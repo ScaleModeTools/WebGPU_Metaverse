@@ -19,6 +19,7 @@
 - `@types/node@25.5.2`
 - `@types/react@19.2.14`
 - `@types/react-dom@19.2.3`
+- `@types/three@0.183.0`
 - `@vitejs/plugin-react@6.0.1`
 - `vite@8.0.3`
 - `@webgpu/types@0.1.69`
