@@ -1,11 +1,13 @@
 import { useEffect, useReducer, useState } from "react";
 
 import { BrowserAudioSession } from "../../audio";
+import type { GameplaySignal } from "../../game";
 import { WebGpuGameplayCapabilityProbe } from "../../game/classes/webgpu-gameplay-capability-probe";
 import { HandTrackingRuntime } from "../../game/classes/hand-tracking-runtime";
 import { LocalProfileStorage } from "../../network";
 import { WebcamPermissionGateway, resolveShellNavigation } from "../../navigation";
 
+import { useThumbShooterShellAudioPolicy } from "./thumbshooter-shell-audio-policy";
 import {
   createInitialThumbShooterShellControllerState,
   reduceThumbShooterShellControllerState
@@ -61,6 +63,11 @@ export function useThumbShooterShellController(): ThumbShooterShellController {
     capabilitySnapshot: state.capabilitySnapshot,
     profile: state.profile
   });
+  const audioPolicy = useThumbShooterShellAudioPolicy({
+    audioSession,
+    dispatch,
+    navigationSnapshot
+  });
 
   const entryPolicy = useThumbShooterShellEntryPolicy({
     audioSession,
@@ -101,6 +108,9 @@ export function useThumbShooterShellController(): ThumbShooterShellController {
     onCalibrationProgress: profilePolicy.onCalibrationProgress,
     onClearProfile: profilePolicy.onClearProfile,
     onEditProfile: profilePolicy.onEditProfile,
+    onGameplaySignal: (signal: GameplaySignal) => {
+      audioPolicy.onGameplaySignal(signal);
+    },
     onGameplayMenuOpen: gameplayMenuPolicy.onGameplayMenuOpen,
     onLoginSubmit: entryPolicy.onLoginSubmit,
     onMusicVolumeChange: profilePolicy.onMusicVolumeChange,

@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 
 import type { PlayerProfile } from "@thumbshooter/shared";
 
+import type { GameplaySignal } from "../../game";
 import type { HandTrackingRuntime } from "../../game/classes/hand-tracking-runtime";
 import { gameFoundationConfig } from "../../game/config/game-foundation";
 import type { WebGpuGameplayCapabilitySnapshot } from "../../game/types/webgpu-capability";
@@ -43,6 +44,7 @@ interface ShellStageRouterProps {
   readonly onBestScoreChange: (bestScore: number) => void;
   readonly onClearProfile: () => void;
   readonly onEditProfile: () => void;
+  readonly onGameplaySignal: (signal: GameplaySignal) => void;
   readonly onLoginSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onOpenGameplayMenu: () => void;
   readonly onRequestPermission: () => void;
@@ -82,6 +84,7 @@ export function ShellStageRouter({
   onBestScoreChange,
   onClearProfile,
   onEditProfile,
+  onGameplaySignal,
   onLoginSubmit,
   onOpenGameplayMenu,
   onRequestPermission,
@@ -137,6 +140,7 @@ export function ShellStageRouter({
             bestScore={bestScore}
             handTrackingRuntime={handTrackingRuntime}
             onBestScoreChange={onBestScoreChange}
+            onGameplaySignal={onGameplaySignal}
             onOpenMenu={onOpenGameplayMenu}
             selectedReticleLabel={selectedReticleLabel}
             username={profile.snapshot.username}

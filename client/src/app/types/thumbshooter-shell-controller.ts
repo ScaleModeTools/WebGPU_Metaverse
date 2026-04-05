@@ -2,6 +2,7 @@ import type { FormEvent } from "react";
 import type { PlayerProfile } from "@thumbshooter/shared";
 
 import type { AudioSessionSnapshot } from "../../audio";
+import type { GameplaySignal } from "../../game";
 import type { HandTrackingRuntime } from "../../game/classes/hand-tracking-runtime";
 import type { WebGpuGameplayCapabilitySnapshot } from "../../game/types/webgpu-capability";
 import type {
@@ -32,6 +33,7 @@ export interface ThumbShooterShellController {
   ) => void;
   readonly onClearProfile: () => void;
   readonly onEditProfile: () => void;
+  readonly onGameplaySignal: (signal: GameplaySignal) => void;
   readonly onGameplayMenuOpen: (open: boolean) => void;
   readonly onLoginSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onMusicVolumeChange: (nextValue: number) => void;

@@ -1,3 +1,4 @@
+import type { AudioTrackId } from "./audio-foundation";
 import type { AudioMixSnapshot } from "@thumbshooter/shared";
 
 import type { AudioCueId } from "./audio-foundation";
@@ -21,6 +22,7 @@ export type BackgroundMusicRuntimeState =
   (typeof backgroundMusicRuntimeStates)[number];
 
 export interface AudioSessionSnapshot {
+  readonly backgroundTrackId: AudioTrackId | null;
   readonly unlockState: AudioSessionUnlockState;
   readonly backgroundMusicState: BackgroundMusicRuntimeState;
   readonly mix: AudioMixSnapshot;

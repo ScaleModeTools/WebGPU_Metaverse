@@ -7,6 +7,7 @@ import {
 } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
+import typescript from "typescript";
 
 const requiredEntrypoints = [
   "tools/build",
@@ -102,6 +103,14 @@ const runtimeDependencyManifestPaths = ["package.json", "client/package.json"];
 const runtimeOwnerDirectoryNames = new Set(["classes", "adapters", "guards"]);
 const runtimeOwnerTestManifestPath = "tools/runtime-owner-test-manifest.json";
 const bundleBudgetsPath = "docs/bundle-budgets.json";
+const explicitAnyScanRoots = [
+  "client",
+  "server",
+  "packages/shared",
+  "tests",
+  "tools"
+];
+const explicitAnyExcludedPathSegments = new Set(["dist", "node_modules"]);
 
 function toRepoPath(filePath) {
   return filePath.replaceAll("\\", "/");
@@ -159,6 +168,14 @@ function isTypedSourceFile(filePath) {
 
 function isDeclarationFile(filePath) {
   return filePath.endsWith(".d.ts");
+}
+
+function getTypeScriptScriptKind(filePath) {
+  if (filePath.endsWith(".tsx")) {
+    return typescript.ScriptKind.TSX;
+  }
+
+  return typescript.ScriptKind.TS;
 }
 
 function assertExists(repoRoot, relativePath, errors) {
@@ -834,6 +851,79 @@ function verifyBundleBudgets(repoRoot, errors) {
   }
 }
 
+function listExplicitAnyScanFiles(repoRoot) {
+  const files = [];
+
+  for (const rootPath of explicitAnyScanRoots) {
+    for (const filePath of listFiles(join(repoRoot, rootPath))) {
+      if (!isTypedSourceFile(filePath)) {
+        continue;
+      }
+
+      const repoRelativePath = toRepoPath(relative(repoRoot, filePath));
+      const pathSegments = repoRelativePath.split("/");
+
+      if (
+        pathSegments.some((segment) =>
+          explicitAnyExcludedPathSegments.has(segment)
+        )
+      ) {
+        continue;
+      }
+
+      files.push(filePath);
+    }
+  }
+
+  return [...new Set(files)].sort();
+}
+
+function findExplicitAnyLocations(filePath, contents) {
+  const sourceFile = typescript.createSourceFile(
+    filePath,
+    contents,
+    typescript.ScriptTarget.Latest,
+    true,
+    getTypeScriptScriptKind(filePath)
+  );
+  const locations = [];
+
+  function visit(node) {
+    if (node.kind === typescript.SyntaxKind.AnyKeyword) {
+      const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+        node.getStart(sourceFile)
+      );
+
+      locations.push(`${line + 1}:${character + 1}`);
+    }
+
+    typescript.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+
+  return locations;
+}
+
+function verifyNoExplicitAny(repoRoot, errors) {
+  const typedFiles = listExplicitAnyScanFiles(repoRoot);
+
+  for (const filePath of typedFiles) {
+    const contents = readFileSync(filePath, "utf8");
+    const explicitAnyLocations = findExplicitAnyLocations(filePath, contents);
+
+    if (explicitAnyLocations.length === 0) {
+      continue;
+    }
+
+    errors.push(
+      `Explicit any is forbidden in typed source: ${toRepoPath(
+        relative(repoRoot, filePath)
+      )} at ${explicitAnyLocations.join(", ")}.`
+    );
+  }
+}
+
 export function collectRepoVerificationErrors({
   repoRoot = process.cwd(),
   trackedFiles = null
@@ -870,6 +960,7 @@ export function collectRepoVerificationErrors({
   verifyDependencyBaseline(repoRoot, errors);
   verifyRuntimeOwnerTestParity(repoRoot, errors);
   verifyBundleBudgets(repoRoot, errors);
+  verifyNoExplicitAny(repoRoot, errors);
 
   return errors;
 }

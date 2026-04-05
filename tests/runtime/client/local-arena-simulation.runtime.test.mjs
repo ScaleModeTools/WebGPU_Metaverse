@@ -99,12 +99,18 @@ test("LocalArenaSimulation publishes calibrated aim, arena counts, and early sca
 
 test("LocalArenaSimulation completes the round on a kill and reset starts a fresh session", async () => {
   const { LocalArenaSimulation } = await clientLoader.load("/src/game/index.ts");
+  const emittedSignals = [];
   const simulation = new LocalArenaSimulation(
     {
       xCoefficients: [1, 0, 0],
       yCoefficients: [0, 1, 0]
     },
-    createArenaConfig()
+    createArenaConfig(),
+    {
+      emitGameplaySignal(signal) {
+        emittedSignals.push(signal);
+      }
+    }
   );
 
   simulation.advance(createTrackedSnapshot(1, 0.25, 0.4), 0);
@@ -123,6 +129,12 @@ test("LocalArenaSimulation completes the round on a kill and reset starts a fres
   assert.equal(firedSnapshot.session.restartReady, true);
   assert.equal(firedSnapshot.targetFeedback.state, "hit");
   assert.equal(firedSnapshot.targetFeedback.enemyLabel, "Bird 1");
+  assert.deepEqual(emittedSignals, [
+    {
+      type: "weapon-fired",
+      weaponId: "semiautomatic-pistol"
+    }
+  ]);
   assert.equal(simulation.enemyRenderStates[0]?.behavior, "downed");
 
   const postCompletionSnapshot = simulation.advance(

@@ -5,16 +5,27 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "lib": [
-      "ES2024"
+      "ES2024",
+      "DOM",
+      "DOM.Iterable"
     ],
     "noEmit": true,
+    "jsx": "react-jsx",
+    "types": [
+      "vite/client",
+      "@webgpu/types"
+    ],
     "paths": {
+      "@/*": [
+        "../client/src/*"
+      ],
       "@thumbshooter/shared": [
         "../packages/shared/src/index.ts"
       ]
     }
   },
   "include": [
+    "../client/src/**/*.d.ts",
     "typecheck/**/*.ts"
   ]
 }

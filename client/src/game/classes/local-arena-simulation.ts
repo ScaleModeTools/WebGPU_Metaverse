@@ -17,6 +17,7 @@ import {
   stepEnemyField,
   summarizeEnemyField
 } from "../states/local-arena-enemy-field";
+import type { GameplaySignal } from "../types/gameplay-signal";
 import type { LatestHandTrackingSnapshot } from "../types/hand-tracking";
 import type {
   LocalArenaEnemyRenderState,
@@ -81,12 +82,17 @@ function readNowMs(): number {
   return globalThis.performance?.now() ?? Date.now();
 }
 
+interface LocalArenaSimulationDependencies {
+  readonly emitGameplaySignal?: (signal: GameplaySignal) => void;
+}
+
 export class LocalArenaSimulation {
   readonly #affineAimTransform: AffineAimTransform;
   readonly #combatSession: LocalCombatSession;
   readonly #config: LocalArenaSimulationConfig;
   readonly #enemyRenderStates: readonly LocalArenaEnemyRenderState[];
   readonly #enemyRuntimeStates: readonly LocalArenaEnemyRuntimeState[];
+  readonly #emitGameplaySignal: ((signal: GameplaySignal) => void) | null;
 
   #feedbackEnemyId: string | null = null;
   #feedbackEnemyLabel: string | null = null;
@@ -102,10 +108,12 @@ export class LocalArenaSimulation {
 
   constructor(
     aimCalibration: AffineAimTransformSnapshot,
-    config: LocalArenaSimulationConfig = localArenaSimulationConfig
+    config: LocalArenaSimulationConfig = localArenaSimulationConfig,
+    dependencies: LocalArenaSimulationDependencies = {}
   ) {
     this.#affineAimTransform = AffineAimTransform.fromSnapshot(aimCalibration);
     this.#config = config;
+    this.#emitGameplaySignal = dependencies.emitGameplaySignal ?? null;
     this.#combatSession = new LocalCombatSession(
       config.enemySeeds.length,
       config.session
@@ -258,6 +266,10 @@ export class LocalArenaSimulation {
   #resolveShot(aimX: number, aimY: number, nowMs: number): void {
     this.#shotsFired += 1;
     this.#nextFireAtMs = nowMs + this.#config.weapon.fireCooldownMs;
+    this.#emitGameplaySignal?.({
+      type: "weapon-fired",
+      weaponId: this.#config.weapon.weaponId
+    });
 
     const hitEnemy = findNearestEnemyState(
       this.#enemyRuntimeStates,

@@ -21,7 +21,7 @@ interface GameplayTrackingSource {
 }
 
 interface GameplayRendererHost {
-  init(): Promise<void>;
+  init(): Promise<void | GameplayRendererHost>;
   render(scene: Scene, camera: OrthographicCamera): void;
   setPixelRatio(pixelRatio: number): void;
   setSize(width: number, height: number, updateStyle?: boolean): void;

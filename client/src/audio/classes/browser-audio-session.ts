@@ -1,10 +1,12 @@
 import type { AudioMixSnapshot } from "@thumbshooter/shared";
 
 import { audioFoundationConfig } from "../config/audio-foundation";
-import type { AudioCueId } from "../types/audio-foundation";
+import { buildBackgroundMusicTrack } from "../config/background-music-tracks";
+import type { AudioCueId, AudioTrackId } from "../types/audio-foundation";
 import type {
   AudioBusNodeLike,
   AudioContextLike,
+  BackgroundMusicEngineLike,
   BrowserAudioSessionDependencies
 } from "../types/audio-session-runtime";
 import type { AudioSessionSnapshot } from "../types/audio-session";
@@ -13,14 +15,11 @@ interface WindowWithWebkitAudioContext extends Window {
   readonly webkitAudioContext?: typeof AudioContext;
 }
 
-interface StrudelModule {
-  readonly initStrudel: (options?: { audioContext?: AudioContext }) => Promise<unknown>;
-}
-
 function freezeAudioSessionSnapshot(
   snapshot: AudioSessionSnapshot
 ): AudioSessionSnapshot {
   return Object.freeze({
+    backgroundTrackId: snapshot.backgroundTrackId,
     unlockState: snapshot.unlockState,
     backgroundMusicState: snapshot.backgroundMusicState,
     mix: Object.freeze({
@@ -34,6 +33,7 @@ function freezeAudioSessionSnapshot(
 
 function createInitialSnapshot(): AudioSessionSnapshot {
   return freezeAudioSessionSnapshot({
+    backgroundTrackId: audioFoundationConfig.music.shellTrack,
     unlockState: "locked",
     backgroundMusicState: "idle",
     mix: audioFoundationConfig.defaultMix,
@@ -145,13 +145,38 @@ function playBrowserCue({
 }
 
 async function initializeBrowserBackgroundMusic(
-  context: AudioContextLike
-): Promise<void> {
-  const module = (await import("@strudel/web/web.mjs")) as unknown as StrudelModule;
+  {
+    context,
+    musicBus
+  }: {
+    readonly context: AudioContextLike;
+    readonly musicBus: AudioBusNodeLike;
+  }
+): Promise<BackgroundMusicEngineLike> {
+  const module = await import("@strudel/web/web.mjs");
 
   await module.initStrudel({
     audioContext: context as AudioContext
   });
+
+  const outputNode = module.getSuperdoughAudioController().output?.destinationGain;
+
+  if (outputNode === null || outputNode === undefined) {
+    throw new Error("Strudel did not expose a routable background music output.");
+  }
+
+  outputNode.disconnect();
+  outputNode.connect(musicBus);
+
+  return {
+    playTrack(trackId: AudioTrackId) {
+      module.hush();
+      buildBackgroundMusicTrack(trackId, module).play();
+    },
+    stop() {
+      module.hush();
+    }
+  };
 }
 
 const defaultBrowserAudioSessionDependencies: BrowserAudioSessionDependencies = {
@@ -163,8 +188,10 @@ const defaultBrowserAudioSessionDependencies: BrowserAudioSessionDependencies = 
 
 export class BrowserAudioSession {
   #audioContext: AudioContextLike | null = null;
+  #backgroundMusicEngine: BackgroundMusicEngineLike | null = null;
   #masterGain: AudioBusNodeLike | null = null;
   #musicGain: AudioBusNodeLike | null = null;
+  #playingTrackId: AudioTrackId | null = null;
   #sfxGain: AudioBusNodeLike | null = null;
   #snapshot = createInitialSnapshot();
   #unlockPromise: Promise<AudioSessionSnapshot> | null = null;
@@ -179,6 +206,15 @@ export class BrowserAudioSession {
 
   get snapshot(): AudioSessionSnapshot {
     return this.#snapshot;
+  }
+
+  syncBackgroundTrack(trackId: AudioTrackId | null): AudioSessionSnapshot {
+    this.#snapshot = freezeAudioSessionSnapshot({
+      ...this.#snapshot,
+      backgroundTrackId: trackId
+    });
+
+    return this.#syncBackgroundTrackPlayback();
   }
 
   syncMix(mix: AudioMixSnapshot): AudioSessionSnapshot {
@@ -265,6 +301,7 @@ export class BrowserAudioSession {
             ? this.#snapshot.failureReason
             : null
       });
+      this.#syncBackgroundTrackPlayback();
       this.#unlockPromise = null;
       return this.#snapshot;
     } catch (error) {
@@ -312,6 +349,10 @@ export class BrowserAudioSession {
   }
 
   async #primeBackgroundMusicEngine(audioContext: AudioContextLike): Promise<void> {
+    if (this.#musicGain === null) {
+      throw new Error("The shared music bus was unavailable during audio boot.");
+    }
+
     if (this.#strudelPrimePromise !== null) {
       return this.#strudelPrimePromise;
     }
@@ -323,8 +364,12 @@ export class BrowserAudioSession {
     });
 
     this.#strudelPrimePromise = this.#dependencies
-      .initializeBackgroundMusic(audioContext)
-      .then(() => {
+      .initializeBackgroundMusic({
+        context: audioContext,
+        musicBus: this.#musicGain
+      })
+      .then((backgroundMusicEngine) => {
+        this.#backgroundMusicEngine = backgroundMusicEngine;
         this.#snapshot = freezeAudioSessionSnapshot({
           ...this.#snapshot,
           backgroundMusicState: "primed"
@@ -342,5 +387,50 @@ export class BrowserAudioSession {
       });
 
     return this.#strudelPrimePromise;
+  }
+
+  #syncBackgroundTrackPlayback(): AudioSessionSnapshot {
+    if (
+      this.#snapshot.unlockState !== "unlocked" ||
+      this.#backgroundMusicEngine === null
+    ) {
+      return this.#snapshot;
+    }
+
+    if (this.#snapshot.backgroundTrackId === null) {
+      if (this.#playingTrackId === null) {
+        return this.#snapshot;
+      }
+
+      this.#backgroundMusicEngine.stop();
+      this.#playingTrackId = null;
+      return this.#snapshot;
+    }
+
+    if (this.#playingTrackId === this.#snapshot.backgroundTrackId) {
+      return this.#snapshot;
+    }
+
+    try {
+      this.#backgroundMusicEngine.playTrack(this.#snapshot.backgroundTrackId);
+      this.#playingTrackId = this.#snapshot.backgroundTrackId;
+      this.#snapshot = freezeAudioSessionSnapshot({
+        ...this.#snapshot,
+        backgroundMusicState: "primed",
+        failureReason: null
+      });
+    } catch (error) {
+      this.#playingTrackId = null;
+      this.#snapshot = freezeAudioSessionSnapshot({
+        ...this.#snapshot,
+        backgroundMusicState: "failed",
+        failureReason:
+          error instanceof Error
+            ? error.message
+            : "Unable to switch the background music track."
+      });
+    }
+
+    return this.#snapshot;
   }
 }

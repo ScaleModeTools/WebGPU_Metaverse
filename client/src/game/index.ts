@@ -31,6 +31,7 @@ export {
   localArenaEnemyBehaviorStates,
   localArenaTargetFeedbackStates
 } from "./types/local-arena-simulation";
+export { gameplaySignalTypes } from "./types/gameplay-signal";
 export {
   webGpuGameplayCapabilityReasons,
   webGpuGameplayCapabilityStatuses
@@ -48,6 +49,10 @@ export type {
   TriggerGestureMode,
   WebGpuFallbackPolicy
 } from "./types/game-foundation";
+export type {
+  GameplaySignal,
+  GameplaySignalType
+} from "./types/gameplay-signal";
 export type {
   HandTrackingRuntimeSnapshot,
   HandTrackingLifecycleState,

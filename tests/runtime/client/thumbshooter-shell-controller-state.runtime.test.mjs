@@ -17,6 +17,7 @@ after(async () => {
 
 function createAudioSnapshot() {
   return {
+    backgroundTrackId: "shell-attract-loop",
     unlockState: "locked",
     backgroundMusicState: "idle",
     mix: {
@@ -86,6 +87,7 @@ test("reduceThumbShooterShellControllerState keeps shell mutations behind typed 
     type: "gameplayMenuAutoOpened",
     audioSnapshot: {
       ...createAudioSnapshot(),
+      backgroundTrackId: "birds-arena-loop",
       lastCueId: "ui-menu-open"
     }
   });

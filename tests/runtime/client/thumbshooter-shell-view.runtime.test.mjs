@@ -31,6 +31,7 @@ test("buildThumbShooterShellView derives stable shell labels from typed state", 
 
   const shellView = buildThumbShooterShellView({
     audioSnapshot: {
+      backgroundTrackId: "shell-attract-loop",
       unlockState: "unlocked",
       backgroundMusicState: "primed",
       mix: profile.snapshot.audioSettings.mix,

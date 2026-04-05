@@ -429,3 +429,30 @@ test("collectRepoVerificationErrors reports bundle budget mismatches", () => {
     )
   );
 });
+
+test("collectRepoVerificationErrors reports explicit any in typed source without flagging plain text", () => {
+  const repoRoot = createFixtureRepo({
+    "client/src/lib/unsafe-cast.ts": `export function unsafeRoundTrip(value: any): any {
+  return value;
+}
+`,
+    "client/src/lib/plain-text.ts": `export const note = "without any implicit widenings";
+`
+  });
+
+  const errors = collectRepoVerificationErrors({
+    repoRoot,
+    trackedFiles: []
+  });
+
+  assert.ok(
+    errors.some((error) =>
+      error.includes(
+        "Explicit any is forbidden in typed source: client/src/lib/unsafe-cast.ts at 1:40, 1:46."
+      )
+    )
+  );
+  assert.ok(
+    !errors.some((error) => error.includes("client/src/lib/plain-text.ts"))
+  );
+});

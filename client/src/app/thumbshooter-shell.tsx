@@ -49,6 +49,7 @@ export function ThumbShooterShell() {
             onCalibrationProgress={controller.onCalibrationProgress}
             onClearProfile={controller.onClearProfile}
             onEditProfile={controller.onEditProfile}
+            onGameplaySignal={controller.onGameplaySignal}
             onLoginSubmit={controller.onLoginSubmit}
             onOpenGameplayMenu={() => controller.onGameplayMenuOpen(true)}
             onRequestPermission={controller.onRequestPermission}

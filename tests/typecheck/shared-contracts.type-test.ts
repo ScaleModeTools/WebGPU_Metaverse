@@ -12,14 +12,7 @@ import type {
   Username
 } from "@thumbshooter/shared";
 import { createUsername } from "@thumbshooter/shared";
-
-type AssertTrue<T extends true> = T;
-
-type IsEqual<TLeft, TRight> = [TLeft] extends [TRight]
-  ? [TRight] extends [TLeft]
-    ? true
-    : false
-  : false;
+import type { AssertTrue, IsEqual } from "./type-assertions";
 
 type ExpectedCalibrationAnchorId =
   | "center"

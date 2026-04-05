@@ -5,6 +5,7 @@ import type { AffineAimTransformSnapshot } from "@thumbshooter/shared";
 import { HandTrackingRuntime } from "../../game/classes/hand-tracking-runtime";
 import { LocalArenaSimulation } from "../../game/classes/local-arena-simulation";
 import { WebGpuGameplayRuntime } from "../../game/classes/webgpu-gameplay-runtime";
+import type { GameplaySignal } from "../../game";
 import { GameplayHudOverlay } from "../../ui";
 import { Card } from "@/components/ui/card";
 
@@ -14,6 +15,7 @@ interface GameplayStageScreenProps {
   readonly bestScore: number;
   readonly handTrackingRuntime: HandTrackingRuntime;
   readonly onBestScoreChange: (bestScore: number) => void;
+  readonly onGameplaySignal: (signal: GameplaySignal) => void;
   readonly onOpenMenu: () => void;
   readonly selectedReticleLabel: string;
   readonly username: string;
@@ -26,6 +28,7 @@ export function GameplayStageScreen({
   bestScore,
   handTrackingRuntime,
   onBestScoreChange,
+  onGameplaySignal,
   onOpenMenu,
   selectedReticleLabel,
   username,
@@ -33,8 +36,14 @@ export function GameplayStageScreen({
 }: GameplayStageScreenProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const bestScoreRef = useRef(bestScore);
+  const handleGameplaySignal = useEffectEvent((signal: GameplaySignal) => {
+    onGameplaySignal(signal);
+  });
   const [arenaSimulation] = useState(
-    () => new LocalArenaSimulation(aimCalibration)
+    () =>
+      new LocalArenaSimulation(aimCalibration, undefined, {
+        emitGameplaySignal: handleGameplaySignal
+      })
   );
   const [gameplayRuntime] = useState(
     () => new WebGpuGameplayRuntime(handTrackingRuntime, arenaSimulation)

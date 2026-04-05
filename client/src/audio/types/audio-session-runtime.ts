@@ -1,4 +1,4 @@
-import type { AudioCueId } from "./audio-foundation";
+import type { AudioCueId, AudioTrackId } from "./audio-foundation";
 
 export interface AudioBusGainLike {
   value: number;
@@ -18,13 +18,21 @@ export interface AudioContextLike {
   resume(): Promise<void>;
 }
 
+export interface BackgroundMusicEngineLike {
+  playTrack(trackId: AudioTrackId): void;
+  stop(): void;
+}
+
 export interface BrowserAudioSessionDependencies {
   createAudioContext: () => AudioContextLike | null;
   createGainBus: (
     context: AudioContextLike,
     initialGain: number
   ) => AudioBusNodeLike;
-  initializeBackgroundMusic: (context: AudioContextLike) => Promise<void>;
+  initializeBackgroundMusic: (input: {
+    readonly context: AudioContextLike;
+    readonly musicBus: AudioBusNodeLike;
+  }) => Promise<BackgroundMusicEngineLike>;
   playCue: (input: {
     readonly context: AudioContextLike;
     readonly cueId: AudioCueId;

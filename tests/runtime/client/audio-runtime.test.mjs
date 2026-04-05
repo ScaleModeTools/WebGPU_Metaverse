@@ -37,12 +37,14 @@ function createFakeAudioContext() {
   return context;
 }
 
-test("BrowserAudioSession unlocks, primes music, and syncs mix buses", async () => {
+test("BrowserAudioSession unlocks, primes music, switches typed tracks, and syncs mix buses", async () => {
   const { BrowserAudioSession } = await clientLoader.load(
     "/src/audio/classes/browser-audio-session.ts"
   );
   const createdBuses = [];
   const playedCues = [];
+  const playedTracks = [];
+  let stopCalls = 0;
   const context = createFakeAudioContext();
   const session = new BrowserAudioSession({
     createAudioContext: () => context,
@@ -51,23 +53,40 @@ test("BrowserAudioSession unlocks, primes music, and syncs mix buses", async () 
       createdBuses.push(bus);
       return bus;
     },
-    async initializeBackgroundMusic() {},
+    async initializeBackgroundMusic() {
+      return {
+        playTrack(trackId) {
+          playedTracks.push(trackId);
+        },
+        stop() {
+          stopCalls += 1;
+        }
+      };
+    },
     playCue({ cueId }) {
       playedCues.push(cueId);
     }
   });
 
+  const deferredTrackSnapshot = session.syncBackgroundTrack("birds-arena-loop");
   const unlockSnapshot = await session.unlock();
+  const shellTrackSnapshot = session.syncBackgroundTrack("shell-attract-loop");
   const mixSnapshot = session.syncMix({
     musicVolume: 0.2,
     sfxVolume: 0.9
   });
   const cueSnapshot = session.playCue("ui-confirm");
+  const stoppedTrackSnapshot = session.syncBackgroundTrack(null);
 
   assert.equal(unlockSnapshot.unlockState, "unlocked");
   assert.equal(unlockSnapshot.backgroundMusicState, "primed");
+  assert.equal(deferredTrackSnapshot.backgroundTrackId, "birds-arena-loop");
+  assert.equal(shellTrackSnapshot.backgroundTrackId, "shell-attract-loop");
+  assert.equal(stoppedTrackSnapshot.backgroundTrackId, null);
   assert.equal(createdBuses[1]?.gain.value, 0.2);
   assert.equal(createdBuses[2]?.gain.value, 0.9);
+  assert.deepEqual(playedTracks, ["birds-arena-loop", "shell-attract-loop"]);
+  assert.equal(stopCalls, 1);
   assert.deepEqual(playedCues, ["ui-confirm"]);
   assert.equal(mixSnapshot.mix.musicVolume, 0.2);
   assert.equal(cueSnapshot.lastCueId, "ui-confirm");
@@ -82,7 +101,9 @@ test("BrowserAudioSession reports unsupported audio contexts deterministically",
     createGainBus: () => {
       throw new Error("should not create gain buses");
     },
-    async initializeBackgroundMusic() {},
+    async initializeBackgroundMusic() {
+      throw new Error("should not initialize background music");
+    },
     playCue() {}
   });
 
