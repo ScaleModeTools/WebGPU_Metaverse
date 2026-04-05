@@ -28,7 +28,7 @@ export function ShellProgressHeader({
     <header className="rounded-[2rem] border border-border/70 bg-card/82 p-6 shadow-[0_24px_80px_rgb(15_23_42_/_0.14)] backdrop-blur-xl">
       <div className="flex flex-col gap-6">
         <div className="flex flex-wrap gap-2">
-          <Badge>Milestone 2 bootstrap</Badge>
+          <Badge>Milestone 3 local arena</Badge>
           <Badge variant="secondary">Local-first profile</Badge>
           <Badge variant="secondary">Worker-first tracking live</Badge>
           <Badge variant="outline">WebGPU gameplay live</Badge>
@@ -41,13 +41,14 @@ export function ShellProgressHeader({
                 ThumbShooter
               </p>
               <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
-                Calibration runtime and gameplay bootstrap are now live in the
-                client shell.
+                The first calibrated local arena loop is now live in the client
+                shell.
               </h1>
               <p className="max-w-3xl text-base text-muted-foreground sm:text-lg">
                 This build now carries login, persistence, worker tracking,
                 nine-point calibration, explicit WebGPU gating, the in-game
-                menu, and the first real gameplay runtime owner.
+                menu, readable bird enemies, and the first semiautomatic local
+                combat loop.
               </p>
             </div>
 

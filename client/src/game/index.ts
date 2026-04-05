@@ -1,8 +1,10 @@
 export { gameFoundationConfig } from "./config/game-foundation";
 export { calibrationCaptureConfig } from "./config/calibration-capture";
+export { localArenaSimulationConfig } from "./config/local-arena-simulation";
 export { gameplayRuntimeConfig } from "./config/gameplay-runtime";
 export { handTrackingRuntimeConfig } from "./config/hand-tracking-runtime";
 export { HandTrackingRuntime } from "./classes/hand-tracking-runtime";
+export { LocalArenaSimulation } from "./classes/local-arena-simulation";
 export { NinePointCalibrationSession } from "./classes/nine-point-calibration-session";
 export { WebGpuGameplayRuntime } from "./classes/webgpu-gameplay-runtime";
 export { WebGpuGameplayCapabilityProbe } from "./classes/webgpu-gameplay-capability-probe";
@@ -22,6 +24,10 @@ export {
   handTrackingLifecycleStates,
   handTrackingPoseStates
 } from "./types/hand-tracking";
+export {
+  localArenaEnemyBehaviorStates,
+  localArenaTargetFeedbackStates
+} from "./types/local-arena-simulation";
 export {
   webGpuGameplayCapabilityReasons,
   webGpuGameplayCapabilityStatuses
@@ -69,6 +75,17 @@ export type {
   GameplayRuntimeConfig,
   GameplayRuntimeLifecycleState
 } from "./types/gameplay-runtime";
+export type {
+  LocalArenaArenaSnapshot,
+  LocalArenaEnemyBehaviorState,
+  LocalArenaEnemyRenderState,
+  LocalArenaEnemySeed,
+  LocalArenaHudSnapshot,
+  LocalArenaSimulationConfig,
+  LocalArenaTargetFeedbackSnapshot,
+  LocalArenaTargetFeedbackState,
+  LocalArenaWeaponSnapshot
+} from "./types/local-arena-simulation";
 export type { GameRuntimeStage } from "./states/game-runtime-state";
 export type {
   WebGpuGameplayCapabilityReason,

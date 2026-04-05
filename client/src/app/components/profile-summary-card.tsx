@@ -28,7 +28,8 @@ export function ProfileSummaryCard({
       <CardHeader>
         <CardTitle>Profile summary</CardTitle>
         <CardDescription>
-          Local-first state that milestone 2 can extend instead of replacing.
+          Local-first state that the arena loop still builds on instead of
+          replacing.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">

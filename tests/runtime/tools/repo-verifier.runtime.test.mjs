@@ -43,10 +43,54 @@ function createFixtureRepo(overrides = {}) {
 - \`vite@8.0.3\`
 - \`@webgpu/types@0.1.69\`
 `,
+    "docs/bundle-budgets.json": JSON.stringify(
+      {
+        budgets: [
+          {
+            label: "fixture shell javascript",
+            pattern: "client/dist/assets/index-*.js",
+            maxBytes: 5000,
+            maxGzipBytes: 2500
+          },
+          {
+            label: "fixture shell styles",
+            pattern: "client/dist/assets/index-*.css",
+            maxBytes: 3000,
+            maxGzipBytes: 1500
+          }
+        ]
+      },
+      null,
+      2
+    ),
     "tools/build": "#!/usr/bin/env bash\n",
     "tools/test": "#!/usr/bin/env bash\n",
     "tools/bench": "#!/usr/bin/env bash\n",
     "tools/verify": "#!/usr/bin/env bash\n",
+    "tools/runtime-owner-test-manifest.json": JSON.stringify(
+      {
+        owners: [
+          {
+            ownerPath: "client/src/audio/classes/browser-audio-session.ts",
+            testPaths: ["tests/runtime/client/audio-runtime.test.mjs"]
+          },
+          {
+            ownerPath: "client/src/game/classes/webgpu-gameplay-runtime.ts",
+            testPaths: ["tests/runtime/client/webgpu-gameplay-runtime.test.mjs"]
+          },
+          {
+            ownerPath: "client/src/navigation/guards/resolve-shell-navigation.ts",
+            testPaths: ["tests/runtime/client/navigation-runtime.test.mjs"]
+          },
+          {
+            ownerPath: "client/src/network/classes/local-profile-storage.ts",
+            testPaths: ["tests/runtime/client/local-profile-storage.runtime.test.mjs"]
+          }
+        ]
+      },
+      null,
+      2
+    ),
     "package.json": JSON.stringify(
       {
         name: "thumbshooter",
@@ -137,7 +181,13 @@ export const navigation = createRuntime;
     "server/src/index.ts": "export const server = 'server';\n",
     "packages/shared/src/index.ts": "export const shared = 'shared';\n",
     "packages/shared/dist/index.js": "export const shared = 'shared';\n",
-    "packages/shared/dist/index.d.ts": "export declare const shared: 'shared';\n"
+    "packages/shared/dist/index.d.ts": "export declare const shared: 'shared';\n",
+    "client/dist/assets/index-fixture.js": "console.log('fixture-shell');\n",
+    "client/dist/assets/index-fixture.css": "body{background:#000;}\n",
+    "tests/runtime/client/audio-runtime.test.mjs": "export const audioRuntimeTest = true;\n",
+    "tests/runtime/client/navigation-runtime.test.mjs": "export const navigationRuntimeTest = true;\n",
+    "tests/runtime/client/local-profile-storage.runtime.test.mjs": "export const profileRuntimeTest = true;\n",
+    "tests/runtime/client/webgpu-gameplay-runtime.test.mjs": "export const gameplayRuntimeTest = true;\n"
   };
 
   for (const [relativePath, contents] of Object.entries({
@@ -282,6 +332,99 @@ test("collectRepoVerificationErrors reports dependency baseline mismatches", () 
     errors.some((error) =>
       error.includes(
         "client/package.json declares three@^0.183.0, but docs/dependencies.md requires 0.183.0."
+      )
+    )
+  );
+});
+
+test("collectRepoVerificationErrors reports missing runtime owner test manifest coverage", () => {
+  const repoRoot = createFixtureRepo({
+    "client/src/game/classes/local-arena-simulation.ts": "export class LocalArenaSimulation {}\n"
+  });
+
+  const errors = collectRepoVerificationErrors({
+    repoRoot,
+    trackedFiles: []
+  });
+
+  assert.ok(
+    errors.some((error) =>
+      error.includes(
+        "Missing runtime owner test manifest entry for client/src/game/classes/local-arena-simulation.ts"
+      )
+    )
+  );
+});
+
+test("collectRepoVerificationErrors reports missing runtime test files referenced by the manifest", () => {
+  const repoRoot = createFixtureRepo({
+    "tools/runtime-owner-test-manifest.json": JSON.stringify(
+      {
+        owners: [
+          {
+            ownerPath: "client/src/audio/classes/browser-audio-session.ts",
+            testPaths: ["tests/runtime/client/missing-audio-runtime.test.mjs"]
+          },
+          {
+            ownerPath: "client/src/game/classes/webgpu-gameplay-runtime.ts",
+            testPaths: ["tests/runtime/client/webgpu-gameplay-runtime.test.mjs"]
+          },
+          {
+            ownerPath: "client/src/navigation/guards/resolve-shell-navigation.ts",
+            testPaths: ["tests/runtime/client/navigation-runtime.test.mjs"]
+          },
+          {
+            ownerPath: "client/src/network/classes/local-profile-storage.ts",
+            testPaths: ["tests/runtime/client/local-profile-storage.runtime.test.mjs"]
+          }
+        ]
+      },
+      null,
+      2
+    )
+  });
+
+  const errors = collectRepoVerificationErrors({
+    repoRoot,
+    trackedFiles: []
+  });
+
+  assert.ok(
+    errors.some((error) =>
+      error.includes(
+        "Runtime owner test manifest references a missing runtime test file: tests/runtime/client/missing-audio-runtime.test.mjs."
+      )
+    )
+  );
+});
+
+test("collectRepoVerificationErrors reports bundle budget mismatches", () => {
+  const repoRoot = createFixtureRepo({
+    "docs/bundle-budgets.json": JSON.stringify(
+      {
+        budgets: [
+          {
+            label: "fixture shell javascript",
+            pattern: "client/dist/assets/index-*.js",
+            maxBytes: 10,
+            maxGzipBytes: 10
+          }
+        ]
+      },
+      null,
+      2
+    )
+  });
+
+  const errors = collectRepoVerificationErrors({
+    repoRoot,
+    trackedFiles: []
+  });
+
+  assert.ok(
+    errors.some((error) =>
+      error.includes(
+        "Bundle budget exceeded for fixture shell javascript: client/dist/assets/index-*.js produced"
       )
     )
   );

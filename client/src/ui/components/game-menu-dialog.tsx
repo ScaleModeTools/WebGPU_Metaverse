@@ -53,8 +53,8 @@ export function GameMenuDialog({
           </div>
           <DialogTitle>In-game menu</DialogTitle>
           <DialogDescription>
-            The calibrated WebGPU runtime is live. Enemies, bird behavior, and
-            the weapon fire loop remain deferred to the next milestone.
+            The calibrated local arena loop is live with bird scatter, local
+            hit reactions, and the first semiautomatic pistol reset rhythm.
           </DialogDescription>
         </DialogHeader>
 
@@ -64,8 +64,8 @@ export function GameMenuDialog({
               <div>
                 <p className="text-sm font-medium">Controls</p>
                 <p className="text-sm text-muted-foreground">
-                  Live calibrated aim is active; the firing and reload loop is
-                  still deferred.
+                  Live calibrated aim, semiautomatic trigger reset, and local
+                  enemy reactions are all active in the arena loop.
                 </p>
               </div>
               <Badge variant="outline">{gameMenuPlan.sections[0]?.label}</Badge>

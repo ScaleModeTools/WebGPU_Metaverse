@@ -11,7 +11,7 @@ export const gameMenuPlan = {
   controlsSummary: [
     "Aim with the thumb-gun pose",
     "Shoot by dropping the thumb relative to the index finger",
-    "Reload by moving the reticle off-screen"
+    "Reset by lifting the thumb before the next shot"
   ],
   recalibrationAction: "restart-nine-point-calibration",
   audioControls: ["music", "sfx"]

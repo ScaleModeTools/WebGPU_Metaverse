@@ -41,9 +41,58 @@ class FakeRenderer {
   }
 }
 
+function createArenaConfig() {
+  return {
+    arenaBounds: {
+      minX: 0.05,
+      maxX: 0.95,
+      minY: 0.05,
+      maxY: 0.95
+    },
+    enemySeeds: [
+      {
+        id: "bird-1",
+        label: "Bird 1",
+        spawn: { x: 0.25, y: 0.4 },
+        glideVelocity: { x: 0, y: 0 },
+        radius: 0.08,
+        scale: 1,
+        wingSpeed: 6
+      }
+    ],
+    movement: {
+      maxStepMs: 64,
+      scatterDurationMs: 280,
+      scatterSpeed: 0.22,
+      downedDurationMs: 520,
+      downedDriftVelocityY: 0.18
+    },
+    targeting: {
+      acquireRadius: 0.1,
+      hitRadius: 0.1,
+      reticleScatterRadius: 0.14,
+      shotScatterRadius: 0.2
+    },
+    weapon: {
+      weaponId: "semiautomatic-pistol",
+      pressThreshold: 0.055,
+      releaseThreshold: 0.02,
+      fireCooldownMs: 220,
+      feedbackHoldMs: 280
+    }
+  };
+}
+
 test("WebGpuGameplayRuntime rejects unsupported navigators explicitly", async () => {
-  const { WebGpuGameplayRuntime } = await clientLoader.load(
-    "/src/game/classes/webgpu-gameplay-runtime.ts"
+  const { LocalArenaSimulation, WebGpuGameplayRuntime } = await clientLoader.load(
+    "/src/game/index.ts"
+  );
+  const arenaSimulation = new LocalArenaSimulation(
+    {
+      xCoefficients: [1, 0, 0],
+      yCoefficients: [0, 1, 0]
+    },
+    createArenaConfig()
   );
   const runtime = new WebGpuGameplayRuntime(
     {
@@ -54,10 +103,7 @@ test("WebGpuGameplayRuntime rejects unsupported navigators explicitly", async ()
         pose: null
       }
     },
-    {
-      xCoefficients: [1, 0, 0],
-      yCoefficients: [0, 1, 0]
-    },
+    arenaSimulation,
     undefined,
     {
       cancelAnimationFrame() {},
@@ -77,8 +123,8 @@ test("WebGpuGameplayRuntime rejects unsupported navigators explicitly", async ()
 });
 
 test("WebGpuGameplayRuntime renders the calibrated reticle from live tracking snapshots", async () => {
-  const { WebGpuGameplayRuntime } = await clientLoader.load(
-    "/src/game/classes/webgpu-gameplay-runtime.ts"
+  const { LocalArenaSimulation, WebGpuGameplayRuntime } = await clientLoader.load(
+    "/src/game/index.ts"
   );
   const trackingSource = {
     latestPose: {
@@ -86,20 +132,24 @@ test("WebGpuGameplayRuntime renders the calibrated reticle from live tracking sn
       sequenceNumber: 1,
       timestampMs: 10,
       pose: {
-        thumbTip: { x: 0.3, y: 0.5 },
+        thumbTip: { x: 0.3, y: 0.42 },
         indexTip: { x: 0.25, y: 0.4 }
       }
     }
   };
   const renderer = new FakeRenderer();
   let scheduledFrame = null;
-
-  const runtime = new WebGpuGameplayRuntime(
-    trackingSource,
+  const arenaSimulation = new LocalArenaSimulation(
     {
       xCoefficients: [1, 0, 0],
       yCoefficients: [0, 1, 0]
     },
+    createArenaConfig()
+  );
+
+  const runtime = new WebGpuGameplayRuntime(
+    trackingSource,
+    arenaSimulation,
     undefined,
     {
       cancelAnimationFrame() {
@@ -134,6 +184,7 @@ test("WebGpuGameplayRuntime renders the calibrated reticle from live tracking sn
   assert.equal(renderer.pixelRatio, 1.5);
   assert.deepEqual(renderer.sizes.at(-1), [1280, 720]);
   assert.equal(runtime.hudSnapshot.trackingState, "tracked");
+  assert.equal(runtime.hudSnapshot.targetFeedback.state, "targeted");
   assert.deepEqual(runtime.hudSnapshot.aimPoint, {
     x: 0.25,
     y: 0.4

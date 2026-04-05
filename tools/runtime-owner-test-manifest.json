@@ -1,0 +1,64 @@
+{
+  "owners": [
+    {
+      "ownerPath": "client/src/audio/classes/browser-audio-session.ts",
+      "testPaths": [
+        "tests/runtime/client/audio-runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/game/classes/hand-tracking-runtime.ts",
+      "testPaths": [
+        "tests/runtime/client/hand-tracking-runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/game/classes/local-arena-simulation.ts",
+      "testPaths": [
+        "tests/runtime/client/local-arena-simulation.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/game/classes/nine-point-calibration-session.ts",
+      "testPaths": [
+        "tests/runtime/client/calibration-session.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/game/classes/webgpu-gameplay-capability-probe.ts",
+      "testPaths": [
+        "tests/runtime/client/game-runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/game/classes/webgpu-gameplay-runtime.ts",
+      "testPaths": [
+        "tests/runtime/client/webgpu-gameplay-runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/navigation/adapters/webcam-permission-gateway.ts",
+      "testPaths": [
+        "tests/runtime/client/navigation-runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/navigation/guards/resolve-shell-navigation.ts",
+      "testPaths": [
+        "tests/runtime/client/navigation-runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/network/classes/local-profile-storage.ts",
+      "testPaths": [
+        "tests/runtime/client/local-profile-storage.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "tools/internal/repo-verifier.mjs",
+      "testPaths": [
+        "tests/runtime/tools/repo-verifier.runtime.test.mjs"
+      ]
+    }
+  ]
+}

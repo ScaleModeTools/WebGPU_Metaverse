@@ -1,6 +1,7 @@
 export { gameMenuPlan } from "./config/game-menu-plan";
 export { viewportOverlayPlan } from "./config/viewport-overlay-plan";
 export { GameMenuDialog } from "./components/game-menu-dialog";
+export { GameplayHudOverlay } from "./components/gameplay-hud-overlay";
 export {
   gameMenuEntryActions,
   gameMenuSectionIds

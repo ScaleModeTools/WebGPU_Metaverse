@@ -6,6 +6,7 @@ import {
   statSync
 } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
+import { gzipSync } from "node:zlib";
 
 const requiredEntrypoints = [
   "tools/build",
@@ -18,7 +19,9 @@ const requiredRepoFiles = [
   "README.md",
   "spec.md",
   "progress.md",
-  "docs/dependencies.md"
+  "docs/dependencies.md",
+  "docs/bundle-budgets.json",
+  "tools/runtime-owner-test-manifest.json"
 ];
 const productSourceRoots = [
   "client/src",
@@ -96,6 +99,13 @@ const clientDomainPolicies = new Map([
   ]
 ]);
 const runtimeDependencyManifestPaths = ["package.json", "client/package.json"];
+const runtimeOwnerDirectoryNames = new Set(["classes", "adapters", "guards"]);
+const runtimeOwnerTestManifestPath = "tools/runtime-owner-test-manifest.json";
+const bundleBudgetsPath = "docs/bundle-budgets.json";
+
+function toRepoPath(filePath) {
+  return filePath.replaceAll("\\", "/");
+}
 
 function listFiles(rootPath) {
   if (!existsSync(rootPath)) {
@@ -184,7 +194,7 @@ function resolveClientImportDomain(repoRoot, sourceFilePath, specifier) {
     return null;
   }
 
-  const repoRelativeTargetPath = relative(repoRoot, absoluteTargetPath);
+  const repoRelativeTargetPath = toRepoPath(relative(repoRoot, absoluteTargetPath));
 
   if (!repoRelativeTargetPath.startsWith("client/src/")) {
     return null;
@@ -226,10 +236,127 @@ function parseDependencyBaseline(repoRoot) {
   return dependencyMap;
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function createGlobPatternRegExp(pattern) {
+  return new RegExp(
+    `^${pattern
+      .split("*")
+      .map((part) => escapeRegExp(part))
+      .join("[^/]*")}$`
+  );
+}
+
+function findSearchRoot(pattern) {
+  const wildcardIndex = pattern.indexOf("*");
+  const staticPrefix = wildcardIndex === -1 ? pattern : pattern.slice(0, wildcardIndex);
+  const lastSlashIndex = staticPrefix.lastIndexOf("/");
+
+  return lastSlashIndex === -1 ? "." : staticPrefix.slice(0, lastSlashIndex);
+}
+
+function readJsonFile(repoRoot, relativePath, description, errors) {
+  try {
+    return JSON.parse(readFileSync(join(repoRoot, relativePath), "utf8"));
+  } catch {
+    errors.push(`Unable to parse ${description} at ${relativePath}.`);
+    return null;
+  }
+}
+
+function parseRuntimeOwnerTestManifest(repoRoot, errors) {
+  const parsedValue = readJsonFile(
+    repoRoot,
+    runtimeOwnerTestManifestPath,
+    "runtime owner test manifest",
+    errors
+  );
+
+  if (parsedValue === null) {
+    return [];
+  }
+
+  if (!Array.isArray(parsedValue.owners)) {
+    errors.push(
+      "tools/runtime-owner-test-manifest.json must expose an owners array."
+    );
+    return [];
+  }
+
+  const manifestEntries = [];
+
+  for (const rawEntry of parsedValue.owners) {
+    if (
+      rawEntry === null ||
+      typeof rawEntry !== "object" ||
+      typeof rawEntry.ownerPath !== "string" ||
+      !Array.isArray(rawEntry.testPaths) ||
+      rawEntry.testPaths.some((testPath) => typeof testPath !== "string")
+    ) {
+      errors.push(
+        "tools/runtime-owner-test-manifest.json contains an invalid owner entry."
+      );
+      continue;
+    }
+
+    manifestEntries.push({
+      ownerPath: rawEntry.ownerPath,
+      testPaths: rawEntry.testPaths
+    });
+  }
+
+  return manifestEntries;
+}
+
+function parseBundleBudgets(repoRoot, errors) {
+  const parsedValue = readJsonFile(
+    repoRoot,
+    bundleBudgetsPath,
+    "bundle budgets",
+    errors
+  );
+
+  if (parsedValue === null) {
+    return [];
+  }
+
+  if (!Array.isArray(parsedValue.budgets)) {
+    errors.push("docs/bundle-budgets.json must expose a budgets array.");
+    return [];
+  }
+
+  const budgets = [];
+
+  for (const rawBudget of parsedValue.budgets) {
+    if (
+      rawBudget === null ||
+      typeof rawBudget !== "object" ||
+      typeof rawBudget.label !== "string" ||
+      typeof rawBudget.pattern !== "string" ||
+      !Number.isFinite(rawBudget.maxBytes) ||
+      !Number.isFinite(rawBudget.maxGzipBytes)
+    ) {
+      errors.push("docs/bundle-budgets.json contains an invalid budget entry.");
+      continue;
+    }
+
+    budgets.push({
+      label: rawBudget.label,
+      pattern: rawBudget.pattern,
+      maxBytes: rawBudget.maxBytes,
+      maxGzipBytes: rawBudget.maxGzipBytes
+    });
+  }
+
+  return budgets;
+}
+
 function verifyProductImports(repoRoot, sourceFiles, errors) {
   for (const filePath of sourceFiles) {
     const contents = readFileSync(filePath, "utf8");
-    const repoRelativePath = relative(repoRoot, filePath);
+    const repoRelativePath = toRepoPath(relative(repoRoot, filePath));
     const baseName = filePath.split("/").at(-1);
 
     if (contents.includes("packages/shared/src")) {
@@ -265,7 +392,7 @@ function verifyClientSourceExtensions(repoRoot, errors) {
   const clientSourceFiles = listFiles(join(repoRoot, "client/src"));
 
   for (const filePath of clientSourceFiles) {
-    const repoRelativePath = relative(repoRoot, filePath);
+    const repoRelativePath = toRepoPath(relative(repoRoot, filePath));
 
     if (filePath.endsWith(".jsx")) {
       errors.push(
@@ -306,7 +433,7 @@ function verifySharedDist(repoRoot, errors) {
 
     if (!sharedSourceBaseNames.has(baseName)) {
       errors.push(
-        `Stale generated shared artifact found: ${relative(repoRoot, filePath)}`
+        `Stale generated shared artifact found: ${toRepoPath(relative(repoRoot, filePath))}`
       );
     }
   }
@@ -379,7 +506,7 @@ function verifyTrackedPrivacy(trackedFiles, errors) {
 
 function verifyClientDomainImportBoundaries(repoRoot, sourceFiles, errors) {
   for (const filePath of sourceFiles) {
-    const repoRelativePath = relative(repoRoot, filePath);
+    const repoRelativePath = toRepoPath(relative(repoRoot, filePath));
     const sourceDomain = getClientDomain(repoRelativePath);
 
     if (sourceDomain === null || !clientDomainPolicies.has(sourceDomain)) {
@@ -405,7 +532,7 @@ function verifyClientDomainImportBoundaries(repoRoot, sourceFiles, errors) {
 
 function verifyExternalPackageBoundaries(repoRoot, sourceFiles, errors) {
   for (const filePath of sourceFiles) {
-    const repoRelativePath = relative(repoRoot, filePath);
+    const repoRelativePath = toRepoPath(relative(repoRoot, filePath));
     const specifiers = readImportSpecifiers(readFileSync(filePath, "utf8"));
     const sourceDomain = getClientDomain(repoRelativePath);
     const declarationFile = isDeclarationFile(filePath);
@@ -577,6 +704,136 @@ function verifyDependencyBaseline(repoRoot, errors) {
   }
 }
 
+function listRuntimeOwnerCandidates(repoRoot) {
+  const candidates = [];
+  const runtimeSourceRoots = ["client/src", "server/src"];
+
+  for (const sourceRoot of runtimeSourceRoots) {
+    for (const filePath of listFiles(join(repoRoot, sourceRoot))) {
+      if (!isTypedSourceFile(filePath) || isDeclarationFile(filePath)) {
+        continue;
+      }
+
+      const repoRelativePath = toRepoPath(relative(repoRoot, filePath));
+      const pathSegments = repoRelativePath.split("/");
+
+      if (pathSegments.some((segment) => runtimeOwnerDirectoryNames.has(segment))) {
+        candidates.push(repoRelativePath);
+      }
+    }
+  }
+
+  if (existsSync(join(repoRoot, "tools/internal/repo-verifier.mjs"))) {
+    candidates.push("tools/internal/repo-verifier.mjs");
+  }
+
+  return [...new Set(candidates)].sort();
+}
+
+function verifyRuntimeOwnerTestParity(repoRoot, errors) {
+  const manifestEntries = parseRuntimeOwnerTestManifest(repoRoot, errors);
+  const manifestByOwner = new Map();
+
+  for (const entry of manifestEntries) {
+    if (manifestByOwner.has(entry.ownerPath)) {
+      errors.push(
+        `Duplicate runtime owner test manifest entry found for ${entry.ownerPath}.`
+      );
+      continue;
+    }
+
+    manifestByOwner.set(entry.ownerPath, entry);
+  }
+
+  const candidateOwners = listRuntimeOwnerCandidates(repoRoot);
+
+  for (const candidateOwner of candidateOwners) {
+    if (!manifestByOwner.has(candidateOwner)) {
+      errors.push(
+        `Missing runtime owner test manifest entry for ${candidateOwner}; add direct runtime coverage in tools/runtime-owner-test-manifest.json.`
+      );
+    }
+  }
+
+  for (const [ownerPath, entry] of manifestByOwner.entries()) {
+    if (!existsSync(join(repoRoot, ownerPath))) {
+      errors.push(
+        `Runtime owner test manifest references a missing owner file: ${ownerPath}.`
+      );
+      continue;
+    }
+
+    if (entry.testPaths.length === 0) {
+      errors.push(
+        `Runtime owner test manifest entry for ${ownerPath} must list at least one runtime test file.`
+      );
+    }
+
+    if (!candidateOwners.includes(ownerPath)) {
+      errors.push(
+        `Runtime owner test manifest entry for ${ownerPath} is stale or outside the supported owner directories.`
+      );
+    }
+
+    for (const testPath of entry.testPaths) {
+      if (!testPath.startsWith("tests/runtime/")) {
+        errors.push(
+          `Runtime owner test manifest entry for ${ownerPath} must point at tests/runtime/* files only.`
+        );
+        continue;
+      }
+
+      if (!existsSync(join(repoRoot, testPath))) {
+        errors.push(
+          `Runtime owner test manifest references a missing runtime test file: ${testPath}.`
+        );
+      }
+    }
+  }
+}
+
+function verifyBundleBudgets(repoRoot, errors) {
+  const budgets = parseBundleBudgets(repoRoot, errors);
+  const searchRootCache = new Map();
+
+  for (const budget of budgets) {
+    const searchRoot = findSearchRoot(budget.pattern);
+    const absoluteSearchRoot = join(repoRoot, searchRoot);
+    const searchFiles =
+      searchRootCache.get(searchRoot) ??
+      listFiles(absoluteSearchRoot).map((filePath) =>
+        toRepoPath(relative(repoRoot, filePath))
+      );
+    const patternRegExp = createGlobPatternRegExp(budget.pattern);
+    const matchedFiles = searchFiles.filter((filePath) => patternRegExp.test(filePath));
+
+    searchRootCache.set(searchRoot, searchFiles);
+
+    if (matchedFiles.length === 0) {
+      errors.push(
+        `Bundle budget pattern ${budget.pattern} for ${budget.label} matched no built files.`
+      );
+      continue;
+    }
+
+    let rawBytes = 0;
+    let gzipBytes = 0;
+
+    for (const matchedFile of matchedFiles) {
+      const fileBuffer = readFileSync(join(repoRoot, matchedFile));
+
+      rawBytes += fileBuffer.length;
+      gzipBytes += gzipSync(fileBuffer).length;
+    }
+
+    if (rawBytes > budget.maxBytes || gzipBytes > budget.maxGzipBytes) {
+      errors.push(
+        `Bundle budget exceeded for ${budget.label}: ${budget.pattern} produced ${rawBytes} raw bytes and ${gzipBytes} gzip bytes, but the budget is ${budget.maxBytes}/${budget.maxGzipBytes}.`
+      );
+    }
+  }
+}
+
 export function collectRepoVerificationErrors({
   repoRoot = process.cwd(),
   trackedFiles = null
@@ -611,6 +868,8 @@ export function collectRepoVerificationErrors({
   verifyClientDomainImportBoundaries(repoRoot, sourceFiles, errors);
   verifyExternalPackageBoundaries(repoRoot, sourceFiles, errors);
   verifyDependencyBaseline(repoRoot, errors);
+  verifyRuntimeOwnerTestParity(repoRoot, errors);
+  verifyBundleBudgets(repoRoot, errors);
 
   return errors;
 }

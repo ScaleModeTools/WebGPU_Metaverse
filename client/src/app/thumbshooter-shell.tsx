@@ -362,7 +362,7 @@ export function ThumbShooterShell() {
       {profile !== null ? (
         <GameMenuDialog
           audioStatusLabel={shellView.audioStatusLabel}
-          gameplayStatusLabel="Gameplay runtime live"
+          gameplayStatusLabel="Local arena loop live"
           musicVolume={shellView.musicVolumeSliderValue}
           onMusicVolumeChange={handleMusicVolumeChange}
           onOpenChange={handleGameplayMenuOpen}

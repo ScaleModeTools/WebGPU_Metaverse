@@ -1,10 +1,4 @@
 import {
-  AffineAimTransform,
-  createNormalizedViewportPoint,
-  type AffineAimTransformSnapshot
-} from "@thumbshooter/shared";
-
-import {
   Group,
   Mesh,
   MeshBasicNodeMaterial,
@@ -22,6 +16,7 @@ import type {
   GameplayRuntimeConfig
 } from "../types/gameplay-runtime";
 import type { LatestHandTrackingSnapshot } from "../types/hand-tracking";
+import { LocalArenaSimulation } from "./local-arena-simulation";
 
 interface GameplayTrackingSource {
   readonly latestPose: LatestHandTrackingSnapshot;
@@ -38,6 +33,14 @@ interface GameplayRendererHost {
 interface GameplayCanvasHost {
   readonly clientHeight: number;
   readonly clientWidth: number;
+}
+
+interface EnemyMeshRuntime {
+  readonly bodyMaterial: MeshBasicNodeMaterial;
+  readonly group: Group;
+  readonly leftWingPivot: Group;
+  readonly rightWingPivot: Group;
+  readonly wingMaterial: MeshBasicNodeMaterial;
 }
 
 interface GameplayRuntimeDependencies {
@@ -59,15 +62,17 @@ function createDefaultRenderer(canvas: HTMLCanvasElement): GameplayRendererHost 
 
 function freezeHudSnapshot(
   lifecycle: GameplayHudSnapshot["lifecycle"],
-  trackingState: GameplayHudSnapshot["trackingState"],
-  aimPoint: GameplayHudSnapshot["aimPoint"],
-  failureReason: string | null
+  failureReason: string | null,
+  arenaHudSnapshot: LocalArenaSimulation["hudSnapshot"]
 ): GameplayHudSnapshot {
   return Object.freeze({
-    aimPoint,
+    aimPoint: arenaHudSnapshot.aimPoint,
+    arena: arenaHudSnapshot.arena,
     failureReason,
     lifecycle,
-    trackingState
+    targetFeedback: arenaHudSnapshot.targetFeedback,
+    trackingState: arenaHudSnapshot.trackingState,
+    weapon: arenaHudSnapshot.weapon
   });
 }
 
@@ -75,8 +80,15 @@ function readNowMs(): number {
   return globalThis.performance?.now() ?? Date.now();
 }
 
+function setMaterialColor(
+  material: MeshBasicNodeMaterial,
+  nextColor: readonly [number, number, number]
+): void {
+  material.colorNode = color(nextColor[0], nextColor[1], nextColor[2]);
+}
+
 export class WebGpuGameplayRuntime {
-  readonly #affineAimTransform: AffineAimTransform;
+  readonly #arenaSimulation: LocalArenaSimulation;
   readonly #camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
   readonly #config: GameplayRuntimeConfig;
   readonly #createRenderer: (canvas: HTMLCanvasElement) => GameplayRendererHost;
@@ -86,21 +98,22 @@ export class WebGpuGameplayRuntime {
   readonly #scene = new Scene();
   readonly #trackingSource: GameplayTrackingSource;
   readonly #backgroundMesh: Mesh;
+  readonly #enemyMeshes: EnemyMeshRuntime[] = [];
   readonly #reticleGroup = new Group();
 
   #animationFrameHandle = 0;
   #animationStartAtMs = 0;
   #canvasHost: GameplayCanvasHost | null = null;
-  #hudSnapshot = freezeHudSnapshot("idle", "unavailable", null, null);
+  #hudSnapshot: GameplayHudSnapshot;
   #renderer: GameplayRendererHost | null = null;
 
   constructor(
     trackingSource: GameplayTrackingSource,
-    aimCalibration: AffineAimTransformSnapshot,
+    arenaSimulation: LocalArenaSimulation,
     config: GameplayRuntimeConfig = gameplayRuntimeConfig,
     dependencies: GameplayRuntimeDependencies = {}
   ) {
-    this.#affineAimTransform = AffineAimTransform.fromSnapshot(aimCalibration);
+    this.#arenaSimulation = arenaSimulation;
     this.#config = config;
     this.#trackingSource = trackingSource;
     this.#createRenderer = dependencies.createRenderer ?? createDefaultRenderer;
@@ -115,6 +128,8 @@ export class WebGpuGameplayRuntime {
     this.#scene.add(this.#backgroundMesh);
     this.#scene.add(this.#reticleGroup);
     this.#createReticleMeshes();
+    this.#createEnemyMeshes();
+    this.#hudSnapshot = freezeHudSnapshot("idle", null, this.#arenaSimulation.hudSnapshot);
   }
 
   get hudSnapshot(): GameplayHudSnapshot {
@@ -126,13 +141,13 @@ export class WebGpuGameplayRuntime {
     navigatorLike: Navigator | null | undefined = window.navigator
   ): Promise<GameplayHudSnapshot> {
     this.dispose();
+    this.#arenaSimulation.reset();
 
     if (navigatorLike?.gpu === undefined) {
       this.#hudSnapshot = freezeHudSnapshot(
         "failed",
-        "unavailable",
-        null,
-        "WebGPU is unavailable for the gameplay runtime."
+        "WebGPU is unavailable for the gameplay runtime.",
+        this.#arenaSimulation.hudSnapshot
       );
       throw new Error(
         this.#hudSnapshot.failureReason ??
@@ -140,13 +155,22 @@ export class WebGpuGameplayRuntime {
       );
     }
 
-    this.#hudSnapshot = freezeHudSnapshot("booting", "unavailable", null, null);
+    this.#hudSnapshot = freezeHudSnapshot(
+      "booting",
+      null,
+      this.#arenaSimulation.hudSnapshot
+    );
     this.#canvasHost = canvas;
     this.#renderer = this.#createRenderer(canvas);
     await this.#renderer.init();
     this.#animationStartAtMs = readNowMs();
     this.#syncViewport();
-    this.#hudSnapshot = freezeHudSnapshot("running", "unavailable", null, null);
+    this.#syncArenaFrame(this.#animationStartAtMs);
+    this.#hudSnapshot = freezeHudSnapshot(
+      "running",
+      null,
+      this.#arenaSimulation.hudSnapshot
+    );
     this.#queueNextFrame();
 
     return this.#hudSnapshot;
@@ -163,9 +187,18 @@ export class WebGpuGameplayRuntime {
     this.#canvasHost = null;
     this.#reticleGroup.visible = false;
     this.#animationStartAtMs = 0;
+    this.#arenaSimulation.reset();
+
+    for (const enemyMesh of this.#enemyMeshes) {
+      enemyMesh.group.visible = true;
+    }
 
     if (this.#hudSnapshot.lifecycle !== "failed") {
-      this.#hudSnapshot = freezeHudSnapshot("idle", "unavailable", null, null);
+      this.#hudSnapshot = freezeHudSnapshot(
+        "idle",
+        null,
+        this.#arenaSimulation.hudSnapshot
+      );
     }
   }
 
@@ -179,6 +212,71 @@ export class WebGpuGameplayRuntime {
     );
 
     return new Mesh(new PlaneGeometry(2, 2), backgroundMaterial);
+  }
+
+  #createEnemyMeshes(): void {
+    for (const enemyState of this.#arenaSimulation.enemyRenderStates) {
+      const group = new Group();
+      const bodyMaterial = new MeshBasicNodeMaterial({
+        transparent: true
+      });
+      const wingMaterial = new MeshBasicNodeMaterial({
+        transparent: true
+      });
+      const bodyMesh = new Mesh(
+        new PlaneGeometry(
+          this.#config.enemies.bodySize.width,
+          this.#config.enemies.bodySize.height
+        ),
+        bodyMaterial
+      );
+      const leftWingPivot = new Group();
+      const rightWingPivot = new Group();
+      const leftWing = new Mesh(
+        new PlaneGeometry(
+          this.#config.enemies.wingSize.width,
+          this.#config.enemies.wingSize.height
+        ),
+        wingMaterial
+      );
+      const rightWing = new Mesh(
+        new PlaneGeometry(
+          this.#config.enemies.wingSize.width,
+          this.#config.enemies.wingSize.height
+        ),
+        wingMaterial
+      );
+
+      setMaterialColor(bodyMaterial, this.#config.enemies.bodyColor);
+      setMaterialColor(wingMaterial, this.#config.enemies.wingColor);
+      bodyMaterial.opacity = 0.95;
+      wingMaterial.opacity = 0.92;
+
+      leftWing.position.x = -this.#config.enemies.wingSize.width * 0.38;
+      rightWing.position.x = this.#config.enemies.wingSize.width * 0.38;
+      leftWingPivot.position.x = -this.#config.enemies.bodySize.width * 0.18;
+      rightWingPivot.position.x = this.#config.enemies.bodySize.width * 0.18;
+
+      leftWingPivot.add(leftWing);
+      rightWingPivot.add(rightWing);
+      group.add(bodyMesh, leftWingPivot, rightWingPivot);
+      group.position.set(
+        this.#toWorldX(enemyState.positionX),
+        this.#toWorldY(enemyState.positionY),
+        0.04
+      );
+      group.scale.setScalar(enemyState.scale);
+      group.visible = enemyState.visible;
+
+      this.#enemyMeshes.push({
+        bodyMaterial,
+        group,
+        leftWingPivot,
+        rightWingPivot,
+        wingMaterial
+      });
+      this.#scene.add(group);
+    }
   }
 
   #createReticleMeshes(): void {
@@ -240,40 +338,81 @@ export class WebGpuGameplayRuntime {
       return;
     }
 
+    const nowMs = readNowMs();
+
     this.#syncViewport();
-    this.#syncReticleFromTracking(this.#trackingSource.latestPose);
+    this.#syncArenaFrame(nowMs);
     this.#reticleGroup.rotation.z =
-      Math.sin(((readNowMs() - this.#animationStartAtMs) / 1000) * 1.4) * 0.03;
+      Math.sin(((nowMs - this.#animationStartAtMs) / 1000) * 1.4) * 0.03;
     this.#renderer.render(this.#scene, this.#camera);
   }
 
-  #syncReticleFromTracking(trackingSnapshot: LatestHandTrackingSnapshot): void {
-    if (trackingSnapshot.trackingState !== "tracked") {
-      this.#reticleGroup.visible = false;
-      this.#hudSnapshot = freezeHudSnapshot(
-        "running",
-        trackingSnapshot.trackingState,
-        null,
-        null
+  #syncArenaFrame(nowMs: number): void {
+    const arenaHudSnapshot = this.#arenaSimulation.advance(
+      this.#trackingSource.latestPose,
+      nowMs
+    );
+
+    this.#syncReticleFromArena(arenaHudSnapshot.aimPoint);
+    this.#syncEnemiesFromArena();
+    this.#hudSnapshot = freezeHudSnapshot("running", null, arenaHudSnapshot);
+  }
+
+  #syncEnemiesFromArena(): void {
+    const enemyStates = this.#arenaSimulation.enemyRenderStates;
+
+    for (let index = 0; index < this.#enemyMeshes.length; index += 1) {
+      const enemyMesh = this.#enemyMeshes[index]!;
+      const enemyState = enemyStates[index];
+
+      if (enemyState === undefined) {
+        enemyMesh.group.visible = false;
+        continue;
+      }
+
+      if (enemyState.behavior === "downed") {
+        setMaterialColor(enemyMesh.bodyMaterial, this.#config.enemies.downedColor);
+        setMaterialColor(enemyMesh.wingMaterial, this.#config.enemies.downedColor);
+        enemyMesh.bodyMaterial.opacity = 0.82;
+        enemyMesh.wingMaterial.opacity = 0.78;
+      } else if (enemyState.behavior === "scatter") {
+        setMaterialColor(enemyMesh.bodyMaterial, this.#config.enemies.scatterColor);
+        setMaterialColor(enemyMesh.wingMaterial, this.#config.enemies.scatterColor);
+        enemyMesh.bodyMaterial.opacity = 0.96;
+        enemyMesh.wingMaterial.opacity = 0.94;
+      } else {
+        setMaterialColor(enemyMesh.bodyMaterial, this.#config.enemies.bodyColor);
+        setMaterialColor(enemyMesh.wingMaterial, this.#config.enemies.wingColor);
+        enemyMesh.bodyMaterial.opacity = 0.95;
+        enemyMesh.wingMaterial.opacity = 0.92;
+      }
+
+      enemyMesh.group.visible = enemyState.visible;
+      enemyMesh.group.position.set(
+        this.#toWorldX(enemyState.positionX),
+        this.#toWorldY(enemyState.positionY),
+        0.04
       );
+      enemyMesh.group.rotation.z = enemyState.headingRadians;
+      enemyMesh.group.scale.setScalar(enemyState.scale);
+      enemyMesh.leftWingPivot.rotation.z =
+        Math.sin(enemyState.wingPhase) * this.#config.enemies.wingSweepRadians;
+      enemyMesh.rightWingPivot.rotation.z =
+        -Math.sin(enemyState.wingPhase) * this.#config.enemies.wingSweepRadians;
+    }
+  }
+
+  #syncReticleFromArena(aimPoint: GameplayHudSnapshot["aimPoint"]): void {
+    if (aimPoint === null) {
+      this.#reticleGroup.visible = false;
       return;
     }
 
-    const aimPoint = this.#affineAimTransform.apply(trackingSnapshot.pose.indexTip);
-    const aspect = Math.max(
-      1,
-      (this.#canvasHost?.clientWidth ?? 1) / Math.max(this.#canvasHost?.clientHeight ?? 1, 1)
-    );
-    const worldX = (aimPoint.x * 2 - 1) * aspect;
-    const worldY = 1 - aimPoint.y * 2;
-
     this.#reticleGroup.visible = true;
-    this.#reticleGroup.position.set(worldX, worldY, 0.1);
-    this.#hudSnapshot = freezeHudSnapshot(
-      "running",
-      "tracked",
-      createNormalizedViewportPoint(aimPoint),
-      null
+    this.#reticleGroup.position.set(
+      this.#toWorldX(aimPoint.x),
+      this.#toWorldY(aimPoint.y),
+      0.1
     );
   }
 
@@ -294,5 +433,13 @@ export class WebGpuGameplayRuntime {
     this.#camera.bottom = -1;
     this.#camera.updateProjectionMatrix();
     this.#backgroundMesh.scale.set(aspect, 1, 1);
+  }
+
+  #toWorldX(normalizedX: number): number {
+    return (normalizedX * 2 - 1) * this.#camera.right;
+  }
+
+  #toWorldY(normalizedY: number): number {
+    return 1 - normalizedY * 2;
   }
 }

@@ -3,6 +3,11 @@ import type {
 } from "@thumbshooter/shared";
 
 import type { HandTrackingPoseState } from "./hand-tracking";
+import type {
+  LocalArenaArenaSnapshot,
+  LocalArenaTargetFeedbackSnapshot,
+  LocalArenaWeaponSnapshot
+} from "./local-arena-simulation";
 
 export const gameplayRuntimeLifecycleStates = [
   "idle",
@@ -16,15 +21,33 @@ export type GameplayRuntimeLifecycleState =
 
 export interface GameplayHudSnapshot {
   readonly aimPoint: NormalizedViewportPoint | null;
+  readonly arena: LocalArenaArenaSnapshot;
   readonly failureReason: string | null;
   readonly lifecycle: GameplayRuntimeLifecycleState;
+  readonly targetFeedback: LocalArenaTargetFeedbackSnapshot;
   readonly trackingState: HandTrackingPoseState;
+  readonly weapon: LocalArenaWeaponSnapshot;
 }
 
 export interface GameplayRuntimeConfig {
   readonly background: {
     readonly lowerColor: readonly [number, number, number];
     readonly upperColor: readonly [number, number, number];
+  };
+  readonly enemies: {
+    readonly bodyColor: readonly [number, number, number];
+    readonly bodySize: {
+      readonly height: number;
+      readonly width: number;
+    };
+    readonly downedColor: readonly [number, number, number];
+    readonly scatterColor: readonly [number, number, number];
+    readonly wingColor: readonly [number, number, number];
+    readonly wingSize: {
+      readonly height: number;
+      readonly width: number;
+    };
+    readonly wingSweepRadians: number;
   };
   readonly reticle: {
     readonly innerRadius: number;
