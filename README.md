@@ -1,7 +1,16 @@
 # ThumbShooter
 
-ThumbShooter is a type-first monorepo scaffold for a browser FPS controlled by
-hand tracking.
+ThumbShooter is a type-first monorepo for a browser FPS controlled by hand
+tracking.
+
+Current implemented milestone:
+
+- login and local profile persistence
+- webcam permission flow
+- unsupported WebGPU gameplay route
+- calibration shell placeholder
+- gameplay shell with in-game menu, recalibration entry point, and music/SFX
+  sliders
 
 ## Workspaces
 
@@ -21,6 +30,13 @@ npm install
 ./tools/verify
 npm run dev:client
 npm run start:server
+```
+
+To review the current client shell locally:
+
+```bash
+npm install
+npm run dev:client
 ```
 
 ## Locked Runtime

@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import { ThumbShooterScaffoldApp } from "./app/thumbshooter-scaffold-app";
+import { ThumbShooterShell } from "./app/thumbshooter-shell";
 import "./styles/global.css";
 
 const rootElement = document.querySelector<HTMLDivElement>("#app");
@@ -12,6 +12,6 @@ if (rootElement === null) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <ThumbShooterScaffoldApp />
+    <ThumbShooterShell />
   </StrictMode>
 );

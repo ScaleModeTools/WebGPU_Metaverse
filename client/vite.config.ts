@@ -5,6 +5,21 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              maxSize: 240 * 1024,
+              name: "strudel",
+              test: /node_modules[\\/](?:@strudel|superdough)[\\/]/
+            }
+          ]
+        }
+      }
+    }
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

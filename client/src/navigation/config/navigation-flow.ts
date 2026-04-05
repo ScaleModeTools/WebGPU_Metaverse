@@ -11,12 +11,12 @@ export const navigationFlow = {
     },
     {
       id: "calibration",
-      label: "Complete nine-point calibration",
+      label: "Review calibration shell",
       requiresPrevious: ["permissions"]
     },
     {
       id: "gameplay",
-      label: "Enter the birds arena",
+      label: "Open the gameplay shell",
       requiresPrevious: ["calibration"]
     },
     {

@@ -7,8 +7,10 @@ import type {
   NormalizedViewportPoint,
   PlayerProfileSnapshot,
   ReticleId,
-  SoundEffectEngine
+  SoundEffectEngine,
+  Username
 } from "@thumbshooter/shared";
+import { createUsername } from "@thumbshooter/shared";
 
 type AssertTrue<T extends true> = T;
 
@@ -61,6 +63,9 @@ type NormalizedPointXAxisUsesBrandedScalar = AssertTrue<
 type NormalizedPointYAxisUsesBrandedScalar = AssertTrue<
   IsEqual<NormalizedViewportPoint["y"], NormalizedViewportScalar>
 >;
+type CreateUsernameReturnMatches = AssertTrue<
+  IsEqual<ReturnType<typeof createUsername>, Username | null>
+>;
 
 export type SharedContractTypeTests =
   | CalibrationAnchorIdMatches
@@ -71,4 +76,5 @@ export type SharedContractTypeTests =
   | PlayerProfileReticleUsesReticleId
   | PlayerProfileAudioUsesAudioSettings
   | NormalizedPointXAxisUsesBrandedScalar
-  | NormalizedPointYAxisUsesBrandedScalar;
+  | NormalizedPointYAxisUsesBrandedScalar
+  | CreateUsernameReturnMatches;

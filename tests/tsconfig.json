@@ -10,7 +10,7 @@
     "noEmit": true,
     "paths": {
       "@thumbshooter/shared": [
-        "./packages/shared/src/index.ts"
+        "../packages/shared/src/index.ts"
       ]
     }
   },

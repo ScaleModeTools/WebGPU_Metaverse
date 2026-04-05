@@ -5,6 +5,7 @@ import {
   AudioSettings,
   PlayerProfile,
   calibrationAnchorIds,
+  createUsername,
   createCalibrationShotSample,
   createNormalizedViewportPoint,
   reticleIds
@@ -112,4 +113,20 @@ test("PlayerProfile.fromSnapshot rehydrates an immutable cloned snapshot", () =>
   assert.equal(Object.isFrozen(profile.snapshot), true);
   assert.equal(Object.isFrozen(profile.snapshot.calibrationSamples), true);
   assert.equal(Object.isFrozen(profile.snapshot.audioSettings), true);
+});
+
+test("createUsername trims whitespace and rejects blank names", () => {
+  assert.equal(createUsername("  ThumbShooter  "), "ThumbShooter");
+  assert.equal(createUsername("   "), null);
+});
+
+test("PlayerProfile.resetCalibration clears stored calibration samples", () => {
+  const resetProfile = PlayerProfile.create({
+    username: "thumbshooter-test-user"
+  })
+    .withCalibrationShot(createCalibrationSampleFixture())
+    .resetCalibration();
+
+  assert.equal(resetProfile.calibrationSampleCount, 0);
+  assert.deepEqual(resetProfile.snapshot.calibrationSamples, []);
 });

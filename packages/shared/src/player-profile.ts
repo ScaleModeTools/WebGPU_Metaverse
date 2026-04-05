@@ -12,6 +12,16 @@ import type { TypeBrand } from "./type-branding.js";
 
 export type Username = TypeBrand<string, "Username">;
 
+export function createUsername(rawValue: string): Username | null {
+  const normalizedValue = rawValue.trim();
+
+  if (normalizedValue.length === 0) {
+    return null;
+  }
+
+  return normalizedValue as Username;
+}
+
 export interface PlayerProfileSnapshot {
   readonly username: Username;
   readonly selectedReticleId: ReticleId;
@@ -68,6 +78,13 @@ export class PlayerProfile {
 
   get audioSettings(): AudioSettings {
     return AudioSettings.fromSnapshot(this.#snapshot.audioSettings);
+  }
+
+  resetCalibration(): PlayerProfile {
+    return new PlayerProfile({
+      ...this.#snapshot,
+      calibrationSamples: []
+    });
   }
 
   withSelectedReticle(selectedReticleId: ReticleId): PlayerProfile {

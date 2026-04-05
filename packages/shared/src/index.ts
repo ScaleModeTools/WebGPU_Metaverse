@@ -51,3 +51,6 @@ export type {
   PlayerProfileSnapshot,
   Username
 } from "./player-profile.js";
+export {
+  createUsername
+} from "./player-profile.js";
