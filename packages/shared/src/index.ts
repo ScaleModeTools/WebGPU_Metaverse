@@ -1,11 +1,35 @@
 export type { TypeBrand } from "./type-branding.js";
 export {
-  calibrationAnchorIds
+  AudioSettings,
+  audioChannelIds,
+  backgroundMusicEngines,
+  createAudioLevel,
+  soundEffectEngines
+} from "./audio-settings.js";
+export type {
+  AudioChannelId,
+  AudioLevel,
+  AudioMixSnapshot,
+  AudioSettingsCreateInput,
+  AudioSettingsSnapshot,
+  BackgroundMusicEngine,
+  SoundEffectEngine
+} from "./audio-settings.js";
+export {
+  calibrationAnchorIds,
+  createCalibrationShotSample,
+  createHandTriggerPoseSample,
+  createNormalizedViewportPoint,
+  createNormalizedViewportScalar
 } from "./calibration-types.js";
 export type {
   CalibrationAnchorId,
   CalibrationShotSample,
+  CalibrationShotSampleInput,
   HandTriggerPoseSample,
+  HandTriggerPoseSampleInput,
+  NormalizedViewportScalar,
+  NormalizedViewportPointInput,
   NormalizedViewportPoint
 } from "./calibration-types.js";
 export {

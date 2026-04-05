@@ -3,7 +3,7 @@ import type {
   ReticleColor,
   ReticleId,
   ReticleStyle
-} from "../../../../packages/shared/src/index";
+} from "@thumbshooter/shared";
 
 export interface ReticleDescriptor<TId extends ReticleId = ReticleId> {
   readonly id: TId;

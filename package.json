@@ -13,13 +13,22 @@
     "npm": ">=11.6.2"
   },
   "scripts": {
+    "clean": "./tools/clean",
+    "build": "./tools/build",
+    "test": "./tools/test",
+    "bench": "./tools/bench",
+    "verify": "./tools/verify",
     "dev:client": "npm run dev --workspace client",
     "start:server": "npm run start --workspace server",
     "watch:server": "npm run watch:build --workspace server",
     "start:server:watch": "npm run start:watch --workspace server",
-    "build": "npm run build --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present",
-    "check": "npm run typecheck && npm run build"
+    "clean:generated": "npm run clean --workspace @thumbshooter/shared && npm run clean --workspace @thumbshooter/server && npm run clean --workspace @thumbshooter/client",
+    "build:workspaces": "npm run build --workspace @thumbshooter/shared && npm run build --workspace @thumbshooter/server && npm run build --workspace @thumbshooter/client",
+    "typecheck:workspaces": "npm run typecheck --workspace @thumbshooter/shared && npm run typecheck --workspace @thumbshooter/server && npm run typecheck --workspace @thumbshooter/client",
+    "typecheck:contracts": "tsc -p tests/tsconfig.json --noEmit",
+    "typecheck": "npm run typecheck:workspaces && npm run typecheck:contracts",
+    "test:runtime": "node --test tests/runtime/**/*.test.mjs",
+    "check": "npm run typecheck && npm run test:runtime"
   },
   "devDependencies": {
     "@types/node": "25.5.2",

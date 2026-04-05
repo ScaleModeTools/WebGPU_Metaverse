@@ -18,6 +18,10 @@ export const navigationFlow = {
       id: "gameplay",
       label: "Enter the birds arena",
       requiresPrevious: ["calibration"]
+    },
+    {
+      id: "unsupported",
+      label: "Show a clear unsupported gameplay state"
     }
   ]
 } as const satisfies NavigationFlow;

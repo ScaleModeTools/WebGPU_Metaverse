@@ -2,7 +2,8 @@ export const navigationStepIds = [
   "login",
   "permissions",
   "calibration",
-  "gameplay"
+  "gameplay",
+  "unsupported"
 ] as const;
 
 export type NavigationStepId = (typeof navigationStepIds)[number];

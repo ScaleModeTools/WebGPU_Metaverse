@@ -3,4 +3,5 @@ export type GameRuntimeStage =
   | "login"
   | "permissions"
   | "calibration"
-  | "gameplay";
+  | "gameplay"
+  | "unsupported";

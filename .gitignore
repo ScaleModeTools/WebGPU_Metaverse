@@ -10,10 +10,26 @@ coverage/
 .vite/
 *.log
 
+# Secrets and private local files
+.env
+.env.*
+!.env.example
+.private/
+private/
+*.pem
+*.key
+*.crt
+*.p12
+
 # Local-only developer helpers
 .local-dev/
 .agents/skills/
 skills-lock.json
+
+# Private planning and agent guidance
+**/AGENTS.md
+/spec.md
+/progress.md
 
 # Editor folders and swap files
 .idea/

@@ -1,48 +1,41 @@
 # ThumbShooter
 
-ThumbShooter is a browser FPS prototype controlled by a "thumb gun" gesture.
-This repository is now set up as a type-first monorepo scaffold so the full
-game can be built against a concrete spec, dependency baseline, and agent
-workflow.
+ThumbShooter is a type-first monorepo scaffold for a browser FPS controlled by
+hand tracking.
 
-## Workspace
+## Workspaces
 
-- `client`: Vite + TypeScript browser app
-- `server`: TypeScript Node service placeholder
-- `packages/shared`: shared domain types for future client/server contracts
-- `docs`: dependency and LLM reference material
-- `examples`: external reference code and adaptation notes
-
-## Core Docs
-
-- [`spec.md`](./spec.md)
-- [`progress.md`](./progress.md)
-- [`docs/dependencies.md`](./docs/dependencies.md)
-- [`AGENTS.md`](./AGENTS.md)
+- `client`: React + Vite + shadcn browser shell
+- `server`: TypeScript headless service boundary
+- `packages/shared`: cross-workspace contracts
+- `docs`: dependency and setup notes
+- `examples`: reference material only
 
 ## Commands
 
 ```bash
 npm install
+./tools/build
+./tools/test
+./tools/bench
+./tools/verify
 npm run dev:client
-npm run build
 npm run start:server
-npm run typecheck
 ```
 
-## Rendering Direction
+## Locked Runtime
 
-The production game target is Three.js `r183` with WebGPU-first gameplay code.
-The included birds example remains a behavior reference, not the final runtime
-architecture.
+- gameplay: Three.js `r183`, `three/webgpu`, `three/tsl`
+- UI shell: React + shadcn (`radix-nova`)
+- tracking: worker-first MediaPipe Hand Landmarker
+- audio: Strudel BGM, Web Audio SFX
+- fallback: explicit unsupported state, not silent renderer downgrade
+- first calibration model: 2D affine
+- first weapon: semiautomatic pistol
 
-## Local Dev Helpers
+## Main Docs
 
-Local-only launch helpers and personal notes belong under `.local-dev/`. That
-folder is intentionally gitignored so public pushes stay focused on production
-source, shared docs, and portable scripts.
-
-## TypeScript File Rule
-
-Use `.ts` by default. Introduce `.tsx` only when a file actually contains JSX.
-The removed `tsx` package and the `.tsx` file extension are unrelated concerns.
+- [AGENTS.md](./AGENTS.md)
+- [spec.md](./spec.md)
+- [docs/dependencies.md](./docs/dependencies.md)
+- [progress.md](./progress.md)

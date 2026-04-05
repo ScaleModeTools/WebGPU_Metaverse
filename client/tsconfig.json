@@ -13,11 +13,21 @@
       "vite/client",
       "@webgpu/types"
     ],
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@thumbshooter/shared": [
+        "../packages/shared/src/index.ts"
+      ]
+    },
     "useDefineForClassFields": true,
     "noEmit": true
   },
   "include": [
     "src/**/*.ts",
+    "src/**/*.tsx",
     "vite.config.ts"
   ]
 }
