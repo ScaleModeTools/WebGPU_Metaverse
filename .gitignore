@@ -1,39 +1,66 @@
+# ----------------------------
 # OS files
+# ----------------------------
 .DS_Store
 Thumbs.db
 Desktop.ini
 
-# Node and build output
+# ----------------------------
+# Node / build output
+# ----------------------------
 node_modules/
 dist/
 coverage/
 .vite/
 *.log
 
-# Secrets and private local files
+# ----------------------------
+# Environment & secrets
+# ----------------------------
 .env
 .env.*
 !.env.example
+
 .private/
 private/
+
 *.pem
 *.key
 *.crt
 *.p12
 
+# ----------------------------
 # Local-only developer helpers
+# ----------------------------
 .local-dev/
 .agents/skills/
 skills-lock.json
 
-# Private planning and agent guidance
+# ----------------------------
+# Private planning / agent docs
+# ----------------------------
 **/AGENTS.md
 /spec.md
 /progress.md
 
-# Editor folders and swap files
+# ----------------------------
+# Editors & temp files
+# ----------------------------
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
+
+# ----------------------------
+# Local examples / experiments
+# (ignore if not part of product)
+# ----------------------------
+/examples/
+
+# ----------------------------
+# Optional: large generated assets
+# (ONLY if you later add a download step)
+# ----------------------------
+# /client/public/mediapipe/
+# /client/public/models/
