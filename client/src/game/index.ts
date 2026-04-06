@@ -28,6 +28,11 @@ export {
 } from "./types/game-foundation";
 export { calibrationCaptureStates } from "./types/calibration-session";
 export { gameplayRuntimeLifecycleStates } from "./types/gameplay-runtime";
+export {
+  gameplayDebugPanelModes,
+  gameplayReticleStyledStates,
+  gameplayReticleVisualStates
+} from "./types/gameplay-presentation";
 export { localCombatSessionPhases } from "./types/local-combat-session";
 export {
   handTrackingLifecycleStates,
@@ -94,6 +99,13 @@ export type {
   GameplayRuntimeConfig,
   GameplayRuntimeLifecycleState
 } from "./types/gameplay-runtime";
+export type {
+  GameplayDebugPanelMode,
+  GameplayReticleStyledState,
+  GameplayReticleVisualState,
+  GameplayTelemetrySnapshot,
+  HandTrackingTelemetrySnapshot
+} from "./types/gameplay-presentation";
 export type {
   LocalCombatSessionConfig,
   LocalCombatSessionPhase,

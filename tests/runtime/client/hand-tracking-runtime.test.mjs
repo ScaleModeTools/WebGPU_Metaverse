@@ -134,6 +134,8 @@ test("HandTrackingRuntime boots the worker, pumps frames, and disposes owned res
   await Promise.resolve();
 
   assert.equal(worker.messages.at(-1)?.kind, "process-frame");
+  assert.equal(runtime.telemetrySnapshot.framesDispatched, 1);
+  assert.equal(runtime.telemetrySnapshot.inFlightFrameSkips, 0);
 
   runtime.dispose();
 
@@ -206,6 +208,11 @@ test("HandTrackingRuntime keeps the newest validated pose snapshot and ignores s
 
   assert.equal(runtime.latestPose.trackingState, "no-hand");
   assert.equal(runtime.latestPose.sequenceNumber, 3);
+  assert.equal(runtime.telemetrySnapshot.framesProcessed, 2);
+  assert.equal(runtime.telemetrySnapshot.staleSnapshotsIgnored, 1);
+  assert.equal(runtime.telemetrySnapshot.latestSequenceNumber, 3);
+  assert.equal(runtime.telemetrySnapshot.trackingState, "no-hand");
+  assert.notEqual(runtime.telemetrySnapshot.workerLatencyMs, null);
 
   runtime.dispose();
 });

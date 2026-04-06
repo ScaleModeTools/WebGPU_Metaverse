@@ -128,18 +128,19 @@ function playBrowserCue({
       break;
     case "calibration-shot":
     case "weapon-pistol-shot":
-      schedulePulse(browserContext, destinationBus, now, 240, 0.08, "square", 0.12, 95);
+      schedulePulse(browserContext, destinationBus, now, 240, 0.07, "square", 0.09, 105);
       break;
     case "weapon-reload":
       schedulePulse(browserContext, destinationBus, now, 460, 0.1, "triangle", 0.05, 320);
       schedulePulse(browserContext, destinationBus, now + 0.08, 420, 0.14, "triangle", 0.04, 220);
       break;
     case "enemy-hit":
-      schedulePulse(browserContext, destinationBus, now, 180, 0.09, "square", 0.05, 120);
+      schedulePulse(browserContext, destinationBus, now, 180, 0.08, "square", 0.06, 120);
+      schedulePulse(browserContext, destinationBus, now + 0.045, 260, 0.07, "triangle", 0.035, 180);
       break;
     case "enemy-scatter":
-      schedulePulse(browserContext, destinationBus, now, 280, 0.1, "sawtooth", 0.04, 520);
-      schedulePulse(browserContext, destinationBus, now + 0.06, 360, 0.1, "sawtooth", 0.03, 660);
+      schedulePulse(browserContext, destinationBus, now, 280, 0.08, "sawtooth", 0.03, 520);
+      schedulePulse(browserContext, destinationBus, now + 0.06, 360, 0.08, "sawtooth", 0.025, 660);
       break;
   }
 }

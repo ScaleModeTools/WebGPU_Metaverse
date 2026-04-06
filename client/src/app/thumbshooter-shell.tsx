@@ -23,13 +23,14 @@ export function ThumbShooterShell() {
         />
 
         <main className="grid flex-1 gap-6 xl:grid-cols-[0.82fr_1.18fr]">
-          <ShellStatusRail
-            calibrationSampleCount={controller.profile?.calibrationSampleCount ?? 0}
-            hasAimCalibration={controller.profile?.hasAimCalibration ?? false}
-            hydrationSource={controller.hydrationSource}
-            reticleCatalogLabel={controller.shellView.reticleCatalogLabel}
-            username={controller.profile?.snapshot.username ?? "not confirmed"}
-          />
+        <ShellStatusRail
+          calibrationSampleCount={controller.profile?.calibrationSampleCount ?? 0}
+          calibrationQualityLabel={controller.shellView.calibrationQualityLabel}
+          hasAimCalibration={controller.profile?.hasAimCalibration ?? false}
+          hydrationSource={controller.hydrationSource}
+          reticleCatalogLabel={controller.shellView.reticleCatalogLabel}
+          username={controller.profile?.snapshot.username ?? "not confirmed"}
+        />
 
           <ShellStageRouter
             activeStep={controller.navigationSnapshot.activeStep}
@@ -37,6 +38,7 @@ export function ThumbShooterShell() {
             bestScore={controller.profile?.snapshot.bestScore ?? 0}
             capabilityReasonLabel={controller.shellView.capabilityReasonLabel}
             capabilityStatus={controller.capabilityStatus}
+            debugPanelMode={controller.debugPanelMode}
             handTrackingRuntime={controller.handTrackingRuntime}
             hasStoredProfile={controller.hydrationSource !== "empty"}
             loginError={controller.loginError}
@@ -62,8 +64,11 @@ export function ThumbShooterShell() {
       {controller.profile !== null ? (
         <GameMenuDialog
           audioStatusLabel={controller.shellView.audioStatusLabel}
+          calibrationQualityLabel={controller.shellView.calibrationQualityLabel}
+          debugPanelMode={controller.debugPanelMode}
           gameplayStatusLabel="Local combat progression live"
           musicVolume={controller.shellView.musicVolumeSliderValue}
+          onDebugPanelModeChange={controller.onGameplayDebugPanelModeChange}
           onMusicVolumeChange={controller.onMusicVolumeChange}
           onOpenChange={controller.onGameplayMenuOpen}
           onRecalibrationRequest={controller.onRecalibrationRequest}

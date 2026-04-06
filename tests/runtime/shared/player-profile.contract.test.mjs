@@ -144,6 +144,70 @@ test("AffineAimTransform.fit reconstructs an affine screen-space mapping", () =>
   );
 });
 
+test("AffineAimTransform.fit tolerates one bad calibration outlier and exposes diagnostics", () => {
+  const samples = [
+    createCalibrationShotSample({
+      anchorId: "center",
+      intendedTarget: { x: 0.2, y: 0.2 },
+      observedPose: {
+        thumbTip: { x: 0.2, y: 0.3 },
+        indexTip: { x: 0.2, y: 0.2 }
+      }
+    }),
+    createCalibrationShotSample({
+      anchorId: "top-left",
+      intendedTarget: { x: 0.8, y: 0.2 },
+      observedPose: {
+        thumbTip: { x: 0.8, y: 0.3 },
+        indexTip: { x: 0.8, y: 0.2 }
+      }
+    }),
+    createCalibrationShotSample({
+      anchorId: "top-right",
+      intendedTarget: { x: 0.2, y: 0.8 },
+      observedPose: {
+        thumbTip: { x: 0.2, y: 0.9 },
+        indexTip: { x: 0.2, y: 0.8 }
+      }
+    }),
+    createCalibrationShotSample({
+      anchorId: "bottom-left",
+      intendedTarget: { x: 0.8, y: 0.8 },
+      observedPose: {
+        thumbTip: { x: 0.8, y: 0.9 },
+        indexTip: { x: 0.8, y: 0.8 }
+      }
+    }),
+    createCalibrationShotSample({
+      anchorId: "top-center",
+      intendedTarget: { x: 0.5, y: 0.2 },
+      observedPose: {
+        thumbTip: { x: 0.5, y: 0.3 },
+        indexTip: { x: 0.5, y: 0.2 }
+      }
+    }),
+    createCalibrationShotSample({
+      anchorId: "mid-right",
+      intendedTarget: { x: 0.92, y: 0.92 },
+      observedPose: {
+        thumbTip: { x: 0.5, y: 0.3 },
+        indexTip: { x: 0.5, y: 0.2 }
+      }
+    })
+  ];
+  const transform = AffineAimTransform.fit(samples);
+  const diagnostics =
+    transform === null ? null : AffineAimTransform.summarizeFit(samples, transform);
+
+  assert.notEqual(transform, null);
+  assert.notEqual(diagnostics, null);
+  assert.ok(Math.abs((transform?.apply({ x: 0.35, y: 0.45 }).x ?? 0) - 0.35) < 1e-3);
+  assert.ok(Math.abs((transform?.apply({ x: 0.35, y: 0.45 }).y ?? 0) - 0.45) < 1e-3);
+  assert.equal(diagnostics?.inlierSampleCount, 5);
+  assert.equal(diagnostics?.sampleCount, 6);
+  assert.equal(diagnostics?.quality, "degraded");
+});
+
 test("AffineAimTransform.projectUnclamped preserves off-screen projections", () => {
   const transform = AffineAimTransform.fromSnapshot({
     xCoefficients: [2, 0, -0.5],

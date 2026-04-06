@@ -155,6 +155,10 @@ test("LocalArenaSimulation completes the round on a kill and reset starts a fres
     {
       type: "weapon-fired",
       weaponId: "semiautomatic-pistol"
+    },
+    {
+      enemyId: "bird-1",
+      type: "enemy-hit-confirmed"
     }
   ]);
   assert.equal(simulation.enemyRenderStates[0]?.behavior, "downed");

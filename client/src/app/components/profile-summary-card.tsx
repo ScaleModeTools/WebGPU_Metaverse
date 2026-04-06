@@ -10,6 +10,7 @@ import {
 
 interface ProfileSummaryCardProps {
   readonly calibrationSampleCount: number;
+  readonly calibrationQualityLabel: string;
   readonly hasAimCalibration: boolean;
   readonly hydrationSource: StoredProfileHydrationResult["source"];
   readonly reticleCatalogLabel: string;
@@ -18,6 +19,7 @@ interface ProfileSummaryCardProps {
 
 export function ProfileSummaryCard({
   calibrationSampleCount,
+  calibrationQualityLabel,
   hasAimCalibration,
   hydrationSource,
   reticleCatalogLabel,
@@ -44,6 +46,9 @@ export function ProfileSummaryCard({
         </div>
         <div className="rounded-xl border border-border/70 bg-muted/35 px-3 py-3">
           Aim calibration: {hasAimCalibration ? "ready" : "pending"}
+        </div>
+        <div className="rounded-xl border border-border/70 bg-muted/35 px-3 py-3">
+          Calibration quality: {calibrationQualityLabel}
         </div>
         <div className="rounded-xl border border-border/70 bg-muted/35 px-3 py-3">
           Reticle catalog: {reticleCatalogLabel}

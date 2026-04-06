@@ -4,7 +4,8 @@ import test, { after, before } from "node:test";
 import {
   AffineAimTransform,
   AudioSettings,
-  PlayerProfile
+  PlayerProfile,
+  createCalibrationShotSample
 } from "@thumbshooter/shared";
 
 import { createClientModuleLoader } from "./load-client-module.mjs";
@@ -46,6 +47,7 @@ test("buildThumbShooterShellView derives stable shell labels from typed state", 
   });
 
   assert.equal(shellView.audioStatusLabel, "Audio unlocked, Strudel primed");
+  assert.equal(shellView.calibrationQualityLabel, "pending");
   assert.equal(shellView.capabilityReasonLabel, "Gameplay WebGPU adapter ready.");
   assert.equal(shellView.musicVolumeLabel, "30%");
   assert.equal(shellView.sfxVolumeLabel, "65%");
@@ -75,6 +77,79 @@ test("resolveCalibrationShellState reports reviewed only after a fitted calibrat
   assert.equal(resolveCalibrationShellState(null), "pending");
   assert.equal(resolveCalibrationShellState(pendingProfile), "pending");
   assert.equal(resolveCalibrationShellState(reviewedProfile), "reviewed");
+});
+
+test("buildThumbShooterShellView summarizes stored calibration quality", async () => {
+  const { buildThumbShooterShellView } = await clientLoader.load(
+    "/src/app/states/thumbshooter-shell-view.ts"
+  );
+  const profile = PlayerProfile.create({
+    username: "calibrated-user"
+  })
+    .withCalibrationShot(
+      createCalibrationShotSample({
+        anchorId: "center",
+        intendedTarget: { x: 0.3, y: 0.3 },
+        observedPose: {
+          thumbTip: { x: 0.3, y: 0.4 },
+          indexTip: { x: 0.3, y: 0.3 }
+        }
+      })
+    )
+    .withCalibrationShot(
+      createCalibrationShotSample({
+        anchorId: "top-left",
+        intendedTarget: { x: 0.7, y: 0.3 },
+        observedPose: {
+          thumbTip: { x: 0.7, y: 0.4 },
+          indexTip: { x: 0.7, y: 0.3 }
+        }
+      })
+    )
+    .withCalibrationShot(
+      createCalibrationShotSample({
+        anchorId: "top-right",
+        intendedTarget: { x: 0.3, y: 0.7 },
+        observedPose: {
+          thumbTip: { x: 0.3, y: 0.8 },
+          indexTip: { x: 0.3, y: 0.7 }
+        }
+      })
+    )
+    .withCalibrationShot(
+      createCalibrationShotSample({
+        anchorId: "bottom-left",
+        intendedTarget: { x: 0.7, y: 0.7 },
+        observedPose: {
+          thumbTip: { x: 0.7, y: 0.8 },
+          indexTip: { x: 0.7, y: 0.7 }
+        }
+      })
+    )
+    .withAimCalibration(
+      AffineAimTransform.fromSnapshot({
+        xCoefficients: [1, 0, 0],
+        yCoefficients: [0, 1, 0]
+      }).snapshot
+    );
+
+  const shellView = buildThumbShooterShellView({
+    audioSnapshot: {
+      backgroundTrackId: "birds-arena-loop",
+      unlockState: "unlocked",
+      backgroundMusicState: "primed",
+      mix: profile.snapshot.audioSettings.mix,
+      lastCueId: null,
+      failureReason: null
+    },
+    capabilitySnapshot: {
+      status: "supported",
+      reason: "adapter-ready"
+    },
+    profile
+  });
+
+  assert.match(shellView.calibrationQualityLabel, /^stable · 4\/4 inliers/);
 });
 
 test("updateProfileMix returns a new player profile without mutating the previous snapshot", async () => {

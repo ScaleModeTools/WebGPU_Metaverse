@@ -4,6 +4,7 @@ import type { FormEvent } from "react";
 import type { PlayerProfile } from "@thumbshooter/shared";
 
 import {
+  type GameplayDebugPanelMode,
   firstPlayableWeaponDefinition,
   type GameplaySignal
 } from "../../game";
@@ -31,6 +32,7 @@ interface ShellStageRouterProps {
   readonly bestScore: number;
   readonly capabilityReasonLabel: string;
   readonly capabilityStatus: WebGpuGameplayCapabilitySnapshot["status"];
+  readonly debugPanelMode: GameplayDebugPanelMode;
   readonly handTrackingRuntime: HandTrackingRuntime;
   readonly hasStoredProfile: boolean;
   readonly loginError: string | null;
@@ -74,6 +76,7 @@ export function ShellStageRouter({
   bestScore,
   capabilityReasonLabel,
   capabilityStatus,
+  debugPanelMode,
   handTrackingRuntime,
   hasStoredProfile,
   loginError,
@@ -140,6 +143,7 @@ export function ShellStageRouter({
             aimCalibration={profile.snapshot.aimCalibration}
             audioStatusLabel={audioStatusLabel}
             bestScore={bestScore}
+            debugPanelMode={debugPanelMode}
             handTrackingRuntime={handTrackingRuntime}
             onBestScoreChange={onBestScoreChange}
             onGameplaySignal={onGameplaySignal}

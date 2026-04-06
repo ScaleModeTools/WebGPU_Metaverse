@@ -30,6 +30,13 @@ test("shell audio policy maps first-weapon gameplay signals to typed audio cues"
 
   assert.equal(
     resolveGameplaySignalCue({
+      enemyId: "bird-1",
+      type: "enemy-hit-confirmed"
+    }),
+    "enemy-hit"
+  );
+  assert.equal(
+    resolveGameplaySignalCue({
       type: "weapon-fired",
       weaponId: "semiautomatic-pistol"
     }),

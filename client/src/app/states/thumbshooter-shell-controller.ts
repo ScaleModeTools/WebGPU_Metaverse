@@ -93,6 +93,7 @@ export function useThumbShooterShellController(): ThumbShooterShellController {
 
   return {
     capabilityStatus: state.capabilitySnapshot.status,
+    debugPanelMode: state.debugPanelMode,
     handTrackingRuntime,
     hydrationSource: state.hydrationSource,
     isMenuOpen: state.isMenuOpen,
@@ -108,6 +109,12 @@ export function useThumbShooterShellController(): ThumbShooterShellController {
     onCalibrationProgress: profilePolicy.onCalibrationProgress,
     onClearProfile: profilePolicy.onClearProfile,
     onEditProfile: profilePolicy.onEditProfile,
+    onGameplayDebugPanelModeChange: (mode) => {
+      dispatch({
+        mode,
+        type: "gameplayDebugPanelModeChanged"
+      });
+    },
     onGameplaySignal: (signal: GameplaySignal) => {
       audioPolicy.onGameplaySignal(signal);
     },

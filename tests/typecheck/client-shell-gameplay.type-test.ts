@@ -2,11 +2,16 @@ import type { PlayerProfile } from "@thumbshooter/shared";
 
 import type { ThumbShooterShellControllerAction } from "../../client/src/app/types/thumbshooter-shell-controller";
 import {
+  gameplayDebugPanelModes,
   gameplayRuntimeLifecycleStates,
+  gameplayReticleVisualStates,
   localArenaEnemyBehaviorStates,
   localArenaTargetFeedbackStates,
   type FirstPlayableWeaponId,
+  type GameplayDebugPanelMode,
   type GameplayHudSnapshot,
+  type GameplayReticleVisualState,
+  type GameplayTelemetrySnapshot,
   type GameplayRuntimeLifecycleState,
   type GameplaySignal,
   type GameplaySignalType,
@@ -34,6 +39,7 @@ type ExpectedShellActionType =
   | "capabilityProbeStarted"
   | "capabilitySnapshotReceived"
   | "gameplayExited"
+  | "gameplayDebugPanelModeChanged"
   | "gameplayMenuAutoOpened"
   | "gameplayMenuSetOpen"
   | "loginRejected"
@@ -71,6 +77,19 @@ type ExpectedWeaponReadinessState =
   | "reloading";
 type ExpectedWeaponReloadState = "full" | "blocked" | "reloading";
 type ExpectedWeaponReloadRule = "reticle-offscreen";
+type ExpectedGameplayDebugPanelMode =
+  | "hidden"
+  | "telemetry"
+  | "aim-inspector";
+type ExpectedGameplayReticleVisualState =
+  | "hidden"
+  | "tracking-unavailable"
+  | "neutral"
+  | "targeted"
+  | "hit"
+  | "reload-required"
+  | "reloading"
+  | "round-paused";
 
 type ShellActionTypesMatch = AssertTrue<
   IsEqual<ThumbShooterShellControllerActionType, ExpectedShellActionType>
@@ -122,6 +141,36 @@ type GameplayHudFeedbackUsesTargetFeedbackState = AssertTrue<
 >;
 type GameplayHudWeaponUsesFirstPlayableWeaponId = AssertTrue<
   IsEqual<GameplayHudSnapshot["weapon"]["weaponId"], FirstPlayableWeaponId>
+>;
+type GameplayDebugPanelModeMatches = AssertTrue<
+  IsEqual<GameplayDebugPanelMode, ExpectedGameplayDebugPanelMode>
+>;
+type GameplayDebugPanelModeCatalogMatches = AssertTrue<
+  IsEqual<(typeof gameplayDebugPanelModes)[number], GameplayDebugPanelMode>
+>;
+type GameplayDebugActionModeMatches = AssertTrue<
+  IsEqual<
+    Extract<
+      ThumbShooterShellControllerAction,
+      { readonly type: "gameplayDebugPanelModeChanged" }
+    >["mode"],
+    GameplayDebugPanelMode
+  >
+>;
+type GameplayReticleVisualStateMatches = AssertTrue<
+  IsEqual<GameplayReticleVisualState, ExpectedGameplayReticleVisualState>
+>;
+type GameplayReticleVisualStateCatalogMatches = AssertTrue<
+  IsEqual<
+    (typeof gameplayReticleVisualStates)[number],
+    GameplayReticleVisualState
+  >
+>;
+type GameplayTelemetryReticleStateMatches = AssertTrue<
+  IsEqual<
+    GameplayTelemetrySnapshot["reticleVisualState"],
+    GameplayReticleVisualState
+  >
 >;
 type WeaponReadinessMatches = AssertTrue<
   IsEqual<WeaponReadinessState, ExpectedWeaponReadinessState>
@@ -187,10 +236,19 @@ type ProfileConfirmedPayloadUsesPlayerProfile = AssertTrue<
   >
 >;
 type GameplaySignalTypeMatches = AssertTrue<
-  IsEqual<GameplaySignalType, "weapon-fired" | "weapon-reloaded">
+  IsEqual<
+    GameplaySignalType,
+    "weapon-fired" | "weapon-reloaded" | "enemy-hit-confirmed"
+  >
 >;
 type GameplaySignalWeaponIdMatches = AssertTrue<
-  IsEqual<GameplaySignal["weaponId"], FirstPlayableWeaponId>
+  IsEqual<
+    Extract<
+      GameplaySignal,
+      { readonly type: "weapon-fired" | "weapon-reloaded" }
+    >["weaponId"],
+    FirstPlayableWeaponId
+  >
 >;
 
 export type ClientShellGameplayTypeTests =
@@ -204,6 +262,12 @@ export type ClientShellGameplayTypeTests =
   | LocalArenaTargetFeedbackCatalogMatches
   | GameplayHudFeedbackUsesTargetFeedbackState
   | GameplayHudWeaponUsesFirstPlayableWeaponId
+  | GameplayDebugPanelModeMatches
+  | GameplayDebugPanelModeCatalogMatches
+  | GameplayDebugActionModeMatches
+  | GameplayReticleVisualStateMatches
+  | GameplayReticleVisualStateCatalogMatches
+  | GameplayTelemetryReticleStateMatches
   | WeaponReadinessMatches
   | WeaponReadinessCatalogMatches
   | GameplayHudWeaponReadinessMatches

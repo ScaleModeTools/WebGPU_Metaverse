@@ -2,17 +2,23 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import type { AffineAimTransformSnapshot } from "@thumbshooter/shared";
 
+import type {
+  GameplayDebugPanelMode,
+  GameplaySignal,
+  GameplayTelemetrySnapshot,
+  HandTrackingTelemetrySnapshot
+} from "../../game";
 import { HandTrackingRuntime } from "../../game/classes/hand-tracking-runtime";
 import { LocalArenaSimulation } from "../../game/classes/local-arena-simulation";
 import { WebGpuGameplayRuntime } from "../../game/classes/webgpu-gameplay-runtime";
-import type { GameplaySignal } from "../../game";
-import { GameplayHudOverlay } from "../../ui";
+import { GameplayDebugOverlay, GameplayHudOverlay } from "../../ui";
 import { Card } from "@/components/ui/card";
 
 interface GameplayStageScreenProps {
   readonly aimCalibration: AffineAimTransformSnapshot;
   readonly audioStatusLabel: string;
   readonly bestScore: number;
+  readonly debugPanelMode: GameplayDebugPanelMode;
   readonly handTrackingRuntime: HandTrackingRuntime;
   readonly onBestScoreChange: (bestScore: number) => void;
   readonly onGameplaySignal: (signal: GameplaySignal) => void;
@@ -26,6 +32,7 @@ export function GameplayStageScreen({
   aimCalibration,
   audioStatusLabel,
   bestScore,
+  debugPanelMode,
   handTrackingRuntime,
   onBestScoreChange,
   onGameplaySignal,
@@ -49,6 +56,12 @@ export function GameplayStageScreen({
     () => new WebGpuGameplayRuntime(handTrackingRuntime, arenaSimulation)
   );
   const [hudSnapshot, setHudSnapshot] = useState(() => gameplayRuntime.hudSnapshot);
+  const [gameplayTelemetry, setGameplayTelemetry] = useState<GameplayTelemetrySnapshot>(
+    () => gameplayRuntime.telemetrySnapshot
+  );
+  const [trackingTelemetry, setTrackingTelemetry] = useState<HandTrackingTelemetrySnapshot>(
+    () => handTrackingRuntime.telemetrySnapshot
+  );
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
 
   const handleStartRuntime = useEffectEvent(async () => {
@@ -60,9 +73,13 @@ export function GameplayStageScreen({
       const snapshot = await gameplayRuntime.start(canvasRef.current);
 
       setHudSnapshot(snapshot);
+      setGameplayTelemetry(gameplayRuntime.telemetrySnapshot);
+      setTrackingTelemetry(handTrackingRuntime.telemetrySnapshot);
       setRuntimeError(null);
     } catch (error) {
       setHudSnapshot(gameplayRuntime.hudSnapshot);
+      setGameplayTelemetry(gameplayRuntime.telemetrySnapshot);
+      setTrackingTelemetry(handTrackingRuntime.telemetrySnapshot);
       setRuntimeError(
         gameplayRuntime.hudSnapshot.failureReason ??
           (error instanceof Error ? error.message : "Gameplay runtime failed.")
@@ -73,6 +90,8 @@ export function GameplayStageScreen({
   const handleRetryRuntime = useEffectEvent(() => {
     gameplayRuntime.dispose();
     setHudSnapshot(gameplayRuntime.hudSnapshot);
+    setGameplayTelemetry(gameplayRuntime.telemetrySnapshot);
+    setTrackingTelemetry(handTrackingRuntime.telemetrySnapshot);
     setRuntimeError(null);
     void handleStartRuntime();
   });
@@ -80,6 +99,7 @@ export function GameplayStageScreen({
   const handleRestartSession = useEffectEvent(() => {
     setRuntimeError(null);
     setHudSnapshot(gameplayRuntime.restartSession());
+    setGameplayTelemetry(gameplayRuntime.telemetrySnapshot);
   });
 
   useEffect(() => {
@@ -91,6 +111,8 @@ export function GameplayStageScreen({
 
     const intervalHandle = window.setInterval(() => {
       setHudSnapshot(gameplayRuntime.hudSnapshot);
+      setGameplayTelemetry(gameplayRuntime.telemetrySnapshot);
+      setTrackingTelemetry(handTrackingRuntime.telemetrySnapshot);
     }, 150);
 
     return () => {
@@ -114,6 +136,11 @@ export function GameplayStageScreen({
     <Card className="relative min-h-[36rem] overflow-hidden rounded-[2rem] border-border/70 bg-card/88 shadow-[0_28px_90px_rgb(15_23_42_/_0.2)] backdrop-blur-xl">
       <canvas className="absolute inset-0 h-full w-full" ref={canvasRef} />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgb(56_189_248_/_0.08),_transparent_28%)]" />
+      <GameplayDebugOverlay
+        gameplayTelemetry={gameplayTelemetry}
+        mode={debugPanelMode}
+        trackingTelemetry={trackingTelemetry}
+      />
       <GameplayHudOverlay
         audioStatusLabel={audioStatusLabel}
         bestScore={bestScore}

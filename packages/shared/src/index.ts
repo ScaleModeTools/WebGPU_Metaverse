@@ -1,6 +1,13 @@
 export type { TypeBrand } from "./type-branding.js";
-export { AffineAimTransform } from "./affine-aim-transform.js";
-export type { AffineAimTransformSnapshot } from "./affine-aim-transform.js";
+export {
+  AffineAimTransform,
+  affineAimTransformFitQualities
+} from "./affine-aim-transform.js";
+export type {
+  AffineAimTransformFitDiagnosticsSnapshot,
+  AffineAimTransformFitQuality,
+  AffineAimTransformSnapshot
+} from "./affine-aim-transform.js";
 export {
   AudioSettings,
   audioChannelIds,

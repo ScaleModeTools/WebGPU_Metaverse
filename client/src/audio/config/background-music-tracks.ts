@@ -55,40 +55,40 @@ const backgroundMusicTrackCatalog = {
           strudel
             .note("<[e3 ~ g3 ~ a3 ~ g3 ~] [e3 ~ a3 ~ b3 ~ a3 ~]>")
             .s("square")
-            .gain(0.1)
-            .decay(0.14)
-            .sustain(0.12)
-            .release(0.18)
-            .lpf(1900),
+            .gain(0.082)
+            .decay(0.12)
+            .sustain(0.08)
+            .release(0.16)
+            .lpf(1650),
           strudel
             .note("<[~ b4 ~ ~ g4 ~ ~ ~] [~ a4 ~ ~ e4 ~ ~ ~]>")
             .s("triangle")
-            .gain(0.04)
+            .gain(0.03)
             .delay(0.24)
             .delaytime(0.375)
             .delayfeedback(0.32)
             .room(0.28)
-            .lpf(2100)
+            .lpf(2000)
             .slow(2),
           strudel
             .note("<[e2 ~ e2 ~ a1 ~ a1 ~] [d2 ~ d2 ~ b1 ~ b1 ~]>")
             .s("triangle")
-            .gain(0.12)
-            .lpf(420)
+            .gain(0.095)
+            .lpf(360)
             .room(0.14),
           strudel
             .note("~ ~ e5? ~ ~ ~ g5? ~")
             .s("sine")
-            .gain(0.03)
-            .release(0.45)
+            .gain(0.017)
+            .release(0.32)
             .pan(0.65)
             .delay(0.18)
             .delaytime(0.25)
             .delayfeedback(0.22)
-            .lpf(2500)
+            .lpf(2200)
             .slow(4)
         )
-        .cpm(96)
+        .cpm(92)
   }
 } as const satisfies Record<AudioTrackId, BackgroundMusicTrackDefinition>;
 

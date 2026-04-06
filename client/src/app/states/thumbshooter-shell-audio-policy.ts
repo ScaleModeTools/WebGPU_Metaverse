@@ -34,6 +34,8 @@ export function resolveGameplaySignalCue(
   signal: GameplaySignal
 ): AudioCueId | null {
   switch (signal.type) {
+    case "enemy-hit-confirmed":
+      return "enemy-hit";
     case "weapon-fired":
       return signal.weaponId === "semiautomatic-pistol"
         ? "weapon-pistol-shot"

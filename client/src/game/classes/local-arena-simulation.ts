@@ -282,6 +282,10 @@ export class LocalArenaSimulation {
         hitConfirmed: true,
         killConfirmed: true
       });
+      this.#emitGameplaySignal?.({
+        enemyId: hitEnemy.renderState.id,
+        type: "enemy-hit-confirmed"
+      });
       this.#setFeedback(
         "hit",
         hitEnemy.renderState.id,

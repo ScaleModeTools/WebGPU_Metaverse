@@ -1,4 +1,8 @@
-import { AudioSettings, type PlayerProfile } from "@thumbshooter/shared";
+import {
+  AffineAimTransform,
+  AudioSettings,
+  type PlayerProfile
+} from "@thumbshooter/shared";
 
 import { reticleManifest } from "../../assets";
 import { audioFoundationConfig } from "../../audio";
@@ -21,6 +25,10 @@ function toPercent(value: number): string {
 
 function toSliderValue(value: number): [number] {
   return [Math.round(value * 100)];
+}
+
+function toResidualPercent(value: number): string {
+  return `${(value * 100).toFixed(1)}%`;
 }
 
 function describeCapabilityReason(
@@ -62,6 +70,30 @@ function describeAudioStatus(snapshot: AudioSessionSnapshot): string {
   return "Awaiting user gesture";
 }
 
+function describeCalibrationQuality(profile: PlayerProfile | null): string {
+  if (profile === null || profile.snapshot.aimCalibration === null) {
+    return "pending";
+  }
+
+  const diagnostics = AffineAimTransform.summarizeFit(
+    profile.snapshot.calibrationSamples,
+    profile.snapshot.aimCalibration
+  );
+
+  if (diagnostics === null) {
+    return "pending";
+  }
+
+  const qualityLabel =
+    diagnostics.quality === "stable"
+      ? "stable"
+      : diagnostics.quality === "usable"
+        ? "usable"
+        : "review";
+
+  return `${qualityLabel} · ${diagnostics.inlierSampleCount}/${diagnostics.sampleCount} inliers · max ${toResidualPercent(diagnostics.maxResidual)}`;
+}
+
 export function resolveCalibrationShellState(
   profile: PlayerProfile | null
 ): CalibrationShellState {
@@ -88,6 +120,7 @@ export function buildThumbShooterShellView({
   return {
     audioMix,
     audioStatusLabel: describeAudioStatus(audioSnapshot),
+    calibrationQualityLabel: describeCalibrationQuality(profile),
     capabilityReasonLabel: describeCapabilityReason(capabilitySnapshot),
     musicVolumeLabel: toPercent(Number(audioMix.musicVolume)),
     musicVolumeSliderValue: toSliderValue(Number(audioMix.musicVolume)),

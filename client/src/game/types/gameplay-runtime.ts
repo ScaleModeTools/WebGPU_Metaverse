@@ -2,6 +2,7 @@ import type {
   NormalizedViewportPoint
 } from "@thumbshooter/shared";
 
+import type { GameplayReticleStyledState } from "./gameplay-presentation";
 import type { HandTrackingPoseState } from "./hand-tracking";
 import type { LocalCombatSessionSnapshot } from "./local-combat-session";
 import type {
@@ -52,13 +53,23 @@ export interface GameplayRuntimeConfig {
     readonly wingSweepRadians: number;
   };
   readonly reticle: {
+    readonly haloInnerRadius: number;
+    readonly haloOuterRadius: number;
     readonly innerRadius: number;
     readonly outerRadius: number;
-    readonly strokeColor: readonly [number, number, number];
     readonly horizontalBarSize: {
       readonly width: number;
       readonly height: number;
     };
+    readonly stateStyles: Record<
+      GameplayReticleStyledState,
+      {
+        readonly haloOpacity: number;
+        readonly scale: number;
+        readonly strokeColor: readonly [number, number, number];
+        readonly strokeOpacity: number;
+      }
+    >;
     readonly verticalBarSize: {
       readonly width: number;
       readonly height: number;

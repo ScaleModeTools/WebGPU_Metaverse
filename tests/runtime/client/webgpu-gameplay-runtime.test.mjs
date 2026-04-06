@@ -212,6 +212,12 @@ test("WebGpuGameplayRuntime renders the calibrated reticle from live tracking sn
     x: 0.25,
     y: 0.4
   });
+  assert.equal(runtime.telemetrySnapshot.reticleVisualState, "targeted");
+  assert.deepEqual(runtime.telemetrySnapshot.observedIndexPoint, {
+    x: 0.25,
+    y: 0.4
+  });
+  assert.equal(runtime.telemetrySnapshot.trackingSequenceNumber, 1);
 
   trackingSource.latestPose = {
     trackingState: "tracked",
@@ -228,6 +234,9 @@ test("WebGpuGameplayRuntime renders the calibrated reticle from live tracking sn
   assert.equal(runtime.hudSnapshot.session.phase, "completed");
   assert.equal(runtime.hudSnapshot.session.score, 100);
   assert.equal(runtime.hudSnapshot.weapon.reload.clipRoundsRemaining, 5);
+  assert.equal(runtime.telemetrySnapshot.reticleVisualState, "hit");
+  assert.equal(runtime.telemetrySnapshot.targetFeedbackState, "hit");
+  assert.equal(runtime.telemetrySnapshot.trackingSequenceNumber, 2);
 
   const restartSnapshot = runtime.restartSession(500);
 
@@ -235,6 +244,7 @@ test("WebGpuGameplayRuntime renders the calibrated reticle from live tracking sn
   assert.equal(restartSnapshot.session.phase, "active");
   assert.equal(restartSnapshot.session.score, 0);
   assert.equal(restartSnapshot.arena.liveEnemyCount, 1);
+  assert.equal(runtime.telemetrySnapshot.renderedFrameCount >= 2, true);
 
   trackingSource.latestPose = {
     trackingState: "no-hand",
@@ -247,6 +257,7 @@ test("WebGpuGameplayRuntime renders the calibrated reticle from live tracking sn
 
   assert.equal(runtime.hudSnapshot.trackingState, "no-hand");
   assert.equal(runtime.hudSnapshot.aimPoint, null);
+  assert.equal(runtime.telemetrySnapshot.reticleVisualState, "tracking-unavailable");
 
   runtime.dispose();
 

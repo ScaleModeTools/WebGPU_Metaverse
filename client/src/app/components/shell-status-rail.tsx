@@ -5,6 +5,7 @@ import { ProfileSummaryCard } from "./profile-summary-card";
 
 interface ShellStatusRailProps {
   readonly calibrationSampleCount: number;
+  readonly calibrationQualityLabel: string;
   readonly hasAimCalibration: boolean;
   readonly hydrationSource: StoredProfileHydrationResult["source"];
   readonly reticleCatalogLabel: string;
@@ -13,6 +14,7 @@ interface ShellStatusRailProps {
 
 export function ShellStatusRail({
   calibrationSampleCount,
+  calibrationQualityLabel,
   hasAimCalibration,
   hydrationSource,
   reticleCatalogLabel,
@@ -22,6 +24,7 @@ export function ShellStatusRail({
     <aside className="grid gap-6">
       <ProfileSummaryCard
         calibrationSampleCount={calibrationSampleCount}
+        calibrationQualityLabel={calibrationQualityLabel}
         hasAimCalibration={hasAimCalibration}
         hydrationSource={hydrationSource}
         reticleCatalogLabel={reticleCatalogLabel}

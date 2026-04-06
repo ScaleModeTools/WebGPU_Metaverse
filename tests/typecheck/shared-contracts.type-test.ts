@@ -1,5 +1,7 @@
 import type {
   AffineAimTransform,
+  AffineAimTransformFitDiagnosticsSnapshot,
+  AffineAimTransformFitQuality,
   AffineAimTransformSnapshot,
   AudioChannelId,
   AudioSettingsSnapshot,
@@ -13,7 +15,7 @@ import type {
   SoundEffectEngine,
   Username
 } from "@thumbshooter/shared";
-import { createUsername } from "@thumbshooter/shared";
+import { affineAimTransformFitQualities, createUsername } from "@thumbshooter/shared";
 import type { AssertTrue, IsEqual } from "./type-assertions";
 
 type ExpectedCalibrationAnchorId =
@@ -31,6 +33,7 @@ type ExpectedReticleId = "default-ring" | "precision-ring";
 type ExpectedAudioChannelId = "music" | "sfx";
 type ExpectedBackgroundMusicEngine = "strudel-web";
 type ExpectedSoundEffectEngine = "web-audio-api";
+type ExpectedAffineAimTransformFitQuality = "stable" | "usable" | "degraded";
 
 type CalibrationAnchorIdMatches = AssertTrue<
   IsEqual<CalibrationAnchorId, ExpectedCalibrationAnchorId>
@@ -45,6 +48,15 @@ type BackgroundMusicEngineMatches = AssertTrue<
 >;
 type SoundEffectEngineMatches = AssertTrue<
   IsEqual<SoundEffectEngine, ExpectedSoundEffectEngine>
+>;
+type AffineAimTransformFitQualityMatches = AssertTrue<
+  IsEqual<AffineAimTransformFitQuality, ExpectedAffineAimTransformFitQuality>
+>;
+type AffineAimTransformFitQualityCatalogMatches = AssertTrue<
+  IsEqual<
+    (typeof affineAimTransformFitQualities)[number],
+    AffineAimTransformFitQuality
+  >
 >;
 
 type PlayerProfileReticleUsesReticleId = AssertTrue<
@@ -71,12 +83,23 @@ type SharedProjectUnclampedReturnMatches = AssertTrue<
     NormalizedViewportPointInput
   >
 >;
+type AffineAimTransformFitDiagnosticsSampleCountIsNumber = AssertTrue<
+  IsEqual<AffineAimTransformFitDiagnosticsSnapshot["sampleCount"], number>
+>;
+type AffineAimTransformFitDiagnosticsQualityUsesFitQuality = AssertTrue<
+  IsEqual<
+    AffineAimTransformFitDiagnosticsSnapshot["quality"],
+    AffineAimTransformFitQuality
+  >
+>;
 
 export type SharedContractTypeTests =
   | CalibrationAnchorIdMatches
   | AudioChannelIdMatches
   | BackgroundMusicEngineMatches
   | SoundEffectEngineMatches
+  | AffineAimTransformFitQualityMatches
+  | AffineAimTransformFitQualityCatalogMatches
   | ReticleIdMatches
   | PlayerProfileReticleUsesReticleId
   | PlayerProfileAudioUsesAudioSettings
@@ -84,4 +107,6 @@ export type SharedContractTypeTests =
   | NormalizedPointXAxisUsesBrandedScalar
   | NormalizedPointYAxisUsesBrandedScalar
   | CreateUsernameReturnMatches
-  | SharedProjectUnclampedReturnMatches;
+  | SharedProjectUnclampedReturnMatches
+  | AffineAimTransformFitDiagnosticsSampleCountIsNumber
+  | AffineAimTransformFitDiagnosticsQualityUsesFitQuality;

@@ -10,6 +10,44 @@ export interface AffineAimTransformSnapshot {
   readonly yCoefficients: readonly [number, number, number];
 }
 
+export const affineAimTransformFitQualities = [
+  "stable",
+  "usable",
+  "degraded"
+] as const;
+
+export type AffineAimTransformFitQuality =
+  (typeof affineAimTransformFitQualities)[number];
+
+export interface AffineAimTransformFitDiagnosticsSnapshot {
+  readonly inlierSampleCount: number;
+  readonly maxResidual: number;
+  readonly meanResidual: number;
+  readonly quality: AffineAimTransformFitQuality;
+  readonly sampleCount: number;
+}
+
+interface AffineAimTransformResidualStats {
+  readonly inlierSampleCount: number;
+  readonly maxResidual: number;
+  readonly meanResidual: number;
+  readonly sampleCount: number;
+}
+
+interface AffineAimTransformCandidateScore
+  extends AffineAimTransformResidualStats {
+  readonly inlierSamples: readonly CalibrationShotSample[];
+  readonly transformSnapshot: AffineAimTransformSnapshot;
+}
+
+const affineAimTransformFitConfig = Object.freeze({
+  inlierResidualMax: 0.075,
+  stableMaxResidualMax: 0.035,
+  stableMeanResidualMax: 0.015,
+  usableMaxResidualMax: 0.09,
+  usableMeanResidualMax: 0.032
+});
+
 function normalizeCoefficient(rawValue: number): number {
   return Number.isFinite(rawValue) ? rawValue : 0;
 }
@@ -30,6 +68,102 @@ function freezeAffineAimTransformSnapshot(
   return Object.freeze({
     xCoefficients: createCoefficientTriplet(snapshot.xCoefficients),
     yCoefficients: createCoefficientTriplet(snapshot.yCoefficients)
+  });
+}
+
+function freezeFitDiagnosticsSnapshot(
+  diagnostics: AffineAimTransformFitDiagnosticsSnapshot
+): AffineAimTransformFitDiagnosticsSnapshot {
+  return Object.freeze({
+    inlierSampleCount: diagnostics.inlierSampleCount,
+    maxResidual: diagnostics.maxResidual,
+    meanResidual: diagnostics.meanResidual,
+    quality: diagnostics.quality,
+    sampleCount: diagnostics.sampleCount
+  });
+}
+
+function projectWithSnapshot(
+  snapshot: AffineAimTransformSnapshot,
+  observedPoint: NormalizedViewportPoint | NormalizedViewportPointInput
+): NormalizedViewportPointInput {
+  return Object.freeze({
+    x:
+      observedPoint.x * snapshot.xCoefficients[0] +
+      observedPoint.y * snapshot.xCoefficients[1] +
+      snapshot.xCoefficients[2],
+    y:
+      observedPoint.x * snapshot.yCoefficients[0] +
+      observedPoint.y * snapshot.yCoefficients[1] +
+      snapshot.yCoefficients[2]
+  });
+}
+
+function measureResidualDistance(
+  snapshot: AffineAimTransformSnapshot,
+  sample: CalibrationShotSample
+): number {
+  const projectedPoint = projectWithSnapshot(snapshot, sample.observedPose.indexTip);
+  const deltaX = projectedPoint.x - sample.intendedTarget.x;
+  const deltaY = projectedPoint.y - sample.intendedTarget.y;
+
+  return Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+}
+
+function collectResidualStats(
+  snapshot: AffineAimTransformSnapshot,
+  samples: readonly CalibrationShotSample[]
+): AffineAimTransformResidualStats {
+  if (samples.length === 0) {
+    return {
+      inlierSampleCount: 0,
+      maxResidual: 0,
+      meanResidual: 0,
+      sampleCount: 0
+    };
+  }
+
+  let inlierSampleCount = 0;
+  let maxResidual = 0;
+  let totalResidual = 0;
+
+  for (const sample of samples) {
+    const residual = measureResidualDistance(snapshot, sample);
+
+    if (residual <= affineAimTransformFitConfig.inlierResidualMax) {
+      inlierSampleCount += 1;
+    }
+
+    maxResidual = Math.max(maxResidual, residual);
+    totalResidual += residual;
+  }
+
+  return {
+    inlierSampleCount,
+    maxResidual,
+    meanResidual: totalResidual / samples.length,
+    sampleCount: samples.length
+  };
+}
+
+function createFitDiagnosticsSnapshot(
+  snapshot: AffineAimTransformSnapshot,
+  samples: readonly CalibrationShotSample[]
+): AffineAimTransformFitDiagnosticsSnapshot {
+  const residualStats = collectResidualStats(snapshot, samples);
+  const quality =
+    residualStats.meanResidual <= affineAimTransformFitConfig.stableMeanResidualMax &&
+    residualStats.maxResidual <= affineAimTransformFitConfig.stableMaxResidualMax
+      ? "stable"
+      : residualStats.meanResidual <=
+            affineAimTransformFitConfig.usableMeanResidualMax &&
+          residualStats.maxResidual <= affineAimTransformFitConfig.usableMaxResidualMax
+        ? "usable"
+        : "degraded";
+
+  return freezeFitDiagnosticsSnapshot({
+    ...residualStats,
+    quality
   });
 }
 
@@ -142,6 +276,80 @@ function fitObservedAxis(
   );
 }
 
+function fitSnapshot(
+  samples: readonly CalibrationShotSample[]
+): AffineAimTransformSnapshot | null {
+  if (samples.length < 3) {
+    return null;
+  }
+
+  const xCoefficients = fitObservedAxis(
+    samples,
+    (sample) => sample.intendedTarget.x
+  );
+  const yCoefficients = fitObservedAxis(
+    samples,
+    (sample) => sample.intendedTarget.y
+  );
+
+  if (xCoefficients === null || yCoefficients === null) {
+    return null;
+  }
+
+  return freezeAffineAimTransformSnapshot({
+    xCoefficients,
+    yCoefficients
+  });
+}
+
+function scoreCandidateTransform(
+  transformSnapshot: AffineAimTransformSnapshot,
+  samples: readonly CalibrationShotSample[]
+): AffineAimTransformCandidateScore {
+  const inlierSamples: CalibrationShotSample[] = [];
+  let maxResidual = 0;
+  let totalResidual = 0;
+
+  for (const sample of samples) {
+    const residual = measureResidualDistance(transformSnapshot, sample);
+
+    if (residual <= affineAimTransformFitConfig.inlierResidualMax) {
+      inlierSamples.push(sample);
+    }
+
+    maxResidual = Math.max(maxResidual, residual);
+    totalResidual += residual;
+  }
+
+  return {
+    inlierSampleCount: inlierSamples.length,
+    inlierSamples: Object.freeze(inlierSamples),
+    maxResidual,
+    meanResidual: samples.length === 0 ? 0 : totalResidual / samples.length,
+    sampleCount: samples.length,
+    transformSnapshot
+  };
+}
+
+function isCandidateBetter(
+  currentBest: AffineAimTransformCandidateScore | null,
+  candidate: AffineAimTransformCandidateScore
+): boolean {
+  if (currentBest === null) {
+    return true;
+  }
+
+  if (candidate.inlierSampleCount !== currentBest.inlierSampleCount) {
+    return candidate.inlierSampleCount > currentBest.inlierSampleCount;
+  }
+
+  if (candidate.meanResidual !== currentBest.meanResidual) {
+    return candidate.meanResidual < currentBest.meanResidual;
+  }
+
+  return candidate.maxResidual < currentBest.maxResidual;
+}
+
 export class AffineAimTransform {
   readonly #snapshot: AffineAimTransformSnapshot;
 
@@ -156,27 +364,66 @@ export class AffineAimTransform {
   static fit(
     samples: readonly CalibrationShotSample[]
   ): AffineAimTransform | null {
-    if (samples.length < 3) {
+    const baselineSnapshot = fitSnapshot(samples);
+
+    if (baselineSnapshot === null) {
       return null;
     }
 
-    const xCoefficients = fitObservedAxis(
-      samples,
-      (sample) => sample.intendedTarget.x
-    );
-    const yCoefficients = fitObservedAxis(
-      samples,
-      (sample) => sample.intendedTarget.y
-    );
+    let bestCandidate = scoreCandidateTransform(baselineSnapshot, samples);
 
-    if (xCoefficients === null || yCoefficients === null) {
+    for (let firstIndex = 0; firstIndex < samples.length - 2; firstIndex += 1) {
+      for (
+        let secondIndex = firstIndex + 1;
+        secondIndex < samples.length - 1;
+        secondIndex += 1
+      ) {
+        for (
+          let thirdIndex = secondIndex + 1;
+          thirdIndex < samples.length;
+          thirdIndex += 1
+        ) {
+          const candidateSnapshot = fitSnapshot([
+            samples[firstIndex]!,
+            samples[secondIndex]!,
+            samples[thirdIndex]!
+          ]);
+
+          if (candidateSnapshot === null) {
+            continue;
+          }
+
+          const candidateScore = scoreCandidateTransform(candidateSnapshot, samples);
+
+          if (isCandidateBetter(bestCandidate, candidateScore)) {
+            bestCandidate = candidateScore;
+          }
+        }
+      }
+    }
+
+    const refitSnapshot =
+      fitSnapshot(
+        bestCandidate.inlierSamples.length >= 3
+          ? bestCandidate.inlierSamples
+          : samples
+      ) ?? bestCandidate.transformSnapshot;
+
+    return new AffineAimTransform(refitSnapshot);
+  }
+
+  static summarizeFit(
+    samples: readonly CalibrationShotSample[],
+    transform: AffineAimTransform | AffineAimTransformSnapshot
+  ): AffineAimTransformFitDiagnosticsSnapshot | null {
+    if (samples.length === 0) {
       return null;
     }
 
-    return new AffineAimTransform({
-      xCoefficients,
-      yCoefficients
-    });
+    return createFitDiagnosticsSnapshot(
+      transform instanceof AffineAimTransform ? transform.snapshot : transform,
+      samples
+    );
   }
 
   get snapshot(): AffineAimTransformSnapshot {
@@ -186,16 +433,7 @@ export class AffineAimTransform {
   projectUnclamped(
     observedPoint: NormalizedViewportPoint | NormalizedViewportPointInput
   ): NormalizedViewportPointInput {
-    return Object.freeze({
-      x:
-        observedPoint.x * this.#snapshot.xCoefficients[0] +
-        observedPoint.y * this.#snapshot.xCoefficients[1] +
-        this.#snapshot.xCoefficients[2],
-      y:
-        observedPoint.x * this.#snapshot.yCoefficients[0] +
-        observedPoint.y * this.#snapshot.yCoefficients[1] +
-        this.#snapshot.yCoefficients[2]
-    });
+    return projectWithSnapshot(this.#snapshot, observedPoint);
   }
 
   apply(

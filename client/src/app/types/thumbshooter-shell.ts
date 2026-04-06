@@ -5,6 +5,7 @@ type SliderValue = [number];
 export interface ThumbShooterShellViewModel {
   readonly audioMix: AudioMixSnapshot;
   readonly audioStatusLabel: string;
+  readonly calibrationQualityLabel: string;
   readonly capabilityReasonLabel: string;
   readonly musicVolumeLabel: string;
   readonly musicVolumeSliderValue: SliderValue;

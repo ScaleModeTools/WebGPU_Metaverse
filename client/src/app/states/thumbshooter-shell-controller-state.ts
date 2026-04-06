@@ -56,6 +56,7 @@ export function createInitialThumbShooterShellControllerState({
   return {
     audioSnapshot,
     capabilitySnapshot: initialCapabilitySnapshot,
+    debugPanelMode: "hidden",
     hasAutoOpenedMenu: false,
     hasConfirmedProfile: false,
     hydrationSource: hydratedProfile.source,
@@ -118,6 +119,13 @@ export function reduceThumbShooterShellControllerState(
             isMenuOpen: false
           }
         : state;
+    case "gameplayDebugPanelModeChanged":
+      return action.mode === state.debugPanelMode
+        ? state
+        : {
+            ...state,
+            debugPanelMode: action.mode
+          };
     case "gameplayMenuAutoOpened":
       return {
         ...state,
@@ -163,7 +171,8 @@ export function reduceThumbShooterShellControllerState(
         permissionError: null,
         permissionState: "prompt",
         profile: null,
-        usernameDraft: ""
+        usernameDraft: "",
+        debugPanelMode: "hidden"
       };
     case "profileConfirmed":
       return {
@@ -176,6 +185,7 @@ export function reduceThumbShooterShellControllerState(
     case "profileEditRequested":
       return {
         ...state,
+        debugPanelMode: "hidden",
         hasConfirmedProfile: false,
         isMenuOpen: false
       };

@@ -1,3 +1,4 @@
+import type { NormalizedViewportPoint } from "@thumbshooter/shared";
 import {
   type OrthographicCamera,
   type Scene,
@@ -5,10 +6,15 @@ import {
 } from "three/webgpu";
 
 import { gameplayRuntimeConfig } from "../config/gameplay-runtime";
+import { resolveGameplayReticleVisualState } from "../render/gameplay-reticle-presentation";
 import {
   createGameplayScene,
   type GameplaySceneCanvasHost
 } from "../render/webgpu-gameplay-scene";
+import type {
+  GameplayReticleVisualState,
+  GameplayTelemetrySnapshot
+} from "../types/gameplay-presentation";
 import type {
   GameplayHudSnapshot,
   GameplayRuntimeConfig
@@ -66,6 +72,26 @@ function readNowMs(): number {
   return globalThis.performance?.now() ?? Date.now();
 }
 
+function freezeGameplayTelemetrySnapshot(
+  snapshot: GameplayTelemetrySnapshot
+): GameplayTelemetrySnapshot {
+  return Object.freeze({
+    aimPoint: snapshot.aimPoint,
+    frameDeltaMs: snapshot.frameDeltaMs,
+    frameRate: snapshot.frameRate,
+    observedIndexPoint: snapshot.observedIndexPoint,
+    renderedFrameCount: snapshot.renderedFrameCount,
+    reticleVisualState: snapshot.reticleVisualState,
+    sessionPhase: snapshot.sessionPhase,
+    targetFeedbackState: snapshot.targetFeedbackState,
+    thumbDropDistance: snapshot.thumbDropDistance,
+    trackingPoseAgeMs: snapshot.trackingPoseAgeMs,
+    trackingSequenceNumber: snapshot.trackingSequenceNumber,
+    weaponReadiness: snapshot.weaponReadiness,
+    worldTimeMs: snapshot.worldTimeMs
+  });
+}
+
 export class WebGpuGameplayRuntime {
   readonly #arenaSimulation: LocalArenaSimulation;
   readonly #config: GameplayRuntimeConfig;
@@ -79,8 +105,16 @@ export class WebGpuGameplayRuntime {
   #animationFrameHandle = 0;
   #animationStartAtMs = 0;
   #canvasHost: GameplaySceneCanvasHost | null = null;
+  #frameDeltaMs = 0;
+  #frameRate = 0;
   #hudSnapshot: GameplayHudSnapshot;
+  #lastObservedIndexPoint: NormalizedViewportPoint | null = null;
+  #lastRenderAtMs: number | null = null;
+  #lastThumbDropDistance: number | null = null;
+  #renderedFrameCount = 0;
   #renderer: GameplayRendererHost | null = null;
+  #reticleVisualState: GameplayReticleVisualState = "hidden";
+  #trackingPoseAgeMs: number | null = null;
 
   constructor(
     trackingSource: GameplayTrackingSource,
@@ -107,6 +141,24 @@ export class WebGpuGameplayRuntime {
 
   get hudSnapshot(): GameplayHudSnapshot {
     return this.#hudSnapshot;
+  }
+
+  get telemetrySnapshot(): GameplayTelemetrySnapshot {
+    return freezeGameplayTelemetrySnapshot({
+      aimPoint: this.#hudSnapshot.aimPoint,
+      frameDeltaMs: this.#frameDeltaMs,
+      frameRate: this.#frameRate,
+      observedIndexPoint: this.#lastObservedIndexPoint,
+      renderedFrameCount: this.#renderedFrameCount,
+      reticleVisualState: this.#reticleVisualState,
+      sessionPhase: this.#hudSnapshot.session.phase,
+      targetFeedbackState: this.#hudSnapshot.targetFeedback.state,
+      thumbDropDistance: this.#lastThumbDropDistance,
+      trackingPoseAgeMs: this.#trackingPoseAgeMs,
+      trackingSequenceNumber: this.#trackingSource.latestPose.sequenceNumber,
+      weaponReadiness: this.#hudSnapshot.weapon.readiness,
+      worldTimeMs: this.#arenaSimulation.worldTimeMs
+    });
   }
 
   restartSession(nowMs: number = readNowMs()): GameplayHudSnapshot {
@@ -184,6 +236,14 @@ export class WebGpuGameplayRuntime {
     this.#renderer = null;
     this.#canvasHost = null;
     this.#animationStartAtMs = 0;
+    this.#frameDeltaMs = 0;
+    this.#frameRate = 0;
+    this.#lastObservedIndexPoint = null;
+    this.#lastRenderAtMs = null;
+    this.#lastThumbDropDistance = null;
+    this.#renderedFrameCount = 0;
+    this.#reticleVisualState = "hidden";
+    this.#trackingPoseAgeMs = null;
     this.#arenaSimulation.reset();
     this.#gameplayScene.resetPresentation();
 
@@ -214,7 +274,13 @@ export class WebGpuGameplayRuntime {
     }
 
     const nowMs = readNowMs();
+    const frameDeltaMs =
+      this.#lastRenderAtMs === null ? 0 : Math.max(0, nowMs - this.#lastRenderAtMs);
 
+    this.#frameDeltaMs = frameDeltaMs;
+    this.#frameRate = frameDeltaMs === 0 ? 0 : 1000 / frameDeltaMs;
+    this.#lastRenderAtMs = nowMs;
+    this.#renderedFrameCount += 1;
     this.#syncViewport();
     this.#syncArenaFrame(nowMs);
     this.#gameplayScene.updateReticleDrift(
@@ -224,16 +290,30 @@ export class WebGpuGameplayRuntime {
   }
 
   #syncArenaFrame(nowMs: number): void {
-    const arenaHudSnapshot = this.#arenaSimulation.advance(
-      this.#trackingSource.latestPose,
-      nowMs
-    );
+    const trackingSnapshot = this.#trackingSource.latestPose;
+    const arenaHudSnapshot = this.#arenaSimulation.advance(trackingSnapshot, nowMs);
+    const hudSnapshot = freezeHudSnapshot("running", null, arenaHudSnapshot);
+    const reticleVisualState = resolveGameplayReticleVisualState(hudSnapshot);
 
     this.#gameplayScene.syncArenaPresentation(
       this.#arenaSimulation.enemyRenderStates,
-      arenaHudSnapshot.aimPoint
+      arenaHudSnapshot.aimPoint,
+      reticleVisualState
     );
-    this.#hudSnapshot = freezeHudSnapshot("running", null, arenaHudSnapshot);
+    this.#hudSnapshot = hudSnapshot;
+    this.#reticleVisualState = reticleVisualState;
+    this.#lastObservedIndexPoint =
+      trackingSnapshot.trackingState === "tracked"
+        ? trackingSnapshot.pose.indexTip
+        : null;
+    this.#lastThumbDropDistance =
+      trackingSnapshot.trackingState === "tracked"
+        ? trackingSnapshot.pose.thumbTip.y - trackingSnapshot.pose.indexTip.y
+        : null;
+    this.#trackingPoseAgeMs =
+      trackingSnapshot.timestampMs === null
+        ? null
+        : Math.max(0, nowMs - trackingSnapshot.timestampMs);
   }
 
   #syncViewport(): void {

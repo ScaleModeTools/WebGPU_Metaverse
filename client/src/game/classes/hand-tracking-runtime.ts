@@ -1,4 +1,5 @@
 import { handTrackingRuntimeConfig } from "../config/hand-tracking-runtime";
+import type { HandTrackingTelemetrySnapshot } from "../types/gameplay-presentation";
 import {
   createLatestHandTrackingSnapshot,
   createUnavailableHandTrackingSnapshot,
@@ -75,6 +76,21 @@ function readFrameTimestampMs(): number {
   return globalThis.performance?.now() ?? Date.now();
 }
 
+function freezeTelemetrySnapshot(
+  snapshot: HandTrackingTelemetrySnapshot
+): HandTrackingTelemetrySnapshot {
+  return Object.freeze({
+    framesDispatched: snapshot.framesDispatched,
+    framesProcessed: snapshot.framesProcessed,
+    inFlightFrameSkips: snapshot.inFlightFrameSkips,
+    latestPoseAgeMs: snapshot.latestPoseAgeMs,
+    latestSequenceNumber: snapshot.latestSequenceNumber,
+    staleSnapshotsIgnored: snapshot.staleSnapshotsIgnored,
+    trackingState: snapshot.trackingState,
+    workerLatencyMs: snapshot.workerLatencyMs
+  });
+}
+
 export class HandTrackingRuntime {
   readonly #cancelAnimationFrame: typeof globalThis.cancelAnimationFrame;
   readonly #config: HandTrackingRuntimeConfig;
@@ -85,9 +101,13 @@ export class HandTrackingRuntime {
   readonly #requestAnimationFrame: typeof globalThis.requestAnimationFrame;
 
   #bootPromise: Promise<HandTrackingRuntimeSnapshot> | null = null;
+  #framesDispatched = 0;
+  #framesProcessed = 0;
   #frameHandle = 0;
   #frameInFlight = false;
+  #inFlightFrameSkips = 0;
   #lastDispatchedFrameAt = 0;
+  #lastWorkerLatencyMs: number | null = null;
   #latestSequenceNumber = 0;
   #pendingBootReject:
     | ((reason?: unknown) => void)
@@ -101,6 +121,7 @@ export class HandTrackingRuntime {
     null
   );
   #stream: MediaStream | null = null;
+  #staleSnapshotsIgnored = 0;
   #videoElement: TrackingVideoElement | null = null;
   #worker: HandTrackingWorkerHost | null = null;
 
@@ -134,6 +155,24 @@ export class HandTrackingRuntime {
 
   get latestPose(): LatestHandTrackingSnapshot {
     return this.#runtimeSnapshot.latestPose;
+  }
+
+  get telemetrySnapshot(): HandTrackingTelemetrySnapshot {
+    const latestPoseAgeMs =
+      this.#runtimeSnapshot.latestPose.timestampMs === null
+        ? null
+        : Math.max(0, readFrameTimestampMs() - this.#runtimeSnapshot.latestPose.timestampMs);
+
+    return freezeTelemetrySnapshot({
+      framesDispatched: this.#framesDispatched,
+      framesProcessed: this.#framesProcessed,
+      inFlightFrameSkips: this.#inFlightFrameSkips,
+      latestPoseAgeMs,
+      latestSequenceNumber: this.#latestSequenceNumber,
+      staleSnapshotsIgnored: this.#staleSnapshotsIgnored,
+      trackingState: this.#runtimeSnapshot.latestPose.trackingState,
+      workerLatencyMs: this.#lastWorkerLatencyMs
+    });
   }
 
   async ensureStarted(): Promise<HandTrackingRuntimeSnapshot> {
@@ -181,8 +220,13 @@ export class HandTrackingRuntime {
     }
 
     this.#frameInFlight = false;
+    this.#framesDispatched = 0;
+    this.#framesProcessed = 0;
+    this.#inFlightFrameSkips = 0;
     this.#lastDispatchedFrameAt = 0;
+    this.#lastWorkerLatencyMs = null;
     this.#latestSequenceNumber = 0;
+    this.#staleSnapshotsIgnored = 0;
 
     if (this.#pendingBootReject !== null) {
       this.#pendingBootReject(new Error("Hand tracking runtime was disposed."));
@@ -295,9 +339,15 @@ export class HandTrackingRuntime {
     this.#frameInFlight = false;
 
     if (event.sequenceNumber < this.#latestSequenceNumber) {
+      this.#staleSnapshotsIgnored += 1;
       return;
     }
 
+    this.#framesProcessed += 1;
+    this.#lastWorkerLatencyMs = Math.max(
+      0,
+      readFrameTimestampMs() - event.timestampMs
+    );
     this.#latestSequenceNumber = event.sequenceNumber;
     this.#setRuntimeSnapshot(
       this.#runtimeSnapshot.lifecycle,
@@ -326,9 +376,13 @@ export class HandTrackingRuntime {
     if (
       this.#worker === null ||
       this.#videoElement === null ||
-      this.#runtimeSnapshot.lifecycle !== "ready" ||
-      this.#frameInFlight
+      this.#runtimeSnapshot.lifecycle !== "ready"
     ) {
+      return;
+    }
+
+    if (this.#frameInFlight) {
+      this.#inFlightFrameSkips += 1;
       return;
     }
 
@@ -362,6 +416,7 @@ export class HandTrackingRuntime {
         },
         [frame]
       );
+      this.#framesDispatched += 1;
     } catch {
       this.#frameInFlight = false;
     }

@@ -2,7 +2,10 @@ import type { FormEvent } from "react";
 import type { PlayerProfile } from "@thumbshooter/shared";
 
 import type { AudioSessionSnapshot } from "../../audio";
-import type { GameplaySignal } from "../../game";
+import type {
+  GameplayDebugPanelMode,
+  GameplaySignal
+} from "../../game";
 import type { HandTrackingRuntime } from "../../game/classes/hand-tracking-runtime";
 import type { WebGpuGameplayCapabilitySnapshot } from "../../game/types/webgpu-capability";
 import type {
@@ -15,6 +18,7 @@ import type { ThumbShooterShellViewModel } from "./thumbshooter-shell";
 
 export interface ThumbShooterShellController {
   readonly capabilityStatus: WebGpuGameplayCapabilitySnapshot["status"];
+  readonly debugPanelMode: GameplayDebugPanelMode;
   readonly handTrackingRuntime: HandTrackingRuntime;
   readonly hydrationSource: StoredProfileHydrationResult["source"];
   readonly isMenuOpen: boolean;
@@ -34,6 +38,9 @@ export interface ThumbShooterShellController {
   readonly onClearProfile: () => void;
   readonly onEditProfile: () => void;
   readonly onGameplaySignal: (signal: GameplaySignal) => void;
+  readonly onGameplayDebugPanelModeChange: (
+    mode: GameplayDebugPanelMode
+  ) => void;
   readonly onGameplayMenuOpen: (open: boolean) => void;
   readonly onLoginSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onMusicVolumeChange: (nextValue: number) => void;
@@ -46,6 +53,7 @@ export interface ThumbShooterShellController {
 export interface ThumbShooterShellControllerState {
   readonly audioSnapshot: AudioSessionSnapshot;
   readonly capabilitySnapshot: WebGpuGameplayCapabilitySnapshot;
+  readonly debugPanelMode: GameplayDebugPanelMode;
   readonly hasAutoOpenedMenu: boolean;
   readonly hasConfirmedProfile: boolean;
   readonly hydrationSource: StoredProfileHydrationResult["source"];
@@ -87,6 +95,10 @@ export type ThumbShooterShellControllerAction =
     }
   | {
       readonly type: "gameplayExited";
+    }
+  | {
+      readonly mode: GameplayDebugPanelMode;
+      readonly type: "gameplayDebugPanelModeChanged";
     }
   | {
       readonly type: "gameplayMenuAutoOpened";

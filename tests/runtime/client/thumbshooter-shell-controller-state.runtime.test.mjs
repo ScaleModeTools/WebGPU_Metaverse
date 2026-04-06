@@ -51,6 +51,7 @@ test("createInitialThumbShooterShellControllerState seeds typed shell policy fro
   assert.equal(state.hydrationSource, "profile-record");
   assert.equal(state.usernameDraft, "shell-user");
   assert.equal(state.capabilitySnapshot.status, "checking");
+  assert.equal(state.debugPanelMode, "hidden");
   assert.equal(state.permissionState, "prompt");
 });
 
@@ -84,6 +85,10 @@ test("reduceThumbShooterShellControllerState keeps shell mutations behind typed 
     permissionState: "granted"
   });
   state = reduceThumbShooterShellControllerState(state, {
+    mode: "aim-inspector",
+    type: "gameplayDebugPanelModeChanged"
+  });
+  state = reduceThumbShooterShellControllerState(state, {
     type: "gameplayMenuAutoOpened",
     audioSnapshot: {
       ...createAudioSnapshot(),
@@ -106,6 +111,7 @@ test("reduceThumbShooterShellControllerState keeps shell mutations behind typed 
 
   assert.equal(state.hasConfirmedProfile, true);
   assert.equal(state.permissionState, "granted");
+  assert.equal(state.debugPanelMode, "aim-inspector");
   assert.equal(state.isMenuOpen, true);
   assert.equal(state.hasAutoOpenedMenu, true);
   assert.equal(state.profile?.snapshot.bestScore, 300);
