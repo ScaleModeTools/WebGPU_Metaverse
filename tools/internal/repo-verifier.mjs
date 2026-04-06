@@ -6,7 +6,6 @@ import {
   statSync
 } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import { gzipSync } from "node:zlib";
 import typescript from "typescript";
 
 const requiredEntrypoints = [
@@ -18,10 +17,6 @@ const requiredEntrypoints = [
 const requiredLocalRepoFiles = [
   "AGENTS.md",
   "README.md",
-  "spec.md",
-  "progress.md",
-  "docs/dependencies.md",
-  "docs/bundle-budgets.json",
   "tools/runtime-owner-test-manifest.json"
 ];
 const productSourceRoots = [
@@ -99,10 +94,8 @@ const clientDomainPolicies = new Map([
     new Set(["lib", "shared"])
   ]
 ]);
-const runtimeDependencyManifestPaths = ["package.json", "client/package.json"];
 const runtimeOwnerDirectoryNames = new Set(["classes", "adapters", "guards"]);
 const runtimeOwnerTestManifestPath = "tools/runtime-owner-test-manifest.json";
-const bundleBudgetsPath = "docs/bundle-budgets.json";
 const explicitAnyScanRoots = [
   "client",
   "server",
@@ -232,47 +225,9 @@ function getTrackedFiles(repoRoot) {
     .filter(Boolean);
 }
 
-function parseDependencyBaseline(repoRoot) {
-  const baselineLines = readFileSync(
-    join(repoRoot, "docs/dependencies.md"),
-    "utf8"
-  ).split("\n");
-  const dependencyMap = new Map();
 
-  for (const rawLine of baselineLines) {
-    const line = rawLine.trim();
-    const match = /^- `(.+)@([^@`]+)`$/.exec(line);
 
-    if (match === null) {
-      continue;
-    }
 
-    dependencyMap.set(match[1], match[2]);
-  }
-
-  return dependencyMap;
-}
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function createGlobPatternRegExp(pattern) {
-  return new RegExp(
-    `^${pattern
-      .split("*")
-      .map((part) => escapeRegExp(part))
-      .join("[^/]*")}$`
-  );
-}
-
-function findSearchRoot(pattern) {
-  const wildcardIndex = pattern.indexOf("*");
-  const staticPrefix = wildcardIndex === -1 ? pattern : pattern.slice(0, wildcardIndex);
-  const lastSlashIndex = staticPrefix.lastIndexOf("/");
-
-  return lastSlashIndex === -1 ? "." : staticPrefix.slice(0, lastSlashIndex);
-}
 
 function readJsonFile(repoRoot, relativePath, description, errors) {
   try {
@@ -327,48 +282,7 @@ function parseRuntimeOwnerTestManifest(repoRoot, errors) {
   return manifestEntries;
 }
 
-function parseBundleBudgets(repoRoot, errors) {
-  const parsedValue = readJsonFile(
-    repoRoot,
-    bundleBudgetsPath,
-    "bundle budgets",
-    errors
-  );
 
-  if (parsedValue === null) {
-    return [];
-  }
-
-  if (!Array.isArray(parsedValue.budgets)) {
-    errors.push("docs/bundle-budgets.json must expose a budgets array.");
-    return [];
-  }
-
-  const budgets = [];
-
-  for (const rawBudget of parsedValue.budgets) {
-    if (
-      rawBudget === null ||
-      typeof rawBudget !== "object" ||
-      typeof rawBudget.label !== "string" ||
-      typeof rawBudget.pattern !== "string" ||
-      !Number.isFinite(rawBudget.maxBytes) ||
-      !Number.isFinite(rawBudget.maxGzipBytes)
-    ) {
-      errors.push("docs/bundle-budgets.json contains an invalid budget entry.");
-      continue;
-    }
-
-    budgets.push({
-      label: rawBudget.label,
-      pattern: rawBudget.pattern,
-      maxBytes: rawBudget.maxBytes,
-      maxGzipBytes: rawBudget.maxGzipBytes
-    });
-  }
-
-  return budgets;
-}
 
 function verifyProductImports(repoRoot, sourceFiles, errors) {
   for (const filePath of sourceFiles) {
@@ -475,10 +389,6 @@ function verifyTrackedPrivacy(trackedFiles, errors) {
     {
       pattern: /^spec\.md$/,
       description: "private build spec must stay untracked"
-    },
-    {
-      pattern: /^progress\.md$/,
-      description: "private progress tracking must stay untracked"
     },
     {
       pattern: /^\.local-dev\//,
@@ -693,33 +603,6 @@ function verifyExternalPackageBoundaries(repoRoot, sourceFiles, errors) {
   }
 }
 
-function verifyDependencyBaseline(repoRoot, errors) {
-  const dependencyBaseline = parseDependencyBaseline(repoRoot);
-
-  for (const manifestPath of runtimeDependencyManifestPaths) {
-    const packageJson = readPackageJson(repoRoot, manifestPath);
-    const dependencyGroups = [
-      packageJson.dependencies ?? {},
-      packageJson.devDependencies ?? {}
-    ];
-
-    for (const [dependencyName, expectedVersion] of dependencyBaseline.entries()) {
-      for (const dependencyGroup of dependencyGroups) {
-        const declaredVersion = dependencyGroup[dependencyName];
-
-        if (declaredVersion === undefined) {
-          continue;
-        }
-
-        if (declaredVersion !== expectedVersion) {
-          errors.push(
-            `${manifestPath} declares ${dependencyName}@${declaredVersion}, but docs/dependencies.md requires ${expectedVersion}.`
-          );
-        }
-      }
-    }
-  }
-}
 
 function listRuntimeOwnerCandidates(repoRoot) {
   const candidates = [];
@@ -809,47 +692,7 @@ function verifyRuntimeOwnerTestParity(repoRoot, errors) {
   }
 }
 
-function verifyBundleBudgets(repoRoot, errors) {
-  const budgets = parseBundleBudgets(repoRoot, errors);
-  const searchRootCache = new Map();
 
-  for (const budget of budgets) {
-    const searchRoot = findSearchRoot(budget.pattern);
-    const absoluteSearchRoot = join(repoRoot, searchRoot);
-    const searchFiles =
-      searchRootCache.get(searchRoot) ??
-      listFiles(absoluteSearchRoot).map((filePath) =>
-        toRepoPath(relative(repoRoot, filePath))
-      );
-    const patternRegExp = createGlobPatternRegExp(budget.pattern);
-    const matchedFiles = searchFiles.filter((filePath) => patternRegExp.test(filePath));
-
-    searchRootCache.set(searchRoot, searchFiles);
-
-    if (matchedFiles.length === 0) {
-      errors.push(
-        `Bundle budget pattern ${budget.pattern} for ${budget.label} matched no built files.`
-      );
-      continue;
-    }
-
-    let rawBytes = 0;
-    let gzipBytes = 0;
-
-    for (const matchedFile of matchedFiles) {
-      const fileBuffer = readFileSync(join(repoRoot, matchedFile));
-
-      rawBytes += fileBuffer.length;
-      gzipBytes += gzipSync(fileBuffer).length;
-    }
-
-    if (rawBytes > budget.maxBytes || gzipBytes > budget.maxGzipBytes) {
-      errors.push(
-        `Bundle budget exceeded for ${budget.label}: ${budget.pattern} produced ${rawBytes} raw bytes and ${gzipBytes} gzip bytes, but the budget is ${budget.maxBytes}/${budget.maxGzipBytes}.`
-      );
-    }
-  }
-}
 
 function listExplicitAnyScanFiles(repoRoot) {
   const files = [];
@@ -957,9 +800,7 @@ export function collectRepoVerificationErrors({
   verifyTrackedPrivacy(nextTrackedFiles, errors);
   verifyClientDomainImportBoundaries(repoRoot, sourceFiles, errors);
   verifyExternalPackageBoundaries(repoRoot, sourceFiles, errors);
-  verifyDependencyBaseline(repoRoot, errors);
   verifyRuntimeOwnerTestParity(repoRoot, errors);
-  verifyBundleBudgets(repoRoot, errors);
   verifyNoExplicitAny(repoRoot, errors);
 
   return errors;

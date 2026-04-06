@@ -2,8 +2,6 @@
 
 ThumbShooter is a browser FPS prototype where the player aims with a webcam-
 tracked hand pose and fires by dropping the thumb relative to the index finger.
-The current shipped build is the phase 7 local combat loop with the phase 5
-audio prototype live on top of it.
 
 ## What Ships Now
 
@@ -35,7 +33,6 @@ Still intentionally deferred:
   objects
 - `tests`: runtime and contract coverage
 - `tools`: non-interactive build, test, bench, and verify entrypoints
-- `docs`: dependency baseline and bundle-budget references
 - `examples`: reference material only, never product code
 
 ## Main Runtime Owners
@@ -72,7 +69,6 @@ npm run dev:client
 ## Fast Orientation
 
 - `README.md` is the public blank-slate orientation surface.
-- `docs/dependencies.md` is the public dependency baseline.
 - local/private steering for autonomous contributors lives outside this public
   README and can be more detailed than what belongs here.
 
