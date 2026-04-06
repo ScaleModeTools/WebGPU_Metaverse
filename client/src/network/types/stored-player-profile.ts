@@ -18,6 +18,7 @@ export interface StoredCalibrationRecord {
   readonly version: CalibrationRecordVersion;
   readonly aimCalibration: PlayerProfileSnapshot["aimCalibration"];
   readonly calibrationSamples: readonly CalibrationShotSample[];
+  readonly triggerCalibration: PlayerProfileSnapshot["triggerCalibration"];
 }
 
 export interface StoredProfileHydrationResult {

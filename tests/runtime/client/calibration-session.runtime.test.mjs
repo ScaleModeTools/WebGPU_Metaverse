@@ -23,6 +23,7 @@ test("NinePointCalibrationSession captures one sample per trigger press and comp
   const session = new NinePointCalibrationSession();
   const capturedAnchorIds = [];
   let fittedCalibration = null;
+  let triggerCalibration = null;
   let sequenceNumber = 0;
 
   for (const anchor of gameFoundationConfig.calibration.anchors) {
@@ -45,10 +46,17 @@ test("NinePointCalibrationSession captures one sample per trigger press and comp
 
     if (pressedResult.capturedSample !== null) {
       capturedAnchorIds.push(pressedResult.capturedSample.anchorId);
+      assert.notEqual(pressedResult.capturedSample.observedPose.aimPoint, null);
+      assert.notEqual(pressedResult.capturedSample.readyTriggerMetrics, null);
+      assert.notEqual(pressedResult.capturedSample.pressedTriggerMetrics, null);
     }
 
     if (pressedResult.fittedCalibration !== null) {
       fittedCalibration = pressedResult.fittedCalibration;
+    }
+
+    if (pressedResult.triggerCalibration !== null) {
+      triggerCalibration = pressedResult.triggerCalibration;
     }
 
     const heldResult = session.ingestTrackingSnapshot(
@@ -76,6 +84,13 @@ test("NinePointCalibrationSession captures one sample per trigger press and comp
     gameFoundationConfig.calibration.anchors.map((anchor) => anchor.id)
   );
   assert.notEqual(fittedCalibration, null);
+  assert.notEqual(triggerCalibration, null);
+  assert.equal(triggerCalibration?.sampleCount, 9);
+  assert.equal(
+    triggerCalibration?.readyAxisAngleDegreesMin >
+      triggerCalibration?.pressedAxisAngleDegreesMax,
+    true
+  );
   assert.equal(session.snapshot.captureState, "complete");
   assert.equal(session.snapshot.currentAnchorId, null);
 });

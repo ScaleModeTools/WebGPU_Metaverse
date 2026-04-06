@@ -57,7 +57,6 @@ function ensureWorkerDynamicImportBridge(): void {
 
 let handLandmarker: HandLandmarker | null = null;
 let landmarkIndices: HandTrackingWorkerBootMessage["landmarks"] = {
-  handPivotIndex: 0,
   thumbBaseIndex: 1,
   thumbKnuckleIndex: 2,
   thumbJointIndex: 3,
@@ -116,7 +115,6 @@ function extractPoseCandidate(
   result: HandLandmarkerResult
 ): HandTrackingPoseCandidate | null {
   const landmarks = result.landmarks[0];
-  const handPivot = readLandmarkPoint(landmarks?.[landmarkIndices.handPivotIndex]);
   const thumbBase = readLandmarkPoint(landmarks?.[landmarkIndices.thumbBaseIndex]);
   const thumbKnuckle = readLandmarkPoint(landmarks?.[landmarkIndices.thumbKnuckleIndex]);
   const thumbJoint = readLandmarkPoint(landmarks?.[landmarkIndices.thumbJointIndex]);
@@ -127,7 +125,6 @@ function extractPoseCandidate(
   const indexTip = readLandmarkPoint(landmarks?.[landmarkIndices.indexTipIndex]);
 
   if (
-    handPivot === null ||
     thumbBase === null ||
     thumbKnuckle === null ||
     thumbJoint === null ||
@@ -141,7 +138,6 @@ function extractPoseCandidate(
   }
 
   return {
-    handPivot,
     thumbBase,
     thumbKnuckle,
     thumbJoint,

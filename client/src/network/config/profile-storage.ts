@@ -4,5 +4,5 @@ export const profileStoragePlan = {
   usernameStorageKey: "thumbshooter.profile.username",
   profileStorageKey: "thumbshooter.profile.record",
   calibrationStorageKey: "thumbshooter.profile.calibration",
-  calibrationRecordVersion: 1
+  calibrationRecordVersion: 2
 } as const satisfies ProfileStoragePlan;

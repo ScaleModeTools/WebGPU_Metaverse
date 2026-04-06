@@ -1,4 +1,7 @@
-import type { NormalizedViewportPoint } from "@thumbshooter/shared";
+import type {
+  NormalizedViewportPoint,
+  NormalizedViewportPointInput
+} from "@thumbshooter/shared";
 
 import type { HandTrackingPoseState } from "./hand-tracking";
 import type { LocalCombatSessionPhase } from "./local-combat-session";
@@ -45,7 +48,7 @@ export interface GameplayTelemetrySnapshot {
   readonly aimPoint: NormalizedViewportPoint | null;
   readonly frameDeltaMs: number;
   readonly frameRate: number;
-  readonly observedIndexPoint: NormalizedViewportPoint | null;
+  readonly observedAimPoint: NormalizedViewportPointInput | null;
   readonly renderedFrameCount: number;
   readonly reticleVisualState: GameplayReticleVisualState;
   readonly sessionPhase: LocalCombatSessionPhase;

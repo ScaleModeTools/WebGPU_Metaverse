@@ -7,6 +7,7 @@ import {
   PlayerProfile,
   calibrationAnchorIds,
   createCalibrationShotSample,
+  createHandTriggerCalibrationSnapshot,
   createNormalizedViewportPoint,
   createUsername,
   reticleIds
@@ -19,6 +20,14 @@ function createCalibrationSampleFixture() {
     observedPose: {
       thumbTip: { x: 0.4, y: 0.6 },
       indexTip: { x: 0.55, y: 0.35 }
+    },
+    pressedTriggerMetrics: {
+      axisAngleDegrees: 12,
+      engagementRatio: 0.44
+    },
+    readyTriggerMetrics: {
+      axisAngleDegrees: 42,
+      engagementRatio: 1.08
     }
   });
 }
@@ -36,6 +45,7 @@ test("PlayerProfile.create uses the default reticle and zero calibration samples
   assert.equal(profile.snapshot.aimCalibration, null);
   assert.equal(profile.snapshot.bestScore, 0);
   assert.equal(profile.calibrationSampleCount, 0);
+  assert.equal(profile.snapshot.triggerCalibration, null);
 });
 
 test("PlayerProfile.withSelectedReticle returns a new immutable snapshot", () => {
@@ -239,6 +249,24 @@ test("PlayerProfile.withAimCalibration stores an immutable fitted transform", ()
   assert.equal(Object.isFrozen(updatedProfile.snapshot.aimCalibration), true);
 });
 
+test("PlayerProfile.withTriggerCalibration stores an immutable trigger calibration", () => {
+  const baseProfile = PlayerProfile.create({
+    username: "thumbshooter-test-user"
+  });
+  const triggerCalibration = createHandTriggerCalibrationSnapshot({
+    sampleCount: 9,
+    pressedAxisAngleDegreesMax: 15,
+    pressedEngagementRatioMax: 0.5,
+    readyAxisAngleDegreesMin: 30,
+    readyEngagementRatioMin: 0.95
+  });
+  const updatedProfile = baseProfile.withTriggerCalibration(triggerCalibration);
+
+  assert.equal(baseProfile.snapshot.triggerCalibration, null);
+  assert.deepEqual(updatedProfile.snapshot.triggerCalibration, triggerCalibration);
+  assert.equal(Object.isFrozen(updatedProfile.snapshot.triggerCalibration), true);
+});
+
 test("shared calibration anchors and reticle ids are unique", () => {
   assert.equal(new Set(calibrationAnchorIds).size, calibrationAnchorIds.length);
   assert.equal(new Set(reticleIds).size, reticleIds.length);
@@ -262,7 +290,14 @@ test("PlayerProfile.fromSnapshot rehydrates an immutable cloned snapshot", () =>
       yCoefficients: [0, 1, 0]
     },
     bestScore: 325.4,
-    calibrationSamples: mutableCalibrationSamples
+    calibrationSamples: mutableCalibrationSamples,
+    triggerCalibration: createHandTriggerCalibrationSnapshot({
+      sampleCount: 4,
+      pressedAxisAngleDegreesMax: 14,
+      pressedEngagementRatioMax: 0.46,
+      readyAxisAngleDegreesMin: 32,
+      readyEngagementRatioMin: 1.02
+    })
   });
 
   mutableCalibrationSamples.push(createCalibrationSampleFixture());
@@ -273,6 +308,7 @@ test("PlayerProfile.fromSnapshot rehydrates an immutable cloned snapshot", () =>
   assert.equal(Object.isFrozen(profile.snapshot.aimCalibration), true);
   assert.equal(Object.isFrozen(profile.snapshot.calibrationSamples), true);
   assert.equal(Object.isFrozen(profile.snapshot.audioSettings), true);
+  assert.equal(Object.isFrozen(profile.snapshot.triggerCalibration), true);
 });
 
 test("createUsername trims whitespace and rejects blank names", () => {
@@ -285,6 +321,15 @@ test("PlayerProfile.resetCalibration clears stored calibration samples", () => {
     username: "thumbshooter-test-user"
   })
     .withCalibrationShot(createCalibrationSampleFixture())
+    .withTriggerCalibration(
+      createHandTriggerCalibrationSnapshot({
+        sampleCount: 1,
+        pressedAxisAngleDegreesMax: 14,
+        pressedEngagementRatioMax: 0.42,
+        readyAxisAngleDegreesMin: 34,
+        readyEngagementRatioMin: 1.01
+      })
+    )
     .withAimCalibration({
       xCoefficients: [1, 0, 0],
       yCoefficients: [0, 1, 0]
@@ -294,4 +339,5 @@ test("PlayerProfile.resetCalibration clears stored calibration samples", () => {
   assert.equal(resetProfile.calibrationSampleCount, 0);
   assert.equal(resetProfile.snapshot.aimCalibration, null);
   assert.deepEqual(resetProfile.snapshot.calibrationSamples, []);
+  assert.equal(resetProfile.snapshot.triggerCalibration, null);
 });

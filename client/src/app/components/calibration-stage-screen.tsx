@@ -4,7 +4,9 @@ import type { PlayerProfile } from "@thumbshooter/shared";
 
 import { HandTrackingRuntime } from "../../game/classes/hand-tracking-runtime";
 import { NinePointCalibrationSession } from "../../game/classes/nine-point-calibration-session";
+import { handAimObservationConfig } from "../../game/config/hand-aim-observation";
 import { gameFoundationConfig } from "../../game/config/game-foundation";
+import { readObservedAimPoint } from "../../game/types/hand-aim-observation";
 import type { HandTrackingPoseSnapshot } from "../../game/types/hand-tracking";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,18 +54,21 @@ function resolveCaptureGuidance(input: {
 }
 
 const indexDebugPointIds = [
-  "handPivot",
   "indexBase",
   "indexKnuckle",
   "indexJoint",
   "indexTip"
 ] as const satisfies readonly (keyof HandTrackingPoseSnapshot)[];
 const thumbDebugPointIds = [
-  "handPivot",
+  "thumbBase",
+  "thumbKnuckle",
+  "thumbJoint",
   "thumbTip"
 ] as const satisfies readonly (keyof HandTrackingPoseSnapshot)[];
 const handDebugPointIds = [
-  "handPivot",
+  "thumbBase",
+  "thumbKnuckle",
+  "thumbJoint",
   "thumbTip",
   "indexBase",
   "indexKnuckle",
@@ -82,7 +87,10 @@ function formatOverlayPolyline(
 
 function setOverlayPoint(
   node: SVGCircleElement | null | undefined,
-  point: HandTrackingPoseSnapshot[keyof HandTrackingPoseSnapshot]
+  point: {
+    readonly x: number;
+    readonly y: number;
+  }
 ): void {
   if (node == null) {
     return;
@@ -149,8 +157,14 @@ export function CalibrationStageScreen({
     const thumbOverlay = handOverlay?.querySelector<SVGPolylineElement>(
       '[data-skeleton="thumb"]'
     );
-    const handPivotPoint = handOverlay?.querySelector<SVGCircleElement>(
-      '[data-point="handPivot"]'
+    const thumbBasePoint = handOverlay?.querySelector<SVGCircleElement>(
+      '[data-point="thumbBase"]'
+    );
+    const thumbKnucklePoint = handOverlay?.querySelector<SVGCircleElement>(
+      '[data-point="thumbKnuckle"]'
+    );
+    const thumbJointPoint = handOverlay?.querySelector<SVGCircleElement>(
+      '[data-point="thumbJoint"]'
     );
     const thumbTipPoint = handOverlay?.querySelector<SVGCircleElement>(
       '[data-point="thumbTip"]'
@@ -166,6 +180,9 @@ export function CalibrationStageScreen({
     );
     const indexTipPoint = handOverlay?.querySelector<SVGCircleElement>(
       '[data-point="indexTip"]'
+    );
+    const observedAimPoint = handOverlay?.querySelector<SVGCircleElement>(
+      '[data-point="observedAimPoint"]'
     );
 
     const updateLoop = () => {
@@ -211,12 +228,18 @@ export function CalibrationStageScreen({
             "points",
             formatOverlayPolyline(latestPose.pose, thumbDebugPointIds)
           );
-          setOverlayPoint(handPivotPoint, latestPose.pose.handPivot);
+          setOverlayPoint(thumbBasePoint, latestPose.pose.thumbBase);
+          setOverlayPoint(thumbKnucklePoint, latestPose.pose.thumbKnuckle);
+          setOverlayPoint(thumbJointPoint, latestPose.pose.thumbJoint);
           setOverlayPoint(thumbTipPoint, latestPose.pose.thumbTip);
           setOverlayPoint(indexBasePoint, latestPose.pose.indexBase);
           setOverlayPoint(indexKnucklePoint, latestPose.pose.indexKnuckle);
           setOverlayPoint(indexJointPoint, latestPose.pose.indexJoint);
           setOverlayPoint(indexTipPoint, latestPose.pose.indexTip);
+          setOverlayPoint(
+            observedAimPoint,
+            readObservedAimPoint(latestPose.pose, handAimObservationConfig)
+          );
         } else {
           handOverlay.style.opacity = "0";
         }
@@ -233,6 +256,9 @@ export function CalibrationStageScreen({
         if (nextProgress.fittedCalibration !== null) {
           nextProfile = nextProfile.withAimCalibration(
             nextProgress.fittedCalibration
+          );
+          nextProfile = nextProfile.withTriggerCalibration(
+            nextProgress.triggerCalibration
           );
           progress = "completed";
         }
@@ -366,9 +392,14 @@ export function CalibrationStageScreen({
               className="fill-white/90"
               data-point={pointId}
               key={pointId}
-              r={pointId === "handPivot" ? "0.7" : "0.9"}
+              r="0.9"
             />
           ))}
+          <circle
+            className="fill-sky-300/90"
+            data-point="observedAimPoint"
+            r="1.05"
+          />
         </svg>
       </section>
     </ImmersiveStageFrame>

@@ -1,10 +1,14 @@
-import type { NormalizedViewportPoint } from "@thumbshooter/shared";
+import type {
+  NormalizedViewportPoint,
+  NormalizedViewportPointInput
+} from "@thumbshooter/shared";
 import {
   type OrthographicCamera,
   type Scene,
   WebGPURenderer
 } from "three/webgpu";
 
+import { handAimObservationConfig } from "../config/hand-aim-observation";
 import { gameplayRuntimeConfig } from "../config/gameplay-runtime";
 import { resolveGameplayReticleVisualState } from "../render/gameplay-reticle-presentation";
 import {
@@ -19,6 +23,7 @@ import type {
   GameplayHudSnapshot,
   GameplayRuntimeConfig
 } from "../types/gameplay-runtime";
+import { readObservedAimPoint } from "../types/hand-aim-observation";
 import type { LatestHandTrackingSnapshot } from "../types/hand-tracking";
 import { LocalArenaSimulation } from "./local-arena-simulation";
 
@@ -43,12 +48,29 @@ interface GameplayRuntimeDependencies {
   readonly requestAnimationFrame?: typeof globalThis.requestAnimationFrame;
 }
 
+interface GameplayRendererFallbackHandle {
+  _getFallback?: ((error: unknown) => GameplayRendererHost) | null;
+}
+
+function disableImplicitWebGlFallback(renderer: GameplayRendererHost): void {
+  const fallbackHandle = renderer as GameplayRendererHost &
+    GameplayRendererFallbackHandle;
+
+  if ("_getFallback" in fallbackHandle) {
+    fallbackHandle._getFallback = null;
+  }
+}
+
 function createDefaultRenderer(canvas: HTMLCanvasElement): GameplayRendererHost {
-  return new WebGPURenderer({
+  const renderer = new WebGPURenderer({
     alpha: true,
     antialias: true,
     canvas
   });
+
+  disableImplicitWebGlFallback(renderer);
+
+  return renderer;
 }
 
 function freezeHudSnapshot(
@@ -72,6 +94,34 @@ function readNowMs(): number {
   return globalThis.performance?.now() ?? Date.now();
 }
 
+function requestBrowserAnimationFrame(callback: FrameRequestCallback): number {
+  if (typeof globalThis.window?.requestAnimationFrame !== "function") {
+    throw new Error("requestAnimationFrame is unavailable for gameplay rendering.");
+  }
+
+  return globalThis.window.requestAnimationFrame(callback);
+}
+
+function cancelBrowserAnimationFrame(frameHandle: number): void {
+  if (typeof globalThis.window?.cancelAnimationFrame !== "function") {
+    return;
+  }
+
+  globalThis.window.cancelAnimationFrame(frameHandle);
+}
+
+function resolveRuntimeFailureReason(error: unknown): string {
+  if (
+    error instanceof Error &&
+    typeof error.message === "string" &&
+    error.message.trim().length > 0
+  ) {
+    return `WebGPU gameplay failed to initialize: ${error.message}`;
+  }
+
+  return "WebGPU gameplay failed to initialize.";
+}
+
 function freezeGameplayTelemetrySnapshot(
   snapshot: GameplayTelemetrySnapshot
 ): GameplayTelemetrySnapshot {
@@ -79,7 +129,7 @@ function freezeGameplayTelemetrySnapshot(
     aimPoint: snapshot.aimPoint,
     frameDeltaMs: snapshot.frameDeltaMs,
     frameRate: snapshot.frameRate,
-    observedIndexPoint: snapshot.observedIndexPoint,
+    observedAimPoint: snapshot.observedAimPoint,
     renderedFrameCount: snapshot.renderedFrameCount,
     reticleVisualState: snapshot.reticleVisualState,
     sessionPhase: snapshot.sessionPhase,
@@ -108,12 +158,13 @@ export class WebGpuGameplayRuntime {
   #frameDeltaMs = 0;
   #frameRate = 0;
   #hudSnapshot: GameplayHudSnapshot;
-  #lastObservedIndexPoint: NormalizedViewportPoint | null = null;
+  #lastObservedAimPoint: NormalizedViewportPointInput | null = null;
   #lastRenderAtMs: number | null = null;
   #lastThumbDropDistance: number | null = null;
   #renderedFrameCount = 0;
   #renderer: GameplayRendererHost | null = null;
   #reticleVisualState: GameplayReticleVisualState = "hidden";
+  #runtimeEpoch = 0;
   #trackingPoseAgeMs: number | null = null;
 
   constructor(
@@ -126,11 +177,12 @@ export class WebGpuGameplayRuntime {
     this.#config = config;
     this.#trackingSource = trackingSource;
     this.#createRenderer = dependencies.createRenderer ?? createDefaultRenderer;
-    this.#devicePixelRatio = dependencies.devicePixelRatio ?? window.devicePixelRatio;
+    this.#devicePixelRatio =
+      dependencies.devicePixelRatio ?? globalThis.window?.devicePixelRatio ?? 1;
     this.#requestAnimationFrame =
-      dependencies.requestAnimationFrame ?? window.requestAnimationFrame;
+      dependencies.requestAnimationFrame ?? requestBrowserAnimationFrame;
     this.#cancelAnimationFrame =
-      dependencies.cancelAnimationFrame ?? window.cancelAnimationFrame;
+      dependencies.cancelAnimationFrame ?? cancelBrowserAnimationFrame;
 
     this.#gameplayScene = createGameplayScene(
       this.#config,
@@ -148,7 +200,7 @@ export class WebGpuGameplayRuntime {
       aimPoint: this.#hudSnapshot.aimPoint,
       frameDeltaMs: this.#frameDeltaMs,
       frameRate: this.#frameRate,
-      observedIndexPoint: this.#lastObservedIndexPoint,
+      observedAimPoint: this.#lastObservedAimPoint,
       renderedFrameCount: this.#renderedFrameCount,
       reticleVisualState: this.#reticleVisualState,
       sessionPhase: this.#hudSnapshot.session.phase,
@@ -188,9 +240,10 @@ export class WebGpuGameplayRuntime {
 
   async start(
     canvas: HTMLCanvasElement,
-    navigatorLike: Navigator | null | undefined = window.navigator
+    navigatorLike: Navigator | null | undefined = globalThis.window?.navigator
   ): Promise<GameplayHudSnapshot> {
     this.dispose();
+    const runtimeEpoch = ++this.#runtimeEpoch;
     this.#arenaSimulation.reset(this.#trackingSource.latestPose);
 
     if (navigatorLike?.gpu === undefined) {
@@ -211,8 +264,58 @@ export class WebGpuGameplayRuntime {
       this.#arenaSimulation.hudSnapshot
     );
     this.#canvasHost = canvas;
-    this.#renderer = this.#createRenderer(canvas);
-    await this.#renderer.init();
+    const renderer = this.#createRenderer(canvas);
+
+    this.#renderer = renderer;
+
+    try {
+      await renderer.init();
+    } catch (error) {
+      if (this.#renderer === renderer) {
+        this.#renderer = null;
+      }
+
+      if (this.#canvasHost === canvas) {
+        this.#canvasHost = null;
+      }
+
+      renderer.dispose();
+
+      if (runtimeEpoch === this.#runtimeEpoch) {
+        const failureReason = resolveRuntimeFailureReason(error);
+
+        this.#hudSnapshot = freezeHudSnapshot(
+          "failed",
+          failureReason,
+          this.#arenaSimulation.hudSnapshot
+        );
+
+        throw new Error(failureReason);
+      }
+
+      throw error instanceof Error
+        ? error
+        : new Error(resolveRuntimeFailureReason(error));
+    }
+
+    if (
+      runtimeEpoch !== this.#runtimeEpoch ||
+      this.#renderer !== renderer ||
+      this.#canvasHost !== canvas
+    ) {
+      if (this.#renderer === renderer) {
+        this.#renderer = null;
+      }
+
+      if (this.#canvasHost === canvas) {
+        this.#canvasHost = null;
+      }
+
+      renderer.dispose();
+
+      return this.#hudSnapshot;
+    }
+
     this.#animationStartAtMs = readNowMs();
     this.#syncViewport();
     this.#syncArenaFrame(this.#animationStartAtMs);
@@ -227,6 +330,8 @@ export class WebGpuGameplayRuntime {
   }
 
   dispose(): void {
+    this.#runtimeEpoch += 1;
+
     if (this.#animationFrameHandle !== 0) {
       this.#cancelAnimationFrame(this.#animationFrameHandle);
       this.#animationFrameHandle = 0;
@@ -238,7 +343,7 @@ export class WebGpuGameplayRuntime {
     this.#animationStartAtMs = 0;
     this.#frameDeltaMs = 0;
     this.#frameRate = 0;
-    this.#lastObservedIndexPoint = null;
+    this.#lastObservedAimPoint = null;
     this.#lastRenderAtMs = null;
     this.#lastThumbDropDistance = null;
     this.#renderedFrameCount = 0;
@@ -302,9 +407,9 @@ export class WebGpuGameplayRuntime {
     );
     this.#hudSnapshot = hudSnapshot;
     this.#reticleVisualState = reticleVisualState;
-    this.#lastObservedIndexPoint =
+    this.#lastObservedAimPoint =
       trackingSnapshot.trackingState === "tracked"
-        ? trackingSnapshot.pose.indexTip
+        ? readObservedAimPoint(trackingSnapshot.pose, handAimObservationConfig)
         : null;
     this.#lastThumbDropDistance =
       trackingSnapshot.trackingState === "tracked"

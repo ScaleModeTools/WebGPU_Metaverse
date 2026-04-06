@@ -17,7 +17,6 @@ export function createTrackedHandPose(
 ) {
   const normalizedTriggerCurl = Math.min(1, Math.max(0, triggerCurl));
   const openPose = {
-    handPivot: { x: indexTipX - 0.025, y: indexTipY + 0.18, z: 0.05 },
     thumbBase: { x: indexTipX - 0.105, y: indexTipY + 0.1, z: 0.024 },
     thumbKnuckle: { x: indexTipX - 0.145, y: indexTipY + 0.075, z: 0.018 },
     thumbJoint: { x: indexTipX - 0.175, y: indexTipY + 0.048, z: 0.012 },
@@ -28,7 +27,6 @@ export function createTrackedHandPose(
     indexTip: { x: indexTipX, y: indexTipY, z: 0 }
   };
   const pressedPose = {
-    handPivot: { x: indexTipX - 0.025, y: indexTipY + 0.18, z: 0.05 },
     thumbBase: { x: indexTipX - 0.078, y: indexTipY + 0.097, z: 0.02 },
     thumbKnuckle: { x: indexTipX - 0.06, y: indexTipY + 0.075, z: 0.014 },
     thumbJoint: { x: indexTipX - 0.045, y: indexTipY + 0.048, z: 0.009 },
@@ -40,11 +38,6 @@ export function createTrackedHandPose(
   };
 
   return {
-    handPivot: interpolatePoint(
-      openPose.handPivot,
-      pressedPose.handPivot,
-      normalizedTriggerCurl
-    ),
     thumbBase: interpolatePoint(
       openPose.thumbBase,
       pressedPose.thumbBase,

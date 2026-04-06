@@ -42,6 +42,16 @@ export type {
   NormalizedViewportPoint
 } from "./calibration-types.js";
 export {
+  createHandTriggerCalibrationSnapshot,
+  createHandTriggerMetricSnapshot
+} from "./hand-trigger-calibration.js";
+export type {
+  HandTriggerCalibrationSnapshot,
+  HandTriggerCalibrationSnapshotInput,
+  HandTriggerMetricInput,
+  HandTriggerMetricSnapshot
+} from "./hand-trigger-calibration.js";
+export {
   reticleColors,
   reticleIds,
   reticleStyles

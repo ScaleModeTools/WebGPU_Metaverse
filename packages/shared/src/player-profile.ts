@@ -11,6 +11,10 @@ import {
   createCalibrationShotSample,
   type CalibrationShotSample
 } from "./calibration-types.js";
+import {
+  createHandTriggerCalibrationSnapshot,
+  type HandTriggerCalibrationSnapshot
+} from "./hand-trigger-calibration.js";
 import type { ReticleId } from "./reticle-types.js";
 import type { TypeBrand } from "./type-branding.js";
 
@@ -33,6 +37,7 @@ export interface PlayerProfileSnapshot {
   readonly aimCalibration: AffineAimTransformSnapshot | null;
   readonly bestScore: number;
   readonly calibrationSamples: readonly CalibrationShotSample[];
+  readonly triggerCalibration: HandTriggerCalibrationSnapshot | null;
 }
 
 export interface PlayerProfileCreateInput {
@@ -55,7 +60,11 @@ function freezePlayerProfileSnapshot(
     bestScore: normalizeBestScore(snapshot.bestScore),
     calibrationSamples: Object.freeze(
       snapshot.calibrationSamples.map((sample) => createCalibrationShotSample(sample))
-    )
+    ),
+    triggerCalibration:
+      snapshot.triggerCalibration === null
+        ? null
+        : createHandTriggerCalibrationSnapshot(snapshot.triggerCalibration)
   });
 }
 
@@ -81,7 +90,8 @@ export class PlayerProfile {
       audioSettings: AudioSettings.create(input.audioSettings).snapshot,
       aimCalibration: null,
       bestScore: 0,
-      calibrationSamples: []
+      calibrationSamples: [],
+      triggerCalibration: null
     });
   }
 
@@ -113,7 +123,8 @@ export class PlayerProfile {
     return new PlayerProfile({
       ...this.#snapshot,
       aimCalibration: null,
-      calibrationSamples: []
+      calibrationSamples: [],
+      triggerCalibration: null
     });
   }
 
@@ -128,7 +139,8 @@ export class PlayerProfile {
     return new PlayerProfile({
       ...this.#snapshot,
       aimCalibration: null,
-      calibrationSamples: [...this.#snapshot.calibrationSamples, sample]
+      calibrationSamples: [...this.#snapshot.calibrationSamples, sample],
+      triggerCalibration: null
     });
   }
 
@@ -141,6 +153,18 @@ export class PlayerProfile {
         aimCalibration === null
           ? null
           : AffineAimTransform.fromSnapshot(aimCalibration).snapshot
+    });
+  }
+
+  withTriggerCalibration(
+    triggerCalibration: HandTriggerCalibrationSnapshot | null
+  ): PlayerProfile {
+    return new PlayerProfile({
+      ...this.#snapshot,
+      triggerCalibration:
+        triggerCalibration === null
+          ? null
+          : createHandTriggerCalibrationSnapshot(triggerCalibration)
     });
   }
 

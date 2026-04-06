@@ -32,7 +32,6 @@ export interface HandTrackingLandmarkPoint {
 }
 
 export interface HandTrackingPoseCandidate {
-  readonly handPivot: HandTrackingLandmarkCandidate;
   readonly thumbBase: HandTrackingLandmarkCandidate;
   readonly thumbKnuckle: HandTrackingLandmarkCandidate;
   readonly thumbJoint: HandTrackingLandmarkCandidate;
@@ -44,7 +43,6 @@ export interface HandTrackingPoseCandidate {
 }
 
 export interface HandTrackingPoseSnapshot {
-  readonly handPivot: HandTrackingLandmarkPoint;
   readonly thumbBase: HandTrackingLandmarkPoint;
   readonly thumbKnuckle: HandTrackingLandmarkPoint;
   readonly thumbJoint: HandTrackingLandmarkPoint;
@@ -95,7 +93,6 @@ export interface HandTrackingRuntimeConfig {
     readonly runningMode: "video";
   };
   readonly landmarks: {
-    readonly handPivotIndex: 0;
     readonly thumbBaseIndex: 1;
     readonly thumbKnuckleIndex: 2;
     readonly thumbJointIndex: 3;
@@ -117,7 +114,6 @@ export interface HandTrackingWorkerBootMessage {
   readonly numHands: 1;
   readonly runningMode: "video";
   readonly landmarks: {
-    readonly handPivotIndex: 0;
     readonly thumbBaseIndex: 1;
     readonly thumbKnuckleIndex: 2;
     readonly thumbJointIndex: 3;
@@ -235,7 +231,6 @@ export function createLatestHandTrackingSnapshot(input: {
     sequenceNumber,
     timestampMs,
     pose: Object.freeze({
-      handPivot: createHandTrackingLandmarkPoint(input.pose.handPivot),
       thumbBase: createHandTrackingLandmarkPoint(input.pose.thumbBase),
       thumbKnuckle: createHandTrackingLandmarkPoint(input.pose.thumbKnuckle),
       thumbJoint: createHandTrackingLandmarkPoint(input.pose.thumbJoint),

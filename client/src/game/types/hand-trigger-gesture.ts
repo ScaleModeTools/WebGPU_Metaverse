@@ -1,3 +1,11 @@
+import {
+  createHandTriggerCalibrationSnapshot,
+  createHandTriggerMetricSnapshot,
+  type CalibrationShotSample,
+  type HandTriggerCalibrationSnapshot,
+  type HandTriggerMetricSnapshot
+} from "@thumbshooter/shared";
+
 import type { HandTrackingPoseSnapshot } from "./hand-tracking";
 
 export interface HandTriggerGestureConfig {
@@ -5,6 +13,12 @@ export interface HandTriggerGestureConfig {
   readonly pressEngagementRatio: number;
   readonly releaseAxisAngleDegrees: number;
   readonly releaseEngagementRatio: number;
+  readonly calibration: {
+    readonly pressAxisWindowFraction: number;
+    readonly pressEngagementWindowFraction: number;
+    readonly releaseAxisWindowFraction: number;
+    readonly releaseEngagementWindowFraction: number;
+  };
 }
 
 export interface HandTriggerGestureSnapshot {
@@ -18,6 +32,13 @@ interface HandVector3 {
   readonly x: number;
   readonly y: number;
   readonly z: number;
+}
+
+interface ResolvedHandTriggerGestureThresholds {
+  readonly pressAxisAngleDegrees: number;
+  readonly pressEngagementRatio: number;
+  readonly releaseAxisAngleDegrees: number;
+  readonly releaseEngagementRatio: number;
 }
 
 function subtractPoints(
@@ -75,7 +96,12 @@ function readTriggerEngagementRatio(
     readDistance(pose.indexBase, pose.indexTip),
     0.0001
   );
-  const thumbChain = [pose.thumbKnuckle, pose.thumbJoint, pose.thumbTip];
+  const thumbChain = [
+    pose.thumbBase,
+    pose.thumbKnuckle,
+    pose.thumbJoint,
+    pose.thumbTip
+  ];
   const indexChain = [pose.indexBase, pose.indexKnuckle, pose.indexJoint, pose.indexTip];
   const totalNearestDistance = thumbChain.reduce((distanceSum, thumbPoint) => {
     return distanceSum + readNearestDistance(thumbPoint, indexChain);
@@ -88,29 +114,184 @@ function readTriggerAxisAngleDegrees(
   pose: HandTrackingPoseSnapshot
 ): number {
   return readAxisAngleDegrees(
-    subtractPoints(pose.thumbTip, pose.handPivot),
-    subtractPoints(pose.indexTip, pose.handPivot)
+    subtractPoints(pose.thumbTip, pose.thumbBase),
+    subtractPoints(pose.indexTip, pose.indexBase)
   );
+}
+
+function clampWindowFraction(rawValue: number): number {
+  if (!Number.isFinite(rawValue)) {
+    return 0;
+  }
+
+  return Math.min(1, Math.max(0, rawValue));
+}
+
+function resolvePressThreshold(
+  baseThreshold: number,
+  pressedMax: number,
+  readyMin: number,
+  windowFraction: number
+): number {
+  const normalizedReadyMin = Math.max(pressedMax, readyMin);
+  const gap = normalizedReadyMin - pressedMax;
+
+  if (gap <= 0) {
+    return baseThreshold;
+  }
+
+  return Math.min(
+    baseThreshold,
+    pressedMax + gap * clampWindowFraction(windowFraction)
+  );
+}
+
+function resolveReleaseThreshold(
+  baseThreshold: number,
+  pressedMax: number,
+  readyMin: number,
+  windowFraction: number
+): number {
+  const normalizedReadyMin = Math.max(pressedMax, readyMin);
+  const gap = normalizedReadyMin - pressedMax;
+
+  if (gap <= 0) {
+    return baseThreshold;
+  }
+
+  return Math.max(
+    baseThreshold,
+    pressedMax + gap * clampWindowFraction(windowFraction)
+  );
+}
+
+export function readHandTriggerMetrics(
+  pose: HandTrackingPoseSnapshot
+): HandTriggerMetricSnapshot {
+  return createHandTriggerMetricSnapshot({
+    axisAngleDegrees: readTriggerAxisAngleDegrees(pose),
+    engagementRatio: readTriggerEngagementRatio(pose)
+  });
+}
+
+export function summarizeHandTriggerCalibration(
+  samples: readonly CalibrationShotSample[]
+): HandTriggerCalibrationSnapshot | null {
+  let sampleCount = 0;
+  let pressedAxisAngleDegreesMax = 0;
+  let pressedEngagementRatioMax = 0;
+  let readyAxisAngleDegreesMin = Number.POSITIVE_INFINITY;
+  let readyEngagementRatioMin = Number.POSITIVE_INFINITY;
+
+  for (const sample of samples) {
+    if (
+      sample.pressedTriggerMetrics === null ||
+      sample.readyTriggerMetrics === null
+    ) {
+      continue;
+    }
+
+    sampleCount += 1;
+    pressedAxisAngleDegreesMax = Math.max(
+      pressedAxisAngleDegreesMax,
+      sample.pressedTriggerMetrics.axisAngleDegrees
+    );
+    pressedEngagementRatioMax = Math.max(
+      pressedEngagementRatioMax,
+      sample.pressedTriggerMetrics.engagementRatio
+    );
+    readyAxisAngleDegreesMin = Math.min(
+      readyAxisAngleDegreesMin,
+      sample.readyTriggerMetrics.axisAngleDegrees
+    );
+    readyEngagementRatioMin = Math.min(
+      readyEngagementRatioMin,
+      sample.readyTriggerMetrics.engagementRatio
+    );
+  }
+
+  if (sampleCount === 0) {
+    return null;
+  }
+
+  return createHandTriggerCalibrationSnapshot({
+    sampleCount,
+    pressedAxisAngleDegreesMax,
+    pressedEngagementRatioMax,
+    readyAxisAngleDegreesMin:
+      readyAxisAngleDegreesMin === Number.POSITIVE_INFINITY
+        ? pressedAxisAngleDegreesMax
+        : readyAxisAngleDegreesMin,
+    readyEngagementRatioMin:
+      readyEngagementRatioMin === Number.POSITIVE_INFINITY
+        ? pressedEngagementRatioMax
+        : readyEngagementRatioMin
+  });
+}
+
+export function resolveHandTriggerGestureThresholds(
+  config: HandTriggerGestureConfig,
+  calibration: HandTriggerCalibrationSnapshot | null = null
+): ResolvedHandTriggerGestureThresholds {
+  if (calibration === null || calibration.sampleCount === 0) {
+    return Object.freeze({
+      pressAxisAngleDegrees: config.pressAxisAngleDegrees,
+      pressEngagementRatio: config.pressEngagementRatio,
+      releaseAxisAngleDegrees: config.releaseAxisAngleDegrees,
+      releaseEngagementRatio: config.releaseEngagementRatio
+    });
+  }
+
+  const pressAxisAngleDegrees = resolvePressThreshold(
+    config.pressAxisAngleDegrees,
+    calibration.pressedAxisAngleDegreesMax,
+    calibration.readyAxisAngleDegreesMin,
+    config.calibration.pressAxisWindowFraction
+  );
+  const pressEngagementRatio = resolvePressThreshold(
+    config.pressEngagementRatio,
+    calibration.pressedEngagementRatioMax,
+    calibration.readyEngagementRatioMin,
+    config.calibration.pressEngagementWindowFraction
+  );
+
+  return Object.freeze({
+    pressAxisAngleDegrees,
+    pressEngagementRatio,
+    releaseAxisAngleDegrees: resolveReleaseThreshold(
+      config.releaseAxisAngleDegrees,
+      calibration.pressedAxisAngleDegreesMax,
+      calibration.readyAxisAngleDegreesMin,
+      config.calibration.releaseAxisWindowFraction
+    ),
+    releaseEngagementRatio: resolveReleaseThreshold(
+      config.releaseEngagementRatio,
+      calibration.pressedEngagementRatioMax,
+      calibration.readyEngagementRatioMin,
+      config.calibration.releaseEngagementWindowFraction
+    )
+  });
 }
 
 export function evaluateHandTriggerGesture(
   pose: HandTrackingPoseSnapshot,
   triggerHeld: boolean,
-  config: HandTriggerGestureConfig
+  config: HandTriggerGestureConfig,
+  calibration: HandTriggerCalibrationSnapshot | null = null
 ): HandTriggerGestureSnapshot {
-  const engagementRatio = readTriggerEngagementRatio(pose);
-  const axisAngleDegrees = readTriggerAxisAngleDegrees(pose);
+  const metrics = readHandTriggerMetrics(pose);
+  const thresholds = resolveHandTriggerGestureThresholds(config, calibration);
   const pressSatisfied =
-    engagementRatio <= config.pressEngagementRatio &&
-    axisAngleDegrees <= config.pressAxisAngleDegrees;
+    metrics.engagementRatio <= thresholds.pressEngagementRatio &&
+    metrics.axisAngleDegrees <= thresholds.pressAxisAngleDegrees;
   const releaseSatisfied =
-    engagementRatio >= config.releaseEngagementRatio ||
-    axisAngleDegrees >= config.releaseAxisAngleDegrees;
+    metrics.engagementRatio >= thresholds.releaseEngagementRatio ||
+    metrics.axisAngleDegrees >= thresholds.releaseAxisAngleDegrees;
   const nextTriggerPressed = triggerHeld ? !releaseSatisfied : pressSatisfied;
 
   return Object.freeze({
-    axisAngleDegrees,
-    engagementRatio,
+    axisAngleDegrees: metrics.axisAngleDegrees,
+    engagementRatio: metrics.engagementRatio,
     triggerPressed: nextTriggerPressed,
     triggerReady: !nextTriggerPressed && releaseSatisfied
   });

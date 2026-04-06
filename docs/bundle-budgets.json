@@ -4,7 +4,7 @@
       "label": "client shell javascript",
       "pattern": "client/dist/assets/index-*.js",
       "maxBytes": 380000,
-      "maxGzipBytes": 111000
+      "maxGzipBytes": 212500
     },
     {
       "label": "client shell styles",

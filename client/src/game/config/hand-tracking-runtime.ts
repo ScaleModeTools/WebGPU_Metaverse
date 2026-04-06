@@ -8,7 +8,6 @@ export const handTrackingRuntimeConfig = {
     runningMode: "video"
   },
   landmarks: {
-    handPivotIndex: 0,
     thumbBaseIndex: 1,
     thumbKnuckleIndex: 2,
     thumbJointIndex: 3,

@@ -12,6 +12,7 @@ import {
   type GameplayHudSnapshot,
   type GameplayReticleVisualState,
   type GameplayTelemetrySnapshot,
+  type HandTriggerGestureConfig,
   type GameplayRuntimeLifecycleState,
   type GameplaySignal,
   type GameplaySignalType,
@@ -205,6 +206,9 @@ type WeaponDefinitionClipCapacityIsNumber = AssertTrue<
 type WeaponDefinitionTriggerModeMatchesFoundation = AssertTrue<
   IsEqual<WeaponDefinition["triggerMode"], TriggerGestureMode>
 >;
+type WeaponDefinitionTriggerGestureUsesHandTriggerConfig = AssertTrue<
+  IsEqual<WeaponDefinition["triggerGesture"], HandTriggerGestureConfig>
+>;
 type WeaponDefinitionSpreadFieldIsNumber = AssertTrue<
   IsEqual<WeaponDefinition["spread"]["sprayGrowthPerShot"], number>
 >;
@@ -279,6 +283,7 @@ export type ClientShellGameplayTypeTests =
   | GameplayHudReloadRuleMatches
   | WeaponDefinitionClipCapacityIsNumber
   | WeaponDefinitionTriggerModeMatchesFoundation
+  | WeaponDefinitionTriggerGestureUsesHandTriggerConfig
   | WeaponDefinitionSpreadFieldIsNumber
   | MusicVolumePayloadIsNumber
   | GameplayMenuTogglePayloadIsBoolean

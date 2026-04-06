@@ -1,6 +1,9 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
-import type { AffineAimTransformSnapshot } from "@thumbshooter/shared";
+import type {
+  AffineAimTransformSnapshot,
+  HandTriggerCalibrationSnapshot
+} from "@thumbshooter/shared";
 
 import type {
   GameplayDebugPanelMode,
@@ -25,6 +28,7 @@ interface GameplayStageScreenProps {
   readonly onGameplaySignal: (signal: GameplaySignal) => void;
   readonly onOpenMenu: () => void;
   readonly selectedReticleLabel: string;
+  readonly triggerCalibration: HandTriggerCalibrationSnapshot | null;
   readonly username: string;
   readonly weaponLabel: string;
 }
@@ -39,18 +43,21 @@ export function GameplayStageScreen({
   onGameplaySignal,
   onOpenMenu,
   selectedReticleLabel,
+  triggerCalibration,
   username,
   weaponLabel
 }: GameplayStageScreenProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const bestScoreRef = useRef(bestScore);
+  const runtimeStartVersionRef = useRef(0);
   const handleGameplaySignal = useEffectEvent((signal: GameplaySignal) => {
     onGameplaySignal(signal);
   });
   const [arenaSimulation] = useState(
     () =>
       new LocalArenaSimulation(aimCalibration, undefined, {
-        emitGameplaySignal: handleGameplaySignal
+        emitGameplaySignal: handleGameplaySignal,
+        triggerCalibration
       })
   );
   const [gameplayRuntime] = useState(
@@ -70,14 +77,26 @@ export function GameplayStageScreen({
       return;
     }
 
+    const startVersion = runtimeStartVersionRef.current + 1;
+
+    runtimeStartVersionRef.current = startVersion;
+
     try {
       const snapshot = await gameplayRuntime.start(canvasRef.current);
+
+      if (startVersion !== runtimeStartVersionRef.current) {
+        return;
+      }
 
       setHudSnapshot(snapshot);
       setGameplayTelemetry(gameplayRuntime.telemetrySnapshot);
       setTrackingTelemetry(handTrackingRuntime.telemetrySnapshot);
       setRuntimeError(null);
     } catch (error) {
+      if (startVersion !== runtimeStartVersionRef.current) {
+        return;
+      }
+
       setHudSnapshot(gameplayRuntime.hudSnapshot);
       setGameplayTelemetry(gameplayRuntime.telemetrySnapshot);
       setTrackingTelemetry(handTrackingRuntime.telemetrySnapshot);
@@ -117,6 +136,7 @@ export function GameplayStageScreen({
     }, 150);
 
     return () => {
+      runtimeStartVersionRef.current += 1;
       window.clearInterval(intervalHandle);
       gameplayRuntime.dispose();
     };

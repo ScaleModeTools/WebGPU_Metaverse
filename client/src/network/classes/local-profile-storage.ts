@@ -1,6 +1,8 @@
 import {
   PlayerProfile,
   calibrationAnchorIds,
+  createCalibrationShotSample,
+  createHandTriggerCalibrationSnapshot,
   createUsername,
   reticleIds
 } from "@thumbshooter/shared";
@@ -8,6 +10,7 @@ import type {
   AudioSettingsSnapshot,
   AffineAimTransformSnapshot,
   CalibrationShotSample,
+  HandTriggerCalibrationSnapshot,
   PlayerProfileSnapshot
 } from "@thumbshooter/shared";
 
@@ -79,7 +82,51 @@ function isCalibrationShotSample(
     typeof value.observedPose.thumbTip.x === "number" &&
     typeof value.observedPose.thumbTip.y === "number" &&
     typeof value.observedPose.indexTip.x === "number" &&
-    typeof value.observedPose.indexTip.y === "number"
+    typeof value.observedPose.indexTip.y === "number" &&
+    (value.observedPose.aimPoint === undefined ||
+      (isRecord(value.observedPose.aimPoint) &&
+        typeof value.observedPose.aimPoint.x === "number" &&
+        typeof value.observedPose.aimPoint.y === "number")) &&
+    (value.readyTriggerMetrics === undefined ||
+      value.readyTriggerMetrics === null ||
+      isHandTriggerMetricSnapshot(value.readyTriggerMetrics)) &&
+    (value.pressedTriggerMetrics === undefined ||
+      value.pressedTriggerMetrics === null ||
+      isHandTriggerMetricSnapshot(value.pressedTriggerMetrics))
+  );
+}
+
+function isHandTriggerMetricSnapshot(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.axisAngleDegrees === "number" &&
+    Number.isFinite(value.axisAngleDegrees) &&
+    typeof value.engagementRatio === "number" &&
+    Number.isFinite(value.engagementRatio)
+  );
+}
+
+function isHandTriggerCalibrationSnapshot(
+  value: unknown
+): value is HandTriggerCalibrationSnapshot {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.sampleCount === "number" &&
+    Number.isFinite(value.sampleCount) &&
+    typeof value.pressedAxisAngleDegreesMax === "number" &&
+    Number.isFinite(value.pressedAxisAngleDegreesMax) &&
+    typeof value.pressedEngagementRatioMax === "number" &&
+    Number.isFinite(value.pressedEngagementRatioMax) &&
+    typeof value.readyAxisAngleDegreesMin === "number" &&
+    Number.isFinite(value.readyAxisAngleDegreesMin) &&
+    typeof value.readyEngagementRatioMin === "number" &&
+    Number.isFinite(value.readyEngagementRatioMin)
   );
 }
 
@@ -153,12 +200,15 @@ function parseStoredCalibrationRecord(
     return {
       version: expectedVersion,
       aimCalibration: null,
-      calibrationSamples: parsedValue.calibrationSamples
+      calibrationSamples: parsedValue.calibrationSamples.map((sample) =>
+        createCalibrationShotSample(sample)
+      ),
+      triggerCalibration: null
     };
   }
 
   if (
-    parsedValue.version !== expectedVersion ||
+    (parsedValue.version !== 1 && parsedValue.version !== expectedVersion) ||
     !Array.isArray(parsedValue.calibrationSamples) ||
     !parsedValue.calibrationSamples.every(isCalibrationShotSample)
   ) {
@@ -172,7 +222,17 @@ function parseStoredCalibrationRecord(
       isAffineAimTransformSnapshot(parsedValue.aimCalibration)
         ? parsedValue.aimCalibration
         : null,
-    calibrationSamples: parsedValue.calibrationSamples
+    calibrationSamples: parsedValue.calibrationSamples.map((sample) =>
+      createCalibrationShotSample(sample)
+    ),
+    triggerCalibration:
+      parsedValue.version === expectedVersion &&
+      (parsedValue.triggerCalibration === null ||
+        isHandTriggerCalibrationSnapshot(parsedValue.triggerCalibration))
+        ? parsedValue.triggerCalibration === null
+          ? null
+          : createHandTriggerCalibrationSnapshot(parsedValue.triggerCalibration)
+        : null
   };
 }
 
@@ -215,7 +275,8 @@ export class LocalProfileStorage {
           audioSettings: storedProfileRecord.audioSettings,
           aimCalibration: storedCalibrationRecord?.aimCalibration ?? null,
           bestScore: storedProfileRecord.bestScore,
-          calibrationSamples: storedCalibrationRecord?.calibrationSamples ?? []
+          calibrationSamples: storedCalibrationRecord?.calibrationSamples ?? [],
+          triggerCalibration: storedCalibrationRecord?.triggerCalibration ?? null
         }),
         source: "profile-record"
       };
@@ -257,7 +318,8 @@ export class LocalProfileStorage {
     const storedCalibrationRecord: StoredCalibrationRecord = {
       version: this.#plan.calibrationRecordVersion,
       aimCalibration: snapshot.aimCalibration,
-      calibrationSamples: snapshot.calibrationSamples
+      calibrationSamples: snapshot.calibrationSamples,
+      triggerCalibration: snapshot.triggerCalibration
     };
 
     storage.setItem(this.#plan.usernameStorageKey, snapshot.username);

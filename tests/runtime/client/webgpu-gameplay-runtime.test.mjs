@@ -42,6 +42,20 @@ class FakeRenderer {
   }
 }
 
+class DeferredRenderer extends FakeRenderer {
+  constructor() {
+    super();
+    this.initPromise = new Promise((resolve) => {
+      this.resolveInit = resolve;
+    });
+  }
+
+  async init() {
+    this.initCalls += 1;
+    await this.initPromise;
+  }
+}
+
 function createArenaConfig() {
   return {
     arenaBounds: {
@@ -81,16 +95,22 @@ function createArenaConfig() {
       reticleScatterRadius: 0.14,
       shotScatterRadius: 0.2
     },
-    trigger: {
-      pressAxisAngleDegrees: 38,
-      pressEngagementRatio: 0.72,
-      releaseAxisAngleDegrees: 52,
-      releaseEngagementRatio: 0.92
-    },
     weapon: {
       weaponId: "semiautomatic-pistol",
       displayName: "Semiautomatic pistol",
       triggerMode: "single",
+      triggerGesture: {
+        pressAxisAngleDegrees: 26,
+        pressEngagementRatio: 0.72,
+        releaseAxisAngleDegrees: 32,
+        releaseEngagementRatio: 0.92,
+        calibration: {
+          pressAxisWindowFraction: 0.4,
+          pressEngagementWindowFraction: 0.4,
+          releaseAxisWindowFraction: 0.82,
+          releaseEngagementWindowFraction: 0.82
+        }
+      },
       cadence: {
         shotIntervalMs: 220
       },
@@ -149,8 +169,13 @@ test("WebGpuGameplayRuntime rejects unsupported navigators explicitly", async ()
 });
 
 test("WebGpuGameplayRuntime renders the calibrated reticle from live tracking snapshots", async () => {
-  const { LocalArenaSimulation, WebGpuGameplayRuntime } = await clientLoader.load(
-    "/src/game/index.ts"
+  const {
+    LocalArenaSimulation,
+    WebGpuGameplayRuntime,
+    readObservedAimPoint
+  } = await clientLoader.load("/src/game/index.ts");
+  const { handAimObservationConfig } = await clientLoader.load(
+    "/src/game/config/hand-aim-observation.ts"
   );
   const trackingSource = {
     latestPose: {
@@ -160,6 +185,10 @@ test("WebGpuGameplayRuntime renders the calibrated reticle from live tracking sn
       pose: createTrackedHandPose(0.25, 0.4, 0)
     }
   };
+  const expectedObservedAimPoint = readObservedAimPoint(
+    trackingSource.latestPose.pose,
+    handAimObservationConfig
+  );
   const renderer = new FakeRenderer();
   let scheduledFrame = null;
   const arenaSimulation = new LocalArenaSimulation(
@@ -208,16 +237,9 @@ test("WebGpuGameplayRuntime renders the calibrated reticle from live tracking sn
   assert.deepEqual(renderer.sizes.at(-1), [1280, 720]);
   assert.equal(runtime.hudSnapshot.trackingState, "tracked");
   assert.equal(runtime.hudSnapshot.targetFeedback.state, "targeted");
-  assert.deepEqual(runtime.hudSnapshot.aimPoint, {
-    x: 0.25,
-    y: 0.4
-  });
+  assert.deepEqual(runtime.hudSnapshot.aimPoint, expectedObservedAimPoint);
   assert.equal(runtime.telemetrySnapshot.reticleVisualState, "targeted");
-  assert.deepEqual(runtime.telemetrySnapshot.observedIndexPoint, {
-    x: 0.25,
-    y: 0.4,
-    z: 0
-  });
+  assert.deepEqual(runtime.telemetrySnapshot.observedAimPoint, expectedObservedAimPoint);
   assert.equal(runtime.telemetrySnapshot.trackingSequenceNumber, 1);
 
   trackingSource.latestPose = {
@@ -261,4 +283,132 @@ test("WebGpuGameplayRuntime renders the calibrated reticle from live tracking sn
 
   assert.equal(renderer.disposed, true);
   assert.equal(runtime.hudSnapshot.lifecycle, "idle");
+});
+
+test("WebGpuGameplayRuntime ignores stale async boots after disposal", async () => {
+  const { LocalArenaSimulation, WebGpuGameplayRuntime } = await clientLoader.load(
+    "/src/game/index.ts"
+  );
+  const renderer = new DeferredRenderer();
+  const arenaSimulation = new LocalArenaSimulation(
+    {
+      xCoefficients: [1, 0, 0],
+      yCoefficients: [0, 1, 0]
+    },
+    createArenaConfig()
+  );
+  const runtime = new WebGpuGameplayRuntime(
+    {
+      latestPose: {
+        trackingState: "unavailable",
+        sequenceNumber: 0,
+        timestampMs: null,
+        pose: null
+      }
+    },
+    arenaSimulation,
+    undefined,
+    {
+      cancelAnimationFrame() {},
+      createRenderer: () => renderer,
+      devicePixelRatio: 1,
+      requestAnimationFrame() {
+        return 1;
+      }
+    }
+  );
+
+  const startPromise = runtime.start(
+    {
+      clientHeight: 720,
+      clientWidth: 1280
+    },
+    {
+      gpu: {}
+    }
+  );
+
+  runtime.dispose();
+  renderer.resolveInit();
+
+  const snapshot = await startPromise;
+
+  assert.equal(renderer.disposed, true);
+  assert.equal(snapshot.lifecycle, "idle");
+  assert.equal(runtime.hudSnapshot.lifecycle, "idle");
+  assert.equal(runtime.telemetrySnapshot.renderedFrameCount, 0);
+});
+
+test("WebGpuGameplayRuntime binds browser frame APIs before scheduling gameplay", async () => {
+  const { LocalArenaSimulation, WebGpuGameplayRuntime } = await clientLoader.load(
+    "/src/game/index.ts"
+  );
+  const arenaSimulation = new LocalArenaSimulation(
+    {
+      xCoefficients: [1, 0, 0],
+      yCoefficients: [0, 1, 0]
+    },
+    createArenaConfig()
+  );
+  const renderer = new FakeRenderer();
+  const originalWindow = globalThis.window;
+  let cancelledFrameHandle = null;
+  let scheduledFrame = null;
+  const fakeWindow = {
+    devicePixelRatio: 2,
+    requestAnimationFrame(callback) {
+      if (this !== fakeWindow) {
+        throw new TypeError("Illegal invocation");
+      }
+
+      scheduledFrame = callback;
+      return 7;
+    },
+    cancelAnimationFrame(frameHandle) {
+      if (this !== fakeWindow) {
+        throw new TypeError("Illegal invocation");
+      }
+
+      cancelledFrameHandle = frameHandle;
+    }
+  };
+
+  globalThis.window = fakeWindow;
+
+  try {
+    const runtime = new WebGpuGameplayRuntime(
+      {
+        latestPose: {
+          trackingState: "unavailable",
+          sequenceNumber: 0,
+          timestampMs: null,
+          pose: null
+        }
+      },
+      arenaSimulation,
+      undefined,
+      {
+        createRenderer: () => renderer
+      }
+    );
+
+    const snapshot = await runtime.start(
+      {
+        clientHeight: 720,
+        clientWidth: 1280
+      },
+      {
+        gpu: {}
+      }
+    );
+
+    assert.equal(snapshot.lifecycle, "running");
+    assert.equal(typeof scheduledFrame, "function");
+
+    runtime.dispose();
+
+    assert.equal(cancelledFrameHandle, 7);
+  } finally {
+    globalThis.window = originalWindow;
+  }
 });

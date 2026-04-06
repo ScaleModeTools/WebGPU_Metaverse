@@ -40,6 +40,12 @@ export {
 } from "./types/hand-tracking";
 export { evaluateHandTriggerGesture } from "./types/hand-trigger-gesture";
 export {
+  readHandTriggerMetrics,
+  resolveHandTriggerGestureThresholds,
+  summarizeHandTriggerCalibration
+} from "./types/hand-trigger-gesture";
+export { readObservedAimPoint } from "./types/hand-aim-observation";
+export {
   localArenaEnemyBehaviorStates,
   localArenaTargetFeedbackStates
 } from "./types/local-arena-simulation";
@@ -74,6 +80,9 @@ export type {
   HandTriggerGestureConfig,
   HandTriggerGestureSnapshot
 } from "./types/hand-trigger-gesture";
+export type {
+  HandAimObservationConfig
+} from "./types/hand-aim-observation";
 export type {
   HandTrackingRuntimeSnapshot,
   HandTrackingLandmarkCandidate,

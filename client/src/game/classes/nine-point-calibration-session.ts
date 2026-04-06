@@ -1,17 +1,23 @@
 import {
   AffineAimTransform,
   createCalibrationShotSample,
+  createHandTriggerMetricSnapshot,
   type CalibrationShotSample
 } from "@thumbshooter/shared";
 
 import { gameFoundationConfig } from "../config/game-foundation";
 import { calibrationCaptureConfig } from "../config/calibration-capture";
-import { evaluateHandTriggerGesture } from "../types/hand-trigger-gesture";
+import {
+  evaluateHandTriggerGesture,
+  summarizeHandTriggerCalibration
+} from "../types/hand-trigger-gesture";
+import { handAimObservationConfig } from "../config/hand-aim-observation";
 import type {
   CalibrationCaptureConfig,
   NinePointCalibrationAdvanceResult,
   NinePointCalibrationSnapshot
 } from "../types/calibration-session";
+import { readObservedAimPoint } from "../types/hand-aim-observation";
 import type { LatestHandTrackingSnapshot } from "../types/hand-tracking";
 
 function createSnapshotKey(snapshot: NinePointCalibrationSnapshot): string {
@@ -46,6 +52,7 @@ export class NinePointCalibrationSession {
 
   #captureState: NinePointCalibrationSnapshot["captureState"];
   #failureReason: string | null = null;
+  #latestReadyTriggerMetrics: CalibrationShotSample["readyTriggerMetrics"] = null;
   #triggerHeld = false;
 
   constructor(
@@ -83,18 +90,21 @@ export class NinePointCalibrationSession {
       return {
         didChange: false,
         capturedSample: null,
-        fittedCalibration: null
+        fittedCalibration: null,
+        triggerCalibration: null
       };
     }
 
     if (trackingSnapshot.trackingState !== "tracked") {
       this.#triggerHeld = false;
+      this.#latestReadyTriggerMetrics = null;
       this.#captureState = "waiting-for-hand";
 
       return {
         didChange: previousSnapshotKey !== createSnapshotKey(this.snapshot),
         capturedSample: null,
-        fittedCalibration: null
+        fittedCalibration: null,
+        triggerCalibration: null
       };
     }
 
@@ -110,11 +120,18 @@ export class NinePointCalibrationSession {
       this.#captureState = triggerGesture.triggerReady
         ? "ready-to-capture"
         : "release-trigger";
+      if (triggerGesture.triggerReady) {
+        this.#latestReadyTriggerMetrics = createHandTriggerMetricSnapshot({
+          axisAngleDegrees: triggerGesture.axisAngleDegrees,
+          engagementRatio: triggerGesture.engagementRatio
+        });
+      }
 
       return {
         didChange: previousSnapshotKey !== createSnapshotKey(this.snapshot),
         capturedSample: null,
-        fittedCalibration: null
+        fittedCalibration: null,
+        triggerCalibration: null
       };
     }
 
@@ -124,7 +141,8 @@ export class NinePointCalibrationSession {
       return {
         didChange: previousSnapshotKey !== createSnapshotKey(this.snapshot),
         capturedSample: null,
-        fittedCalibration: null
+        fittedCalibration: null,
+        triggerCalibration: null
       };
     }
 
@@ -140,24 +158,39 @@ export class NinePointCalibrationSession {
       return {
         didChange: previousSnapshotKey !== createSnapshotKey(this.snapshot),
         capturedSample: null,
-        fittedCalibration: null
+        fittedCalibration: null,
+        triggerCalibration: null
       };
     }
 
     const capturedSample = createCalibrationShotSample({
       anchorId: currentAnchor.id,
       intendedTarget: currentAnchor.normalizedTarget,
-      observedPose: trackingSnapshot.pose
+      observedPose: {
+        thumbTip: trackingSnapshot.pose.thumbTip,
+        indexTip: trackingSnapshot.pose.indexTip,
+        aimPoint: readObservedAimPoint(
+          trackingSnapshot.pose,
+          handAimObservationConfig
+        )
+      },
+      pressedTriggerMetrics: {
+        axisAngleDegrees: triggerGesture.axisAngleDegrees,
+        engagementRatio: triggerGesture.engagementRatio
+      },
+      readyTriggerMetrics: this.#latestReadyTriggerMetrics
     });
 
     this.#storedSamples.push(capturedSample);
+    this.#latestReadyTriggerMetrics = null;
     this.#captureState = "release-trigger";
 
     if (this.#storedSamples.length < gameFoundationConfig.calibration.anchors.length) {
       return {
         didChange: true,
         capturedSample,
-        fittedCalibration: null
+        fittedCalibration: null,
+        triggerCalibration: null
       };
     }
 
@@ -171,7 +204,8 @@ export class NinePointCalibrationSession {
       return {
         didChange: true,
         capturedSample,
-        fittedCalibration: null
+        fittedCalibration: null,
+        triggerCalibration: null
       };
     }
 
@@ -181,7 +215,8 @@ export class NinePointCalibrationSession {
     return {
       didChange: true,
       capturedSample,
-      fittedCalibration: fittedCalibration.snapshot
+      fittedCalibration: fittedCalibration.snapshot,
+      triggerCalibration: summarizeHandTriggerCalibration(this.#storedSamples)
     };
   }
 }

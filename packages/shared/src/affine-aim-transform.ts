@@ -103,7 +103,7 @@ function measureResidualDistance(
   snapshot: AffineAimTransformSnapshot,
   sample: CalibrationShotSample
 ): number {
-  const projectedPoint = projectWithSnapshot(snapshot, sample.observedPose.indexTip);
+  const projectedPoint = projectWithSnapshot(snapshot, sample.observedPose.aimPoint);
   const deltaX = projectedPoint.x - sample.intendedTarget.x;
   const deltaY = projectedPoint.y - sample.intendedTarget.y;
 
@@ -253,7 +253,7 @@ function fitObservedAxis(
   let sumTargetY = 0;
 
   for (const sample of samples) {
-    const observedPoint = sample.observedPose.indexTip;
+    const observedPoint = sample.observedPose.aimPoint;
     const targetValue = targetSelector(sample);
 
     sumXx += observedPoint.x * observedPoint.x;

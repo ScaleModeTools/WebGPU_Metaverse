@@ -1,3 +1,8 @@
+import type {
+  HandTriggerMetricInput,
+  HandTriggerMetricSnapshot
+} from "./hand-trigger-calibration.js";
+import { createHandTriggerMetricSnapshot } from "./hand-trigger-calibration.js";
 import type { TypeBrand } from "./type-branding.js";
 
 export const calibrationAnchorIds = [
@@ -32,23 +37,29 @@ export interface NormalizedViewportPointInput {
 export interface HandTriggerPoseSample {
   readonly thumbTip: NormalizedViewportPoint;
   readonly indexTip: NormalizedViewportPoint;
+  readonly aimPoint: NormalizedViewportPoint;
 }
 
 export interface HandTriggerPoseSampleInput {
   readonly thumbTip: NormalizedViewportPointInput;
   readonly indexTip: NormalizedViewportPointInput;
+  readonly aimPoint?: NormalizedViewportPointInput;
 }
 
 export interface CalibrationShotSample {
   readonly anchorId: CalibrationAnchorId;
   readonly intendedTarget: NormalizedViewportPoint;
   readonly observedPose: HandTriggerPoseSample;
+  readonly pressedTriggerMetrics: HandTriggerMetricSnapshot | null;
+  readonly readyTriggerMetrics: HandTriggerMetricSnapshot | null;
 }
 
 export interface CalibrationShotSampleInput {
   readonly anchorId: CalibrationAnchorId;
   readonly intendedTarget: NormalizedViewportPointInput;
   readonly observedPose: HandTriggerPoseSampleInput;
+  readonly pressedTriggerMetrics?: HandTriggerMetricInput | null;
+  readonly readyTriggerMetrics?: HandTriggerMetricInput | null;
 }
 
 function clampNormalizedViewportScalar(rawValue: number): number {
@@ -79,7 +90,8 @@ export function createHandTriggerPoseSample(
 ): HandTriggerPoseSample {
   return Object.freeze({
     thumbTip: createNormalizedViewportPoint(input.thumbTip),
-    indexTip: createNormalizedViewportPoint(input.indexTip)
+    indexTip: createNormalizedViewportPoint(input.indexTip),
+    aimPoint: createNormalizedViewportPoint(input.aimPoint ?? input.indexTip)
   });
 }
 
@@ -89,6 +101,14 @@ export function createCalibrationShotSample(
   return Object.freeze({
     anchorId: input.anchorId,
     intendedTarget: createNormalizedViewportPoint(input.intendedTarget),
-    observedPose: createHandTriggerPoseSample(input.observedPose)
+    observedPose: createHandTriggerPoseSample(input.observedPose),
+    pressedTriggerMetrics:
+      input.pressedTriggerMetrics == null
+        ? null
+        : createHandTriggerMetricSnapshot(input.pressedTriggerMetrics),
+    readyTriggerMetrics:
+      input.readyTriggerMetrics == null
+        ? null
+        : createHandTriggerMetricSnapshot(input.readyTriggerMetrics)
   });
 }

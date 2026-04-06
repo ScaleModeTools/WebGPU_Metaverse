@@ -5,7 +5,8 @@ import {
   AffineAimTransform,
   AudioSettings,
   PlayerProfile,
-  createCalibrationShotSample
+  createCalibrationShotSample,
+  createHandTriggerCalibrationSnapshot
 } from "@thumbshooter/shared";
 
 import { createClientModuleLoader } from "./load-client-module.mjs";
@@ -59,6 +60,15 @@ test("LocalProfileStorage saves and reloads a persisted player profile", async (
     .withRaisedBestScore(400)
     .withAudioSettings(AudioSettings.create({ musicVolume: 0.3, sfxVolume: 0.6 }).snapshot)
     .withCalibrationShot(createCalibrationFixture())
+    .withTriggerCalibration(
+      createHandTriggerCalibrationSnapshot({
+        sampleCount: 1,
+        pressedAxisAngleDegreesMax: 15,
+        pressedEngagementRatioMax: 0.48,
+        readyAxisAngleDegreesMin: 34,
+        readyEngagementRatioMin: 1.02
+      })
+    )
     .withAimCalibration(
       AffineAimTransform.fromSnapshot({
         xCoefficients: [1, 0, 0],
@@ -78,6 +88,13 @@ test("LocalProfileStorage saves and reloads a persisted player profile", async (
   assert.deepEqual(hydration.profile?.snapshot.aimCalibration, {
     xCoefficients: [1, 0, 0],
     yCoefficients: [0, 1, 0]
+  });
+  assert.deepEqual(hydration.profile?.snapshot.triggerCalibration, {
+    sampleCount: 1,
+    pressedAxisAngleDegreesMax: 15,
+    pressedEngagementRatioMax: 0.48,
+    readyAxisAngleDegreesMin: 34,
+    readyEngagementRatioMin: 1.02
   });
 });
 
@@ -131,6 +148,7 @@ test("LocalProfileStorage hydrates legacy calibration records without a persiste
   assert.equal(hydration.profile?.snapshot.aimCalibration, null);
   assert.equal(hydration.profile?.snapshot.bestScore, 0);
   assert.equal(hydration.profile?.calibrationSampleCount, 1);
+  assert.equal(hydration.profile?.snapshot.triggerCalibration, null);
 });
 
 test("LocalProfileStorage clears all persisted keys", async () => {

@@ -6,6 +6,18 @@ export const weaponManifest = {
     weaponId: "semiautomatic-pistol",
     displayName: "Semiautomatic pistol",
     triggerMode: "single",
+    triggerGesture: {
+      pressAxisAngleDegrees: 26,
+      pressEngagementRatio: 0.72,
+      releaseAxisAngleDegrees: 32,
+      releaseEngagementRatio: 0.92,
+      calibration: {
+        pressAxisWindowFraction: 0.4,
+        pressEngagementWindowFraction: 0.4,
+        releaseAxisWindowFraction: 0.82,
+        releaseEngagementWindowFraction: 0.82
+      }
+    },
     cadence: {
       shotIntervalMs: 260
     },

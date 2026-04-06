@@ -154,6 +154,7 @@ export function ShellStageRouter({
             onGameplaySignal={onGameplaySignal}
             onOpenMenu={onOpenGameplayMenu}
             selectedReticleLabel={selectedReticleLabel}
+            triggerCalibration={profile.snapshot.triggerCalibration}
             username={profile.snapshot.username}
             weaponLabel={firstPlayableWeaponDefinition.displayName}
           />

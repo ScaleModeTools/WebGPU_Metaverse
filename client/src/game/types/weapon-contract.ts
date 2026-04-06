@@ -1,3 +1,4 @@
+import type { HandTriggerGestureConfig } from "./hand-trigger-gesture";
 import type {
   FirstPlayableWeaponId,
   TriggerGestureMode,
@@ -40,6 +41,7 @@ export interface WeaponDefinition {
   readonly displayName: string;
   readonly reload: WeaponReloadConfig;
   readonly spread: WeaponSpreadConfig;
+  readonly triggerGesture: HandTriggerGestureConfig;
   readonly triggerMode: TriggerGestureMode;
   readonly weaponId: FirstPlayableWeaponId;
 }

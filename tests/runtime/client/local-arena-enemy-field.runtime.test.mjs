@@ -61,16 +61,22 @@ function createArenaConfig() {
       reticleScatterRadius: 0.14,
       shotScatterRadius: 0.2
     },
-    trigger: {
-      pressAxisAngleDegrees: 38,
-      pressEngagementRatio: 0.72,
-      releaseAxisAngleDegrees: 52,
-      releaseEngagementRatio: 0.92
-    },
     weapon: {
       weaponId: "semiautomatic-pistol",
       displayName: "Semiautomatic pistol",
       triggerMode: "single",
+      triggerGesture: {
+        pressAxisAngleDegrees: 26,
+        pressEngagementRatio: 0.72,
+        releaseAxisAngleDegrees: 32,
+        releaseEngagementRatio: 0.92,
+        calibration: {
+          pressAxisWindowFraction: 0.4,
+          pressEngagementWindowFraction: 0.4,
+          releaseAxisWindowFraction: 0.82,
+          releaseEngagementWindowFraction: 0.82
+        }
+      },
       cadence: {
         shotIntervalMs: 220
       },

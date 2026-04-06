@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
+import { createHandTriggerCalibrationSnapshot } from "@thumbshooter/shared";
+
 import { createClientModuleLoader } from "./load-client-module.mjs";
 import { createTrackedHandSnapshot } from "./tracked-hand-pose-fixture.mjs";
 
@@ -53,16 +55,22 @@ function createArenaConfig() {
       reticleScatterRadius: 0.14,
       shotScatterRadius: 0.2
     },
-    trigger: {
-      pressAxisAngleDegrees: 38,
-      pressEngagementRatio: 0.72,
-      releaseAxisAngleDegrees: 52,
-      releaseEngagementRatio: 0.92
-    },
     weapon: {
       weaponId: "semiautomatic-pistol",
       displayName: "Semiautomatic pistol",
       triggerMode: "single",
+      triggerGesture: {
+        pressAxisAngleDegrees: 26,
+        pressEngagementRatio: 0.72,
+        releaseAxisAngleDegrees: 32,
+        releaseEngagementRatio: 0.92,
+        calibration: {
+          pressAxisWindowFraction: 0.4,
+          pressEngagementWindowFraction: 0.4,
+          releaseAxisWindowFraction: 0.82,
+          releaseEngagementWindowFraction: 0.82
+        }
+      },
       cadence: {
         shotIntervalMs: 220
       },
@@ -82,7 +90,12 @@ function createArenaConfig() {
 }
 
 test("LocalArenaSimulation publishes calibrated aim, arena counts, and early scatter state", async () => {
-  const { LocalArenaSimulation } = await clientLoader.load("/src/game/index.ts");
+  const { LocalArenaSimulation, readObservedAimPoint } = await clientLoader.load(
+    "/src/game/index.ts"
+  );
+  const { handAimObservationConfig } = await clientLoader.load(
+    "/src/game/config/hand-aim-observation.ts"
+  );
   const simulation = new LocalArenaSimulation(
     {
       xCoefficients: [1, 0, 0],
@@ -90,10 +103,14 @@ test("LocalArenaSimulation publishes calibrated aim, arena counts, and early sca
     },
     createArenaConfig()
   );
+  const trackingSnapshot = createTrackedHandSnapshot(1, 0.25, 0.4);
 
-  const snapshot = simulation.advance(createTrackedHandSnapshot(1, 0.25, 0.4), 0);
+  const snapshot = simulation.advance(trackingSnapshot, 0);
 
-  assert.deepEqual(snapshot.aimPoint, { x: 0.25, y: 0.4 });
+  assert.deepEqual(
+    snapshot.aimPoint,
+    readObservedAimPoint(trackingSnapshot.pose, handAimObservationConfig)
+  );
   assert.equal(snapshot.arena.liveEnemyCount, 1);
   assert.equal(snapshot.session.phase, "active");
   assert.equal(snapshot.targetFeedback.state, "targeted");
@@ -167,6 +184,46 @@ test("LocalArenaSimulation completes the round on a kill and reset starts a fres
   assert.equal(resetSnapshot.weapon.triggerHeld, false);
   assert.equal(resetSnapshot.weapon.hitsLanded, 0);
   assert.equal(resetSnapshot.weapon.reload.clipRoundsRemaining, 6);
+});
+
+test("LocalArenaSimulation applies trigger calibration before a shot becomes valid", async () => {
+  const { LocalArenaSimulation } = await clientLoader.load("/src/game/index.ts");
+  const simulation = new LocalArenaSimulation(
+    {
+      xCoefficients: [1, 0, 0],
+      yCoefficients: [0, 1, 0]
+    },
+    createArenaConfig(),
+    {
+      triggerCalibration: createHandTriggerCalibrationSnapshot({
+        sampleCount: 9,
+        pressedAxisAngleDegreesMax: 20,
+        pressedEngagementRatioMax: 0.31,
+        readyAxisAngleDegreesMin: 34,
+        readyEngagementRatioMin: 0.75
+      })
+    }
+  );
+
+  simulation.advance(createTrackedHandSnapshot(1, 0.25, 0.4), 0);
+
+  const borderlineSnapshot = simulation.advance(
+    createTrackedHandSnapshot(2, 0.25, 0.4, 0.9),
+    16
+  );
+
+  assert.equal(borderlineSnapshot.weapon.shotsFired, 0);
+  assert.equal(borderlineSnapshot.session.score, 0);
+
+  simulation.advance(createTrackedHandSnapshot(3, 0.25, 0.4), 40);
+
+  const firedSnapshot = simulation.advance(
+    createTrackedHandSnapshot(4, 0.25, 0.4, 1),
+    64
+  );
+
+  assert.equal(firedSnapshot.weapon.shotsFired, 1);
+  assert.equal(firedSnapshot.session.score, 100);
 });
 
 test("LocalArenaSimulation exposes reload state and completes off-screen reloads", async () => {

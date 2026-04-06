@@ -2,7 +2,8 @@ import type { HandTriggerGestureConfig } from "./hand-trigger-gesture";
 import type {
   AffineAimTransformSnapshot,
   CalibrationAnchorId,
-  CalibrationShotSample
+  CalibrationShotSample,
+  HandTriggerCalibrationSnapshot
 } from "@thumbshooter/shared";
 
 export const calibrationCaptureStates = [
@@ -33,4 +34,5 @@ export interface NinePointCalibrationAdvanceResult {
   readonly didChange: boolean;
   readonly capturedSample: CalibrationShotSample | null;
   readonly fittedCalibration: AffineAimTransformSnapshot | null;
+  readonly triggerCalibration: HandTriggerCalibrationSnapshot | null;
 }

@@ -2,11 +2,14 @@ import {
   AffineAimTransform,
   createNormalizedViewportPoint,
   type AffineAimTransformSnapshot,
+  type HandTriggerCalibrationSnapshot,
   type NormalizedViewportPoint
 } from "@thumbshooter/shared";
 
+import { handAimObservationConfig } from "../config/hand-aim-observation";
 import { localArenaSimulationConfig } from "../config/local-arena-simulation";
 import { evaluateHandTriggerGesture } from "../types/hand-trigger-gesture";
+import { readObservedAimPoint } from "../types/hand-aim-observation";
 import {
   applyReticleScatter,
   countDownedEnemies,
@@ -68,6 +71,7 @@ function readNowMs(): number {
 
 interface LocalArenaSimulationDependencies {
   readonly emitGameplaySignal?: (signal: GameplaySignal) => void;
+  readonly triggerCalibration?: HandTriggerCalibrationSnapshot | null;
 }
 
 interface ProjectedAimPoint {
@@ -82,6 +86,7 @@ export class LocalArenaSimulation {
   readonly #enemyRenderStates: readonly LocalArenaEnemyRenderState[];
   readonly #enemyRuntimeStates: readonly LocalArenaEnemyRuntimeState[];
   readonly #emitGameplaySignal: ((signal: GameplaySignal) => void) | null;
+  readonly #triggerCalibration: HandTriggerCalibrationSnapshot | null;
   readonly #weaponRuntime: WeaponRuntime;
 
   #feedbackEnemyId: string | null = null;
@@ -100,6 +105,7 @@ export class LocalArenaSimulation {
     this.#affineAimTransform = AffineAimTransform.fromSnapshot(aimCalibration);
     this.#config = config;
     this.#emitGameplaySignal = dependencies.emitGameplaySignal ?? null;
+    this.#triggerCalibration = dependencies.triggerCalibration ?? null;
     this.#combatSession = new LocalCombatSession(
       config.enemySeeds.length,
       config.session
@@ -258,7 +264,8 @@ export class LocalArenaSimulation {
     return evaluateHandTriggerGesture(
       trackingSnapshot.pose,
       this.#weaponRuntime.triggerHeld,
-      this.#config.trigger
+      this.#weaponRuntime.definition.triggerGesture,
+      this.#triggerCalibration
     ).triggerPressed;
   }
 
@@ -370,8 +377,12 @@ export class LocalArenaSimulation {
       readonly trackingState: "tracked";
     }>
   ): ProjectedAimPoint {
+    const observedAimPoint = readObservedAimPoint(
+      trackingSnapshot.pose,
+      handAimObservationConfig
+    );
     const rawAimPoint = this.#affineAimTransform.projectUnclamped(
-      trackingSnapshot.pose.indexTip
+      observedAimPoint
     );
     const isReticleOffscreen =
       rawAimPoint.x < 0 ||

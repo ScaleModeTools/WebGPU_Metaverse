@@ -1,7 +1,7 @@
 export type ProfileStorageNamespace = "thumbshooter.profile";
 
 export type ProfileStorageSegment = "username" | "record" | "calibration";
-export type CalibrationRecordVersion = 1;
+export type CalibrationRecordVersion = 1 | 2;
 
 export type ProfileStorageKey<TSegment extends ProfileStorageSegment> =
   `${ProfileStorageNamespace}.${TSegment}`;

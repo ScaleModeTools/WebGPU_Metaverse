@@ -1,4 +1,3 @@
-import { calibrationCaptureConfig } from "./calibration-capture";
 import { localCombatSessionConfig } from "./local-combat-session";
 import { firstPlayableWeaponDefinition } from "./weapon-manifest";
 import type { LocalArenaSimulationConfig } from "../types/local-arena-simulation";
@@ -65,6 +64,5 @@ export const localArenaSimulationConfig = {
     reticleScatterRadius: 0.17,
     shotScatterRadius: 0.24
   },
-  trigger: calibrationCaptureConfig.triggerGesture,
   weapon: firstPlayableWeaponDefinition
 } as const satisfies LocalArenaSimulationConfig;

@@ -50,7 +50,7 @@ export interface GameFoundationConfig {
   };
   readonly input: {
     readonly tracker: "mediapipe-hand-landmarker";
-    readonly primaryLandmarks: readonly ["hand-pivot", "thumb-chain", "index-chain"];
+    readonly primaryLandmarks: readonly ["thumb-chain", "index-chain"];
   };
   readonly calibration: {
     readonly transformModel: CalibrationTransformModel;
