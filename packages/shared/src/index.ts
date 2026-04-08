@@ -80,3 +80,14 @@ export type {
 export {
   createUsername
 } from "./player-profile.js";
+export {
+  defaultGameplayInputMode,
+  gameplayInputModeIds,
+  gameplayInputModes,
+  resolveGameplayInputMode
+} from "./gameplay-input-mode.js";
+export type {
+  GameplayInputModeDefinition,
+  GameplayInputModeHudCopy,
+  GameplayInputModeId
+} from "./gameplay-input-mode.js";

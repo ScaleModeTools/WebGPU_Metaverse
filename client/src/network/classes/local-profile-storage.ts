@@ -11,9 +11,13 @@ import type {
   AffineAimTransformSnapshot,
   CalibrationShotSample,
   HandTriggerCalibrationSnapshot,
+  GameplayInputModeId,
   PlayerProfileSnapshot
 } from "@thumbshooter/shared";
-
+import {
+  defaultGameplayInputMode,
+  gameplayInputModeIds
+} from "@thumbshooter/shared";
 import { profileStoragePlan } from "../config/profile-storage";
 import type { ProfileStoragePlan } from "../types/profile-storage";
 import type {
@@ -24,6 +28,7 @@ import type {
 
 const reticleIdSet = new Set<string>(reticleIds);
 const calibrationAnchorIdSet = new Set<string>(calibrationAnchorIds);
+const gameplayInputModeIdSet = new Set<string>(gameplayInputModeIds);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -64,6 +69,10 @@ function isCalibrationAnchorId(
   value: unknown
 ): value is CalibrationShotSample["anchorId"] {
   return typeof value === "string" && calibrationAnchorIdSet.has(value);
+}
+
+function isGameplayInputMode(value: unknown): value is GameplayInputModeId {
+  return typeof value === "string" && gameplayInputModeIdSet.has(value);
 }
 
 function isCalibrationShotSample(
@@ -244,6 +253,10 @@ function readStoredUsername(rawValue: string | null): PlayerProfileSnapshot["use
   return createUsername(rawValue);
 }
 
+function readStoredInputMode(rawValue: string | null): GameplayInputModeId {
+  return isGameplayInputMode(rawValue) ? rawValue : defaultGameplayInputMode;
+}
+
 export class LocalProfileStorage {
   readonly #plan: ProfileStoragePlan;
 
@@ -254,11 +267,15 @@ export class LocalProfileStorage {
   loadProfile(storage: Storage | null | undefined): StoredProfileHydrationResult {
     if (storage == null) {
       return {
+        inputMode: defaultGameplayInputMode,
         profile: null,
         source: "empty"
       };
     }
 
+    const inputMode = readStoredInputMode(
+      storage.getItem(this.#plan.inputModeStorageKey)
+    );
     const storedProfileRecord = parseStoredPlayerProfileRecord(
       storage.getItem(this.#plan.profileStorageKey)
     );
@@ -269,6 +286,7 @@ export class LocalProfileStorage {
 
     if (storedProfileRecord !== null) {
       return {
+        inputMode,
         profile: PlayerProfile.fromSnapshot({
           username: storedProfileRecord.username,
           selectedReticleId: storedProfileRecord.selectedReticleId,
@@ -288,12 +306,14 @@ export class LocalProfileStorage {
 
     if (storedUsername === null) {
       return {
+        inputMode,
         profile: null,
         source: "empty"
       };
     }
 
     return {
+      inputMode,
       profile: PlayerProfile.create({
         username: storedUsername
       }),
@@ -303,7 +323,8 @@ export class LocalProfileStorage {
 
   saveProfile(
     storage: Storage | null | undefined,
-    snapshot: PlayerProfileSnapshot
+    snapshot: PlayerProfileSnapshot,
+    inputMode: GameplayInputModeId
   ): void {
     if (storage == null) {
       return;
@@ -331,6 +352,7 @@ export class LocalProfileStorage {
       this.#plan.calibrationStorageKey,
       JSON.stringify(storedCalibrationRecord)
     );
+    storage.setItem(this.#plan.inputModeStorageKey, inputMode);
   }
 
   clearProfile(storage: Storage | null | undefined): void {
@@ -341,5 +363,6 @@ export class LocalProfileStorage {
     storage.removeItem(this.#plan.usernameStorageKey);
     storage.removeItem(this.#plan.profileStorageKey);
     storage.removeItem(this.#plan.calibrationStorageKey);
+    storage.removeItem(this.#plan.inputModeStorageKey);
   }
 }

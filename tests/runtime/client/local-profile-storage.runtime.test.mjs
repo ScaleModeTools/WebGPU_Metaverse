@@ -76,11 +76,12 @@ test("LocalProfileStorage saves and reloads a persisted player profile", async (
       }).snapshot
     );
 
-  profileStorage.saveProfile(storage, profile.snapshot);
+  profileStorage.saveProfile(storage, profile.snapshot, "mouse");
 
   const hydration = profileStorage.loadProfile(storage);
 
   assert.equal(hydration.source, "profile-record");
+  assert.equal(hydration.inputMode, "mouse");
   assert.equal(hydration.profile?.snapshot.username, "thumbshooter-user");
   assert.equal(hydration.profile?.snapshot.audioSettings.mix.musicVolume, 0.3);
   assert.equal(hydration.profile?.snapshot.bestScore, 400);
@@ -112,6 +113,7 @@ test("LocalProfileStorage rehydrates username-only storage into a fresh profile"
   const hydration = new LocalProfileStorage().loadProfile(storage);
 
   assert.equal(hydration.source, "username-only");
+  assert.equal(hydration.inputMode, "camera-thumb-shooter");
   assert.equal(hydration.profile?.snapshot.username, "shell-user");
   assert.equal(hydration.profile?.snapshot.aimCalibration, null);
   assert.equal(hydration.profile?.snapshot.bestScore, 0);
@@ -144,6 +146,7 @@ test("LocalProfileStorage hydrates legacy calibration records without a persiste
 
   const hydration = new LocalProfileStorage().loadProfile(storage);
 
+  assert.equal(hydration.inputMode, "camera-thumb-shooter");
   assert.equal(hydration.profile?.snapshot.username, "legacy-user");
   assert.equal(hydration.profile?.snapshot.aimCalibration, null);
   assert.equal(hydration.profile?.snapshot.bestScore, 0);
@@ -163,11 +166,13 @@ test("LocalProfileStorage clears all persisted keys", async () => {
 
   profileStorage.saveProfile(
     storage,
-    PlayerProfile.create({ username: "clear-me" }).snapshot
+    PlayerProfile.create({ username: "clear-me" }).snapshot,
+    "mouse"
   );
   profileStorage.clearProfile(storage);
 
   assert.equal(storage.getItem(profileStoragePlan.usernameStorageKey), null);
   assert.equal(storage.getItem(profileStoragePlan.profileStorageKey), null);
   assert.equal(storage.getItem(profileStoragePlan.calibrationStorageKey), null);
+  assert.equal(storage.getItem(profileStoragePlan.inputModeStorageKey), null);
 });

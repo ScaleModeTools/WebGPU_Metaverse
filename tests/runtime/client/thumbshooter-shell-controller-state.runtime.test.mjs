@@ -42,6 +42,7 @@ test("createInitialThumbShooterShellControllerState seeds typed shell policy fro
   const state = createInitialThumbShooterShellControllerState({
     audioSnapshot: createAudioSnapshot(),
     hydratedProfile: {
+      inputMode: "mouse",
       profile,
       source: "profile-record"
     }
@@ -49,9 +50,11 @@ test("createInitialThumbShooterShellControllerState seeds typed shell policy fro
 
   assert.equal(state.profile?.snapshot.username, "shell-user");
   assert.equal(state.hydrationSource, "profile-record");
+  assert.equal(state.inputMode, "mouse");
   assert.equal(state.usernameDraft, "shell-user");
   assert.equal(state.capabilitySnapshot.status, "checking");
   assert.equal(state.debugPanelMode, "hidden");
+  assert.equal(state.gameplayShell, "main-menu");
   assert.equal(state.permissionState, "prompt");
 });
 
@@ -67,6 +70,7 @@ test("reduceThumbShooterShellControllerState keeps shell mutations behind typed 
   let state = createInitialThumbShooterShellControllerState({
     audioSnapshot: createAudioSnapshot(),
     hydratedProfile: {
+      inputMode: "camera-thumb-shooter",
       profile: baseProfile,
       source: "username-only"
     }
@@ -93,6 +97,9 @@ test("reduceThumbShooterShellControllerState keeps shell mutations behind typed 
     open: true
   });
   state = reduceThumbShooterShellControllerState(state, {
+    type: "gameplayStartRequested"
+  });
+  state = reduceThumbShooterShellControllerState(state, {
     type: "bestScoreRaised",
     bestScore: 300
   });
@@ -108,10 +115,20 @@ test("reduceThumbShooterShellControllerState keeps shell mutations behind typed 
   assert.equal(state.hasConfirmedProfile, true);
   assert.equal(state.permissionState, "granted");
   assert.equal(state.debugPanelMode, "aim-inspector");
+  assert.equal(state.gameplayShell, "gameplay");
   assert.equal(state.isMenuOpen, true);
   assert.equal(state.profile?.snapshot.bestScore, 300);
   assert.equal(state.profile?.snapshot.audioSettings.mix.musicVolume, 0.2);
   assert.equal(state.profile?.snapshot.audioSettings.mix.sfxVolume, 0.45);
+
+  state = reduceThumbShooterShellControllerState(state, {
+    type: "inputModeChanged",
+    inputMode: "mouse"
+  });
+
+  assert.equal(state.gameplayShell, "main-menu");
+  assert.equal(state.inputMode, "mouse");
+  assert.equal(state.isMenuOpen, false);
 
   state = reduceThumbShooterShellControllerState(state, {
     type: "profileCleared",
@@ -120,6 +137,7 @@ test("reduceThumbShooterShellControllerState keeps shell mutations behind typed 
 
   assert.equal(state.profile, null);
   assert.equal(state.hydrationSource, "empty");
+  assert.equal(state.inputMode, "camera-thumb-shooter");
   assert.equal(state.usernameDraft, "");
   assert.equal(state.isMenuOpen, false);
 });

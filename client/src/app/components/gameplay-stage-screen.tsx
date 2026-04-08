@@ -14,11 +14,12 @@ import type {
 
 import type {
   GameplayDebugPanelMode,
+  GameplayInputModeId,
+  GameplayInputSource,
   GameplaySignal,
   GameplayTelemetrySnapshot,
   HandTrackingTelemetrySnapshot
 } from "../../game";
-import { HandTrackingRuntime } from "../../game/classes/hand-tracking-runtime";
 import { LocalArenaSimulation } from "../../game/classes/local-arena-simulation";
 import { WebGpuGameplayRuntime } from "../../game/classes/webgpu-gameplay-runtime";
 import {
@@ -34,11 +35,12 @@ interface GameplayStageScreenProps {
   readonly audioStatusLabel: string;
   readonly bestScore: number;
   readonly debugPanelMode: GameplayDebugPanelMode;
-  readonly handTrackingRuntime: HandTrackingRuntime;
+  readonly inputMode: GameplayInputModeId;
   readonly onBestScoreChange: (bestScore: number) => void;
   readonly onGameplaySignal: (signal: GameplaySignal) => void;
   readonly onOpenMenu: () => void;
   readonly selectedReticleLabel: string;
+  readonly trackingSource: GameplayInputSource;
   readonly triggerCalibration: HandTriggerCalibrationSnapshot | null;
   readonly username: string;
   readonly weaponLabel: string;
@@ -49,17 +51,19 @@ export function GameplayStageScreen({
   audioStatusLabel,
   bestScore,
   debugPanelMode,
-  handTrackingRuntime,
+  inputMode,
   onBestScoreChange,
   onGameplaySignal,
   onOpenMenu,
   selectedReticleLabel,
+  trackingSource,
   triggerCalibration,
   username,
   weaponLabel
 }: GameplayStageScreenProps) {
   const showDeveloperUi = import.meta.env.DEV;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
   const bestScoreRef = useRef(bestScore);
   const runtimeStartVersionRef = useRef(0);
   const handleGameplaySignal = useEffectEvent((signal: GameplaySignal) => {
@@ -73,7 +77,7 @@ export function GameplayStageScreen({
       })
   );
   const [gameplayRuntime] = useState(
-    () => new WebGpuGameplayRuntime(handTrackingRuntime, arenaSimulation)
+    () => new WebGpuGameplayRuntime(trackingSource, arenaSimulation)
   );
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const subscribeGameplayUiUpdates = useCallback(
@@ -87,27 +91,35 @@ export function GameplayStageScreen({
   );
   const gameplayTelemetry: GameplayTelemetrySnapshot = gameplayRuntime.telemetrySnapshot;
   const trackingTelemetry: HandTrackingTelemetrySnapshot =
-    handTrackingRuntime.telemetrySnapshot;
+    trackingSource.telemetrySnapshot;
 
   useEffect(() => {
     let cancelled = false;
 
-    void handTrackingRuntime.ensureStarted().catch((error) => {
+    void trackingSource.ensureStarted().catch((error) => {
       if (cancelled) {
         return;
       }
 
       setRuntimeError((currentValue) =>
         currentValue ??
-        handTrackingRuntime.snapshot.failureReason ??
-        (error instanceof Error ? error.message : "Hand tracking runtime failed.")
+        trackingSource.snapshot.failureReason ??
+        (error instanceof Error ? error.message : "Gameplay input failed.")
       );
     });
 
     return () => {
       cancelled = true;
     };
-  }, [handTrackingRuntime]);
+  }, [trackingSource]);
+
+  useEffect(() => {
+    if (trackingSource.attachViewport === undefined || viewportRef.current === null) {
+      return;
+    }
+
+    return trackingSource.attachViewport(viewportRef.current);
+  }, [trackingSource]);
 
   const handleStartRuntime = useEffectEvent(async () => {
     if (canvasRef.current === null) {
@@ -162,7 +174,7 @@ export function GameplayStageScreen({
     };
     // Effect events must stay out of dependency arrays or the runtime gets
     // torn down on the first post-boot rerender before RAF can advance.
-  }, [gameplayRuntime, handTrackingRuntime]);
+  }, [gameplayRuntime, trackingSource]);
 
   useEffect(() => {
     const nextBestScore = hudSnapshot.session.score;
@@ -177,7 +189,7 @@ export function GameplayStageScreen({
 
   return (
     <ImmersiveStageFrame>
-      <div className="relative flex-1 overflow-hidden">
+      <div className="relative flex-1 overflow-hidden" ref={viewportRef}>
         <canvas className="absolute inset-0 h-full w-full" ref={canvasRef} />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgb(56_189_248_/_0.08),_transparent_28%)]" />
         {showDeveloperUi ? (
@@ -194,6 +206,7 @@ export function GameplayStageScreen({
           audioStatusLabel={audioStatusLabel}
           bestScore={bestScore}
           hudSnapshot={hudSnapshot}
+          inputMode={inputMode}
           onOpenMenu={onOpenMenu}
           onRestartSession={handleRestartSession}
           onRetryRuntime={handleRetryRuntime}

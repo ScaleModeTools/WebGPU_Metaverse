@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useState } from "react";
 
 import { BrowserAudioSession } from "../../audio";
-import type { GameplaySignal } from "../../game";
+import { MouseGameplayInput, type GameplaySignal } from "../../game";
 import { WebGpuGameplayCapabilityProbe } from "../../game/classes/webgpu-gameplay-capability-probe";
 import { HandTrackingRuntime } from "../../game/classes/hand-tracking-runtime";
 import { LocalProfileStorage } from "../../network";
@@ -13,6 +13,7 @@ import {
   reduceThumbShooterShellControllerState
 } from "./thumbshooter-shell-controller-state";
 import { useThumbShooterShellEntryPolicy } from "./thumbshooter-shell-entry-policy";
+import { useThumbShooterShellFlowPolicy } from "./thumbshooter-shell-flow-policy";
 import { useThumbShooterShellGameplayMenuPolicy } from "./thumbshooter-shell-gameplay-menu-policy";
 import { useThumbShooterShellProfilePolicy } from "./thumbshooter-shell-profile-policy";
 import { buildThumbShooterShellView, resolveCalibrationShellState } from "./thumbshooter-shell-view";
@@ -31,6 +32,7 @@ export function useThumbShooterShellController(): ThumbShooterShellController {
   const [profileStorage] = useState(() => new LocalProfileStorage());
   const [capabilityProbe] = useState(() => new WebGpuGameplayCapabilityProbe());
   const [handTrackingRuntime] = useState(() => new HandTrackingRuntime());
+  const [mouseGameplayInput] = useState(() => new MouseGameplayInput());
   const [permissionGateway] = useState(() => new WebcamPermissionGateway());
   const [audioSession] = useState(() => new BrowserAudioSession());
   const [hydratedProfile] = useState(() =>
@@ -48,19 +50,23 @@ export function useThumbShooterShellController(): ThumbShooterShellController {
   useEffect(() => {
     return () => {
       handTrackingRuntime.dispose();
+      mouseGameplayInput.dispose();
     };
-  }, [handTrackingRuntime]);
+  }, [handTrackingRuntime, mouseGameplayInput]);
 
   const calibrationStatus = resolveCalibrationShellState(state.profile);
   const navigationSnapshot = resolveShellNavigation({
+    inputMode: state.inputMode,
     hasConfirmedProfile: state.hasConfirmedProfile,
     webcamPermission: state.permissionState,
     gameplayCapability: state.capabilitySnapshot.status,
-    calibrationShell: calibrationStatus
+    calibrationShell: calibrationStatus,
+    gameplayShell: state.gameplayShell
   });
   const shellView = buildThumbShooterShellView({
     audioSnapshot: state.audioSnapshot,
     capabilitySnapshot: state.capabilitySnapshot,
+    inputMode: state.inputMode,
     profile: state.profile
   });
   const audioPolicy = useThumbShooterShellAudioPolicy({
@@ -82,6 +88,11 @@ export function useThumbShooterShellController(): ThumbShooterShellController {
     navigationSnapshot,
     state
   });
+  const flowPolicy = useThumbShooterShellFlowPolicy({
+    audioSession,
+    dispatch,
+    state
+  });
   const profilePolicy = useThumbShooterShellProfilePolicy({
     audioSession,
     browserStorage,
@@ -90,12 +101,35 @@ export function useThumbShooterShellController(): ThumbShooterShellController {
     profileStorage,
     state
   });
+  const gameplayInputSource =
+    state.inputMode === "mouse" ? mouseGameplayInput : handTrackingRuntime;
+
+  useEffect(() => {
+    if (
+      state.inputMode === "mouse" ||
+      (navigationSnapshot.activeStep !== "calibration" &&
+        navigationSnapshot.activeStep !== "gameplay")
+    ) {
+      handTrackingRuntime.dispose();
+    }
+
+    if (navigationSnapshot.activeStep !== "gameplay") {
+      mouseGameplayInput.dispose();
+    }
+  }, [
+    handTrackingRuntime,
+    mouseGameplayInput,
+    navigationSnapshot.activeStep,
+    state.inputMode
+  ]);
 
   return {
     capabilityStatus: state.capabilitySnapshot.status,
     debugPanelMode: state.debugPanelMode,
+    gameplayInputSource,
     handTrackingRuntime,
     hydrationSource: state.hydrationSource,
+    inputMode: state.inputMode,
     isMenuOpen: state.isMenuOpen,
     loginError: state.loginError,
     navigationSnapshot,
@@ -118,8 +152,11 @@ export function useThumbShooterShellController(): ThumbShooterShellController {
     onGameplaySignal: (signal: GameplaySignal) => {
       audioPolicy.onGameplaySignal(signal);
     },
+    onGameplayStartRequest: flowPolicy.onGameplayStartRequest,
     onGameplayMenuOpen: gameplayMenuPolicy.onGameplayMenuOpen,
+    onInputModeChange: flowPolicy.onInputModeChange,
     onLoginSubmit: entryPolicy.onLoginSubmit,
+    onMainMenuRequest: flowPolicy.onMainMenuRequest,
     onMusicVolumeChange: profilePolicy.onMusicVolumeChange,
     onRecalibrationRequest: profilePolicy.onRecalibrationRequest,
     onRequestPermission: entryPolicy.onRequestPermission,

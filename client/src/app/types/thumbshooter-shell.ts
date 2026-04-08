@@ -6,7 +6,9 @@ export interface ThumbShooterShellViewModel {
   readonly audioMix: AudioMixSnapshot;
   readonly audioStatusLabel: string;
   readonly calibrationQualityLabel: string;
+  readonly calibrationStatusLabel: string;
   readonly capabilityReasonLabel: string;
+  readonly inputModeLabel: string;
   readonly musicVolumeLabel: string;
   readonly musicVolumeSliderValue: SliderValue;
   readonly reticleCatalogLabel: string;

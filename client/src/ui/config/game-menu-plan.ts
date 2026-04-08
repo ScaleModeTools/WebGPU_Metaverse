@@ -5,14 +5,10 @@ export const gameMenuPlan = {
   entryActions: ["escape-key", "menu-button"],
   sections: [
     { id: "controls", label: "Controls" },
+    { id: "input", label: "Input" },
     { id: "audio", label: "Audio" },
     { id: "debug", label: "Debug" },
     { id: "calibration", label: "Calibration" }
-  ],
-  controlsSummary: [
-    "Aim with the thumb-gun pose",
-    "Shoot by dropping the thumb relative to the index finger",
-    "Reset by lifting the thumb before the next shot"
   ],
   debugModes: [
     {
@@ -31,6 +27,7 @@ export const gameMenuPlan = {
       mode: "aim-inspector"
     }
   ],
+  mainMenuAction: "return-to-main-menu",
   recalibrationAction: "restart-nine-point-calibration",
   audioControls: ["music", "sfx"]
 } as const satisfies GameMenuPlan;

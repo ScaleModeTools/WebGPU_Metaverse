@@ -4,11 +4,14 @@ import type { PlayerProfile } from "@thumbshooter/shared";
 import type { AudioSessionSnapshot } from "../../audio";
 import type {
   GameplayDebugPanelMode,
+  GameplayInputModeId,
+  GameplayInputSource,
   GameplaySignal
 } from "../../game";
 import type { HandTrackingRuntime } from "../../game/classes/hand-tracking-runtime";
 import type { WebGpuGameplayCapabilitySnapshot } from "../../game/types/webgpu-capability";
 import type {
+  GameplayShellState,
   ShellNavigationSnapshot,
   WebcamPermissionState
 } from "../../navigation";
@@ -19,8 +22,10 @@ import type { ThumbShooterShellViewModel } from "./thumbshooter-shell";
 export interface ThumbShooterShellController {
   readonly capabilityStatus: WebGpuGameplayCapabilitySnapshot["status"];
   readonly debugPanelMode: GameplayDebugPanelMode;
+  readonly gameplayInputSource: GameplayInputSource;
   readonly handTrackingRuntime: HandTrackingRuntime;
   readonly hydrationSource: StoredProfileHydrationResult["source"];
+  readonly inputMode: GameplayInputModeId;
   readonly isMenuOpen: boolean;
   readonly loginError: string | null;
   readonly navigationSnapshot: ShellNavigationSnapshot;
@@ -41,8 +46,11 @@ export interface ThumbShooterShellController {
   readonly onGameplayDebugPanelModeChange: (
     mode: GameplayDebugPanelMode
   ) => void;
+  readonly onGameplayStartRequest: () => void;
   readonly onGameplayMenuOpen: (open: boolean) => void;
+  readonly onInputModeChange: (inputMode: GameplayInputModeId) => void;
   readonly onLoginSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  readonly onMainMenuRequest: () => void;
   readonly onMusicVolumeChange: (nextValue: number) => void;
   readonly onRecalibrationRequest: () => void;
   readonly onRequestPermission: () => void;
@@ -54,8 +62,10 @@ export interface ThumbShooterShellControllerState {
   readonly audioSnapshot: AudioSessionSnapshot;
   readonly capabilitySnapshot: WebGpuGameplayCapabilitySnapshot;
   readonly debugPanelMode: GameplayDebugPanelMode;
+  readonly gameplayShell: GameplayShellState;
   readonly hasConfirmedProfile: boolean;
   readonly hydrationSource: StoredProfileHydrationResult["source"];
+  readonly inputMode: GameplayInputModeId;
   readonly isMenuOpen: boolean;
   readonly loginError: string | null;
   readonly permissionError: string | null;
@@ -93,6 +103,9 @@ export type ThumbShooterShellControllerAction =
       readonly capabilitySnapshot: WebGpuGameplayCapabilitySnapshot;
     }
   | {
+      readonly type: "gameplayStartRequested";
+    }
+  | {
       readonly type: "gameplayExited";
     }
   | {
@@ -104,8 +117,15 @@ export type ThumbShooterShellControllerAction =
       readonly open: boolean;
     }
   | {
+      readonly type: "inputModeChanged";
+      readonly inputMode: GameplayInputModeId;
+    }
+  | {
       readonly type: "loginRejected";
       readonly loginError: string;
+    }
+  | {
+      readonly type: "mainMenuRequested";
     }
   | {
       readonly type: "musicVolumeChanged";

@@ -7,6 +7,10 @@ import {
 import { reticleManifest } from "../../assets";
 import { audioFoundationConfig } from "../../audio";
 import type { AudioSessionSnapshot } from "../../audio";
+import {
+  resolveGameplayInputMode,
+  type GameplayInputModeId
+} from "../../game";
 import { gameFoundationConfig } from "../../game/config/game-foundation";
 import type { WebGpuGameplayCapabilitySnapshot } from "../../game/types/webgpu-capability";
 import type { CalibrationShellState } from "../../navigation";
@@ -16,6 +20,7 @@ import type { ThumbShooterShellViewModel } from "../types/thumbshooter-shell";
 interface BuildThumbShooterShellViewInput {
   readonly audioSnapshot: AudioSessionSnapshot;
   readonly capabilitySnapshot: WebGpuGameplayCapabilitySnapshot;
+  readonly inputMode: GameplayInputModeId;
   readonly profile: PlayerProfile | null;
 }
 
@@ -70,7 +75,16 @@ function describeAudioStatus(snapshot: AudioSessionSnapshot): string {
   return "Awaiting user gesture";
 }
 
-function describeCalibrationQuality(profile: PlayerProfile | null): string {
+function describeCalibrationQuality(
+  profile: PlayerProfile | null,
+  inputMode: GameplayInputModeId
+): string {
+  const selectedInputMode = resolveGameplayInputMode(inputMode);
+
+  if (!selectedInputMode.requiresCalibration) {
+    return "not required in mouse mode";
+  }
+
   if (profile === null || profile.snapshot.aimCalibration === null) {
     return "pending";
   }
@@ -112,16 +126,24 @@ export function updateProfileMix(
 export function buildThumbShooterShellView({
   audioSnapshot,
   capabilitySnapshot,
+  inputMode,
   profile
 }: BuildThumbShooterShellViewInput): ThumbShooterShellViewModel {
   const audioMix =
     profile?.snapshot.audioSettings.mix ?? audioFoundationConfig.defaultMix;
+  const selectedInputMode = resolveGameplayInputMode(inputMode);
 
   return {
     audioMix,
     audioStatusLabel: describeAudioStatus(audioSnapshot),
-    calibrationQualityLabel: describeCalibrationQuality(profile),
+    calibrationQualityLabel: describeCalibrationQuality(profile, inputMode),
+    calibrationStatusLabel: selectedInputMode.requiresCalibration
+      ? profile?.hasAimCalibration === true
+        ? "ready"
+        : "pending"
+      : "not required",
     capabilityReasonLabel: describeCapabilityReason(capabilitySnapshot),
+    inputModeLabel: selectedInputMode.label,
     musicVolumeLabel: toPercent(Number(audioMix.musicVolume)),
     musicVolumeSliderValue: toSliderValue(Number(audioMix.musicVolume)),
     reticleCatalogLabel: reticleManifest.reticles

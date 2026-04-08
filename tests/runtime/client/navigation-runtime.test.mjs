@@ -13,24 +13,44 @@ after(async () => {
   await clientLoader?.close();
 });
 
-test("resolveShellNavigation routes completed shell progress into gameplay", async () => {
+test("resolveShellNavigation routes completed shell progress into the main menu before gameplay starts", async () => {
   const { resolveShellNavigation } = await clientLoader.load(
     "/src/navigation/guards/resolve-shell-navigation.ts"
   );
 
   const snapshot = resolveShellNavigation({
     hasConfirmedProfile: true,
+    inputMode: "camera-thumb-shooter",
     webcamPermission: "granted",
     gameplayCapability: "supported",
-    calibrationShell: "reviewed"
+    calibrationShell: "reviewed",
+    gameplayShell: "main-menu"
   });
 
   assert.deepEqual(snapshot, {
-    activeStep: "gameplay",
+    activeStep: "main-menu",
     canAdvanceFromPermissions: true,
     canEnterGameplayShell: true,
     isUnsupportedRoute: false
   });
+});
+
+test("resolveShellNavigation enters gameplay only after an explicit start request", async () => {
+  const { resolveShellNavigation } = await clientLoader.load(
+    "/src/navigation/guards/resolve-shell-navigation.ts"
+  );
+
+  const snapshot = resolveShellNavigation({
+    hasConfirmedProfile: true,
+    inputMode: "camera-thumb-shooter",
+    webcamPermission: "granted",
+    gameplayCapability: "supported",
+    calibrationShell: "reviewed",
+    gameplayShell: "gameplay"
+  });
+
+  assert.equal(snapshot.activeStep, "gameplay");
+  assert.equal(snapshot.canEnterGameplayShell, true);
 });
 
 test("resolveShellNavigation routes unsupported capability into the unsupported screen", async () => {
@@ -40,13 +60,33 @@ test("resolveShellNavigation routes unsupported capability into the unsupported 
 
   const snapshot = resolveShellNavigation({
     hasConfirmedProfile: true,
+    inputMode: "camera-thumb-shooter",
     webcamPermission: "granted",
     gameplayCapability: "unsupported",
-    calibrationShell: "reviewed"
+    calibrationShell: "reviewed",
+    gameplayShell: "main-menu"
   });
 
   assert.equal(snapshot.activeStep, "unsupported");
   assert.equal(snapshot.isUnsupportedRoute, true);
+});
+
+test("resolveShellNavigation lets mouse mode skip webcam permission and calibration", async () => {
+  const { resolveShellNavigation } = await clientLoader.load(
+    "/src/navigation/guards/resolve-shell-navigation.ts"
+  );
+
+  const snapshot = resolveShellNavigation({
+    hasConfirmedProfile: true,
+    inputMode: "mouse",
+    webcamPermission: "prompt",
+    gameplayCapability: "supported",
+    calibrationShell: "pending",
+    gameplayShell: "main-menu"
+  });
+
+  assert.equal(snapshot.activeStep, "main-menu");
+  assert.equal(snapshot.canEnterGameplayShell, true);
 });
 
 test("WebcamPermissionGateway grants permission and stops returned tracks", async () => {

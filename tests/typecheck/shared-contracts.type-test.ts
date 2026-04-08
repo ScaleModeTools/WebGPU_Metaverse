@@ -6,6 +6,7 @@ import type {
   AudioChannelId,
   AudioSettingsSnapshot,
   Degrees,
+  GameplayInputModeId,
   HandTriggerCalibrationSnapshot,
   HandTriggerMetricSnapshot,
   BackgroundMusicEngine,
@@ -43,6 +44,7 @@ type ExpectedCalibrationAnchorId =
 type ExpectedReticleId = "default-ring" | "precision-ring";
 type ExpectedAudioChannelId = "music" | "sfx";
 type ExpectedBackgroundMusicEngine = "strudel-web";
+type ExpectedGameplayInputModeId = "camera-thumb-shooter" | "mouse";
 type ExpectedSoundEffectEngine = "web-audio-api";
 type ExpectedAffineAimTransformFitQuality = "stable" | "usable" | "degraded";
 
@@ -56,6 +58,9 @@ type AudioChannelIdMatches = AssertTrue<
 >;
 type BackgroundMusicEngineMatches = AssertTrue<
   IsEqual<BackgroundMusicEngine, ExpectedBackgroundMusicEngine>
+>;
+type GameplayInputModeMatches = AssertTrue<
+  IsEqual<GameplayInputModeId, ExpectedGameplayInputModeId>
 >;
 type SoundEffectEngineMatches = AssertTrue<
   IsEqual<SoundEffectEngine, ExpectedSoundEffectEngine>
@@ -129,6 +134,7 @@ export type SharedContractTypeTests =
   | CalibrationAnchorIdMatches
   | AudioChannelIdMatches
   | BackgroundMusicEngineMatches
+  | GameplayInputModeMatches
   | SoundEffectEngineMatches
   | AffineAimTransformFitQualityMatches
   | AffineAimTransformFitQualityCatalogMatches

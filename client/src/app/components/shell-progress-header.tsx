@@ -88,7 +88,7 @@ export function ShellProgressHeader({
 
         <Separator />
 
-        <div className="grid gap-3 md:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
           {navigationFlow.steps.map((step, index) => {
             const isCurrent = step.id === currentStepId;
             const isComplete = currentStepIndex > -1 && index < currentStepIndex;

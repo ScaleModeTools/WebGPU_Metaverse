@@ -1,3 +1,4 @@
+import { resolveGameplayInputMode } from "@thumbshooter/shared";
 import type {
   ShellNavigationProgress,
   ShellNavigationSnapshot
@@ -6,6 +7,8 @@ import type {
 export function resolveShellNavigation(
   progress: ShellNavigationProgress
 ): ShellNavigationSnapshot {
+  const inputMode = resolveGameplayInputMode(progress.inputMode);
+
   if (!progress.hasConfirmedProfile) {
     return {
       activeStep: "login",
@@ -15,7 +18,10 @@ export function resolveShellNavigation(
     };
   }
 
-  if (progress.webcamPermission !== "granted") {
+  if (
+    inputMode.requiresWebcamPermission &&
+    progress.webcamPermission !== "granted"
+  ) {
     return {
       activeStep: "permissions",
       canAdvanceFromPermissions: false,
@@ -33,7 +39,10 @@ export function resolveShellNavigation(
     };
   }
 
-  if (progress.gameplayCapability !== "supported") {
+  if (
+    inputMode.requiresWebcamPermission &&
+    progress.gameplayCapability !== "supported"
+  ) {
     return {
       activeStep: "permissions",
       canAdvanceFromPermissions: false,
@@ -42,7 +51,19 @@ export function resolveShellNavigation(
     };
   }
 
-  if (progress.calibrationShell !== "reviewed") {
+  if (progress.gameplayCapability !== "supported") {
+    return {
+      activeStep: "main-menu",
+      canAdvanceFromPermissions: true,
+      canEnterGameplayShell: false,
+      isUnsupportedRoute: false
+    };
+  }
+
+  if (
+    inputMode.requiresCalibration &&
+    progress.calibrationShell !== "reviewed"
+  ) {
     return {
       activeStep: "calibration",
       canAdvanceFromPermissions: true,
@@ -51,10 +72,19 @@ export function resolveShellNavigation(
     };
   }
 
+  if (progress.gameplayShell === "main-menu") {
+    return {
+      activeStep: "main-menu",
+      canAdvanceFromPermissions: true,
+      canEnterGameplayShell: progress.gameplayCapability === "supported",
+      isUnsupportedRoute: false
+    };
+  }
+
   return {
     activeStep: "gameplay",
     canAdvanceFromPermissions: true,
-    canEnterGameplayShell: true,
+    canEnterGameplayShell: progress.gameplayCapability === "supported",
     isUnsupportedRoute: false
   };
 }

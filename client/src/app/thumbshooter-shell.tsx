@@ -18,9 +18,13 @@ export function ThumbShooterShell() {
       bestScore={controller.profile?.snapshot.bestScore ?? 0}
       capabilityReasonLabel={controller.shellView.capabilityReasonLabel}
       capabilityStatus={controller.capabilityStatus}
+      canEnterGameplayShell={controller.navigationSnapshot.canEnterGameplayShell}
+      calibrationQualityLabel={controller.shellView.calibrationQualityLabel}
       debugPanelMode={controller.debugPanelMode}
+      gameplayInputSource={controller.gameplayInputSource}
       handTrackingRuntime={controller.handTrackingRuntime}
       hasStoredProfile={controller.hydrationSource !== "empty"}
+      inputMode={controller.inputMode}
       loginError={controller.loginError}
       onBestScoreChange={controller.onBestScoreChange}
       permissionError={controller.permissionError}
@@ -32,9 +36,12 @@ export function ThumbShooterShell() {
       onClearProfile={controller.onClearProfile}
       onEditProfile={controller.onEditProfile}
       onGameplaySignal={controller.onGameplaySignal}
+      onGameplayStartRequest={controller.onGameplayStartRequest}
+      onInputModeChange={controller.onInputModeChange}
       onLoginSubmit={controller.onLoginSubmit}
       onOpenGameplayMenu={() => controller.onGameplayMenuOpen(true)}
       onRequestPermission={controller.onRequestPermission}
+      onRecalibrationRequest={controller.onRecalibrationRequest}
       onRetryCapabilityProbe={controller.onRetryCapabilityProbe}
       setUsernameDraft={controller.setUsernameDraft}
     />
@@ -63,8 +70,9 @@ export function ThumbShooterShell() {
                 controller.profile?.calibrationSampleCount ?? 0
               }
               calibrationQualityLabel={controller.shellView.calibrationQualityLabel}
-              hasAimCalibration={controller.profile?.hasAimCalibration ?? false}
+              calibrationStatusLabel={controller.shellView.calibrationStatusLabel}
               hydrationSource={controller.hydrationSource}
+              inputModeLabel={controller.shellView.inputModeLabel}
               reticleCatalogLabel={controller.shellView.reticleCatalogLabel}
               username={controller.profile?.snapshot.username ?? "not confirmed"}
             />
@@ -80,8 +88,11 @@ export function ThumbShooterShell() {
           calibrationQualityLabel={controller.shellView.calibrationQualityLabel}
           debugPanelMode={controller.debugPanelMode}
           gameplayStatusLabel="Local combat progression live"
+          inputMode={controller.inputMode}
           musicVolume={controller.shellView.musicVolumeSliderValue}
           onDebugPanelModeChange={controller.onGameplayDebugPanelModeChange}
+          onInputModeChange={controller.onInputModeChange}
+          onMainMenuRequest={controller.onMainMenuRequest}
           onMusicVolumeChange={controller.onMusicVolumeChange}
           onOpenChange={controller.onGameplayMenuOpen}
           onRecalibrationRequest={controller.onRecalibrationRequest}

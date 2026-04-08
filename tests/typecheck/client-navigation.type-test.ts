@@ -10,6 +10,7 @@ type ExpectedNavigationStepId =
   | "login"
   | "permissions"
   | "calibration"
+  | "main-menu"
   | "gameplay"
   | "unsupported";
 
@@ -37,7 +38,7 @@ type CalibrationRequiresPermissions = AssertTrue<
 type GameplayRequiresCalibration = AssertTrue<
   IsEqual<
     Extract<(typeof navigationFlow.steps)[number], { readonly id: "gameplay" }>["requiresPrevious"],
-    readonly ["calibration"]
+    readonly ["main-menu"]
   >
 >;
 

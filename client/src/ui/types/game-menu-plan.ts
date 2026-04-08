@@ -3,6 +3,7 @@ import type { GameplayDebugPanelMode } from "../../game";
 
 export const gameMenuSectionIds = [
   "controls",
+  "input",
   "audio",
   "debug",
   "calibration"
@@ -27,8 +28,8 @@ export interface GameMenuPlan {
   readonly placement: "center-modal";
   readonly entryActions: readonly GameMenuEntryAction[];
   readonly sections: readonly GameMenuSectionDefinition[];
-  readonly controlsSummary: readonly string[];
   readonly debugModes: readonly GameMenuDebugModeDefinition[];
+  readonly mainMenuAction: "return-to-main-menu";
   readonly recalibrationAction: "restart-nine-point-calibration";
   readonly audioControls: readonly AudioChannelId[];
 }

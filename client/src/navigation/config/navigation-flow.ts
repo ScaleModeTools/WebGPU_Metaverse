@@ -15,9 +15,13 @@ export const navigationFlow = {
       requiresPrevious: ["permissions"]
     },
     {
+      id: "main-menu",
+      label: "Review settings and start the local arena"
+    },
+    {
       id: "gameplay",
       label: "Boot WebGPU gameplay",
-      requiresPrevious: ["calibration"]
+      requiresPrevious: ["main-menu"]
     },
     {
       id: "unsupported",

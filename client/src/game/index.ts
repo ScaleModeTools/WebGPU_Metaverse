@@ -3,6 +3,11 @@ export { calibrationCaptureConfig } from "./config/calibration-capture";
 export { localCombatSessionConfig } from "./config/local-combat-session";
 export { localArenaSimulationConfig } from "./config/local-arena-simulation";
 export { gameplayRuntimeConfig } from "./config/gameplay-runtime";
+export {
+  defaultGameplayInputMode,
+  gameplayInputModes,
+  resolveGameplayInputMode
+} from "./config/gameplay-input-modes";
 export { handTrackingRuntimeConfig } from "./config/hand-tracking-runtime";
 export {
   firstPlayableWeaponDefinition,
@@ -11,11 +16,16 @@ export {
 export { HandTrackingRuntime } from "./classes/hand-tracking-runtime";
 export { LocalCombatSession } from "./classes/local-combat-session";
 export { LocalArenaSimulation } from "./classes/local-arena-simulation";
+export {
+  MouseGameplayInput,
+  mouseGameplayAimCalibrationSnapshot
+} from "./classes/mouse-gameplay-input";
 export { NinePointCalibrationSession } from "./classes/nine-point-calibration-session";
 export { WebGpuGameplayRuntime } from "./classes/webgpu-gameplay-runtime";
 export { WebGpuGameplayCapabilityProbe } from "./classes/webgpu-gameplay-capability-probe";
 export { WeaponRuntime } from "./classes/weapon-runtime";
 export { calibrationCaptureStates } from "./types/calibration-session";
+export { gameplayInputModeIds } from "./types/gameplay-input-mode";
 export { gameplayRuntimeLifecycleStates } from "./types/gameplay-runtime";
 export {
   gameplayDebugPanelModes,
@@ -54,6 +64,12 @@ export type {
   TriggerGestureMode,
   WeaponReloadRule
 } from "./types/game-foundation";
+export type {
+  GameplayInputModeDefinition,
+  GameplayInputModeHudCopy,
+  GameplayInputModeId
+} from "./types/gameplay-input-mode";
+export type { GameplayInputSource } from "./types/gameplay-input-source";
 export type {
   GameplaySignal,
   GameplaySignalType

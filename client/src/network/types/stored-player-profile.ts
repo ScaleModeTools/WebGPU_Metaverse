@@ -1,5 +1,6 @@
 import type {
   CalibrationShotSample,
+  GameplayInputModeId,
   PlayerProfile,
   PlayerProfileSnapshot,
   Username
@@ -22,6 +23,7 @@ export interface StoredCalibrationRecord {
 }
 
 export interface StoredProfileHydrationResult {
+  readonly inputMode: GameplayInputModeId;
   readonly profile: PlayerProfile | null;
   readonly source: "empty" | "username-only" | "profile-record";
 }

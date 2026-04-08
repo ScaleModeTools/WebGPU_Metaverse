@@ -19,6 +19,12 @@
       ]
     },
     {
+      "ownerPath": "client/src/game/classes/mouse-gameplay-input.ts",
+      "testPaths": [
+        "tests/runtime/client/mouse-gameplay-input.runtime.test.mjs"
+      ]
+    },
+    {
       "ownerPath": "client/src/game/classes/local-arena-simulation.ts",
       "testPaths": [
         "tests/runtime/client/local-arena-simulation.runtime.test.mjs"

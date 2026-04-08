@@ -88,6 +88,9 @@ export function LoginStageScreen({
               <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-3">
                 Calibration key: {profileStoragePlan.calibrationStorageKey}
               </div>
+              <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-3">
+                Input mode key: {profileStoragePlan.inputModeStorageKey}
+              </div>
             </CardContent>
           </Card>
         </div>

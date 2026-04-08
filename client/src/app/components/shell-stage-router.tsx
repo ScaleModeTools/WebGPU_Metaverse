@@ -4,7 +4,10 @@ import type { FormEvent } from "react";
 import type { PlayerProfile } from "@thumbshooter/shared";
 
 import {
+  mouseGameplayAimCalibrationSnapshot,
   type GameplayDebugPanelMode,
+  type GameplayInputModeId,
+  type GameplayInputSource,
   firstPlayableWeaponDefinition,
   type GameplaySignal
 } from "../../game";
@@ -18,6 +21,7 @@ import type {
 import { CalibrationStageScreen } from "./calibration-stage-screen";
 import { ImmersiveStageFrame } from "./immersive-stage-frame";
 import { LoginStageScreen } from "./login-stage-screen";
+import { MainMenuStageScreen } from "./main-menu-stage-screen";
 import { PermissionStageScreen } from "./permission-stage-screen";
 import { UnsupportedStageScreen } from "./unsupported-stage-screen";
 
@@ -33,9 +37,13 @@ interface ShellStageRouterProps {
   readonly bestScore: number;
   readonly capabilityReasonLabel: string;
   readonly capabilityStatus: WebGpuGameplayCapabilitySnapshot["status"];
+  readonly canEnterGameplayShell: boolean;
+  readonly calibrationQualityLabel: string;
   readonly debugPanelMode: GameplayDebugPanelMode;
+  readonly gameplayInputSource: GameplayInputSource;
   readonly handTrackingRuntime: HandTrackingRuntime;
   readonly hasStoredProfile: boolean;
+  readonly inputMode: GameplayInputModeId;
   readonly loginError: string | null;
   readonly permissionError: string | null;
   readonly permissionState: WebcamPermissionState;
@@ -50,9 +58,12 @@ interface ShellStageRouterProps {
   readonly onClearProfile: () => void;
   readonly onEditProfile: () => void;
   readonly onGameplaySignal: (signal: GameplaySignal) => void;
+  readonly onGameplayStartRequest: () => void;
+  readonly onInputModeChange: (inputMode: GameplayInputModeId) => void;
   readonly onLoginSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onOpenGameplayMenu: () => void;
   readonly onRequestPermission: () => void;
+  readonly onRecalibrationRequest: () => void;
   readonly onRetryCapabilityProbe: () => void;
   readonly setUsernameDraft: (value: string) => void;
 }
@@ -81,9 +92,13 @@ export function ShellStageRouter({
   bestScore,
   capabilityReasonLabel,
   capabilityStatus,
+  canEnterGameplayShell,
+  calibrationQualityLabel,
   debugPanelMode,
+  gameplayInputSource,
   handTrackingRuntime,
   hasStoredProfile,
+  inputMode,
   loginError,
   permissionError,
   permissionState,
@@ -95,12 +110,20 @@ export function ShellStageRouter({
   onClearProfile,
   onEditProfile,
   onGameplaySignal,
+  onGameplayStartRequest,
+  onInputModeChange,
   onLoginSubmit,
   onOpenGameplayMenu,
   onRequestPermission,
+  onRecalibrationRequest,
   onRetryCapabilityProbe,
   setUsernameDraft
 }: ShellStageRouterProps) {
+  const gameplayAimCalibration =
+    inputMode === "mouse"
+      ? mouseGameplayAimCalibrationSnapshot
+      : profile?.snapshot.aimCalibration ?? null;
+
   return (
     <section>
       {activeStep === "login" ? (
@@ -132,6 +155,20 @@ export function ShellStageRouter({
         />
       ) : null}
 
+      {activeStep === "main-menu" ? (
+        <MainMenuStageScreen
+          audioStatusLabel={audioStatusLabel}
+          calibrationQualityLabel={calibrationQualityLabel}
+          capabilityReasonLabel={capabilityReasonLabel}
+          capabilityStatus={capabilityStatus}
+          canStartGame={canEnterGameplayShell}
+          inputMode={inputMode}
+          onInputModeChange={onInputModeChange}
+          onRecalibrationRequest={onRecalibrationRequest}
+          onStartGame={onGameplayStartRequest}
+        />
+      ) : null}
+
       {activeStep === "unsupported" ? (
         <UnsupportedStageScreen
           capabilityReasonLabel={capabilityReasonLabel}
@@ -142,18 +179,19 @@ export function ShellStageRouter({
 
       {activeStep === "gameplay" &&
       profile !== null &&
-      profile.snapshot.aimCalibration !== null ? (
+      gameplayAimCalibration !== null ? (
         <Suspense fallback={<GameplayStageFallback />}>
           <GameplayStageScreen
-            aimCalibration={profile.snapshot.aimCalibration}
+            aimCalibration={gameplayAimCalibration}
             audioStatusLabel={audioStatusLabel}
             bestScore={bestScore}
             debugPanelMode={debugPanelMode}
-            handTrackingRuntime={handTrackingRuntime}
+            inputMode={inputMode}
             onBestScoreChange={onBestScoreChange}
             onGameplaySignal={onGameplaySignal}
             onOpenMenu={onOpenGameplayMenu}
             selectedReticleLabel={selectedReticleLabel}
+            trackingSource={gameplayInputSource}
             triggerCalibration={profile.snapshot.triggerCalibration}
             username={profile.snapshot.username}
             weaponLabel={firstPlayableWeaponDefinition.displayName}

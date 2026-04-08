@@ -47,8 +47,12 @@ export function useThumbShooterShellProfilePolicy({
       return;
     }
 
-    profileStorage.saveProfile(browserStorage, state.profile.snapshot);
-  }, [browserStorage, profileStorage, state.profile]);
+    profileStorage.saveProfile(
+      browserStorage,
+      state.profile.snapshot,
+      state.inputMode
+    );
+  }, [browserStorage, profileStorage, state.inputMode, state.profile]);
 
   useEffect(() => {
     if (state.profile === null) {

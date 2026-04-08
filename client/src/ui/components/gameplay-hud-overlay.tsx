@@ -1,4 +1,8 @@
-import type { GameplayHudSnapshot } from "../../game";
+import {
+  resolveGameplayInputMode,
+  type GameplayHudSnapshot,
+  type GameplayInputModeId
+} from "../../game";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -6,6 +10,7 @@ interface GameplayHudOverlayProps {
   readonly audioStatusLabel: string;
   readonly bestScore: number;
   readonly hudSnapshot: GameplayHudSnapshot;
+  readonly inputMode: GameplayInputModeId;
   readonly onOpenMenu: () => void;
   readonly onRestartSession: () => void;
   readonly onRetryRuntime: () => void;
@@ -23,9 +28,14 @@ function formatArenaState(hudSnapshot: GameplayHudSnapshot): string {
   ].join(" / ");
 }
 
-function formatTargetFeedback(hudSnapshot: GameplayHudSnapshot): string {
+function formatTargetFeedback(
+  hudSnapshot: GameplayHudSnapshot,
+  inputMode: GameplayInputModeId
+): string {
+  const selectedInputMode = resolveGameplayInputMode(inputMode);
+
   if (hudSnapshot.targetFeedback.state === "tracking-lost") {
-    return "Tracking lost";
+    return selectedInputMode.hudCopy.trackingLost;
   }
 
   if (hudSnapshot.targetFeedback.state === "offscreen") {
@@ -51,14 +61,19 @@ function formatTargetFeedback(hudSnapshot: GameplayHudSnapshot): string {
     : `Hit ${hudSnapshot.targetFeedback.enemyLabel}`;
 }
 
-function formatWeaponReadiness(hudSnapshot: GameplayHudSnapshot): string {
+function formatWeaponReadiness(
+  hudSnapshot: GameplayHudSnapshot,
+  inputMode: GameplayInputModeId
+): string {
+  const selectedInputMode = resolveGameplayInputMode(inputMode);
+
   switch (hudSnapshot.weapon.readiness) {
     case "round-paused":
       return "Round paused for restart";
     case "tracking-unavailable":
-      return "Awaiting tracked hand";
+      return selectedInputMode.hudCopy.trackingUnavailable;
     case "trigger-reset-required":
-      return "Release thumb to reset";
+      return selectedInputMode.hudCopy.triggerResetRequired;
     case "cooldown":
       return `Recovering ${Math.ceil(hudSnapshot.weapon.cooldownRemainingMs)} ms`;
     case "reload-required":
@@ -143,6 +158,7 @@ export function GameplayHudOverlay({
   audioStatusLabel,
   bestScore,
   hudSnapshot,
+  inputMode,
   onOpenMenu,
   onRestartSession,
   onRetryRuntime,
@@ -233,7 +249,7 @@ export function GameplayHudOverlay({
         <div className="rounded-[1.5rem] border border-white/12 bg-white/6 p-4 backdrop-blur-md">
           <p className="text-sm font-medium text-white">{weaponLabel}</p>
           <p className="mt-2 text-sm text-white/82">
-            {formatWeaponReadiness(hudSnapshot)}
+            {formatWeaponReadiness(hudSnapshot, inputMode)}
           </p>
           <p className="mt-2 text-xs uppercase tracking-[0.22em] text-white/52">
             {formatClipState(hudSnapshot)}
@@ -248,7 +264,7 @@ export function GameplayHudOverlay({
             {formatArenaState(hudSnapshot)}
           </p>
           <p className="mt-2 text-sm text-white/72">
-            {formatTargetFeedback(hudSnapshot)}
+            {formatTargetFeedback(hudSnapshot, inputMode)}
           </p>
         </div>
       </div>

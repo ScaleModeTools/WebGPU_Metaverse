@@ -1,5 +1,10 @@
 import { gameMenuPlan } from "../config/game-menu-plan";
-import type { GameplayDebugPanelMode } from "../../game";
+import {
+  gameplayInputModes,
+  resolveGameplayInputMode,
+  type GameplayDebugPanelMode,
+  type GameplayInputModeId
+} from "../../game";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,40 +17,52 @@ import {
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
+import {
+  ToggleGroup,
+  ToggleGroupItem
+} from "@/components/ui/toggle-group";
 
 type SliderValue = [number];
 
 interface GameMenuDialogProps {
-  readonly open: boolean;
   readonly audioStatusLabel: string;
   readonly calibrationQualityLabel: string;
   readonly debugPanelMode: GameplayDebugPanelMode;
   readonly gameplayStatusLabel: string;
+  readonly inputMode: GameplayInputModeId;
   readonly musicVolume: SliderValue;
   readonly onDebugPanelModeChange: (mode: GameplayDebugPanelMode) => void;
+  readonly onInputModeChange: (inputMode: GameplayInputModeId) => void;
+  readonly onMainMenuRequest: () => void;
   readonly sfxVolume: SliderValue;
   readonly onMusicVolumeChange: (nextValue: number) => void;
   readonly onOpenChange: (open: boolean) => void;
+  readonly open: boolean;
   readonly onRecalibrationRequest: () => void;
   readonly onSfxVolumeChange: (nextValue: number) => void;
   readonly showDebugControls: boolean;
 }
 
 export function GameMenuDialog({
-  open,
   audioStatusLabel,
   calibrationQualityLabel,
   debugPanelMode,
   gameplayStatusLabel,
+  inputMode,
   musicVolume,
   onDebugPanelModeChange,
+  onInputModeChange,
+  onMainMenuRequest,
   sfxVolume,
   onMusicVolumeChange,
   onOpenChange,
+  open,
   onRecalibrationRequest,
   onSfxVolumeChange,
   showDebugControls
 }: GameMenuDialogProps) {
+  const selectedInputMode = resolveGameplayInputMode(inputMode);
+
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent
@@ -62,8 +79,8 @@ export function GameMenuDialog({
           </div>
           <DialogTitle>In-game menu</DialogTitle>
           <DialogDescription>
-            The calibrated local arena loop is live with bird scatter, local
-            hit reactions, and the first semiautomatic pistol reset rhythm.
+            Adjust the live arena session, return to the main menu, or switch
+            to a different control path.
           </DialogDescription>
         </DialogHeader>
 
@@ -73,15 +90,16 @@ export function GameMenuDialog({
               <div>
                 <p className="text-sm font-medium">Controls</p>
                 <p className="text-sm text-muted-foreground">
-                  Live calibrated aim, semiautomatic trigger reset, and local
-                  enemy reactions are all active in the arena loop.
+                  {selectedInputMode.description}
                 </p>
               </div>
-              <Badge variant="outline">{gameMenuPlan.sections[0]?.label}</Badge>
+              <Badge variant="outline">
+                {gameMenuPlan.sections.find((section) => section.id === "controls")?.label}
+              </Badge>
             </div>
 
             <div className="grid gap-2 md:grid-cols-3">
-              {gameMenuPlan.controlsSummary.map((instruction) => (
+              {selectedInputMode.controlsSummary.map((instruction) => (
                 <div
                   className="rounded-xl border border-border/70 bg-muted/30 px-3 py-3 text-sm text-muted-foreground"
                   key={instruction}
@@ -90,6 +108,42 @@ export function GameMenuDialog({
                 </div>
               ))}
             </div>
+          </section>
+
+          <Separator />
+
+          <section className="flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">Input mode</p>
+                <p className="text-sm text-muted-foreground">
+                  Changing the active input returns the session to the main menu.
+                </p>
+              </div>
+              <Badge variant="outline">
+                {gameMenuPlan.sections.find((section) => section.id === "input")?.label}
+              </Badge>
+            </div>
+
+            <ToggleGroup
+              className="w-full"
+              onValueChange={(nextValue) => {
+                if (nextValue.length === 0) {
+                  return;
+                }
+
+                onInputModeChange(nextValue as GameplayInputModeId);
+              }}
+              type="single"
+              value={inputMode}
+              variant="outline"
+            >
+              {gameplayInputModes.map((mode) => (
+                <ToggleGroupItem className="flex-1" key={mode.id} value={mode.id}>
+                  {mode.label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
           </section>
 
           <Separator />
@@ -156,7 +210,9 @@ export function GameMenuDialog({
                       Development-only telemetry stays separate from the player HUD.
                     </p>
                   </div>
-                  <Badge variant="outline">{gameMenuPlan.sections[2]?.label}</Badge>
+                  <Badge variant="outline">
+                    {gameMenuPlan.sections.find((section) => section.id === "debug")?.label}
+                  </Badge>
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-3">
@@ -188,18 +244,31 @@ export function GameMenuDialog({
             <Separator />
           )}
 
-          <section className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex flex-col gap-1">
-              <p className="text-sm font-medium">Calibration</p>
-              <p className="text-sm text-muted-foreground">
-                {gameMenuPlan.recalibrationAction.replaceAll("-", " ")} ·{" "}
-                {calibrationQualityLabel}
-              </p>
+          <section className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col gap-1">
+                <p className="text-sm font-medium">Calibration</p>
+                <p className="text-sm text-muted-foreground">
+                  {selectedInputMode.requiresCalibration
+                    ? `${gameMenuPlan.recalibrationAction.replaceAll("-", " ")} · ${calibrationQualityLabel}`
+                    : "Mouse mode bypasses calibration and hand tracking."}
+                </p>
+              </div>
+              <Badge variant="outline">
+                {gameMenuPlan.sections.find((section) => section.id === "calibration")?.label}
+              </Badge>
             </div>
 
-            <Button onClick={onRecalibrationRequest} variant="outline">
-              Restart nine-point calibration
-            </Button>
+            <div className="flex flex-col gap-3 md:flex-row">
+              <Button onClick={onMainMenuRequest} type="button" variant="secondary">
+                Return to main menu
+              </Button>
+              {selectedInputMode.requiresCalibration ? (
+                <Button onClick={onRecalibrationRequest} type="button" variant="outline">
+                  Restart nine-point calibration
+                </Button>
+              ) : null}
+            </div>
           </section>
         </div>
       </DialogContent>

@@ -7,6 +7,7 @@ import type {
 
 import type { ThumbShooterShellControllerAction } from "../../client/src/app/types/thumbshooter-shell-controller";
 import {
+  gameplayInputModeIds,
   gameFoundationConfig,
   gameplayDebugPanelModes,
   gameplayRuntimeLifecycleStates,
@@ -16,6 +17,7 @@ import {
   type FirstPlayableWeaponId,
   type GameplayDebugPanelMode,
   type GameplayHudSnapshot,
+  type GameplayInputModeId,
   type GameplayRuntimeConfig,
   type GameplayReticleVisualState,
   type GameplayTelemetrySnapshot,
@@ -48,10 +50,13 @@ type ExpectedShellActionType =
   | "calibrationResetRequested"
   | "capabilityProbeStarted"
   | "capabilitySnapshotReceived"
+  | "gameplayStartRequested"
   | "gameplayExited"
   | "gameplayDebugPanelModeChanged"
   | "gameplayMenuSetOpen"
+  | "inputModeChanged"
   | "loginRejected"
+  | "mainMenuRequested"
   | "musicVolumeChanged"
   | "permissionRequestStarted"
   | "permissionResolved"
@@ -99,6 +104,7 @@ type ExpectedGameplayReticleVisualState =
   | "reload-required"
   | "reloading"
   | "round-paused";
+type ExpectedGameplayInputModeId = "camera-thumb-shooter" | "mouse";
 
 type ShellActionTypesMatch = AssertTrue<
   IsEqual<ThumbShooterShellControllerActionType, ExpectedShellActionType>
@@ -180,6 +186,12 @@ type GameplayReticleVisualStateCatalogMatches = AssertTrue<
     (typeof gameplayReticleVisualStates)[number],
     GameplayReticleVisualState
   >
+>;
+type GameplayInputModeMatches = AssertTrue<
+  IsEqual<GameplayInputModeId, ExpectedGameplayInputModeId>
+>;
+type GameplayInputModeCatalogMatches = AssertTrue<
+  IsEqual<(typeof gameplayInputModeIds)[number], GameplayInputModeId>
 >;
 type GameplayTelemetryReticleStateMatches = AssertTrue<
   IsEqual<
@@ -346,6 +358,8 @@ export type ClientShellGameplayTypeTests =
   | GameplayDebugActionModeMatches
   | GameplayReticleVisualStateMatches
   | GameplayReticleVisualStateCatalogMatches
+  | GameplayInputModeMatches
+  | GameplayInputModeCatalogMatches
   | GameplayTelemetryReticleStateMatches
   | WeaponReadinessMatches
   | WeaponReadinessCatalogMatches

@@ -6,8 +6,9 @@ import { ProfileSummaryCard } from "./profile-summary-card";
 interface ShellStatusRailProps {
   readonly calibrationSampleCount: number;
   readonly calibrationQualityLabel: string;
-  readonly hasAimCalibration: boolean;
+  readonly calibrationStatusLabel: string;
   readonly hydrationSource: StoredProfileHydrationResult["source"];
+  readonly inputModeLabel: string;
   readonly reticleCatalogLabel: string;
   readonly username: string;
 }
@@ -15,8 +16,9 @@ interface ShellStatusRailProps {
 export function ShellStatusRail({
   calibrationSampleCount,
   calibrationQualityLabel,
-  hasAimCalibration,
+  calibrationStatusLabel,
   hydrationSource,
+  inputModeLabel,
   reticleCatalogLabel,
   username
 }: ShellStatusRailProps) {
@@ -25,8 +27,9 @@ export function ShellStatusRail({
       <ProfileSummaryCard
         calibrationSampleCount={calibrationSampleCount}
         calibrationQualityLabel={calibrationQualityLabel}
-        hasAimCalibration={hasAimCalibration}
+        calibrationStatusLabel={calibrationStatusLabel}
         hydrationSource={hydrationSource}
+        inputModeLabel={inputModeLabel}
         reticleCatalogLabel={reticleCatalogLabel}
         username={username}
       />

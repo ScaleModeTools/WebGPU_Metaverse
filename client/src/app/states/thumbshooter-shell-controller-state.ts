@@ -1,3 +1,4 @@
+import { defaultGameplayInputMode } from "../../game";
 import { AudioSettings } from "@thumbshooter/shared";
 
 import type { WebGpuGameplayCapabilitySnapshot } from "../../game/types/webgpu-capability";
@@ -57,8 +58,10 @@ export function createInitialThumbShooterShellControllerState({
     audioSnapshot,
     capabilitySnapshot: initialCapabilitySnapshot,
     debugPanelMode: "hidden",
+    gameplayShell: "main-menu",
     hasConfirmedProfile: false,
     hydrationSource: hydratedProfile.source,
+    inputMode: hydratedProfile.inputMode,
     isMenuOpen: false,
     loginError: null,
     permissionError: null,
@@ -94,10 +97,12 @@ export function reduceThumbShooterShellControllerState(
       return state.profile === null
         ? {
             ...state,
+            gameplayShell: "main-menu",
             isMenuOpen: false
           }
         : {
             ...state,
+            gameplayShell: "main-menu",
             isMenuOpen: false,
             profile: state.profile.resetCalibration()
           };
@@ -111,6 +116,13 @@ export function reduceThumbShooterShellControllerState(
         ...state,
         capabilitySnapshot: action.capabilitySnapshot
       };
+    case "gameplayStartRequested":
+      return state.gameplayShell === "gameplay"
+        ? state
+        : {
+            ...state,
+            gameplayShell: "gameplay"
+          };
     case "gameplayExited":
       return state.isMenuOpen
         ? {
@@ -132,11 +144,31 @@ export function reduceThumbShooterShellControllerState(
             ...state,
             isMenuOpen: action.open
           };
+    case "inputModeChanged":
+      return action.inputMode === state.inputMode &&
+        state.gameplayShell === "main-menu" &&
+        !state.isMenuOpen
+        ? state
+        : {
+            ...state,
+            debugPanelMode: "hidden",
+            gameplayShell: "main-menu",
+            inputMode: action.inputMode,
+            isMenuOpen: false
+          };
     case "loginRejected":
       return {
         ...state,
         loginError: action.loginError
       };
+    case "mainMenuRequested":
+      return state.gameplayShell === "main-menu" && !state.isMenuOpen
+        ? state
+        : {
+            ...state,
+            gameplayShell: "main-menu",
+            isMenuOpen: false
+          };
     case "musicVolumeChanged":
       return withMusicVolume(state, action.sliderValue);
     case "permissionRequestStarted":
@@ -156,7 +188,9 @@ export function reduceThumbShooterShellControllerState(
         ...state,
         audioSnapshot: action.audioSnapshot,
         hasConfirmedProfile: false,
+        gameplayShell: "main-menu",
         hydrationSource: "empty",
+        inputMode: defaultGameplayInputMode,
         isMenuOpen: false,
         loginError: null,
         permissionError: null,
@@ -177,6 +211,7 @@ export function reduceThumbShooterShellControllerState(
       return {
         ...state,
         debugPanelMode: "hidden",
+        gameplayShell: "main-menu",
         hasConfirmedProfile: false,
         isMenuOpen: false
       };
