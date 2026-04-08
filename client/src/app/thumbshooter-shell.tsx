@@ -53,7 +53,7 @@ export function ThumbShooterShell() {
 
   return (
     <div className="min-h-dvh overflow-hidden">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgb(14_165_233_/_0.12),_transparent_30%),radial-gradient(circle_at_bottom_right,_rgb(251_146_60_/_0.14),_transparent_32%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgb(14_165_233/0.12),transparent_30%),radial-gradient(circle_at_bottom_right,rgb(251_146_60/0.14),transparent_32%)]" />
 
       {isImmersiveStage ? (
         <main className="relative min-h-dvh">{stageRouter}</main>

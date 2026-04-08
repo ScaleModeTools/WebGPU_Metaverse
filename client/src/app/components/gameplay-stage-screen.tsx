@@ -335,7 +335,7 @@ export function GameplayStageScreen({
     <ImmersiveStageFrame>
       <div className="relative flex-1 overflow-hidden" ref={viewportRef}>
         <canvas className="absolute inset-0 h-full w-full" ref={canvasRef} />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgb(56_189_248_/_0.08),_transparent_28%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgb(56_189_248/0.08),transparent_28%)]" />
         {showDeveloperUi ? (
           <>
             <GameplayDeveloperPanel gameplayTelemetry={gameplayTelemetry} />
