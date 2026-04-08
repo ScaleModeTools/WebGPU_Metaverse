@@ -128,6 +128,7 @@ const baseCoopRoomRuntimeConfig = {
     z: 0
   },
   requiredReadyPlayerCount: 2,
+  reticleScatterRadius: 0.72,
   scatterRadius: 5.2,
   tickIntervalMs: createMilliseconds(50)
 } as const satisfies Omit<CoopRoomRuntimeConfig, "roomId" | "sessionId">;

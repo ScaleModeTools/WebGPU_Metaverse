@@ -5,10 +5,12 @@ import {
   createCoopBirdId,
   createCoopFireShotCommand,
   createCoopLeaveRoomCommand,
+  createCoopRoomDirectorySnapshot,
   createCoopPlayerId,
   createCoopRoomId,
   createCoopRoomSnapshot,
   createCoopSessionId,
+  createCoopStartSessionCommand,
   createUsername
 } from "@thumbshooter/shared";
 
@@ -168,4 +170,42 @@ test("createCoopLeaveRoomCommand preserves player identity for explicit disconne
 
   assert.equal(command.type, "leave-room");
   assert.equal(command.playerId, "player-8");
+});
+
+test("createCoopStartSessionCommand preserves the party leader identity", () => {
+  const command = createCoopStartSessionCommand({
+    playerId: requireValue(createCoopPlayerId("player-leader"), "playerId"),
+    roomId: requireValue(createCoopRoomId("harbor-room"), "roomId")
+  });
+
+  assert.equal(command.type, "start-session");
+  assert.equal(command.playerId, "player-leader");
+});
+
+test("createCoopRoomDirectorySnapshot normalizes live room summaries", () => {
+  const directorySnapshot = createCoopRoomDirectorySnapshot({
+    coOpRooms: [
+      {
+        birdsRemaining: 2.8,
+        capacity: 0,
+        connectedPlayerCount: 2.6,
+        phase: "waiting-for-players",
+        readyPlayerCount: 1.9,
+        requiredReadyPlayerCount: 0,
+        roomId: requireValue(createCoopRoomId("harbor-room"), "roomId"),
+        sessionId: requireValue(
+          createCoopSessionId("harbor-room-session"),
+          "sessionId"
+        ),
+        tick: 7.4
+      }
+    ]
+  });
+
+  assert.equal(directorySnapshot.coOpRooms[0]?.capacity, 1);
+  assert.equal(directorySnapshot.coOpRooms[0]?.connectedPlayerCount, 2);
+  assert.equal(directorySnapshot.coOpRooms[0]?.readyPlayerCount, 1);
+  assert.equal(directorySnapshot.coOpRooms[0]?.requiredReadyPlayerCount, 1);
+  assert.equal(directorySnapshot.coOpRooms[0]?.tick, 7);
+  assert.equal(Object.isFrozen(directorySnapshot.coOpRooms), true);
 });

@@ -31,6 +31,7 @@ export const coopPlayerShotOutcomeStates = [
 export const coopRoomClientCommandTypes = [
   "join-room",
   "set-player-ready",
+  "start-session",
   "leave-room",
   "fire-shot",
   "sync-player-presence"
@@ -167,6 +168,7 @@ export interface CoopPlayerPresenceSnapshotInput {
 export interface CoopSessionSnapshot {
   readonly birdsCleared: number;
   readonly birdsRemaining: number;
+  readonly leaderPlayerId: CoopPlayerId | null;
   readonly mode: "co-op";
   readonly phase: CoopRoomPhase;
   readonly requiredReadyPlayerCount: number;
@@ -178,6 +180,7 @@ export interface CoopSessionSnapshot {
 export interface CoopSessionSnapshotInput {
   readonly birdsCleared: number;
   readonly birdsRemaining: number;
+  readonly leaderPlayerId?: CoopPlayerId | null;
   readonly phase: CoopRoomPhase;
   readonly requiredReadyPlayerCount: number;
   readonly sessionId: CoopSessionId;
@@ -201,6 +204,44 @@ export interface CoopRoomSnapshotInput {
   readonly roomId: CoopRoomId;
   readonly session: CoopSessionSnapshotInput;
   readonly tick: CoopRoomTickSnapshotInput;
+}
+
+export interface CoopRoomDirectoryEntrySnapshot {
+  readonly birdsRemaining: number;
+  readonly capacity: number;
+  readonly connectedPlayerCount: number;
+  readonly phase: CoopRoomPhase;
+  readonly readyPlayerCount: number;
+  readonly requiredReadyPlayerCount: number;
+  readonly roomId: CoopRoomId;
+  readonly sessionId: CoopSessionId;
+  readonly tick: number;
+}
+
+export interface CoopRoomDirectoryEntrySnapshotInput {
+  readonly birdsRemaining: number;
+  readonly capacity: number;
+  readonly connectedPlayerCount: number;
+  readonly phase: CoopRoomPhase;
+  readonly readyPlayerCount: number;
+  readonly requiredReadyPlayerCount: number;
+  readonly roomId: CoopRoomId;
+  readonly sessionId: CoopSessionId;
+  readonly tick: number;
+}
+
+export interface CoopRoomDirectorySnapshot {
+  readonly coOpRooms: readonly CoopRoomDirectoryEntrySnapshot[];
+  readonly rendererTarget: "webgpu";
+  readonly service: "thumbshooter-server";
+  readonly status: "co-op-contract-slice-ready";
+}
+
+export interface CoopRoomDirectorySnapshotInput {
+  readonly coOpRooms: readonly CoopRoomDirectoryEntrySnapshotInput[];
+  readonly rendererTarget?: "webgpu";
+  readonly service?: "thumbshooter-server";
+  readonly status?: "co-op-contract-slice-ready";
 }
 
 export interface CoopJoinRoomCommand {
@@ -228,6 +269,17 @@ export interface CoopSetPlayerReadyCommand {
 export interface CoopSetPlayerReadyCommandInput {
   readonly playerId: CoopPlayerId;
   readonly ready: boolean;
+  readonly roomId: CoopRoomId;
+}
+
+export interface CoopStartSessionCommand {
+  readonly playerId: CoopPlayerId;
+  readonly roomId: CoopRoomId;
+  readonly type: "start-session";
+}
+
+export interface CoopStartSessionCommandInput {
+  readonly playerId: CoopPlayerId;
   readonly roomId: CoopRoomId;
 }
 
@@ -285,6 +337,7 @@ export interface CoopSyncPlayerPresenceCommandInput {
 export type CoopRoomClientCommand =
   | CoopJoinRoomCommand
   | CoopSetPlayerReadyCommand
+  | CoopStartSessionCommand
   | CoopLeaveRoomCommand
   | CoopFireShotCommand
   | CoopSyncPlayerPresenceCommand;
@@ -536,6 +589,7 @@ export function createCoopSessionSnapshot(
   return Object.freeze({
     birdsCleared: normalizeFiniteNonNegativeInteger(input.birdsCleared),
     birdsRemaining: normalizeFiniteNonNegativeInteger(input.birdsRemaining),
+    leaderPlayerId: input.leaderPlayerId ?? null,
     mode: "co-op",
     phase: input.phase,
     requiredReadyPlayerCount: Math.max(
@@ -563,6 +617,40 @@ export function createCoopRoomSnapshot(
   });
 }
 
+export function createCoopRoomDirectoryEntrySnapshot(
+  input: CoopRoomDirectoryEntrySnapshotInput
+): CoopRoomDirectoryEntrySnapshot {
+  return Object.freeze({
+    birdsRemaining: normalizeFiniteNonNegativeInteger(input.birdsRemaining),
+    capacity: Math.max(1, normalizeFiniteNonNegativeInteger(input.capacity)),
+    connectedPlayerCount: normalizeFiniteNonNegativeInteger(
+      input.connectedPlayerCount
+    ),
+    phase: input.phase,
+    readyPlayerCount: normalizeFiniteNonNegativeInteger(input.readyPlayerCount),
+    requiredReadyPlayerCount: Math.max(
+      1,
+      normalizeFiniteNonNegativeInteger(input.requiredReadyPlayerCount)
+    ),
+    roomId: input.roomId,
+    sessionId: input.sessionId,
+    tick: normalizeFiniteNonNegativeInteger(input.tick)
+  });
+}
+
+export function createCoopRoomDirectorySnapshot(
+  input: CoopRoomDirectorySnapshotInput
+): CoopRoomDirectorySnapshot {
+  return Object.freeze({
+    coOpRooms: Object.freeze(
+      input.coOpRooms.map((room) => createCoopRoomDirectoryEntrySnapshot(room))
+    ),
+    rendererTarget: input.rendererTarget ?? "webgpu",
+    service: input.service ?? "thumbshooter-server",
+    status: input.status ?? "co-op-contract-slice-ready"
+  });
+}
+
 export function createCoopJoinRoomCommand(
   input: CoopJoinRoomCommandInput
 ): CoopJoinRoomCommand {
@@ -583,6 +671,16 @@ export function createCoopSetPlayerReadyCommand(
     ready: input.ready,
     roomId: input.roomId,
     type: "set-player-ready"
+  });
+}
+
+export function createCoopStartSessionCommand(
+  input: CoopStartSessionCommandInput
+): CoopStartSessionCommand {
+  return Object.freeze({
+    playerId: input.playerId,
+    roomId: input.roomId,
+    type: "start-session"
   });
 }
 

@@ -10,6 +10,8 @@ import {
   createCoopRoomId,
   createCoopSessionId,
   createCoopSetPlayerReadyCommand,
+  createCoopStartSessionCommand,
+  createCoopSyncPlayerPresenceCommand,
   createMilliseconds,
   createUsername
 } from "@thumbshooter/shared";
@@ -74,6 +76,7 @@ function createRuntimeConfig(overrides = {}) {
       z: 0
     },
     requiredReadyPlayerCount: 1,
+    reticleScatterRadius: 0.72,
     roomId: requireValue(createCoopRoomId("harbor-room"), "roomId"),
     scatterRadius: 2.4,
     sessionId: requireValue(
@@ -85,7 +88,7 @@ function createRuntimeConfig(overrides = {}) {
   };
 }
 
-test("CoopRoomRuntime advances only on server ticks and waits for ready players before activation", () => {
+test("CoopRoomRuntime waits for enough ready players and an explicit leader start before activation", () => {
   const runtime = new CoopRoomRuntime(
     createRuntimeConfig({
       birds: [createBirdSeed("bird-1", "Bird 1", 0, 1.35)],
@@ -130,11 +133,25 @@ test("CoopRoomRuntime advances only on server ticks and waits for ready players 
     60
   );
 
-  const activeSnapshot = runtime.advanceTo(100);
+  const stillWaitingSnapshot = runtime.advanceTo(100);
 
-  assert.equal(activeSnapshot.tick.currentTick, 2);
+  assert.equal(stillWaitingSnapshot.tick.currentTick, 2);
+  assert.equal(stillWaitingSnapshot.session.phase, "waiting-for-players");
+
+  runtime.acceptCommand(
+    createCoopStartSessionCommand({
+      playerId: playerOneId,
+      roomId
+    }),
+    110
+  );
+
+  const activeSnapshot = runtime.advanceTo(150);
+
+  assert.equal(activeSnapshot.tick.currentTick, 3);
   assert.equal(activeSnapshot.session.phase, "active");
   assert.equal(activeSnapshot.players.filter((player) => player.ready).length, 2);
+  assert.equal(activeSnapshot.session.leaderPlayerId, playerOneId);
 });
 
 test("CoopRoomRuntime applies shared hits once per acknowledged client shot sequence", () => {
@@ -154,6 +171,13 @@ test("CoopRoomRuntime applies shared hits once per acknowledged client shot sequ
       username: requireValue(createUsername("alpha"), "username")
     }),
     0
+  );
+  runtime.acceptCommand(
+    createCoopStartSessionCommand({
+      playerId,
+      roomId
+    }),
+    10
   );
   runtime.advanceTo(50);
   runtime.acceptCommand(
@@ -228,6 +252,13 @@ test("CoopRoomRuntime records scatter outcomes against the shared bird field", (
     }),
     0
   );
+  runtime.acceptCommand(
+    createCoopStartSessionCommand({
+      playerId,
+      roomId
+    }),
+    10
+  );
   runtime.advanceTo(50);
   runtime.acceptCommand(
     createCoopFireShotCommand({
@@ -261,6 +292,139 @@ test("CoopRoomRuntime records scatter outcomes against the shared bird field", (
   assert.equal(playerSnapshot?.activity.scatterEventsCaused, 1);
   assert.equal(scatteredBird?.behavior, "scatter");
   assert.equal(scatteredBird?.lastInteractionTick, 2);
+});
+
+test("CoopRoomRuntime scatters shared birds from synced reticle presence without consuming shots", () => {
+  const runtime = new CoopRoomRuntime(
+    createRuntimeConfig({
+      birds: [createBirdSeed("bird-1", "Bird 1", 0, 1.35)],
+      reticleScatterRadius: 0.08
+    })
+  );
+  const roomId = runtime.roomId;
+  const playerId = requireValue(createCoopPlayerId("player-aim"), "playerId");
+
+  runtime.acceptCommand(
+    createCoopJoinRoomCommand({
+      playerId,
+      ready: true,
+      roomId,
+      username: requireValue(createUsername("delta"), "username")
+    }),
+    0
+  );
+  runtime.acceptCommand(
+    createCoopStartSessionCommand({
+      playerId,
+      roomId
+    }),
+    10
+  );
+  runtime.acceptCommand(
+    createCoopSyncPlayerPresenceCommand({
+      aimDirection: {
+        x: 0,
+        y: 0,
+        z: -1
+      },
+      pitchRadians: 0,
+      playerId,
+      position: {
+        x: 0,
+        y: 1.35,
+        z: 0
+      },
+      roomId,
+      stateSequence: 1,
+      weaponId: "semiautomatic-pistol",
+      yawRadians: 0
+    }),
+    20
+  );
+
+  const scatterSnapshot = runtime.advanceTo(50);
+
+  assert.equal(scatterSnapshot.session.phase, "active");
+  assert.equal(scatterSnapshot.session.teamShotsFired, 0);
+  assert.equal(scatterSnapshot.birds[0]?.behavior, "scatter");
+  assert.equal(scatterSnapshot.birds[0]?.lastInteractionByPlayerId, playerId);
+});
+
+test("CoopRoomRuntime blocks non-ready observers from affecting an active session", () => {
+  const runtime = new CoopRoomRuntime(
+    createRuntimeConfig({
+      birds: [createBirdSeed("bird-1", "Bird 1", 0, 1.35)],
+      requiredReadyPlayerCount: 2
+    })
+  );
+  const roomId = runtime.roomId;
+  const leaderId = requireValue(createCoopPlayerId("leader-1"), "leaderId");
+  const readyPlayerId = requireValue(createCoopPlayerId("player-2"), "readyPlayerId");
+  const observerId = requireValue(createCoopPlayerId("observer-3"), "observerId");
+
+  runtime.acceptCommand(
+    createCoopJoinRoomCommand({
+      playerId: leaderId,
+      ready: true,
+      roomId,
+      username: requireValue(createUsername("alpha"), "alphaUsername")
+    }),
+    0
+  );
+  runtime.acceptCommand(
+    createCoopJoinRoomCommand({
+      playerId: readyPlayerId,
+      ready: true,
+      roomId,
+      username: requireValue(createUsername("bravo"), "bravoUsername")
+    }),
+    0
+  );
+  runtime.acceptCommand(
+    createCoopJoinRoomCommand({
+      playerId: observerId,
+      ready: false,
+      roomId,
+      username: requireValue(createUsername("charlie"), "charlieUsername")
+    }),
+    0
+  );
+  runtime.acceptCommand(
+    createCoopStartSessionCommand({
+      playerId: leaderId,
+      roomId
+    }),
+    10
+  );
+  runtime.advanceTo(50);
+  runtime.acceptCommand(
+    createCoopFireShotCommand({
+      aimDirection: {
+        x: 0,
+        y: 0,
+        z: -1
+      },
+      clientShotSequence: 1,
+      origin: {
+        x: 0,
+        y: 1.35,
+        z: 0
+      },
+      playerId: observerId,
+      roomId
+    }),
+    60
+  );
+
+  const observerSnapshot = runtime.advanceTo(100);
+  const observerPlayer = observerSnapshot.players.find(
+    (playerSnapshot) => playerSnapshot.playerId === observerId
+  );
+
+  assert.equal(observerSnapshot.session.phase, "active");
+  assert.equal(observerSnapshot.session.teamShotsFired, 0);
+  assert.equal(observerPlayer?.activity.shotsFired, 0);
+  assert.equal(observerSnapshot.birds[0]?.behavior, "glide");
 });
 
 test("CoopRoomRuntime removes room leavers from snapshots before and after activation", () => {
@@ -314,8 +478,15 @@ test("CoopRoomRuntime removes room leavers from snapshots before and after activ
     }),
     60
   );
+  runtime.acceptCommand(
+    createCoopStartSessionCommand({
+      playerId: playerOneId,
+      roomId
+    }),
+    70
+  );
 
-  const activeSnapshot = runtime.advanceTo(100);
+  const activeSnapshot = runtime.advanceTo(120);
 
   assert.equal(activeSnapshot.session.phase, "active");
 
@@ -324,7 +495,7 @@ test("CoopRoomRuntime removes room leavers from snapshots before and after activ
       playerId: playerTwoId,
       roomId
     }),
-    110
+    130
   );
 
   const disconnectedSnapshot = runtime.advanceTo(150);

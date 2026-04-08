@@ -24,6 +24,7 @@ export interface CoopGameplaySessionPlayerSnapshot {
   readonly aimDirection: CoopVector3Snapshot;
   readonly connected: boolean;
   readonly hitsLanded: number;
+  readonly isLeader: boolean;
   readonly isLocalPlayer: boolean;
   readonly lastPresenceTick: number | null;
   readonly lastOutcome: CoopPlayerShotOutcomeState | null;
@@ -43,6 +44,9 @@ export interface CoopGameplaySessionSnapshot {
   readonly birdsRemaining: number;
   readonly capacity: number;
   readonly connectedPlayerCount: number;
+  readonly leaderPlayerId: CoopPlayerId | null;
+  readonly localPlayerCanStart: boolean;
+  readonly localPlayerIsLeader: boolean;
   readonly mode: "co-op";
   readonly phase: CoopRoomPhase;
   readonly playerCount: number;
@@ -70,6 +74,7 @@ function freezeCoopGameplaySessionPlayerSnapshot(
     aimDirection: playerSnapshot.aimDirection,
     connected: playerSnapshot.connected,
     hitsLanded: playerSnapshot.hitsLanded,
+    isLeader: playerSnapshot.isLeader,
     isLocalPlayer: playerSnapshot.isLocalPlayer,
     lastPresenceTick: playerSnapshot.lastPresenceTick,
     lastOutcome: playerSnapshot.lastOutcome,
@@ -115,6 +120,9 @@ export function createPendingCoopGameplaySessionSnapshot(
     birdsRemaining: 0,
     capacity: 0,
     connectedPlayerCount: 0,
+    leaderPlayerId: null,
+    localPlayerCanStart: false,
+    localPlayerIsLeader: false,
     mode: "co-op",
     phase: "waiting-for-players",
     playerCount: 0,
@@ -134,6 +142,8 @@ export function createCoopGameplaySessionSnapshot(
 ): CoopGameplaySessionSnapshot {
   let connectedPlayerCount = 0;
   let readyPlayerCount = 0;
+  const leaderPlayerId = roomSnapshot.session.leaderPlayerId ?? null;
+  const localPlayerIsLeader = leaderPlayerId === localPlayerId;
 
   const players = roomSnapshot.players.map((playerSnapshot) => {
     if (playerSnapshot.connected) {
@@ -148,6 +158,7 @@ export function createCoopGameplaySessionSnapshot(
       aimDirection: playerSnapshot.presence.aimDirection,
       connected: playerSnapshot.connected,
       hitsLanded: playerSnapshot.activity.hitsLanded,
+      isLeader: playerSnapshot.playerId === leaderPlayerId,
       isLocalPlayer: playerSnapshot.playerId === localPlayerId,
       lastPresenceTick: playerSnapshot.presence.lastUpdatedTick,
       lastOutcome: playerSnapshot.activity.lastOutcome,
@@ -168,6 +179,12 @@ export function createCoopGameplaySessionSnapshot(
     birdsRemaining: roomSnapshot.session.birdsRemaining,
     capacity: roomSnapshot.capacity,
     connectedPlayerCount,
+    leaderPlayerId,
+    localPlayerCanStart:
+      roomSnapshot.session.phase === "waiting-for-players" &&
+      localPlayerIsLeader &&
+      readyPlayerCount >= roomSnapshot.session.requiredReadyPlayerCount,
+    localPlayerIsLeader,
     mode: "co-op",
     phase: roomSnapshot.session.phase,
     playerCount: roomSnapshot.players.length,

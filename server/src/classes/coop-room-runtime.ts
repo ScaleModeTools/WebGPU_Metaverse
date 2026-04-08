@@ -9,6 +9,7 @@ import type {
   CoopRoomClientCommand,
   CoopRoomServerEvent,
   CoopRoomSnapshot,
+  CoopStartSessionCommand,
   CoopSyncPlayerPresenceCommand,
   CoopVector3Snapshot,
   Username
@@ -366,7 +367,8 @@ function scatterBirdsNearShot(
   direction: CoopVector3Snapshot,
   playerId: CoopPlayerId,
   tick: number,
-  config: CoopRoomRuntimeConfig
+  config: CoopRoomRuntimeConfig,
+  scatterRadius: number = config.scatterRadius
 ): number {
   let scatteredBirdCount = 0;
   const shotAzimuthRadians = Math.atan2(direction.x, -direction.z);
@@ -376,7 +378,7 @@ function scatterBirdsNearShot(
       continue;
     }
 
-    const thresholdRadius = birdState.radius + config.scatterRadius;
+    const thresholdRadius = birdState.radius + scatterRadius;
     const distanceToRay = createDistanceSquaredFromRay(
       origin,
       direction,
@@ -412,6 +414,7 @@ export class CoopRoomRuntime {
   readonly #playerStates = new Map<CoopPlayerId, CoopPlayerRuntimeState>();
 
   #lastAdvancedAtMs: number | null = null;
+  #leaderPlayerId: CoopPlayerId | null = null;
   #phase: CoopRoomSnapshot["session"]["phase"] = "waiting-for-players";
   #snapshot: CoopRoomSnapshot;
   #teamHitsLanded = 0;
@@ -464,6 +467,9 @@ export class CoopRoomRuntime {
         break;
       case "set-player-ready":
         this.#setPlayerReady(command);
+        break;
+      case "start-session":
+        this.#startSession(command);
         break;
       case "leave-room":
         this.#leavePlayer(command);
@@ -526,11 +532,21 @@ export class CoopRoomRuntime {
       weaponId: "semiautomatic-pistol",
       yawRadians: 0
     });
+
+    if (this.#leaderPlayerId === null) {
+      this.#leaderPlayerId = command.playerId;
+    }
   }
 
   #setPlayerReady(
     command: Extract<CoopRoomClientCommand, { type: "set-player-ready" }>
   ): void {
+    if (this.#phase !== "waiting-for-players") {
+      throw new Error(
+        "Co-op readiness can only change before the leader starts the session."
+      );
+    }
+
     const playerState = this.#playerStates.get(command.playerId);
 
     if (playerState === undefined) {
@@ -538,6 +554,30 @@ export class CoopRoomRuntime {
     }
 
     playerState.ready = command.ready;
+  }
+
+  #startSession(command: CoopStartSessionCommand): void {
+    const playerState = this.#playerStates.get(command.playerId);
+
+    if (playerState === undefined || !playerState.connected) {
+      throw new Error(`Unknown co-op player: ${command.playerId}`);
+    }
+
+    if (this.#phase !== "waiting-for-players") {
+      throw new Error("Co-op session is already active.");
+    }
+
+    if (this.#leaderPlayerId !== command.playerId) {
+      throw new Error("Only the party leader can start the co-op session.");
+    }
+
+    if (this.#countReadyPlayers() < this.#config.requiredReadyPlayerCount) {
+      throw new Error(
+        `Need ${this.#config.requiredReadyPlayerCount} ready players before starting the co-op session.`
+      );
+    }
+
+    this.#phase = "active";
   }
 
   #leavePlayer(command: CoopLeaveRoomCommand): void {
@@ -549,6 +589,10 @@ export class CoopRoomRuntime {
 
     this.#dropPendingShotsForPlayer(command.playerId);
     this.#playerStates.delete(command.playerId);
+
+    if (this.#leaderPlayerId === command.playerId) {
+      this.#leaderPlayerId = this.#resolveNextLeaderPlayerId();
+    }
   }
 
   #queueShot(command: CoopFireShotCommand): void {
@@ -556,6 +600,10 @@ export class CoopRoomRuntime {
 
     if (playerState === undefined) {
       throw new Error(`Unknown co-op player: ${command.playerId}`);
+    }
+
+    if (this.#phase !== "active" || !playerState.ready || !playerState.connected) {
+      return;
     }
 
     if (
@@ -606,18 +654,20 @@ export class CoopRoomRuntime {
     }
   }
 
+  #resolveNextLeaderPlayerId(): CoopPlayerId | null {
+    for (const playerId of this.#playerStates.keys()) {
+      return playerId;
+    }
+
+    return null;
+  }
+
   #advanceOneTick(): void {
     this.#tick += 1;
 
-    if (
-      this.#phase === "waiting-for-players" &&
-      this.#countReadyPlayers() >= this.#config.requiredReadyPlayerCount
-    ) {
-      this.#phase = "active";
-    }
-
     if (this.#phase === "active") {
       this.#processPendingShots();
+      this.#scatterBirdsNearTrackedPlayers();
       this.#stepBirds(this.#config.tickIntervalMs);
 
       if (this.#countRemainingBirds() === 0) {
@@ -674,6 +724,37 @@ export class CoopRoomRuntime {
         playerState.lastOutcome = "scatter";
         playerState.scatterEventsCaused += 1;
       }
+    }
+  }
+
+  #scatterBirdsNearTrackedPlayers(): void {
+    for (const playerState of this.#playerStates.values()) {
+      if (
+        !playerState.connected ||
+        !playerState.ready ||
+        playerState.lastPresenceTick === null ||
+        this.#tick - playerState.lastPresenceTick > 2
+      ) {
+        continue;
+      }
+
+      scatterBirdsNearShot(
+        this.#birdStates,
+        {
+          x: playerState.positionX,
+          y: playerState.positionY,
+          z: playerState.positionZ
+        },
+        {
+          x: playerState.aimDirectionX,
+          y: playerState.aimDirectionY,
+          z: playerState.aimDirectionZ
+        },
+        playerState.playerId,
+        this.#tick,
+        this.#config,
+        this.#config.reticleScatterRadius
+      );
     }
   }
 
@@ -826,6 +907,7 @@ export class CoopRoomRuntime {
       session: {
         birdsCleared,
         birdsRemaining: this.#countRemainingBirds(),
+        leaderPlayerId: this.#leaderPlayerId,
         phase: this.#phase,
         requiredReadyPlayerCount: this.#config.requiredReadyPlayerCount,
         sessionId: this.#config.sessionId,

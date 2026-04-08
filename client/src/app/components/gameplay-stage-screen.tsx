@@ -160,6 +160,7 @@ export function GameplayStageScreen({
   );
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [coopReadyActionPending, setCoopReadyActionPending] = useState(false);
+  const [coopSessionStartPending, setCoopSessionStartPending] = useState(false);
   const subscribeGameplayUiUpdates = useCallback(
     (notifyReact: () => void) => gameplayRuntime.subscribeUiUpdates(notifyReact),
     [gameplayRuntime]
@@ -301,6 +302,27 @@ export function GameplayStageScreen({
       });
   });
 
+  const handleStartCoopSession = useEffectEvent(() => {
+    if (
+      coopRoomClient === null ||
+      coopSessionStartPending ||
+      hudSnapshot.session.mode !== "co-op" ||
+      !hudSnapshot.session.localPlayerCanStart
+    ) {
+      return;
+    }
+
+    setCoopSessionStartPending(true);
+    void coopRoomClient
+      .startSession()
+      .catch(() => {
+        // The room client snapshots surface transport errors to the HUD.
+      })
+      .finally(() => {
+        setCoopSessionStartPending(false);
+      });
+  });
+
   useEffect(() => {
     bestScoreRef.current = bestScore;
   }, [bestScore]);
@@ -363,11 +385,27 @@ export function GameplayStageScreen({
           coopReadyActionLabel={
             coopLocalPlayer?.ready === true ? "Unready" : "Ready up"
           }
+          coopStartActionAvailable={
+            hudSnapshot.session.mode === "co-op" &&
+            hudSnapshot.session.phase === "waiting-for-players" &&
+            hudSnapshot.session.localPlayerIsLeader
+          }
+          coopStartActionBusy={coopSessionStartPending}
+          coopStartActionDisabled={
+            coopSessionStartPending ||
+            coopRoomStatus.state === "joining" ||
+            coopRoomStatus.state === "disposed" ||
+            !(
+              hudSnapshot.session.mode === "co-op" &&
+              hudSnapshot.session.localPlayerCanStart
+            )
+          }
           hudSnapshot={hudSnapshot}
           inputMode={inputMode}
           onOpenMenu={onOpenMenu}
           onRestartSession={handleRestartSession}
           onRetryRuntime={handleRetryRuntime}
+          onStartCoopSession={handleStartCoopSession}
           onToggleCoopReady={handleToggleCoopReady}
           runtimeError={runtimeError ?? coopRoomStatus.lastError}
           selectedReticleLabel={selectedReticleLabel}

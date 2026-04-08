@@ -44,6 +44,7 @@ export interface CoopRoomRuntimeConfig {
     readonly z: number;
   };
   readonly requiredReadyPlayerCount: number;
+  readonly reticleScatterRadius: number;
   readonly roomId: CoopRoomId;
   readonly scatterRadius: number;
   readonly sessionId: CoopSessionId;

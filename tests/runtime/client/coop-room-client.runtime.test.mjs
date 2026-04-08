@@ -104,6 +104,7 @@ function createRoomSnapshotEvent({
     session: {
       birdsCleared: birdBehavior === "downed" ? 1 : 0,
       birdsRemaining: birdBehavior === "downed" ? 0 : 1,
+      leaderPlayerId: playerId,
       phase,
       requiredReadyPlayerCount: 2,
       sessionId,
@@ -146,6 +147,13 @@ test("CoopRoomClient joins, polls shared snapshots, and posts fire-shot commands
       sessionId,
       tick: 0,
       phase: "waiting-for-players"
+    }),
+    createRoomSnapshotEvent({
+      playerId,
+      roomId,
+      sessionId,
+      tick: 0,
+      phase: "active"
     }),
     createRoomSnapshotEvent({
       playerId,
@@ -228,11 +236,17 @@ test("CoopRoomClient joins, polls shared snapshots, and posts fire-shot commands
   assert.equal(requests[1]?.method, "POST");
   assert.match(String(requests[1]?.body), /"type":"set-player-ready"/);
 
+  const startedSnapshot = await roomClient.startSession();
+
+  assert.equal(startedSnapshot.session.phase, "active");
+  assert.equal(requests[2]?.method, "POST");
+  assert.match(String(requests[2]?.body), /"type":"start-session"/);
+
   scheduledPolls.shift()?.callback();
   await flushAsyncWork();
 
   assert.equal(roomClient.roomSnapshot?.tick.currentTick, 1);
-  assert.equal(requests[2]?.method, "GET");
+  assert.equal(requests[3]?.method, "GET");
   assert.equal(scheduledPolls[0]?.delay, 50);
 
   roomClient.fireShot(
@@ -241,8 +255,8 @@ test("CoopRoomClient joins, polls shared snapshots, and posts fire-shot commands
   );
   await flushAsyncWork();
 
-  assert.equal(requests[3]?.method, "POST");
-  assert.match(String(requests[3]?.body), /"type":"fire-shot"/);
+  assert.equal(requests[4]?.method, "POST");
+  assert.match(String(requests[4]?.body), /"type":"fire-shot"/);
   assert.equal(
     roomClient.roomSnapshot?.players[0]?.activity.lastAcknowledgedShotSequence,
     1
@@ -254,6 +268,6 @@ test("CoopRoomClient joins, polls shared snapshots, and posts fire-shot commands
 
   assert.equal(roomClient.statusSnapshot.state, "disposed");
   assert.ok(clearedTimers.length >= 1);
-  assert.equal(requests[4]?.method, "POST");
-  assert.match(String(requests[4]?.body), /"type":"leave-room"/);
+  assert.equal(requests[5]?.method, "POST");
+  assert.match(String(requests[5]?.body), /"type":"leave-room"/);
 });

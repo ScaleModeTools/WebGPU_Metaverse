@@ -10,6 +10,7 @@ import {
   createCoopJoinRoomCommand,
   createCoopLeaveRoomCommand,
   createCoopSetPlayerReadyCommand,
+  createCoopStartSessionCommand,
   createCoopSyncPlayerPresenceCommand
 } from "@thumbshooter/shared";
 
@@ -212,6 +213,33 @@ export class CoopRoomClient {
         error instanceof Error
           ? error.message
           : "Co-op room readiness update failed.";
+
+      this.#setError(message);
+      throw error;
+    }
+  }
+
+  async startSession(): Promise<CoopRoomSnapshot> {
+    this.#assertNotDisposed();
+
+    if (this.#playerId === null) {
+      throw new Error("Co-op room client must join before starting the session.");
+    }
+
+    try {
+      const serverEvent = await this.#postCommand(
+        createCoopStartSessionCommand({
+          playerId: this.#playerId,
+          roomId: this.#config.roomId
+        })
+      );
+
+      this.#applyServerEvent(serverEvent);
+
+      return serverEvent.room;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Co-op session start failed.";
 
       this.#setError(message);
       throw error;
@@ -491,6 +519,7 @@ export class CoopRoomClient {
     command:
       | ReturnType<typeof createCoopJoinRoomCommand>
       | ReturnType<typeof createCoopSetPlayerReadyCommand>
+      | ReturnType<typeof createCoopStartSessionCommand>
       | ReturnType<typeof createCoopLeaveRoomCommand>
       | ReturnType<typeof createCoopFireShotCommand>
       | ReturnType<typeof createCoopSyncPlayerPresenceCommand>,

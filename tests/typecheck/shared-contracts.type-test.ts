@@ -13,6 +13,7 @@ import type {
   CalibrationAnchorId,
   CoopBirdBehaviorState,
   CoopRoomClientCommand,
+  CoopRoomDirectorySnapshot,
   CoopRoomPhase,
   CoopRoomSnapshot,
   CoopPlayerShotOutcomeState,
@@ -67,6 +68,7 @@ type ExpectedCoopPlayerShotOutcomeState = "miss" | "scatter" | "hit";
 type ExpectedCoopRoomClientCommandType =
   | "join-room"
   | "set-player-ready"
+  | "start-session"
   | "leave-room"
   | "fire-shot"
   | "sync-player-presence";
@@ -206,6 +208,12 @@ type CoopRoomPlayerUsernameUsesSharedUsername = AssertTrue<
 type CoopRoomRequiredReadyCountUsesNumber = AssertTrue<
   IsEqual<CoopRoomSnapshot["session"]["requiredReadyPlayerCount"], number>
 >;
+type CoopRoomLeaderPlayerUsesSharedId = AssertTrue<
+  IsEqual<CoopRoomSnapshot["session"]["leaderPlayerId"], CoopRoomSnapshot["players"][number]["playerId"] | null>
+>;
+type CoopRoomDirectoryEntryUsesRoomPhase = AssertTrue<
+  IsEqual<CoopRoomDirectorySnapshot["coOpRooms"][number]["phase"], CoopRoomPhase>
+>;
 
 export type SharedContractTypeTests =
   | CalibrationAnchorIdMatches
@@ -246,4 +254,6 @@ export type SharedContractTypeTests =
   | CoopRoomBirdHeadingUsesRadians
   | CoopRoomBirdPositionUsesWorldPoint
   | CoopRoomPlayerUsernameUsesSharedUsername
-  | CoopRoomRequiredReadyCountUsesNumber;
+  | CoopRoomRequiredReadyCountUsesNumber
+  | CoopRoomLeaderPlayerUsesSharedId
+  | CoopRoomDirectoryEntryUsesRoomPhase;

@@ -9,16 +9,20 @@ import type {
   CoopJoinRoomCommand,
   CoopLeaveRoomCommand,
   CoopRoomClientCommand,
+  CoopRoomDirectoryEntrySnapshotInput,
   CoopRoomId,
   CoopSyncPlayerPresenceCommand,
+  CoopStartSessionCommand,
   CoopSetPlayerReadyCommand
 } from "@thumbshooter/shared";
 import {
   createCoopFireShotCommand,
+  createCoopRoomDirectorySnapshot,
   createCoopPlayerId,
   createCoopLeaveRoomCommand,
   createCoopRoomSnapshotEvent,
   createCoopSetPlayerReadyCommand,
+  createCoopStartSessionCommand,
   createCoopSyncPlayerPresenceCommand,
   createCoopJoinRoomCommand,
   createCoopRoomId,
@@ -136,6 +140,24 @@ function parseSetPlayerReadyCommand(
   });
 }
 
+function parseStartSessionCommand(
+  body: Record<string, unknown>,
+  roomId: CoopRoomId
+): CoopStartSessionCommand {
+  const playerId = createCoopPlayerId(
+    readStringField(body.playerId, "playerId")
+  );
+
+  if (playerId === null) {
+    throw new Error("Invalid playerId.");
+  }
+
+  return createCoopStartSessionCommand({
+    playerId,
+    roomId
+  });
+}
+
 function parseLeaveRoomCommand(
   body: Record<string, unknown>,
   roomId: CoopRoomId
@@ -237,6 +259,8 @@ function parseCoopRoomCommand(
       return parseJoinRoomCommand(body, roomId);
     case "set-player-ready":
       return parseSetPlayerReadyCommand(body, roomId);
+    case "start-session":
+      return parseStartSessionCommand(body, roomId);
     case "leave-room":
       return parseLeaveRoomCommand(body, roomId);
     case "fire-shot":
@@ -341,24 +365,30 @@ const server = createServer(async (request, response) => {
 
   if (request.method === "GET" && requestUrl.pathname === "/") {
     const roomSnapshots = coopRoomDirectory.listRoomSnapshots(nowMs);
-
-    writeJson(response, 200, {
-      coOpRooms: roomSnapshots.map((roomSnapshot) => ({
+    const directoryEntries: CoopRoomDirectoryEntrySnapshotInput[] =
+      roomSnapshots.map((roomSnapshot) => ({
         birdsRemaining: roomSnapshot.session.birdsRemaining,
+        capacity: roomSnapshot.capacity,
         connectedPlayerCount: roomSnapshot.players.filter(
           (playerSnapshot) => playerSnapshot.connected
         ).length,
         phase: roomSnapshot.session.phase,
-        playerCount: roomSnapshot.players.length,
+        readyPlayerCount: roomSnapshot.players.filter(
+          (playerSnapshot) => playerSnapshot.connected && playerSnapshot.ready
+        ).length,
         requiredReadyPlayerCount: roomSnapshot.session.requiredReadyPlayerCount,
         roomId: roomSnapshot.roomId,
         sessionId: roomSnapshot.session.sessionId,
         tick: roomSnapshot.tick.currentTick
-      })),
-      rendererTarget: "webgpu",
-      service: "thumbshooter-server",
-      status: "co-op-contract-slice-ready"
-    });
+      }));
+
+    writeJson(
+      response,
+      200,
+      createCoopRoomDirectorySnapshot({
+        coOpRooms: directoryEntries
+      })
+    );
     return;
   }
 

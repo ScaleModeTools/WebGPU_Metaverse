@@ -14,16 +14,32 @@ interface GameplayHudOverlayProps {
   readonly coopReadyActionBusy: boolean;
   readonly coopReadyActionDisabled: boolean;
   readonly coopReadyActionLabel: string;
+  readonly coopStartActionAvailable: boolean;
+  readonly coopStartActionBusy: boolean;
+  readonly coopStartActionDisabled: boolean;
   readonly hudSnapshot: GameplayHudSnapshot;
   readonly inputMode: GameplayInputModeId;
   readonly onOpenMenu: () => void;
   readonly onRestartSession: () => void;
   readonly onRetryRuntime: () => void;
+  readonly onStartCoopSession: () => void;
   readonly onToggleCoopReady: () => void;
   readonly runtimeError: string | null;
   readonly selectedReticleLabel: string;
   readonly username: string;
   readonly weaponLabel: string;
+}
+
+function formatCoopLobbyCounts(hudSnapshot: GameplayHudSnapshot): string {
+  if (hudSnapshot.session.mode !== "co-op") {
+    return "Single-player";
+  }
+
+  if (hudSnapshot.session.playerCount === 0) {
+    return "Joining room";
+  }
+
+  return `${hudSnapshot.session.connectedPlayerCount}/${hudSnapshot.session.capacity} connected • ${hudSnapshot.session.readyPlayerCount}/${hudSnapshot.session.requiredReadyPlayerCount} ready`;
 }
 
 function formatArenaState(hudSnapshot: GameplayHudSnapshot): string {
@@ -147,7 +163,18 @@ function formatSessionStatus(hudSnapshot: GameplayHudSnapshot): string {
         return "Joining room...";
       }
 
-      return `${hudSnapshot.session.connectedPlayerCount}/${hudSnapshot.session.capacity} connected • ${hudSnapshot.session.readyPlayerCount}/${hudSnapshot.session.requiredReadyPlayerCount} ready`;
+      if (hudSnapshot.session.localPlayerCanStart) {
+        return "Leader can start the session";
+      }
+
+      if (
+        hudSnapshot.session.readyPlayerCount >=
+        hudSnapshot.session.requiredReadyPlayerCount
+      ) {
+        return "Waiting for the party leader";
+      }
+
+      return formatCoopLobbyCounts(hudSnapshot);
     }
 
     if (hudSnapshot.session.phase === "active") {
@@ -206,18 +233,34 @@ function formatCoopLobbyBadge(hudSnapshot: GameplayHudSnapshot): string {
     return "Single-player";
   }
 
-  if (hudSnapshot.session.playerCount === 0) {
-    return "Joining room";
+  const lobbyCounts = formatCoopLobbyCounts(hudSnapshot);
+
+  if (
+    hudSnapshot.session.phase === "waiting-for-players" &&
+    hudSnapshot.session.readyPlayerCount >=
+      hudSnapshot.session.requiredReadyPlayerCount &&
+    hudSnapshot.session.playerCount > 0
+  ) {
+    return `${lobbyCounts} • Ready to launch`;
   }
 
-  return `${hudSnapshot.session.connectedPlayerCount}/${hudSnapshot.session.capacity} connected • ${hudSnapshot.session.readyPlayerCount}/${hudSnapshot.session.requiredReadyPlayerCount} ready`;
+  return lobbyCounts;
 }
 
 function formatCoopPlayerOutcome(
-  playerSnapshot: CoopGameplaySessionPlayerSnapshot
+  playerSnapshot: CoopGameplaySessionPlayerSnapshot,
+  phase: GameplayHudSnapshot["session"]["phase"]
 ): string {
+  if (phase === "waiting-for-players") {
+    if (playerSnapshot.ready) {
+      return playerSnapshot.isLeader ? "Leader ready" : "Ready in lobby";
+    }
+
+    return playerSnapshot.isLeader ? "Party leader" : "Not ready";
+  }
+
   if (playerSnapshot.lastOutcome === null) {
-    return playerSnapshot.ready ? "Ready" : "Not ready";
+    return playerSnapshot.ready ? "In session" : "Observing this round";
   }
 
   if (playerSnapshot.lastOutcome === "hit") {
@@ -238,11 +281,15 @@ export function GameplayHudOverlay({
   coopReadyActionBusy,
   coopReadyActionDisabled,
   coopReadyActionLabel,
+  coopStartActionAvailable,
+  coopStartActionBusy,
+  coopStartActionDisabled,
   hudSnapshot,
   inputMode,
   onOpenMenu,
   onRestartSession,
   onRetryRuntime,
+  onStartCoopSession,
   onToggleCoopReady,
   runtimeError,
   selectedReticleLabel,
@@ -394,6 +441,15 @@ export function GameplayHudOverlay({
             </div>
             <div className="flex items-center gap-3">
               <Badge variant="outline">{formatCoopLobbyBadge(hudSnapshot)}</Badge>
+              {coopStartActionAvailable ? (
+                <Button
+                  disabled={coopStartActionDisabled || coopStartActionBusy}
+                  onClick={onStartCoopSession}
+                  type="button"
+                >
+                  {coopStartActionBusy ? "Starting..." : "Start session"}
+                </Button>
+              ) : null}
               {coopReadyActionAvailable ? (
                 <Button
                   disabled={coopReadyActionDisabled || coopReadyActionBusy}
@@ -422,12 +478,17 @@ export function GameplayHudOverlay({
                     <p className="text-sm font-medium text-white">
                       {playerSnapshot.username}
                     </p>
-                    <Badge variant={playerSnapshot.isLocalPlayer ? "secondary" : "outline"}>
-                      {playerSnapshot.isLocalPlayer ? "You" : "Teammate"}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={playerSnapshot.isLocalPlayer ? "secondary" : "outline"}>
+                        {playerSnapshot.isLocalPlayer ? "You" : "Teammate"}
+                      </Badge>
+                      {playerSnapshot.isLeader ? (
+                        <Badge variant="outline">Leader</Badge>
+                      ) : null}
+                    </div>
                   </div>
                   <p className="mt-2 text-sm text-white/72">
-                    {formatCoopPlayerOutcome(playerSnapshot)}
+                    {formatCoopPlayerOutcome(playerSnapshot, hudSnapshot.session.phase)}
                   </p>
                   <p className="mt-3 text-xs uppercase tracking-[0.22em] text-white/52">
                     {`${playerSnapshot.hitsLanded} hits / ${playerSnapshot.shotsFired} shots`}
