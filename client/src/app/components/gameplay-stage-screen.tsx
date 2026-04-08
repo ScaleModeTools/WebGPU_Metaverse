@@ -1,4 +1,11 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from "react";
 
 import type {
   AffineAimTransformSnapshot,
@@ -68,39 +75,34 @@ export function GameplayStageScreen({
   const [gameplayRuntime] = useState(
     () => new WebGpuGameplayRuntime(handTrackingRuntime, arenaSimulation)
   );
-  const [hudSnapshot, setHudSnapshot] = useState(() => gameplayRuntime.hudSnapshot);
-  const [gameplayTelemetry, setGameplayTelemetry] = useState<GameplayTelemetrySnapshot>(
-    () => gameplayRuntime.telemetrySnapshot
-  );
-  const [trackingTelemetry, setTrackingTelemetry] = useState<HandTrackingTelemetrySnapshot>(
-    () => handTrackingRuntime.telemetrySnapshot
-  );
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const subscribeGameplayUiUpdates = useCallback(
+    (notifyReact: () => void) => gameplayRuntime.subscribeUiUpdates(notifyReact),
+    [gameplayRuntime]
+  );
+  const hudSnapshot = useSyncExternalStore(
+    subscribeGameplayUiUpdates,
+    () => gameplayRuntime.hudSnapshot,
+    () => gameplayRuntime.hudSnapshot
+  );
+  const gameplayTelemetry: GameplayTelemetrySnapshot = gameplayRuntime.telemetrySnapshot;
+  const trackingTelemetry: HandTrackingTelemetrySnapshot =
+    handTrackingRuntime.telemetrySnapshot;
 
   useEffect(() => {
     let cancelled = false;
 
-    void handTrackingRuntime.ensureStarted().then(
-      () => {
-        if (cancelled) {
-          return;
-        }
-
-        setTrackingTelemetry(handTrackingRuntime.telemetrySnapshot);
-      },
-      (error) => {
-        if (cancelled) {
-          return;
-        }
-
-        setTrackingTelemetry(handTrackingRuntime.telemetrySnapshot);
-        setRuntimeError((currentValue) =>
-          currentValue ??
-          handTrackingRuntime.snapshot.failureReason ??
-          (error instanceof Error ? error.message : "Hand tracking runtime failed.")
-        );
+    void handTrackingRuntime.ensureStarted().catch((error) => {
+      if (cancelled) {
+        return;
       }
-    );
+
+      setRuntimeError((currentValue) =>
+        currentValue ??
+        handTrackingRuntime.snapshot.failureReason ??
+        (error instanceof Error ? error.message : "Hand tracking runtime failed.")
+      );
+    });
 
     return () => {
       cancelled = true;
@@ -117,24 +119,18 @@ export function GameplayStageScreen({
     runtimeStartVersionRef.current = startVersion;
 
     try {
-      const snapshot = await gameplayRuntime.start(canvasRef.current);
+      await gameplayRuntime.start(canvasRef.current);
 
       if (startVersion !== runtimeStartVersionRef.current) {
         return;
       }
 
-      setHudSnapshot(snapshot);
-      setGameplayTelemetry(gameplayRuntime.telemetrySnapshot);
-      setTrackingTelemetry(handTrackingRuntime.telemetrySnapshot);
       setRuntimeError(null);
     } catch (error) {
       if (startVersion !== runtimeStartVersionRef.current) {
         return;
       }
 
-      setHudSnapshot(gameplayRuntime.hudSnapshot);
-      setGameplayTelemetry(gameplayRuntime.telemetrySnapshot);
-      setTrackingTelemetry(handTrackingRuntime.telemetrySnapshot);
       setRuntimeError(
         gameplayRuntime.hudSnapshot.failureReason ??
           (error instanceof Error ? error.message : "Gameplay runtime failed.")
@@ -144,17 +140,13 @@ export function GameplayStageScreen({
 
   const handleRetryRuntime = useEffectEvent(() => {
     gameplayRuntime.dispose();
-    setHudSnapshot(gameplayRuntime.hudSnapshot);
-    setGameplayTelemetry(gameplayRuntime.telemetrySnapshot);
-    setTrackingTelemetry(handTrackingRuntime.telemetrySnapshot);
     setRuntimeError(null);
     void handleStartRuntime();
   });
 
   const handleRestartSession = useEffectEvent(() => {
     setRuntimeError(null);
-    setHudSnapshot(gameplayRuntime.restartSession());
-    setGameplayTelemetry(gameplayRuntime.telemetrySnapshot);
+    gameplayRuntime.restartSession();
   });
 
   useEffect(() => {
@@ -164,15 +156,8 @@ export function GameplayStageScreen({
   useEffect(() => {
     void handleStartRuntime();
 
-    const intervalHandle = window.setInterval(() => {
-      setHudSnapshot(gameplayRuntime.hudSnapshot);
-      setGameplayTelemetry(gameplayRuntime.telemetrySnapshot);
-      setTrackingTelemetry(handTrackingRuntime.telemetrySnapshot);
-    }, 150);
-
     return () => {
       runtimeStartVersionRef.current += 1;
-      window.clearInterval(intervalHandle);
       gameplayRuntime.dispose();
     };
     // Effect events must stay out of dependency arrays or the runtime gets

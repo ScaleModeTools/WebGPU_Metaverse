@@ -52,6 +52,7 @@ interface GameplayRuntimeDependencies {
     canvas: HTMLCanvasElement
   ) => GameplayRendererHost;
   readonly devicePixelRatio?: number;
+  readonly readNowMs?: () => number;
   readonly requestAnimationFrame?: typeof globalThis.requestAnimationFrame;
 }
 
@@ -199,15 +200,19 @@ async function withGameplayBootLock<T>(task: () => Promise<T>): Promise<T> {
   }
 }
 
+const gameplayUiUpdateIntervalMs = 150;
+
 export class WebGpuGameplayRuntime {
   readonly #arenaSimulation: LocalArenaSimulation;
   readonly #config: GameplayRuntimeConfig;
   readonly #createRenderer: (canvas: HTMLCanvasElement) => GameplayRendererHost;
   readonly #devicePixelRatio: number;
+  readonly #readNowMs: () => number;
   readonly #requestAnimationFrame: typeof globalThis.requestAnimationFrame;
   readonly #cancelAnimationFrame: typeof globalThis.cancelAnimationFrame;
   readonly #gameplayScene: ReturnType<typeof createGameplayScene>;
   readonly #trackingSource: GameplayTrackingSource;
+  readonly #uiUpdateListeners = new Set<() => void>();
 
   #animationFrameHandle = 0;
   #animationStartAtMs = 0;
@@ -215,6 +220,7 @@ export class WebGpuGameplayRuntime {
   #frameDeltaMs = 0;
   #frameRate = 0;
   #hudSnapshot: GameplayHudSnapshot;
+  #lastUiUpdateAtMs = Number.NEGATIVE_INFINITY;
   #lastObservedAimPoint: NormalizedViewportPointInput | null = null;
   #lastRenderAtMs: number | null = null;
   #lastThumbDropDistance: number | null = null;
@@ -237,6 +243,7 @@ export class WebGpuGameplayRuntime {
     this.#createRenderer = dependencies.createRenderer ?? createDefaultRenderer;
     this.#devicePixelRatio =
       dependencies.devicePixelRatio ?? globalThis.window?.devicePixelRatio ?? 1;
+    this.#readNowMs = dependencies.readNowMs ?? readNowMs;
     this.#requestAnimationFrame =
       dependencies.requestAnimationFrame ?? requestBrowserAnimationFrame;
     this.#cancelAnimationFrame =
@@ -279,7 +286,15 @@ export class WebGpuGameplayRuntime {
     });
   }
 
-  restartSession(nowMs: number = readNowMs()): GameplayHudSnapshot {
+  subscribeUiUpdates(listener: () => void): () => void {
+    this.#uiUpdateListeners.add(listener);
+
+    return () => {
+      this.#uiUpdateListeners.delete(listener);
+    };
+  }
+
+  restartSession(nowMs: number = this.#readNowMs()): GameplayHudSnapshot {
     this.#arenaSimulation.reset(this.#trackingSource.latestPose);
 
     if (
@@ -287,7 +302,7 @@ export class WebGpuGameplayRuntime {
       this.#canvasHost !== null &&
       this.#hudSnapshot.lifecycle === "running"
     ) {
-      this.#syncArenaFrame(nowMs);
+      this.#syncArenaFrame(nowMs, true);
       return this.#hudSnapshot;
     }
 
@@ -295,13 +310,13 @@ export class WebGpuGameplayRuntime {
       return this.#hudSnapshot;
     }
 
-    this.#hudSnapshot = freezeHudSnapshot(
+    return this.#setHudSnapshot(
       this.#hudSnapshot.lifecycle === "booting" ? "booting" : "idle",
       null,
-      this.#arenaSimulation.hudSnapshot
+      this.#arenaSimulation.hudSnapshot,
+      nowMs,
+      true
     );
-
-    return this.#hudSnapshot;
   }
 
   async start(
@@ -341,21 +356,24 @@ export class WebGpuGameplayRuntime {
     this.#arenaSimulation.reset(this.#trackingSource.latestPose);
 
     if (navigatorLike?.gpu === undefined) {
-      this.#hudSnapshot = freezeHudSnapshot(
+      const failureReason = "WebGPU is unavailable for the gameplay runtime.";
+
+      this.#setHudSnapshot(
         "failed",
-        "WebGPU is unavailable for the gameplay runtime.",
-        this.#arenaSimulation.hudSnapshot
+        failureReason,
+        this.#arenaSimulation.hudSnapshot,
+        this.#readNowMs(),
+        true
       );
-      throw new Error(
-        this.#hudSnapshot.failureReason ??
-          "WebGPU is unavailable for the gameplay runtime."
-      );
+      throw new Error(failureReason);
     }
 
-    this.#hudSnapshot = freezeHudSnapshot(
+    this.#setHudSnapshot(
       "booting",
       null,
-      this.#arenaSimulation.hudSnapshot
+      this.#arenaSimulation.hudSnapshot,
+      this.#readNowMs(),
+      true
     );
     this.#canvasHost = canvas;
     const renderer = this.#createRenderer(canvas);
@@ -378,10 +396,12 @@ export class WebGpuGameplayRuntime {
       if (runtimeEpoch === this.#runtimeEpoch) {
         const failureReason = resolveRuntimeFailureReason(error);
 
-        this.#hudSnapshot = freezeHudSnapshot(
+        this.#setHudSnapshot(
           "failed",
           failureReason,
-          this.#arenaSimulation.hudSnapshot
+          this.#arenaSimulation.hudSnapshot,
+          this.#readNowMs(),
+          true
         );
 
         throw new Error(failureReason);
@@ -410,14 +430,9 @@ export class WebGpuGameplayRuntime {
       return this.#hudSnapshot;
     }
 
-    this.#animationStartAtMs = readNowMs();
+    this.#animationStartAtMs = this.#readNowMs();
     this.#syncViewport();
-    this.#syncArenaFrame(this.#animationStartAtMs);
-    this.#hudSnapshot = freezeHudSnapshot(
-      "running",
-      null,
-      this.#arenaSimulation.hudSnapshot
-    );
+    this.#syncArenaFrame(this.#animationStartAtMs, true);
     this.#queueNextFrame();
 
     return this.#hudSnapshot;
@@ -446,11 +461,16 @@ export class WebGpuGameplayRuntime {
     this.#arenaSimulation.reset();
     this.#gameplayScene.resetPresentation();
 
-    if (this.#hudSnapshot.lifecycle !== "failed") {
-      this.#hudSnapshot = freezeHudSnapshot(
+    if (
+      this.#hudSnapshot.lifecycle !== "failed" &&
+      (this.#hudSnapshot.lifecycle !== "idle" || this.#hudSnapshot.failureReason !== null)
+    ) {
+      this.#setHudSnapshot(
         "idle",
         null,
-        this.#arenaSimulation.hudSnapshot
+        this.#arenaSimulation.hudSnapshot,
+        this.#readNowMs(),
+        true
       );
     }
   }
@@ -477,7 +497,7 @@ export class WebGpuGameplayRuntime {
       return;
     }
 
-    const nowMs = readNowMs();
+    const nowMs = this.#readNowMs();
     const frameDeltaMs =
       this.#lastRenderAtMs === null ? 0 : Math.max(0, nowMs - this.#lastRenderAtMs);
 
@@ -493,10 +513,16 @@ export class WebGpuGameplayRuntime {
     this.#renderer.render(this.#gameplayScene.scene, this.#gameplayScene.camera);
   }
 
-  #syncArenaFrame(nowMs: number): void {
+  #syncArenaFrame(nowMs: number, forceUiUpdate = false): void {
     const trackingSnapshot = this.#trackingSource.latestPose;
     const arenaHudSnapshot = this.#arenaSimulation.advance(trackingSnapshot, nowMs);
-    const hudSnapshot = freezeHudSnapshot("running", null, arenaHudSnapshot);
+    const hudSnapshot = this.#setHudSnapshot(
+      "running",
+      null,
+      arenaHudSnapshot,
+      nowMs,
+      forceUiUpdate
+    );
     const reticleVisualState = resolveGameplayReticleVisualState(hudSnapshot);
 
     this.#gameplayScene.syncArenaPresentation(
@@ -504,7 +530,6 @@ export class WebGpuGameplayRuntime {
       arenaHudSnapshot.aimPoint,
       reticleVisualState
     );
-    this.#hudSnapshot = hudSnapshot;
     this.#reticleVisualState = reticleVisualState;
     this.#lastObservedAimPoint =
       trackingSnapshot.trackingState === "tracked"
@@ -539,10 +564,42 @@ export class WebGpuGameplayRuntime {
     this.#renderer = null;
     this.#canvasHost = null;
     this.#reticleVisualState = "hidden";
-    this.#hudSnapshot = freezeHudSnapshot(
+    this.#setHudSnapshot(
       "failed",
       failureReason,
-      this.#arenaSimulation.hudSnapshot
+      this.#arenaSimulation.hudSnapshot,
+      this.#readNowMs(),
+      true
     );
+  }
+
+  #setHudSnapshot(
+    lifecycle: GameplayHudSnapshot["lifecycle"],
+    failureReason: string | null,
+    arenaHudSnapshot: LocalArenaSimulation["hudSnapshot"],
+    nowMs: number,
+    forceUiUpdate: boolean
+  ): GameplayHudSnapshot {
+    const hudSnapshot = freezeHudSnapshot(lifecycle, failureReason, arenaHudSnapshot);
+
+    this.#hudSnapshot = hudSnapshot;
+    this.#publishUiUpdate(nowMs, forceUiUpdate);
+
+    return hudSnapshot;
+  }
+
+  #publishUiUpdate(nowMs: number, forceUiUpdate: boolean): void {
+    if (
+      !forceUiUpdate &&
+      nowMs - this.#lastUiUpdateAtMs < gameplayUiUpdateIntervalMs
+    ) {
+      return;
+    }
+
+    this.#lastUiUpdateAtMs = nowMs;
+
+    for (const listener of this.#uiUpdateListeners) {
+      listener();
+    }
   }
 }

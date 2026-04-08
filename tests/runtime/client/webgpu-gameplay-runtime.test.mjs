@@ -306,6 +306,78 @@ test("WebGpuGameplayRuntime renders the calibrated reticle from live tracking sn
   assert.equal(runtime.hudSnapshot.lifecycle, "idle");
 });
 
+test("WebGpuGameplayRuntime publishes throttled UI updates for shell observers", async () => {
+  const { LocalArenaSimulation, WebGpuGameplayRuntime } = await clientLoader.load(
+    "/src/game/index.ts"
+  );
+  const trackingSource = {
+    latestPose: {
+      trackingState: "tracked",
+      sequenceNumber: 1,
+      timestampMs: 10,
+      pose: createTrackedHandPose(0.25, 0.4, 0)
+    }
+  };
+  const renderer = new FakeRenderer();
+  const arenaSimulation = new LocalArenaSimulation(
+    {
+      xCoefficients: [1, 0, 0],
+      yCoefficients: [0, 1, 0]
+    },
+    createArenaConfig()
+  );
+  let nowMs = 1_000;
+  let scheduledFrame = null;
+  const lifecycleUpdates = [];
+  const runtime = new WebGpuGameplayRuntime(
+    trackingSource,
+    arenaSimulation,
+    undefined,
+    {
+      cancelAnimationFrame() {},
+      createRenderer: () => renderer,
+      devicePixelRatio: 1,
+      readNowMs: () => nowMs,
+      requestAnimationFrame(callback) {
+        scheduledFrame = callback;
+        return 1;
+      }
+    }
+  );
+  const unsubscribe = runtime.subscribeUiUpdates(() => {
+    lifecycleUpdates.push(runtime.hudSnapshot.lifecycle);
+  });
+
+  await runtime.start(
+    {
+      clientHeight: 720,
+      clientWidth: 1280
+    },
+    {
+      gpu: {}
+    }
+  );
+
+  assert.deepEqual(lifecycleUpdates, ["booting", "running"]);
+  assert.equal(typeof scheduledFrame, "function");
+
+  nowMs = 1_050;
+  scheduledFrame();
+  assert.deepEqual(lifecycleUpdates, ["booting", "running"]);
+
+  nowMs = 1_160;
+  scheduledFrame();
+  assert.deepEqual(lifecycleUpdates, ["booting", "running", "running"]);
+
+  runtime.restartSession(1_165);
+  assert.deepEqual(lifecycleUpdates, ["booting", "running", "running", "running"]);
+
+  runtime.dispose();
+  assert.deepEqual(lifecycleUpdates, ["booting", "running", "running", "running", "idle"]);
+
+  unsubscribe();
+});
+
 test("WebGpuGameplayRuntime ignores stale async boots after disposal", async () => {
   const { LocalArenaSimulation, WebGpuGameplayRuntime } = await clientLoader.load(
     "/src/game/index.ts"
