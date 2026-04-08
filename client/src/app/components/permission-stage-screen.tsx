@@ -29,9 +29,9 @@ export function PermissionStageScreen({
 }: PermissionStageScreenProps) {
   return (
     <StageScreenLayout
-      description="Webcam permission and gameplay capability stay explicit. The shell never hides a failed hardware gate."
-      eyebrow="Stage 2"
-      title="Webcam permission flow"
+      description="Mouse mode skips this step. Enable webcam access only when you want thumb-shooter tracking and firing."
+      eyebrow="Optional camera setup"
+      title="Enable webcam for thumb-shooter mode"
     >
       <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="flex flex-col gap-5">
@@ -65,7 +65,9 @@ export function PermissionStageScreen({
               onClick={onRequestPermission}
               type="button"
             >
-              {permissionState === "requesting" ? "Requesting permission" : "Enable webcam"}
+              {permissionState === "requesting"
+                ? "Requesting permission"
+                : "Enable webcam for thumb-shooter"}
             </Button>
           </div>
         </div>

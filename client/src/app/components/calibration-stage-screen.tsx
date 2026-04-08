@@ -444,16 +444,20 @@ export function CalibrationStageScreen({
 
         <div className="absolute left-3 top-3 z-10 max-w-xs rounded-[1.25rem] border border-white/10 bg-slate-950/78 p-4 backdrop-blur-md sm:left-4 sm:top-4">
           <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">Stage 3</Badge>
+            <Badge variant="outline">Optional calibration</Badge>
             <Badge variant="secondary">
               {`${captureSnapshot.capturedSampleCount}/${captureSnapshot.totalAnchorCount}`}
             </Badge>
             <Badge variant="outline">{runtimeLifecycle}</Badge>
           </div>
           <p className="mt-3 text-lg font-semibold text-white">
-            Nine-point calibration
+            Thumb-shooter calibration
           </p>
-          <p className="mt-2 text-sm leading-6 text-slate-200">{captureGuidance}</p>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            Only needed for camera mode. Capture all nine targets to align hand
+            aim with gameplay.
+          </p>
+          <p className="mt-3 text-sm leading-6 text-slate-200">{captureGuidance}</p>
           <p className="mt-2 text-xs uppercase tracking-[0.28em] text-slate-400">
             {`Hand ${trackingState}`}
           </p>

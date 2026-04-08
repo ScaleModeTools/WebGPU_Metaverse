@@ -72,9 +72,9 @@ export function MainMenuStageScreen({
 
   return (
     <StageScreenLayout
-      description="Review the current control mode, recalibrate when needed, and start gameplay only when you choose to."
+      description="Choose an input mode, launch gameplay, or enter optional camera setup for thumb-shooter mode."
       eyebrow="Main menu"
-      title="Local arena start menu"
+      title="Choose input and start gameplay"
     >
       <div className="flex flex-wrap gap-2">
         <Badge>{selectedInputMode.label}</Badge>

@@ -58,7 +58,6 @@ export function ThumbShooterShell() {
           <ShellProgressHeader
             audioStatusLabel={controller.shellView.audioStatusLabel}
             capabilityReasonLabel={controller.shellView.capabilityReasonLabel}
-            currentStepId={activeStep}
             musicVolumeLabel={controller.shellView.musicVolumeLabel}
             runtimeLocks={controller.shellView.runtimeLocks}
             sfxVolumeLabel={controller.shellView.sfxVolumeLabel}

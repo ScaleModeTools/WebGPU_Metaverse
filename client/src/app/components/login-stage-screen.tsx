@@ -33,9 +33,9 @@ export function LoginStageScreen({
 }: LoginStageScreenProps) {
   return (
     <StageScreenLayout
-      description="Create or resume the local-first shell profile. Username and audio mix stay persisted without any server roundtrip."
-      eyebrow="Stage 1"
-      title="Login and local profile"
+      description="Create or resume your local profile. Username, input mode, calibration data, and audio mix stay on this device."
+      eyebrow="Login"
+      title="Create or resume local profile"
     >
       <form className="flex flex-col gap-6" onSubmit={onSubmit}>
         <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
@@ -60,7 +60,7 @@ export function LoginStageScreen({
 
             <div className="flex flex-wrap gap-3">
               <Button type="submit">
-                {hasStoredProfile ? "Resume local shell" : "Create local profile"}
+                {hasStoredProfile ? "Resume local profile" : "Create local profile"}
               </Button>
               {hasStoredProfile ? (
                 <Button onClick={onClearProfile} type="button" variant="outline">
@@ -74,8 +74,8 @@ export function LoginStageScreen({
             <CardHeader>
               <CardTitle>What persists now</CardTitle>
               <CardDescription>
-                This milestone stores the profile locally and keeps the repo ready
-                for calibration data in the next round.
+                The local profile stays on this device, including input mode and
+                calibration data when you capture it.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">

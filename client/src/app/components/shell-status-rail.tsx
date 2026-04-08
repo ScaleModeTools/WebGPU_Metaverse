@@ -1,6 +1,5 @@
 import type { StoredProfileHydrationResult } from "../../network";
 
-import { MilestoneBoundariesCard } from "./milestone-boundaries-card";
 import { ProfileSummaryCard } from "./profile-summary-card";
 
 interface ShellStatusRailProps {
@@ -23,7 +22,7 @@ export function ShellStatusRail({
   username
 }: ShellStatusRailProps) {
   return (
-    <aside className="grid gap-6">
+    <aside>
       <ProfileSummaryCard
         calibrationSampleCount={calibrationSampleCount}
         calibrationQualityLabel={calibrationQualityLabel}
@@ -33,8 +32,6 @@ export function ShellStatusRail({
         reticleCatalogLabel={reticleCatalogLabel}
         username={username}
       />
-
-      <MilestoneBoundariesCard />
     </aside>
   );
 }

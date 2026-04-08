@@ -32,8 +32,7 @@ export function ProfileSummaryCard({
       <CardHeader>
         <CardTitle>Profile summary</CardTitle>
         <CardDescription>
-          Local-first state that the arena loop still builds on instead of
-          replacing.
+          Current local player state for the menu and arena session.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">

@@ -5,22 +5,23 @@ export const navigationFlow = {
   steps: [
     { id: "login", label: "Enter username" },
     {
-      id: "permissions",
-      label: "Grant webcam permission",
+      id: "main-menu",
+      label: "Review profile, choose input, and launch gameplay",
       requiresPrevious: ["login"]
     },
     {
+      id: "permissions",
+      label: "Optional webcam permission for thumb-shooter mode",
+      requiresPrevious: ["main-menu"]
+    },
+    {
       id: "calibration",
-      label: "Capture nine-point calibration",
+      label: "Optional nine-point calibration for thumb-shooter mode",
       requiresPrevious: ["permissions"]
     },
     {
-      id: "main-menu",
-      label: "Review settings and start the local arena"
-    },
-    {
       id: "gameplay",
-      label: "Boot WebGPU gameplay",
+      label: "Start local arena gameplay",
       requiresPrevious: ["main-menu"]
     },
     {

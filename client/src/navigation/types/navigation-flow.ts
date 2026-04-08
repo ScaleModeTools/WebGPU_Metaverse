@@ -1,8 +1,8 @@
 export const navigationStepIds = [
   "login",
+  "main-menu",
   "permissions",
   "calibration",
-  "main-menu",
   "gameplay",
   "unsupported"
 ] as const;
