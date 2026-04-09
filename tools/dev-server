@@ -5,8 +5,125 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 server_host="127.0.0.1"
 server_port="3210"
+local_dev_dir="$repo_root/.local-dev"
+server_pid_file="$local_dev_dir/thumbshooter-dev-server.pid"
 
 cd "$repo_root"
+mkdir -p "$local_dev_dir"
+
+pids=()
+
+cleanup() {
+  trap - EXIT INT TERM
+
+  if [[ -f "$server_pid_file" ]] && [[ "$(<"$server_pid_file")" == "$$" ]]; then
+    rm -f "$server_pid_file"
+  fi
+
+  for pid in "${pids[@]:-}"; do
+    kill "$pid" 2>/dev/null || true
+  done
+
+  wait 2>/dev/null || true
+}
+
+trap cleanup EXIT INT TERM
+
+resolve_existing_dev_server_pid() {
+  if [[ ! -f "$server_pid_file" ]]; then
+    return 1
+  fi
+
+  local existing_pid
+  existing_pid="$(<"$server_pid_file")"
+
+  if [[ ! "$existing_pid" =~ ^[0-9]+$ ]]; then
+    rm -f "$server_pid_file"
+    return 1
+  fi
+
+  if ! kill -0 "$existing_pid" 2>/dev/null; then
+    rm -f "$server_pid_file"
+    return 1
+  fi
+
+  local existing_args
+  existing_args="$(ps -p "$existing_pid" -o args= 2>/dev/null || true)"
+
+  if [[ "$existing_args" != *"tools/dev-server"* ]]; then
+    rm -f "$server_pid_file"
+    return 1
+  fi
+
+  printf '%s\n' "$existing_pid"
+}
+
+resolve_existing_managed_server_watch_pid() {
+  while read -r process_pid process_args; do
+    if [[ -z "$process_pid" ]]; then
+      continue
+    fi
+
+    if [[ "$process_args" != *"$repo_root/server/dist/index.js"* ]]; then
+      continue
+    fi
+
+    if [[ "$process_args" != *"--watch-path $repo_root/packages/shared/dist"* ]]; then
+      continue
+    fi
+
+    if [[ "$process_args" != *"--watch-path $repo_root/server/dist"* ]]; then
+      continue
+    fi
+
+    printf '%s\n' "$process_pid"
+    return 0
+  done < <(ps -eo pid=,args=)
+
+  return 1
+}
+
+existing_dev_server_pid="$(resolve_existing_dev_server_pid || true)"
+
+if [[ -n "$existing_dev_server_pid" ]]; then
+  echo "Stopping existing ThumbShooter dev server session (pid $existing_dev_server_pid)."
+  kill "$existing_dev_server_pid" 2>/dev/null || true
+
+  for _ in {1..50}; do
+    if ! kill -0 "$existing_dev_server_pid" 2>/dev/null; then
+      break
+    fi
+
+    sleep 0.1
+  done
+
+  if kill -0 "$existing_dev_server_pid" 2>/dev/null; then
+    echo "ThumbShooter dev server session $existing_dev_server_pid did not exit cleanly."
+    exit 1
+  fi
+fi
+
+existing_server_watch_pid="$(resolve_existing_managed_server_watch_pid || true)"
+
+if [[ -n "$existing_server_watch_pid" ]]; then
+  echo "Stopping existing ThumbShooter managed server watcher (pid $existing_server_watch_pid)."
+  kill "$existing_server_watch_pid" 2>/dev/null || true
+
+  for _ in {1..50}; do
+    if ! kill -0 "$existing_server_watch_pid" 2>/dev/null; then
+      break
+    fi
+
+    sleep 0.1
+  done
+
+  if kill -0 "$existing_server_watch_pid" 2>/dev/null; then
+    echo "ThumbShooter managed server watcher $existing_server_watch_pid did not exit cleanly."
+    exit 1
+  fi
+fi
+
+printf '%s\n' "$$" > "$server_pid_file"
 
 # Fail fast when another process already owns the locked local co-op port.
 node \
@@ -44,20 +161,6 @@ node \
 # temporarily remove package outputs that the server process imports.
 ./node_modules/.bin/tsc -p "$repo_root/packages/shared/tsconfig.json"
 ./node_modules/.bin/tsc -p "$repo_root/server/tsconfig.json"
-
-pids=()
-
-cleanup() {
-  trap - EXIT INT TERM
-
-  for pid in "${pids[@]:-}"; do
-    kill "$pid" 2>/dev/null || true
-  done
-
-  wait 2>/dev/null || true
-}
-
-trap cleanup EXIT INT TERM
 
 npm run watch:build --workspace @thumbshooter/shared &
 pids+=($!)

@@ -77,3 +77,38 @@ test("CoopRoomDirectoryClient fetches typed room summaries from the server root"
   assert.equal(fetchedSnapshot.coOpRooms[0]?.readyPlayerCount, 2);
   assert.equal(fetchedSnapshot.coOpRooms[0]?.capacity, 4);
 });
+
+test("CoopRoomDirectoryClient rejects outdated room summaries that omit current fields", async () => {
+  const { CoopRoomDirectoryClient } = await clientLoader.load("/src/network/index.ts");
+  const directoryClient = new CoopRoomDirectoryClient(
+    {
+      serverOrigin: "http://127.0.0.1:3210"
+    },
+    {
+      async fetch() {
+        return createJsonResponse(true, {
+          coOpRooms: [
+            {
+              birdsRemaining: 0,
+              connectedPlayerCount: 3,
+              phase: "completed",
+              playerCount: 3,
+              requiredReadyPlayerCount: 2,
+              roomId: requireValue(createCoopRoomId("co-op-harbor"), "roomId"),
+              sessionId: requireValue(
+                createCoopSessionId("co-op-harbor-session-1"),
+                "sessionId"
+              ),
+              tick: 42
+            }
+          ]
+        });
+      }
+    }
+  );
+
+  await assert.rejects(
+    () => directoryClient.fetchSnapshot(),
+    /current room summary fields/
+  );
+});

@@ -499,3 +499,66 @@ test("CoopRoomClient stops polling when the server reports local room membership
   );
   assert.equal(scheduledPolls.length, 0);
 });
+
+test("CoopRoomClient reports an outdated room snapshot contract instead of accepting it", async () => {
+  const { CoopRoomClient } = await clientLoader.load("/src/network/index.ts");
+  const roomId = createCoopRoomId("co-op-harbor");
+  const sessionId = createCoopSessionId("co-op-harbor-session-1");
+  const playerId = createCoopPlayerId("coop-player-1");
+  const username = createUsername("coop-user");
+
+  assert.notEqual(roomId, null);
+  assert.notEqual(sessionId, null);
+  assert.notEqual(playerId, null);
+  assert.notEqual(username, null);
+
+  const roomClient = new CoopRoomClient(
+    {
+      defaultPollIntervalMs: createMilliseconds(75),
+      roomId,
+      serverOrigin: "http://127.0.0.1:3210"
+    },
+    {
+      async fetch() {
+        return createJsonResponse(true, {
+          room: {
+            birds: [],
+            capacity: 4,
+            players: [],
+            roomId,
+            session: {
+              birdsCleared: 4,
+              birdsRemaining: 0,
+              phase: "completed",
+              requiredReadyPlayerCount: 2,
+              sessionId,
+              teamHitsLanded: 4,
+              teamShotsFired: 8
+            },
+            tick: {
+              currentTick: 84,
+              tickIntervalMs: 50
+            }
+          },
+          type: "room-snapshot"
+        });
+      },
+      setTimeout() {
+        return 1;
+      },
+      clearTimeout() {}
+    }
+  );
+
+  await assert.rejects(
+    () =>
+      roomClient.ensureJoined({
+        playerId,
+        ready: false,
+        username
+      }),
+    /current room snapshot fields/
+  );
+  assert.equal(roomClient.statusSnapshot.state, "error");
+  assert.match(roomClient.statusSnapshot.lastError ?? "", /current room snapshot fields/);
+});

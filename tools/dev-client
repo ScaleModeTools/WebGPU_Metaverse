@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+local_dev_dir="$repo_root/.local-dev"
+client_pid_file="$local_dev_dir/thumbshooter-dev-client.pid"
+
+cd "$repo_root"
+mkdir -p "$local_dev_dir"
+
+pids=()
+
+cleanup() {
+  trap - EXIT INT TERM
+
+  if [[ -f "$client_pid_file" ]] && [[ "$(<"$client_pid_file")" == "$$" ]]; then
+    rm -f "$client_pid_file"
+  fi
+
+  for pid in "${pids[@]:-}"; do
+    kill "$pid" 2>/dev/null || true
+  done
+
+  wait 2>/dev/null || true
+}
+
+trap cleanup EXIT INT TERM
+
+resolve_existing_dev_client_pid() {
+  if [[ ! -f "$client_pid_file" ]]; then
+    return 1
+  fi
+
+  local existing_pid
+  existing_pid="$(<"$client_pid_file")"
+
+  if [[ ! "$existing_pid" =~ ^[0-9]+$ ]]; then
+    rm -f "$client_pid_file"
+    return 1
+  fi
+
+  if ! kill -0 "$existing_pid" 2>/dev/null; then
+    rm -f "$client_pid_file"
+    return 1
+  fi
+
+  local existing_args
+  existing_args="$(ps -p "$existing_pid" -o args= 2>/dev/null || true)"
+
+  if [[ "$existing_args" != *"tools/dev-client"* ]]; then
+    rm -f "$client_pid_file"
+    return 1
+  fi
+
+  printf '%s\n' "$existing_pid"
+}
+
+resolve_existing_repo_vite_pids() {
+  while read -r process_pid process_args; do
+    if [[ -z "$process_pid" ]]; then
+      continue
+    fi
+
+    if [[ "$process_args" != *"$repo_root/node_modules/.bin/vite"* ]]; then
+      continue
+    fi
+
+    printf '%s\n' "$process_pid"
+  done < <(ps -eo pid=,args=)
+}
+
+existing_dev_client_pid="$(resolve_existing_dev_client_pid || true)"
+
+if [[ -n "$existing_dev_client_pid" ]]; then
+  echo "Stopping existing ThumbShooter dev client session (pid $existing_dev_client_pid)."
+  kill "$existing_dev_client_pid" 2>/dev/null || true
+
+  for _ in {1..50}; do
+    if ! kill -0 "$existing_dev_client_pid" 2>/dev/null; then
+      break
+    fi
+
+    sleep 0.1
+  done
+
+  if kill -0 "$existing_dev_client_pid" 2>/dev/null; then
+    echo "ThumbShooter dev client session $existing_dev_client_pid did not exit cleanly."
+    exit 1
+  fi
+fi
+
+mapfile -t existing_repo_vite_pids < <(resolve_existing_repo_vite_pids || true)
+
+if (( ${#existing_repo_vite_pids[@]} > 0 )); then
+  echo "Stopping existing ThumbShooter client Vite processes (${existing_repo_vite_pids[*]})."
+
+  for existing_vite_pid in "${existing_repo_vite_pids[@]}"; do
+    kill "$existing_vite_pid" 2>/dev/null || true
+  done
+
+  for existing_vite_pid in "${existing_repo_vite_pids[@]}"; do
+    for _ in {1..50}; do
+      if ! kill -0 "$existing_vite_pid" 2>/dev/null; then
+        break
+      fi
+
+      sleep 0.1
+    done
+
+    if kill -0 "$existing_vite_pid" 2>/dev/null; then
+      echo "ThumbShooter client Vite process $existing_vite_pid did not exit cleanly."
+      exit 1
+    fi
+  done
+fi
+
+printf '%s\n' "$$" > "$client_pid_file"
+
+npm --workspace client run dev -- --strictPort &
+pids+=($!)
+
+wait -n "${pids[@]}"

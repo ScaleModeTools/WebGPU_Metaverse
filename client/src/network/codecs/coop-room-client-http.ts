@@ -11,6 +11,43 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function isCurrentRoomSessionPayload(value: unknown): value is Record<string, unknown> {
+  return (
+    isRecord(value) &&
+    typeof value.birdsCleared === "number" &&
+    typeof value.birdsRemaining === "number" &&
+    typeof value.phase === "string" &&
+    typeof value.roundDurationMs === "number" &&
+    typeof value.roundNumber === "number" &&
+    typeof value.roundPhase === "string" &&
+    typeof value.roundPhaseRemainingMs === "number" &&
+    typeof value.requiredReadyPlayerCount === "number" &&
+    typeof value.sessionId === "string" &&
+    typeof value.teamHitsLanded === "number" &&
+    typeof value.teamShotsFired === "number"
+  );
+}
+
+function isCurrentRoomTickPayload(value: unknown): value is Record<string, unknown> {
+  return (
+    isRecord(value) &&
+    typeof value.currentTick === "number" &&
+    typeof value.tickIntervalMs === "number"
+  );
+}
+
+function isCurrentRoomPayload(value: unknown): value is Record<string, unknown> {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.birds) &&
+    typeof value.capacity === "number" &&
+    Array.isArray(value.players) &&
+    typeof value.roomId === "string" &&
+    isCurrentRoomSessionPayload(value.session) &&
+    isCurrentRoomTickPayload(value.tick)
+  );
+}
+
 export function resolveCoopRoomSnapshotUrl(
   serverOrigin: string,
   roomId: CoopRoomId,
@@ -41,6 +78,12 @@ export function serializeCoopRoomClientCommand(
 export function parseCoopRoomServerEvent(payload: unknown): CoopRoomServerEvent {
   if (!isRecord(payload) || payload.type !== "room-snapshot" || !isRecord(payload.room)) {
     throw new Error("Co-op room response did not include a room snapshot event.");
+  }
+
+  if (!isCurrentRoomPayload(payload.room)) {
+    throw new Error(
+      "Co-op room response did not include the current room snapshot fields."
+    );
   }
 
   return createCoopRoomSnapshotEvent(payload.room as unknown as CoopRoomSnapshotInput);
