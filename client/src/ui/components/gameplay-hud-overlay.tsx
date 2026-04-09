@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 
 import {
   resolveGameplayInputMode,
-  type CoopGameplaySessionPlayerSnapshot,
-  type GameplayHudSnapshot,
   type GameplayInputModeId
+} from "@webgpu-metaverse/shared";
+import type {
+  CoopGameplaySessionPlayerSnapshot,
+  GameplayHudSnapshot
 } from "../../game";
 import {
   PretextParagraph,

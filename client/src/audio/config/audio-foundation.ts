@@ -1,4 +1,4 @@
-import { AudioSettings } from "@thumbshooter/shared";
+import { AudioSettings } from "@webgpu-metaverse/shared";
 
 import type { AudioFoundationConfig } from "../types/audio-foundation";
 

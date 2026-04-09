@@ -2,7 +2,7 @@ import {
   createCoopRoomId,
   createMilliseconds,
   type CoopRoomId
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import {
   CoopRoomClient,

@@ -1,4 +1,4 @@
-import type { LatestHandTrackingSnapshot } from "./hand-tracking";
+import type { LatestHandTrackingSnapshot } from "../../tracking";
 import type {
   LocalArenaEnemyRenderState
 } from "./local-arena-simulation";

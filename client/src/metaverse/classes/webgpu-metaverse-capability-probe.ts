@@ -1,9 +1,9 @@
-import type { WebGpuGameplayCapabilitySnapshot } from "../types/webgpu-capability";
+import type { WebGpuMetaverseCapabilitySnapshot } from "../types/webgpu-capability";
 
-export class WebGpuGameplayCapabilityProbe {
+export class WebGpuMetaverseCapabilityProbe {
   async probe(
     navigatorLike: Navigator | null | undefined
-  ): Promise<WebGpuGameplayCapabilitySnapshot> {
+  ): Promise<WebGpuMetaverseCapabilitySnapshot> {
     if (navigatorLike?.gpu === undefined) {
       return {
         status: "unsupported",

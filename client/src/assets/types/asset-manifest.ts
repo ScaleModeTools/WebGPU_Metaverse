@@ -3,7 +3,7 @@ import type {
   ReticleColor,
   ReticleId,
   ReticleStyle
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 export interface ReticleDescriptor<TId extends ReticleId = ReticleId> {
   readonly id: TId;

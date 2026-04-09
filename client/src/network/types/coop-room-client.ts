@@ -6,7 +6,7 @@ import type {
   Milliseconds,
   Username,
   CoopVector3SnapshotInput
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 export const coopRoomClientStates = [
   "idle",

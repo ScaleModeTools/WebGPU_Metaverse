@@ -7,7 +7,7 @@ import {
   experienceCatalog,
   readExperienceCatalogEntry,
   readExperienceTickOwner
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 test("experienceCatalog exposes Duck Hunt as the first metaverse-ready experience", () => {
   assert.equal(experienceCatalog.length, 1);
@@ -16,6 +16,7 @@ test("experienceCatalog exposes Duck Hunt as the first metaverse-ready experienc
 
   assert.equal(duckHuntEntry.id, "duck-hunt");
   assert.equal(duckHuntEntry.label, "Duck Hunt!");
+  assert.equal(duckHuntEntry.defaultInputMode, "mouse");
   assert.deepEqual(duckHuntEntry.supportedSessionModes, [
     "single-player",
     "co-op"

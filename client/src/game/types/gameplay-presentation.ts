@@ -1,10 +1,9 @@
 import type {
   NormalizedViewportPoint,
   NormalizedViewportPointInput
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import type { GameplaySessionPhase } from "./gameplay-session";
-import type { HandTrackingPoseState } from "./hand-tracking";
 import type { LocalArenaTargetFeedbackState } from "./local-arena-simulation";
 import type { WeaponReadinessState } from "./weapon-contract";
 
@@ -33,16 +32,7 @@ export type GameplayReticleStyledState =
 export type GameplayReticleVisualState =
   (typeof gameplayReticleVisualStates)[number];
 
-export interface HandTrackingTelemetrySnapshot {
-  readonly framesDispatched: number;
-  readonly framesProcessed: number;
-  readonly inFlightFrameSkips: number;
-  readonly latestPoseAgeMs: number | null;
-  readonly latestSequenceNumber: number;
-  readonly staleSnapshotsIgnored: number;
-  readonly trackingState: HandTrackingPoseState;
-  readonly workerLatencyMs: number | null;
-}
+export type { HandTrackingTelemetrySnapshot } from "../../tracking";
 
 export interface GameplayTelemetrySnapshot {
   readonly aimPoint: NormalizedViewportPoint | null;

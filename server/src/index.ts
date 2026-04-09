@@ -15,7 +15,7 @@ import type {
   CoopSyncPlayerPresenceCommand,
   CoopStartSessionCommand,
   CoopSetPlayerReadyCommand
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 import {
   createCoopFireShotCommand,
   createCoopKickPlayerCommand,
@@ -29,7 +29,7 @@ import {
   createCoopJoinRoomCommand,
   createCoopRoomId,
   createUsername
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import { CoopRoomDirectory } from "./experiences/duck-hunt/classes/coop-room-directory.js";
 import { MetaverseSessionRuntime } from "./metaverse/classes/metaverse-session-runtime.js";
@@ -563,7 +563,7 @@ const server = createServer(async (request, response) => {
 server.on("error", (error) => {
   if (isErrnoException(error) && error.code === "EADDRINUSE") {
     console.error(
-      `ThumbShooter server could not listen on http://${runtimeConfig.host}:${runtimeConfig.port} because the address is already in use.`
+      `WebGPU Metaverse server could not listen on http://${runtimeConfig.host}:${runtimeConfig.port} because the address is already in use.`
     );
     process.exit(1);
   }
@@ -573,6 +573,6 @@ server.on("error", (error) => {
 
 server.listen(runtimeConfig.port, runtimeConfig.host, () => {
   console.log(
-    `ThumbShooter server listening on http://${runtimeConfig.host}:${runtimeConfig.port}`
+    `WebGPU Metaverse server listening on http://${runtimeConfig.host}:${runtimeConfig.port}`
   );
 });

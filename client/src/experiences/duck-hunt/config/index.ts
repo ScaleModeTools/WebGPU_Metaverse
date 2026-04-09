@@ -1,7 +1,4 @@
 export {
-  duckHuntCalibrationCaptureConfig
-} from "./duck-hunt-calibration-capture";
-export {
   duckHuntCoopArenaSimulationConfig
 } from "./duck-hunt-coop-arena-simulation";
 export {

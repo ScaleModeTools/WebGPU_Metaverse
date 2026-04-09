@@ -4,7 +4,7 @@ import type {
   PlayerProfile,
   PlayerProfileSnapshot,
   Username
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import type { CalibrationRecordVersion } from "./profile-storage";
 

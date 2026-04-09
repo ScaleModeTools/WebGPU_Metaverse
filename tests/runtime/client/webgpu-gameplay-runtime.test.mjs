@@ -216,13 +216,13 @@ test("WebGpuGameplayRuntime rejects unsupported navigators explicitly", async ()
 test("WebGpuGameplayRuntime renders the calibrated reticle from live tracking snapshots", async () => {
   const {
     readObservedAimPoint
-  } = await clientLoader.load("/src/game/index.ts");
+  } = await clientLoader.load("/src/tracking/index.ts");
   const {
     DuckHuntLocalArenaSimulation: LocalArenaSimulation,
     DuckHuntWebGpuGameplayRuntime: WebGpuGameplayRuntime
   } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const { handAimObservationConfig } = await clientLoader.load(
-    "/src/game/config/hand-aim-observation.ts"
+    "/src/tracking/config/hand-aim-observation.ts"
   );
   const trackingSource = {
     latestPose: {

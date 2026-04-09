@@ -2,35 +2,38 @@ import { Suspense, lazy } from "react";
 import type { FormEvent } from "react";
 
 import {
+  type GameplayInputModeId,
   type ExperienceId,
   type GameplaySessionMode,
   type PlayerProfile
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import {
-  mouseGameplayAimCalibrationSnapshot,
   type GameplayDebugPanelMode,
-  type GameplayInputModeId,
-  type GameplayInputSource,
   type GameplaySignal
 } from "../../game";
-import type { HandTrackingRuntime } from "../../game/classes/hand-tracking-runtime";
-import type { WebGpuGameplayCapabilitySnapshot } from "../../game/types/webgpu-capability";
+import type { MetaverseControlModeId } from "../../metaverse";
+import type { WebGpuMetaverseCapabilitySnapshot } from "../../metaverse";
 import type {
   MetaverseEntryStepId,
   NavigationStepId,
   WebcamPermissionState
 } from "../../navigation";
 import {
+  mouseGameplayAimCalibrationSnapshot,
+  type GameplayInputSource
+} from "../../tracking";
+import type { HandTrackingRuntime } from "../../tracking";
+import {
   duckHuntFirstPlayableWeaponDefinition
 } from "../../experiences/duck-hunt/config";
 import { resolveDuckHuntGameplayCoopRoomId } from "../../experiences/duck-hunt/network";
 
-import { CalibrationStageScreen } from "./calibration-stage-screen";
 import { ImmersiveStageFrame } from "../../ui/components/immersive-stage-frame";
 import { LoginStageScreen } from "./login-stage-screen";
 import { MainMenuStageScreen } from "./main-menu-stage-screen";
 import { PermissionStageScreen } from "./permission-stage-screen";
+import { TrackedHandCalibrationStageScreen } from "./tracked-hand-calibration-stage-screen";
 import { UnsupportedStageScreen } from "./unsupported-stage-screen";
 
 const MetaverseStageScreen = lazy(async () =>
@@ -50,7 +53,7 @@ interface ShellStageRouterProps {
   readonly audioStatusLabel: string;
   readonly bestScore: number;
   readonly capabilityReasonLabel: string;
-  readonly capabilityStatus: WebGpuGameplayCapabilitySnapshot["status"];
+  readonly capabilityStatus: WebGpuMetaverseCapabilitySnapshot["status"];
   readonly calibrationQualityLabel: string;
   readonly coopRoomIdDraft: string;
   readonly debugPanelMode: GameplayDebugPanelMode;
@@ -59,6 +62,7 @@ interface ShellStageRouterProps {
   readonly hasStoredProfile: boolean;
   readonly inputMode: GameplayInputModeId;
   readonly loginError: string | null;
+  readonly metaverseControlMode: MetaverseControlModeId;
   readonly nextMetaverseStep: MetaverseEntryStepId | null;
   readonly permissionError: string | null;
   readonly permissionState: WebcamPermissionState;
@@ -79,6 +83,9 @@ interface ShellStageRouterProps {
   readonly onGameplaySignal: (signal: GameplaySignal) => void;
   readonly onInputModeChange: (inputMode: GameplayInputModeId) => void;
   readonly onLoginSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  readonly onMetaverseControlModeChange: (
+    controlMode: MetaverseControlModeId
+  ) => void;
   readonly onOpenGameplayMenu: () => void;
   readonly onRequestPermission: () => void;
   readonly onRecalibrationRequest: () => void;
@@ -118,6 +125,7 @@ export function ShellStageRouter({
   hasStoredProfile,
   inputMode,
   loginError,
+  metaverseControlMode,
   nextMetaverseStep,
   permissionError,
   permissionState,
@@ -135,6 +143,7 @@ export function ShellStageRouter({
   onGameplaySignal,
   onInputModeChange,
   onLoginSubmit,
+  onMetaverseControlModeChange,
   onOpenGameplayMenu,
   onRequestPermission,
   onRecalibrationRequest,
@@ -173,7 +182,7 @@ export function ShellStageRouter({
       ) : null}
 
       {activeStep === "calibration" && profile !== null ? (
-        <CalibrationStageScreen
+        <TrackedHandCalibrationStageScreen
           handTrackingRuntime={handTrackingRuntime}
           onCalibrationProgress={onCalibrationProgress}
           profile={profile}
@@ -187,9 +196,11 @@ export function ShellStageRouter({
           capabilityReasonLabel={capabilityReasonLabel}
           capabilityStatus={capabilityStatus}
           inputMode={inputMode}
+          metaverseControlMode={metaverseControlMode}
           nextMetaverseStep={nextMetaverseStep}
           onEnterMetaverse={onEnterMetaverseRequest}
           onInputModeChange={onInputModeChange}
+          onMetaverseControlModeChange={onMetaverseControlModeChange}
           onRecalibrationRequest={onRecalibrationRequest}
         />
       ) : null}
@@ -200,9 +211,11 @@ export function ShellStageRouter({
             audioStatusLabel={audioStatusLabel}
             calibrationQualityLabel={calibrationQualityLabel}
             coopRoomIdDraft={coopRoomIdDraft}
-            inputMode={inputMode}
+            gameplayInputMode={inputMode}
+            metaverseControlMode={metaverseControlMode}
             onCoopRoomIdDraftChange={onCoopRoomIdDraftChange}
             onExperienceLaunchRequest={onExperienceLaunchRequest}
+            onMetaverseControlModeChange={onMetaverseControlModeChange}
             onRecalibrationRequest={onRecalibrationRequest}
             onSessionModeChange={onSessionModeChange}
             onSetupRequest={onSetupRequest}

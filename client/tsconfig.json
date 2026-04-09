@@ -21,7 +21,7 @@
       "@mediapipe/tasks-vision": [
         "../node_modules/@mediapipe/tasks-vision/vision.d.ts"
       ],
-      "@thumbshooter/shared": [
+      "@webgpu-metaverse/shared": [
         "../packages/shared/src/index.ts"
       ]
     },

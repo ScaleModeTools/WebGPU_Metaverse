@@ -2,4 +2,4 @@ export {
   defaultGameplayInputMode,
   gameplayInputModes,
   resolveGameplayInputMode
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";

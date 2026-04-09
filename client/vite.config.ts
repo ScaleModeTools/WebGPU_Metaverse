@@ -50,7 +50,7 @@ export default defineConfig({
         new URL("../node_modules/@mediapipe/tasks-vision/vision_bundle.mjs", import.meta.url)
       ),
       "@strudel/web/web.mjs": strudelBrowserEntrypoint,
-      "@thumbshooter/shared": fileURLToPath(
+      "@webgpu-metaverse/shared": fileURLToPath(
         new URL("../packages/shared/src/index.ts", import.meta.url)
       )
     },

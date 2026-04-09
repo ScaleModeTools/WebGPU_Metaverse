@@ -13,11 +13,11 @@ after(async () => {
   await clientLoader?.close();
 });
 
-test("WebGpuGameplayCapabilityProbe reports missing navigator.gpu as unsupported", async () => {
-  const { WebGpuGameplayCapabilityProbe } = await clientLoader.load(
-    "/src/game/classes/webgpu-gameplay-capability-probe.ts"
+test("WebGpuMetaverseCapabilityProbe reports missing navigator.gpu as unsupported", async () => {
+  const { WebGpuMetaverseCapabilityProbe } = await clientLoader.load(
+    "/src/metaverse/classes/webgpu-metaverse-capability-probe.ts"
   );
-  const probe = new WebGpuGameplayCapabilityProbe();
+  const probe = new WebGpuMetaverseCapabilityProbe();
 
   const snapshot = await probe.probe({});
 
@@ -27,11 +27,11 @@ test("WebGpuGameplayCapabilityProbe reports missing navigator.gpu as unsupported
   });
 });
 
-test("WebGpuGameplayCapabilityProbe reports ready adapters as supported", async () => {
-  const { WebGpuGameplayCapabilityProbe } = await clientLoader.load(
-    "/src/game/classes/webgpu-gameplay-capability-probe.ts"
+test("WebGpuMetaverseCapabilityProbe reports ready adapters as supported", async () => {
+  const { WebGpuMetaverseCapabilityProbe } = await clientLoader.load(
+    "/src/metaverse/classes/webgpu-metaverse-capability-probe.ts"
   );
-  const probe = new WebGpuGameplayCapabilityProbe();
+  const probe = new WebGpuMetaverseCapabilityProbe();
   let deviceRequestCount = 0;
 
   const snapshot = await probe.probe({
@@ -54,11 +54,11 @@ test("WebGpuGameplayCapabilityProbe reports ready adapters as supported", async 
   assert.equal(deviceRequestCount, 0);
 });
 
-test("WebGpuGameplayCapabilityProbe reports probe failures cleanly", async () => {
-  const { WebGpuGameplayCapabilityProbe } = await clientLoader.load(
-    "/src/game/classes/webgpu-gameplay-capability-probe.ts"
+test("WebGpuMetaverseCapabilityProbe reports probe failures cleanly", async () => {
+  const { WebGpuMetaverseCapabilityProbe } = await clientLoader.load(
+    "/src/metaverse/classes/webgpu-metaverse-capability-probe.ts"
   );
-  const probe = new WebGpuGameplayCapabilityProbe();
+  const probe = new WebGpuMetaverseCapabilityProbe();
 
   const snapshot = await probe.probe({
     gpu: {
@@ -74,11 +74,11 @@ test("WebGpuGameplayCapabilityProbe reports probe failures cleanly", async () =>
   });
 });
 
-test("WebGpuGameplayCapabilityProbe reports missing adapters cleanly", async () => {
-  const { WebGpuGameplayCapabilityProbe } = await clientLoader.load(
-    "/src/game/classes/webgpu-gameplay-capability-probe.ts"
+test("WebGpuMetaverseCapabilityProbe reports missing adapters cleanly", async () => {
+  const { WebGpuMetaverseCapabilityProbe } = await clientLoader.load(
+    "/src/metaverse/classes/webgpu-metaverse-capability-probe.ts"
   );
-  const probe = new WebGpuGameplayCapabilityProbe();
+  const probe = new WebGpuMetaverseCapabilityProbe();
 
   const snapshot = await probe.probe({
     gpu: {

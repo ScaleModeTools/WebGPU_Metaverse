@@ -23,7 +23,7 @@ export interface GameplayInputModeDefinition {
 }
 
 export const defaultGameplayInputMode: GameplayInputModeId =
-  "camera-thumb-trigger";
+  "mouse";
 
 export const gameplayInputModes = [
   {

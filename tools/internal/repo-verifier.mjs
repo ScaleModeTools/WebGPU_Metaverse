@@ -47,6 +47,7 @@ const clientDomainPolicies = new Map([
       "navigation",
       "audio",
       "game",
+      "input",
       "metaverse",
       "experiences",
       "tracking",
@@ -54,6 +55,10 @@ const clientDomainPolicies = new Map([
       "assets",
       "shared"
     ])
+  ],
+  [
+    "input",
+    new Set(["input", "shared"])
   ],
   [
     "ui",
@@ -64,6 +69,7 @@ const clientDomainPolicies = new Map([
       "navigation",
       "audio",
       "game",
+      "tracking",
       "assets",
       "shared"
     ])
@@ -90,7 +96,7 @@ const clientDomainPolicies = new Map([
   ],
   [
     "game",
-    new Set(["game", "shared"])
+    new Set(["game", "tracking", "shared"])
   ],
   [
     "metaverse",
@@ -224,7 +230,7 @@ function getClientDomain(repoRelativePath) {
 }
 
 function resolveClientImportDomain(repoRoot, sourceFilePath, specifier) {
-  if (specifier === "@thumbshooter/shared") {
+  if (specifier === "@webgpu-metaverse/shared") {
     return "shared";
   }
 
@@ -326,7 +332,7 @@ function verifyProductImports(repoRoot, sourceFiles, errors) {
 
     if (contents.includes("packages/shared/src")) {
       errors.push(
-        `Cross-workspace source import found in ${repoRelativePath}; use @thumbshooter/shared instead.`
+        `Cross-workspace source import found in ${repoRelativePath}; use @webgpu-metaverse/shared instead.`
       );
     }
 
@@ -407,9 +413,9 @@ function verifySharedDist(repoRoot, errors) {
 function verifyWorkspaceDependency(repoRoot, errors) {
   const clientPackage = readPackageJson(repoRoot, "client/package.json");
 
-  if (clientPackage.dependencies?.["@thumbshooter/shared"] !== "0.1.0") {
+  if (clientPackage.dependencies?.["@webgpu-metaverse/shared"] !== "0.1.0") {
     errors.push(
-      "client/package.json must declare @thumbshooter/shared as a direct workspace dependency."
+      "client/package.json must declare @webgpu-metaverse/shared as a direct workspace dependency."
     );
   }
 }
@@ -617,10 +623,10 @@ function verifyExternalPackageBoundaries(repoRoot, sourceFiles, errors) {
       if (
         (specifier === "@mediapipe/tasks-vision" ||
           specifier.startsWith("@mediapipe/tasks-vision/")) &&
-        !repoRelativePath.startsWith("client/src/game/workers/")
+        !repoRelativePath.startsWith("client/src/tracking/workers/")
       ) {
         errors.push(
-          `Illegal MediaPipe import in ${repoRelativePath}: @mediapipe/tasks-vision belongs in client/src/game/workers only.`
+          `Illegal MediaPipe import in ${repoRelativePath}: @mediapipe/tasks-vision belongs in client/src/tracking/workers only.`
         );
       }
     }

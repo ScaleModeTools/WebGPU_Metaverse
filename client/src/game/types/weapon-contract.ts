@@ -1,11 +1,11 @@
-import type { Milliseconds } from "@thumbshooter/shared";
+import type { Milliseconds } from "@webgpu-metaverse/shared";
 
-import type { HandTriggerGestureConfig } from "./hand-trigger-gesture";
 import type {
   FirstPlayableWeaponId,
   TriggerGestureMode,
   WeaponReloadRule
 } from "./game-foundation";
+import type { HandTriggerGestureConfig } from "../../tracking";
 
 export const weaponReadinessStates = [
   "ready",

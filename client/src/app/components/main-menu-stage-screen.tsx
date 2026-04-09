@@ -2,9 +2,14 @@ import {
   gameplayInputModes,
   resolveGameplayInputMode,
   type GameplayInputModeId
-} from "../../game";
+} from "@webgpu-metaverse/shared";
 import type { MetaverseEntryStepId } from "../../navigation";
-import type { WebGpuGameplayCapabilitySnapshot } from "../../game/types/webgpu-capability";
+import {
+  metaverseControlModes,
+  resolveMetaverseControlMode
+} from "../../metaverse/config/metaverse-control-modes";
+import type { MetaverseControlModeId } from "../../metaverse/types/metaverse-control-mode";
+import type { WebGpuMetaverseCapabilitySnapshot } from "../../metaverse/types/webgpu-capability";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,16 +31,20 @@ interface MainMenuStageScreenProps {
   readonly audioStatusLabel: string;
   readonly calibrationQualityLabel: string;
   readonly capabilityReasonLabel: string;
-  readonly capabilityStatus: WebGpuGameplayCapabilitySnapshot["status"];
+  readonly capabilityStatus: WebGpuMetaverseCapabilitySnapshot["status"];
   readonly inputMode: GameplayInputModeId;
+  readonly metaverseControlMode: MetaverseControlModeId;
   readonly nextMetaverseStep: MetaverseEntryStepId | null;
   readonly onEnterMetaverse: () => void;
   readonly onInputModeChange: (inputMode: GameplayInputModeId) => void;
+  readonly onMetaverseControlModeChange: (
+    controlMode: MetaverseControlModeId
+  ) => void;
   readonly onRecalibrationRequest: () => void;
 }
 
 function resolveEnterMetaverseLabel(
-  capabilityStatus: WebGpuGameplayCapabilitySnapshot["status"],
+  capabilityStatus: WebGpuMetaverseCapabilitySnapshot["status"],
   nextMetaverseStep: MetaverseEntryStepId | null
 ): string {
   if (nextMetaverseStep === "metaverse") {
@@ -63,22 +72,27 @@ export function MainMenuStageScreen({
   capabilityReasonLabel,
   capabilityStatus,
   inputMode,
+  metaverseControlMode,
   nextMetaverseStep,
   onEnterMetaverse,
   onInputModeChange,
+  onMetaverseControlModeChange,
   onRecalibrationRequest
 }: MainMenuStageScreenProps) {
   const selectedInputMode = resolveGameplayInputMode(inputMode);
+  const selectedMetaverseControlMode =
+    resolveMetaverseControlMode(metaverseControlMode);
   const canEnterMetaverse = nextMetaverseStep !== null;
 
   return (
     <StageScreenLayout
-      description="Confirm the control path for this browser session, keep WebGPU readiness explicit, and then enter the ocean hub."
+      description="Set hub controls separately from experience gameplay input, keep WebGPU readiness explicit, and then enter the ocean shell."
       eyebrow="Pre-metaverse setup"
-      title="Choose input before entering the hub"
+      title="Choose hub controls and experience input"
     >
       <div className="flex flex-wrap gap-2">
-        <Badge>{selectedInputMode.label}</Badge>
+        <Badge>Hub: {selectedMetaverseControlMode.label}</Badge>
+        <Badge>Duck Hunt: {selectedInputMode.label}</Badge>
         <Badge variant="secondary">{audioStatusLabel}</Badge>
         <Badge variant="outline">WebGPU {capabilityStatus}</Badge>
       </div>
@@ -86,47 +100,96 @@ export function MainMenuStageScreen({
       <div className="grid gap-5 xl:grid-cols-[1.08fr_0.92fr]">
         <Card className="rounded-[1.5rem] border-border/70 bg-muted/35">
           <CardHeader className="gap-3">
-            <CardTitle>Input path</CardTitle>
+            <CardTitle>Control paths</CardTitle>
             <CardDescription>
-              Mouse mode enters the ocean hub immediately. Camera thumb-trigger
-              mode keeps webcam permission and nine-point calibration explicit
-              before launch.
+              Hub controls now stay separate from Duck Hunt launch input. Mouse
+              aim or camera thumb-trigger belong to the experience; keyboard or
+              mouse flight belong to the hub.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <ToggleGroup
-              className="w-full"
-              onValueChange={(nextValue) => {
-                if (nextValue.length === 0) {
-                  return;
-                }
+            <div className="flex flex-col gap-3">
+              <p className="text-sm font-medium text-foreground">Hub controls</p>
+              <ToggleGroup
+                className="w-full"
+                onValueChange={(nextValue) => {
+                  if (nextValue.length === 0) {
+                    return;
+                  }
 
-                onInputModeChange(nextValue as GameplayInputModeId);
-              }}
-              type="single"
-              value={inputMode}
-              variant="outline"
-            >
-              {gameplayInputModes.map((mode) => (
-                <ToggleGroupItem className="flex-1" key={mode.id} value={mode.id}>
-                  {mode.label}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
+                  onMetaverseControlModeChange(nextValue as MetaverseControlModeId);
+                }}
+                type="single"
+                value={metaverseControlMode}
+                variant="outline"
+              >
+                {metaverseControlModes.map((controlMode) => (
+                  <ToggleGroupItem
+                    className="flex-1"
+                    key={controlMode.id}
+                    value={controlMode.id}
+                  >
+                    {controlMode.label}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
 
-            <div className="rounded-xl border border-border/70 bg-background/70 px-4 py-4 text-sm text-muted-foreground">
-              {selectedInputMode.description}
+              <div className="rounded-xl border border-border/70 bg-background/70 px-4 py-4 text-sm text-muted-foreground">
+                {selectedMetaverseControlMode.description}
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                {selectedMetaverseControlMode.controlsSummary.map((instruction) => (
+                  <div
+                    className="rounded-xl border border-border/70 bg-background/70 px-3 py-3 text-sm text-muted-foreground"
+                    key={instruction}
+                  >
+                    {instruction}
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-3">
-              {selectedInputMode.controlsSummary.map((instruction) => (
-                <div
-                  className="rounded-xl border border-border/70 bg-background/70 px-3 py-3 text-sm text-muted-foreground"
-                  key={instruction}
-                >
-                  {instruction}
-                </div>
-              ))}
+            <Separator />
+
+            <div className="flex flex-col gap-3">
+              <p className="text-sm font-medium text-foreground">
+                Duck Hunt launch input
+              </p>
+              <ToggleGroup
+                className="w-full"
+                onValueChange={(nextValue) => {
+                  if (nextValue.length === 0) {
+                    return;
+                  }
+
+                  onInputModeChange(nextValue as GameplayInputModeId);
+                }}
+                type="single"
+                value={inputMode}
+                variant="outline"
+              >
+                {gameplayInputModes.map((mode) => (
+                  <ToggleGroupItem className="flex-1" key={mode.id} value={mode.id}>
+                    {mode.label}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+
+              <div className="rounded-xl border border-border/70 bg-background/70 px-4 py-4 text-sm text-muted-foreground">
+                {selectedInputMode.description}
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                {selectedInputMode.controlsSummary.map((instruction) => (
+                  <div
+                    className="rounded-xl border border-border/70 bg-background/70 px-3 py-3 text-sm text-muted-foreground"
+                    key={instruction}
+                  >
+                    {instruction}
+                  </div>
+                ))}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -149,18 +212,19 @@ export function MainMenuStageScreen({
               </div>
 
               <div className="rounded-xl border border-border/70 bg-background/70 px-4 py-4">
-                <p className="text-sm font-medium text-foreground">Calibration</p>
+                <p className="text-sm font-medium text-foreground">Duck Hunt setup</p>
                 <p className="mt-2 text-sm text-muted-foreground">
                   {selectedInputMode.requiresCalibration
                     ? calibrationQualityLabel
-                    : "Not required while mouse input is selected."}
+                    : "Not required while mouse aim is selected."}
                 </p>
               </div>
             </div>
 
             <div className="rounded-xl border border-border/70 bg-background/70 px-4 py-4 text-sm text-muted-foreground">
               Duck Hunt launch details now live inside the in-world portal. Use
-              this setup surface to choose global input and readiness only.
+              this setup surface to pick hub controls, choose gameplay input,
+              and keep camera setup optional instead of blocking the hub.
             </div>
 
             <Separator />

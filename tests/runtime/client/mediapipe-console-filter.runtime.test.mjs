@@ -15,7 +15,7 @@ after(async () => {
 
 test("shouldSuppressMediaPipeConsoleMessage matches known MediaPipe worker chatter", async () => {
   const { shouldSuppressMediaPipeConsoleMessage } = await clientLoader.load(
-    "/src/game/workers/mediapipe-console-filter.ts"
+    "/src/tracking/workers/mediapipe-console-filter.ts"
   );
 
   assert.equal(
@@ -34,14 +34,14 @@ test("shouldSuppressMediaPipeConsoleMessage matches known MediaPipe worker chatt
     true
   );
   assert.equal(
-    shouldSuppressMediaPipeConsoleMessage(["ThumbShooter runtime ready"]),
+    shouldSuppressMediaPipeConsoleMessage(["WebGPU Metaverse runtime ready"]),
     false
   );
 });
 
 test("installMediaPipeConsoleFilter drops only known MediaPipe noise", async () => {
   const { installMediaPipeConsoleFilter } = await clientLoader.load(
-    "/src/game/workers/mediapipe-console-filter.ts"
+    "/src/tracking/workers/mediapipe-console-filter.ts"
   );
   const observedMessages = [];
   const fakeConsole = {
@@ -63,11 +63,11 @@ test("installMediaPipeConsoleFilter drops only known MediaPipe noise", async () 
     "W0408 13:40:25.785999 inference_feedback_manager.cc:121]",
     "Feedback manager requires a model with a single signature inference. Disabling support for feedback tensors."
   );
-  fakeConsole.warn("ThumbShooter gameplay warning");
+  fakeConsole.warn("WebGPU Metaverse gameplay warning");
   fakeConsole.log("Tracking worker ready");
 
   assert.deepEqual(observedMessages, [
-    ["warn", "ThumbShooter gameplay warning"],
+    ["warn", "WebGPU Metaverse gameplay warning"],
     ["log", "Tracking worker ready"]
   ]);
 });

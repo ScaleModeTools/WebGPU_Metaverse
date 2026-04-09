@@ -1,4 +1,4 @@
-import type { NormalizedViewportPointInput } from "@thumbshooter/shared";
+import type { NormalizedViewportPointInput } from "@webgpu-metaverse/shared";
 
 import type { HandTrackingPoseSnapshot } from "./hand-tracking";
 

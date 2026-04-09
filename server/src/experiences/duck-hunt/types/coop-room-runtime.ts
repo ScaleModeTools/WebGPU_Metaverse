@@ -3,7 +3,7 @@ import type {
   CoopRoomId,
   CoopSessionId,
   Milliseconds
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 export interface CoopRoomBirdSeed {
   readonly birdId: CoopBirdId;

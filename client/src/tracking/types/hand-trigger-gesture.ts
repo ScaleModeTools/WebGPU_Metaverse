@@ -6,7 +6,7 @@ import {
   type Degrees,
   type HandTriggerCalibrationSnapshot,
   type HandTriggerMetricSnapshot
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import type { HandTrackingPoseSnapshot } from "./hand-tracking";
 

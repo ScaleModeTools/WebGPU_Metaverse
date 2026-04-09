@@ -23,7 +23,7 @@ export interface ExperienceCatalogEntrySnapshot {
 }
 
 const duckHuntCatalogEntry = Object.freeze({
-  defaultInputMode: "camera-thumb-trigger",
+  defaultInputMode: "mouse",
   defaultSessionMode: "single-player",
   id: "duck-hunt",
   label: "Duck Hunt!",

@@ -1,9 +1,17 @@
 import { useEffectEvent } from "react";
 import type { Dispatch } from "react";
-import type { ExperienceId } from "@thumbshooter/shared";
+import type {
+  ExperienceId,
+  GameplayInputModeId
+} from "@webgpu-metaverse/shared";
 
-import type { GameplayInputModeId } from "../../game";
 import type { MetaverseAudioSession } from "../audio";
+import type {
+  DuckHuntControllerSchemeId,
+  GlobalControllerBindingPresetId,
+  MetaverseControllerSchemeId
+} from "../../input";
+import type { MetaverseControlModeId } from "../../metaverse";
 import type {
   MetaverseShellControllerAction,
   MetaverseShellControllerState
@@ -16,9 +24,21 @@ interface MetaverseShellFlowPolicyDependencies {
 }
 
 interface MetaverseShellFlowPolicy {
+  readonly onDuckHuntControllerSchemeChange: (
+    duckHuntControllerSchemeId: DuckHuntControllerSchemeId
+  ) => void;
   readonly onEnterMetaverseRequest: () => void;
   readonly onExperienceLaunchRequest: (experienceId: ExperienceId) => void;
+  readonly onGlobalControllerBindingPresetChange: (
+    globalBindingPresetId: GlobalControllerBindingPresetId
+  ) => void;
   readonly onInputModeChange: (inputMode: GameplayInputModeId) => void;
+  readonly onMetaverseControlModeChange: (
+    controlMode: MetaverseControlModeId
+  ) => void;
+  readonly onMetaverseControllerSchemeChange: (
+    metaverseControllerSchemeId: MetaverseControllerSchemeId
+  ) => void;
   readonly onReturnToMetaverseRequest: () => void;
   readonly onSetupRequest: () => void;
 }
@@ -85,10 +105,92 @@ export function useMetaverseShellFlowPolicy({
     });
   });
 
+  const onGlobalControllerBindingPresetChange = useEffectEvent(
+    (globalBindingPresetId: GlobalControllerBindingPresetId) => {
+      if (
+        globalBindingPresetId ===
+        state.controllerConfiguration.globalBindingPresetId
+      ) {
+        return;
+      }
+
+      dispatch({
+        type: "globalBindingPresetChanged",
+        globalBindingPresetId
+      });
+      dispatch({
+        type: "audioSnapshotChanged",
+        audioSnapshot: audioSession.playCue("ui-confirm")
+      });
+    }
+  );
+
+  const onMetaverseControlModeChange = useEffectEvent(
+    (controlMode: MetaverseControlModeId) => {
+      if (controlMode === state.metaverseControlMode) {
+        return;
+      }
+
+      dispatch({
+        controlMode,
+        type: "metaverseControlModeChanged"
+      });
+
+      dispatch({
+        type: "audioSnapshotChanged",
+        audioSnapshot: audioSession.playCue("ui-confirm")
+      });
+    }
+  );
+
+  const onMetaverseControllerSchemeChange = useEffectEvent(
+    (metaverseControllerSchemeId: MetaverseControllerSchemeId) => {
+      if (
+        metaverseControllerSchemeId ===
+        state.controllerConfiguration.metaverseControllerSchemeId
+      ) {
+        return;
+      }
+
+      dispatch({
+        type: "metaverseControllerSchemeChanged",
+        metaverseControllerSchemeId
+      });
+      dispatch({
+        type: "audioSnapshotChanged",
+        audioSnapshot: audioSession.playCue("ui-confirm")
+      });
+    }
+  );
+
+  const onDuckHuntControllerSchemeChange = useEffectEvent(
+    (duckHuntControllerSchemeId: DuckHuntControllerSchemeId) => {
+      if (
+        duckHuntControllerSchemeId ===
+        state.controllerConfiguration.duckHuntControllerSchemeId
+      ) {
+        return;
+      }
+
+      dispatch({
+        type: "duckHuntControllerSchemeChanged",
+        duckHuntControllerSchemeId
+      });
+      dispatch({
+        type: "audioSnapshotChanged",
+        audioSnapshot: audioSession.playCue("ui-confirm")
+      });
+    }
+  );
+
   return {
+    onDuckHuntControllerSchemeChange,
     onEnterMetaverseRequest,
     onExperienceLaunchRequest,
+    onGlobalControllerBindingPresetChange,
     onInputModeChange,
+    onMetaverseControlModeChange,
+    onMetaverseControllerSchemeChange,
     onReturnToMetaverseRequest,
     onSetupRequest
   };

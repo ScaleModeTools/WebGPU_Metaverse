@@ -7,7 +7,7 @@ import {
   type CoopRoomSnapshot,
   type HandTriggerCalibrationSnapshot,
   type NormalizedViewportPoint
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import { duckHuntCoopArenaSimulationConfig } from "../config/duck-hunt-coop-arena-simulation";
 import { duckHuntGameplayRuntimeConfig } from "../config/duck-hunt-gameplay-runtime";
@@ -16,10 +16,7 @@ import {
   createDistanceSquaredFromRay,
   createGameplayCameraSnapshot
 } from "../../../game/states/gameplay-space";
-import { evaluateHandTriggerGesture } from "../../../game/types/hand-trigger-gesture";
-import { readObservedAimPoint } from "../../../game/types/hand-aim-observation";
 import type { GameplaySignal } from "../../../game/types/gameplay-signal";
-import type { LatestHandTrackingSnapshot } from "../../../game/types/hand-tracking";
 import {
   createCoopGameplaySessionSnapshot,
   createPendingCoopGameplaySessionSnapshot
@@ -42,7 +39,12 @@ import type {
   LocalArenaTargetFeedbackState,
   LocalArenaWeaponSnapshot
 } from "../../../game/types/local-arena-simulation";
-import { handAimObservationConfig } from "../../../game/config/hand-aim-observation";
+import {
+  evaluateHandTriggerGesture,
+  handAimObservationConfig,
+  readObservedAimPoint,
+  type LatestHandTrackingSnapshot
+} from "../../../tracking";
 import { DuckHuntWeaponRuntime } from "./duck-hunt-weapon-runtime";
 
 const defaultViewportSnapshot = Object.freeze({

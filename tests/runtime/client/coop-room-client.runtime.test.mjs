@@ -8,7 +8,7 @@ import {
   createCoopSessionId,
   createMilliseconds,
   createUsername
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import { createClientModuleLoader } from "./load-client-module.mjs";
 

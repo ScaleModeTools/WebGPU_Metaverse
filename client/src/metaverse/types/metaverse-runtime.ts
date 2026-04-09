@@ -1,4 +1,9 @@
-import type { ExperienceId } from "@thumbshooter/shared";
+import type { ExperienceId } from "@webgpu-metaverse/shared";
+
+import type {
+  MetaverseControlModeId,
+  MetaverseFlightInputSnapshot
+} from "./metaverse-control-mode";
 
 export const metaverseRuntimeLifecycleStates = [
   "idle",
@@ -23,16 +28,6 @@ export interface MetaverseCameraSnapshot {
   readonly yawRadians: number;
 }
 
-export interface MetaverseMovementInputSnapshot {
-  ascend: boolean;
-  boost: boolean;
-  descend: boolean;
-  moveBackward: boolean;
-  moveForward: boolean;
-  strafeLeft: boolean;
-  strafeRight: boolean;
-}
-
 export interface MetaversePortalConfig {
   readonly beamColor: readonly [number, number, number];
   readonly experienceId: ExperienceId;
@@ -51,10 +46,10 @@ export interface FocusedExperiencePortalSnapshot {
 
 export interface MetaverseHudSnapshot {
   readonly camera: MetaverseCameraSnapshot;
+  readonly controlMode: MetaverseControlModeId;
   readonly failureReason: string | null;
   readonly focusedPortal: FocusedExperiencePortalSnapshot | null;
   readonly lifecycle: MetaverseRuntimeLifecycleState;
-  readonly pointerLockActive: boolean;
 }
 
 export interface MetaverseRuntimeConfig {
@@ -78,12 +73,18 @@ export interface MetaverseRuntimeConfig {
   readonly movement: {
     readonly baseSpeedUnitsPerSecond: number;
     readonly boostMultiplier: number;
-    readonly lookSensitivityRadiansPerPixel: number;
     readonly maxAltitude: number;
-    readonly maxPitchRadians: number;
     readonly minAltitude: number;
-    readonly minPitchRadians: number;
     readonly worldRadius: number;
+  };
+  readonly orientation: {
+    readonly maxPitchRadians: number;
+    readonly maxTurnSpeedRadiansPerSecond: number;
+    readonly minPitchRadians: number;
+    readonly mouseEdgeTurn: {
+      readonly deadZoneViewportFraction: number;
+      readonly responseExponent: number;
+    };
   };
   readonly ocean: {
     readonly emissiveColor: readonly [number, number, number];
@@ -108,3 +109,5 @@ export interface MetaverseRuntimeConfig {
   };
   readonly portals: readonly MetaversePortalConfig[];
 }
+
+export type { MetaverseFlightInputSnapshot };

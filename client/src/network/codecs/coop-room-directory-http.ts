@@ -1,8 +1,8 @@
 import type {
   CoopRoomDirectorySnapshot,
   CoopRoomDirectorySnapshotInput
-} from "@thumbshooter/shared";
-import { createCoopRoomDirectorySnapshot } from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
+import { createCoopRoomDirectorySnapshot } from "@webgpu-metaverse/shared";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;

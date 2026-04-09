@@ -254,14 +254,14 @@ export interface CoopRoomDirectoryEntrySnapshotInput {
 export interface CoopRoomDirectorySnapshot {
   readonly coOpRooms: readonly CoopRoomDirectoryEntrySnapshot[];
   readonly rendererTarget: "webgpu";
-  readonly service: "thumbshooter-server";
+  readonly service: "webgpu-metaverse-server";
   readonly status: "co-op-contract-slice-ready";
 }
 
 export interface CoopRoomDirectorySnapshotInput {
   readonly coOpRooms: readonly CoopRoomDirectoryEntrySnapshotInput[];
   readonly rendererTarget?: "webgpu";
-  readonly service?: "thumbshooter-server";
+  readonly service?: "webgpu-metaverse-server" | "thumbshooter-server";
   readonly status?: "co-op-contract-slice-ready";
 }
 
@@ -410,6 +410,14 @@ function normalizeFiniteNumber(rawValue: number): number {
   }
 
   return rawValue;
+}
+
+function normalizeCoopRoomService(
+  rawValue: CoopRoomDirectorySnapshotInput["service"]
+): CoopRoomDirectorySnapshot["service"] {
+  return rawValue === undefined || rawValue === "thumbshooter-server"
+    ? "webgpu-metaverse-server"
+    : rawValue;
 }
 
 function normalizeWeaponId(rawValue: string | undefined): string {
@@ -694,7 +702,7 @@ export function createCoopRoomDirectorySnapshot(
       input.coOpRooms.map((room) => createCoopRoomDirectoryEntrySnapshot(room))
     ),
     rendererTarget: input.rendererTarget ?? "webgpu",
-    service: input.service ?? "thumbshooter-server",
+    service: normalizeCoopRoomService(input.service),
     status: input.status ?? "co-op-contract-slice-ready"
   });
 }

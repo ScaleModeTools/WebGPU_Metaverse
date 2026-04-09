@@ -42,10 +42,10 @@ try {
   let failures = 0;
 
   if (suites.length === 0) {
-    console.error("ThumbShooter bench failed: no benchmark suites are defined.");
+    console.error("WebGPU Metaverse bench failed: no benchmark suites are defined.");
     process.exitCode = 1;
   } else {
-    console.log("ThumbShooter benchmarks");
+    console.log("WebGPU Metaverse benchmarks");
 
     for (const suite of suites) {
       const result = runSuite(suite);
@@ -61,7 +61,7 @@ try {
 
     if (failures > 0) {
       console.error(
-        `ThumbShooter bench failed: ${failures} benchmark suite${failures === 1 ? "" : "s"} exceeded the configured budget.`
+        `WebGPU Metaverse bench failed: ${failures} benchmark suite${failures === 1 ? "" : "s"} exceeded the configured budget.`
       );
       process.exitCode = 1;
     }

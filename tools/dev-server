@@ -6,9 +6,9 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 server_host="127.0.0.1"
 server_port="3210"
 local_dev_dir="$repo_root/.local-dev"
-server_pid_file="$local_dev_dir/thumbshooter-dev-server.pid"
-shared_watch_log="$local_dev_dir/thumbshooter-dev-shared-watch.log"
-server_watch_log="$local_dev_dir/thumbshooter-dev-server-watch.log"
+server_pid_file="$local_dev_dir/webgpu-metaverse-dev-server.pid"
+shared_watch_log="$local_dev_dir/webgpu-metaverse-dev-shared-watch.log"
+server_watch_log="$local_dev_dir/webgpu-metaverse-dev-server-watch.log"
 
 cd "$repo_root"
 mkdir -p "$local_dev_dir"
@@ -87,13 +87,13 @@ wait_for_watch_build_ready() {
       fi
 
       if grep -Eq 'Found [1-9][0-9]* errors?\. Watching for file changes\.' "$log_file"; then
-        echo "ThumbShooter $label watch build reported errors during startup."
+        echo "WebGPU Metaverse $label watch build reported errors during startup."
         return 1
       fi
     fi
 
     if ! kill -0 "$watch_pid" 2>/dev/null; then
-      echo "ThumbShooter $label watch build exited before startup completed."
+      echo "WebGPU Metaverse $label watch build exited before startup completed."
       return 1
     fi
 
@@ -207,7 +207,7 @@ existing_dev_server_pid="$(resolve_existing_dev_server_pid || true)"
 
 if [[ -n "$existing_dev_server_pid" ]]; then
   terminate_existing_processes \
-    "existing ThumbShooter dev server session" \
+    "existing WebGPU Metaverse dev server session" \
     "$existing_dev_server_pid"
 fi
 
@@ -215,7 +215,7 @@ existing_server_watch_pid="$(resolve_existing_managed_server_watch_pid || true)"
 
 if [[ -n "$existing_server_watch_pid" ]]; then
   terminate_existing_processes \
-    "existing ThumbShooter managed server watcher" \
+    "existing WebGPU Metaverse managed server watcher" \
     "$existing_server_watch_pid"
 fi
 
@@ -224,7 +224,7 @@ mapfile -t existing_repo_server_runtime_pids < <(
 )
 
 terminate_existing_processes \
-  "existing ThumbShooter server runtime" \
+  "existing WebGPU Metaverse server runtime" \
   "${existing_repo_server_runtime_pids[@]}"
 
 mapfile -t existing_repo_watch_build_pids < <(
@@ -232,7 +232,7 @@ mapfile -t existing_repo_watch_build_pids < <(
 )
 
 terminate_existing_processes \
-  "existing ThumbShooter TypeScript watch builds" \
+  "existing WebGPU Metaverse TypeScript watch builds" \
   "${existing_repo_watch_build_pids[@]}"
 
 mapfile -t existing_repo_watch_log_pids < <(
@@ -240,7 +240,7 @@ mapfile -t existing_repo_watch_log_pids < <(
 )
 
 terminate_existing_processes \
-  "existing ThumbShooter dev watch log relays" \
+  "existing WebGPU Metaverse dev watch log relays" \
   "${existing_repo_watch_log_pids[@]}"
 
 printf '%s\n' "$$" > "$server_pid_file"
@@ -259,7 +259,7 @@ node \
     server.once("error", (error) => {
       if ("code" in error && error.code === "EADDRINUSE") {
         console.error(
-          `ThumbShooter dev server could not start because http://${host}:${port} is already in use. Stop the existing server process or run \`npm run dev:client\` if you only need the metaverse shell.`
+          `WebGPU Metaverse dev server could not start because http://${host}:${port} is already in use. Stop the existing server process or run \`npm run dev:client\` if you only need the metaverse shell.`
         );
         process.exit(1);
       }
@@ -284,18 +284,18 @@ node \
 
 start_watch_build \
   "$shared_watch_log" \
-  npm run watch:build --workspace @thumbshooter/shared
+  npm run watch:build --workspace @webgpu-metaverse/shared
 shared_watch_pid="$started_watch_pid"
 
 start_watch_build \
   "$server_watch_log" \
-  npm run watch:build --workspace @thumbshooter/server
+  npm run watch:build --workspace @webgpu-metaverse/server
 server_watch_pid="$started_watch_pid"
 
 wait_for_watch_build_ready "shared" "$shared_watch_log" "$shared_watch_pid"
 wait_for_watch_build_ready "server" "$server_watch_log" "$server_watch_pid"
 
-echo "ThumbShooter dev watch builds are ready. Starting server runtime."
+echo "WebGPU Metaverse dev watch builds are ready. Starting server runtime."
 
 node \
   --watch \

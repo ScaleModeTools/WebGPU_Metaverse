@@ -1,4 +1,4 @@
-import { createRadians } from "@thumbshooter/shared";
+import { createRadians } from "@webgpu-metaverse/shared";
 
 import type {
   LocalArenaArenaSnapshot,

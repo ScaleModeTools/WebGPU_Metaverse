@@ -1,9 +1,9 @@
 import { startTransition, useEffect, useEffectEvent } from "react";
 import type { Dispatch, FormEvent } from "react";
 
-import { PlayerProfile, createUsername } from "@thumbshooter/shared";
+import { PlayerProfile, createUsername } from "@webgpu-metaverse/shared";
 
-import { WebGpuGameplayCapabilityProbe } from "../../game/classes/webgpu-gameplay-capability-probe";
+import { WebGpuMetaverseCapabilityProbe } from "../../metaverse/classes/webgpu-metaverse-capability-probe";
 import { WebcamPermissionGateway } from "../../navigation";
 import type { MetaverseAudioSession } from "../audio";
 
@@ -14,7 +14,7 @@ import type {
 
 interface MetaverseShellEntryPolicyDependencies {
   readonly audioSession: MetaverseAudioSession;
-  readonly capabilityProbe: WebGpuGameplayCapabilityProbe;
+  readonly capabilityProbe: WebGpuMetaverseCapabilityProbe;
   readonly dispatch: Dispatch<MetaverseShellControllerAction>;
   readonly permissionGateway: WebcamPermissionGateway;
   readonly state: MetaverseShellControllerState;

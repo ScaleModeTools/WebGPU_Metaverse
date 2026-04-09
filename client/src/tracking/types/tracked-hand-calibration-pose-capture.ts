@@ -1,13 +1,13 @@
-import { duckHuntCalibrationCaptureConfig } from "../../experiences/duck-hunt/config";
-import { handAimObservationConfig } from "../../game/config/hand-aim-observation";
-import { readObservedAimPoint } from "../../game/types/hand-aim-observation";
-import { evaluateHandTriggerGesture } from "../../game/types/hand-trigger-gesture";
+import { trackedHandCalibrationConfig } from "../config/tracked-hand-calibration";
+import { handAimObservationConfig } from "../config/hand-aim-observation";
+import { readObservedAimPoint } from "./hand-aim-observation";
+import { evaluateHandTriggerGesture } from "./hand-trigger-gesture";
 import type {
   HandTrackingPoseSnapshot,
   TrackedHandTrackingSnapshot
-} from "../../game/types/hand-tracking";
+} from "./hand-tracking";
 
-export const calibrationOverlayLandmarkIds = {
+export const trackedHandCalibrationOverlayLandmarkIds = {
   thumb: ["thumbKnuckle", "thumbJoint", "thumbTip"],
   index: ["indexBase", "indexKnuckle", "indexJoint", "indexTip"],
   capture: [
@@ -26,29 +26,29 @@ export const calibrationOverlayLandmarkIds = {
   readonly capture: readonly (keyof HandTrackingPoseSnapshot)[];
 };
 
-export const calibrationCaptureOmittedLandmarkIds = [
+export const trackedHandCalibrationCaptureOmittedLandmarkIds = [
   "thumbBase"
 ] as const satisfies readonly (keyof HandTrackingPoseSnapshot)[];
 
-export type CalibrationPoseCaptureLandmarkId =
-  (typeof calibrationOverlayLandmarkIds.capture)[number];
+export type TrackedHandCalibrationPoseCaptureLandmarkId =
+  (typeof trackedHandCalibrationOverlayLandmarkIds.capture)[number];
 
-type CalibrationPoseCaptureLandmarkMap = {
-  readonly [PointId in CalibrationPoseCaptureLandmarkId]: {
+type TrackedHandCalibrationPoseCaptureLandmarkMap = {
+  readonly [PointId in TrackedHandCalibrationPoseCaptureLandmarkId]: {
     readonly x: number;
     readonly y: number;
     readonly z: number;
   };
 };
 
-export interface CalibrationPoseCaptureSnapshot {
+export interface TrackedHandCalibrationPoseCaptureSnapshot {
   readonly label: string;
   readonly capturedAtIso: string;
   readonly observedAimPoint: {
     readonly x: number;
     readonly y: number;
   };
-  readonly pose: CalibrationPoseCaptureLandmarkMap;
+  readonly pose: TrackedHandCalibrationPoseCaptureLandmarkMap;
   readonly sequenceNumber: number;
   readonly trackingTimestampMs: number;
   readonly triggerGesture: {
@@ -59,11 +59,12 @@ export interface CalibrationPoseCaptureSnapshot {
   };
 }
 
-export interface CalibrationPoseCaptureExportSnapshot {
-  readonly captureLandmarkIds: readonly CalibrationPoseCaptureLandmarkId[];
+export interface TrackedHandCalibrationPoseCaptureExportSnapshot {
+  readonly captureLandmarkIds:
+    readonly TrackedHandCalibrationPoseCaptureLandmarkId[];
   readonly omittedRuntimeLandmarkIds:
-    readonly (typeof calibrationCaptureOmittedLandmarkIds)[number][];
-  readonly captures: readonly CalibrationPoseCaptureSnapshot[];
+    readonly (typeof trackedHandCalibrationCaptureOmittedLandmarkIds)[number][];
+  readonly captures: readonly TrackedHandCalibrationPoseCaptureSnapshot[];
 }
 
 function cloneLandmarkPoint(
@@ -82,7 +83,7 @@ function cloneLandmarkPoint(
 
 function createPoseCaptureLandmarkMap(
   pose: HandTrackingPoseSnapshot
-): CalibrationPoseCaptureLandmarkMap {
+): TrackedHandCalibrationPoseCaptureLandmarkMap {
   return Object.freeze({
     thumbKnuckle: cloneLandmarkPoint(pose.thumbKnuckle),
     thumbJoint: cloneLandmarkPoint(pose.thumbJoint),
@@ -101,10 +102,10 @@ function normalizeCaptureLabel(label: string): string {
   return trimmedLabel.length > 0 ? trimmedLabel : "sample";
 }
 
-export function createCalibrationPoseCapture(
+export function createTrackedHandCalibrationPoseCapture(
   label: string,
   trackingSnapshot: TrackedHandTrackingSnapshot
-): CalibrationPoseCaptureSnapshot {
+): TrackedHandCalibrationPoseCaptureSnapshot {
   const observedAimPoint = readObservedAimPoint(
     trackingSnapshot.pose,
     handAimObservationConfig
@@ -112,7 +113,7 @@ export function createCalibrationPoseCapture(
   const triggerGesture = evaluateHandTriggerGesture(
     trackingSnapshot.pose,
     false,
-    duckHuntCalibrationCaptureConfig.triggerGesture
+    trackedHandCalibrationConfig.triggerGesture
   );
 
   return Object.freeze({
@@ -134,12 +135,12 @@ export function createCalibrationPoseCapture(
   });
 }
 
-export function createCalibrationPoseCaptureExport(
-  captures: readonly CalibrationPoseCaptureSnapshot[]
-): CalibrationPoseCaptureExportSnapshot {
+export function createTrackedHandCalibrationPoseCaptureExport(
+  captures: readonly TrackedHandCalibrationPoseCaptureSnapshot[]
+): TrackedHandCalibrationPoseCaptureExportSnapshot {
   return Object.freeze({
-    captureLandmarkIds: calibrationOverlayLandmarkIds.capture,
-    omittedRuntimeLandmarkIds: calibrationCaptureOmittedLandmarkIds,
+    captureLandmarkIds: trackedHandCalibrationOverlayLandmarkIds.capture,
+    omittedRuntimeLandmarkIds: trackedHandCalibrationCaptureOmittedLandmarkIds,
     captures: Object.freeze([...captures])
   });
 }

@@ -11,7 +11,7 @@ import {
   advanceMetaverseCameraSnapshot,
   createMetaverseCameraSnapshot,
   resolveFocusedPortalSnapshot,
-  rotateMetaverseCameraSnapshot
+  resolveMetaverseMouseLookAxes
 } from "../states/metaverse-flight";
 import {
   createMetaverseScene,
@@ -20,9 +20,15 @@ import {
 import type {
   FocusedExperiencePortalSnapshot,
   MetaverseHudSnapshot,
-  MetaverseMovementInputSnapshot,
   MetaverseRuntimeConfig
 } from "../types/metaverse-runtime";
+import {
+  defaultMetaverseControlMode
+} from "../config/metaverse-control-modes";
+import type {
+  MetaverseControlModeId,
+  MetaverseFlightInputSnapshot
+} from "../types/metaverse-control-mode";
 
 interface MetaverseRendererHost {
   init(): Promise<void | MetaverseRendererHost>;
@@ -88,31 +94,19 @@ function readNowMs(): number {
   return globalThis.performance?.now() ?? Date.now();
 }
 
-function createMovementInputSnapshot(): MetaverseMovementInputSnapshot {
-  return {
-    ascend: false,
-    boost: false,
-    descend: false,
-    moveBackward: false,
-    moveForward: false,
-    strafeLeft: false,
-    strafeRight: false
-  };
-}
-
 function freezeHudSnapshot(
   lifecycle: MetaverseHudSnapshot["lifecycle"],
   failureReason: string | null,
   camera: MetaverseHudSnapshot["camera"],
   focusedPortal: FocusedExperiencePortalSnapshot | null,
-  pointerLockActive: boolean
+  controlMode: MetaverseHudSnapshot["controlMode"]
 ): MetaverseHudSnapshot {
   return Object.freeze({
     camera,
+    controlMode,
     failureReason,
     focusedPortal,
-    lifecycle,
-    pointerLockActive
+    lifecycle
   });
 }
 
@@ -140,29 +134,100 @@ function resolveRuntimeFailureReason(error: unknown): string {
 
 const metaverseUiUpdateIntervalMs = 120;
 
+interface KeyboardFlightInputState {
+  boost: boolean;
+  moveBackward: boolean;
+  moveForward: boolean;
+  pitchDown: boolean;
+  pitchUp: boolean;
+  yawLeft: boolean;
+  yawRight: boolean;
+}
+
+interface MouseFlightInputState {
+  boost: boolean;
+  moveBackward: boolean;
+  moveForward: boolean;
+  pointerX: number | null;
+  pointerY: number | null;
+}
+
+type MouseFlightButtonInputKey = "boost" | "moveBackward" | "moveForward";
+
+function createKeyboardFlightInputState(): KeyboardFlightInputState {
+  return {
+    boost: false,
+    moveBackward: false,
+    moveForward: false,
+    pitchDown: false,
+    pitchUp: false,
+    yawLeft: false,
+    yawRight: false
+  };
+}
+
+function createMouseFlightInputState(): MouseFlightInputState {
+  return {
+    boost: false,
+    moveBackward: false,
+    moveForward: false,
+    pointerX: null,
+    pointerY: null
+  };
+}
+
+function normalizeViewportPointer(
+  event: MouseEvent,
+  canvas: HTMLCanvasElement
+): Pick<MouseFlightInputState, "pointerX" | "pointerY"> {
+  const bounds = canvas.getBoundingClientRect();
+
+  if (bounds.width <= 0 || bounds.height <= 0) {
+    return {
+      pointerX: null,
+      pointerY: null
+    };
+  }
+
+  const pointerX = Math.min(
+    1,
+    Math.max(0, (event.clientX - bounds.left) / bounds.width)
+  );
+  const pointerY = Math.min(
+    1,
+    Math.max(0, (event.clientY - bounds.top) / bounds.height)
+  );
+
+  return {
+    pointerX,
+    pointerY
+  };
+}
+
 export class WebGpuMetaverseRuntime {
   readonly #config: MetaverseRuntimeConfig;
   readonly #createRenderer: (canvas: HTMLCanvasElement) => MetaverseRendererHost;
   readonly #devicePixelRatio: number;
+  readonly #keyboardInput = createKeyboardFlightInputState();
+  readonly #mouseInput = createMouseFlightInputState();
   readonly #sceneRuntime: ReturnType<typeof createMetaverseScene>;
   readonly #uiUpdateListeners = new Set<() => void>();
-  readonly #movementInput = createMovementInputSnapshot();
 
   #animationFrameHandle = 0;
   #cameraSnapshot = createMetaverseCameraSnapshot(metaverseRuntimeConfig.camera);
   #canvas: HTMLCanvasElement | null = null;
+  #controlMode: MetaverseControlModeId = defaultMetaverseControlMode;
   #focusedPortal: FocusedExperiencePortalSnapshot | null = null;
   #hudSnapshot = freezeHudSnapshot(
     "idle",
     null,
     this.#cameraSnapshot,
     null,
-    false
+    this.#controlMode
   );
   #inputCleanup: (() => void) | null = null;
   #lastFrameAtMs: number | null = null;
   #lastUiUpdateAtMs = Number.NEGATIVE_INFINITY;
-  #pointerLockActive = false;
   #renderer: MetaverseRendererHost | null = null;
   #requestAnimationFrame: typeof globalThis.requestAnimationFrame;
   #cancelAnimationFrame: typeof globalThis.cancelAnimationFrame;
@@ -182,7 +247,7 @@ export class WebGpuMetaverseRuntime {
       null,
       this.#cameraSnapshot,
       null,
-      false
+      this.#controlMode
     );
   }
 
@@ -196,6 +261,20 @@ export class WebGpuMetaverseRuntime {
     return () => {
       this.#uiUpdateListeners.delete(listener);
     };
+  }
+
+  setControlMode(controlMode: MetaverseControlModeId): void {
+    if (controlMode === this.#controlMode) {
+      return;
+    }
+
+    this.#controlMode = controlMode;
+    this.#resetTransientInputState();
+    this.#setHudSnapshot(
+      this.#hudSnapshot.lifecycle,
+      this.#hudSnapshot.failureReason,
+      true
+    );
   }
 
   async start(
@@ -246,23 +325,14 @@ export class WebGpuMetaverseRuntime {
       this.#animationFrameHandle = 0;
     }
 
-    if (
-      this.#canvas !== null &&
-      globalThis.document?.pointerLockElement === this.#canvas &&
-      typeof globalThis.document.exitPointerLock === "function"
-    ) {
-      globalThis.document.exitPointerLock();
-    }
-
     this.#removeInputListeners();
     this.#renderer?.dispose();
     this.#renderer = null;
     this.#canvas = null;
     this.#lastFrameAtMs = null;
     this.#lastUiUpdateAtMs = Number.NEGATIVE_INFINITY;
-    this.#pointerLockActive = false;
     this.#focusedPortal = null;
-    Object.assign(this.#movementInput, createMovementInputSnapshot());
+    this.#resetTransientInputState();
     this.#cameraSnapshot = createMetaverseCameraSnapshot(this.#config.camera);
     this.#sceneRuntime.resetPresentation();
 
@@ -272,43 +342,37 @@ export class WebGpuMetaverseRuntime {
   }
 
   #installInputListeners(canvas: HTMLCanvasElement): void {
-    const keyBindings: Record<string, keyof MetaverseMovementInputSnapshot> = {
-      KeyA: "strafeLeft",
-      KeyD: "strafeRight",
-      KeyE: "ascend",
-      KeyQ: "descend",
+    const keyBindings: Record<string, keyof KeyboardFlightInputState> = {
+      KeyA: "yawLeft",
+      KeyD: "yawRight",
+      KeyE: "pitchUp",
+      KeyQ: "pitchDown",
       KeyS: "moveBackward",
       KeyW: "moveForward",
       ShiftLeft: "boost",
-      ShiftRight: "boost",
-      Space: "ascend"
+      ShiftRight: "boost"
     };
-    const handlePointerLockChange = () => {
-      this.#pointerLockActive = globalThis.document?.pointerLockElement === canvas;
-      this.#setHudSnapshot(this.#hudSnapshot.lifecycle, this.#hudSnapshot.failureReason, true);
+    const mouseButtonBindings: Record<number, MouseFlightButtonInputKey> = {
+      0: "moveForward",
+      2: "moveBackward",
+      3: "boost"
     };
-    const handleCanvasClick = () => {
-      if (typeof canvas.requestPointerLock !== "function") {
+    const handleCanvasMouseMove = (event: MouseEvent) => {
+      Object.assign(this.#mouseInput, normalizeViewportPointer(event, canvas));
+    };
+    const handleCanvasMouseLeave = () => {
+      this.#mouseInput.pointerX = null;
+      this.#mouseInput.pointerY = null;
+    };
+    const handleCanvasMouseDown = (event: MouseEvent) => {
+      const inputKey = mouseButtonBindings[event.button];
+
+      if (inputKey === undefined) {
         return;
       }
 
-      if (globalThis.document?.pointerLockElement === canvas) {
-        return;
-      }
-
-      canvas.requestPointerLock();
-    };
-    const handleMouseMove = (event: MouseEvent) => {
-      if (!this.#pointerLockActive) {
-        return;
-      }
-
-      this.#cameraSnapshot = rotateMetaverseCameraSnapshot(
-        this.#cameraSnapshot,
-        event.movementX,
-        event.movementY,
-        this.#config.movement
-      );
+      event.preventDefault();
+      this.#mouseInput[inputKey] = true;
     };
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isEditableEventTarget(event.target)) {
@@ -322,7 +386,7 @@ export class WebGpuMetaverseRuntime {
       }
 
       event.preventDefault();
-      this.#movementInput[inputKey] = true;
+      this.#keyboardInput[inputKey] = true;
     };
     const handleKeyUp = (event: KeyboardEvent) => {
       if (isEditableEventTarget(event.target)) {
@@ -336,27 +400,42 @@ export class WebGpuMetaverseRuntime {
       }
 
       event.preventDefault();
-      this.#movementInput[inputKey] = false;
+      this.#keyboardInput[inputKey] = false;
+    };
+    const handleWindowMouseUp = (event: MouseEvent) => {
+      const inputKey = mouseButtonBindings[event.button];
+
+      if (inputKey === undefined) {
+        return;
+      }
+
+      this.#mouseInput[inputKey] = false;
+    };
+    const handleCanvasContextMenu = (event: MouseEvent) => {
+      event.preventDefault();
     };
     const handleWindowBlur = () => {
-      Object.assign(this.#movementInput, createMovementInputSnapshot());
+      this.#resetTransientInputState();
     };
 
-    canvas.addEventListener("click", handleCanvasClick);
-    globalThis.document?.addEventListener("pointerlockchange", handlePointerLockChange);
-    globalThis.window?.addEventListener("mousemove", handleMouseMove);
+    canvas.addEventListener("mousemove", handleCanvasMouseMove);
+    canvas.addEventListener("mouseleave", handleCanvasMouseLeave);
+    canvas.addEventListener("mousedown", handleCanvasMouseDown);
+    canvas.addEventListener("contextmenu", handleCanvasContextMenu);
+    canvas.addEventListener("auxclick", handleCanvasContextMenu);
     globalThis.window?.addEventListener("keydown", handleKeyDown);
     globalThis.window?.addEventListener("keyup", handleKeyUp);
+    globalThis.window?.addEventListener("mouseup", handleWindowMouseUp);
     globalThis.window?.addEventListener("blur", handleWindowBlur);
     this.#inputCleanup = () => {
-      canvas.removeEventListener("click", handleCanvasClick);
-      globalThis.document?.removeEventListener(
-        "pointerlockchange",
-        handlePointerLockChange
-      );
-      globalThis.window?.removeEventListener("mousemove", handleMouseMove);
+      canvas.removeEventListener("mousemove", handleCanvasMouseMove);
+      canvas.removeEventListener("mouseleave", handleCanvasMouseLeave);
+      canvas.removeEventListener("mousedown", handleCanvasMouseDown);
+      canvas.removeEventListener("contextmenu", handleCanvasContextMenu);
+      canvas.removeEventListener("auxclick", handleCanvasContextMenu);
       globalThis.window?.removeEventListener("keydown", handleKeyDown);
       globalThis.window?.removeEventListener("keyup", handleKeyUp);
+      globalThis.window?.removeEventListener("mouseup", handleWindowMouseUp);
       globalThis.window?.removeEventListener("blur", handleWindowBlur);
     };
   }
@@ -364,6 +443,52 @@ export class WebGpuMetaverseRuntime {
   #removeInputListeners(): void {
     this.#inputCleanup?.();
     this.#inputCleanup = null;
+  }
+
+  #resetTransientInputState(): void {
+    Object.assign(this.#keyboardInput, createKeyboardFlightInputState());
+    Object.assign(this.#mouseInput, createMouseFlightInputState());
+  }
+
+  #readFlightInputSnapshot(): MetaverseFlightInputSnapshot {
+    if (this.#controlMode === "mouse") {
+      const canvas = this.#canvas;
+      const mouseLookAxes =
+        canvas === null
+          ? {
+              pitchAxis: 0,
+              yawAxis: 0
+            }
+          : resolveMetaverseMouseLookAxes(
+              this.#mouseInput.pointerX,
+              this.#mouseInput.pointerY,
+              canvas.clientWidth,
+              canvas.clientHeight,
+              this.#config.orientation.mouseEdgeTurn
+            );
+
+      return Object.freeze({
+        boost: this.#mouseInput.boost,
+        moveAxis:
+          (this.#mouseInput.moveForward ? 1 : 0) -
+          (this.#mouseInput.moveBackward ? 1 : 0),
+        pitchAxis: mouseLookAxes.pitchAxis,
+        yawAxis: mouseLookAxes.yawAxis
+      });
+    }
+
+    return Object.freeze({
+      boost: this.#keyboardInput.boost,
+      moveAxis:
+        (this.#keyboardInput.moveForward ? 1 : 0) -
+        (this.#keyboardInput.moveBackward ? 1 : 0),
+      pitchAxis:
+        (this.#keyboardInput.pitchUp ? 1 : 0) -
+        (this.#keyboardInput.pitchDown ? 1 : 0),
+      yawAxis:
+        (this.#keyboardInput.yawRight ? 1 : 0) -
+        (this.#keyboardInput.yawLeft ? 1 : 0)
+    });
   }
 
   #queueNextFrame(): void {
@@ -385,9 +510,10 @@ export class WebGpuMetaverseRuntime {
         : Math.min(0.1, Math.max(0, (nowMs - this.#lastFrameAtMs) / 1000));
 
     this.#lastFrameAtMs = nowMs;
+    const movementInput = this.#readFlightInputSnapshot();
     this.#cameraSnapshot = advanceMetaverseCameraSnapshot(
       this.#cameraSnapshot,
-      this.#movementInput,
+      movementInput,
       this.#config,
       deltaSeconds
     );
@@ -419,7 +545,7 @@ export class WebGpuMetaverseRuntime {
       failureReason,
       this.#cameraSnapshot,
       this.#focusedPortal,
-      this.#pointerLockActive
+      this.#controlMode
     );
 
     if (

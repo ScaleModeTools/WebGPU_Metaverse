@@ -1,8 +1,8 @@
 import type {
   Degrees,
   NormalizedViewportPoint
-} from "@thumbshooter/shared";
-import { createRadians } from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
+import { createRadians } from "@webgpu-metaverse/shared";
 
 import type {
   GameplayCameraSnapshot,

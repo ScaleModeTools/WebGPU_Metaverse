@@ -46,7 +46,9 @@ export function MetaverseShell() {
       onGameplaySignal={controller.onGameplaySignal}
       onInputModeChange={controller.onInputModeChange}
       onLoginSubmit={controller.onLoginSubmit}
+      metaverseControlMode={controller.metaverseControlMode}
       onOpenGameplayMenu={() => controller.onGameplayMenuOpen(true)}
+      onMetaverseControlModeChange={controller.onMetaverseControlModeChange}
       onRequestPermission={controller.onRequestPermission}
       onRecalibrationRequest={controller.onRecalibrationRequest}
       onRetryCapabilityProbe={controller.onRetryCapabilityProbe}
@@ -80,7 +82,12 @@ export function MetaverseShell() {
               calibrationQualityLabel={controller.shellView.calibrationQualityLabel}
               calibrationStatusLabel={controller.shellView.calibrationStatusLabel}
               hydrationSource={controller.hydrationSource}
-              inputModeLabel={controller.shellView.inputModeLabel}
+              gameplayInputModeLabel={
+                controller.shellView.gameplayInputModeLabel
+              }
+              metaverseControlModeLabel={
+                controller.shellView.metaverseControlModeLabel
+              }
               reticleCatalogLabel={controller.shellView.reticleCatalogLabel}
               username={controller.profile?.snapshot.username ?? "not confirmed"}
             />

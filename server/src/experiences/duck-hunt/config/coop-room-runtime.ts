@@ -5,7 +5,7 @@ import {
   createRadians,
   createMilliseconds,
   type CoopRoomId
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import type { CoopRoomRuntimeConfig } from "../types/coop-room-runtime.js";
 

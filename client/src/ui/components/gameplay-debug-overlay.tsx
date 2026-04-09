@@ -1,8 +1,8 @@
 import type {
   GameplayDebugPanelMode,
-  GameplayTelemetrySnapshot,
-  HandTrackingTelemetrySnapshot
+  GameplayTelemetrySnapshot
 } from "../../game";
+import type { HandTrackingTelemetrySnapshot } from "../../tracking";
 import { Badge } from "@/components/ui/badge";
 
 interface GameplayDebugOverlayProps {

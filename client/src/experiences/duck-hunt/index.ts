@@ -8,7 +8,6 @@ export {
   type DuckHuntAudioCueId
 } from "./audio";
 export {
-  duckHuntCalibrationCaptureConfig,
   duckHuntCoopArenaSimulationConfig,
   duckHuntGameFoundationConfig,
   duckHuntGameplayRuntimeConfig,
@@ -33,7 +32,6 @@ export {
   DuckHuntCoopArenaSimulation,
   DuckHuntLocalArenaSimulation,
   DuckHuntLocalCombatSession,
-  DuckHuntNinePointCalibrationSession,
   DuckHuntWebGpuGameplayRuntime,
   DuckHuntWeaponRuntime
 } from "./runtime";

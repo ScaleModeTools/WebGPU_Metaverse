@@ -2,10 +2,10 @@ import type {
   Degrees,
   NormalizedViewportPoint,
   Radians
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
+import type { HandTrackingPoseState } from "../../tracking";
 import type { GameplayReticleStyledState } from "./gameplay-presentation";
-import type { HandTrackingPoseState } from "./hand-tracking";
 import type { GameplaySessionSnapshot } from "./gameplay-session";
 import type {
   LocalArenaArenaSnapshot,

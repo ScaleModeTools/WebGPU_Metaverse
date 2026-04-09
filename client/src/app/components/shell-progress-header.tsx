@@ -30,8 +30,8 @@ export function ShellProgressHeader({
       <div className="flex flex-col gap-6">
         <div className="flex flex-wrap gap-2">
           <Badge>Ocean metaverse shell live</Badge>
-          <Badge variant="secondary">Mouse enters immediately</Badge>
-          <Badge variant="secondary">Camera setup still optional</Badge>
+          <Badge variant="secondary">Keyboard hub controls default</Badge>
+          <Badge variant="secondary">Camera gameplay setup optional</Badge>
           <Badge variant="outline">WebGPU required</Badge>
         </div>
 
@@ -46,10 +46,10 @@ export function ShellProgressHeader({
                 path, and the ocean hub launches named experiences.
               </h1>
               <p className="type-lead max-w-3xl">
-                Mouse players can enter the metaverse without touching webcam
-                permissions. Thumb-trigger setup stays explicit whenever you
-                want worker tracking, webcam permission, and nine-point
-                calibration before a portal launch.
+                Hub controls stay keyboard-or-mouse without pointer lock.
+                Duck Hunt still chooses between direct mouse aim and
+                thumb-trigger tracking, and camera setup stays explicit only
+                when you opt into that experience-local input path.
               </p>
             </div>
 

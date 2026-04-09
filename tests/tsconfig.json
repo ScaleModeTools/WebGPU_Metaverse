@@ -19,7 +19,7 @@
       "@/*": [
         "../client/src/*"
       ],
-      "@thumbshooter/shared": [
+      "@webgpu-metaverse/shared": [
         "../packages/shared/src/index.ts"
       ]
     }

@@ -1,7 +1,7 @@
 import {
   createDegrees,
   createRadians
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import type { GameplayRuntimeConfig } from "../../../game/types/gameplay-runtime";
 

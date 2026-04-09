@@ -1,7 +1,7 @@
 import type {
   NormalizedViewportPoint,
   NormalizedViewportPointInput
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 import {
   ACESFilmicToneMapping,
   type Camera,
@@ -11,7 +11,6 @@ import {
 } from "three/webgpu";
 
 import { duckHuntGameplayRuntimeConfig } from "../config/duck-hunt-gameplay-runtime";
-import { handAimObservationConfig } from "../../../game/config/hand-aim-observation";
 import { resolveGameplayReticleVisualState } from "../../../game/render/gameplay-reticle-presentation";
 import {
   createGameplayScene,
@@ -28,8 +27,11 @@ import type {
   GameplayHudSnapshot,
   GameplayRuntimeConfig
 } from "../../../game/types/gameplay-runtime";
-import { readObservedAimPoint } from "../../../game/types/hand-aim-observation";
-import type { LatestHandTrackingSnapshot } from "../../../game/types/hand-tracking";
+import {
+  handAimObservationConfig,
+  readObservedAimPoint,
+  type LatestHandTrackingSnapshot
+} from "../../../tracking";
 
 interface GameplayTrackingSource {
   readonly latestPose: LatestHandTrackingSnapshot;

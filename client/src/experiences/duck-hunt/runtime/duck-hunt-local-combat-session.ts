@@ -1,4 +1,4 @@
-import { createMilliseconds } from "@thumbshooter/shared";
+import { createMilliseconds } from "@webgpu-metaverse/shared";
 
 import { duckHuntLocalCombatSessionConfig } from "../config/duck-hunt-local-combat-session";
 import type {

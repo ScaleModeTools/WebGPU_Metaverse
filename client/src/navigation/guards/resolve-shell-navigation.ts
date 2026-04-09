@@ -1,4 +1,4 @@
-import { resolveGameplayInputMode } from "@thumbshooter/shared";
+import { resolveGameplayInputMode } from "@webgpu-metaverse/shared";
 import type {
   MetaverseEntryStepId,
   ShellNavigationProgress,

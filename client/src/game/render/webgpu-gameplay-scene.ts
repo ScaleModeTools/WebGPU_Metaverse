@@ -1,4 +1,4 @@
-import type { NormalizedViewportPoint } from "@thumbshooter/shared";
+import type { NormalizedViewportPoint } from "@webgpu-metaverse/shared";
 import {
   BackSide,
   BoxGeometry,

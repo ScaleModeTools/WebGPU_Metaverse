@@ -3,7 +3,7 @@ import { collectRepoVerificationErrors } from "./repo-verifier.mjs";
 const errors = collectRepoVerificationErrors();
 
 if (errors.length > 0) {
-  console.error("ThumbShooter verify failed:");
+  console.error("WebGPU Metaverse verify failed:");
 
   for (const error of errors) {
     console.error(`- ${error}`);
@@ -11,5 +11,5 @@ if (errors.length > 0) {
 
   process.exitCode = 1;
 } else {
-  console.log("ThumbShooter verify passed.");
+  console.log("WebGPU Metaverse verify passed.");
 }

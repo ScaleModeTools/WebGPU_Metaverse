@@ -34,7 +34,7 @@ import type {
   SoundEffectEngine,
   CoopVector3Snapshot,
   Username
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 import {
   affineAimTransformFitQualities,
   coopBirdBehaviorStates,
@@ -46,7 +46,7 @@ import {
   createMilliseconds,
   createRadians,
   createUsername
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 import type { AssertTrue, IsEqual } from "./type-assertions";
 
 type ExpectedCalibrationAnchorId =

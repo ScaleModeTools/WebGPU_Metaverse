@@ -1,4 +1,4 @@
-import type { AudioMixSnapshot } from "@thumbshooter/shared";
+import type { AudioMixSnapshot } from "@webgpu-metaverse/shared";
 
 type SliderValue = [number];
 
@@ -8,7 +8,8 @@ export interface MetaverseShellViewModel {
   readonly calibrationQualityLabel: string;
   readonly calibrationStatusLabel: string;
   readonly capabilityReasonLabel: string;
-  readonly inputModeLabel: string;
+  readonly gameplayInputModeLabel: string;
+  readonly metaverseControlModeLabel: string;
   readonly musicVolumeLabel: string;
   readonly musicVolumeSliderValue: SliderValue;
   readonly reticleCatalogLabel: string;

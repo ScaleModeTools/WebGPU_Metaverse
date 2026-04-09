@@ -14,7 +14,7 @@ import {
   createRadians,
   createUsername,
   reticleIds
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 function createCalibrationSampleFixture() {
   return createCalibrationShotSample({
@@ -37,7 +37,7 @@ function createCalibrationSampleFixture() {
 
 test("PlayerProfile.create uses the default reticle and zero calibration samples", () => {
   const profile = PlayerProfile.create({
-    username: "thumbshooter-test-user"
+    username: "webgpu-metaverse-test-user"
   });
 
   assert.equal(profile.snapshot.selectedReticleId, "default-ring");
@@ -53,7 +53,7 @@ test("PlayerProfile.create uses the default reticle and zero calibration samples
 
 test("PlayerProfile.withSelectedReticle returns a new immutable snapshot", () => {
   const baseProfile = PlayerProfile.create({
-    username: "thumbshooter-test-user"
+    username: "webgpu-metaverse-test-user"
   });
   const updatedProfile = baseProfile.withSelectedReticle("precision-ring");
 
@@ -64,7 +64,7 @@ test("PlayerProfile.withSelectedReticle returns a new immutable snapshot", () =>
 
 test("PlayerProfile.withCalibrationShot appends a shot without mutating the old profile", () => {
   const baseProfile = PlayerProfile.create({
-    username: "thumbshooter-test-user"
+    username: "webgpu-metaverse-test-user"
   });
   const updatedProfile = baseProfile.withCalibrationShot(
     createCalibrationSampleFixture()
@@ -90,7 +90,7 @@ test("AudioSettings clamps mix levels into the supported range", () => {
 
 test("PlayerProfile.withAudioSettings returns a new immutable snapshot", () => {
   const baseProfile = PlayerProfile.create({
-    username: "thumbshooter-test-user"
+    username: "webgpu-metaverse-test-user"
   });
   const updatedProfile = baseProfile.withAudioSettings(
     AudioSettings.create({ musicVolume: 0.25, sfxVolume: 0.9 }).snapshot
@@ -104,7 +104,7 @@ test("PlayerProfile.withAudioSettings returns a new immutable snapshot", () => {
 
 test("PlayerProfile.withRaisedBestScore only raises the persisted best score", () => {
   const baseProfile = PlayerProfile.create({
-    username: "thumbshooter-test-user"
+    username: "webgpu-metaverse-test-user"
   });
   const raisedProfile = baseProfile.withRaisedBestScore(250.8);
   const unchangedProfile = raisedProfile.withRaisedBestScore(180);
@@ -239,7 +239,7 @@ test("AffineAimTransform.projectUnclamped preserves off-screen projections", () 
 
 test("PlayerProfile.withAimCalibration stores an immutable fitted transform", () => {
   const baseProfile = PlayerProfile.create({
-    username: "thumbshooter-test-user"
+    username: "webgpu-metaverse-test-user"
   });
   const transform = AffineAimTransform.fromSnapshot({
     xCoefficients: [1, 0, 0],
@@ -254,7 +254,7 @@ test("PlayerProfile.withAimCalibration stores an immutable fitted transform", ()
 
 test("PlayerProfile.withTriggerCalibration stores an immutable trigger calibration", () => {
   const baseProfile = PlayerProfile.create({
-    username: "thumbshooter-test-user"
+    username: "webgpu-metaverse-test-user"
   });
   const triggerCalibration = createHandTriggerCalibrationSnapshot({
     sampleCount: 9,
@@ -294,7 +294,7 @@ test("shared unit constructors normalize finite gameplay measurements", () => {
 test("PlayerProfile.fromSnapshot rehydrates an immutable cloned snapshot", () => {
   const mutableCalibrationSamples = [createCalibrationSampleFixture()];
   const profile = PlayerProfile.fromSnapshot({
-    username: "thumbshooter-test-user",
+    username: "webgpu-metaverse-test-user",
     selectedReticleId: "default-ring",
     audioSettings: AudioSettings.create({ musicVolume: 3, sfxVolume: -2 }).snapshot,
     aimCalibration: {
@@ -324,13 +324,13 @@ test("PlayerProfile.fromSnapshot rehydrates an immutable cloned snapshot", () =>
 });
 
 test("createUsername trims whitespace and rejects blank names", () => {
-  assert.equal(createUsername("  ThumbShooter  "), "ThumbShooter");
+  assert.equal(createUsername("  WebGPU Metaverse  "), "WebGPU Metaverse");
   assert.equal(createUsername("   "), null);
 });
 
 test("PlayerProfile.resetCalibration clears stored calibration samples", () => {
   const resetProfile = PlayerProfile.create({
-    username: "thumbshooter-test-user"
+    username: "webgpu-metaverse-test-user"
   })
     .withCalibrationShot(createCalibrationSampleFixture())
     .withTriggerCalibration(

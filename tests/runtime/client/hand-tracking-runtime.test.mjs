@@ -107,7 +107,7 @@ async function waitForBootMessage(worker) {
 
 test("HandTrackingRuntime boots the worker, pumps frames, and disposes owned resources", async () => {
   const { HandTrackingRuntime } = await clientLoader.load(
-    "/src/game/classes/hand-tracking-runtime.ts"
+    "/src/tracking/classes/hand-tracking-runtime.ts"
   );
   const worker = new FakeWorker();
   const videoElement = new FakeVideoElement();
@@ -166,7 +166,7 @@ test("HandTrackingRuntime boots the worker, pumps frames, and disposes owned res
 
 test("HandTrackingRuntime invokes browser frame scheduling through the bound global methods", async () => {
   const { HandTrackingRuntime } = await clientLoader.load(
-    "/src/game/classes/hand-tracking-runtime.ts"
+    "/src/tracking/classes/hand-tracking-runtime.ts"
   );
   const worker = new FakeWorker();
   const stream = new FakeMediaStream();
@@ -224,7 +224,7 @@ test("HandTrackingRuntime invokes browser frame scheduling through the bound glo
 
 test("HandTrackingRuntime prefers VideoFrame transport when the browser supports it", async () => {
   const { HandTrackingRuntime } = await clientLoader.load(
-    "/src/game/classes/hand-tracking-runtime.ts"
+    "/src/tracking/classes/hand-tracking-runtime.ts"
   );
   const worker = new FakeWorker();
   const videoElement = new FakeVideoElement();
@@ -281,7 +281,7 @@ test("HandTrackingRuntime prefers VideoFrame transport when the browser supports
 
 test("HandTrackingRuntime keeps the newest validated pose snapshot and ignores stale worker frames", async () => {
   const { HandTrackingRuntime } = await clientLoader.load(
-    "/src/game/classes/hand-tracking-runtime.ts"
+    "/src/tracking/classes/hand-tracking-runtime.ts"
   );
   const worker = new FakeWorker();
 
@@ -350,7 +350,7 @@ test("HandTrackingRuntime keeps the newest validated pose snapshot and ignores s
 
 test("HandTrackingRuntime surfaces worker boot failures without masking the reason", async () => {
   const { HandTrackingRuntime } = await clientLoader.load(
-    "/src/game/classes/hand-tracking-runtime.ts"
+    "/src/tracking/classes/hand-tracking-runtime.ts"
   );
   const worker = new FakeWorker();
 
@@ -388,7 +388,7 @@ test("HandTrackingRuntime surfaces worker boot failures without masking the reas
 
 test("MediaPipe loader bridge preserves the classic custom_dbg fallback inside module workers", async () => {
   const { buildMediaPipeLoaderScript } = await clientLoader.load(
-    "/src/game/workers/mediapipe-loader-bridge.ts"
+    "/src/tracking/workers/mediapipe-loader-bridge.ts"
   );
   const warningCalls = [];
   const workerScope = {
@@ -440,7 +440,7 @@ test("MediaPipe loader bridge preserves the classic custom_dbg fallback inside m
 
 test("HandTrackingRuntime fails cleanly when webcam media devices are unavailable", async () => {
   const { HandTrackingRuntime } = await clientLoader.load(
-    "/src/game/classes/hand-tracking-runtime.ts"
+    "/src/tracking/classes/hand-tracking-runtime.ts"
   );
   const runtime = new HandTrackingRuntime(undefined, {
     cancelAnimationFrame() {},

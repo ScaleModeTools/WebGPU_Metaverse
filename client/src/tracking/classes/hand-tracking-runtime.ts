@@ -1,5 +1,5 @@
 import { handTrackingRuntimeConfig } from "../config/hand-tracking-runtime";
-import type { HandTrackingTelemetrySnapshot } from "../types/gameplay-presentation";
+import type { HandTrackingTelemetrySnapshot } from "../types/hand-tracking-telemetry";
 import {
   createLatestHandTrackingSnapshot,
   createUnavailableHandTrackingSnapshot,

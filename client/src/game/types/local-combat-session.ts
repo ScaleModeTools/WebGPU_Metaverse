@@ -1,4 +1,4 @@
-import type { Milliseconds } from "@thumbshooter/shared";
+import type { Milliseconds } from "@webgpu-metaverse/shared";
 
 export const localCombatSessionPhases = [
   "active",

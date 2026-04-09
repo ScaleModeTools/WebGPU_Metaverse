@@ -8,12 +8,12 @@ import { collectRepoVerificationErrors } from "../../../tools/internal/repo-veri
 const temporaryRepos = [];
 
 function createFixtureRepo(overrides = {}) {
-  const repoRoot = mkdtempSync(join(tmpdir(), "thumbshooter-verify-"));
+  const repoRoot = mkdtempSync(join(tmpdir(), "webgpu-metaverse-verify-"));
   temporaryRepos.push(repoRoot);
 
   const files = {
     "AGENTS.md": "# private local guidance\n",
-    "README.md": "# ThumbShooter\n",
+    "README.md": "# WebGPU Metaverse\n",
     "tools/build": "#!/usr/bin/env bash\n",
     "tools/test": "#!/usr/bin/env bash\n",
     "tools/bench": "#!/usr/bin/env bash\n",
@@ -44,7 +44,7 @@ function createFixtureRepo(overrides = {}) {
     ),
     "package.json": JSON.stringify(
       {
-        name: "thumbshooter",
+        name: "webgpu-metaverse",
         private: true,
         type: "module",
         devDependencies: {
@@ -57,14 +57,14 @@ function createFixtureRepo(overrides = {}) {
     ),
     "client/package.json": JSON.stringify(
       {
-        name: "@thumbshooter/client",
+        name: "@webgpu-metaverse/client",
         private: true,
         type: "module",
         dependencies: {
           "@fontsource-variable/geist": "5.2.8",
           "@mediapipe/tasks-vision": "0.10.33",
           "@strudel/web": "1.3.0",
-          "@thumbshooter/shared": "0.1.0",
+          "@webgpu-metaverse/shared": "0.1.0",
           "radix-ui": "1.4.3",
           react: "19.2.4",
           "react-dom": "19.2.4",
@@ -87,7 +87,7 @@ function createFixtureRepo(overrides = {}) {
     ),
     "packages/shared/package.json": JSON.stringify(
       {
-        name: "@thumbshooter/shared",
+        name: "@webgpu-metaverse/shared",
         private: true,
         type: "module"
       },
@@ -96,7 +96,7 @@ function createFixtureRepo(overrides = {}) {
     ),
     "server/package.json": JSON.stringify(
       {
-        name: "@thumbshooter/server",
+        name: "@webgpu-metaverse/server",
         private: true,
         type: "module"
       },
@@ -108,7 +108,7 @@ function createFixtureRepo(overrides = {}) {
     "client/src/components/ui/button.tsx": "export const buttonLabel = 'button';\n",
     "client/src/audio/classes/browser-audio-session.ts": `export async function bootAudio() { return import("@strudel/web/web.mjs"); } `,
     "client/src/game/classes/webgpu-gameplay-runtime.ts": `import { WebGPURenderer } from "three/webgpu"; import { color } from "three/tsl"; export function createRuntime() { return { WebGPURenderer, color }; } `,
-    "client/src/game/workers/hand-tracking-worker.ts": `import { HandLandmarker } from "@mediapipe/tasks-vision"; export const workerTask = HandLandmarker; `,
+    "client/src/tracking/workers/hand-tracking-worker.ts": `import { HandLandmarker } from "@mediapipe/tasks-vision"; export const workerTask = HandLandmarker; `,
     "client/src/network/classes/local-profile-storage.ts": "export const storage = 'profile';\n",
     "client/src/navigation/guards/resolve-shell-navigation.ts": `import { createRuntime } from "../game/runtime-entry.ts"; export const navigation = createRuntime; `,
     "client/src/navigation/game/runtime-entry.ts": "export const createRuntime = 'navigation-game';\n",
@@ -187,7 +187,7 @@ test("collectRepoVerificationErrors reports illegal runtime package ownership an
   assert.ok(
     errors.some((error) =>
       error.includes(
-        "Illegal MediaPipe import in client/src/app/vision-screen.ts: @mediapipe/tasks-vision belongs in client/src/game/workers only."
+        "Illegal MediaPipe import in client/src/app/vision-screen.ts: @mediapipe/tasks-vision belongs in client/src/tracking/workers only."
       )
     )
   );

@@ -2,7 +2,7 @@ import type {
   AudioMixSnapshot,
   BackgroundMusicEngine,
   SoundEffectEngine
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 export interface AudioFoundationConfig {
   readonly defaultMix: AudioMixSnapshot;

@@ -1,4 +1,8 @@
-export type ProfileStorageNamespace = "thumbshooter.profile";
+export type ActiveProfileStorageNamespace = "webgpu-metaverse.profile";
+export type LegacyProfileStorageNamespace = "thumbshooter.profile";
+export type ProfileStorageNamespace =
+  | ActiveProfileStorageNamespace
+  | LegacyProfileStorageNamespace;
 
 export type ProfileStorageSegment =
   | "username"

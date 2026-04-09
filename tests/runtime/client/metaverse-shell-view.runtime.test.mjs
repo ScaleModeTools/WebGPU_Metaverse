@@ -6,7 +6,7 @@ import {
   AudioSettings,
   PlayerProfile,
   createCalibrationShotSample
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import { createClientModuleLoader } from "./load-client-module.mjs";
 
@@ -43,12 +43,16 @@ test("buildMetaverseShellView derives stable shell labels from typed state", asy
       status: "supported",
       reason: "adapter-ready"
     },
+    inputMode: "mouse",
+    metaverseControlMode: "keyboard",
     profile
   });
 
   assert.equal(shellView.audioStatusLabel, "Audio unlocked, Strudel primed");
-  assert.equal(shellView.calibrationQualityLabel, "pending");
+  assert.equal(shellView.calibrationQualityLabel, "not required in mouse mode");
   assert.equal(shellView.capabilityReasonLabel, "Gameplay WebGPU adapter ready.");
+  assert.equal(shellView.gameplayInputModeLabel, "Mouse");
+  assert.equal(shellView.metaverseControlModeLabel, "Keyboard");
   assert.equal(shellView.musicVolumeLabel, "30%");
   assert.equal(shellView.sfxVolumeLabel, "65%");
   assert.deepEqual(shellView.musicVolumeSliderValue, [30]);
@@ -81,6 +85,8 @@ test("buildMetaverseShellView explains the localhost versus LAN IP WebGPU constr
       status: "unsupported",
       reason: "navigator-gpu-missing"
     },
+    inputMode: "mouse",
+    metaverseControlMode: "keyboard",
     profile: null
   });
 
@@ -174,6 +180,8 @@ test("buildMetaverseShellView summarizes stored calibration quality", async () =
       status: "supported",
       reason: "adapter-ready"
     },
+    inputMode: "camera-thumb-trigger",
+    metaverseControlMode: "mouse",
     profile
   });
 

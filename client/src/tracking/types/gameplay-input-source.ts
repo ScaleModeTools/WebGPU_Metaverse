@@ -1,4 +1,4 @@
-import type { HandTrackingTelemetrySnapshot } from "./gameplay-presentation";
+import type { HandTrackingTelemetrySnapshot } from "./hand-tracking-telemetry";
 import type {
   HandTrackingRuntimeSnapshot,
   LatestHandTrackingSnapshot

@@ -1,4 +1,4 @@
-import type { Radians } from "@thumbshooter/shared";
+import type { Radians } from "@webgpu-metaverse/shared";
 
 import type {
   LocalArenaEnemyBehaviorState,

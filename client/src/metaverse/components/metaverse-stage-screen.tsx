@@ -10,20 +10,33 @@ import type {
   ExperienceId,
   GameplayInputModeId,
   GameplaySessionMode
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
-import { DuckHuntLaunchPanel } from "../../experiences/duck-hunt/components";
+import { DuckHuntLaunchPanel } from "../../experiences/duck-hunt/components/duck-hunt-launch-panel";
 import { Button } from "@/components/ui/button";
+import {
+  ToggleGroup,
+  ToggleGroupItem
+} from "@/components/ui/toggle-group";
 import { ImmersiveStageFrame } from "../../ui/components/immersive-stage-frame";
+import {
+  metaverseControlModes,
+  resolveMetaverseControlMode
+} from "../config/metaverse-control-modes";
+import type { MetaverseControlModeId } from "../types/metaverse-control-mode";
 import { WebGpuMetaverseRuntime } from "../classes/webgpu-metaverse-runtime";
 
 interface MetaverseStageScreenProps {
   readonly audioStatusLabel: string;
   readonly calibrationQualityLabel: string;
   readonly coopRoomIdDraft: string;
-  readonly inputMode: GameplayInputModeId;
+  readonly gameplayInputMode: GameplayInputModeId;
+  readonly metaverseControlMode: MetaverseControlModeId;
   readonly onCoopRoomIdDraftChange: (coopRoomIdDraft: string) => void;
   readonly onExperienceLaunchRequest: (experienceId: ExperienceId) => void;
+  readonly onMetaverseControlModeChange: (
+    controlMode: MetaverseControlModeId
+  ) => void;
   readonly onRecalibrationRequest: () => void;
   readonly onSessionModeChange: (mode: GameplaySessionMode) => void;
   readonly onSetupRequest: () => void;
@@ -35,9 +48,11 @@ export function MetaverseStageScreen({
   audioStatusLabel,
   calibrationQualityLabel,
   coopRoomIdDraft,
-  inputMode,
+  gameplayInputMode,
+  metaverseControlMode,
   onCoopRoomIdDraftChange,
   onExperienceLaunchRequest,
+  onMetaverseControlModeChange,
   onRecalibrationRequest,
   onSessionModeChange,
   onSetupRequest,
@@ -56,6 +71,11 @@ export function MetaverseStageScreen({
     () => metaverseRuntime.hudSnapshot,
     () => metaverseRuntime.hudSnapshot
   );
+  const selectedControlMode = resolveMetaverseControlMode(metaverseControlMode);
+
+  useEffect(() => {
+    metaverseRuntime.setControlMode(metaverseControlMode);
+  }, [metaverseControlMode, metaverseRuntime]);
 
   useEffect(() => {
     if (canvasRef.current === null) {
@@ -105,19 +125,54 @@ export function MetaverseStageScreen({
                 Welcome back, {username}
               </h1>
               <p className="mt-2 text-sm text-muted-foreground">
-                Fly the ocean shell with `WASD`, use the mouse to look, hold
-                `Shift` to boost, and tap `Q` or `Space` to move vertically.
-                Click the water to capture the mouse, then press `Esc` to unlock
-                the cursor for portal UI.
+                The hub no longer uses pointer lock. Choose one fly-cam control
+                mode at a time, keep the camera behavior predictable, and swap
+                back to setup whenever you want to change launch policy.
               </p>
+              <div className="mt-4 flex flex-col gap-3">
+                <ToggleGroup
+                  className="w-full justify-start"
+                  onValueChange={(nextValue) => {
+                    if (nextValue.length === 0) {
+                      return;
+                    }
+
+                    onMetaverseControlModeChange(nextValue as MetaverseControlModeId);
+                  }}
+                  type="single"
+                  value={metaverseControlMode}
+                  variant="outline"
+                >
+                  {metaverseControlModes.map((controlMode) => (
+                    <ToggleGroupItem
+                      className="flex-1"
+                      key={controlMode.id}
+                      value={controlMode.id}
+                    >
+                      {controlMode.label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+                <div className="rounded-[1rem] border border-border/70 bg-background/70 px-3 py-3 text-sm text-muted-foreground">
+                  {selectedControlMode.description}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedControlMode.controlsSummary.map((instruction) => (
+                    <div
+                      className="rounded-full border border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground"
+                      key={instruction}
+                    >
+                      {instruction}
+                    </div>
+                  ))}
+                </div>
+              </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button onClick={onSetupRequest} type="button" variant="outline">
                   Open setup
                 </Button>
                 <div className="rounded-full border border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
-                  {hudSnapshot.pointerLockActive
-                    ? "Pointer lock live"
-                    : "Click the water to capture mouse"}
+                  Hub controls: {resolveMetaverseControlMode(hudSnapshot.controlMode).label}
                 </div>
               </div>
             </div>
@@ -133,7 +188,7 @@ export function MetaverseStageScreen({
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
                 {focusedPortal === null
-                  ? "The first portal leads to Duck Hunt. More experiences can join this same shell later."
+                  ? "The first portal leads to Duck Hunt. More experiences can join this shell while hub controls stay separate from experience-local gameplay input."
                   : focusDistanceLabel}
               </p>
               {runtimeError !== null ? (
@@ -149,7 +204,7 @@ export function MetaverseStageScreen({
                   audioStatusLabel={audioStatusLabel}
                   calibrationQualityLabel={calibrationQualityLabel}
                   coopRoomIdDraft={coopRoomIdDraft}
-                  inputMode={inputMode}
+                  inputMode={gameplayInputMode}
                   onCoopRoomIdDraftChange={onCoopRoomIdDraftChange}
                   onLaunchRequest={() => {
                     onExperienceLaunchRequest("duck-hunt");

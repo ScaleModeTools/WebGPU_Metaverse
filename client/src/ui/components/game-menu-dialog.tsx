@@ -1,11 +1,13 @@
 import { gameMenuPlan } from "../config/game-menu-plan";
 import {
-  gameplaySessionModes,
   gameplayInputModes,
   resolveGameplayInputMode,
-  type GameplayDebugPanelMode,
   type GameplayInputModeId,
   type GameplaySessionMode
+} from "@webgpu-metaverse/shared";
+import {
+  gameplaySessionModes,
+  type GameplayDebugPanelMode,
 } from "../../game";
 import { StableInlineText } from "@/components/text-stability";
 import { Badge } from "@/components/ui/badge";

@@ -1,26 +1,27 @@
 import {
   AffineAimTransform,
   AudioSettings,
+  resolveGameplayInputMode,
+  type GameplayInputModeId,
   type PlayerProfile
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import { reticleManifest } from "../../assets";
 import { audioFoundationConfig } from "../../audio";
 import type { AudioSessionSnapshot } from "../../audio";
-import {
-  resolveGameplayInputMode,
-  type GameplayInputModeId
-} from "../../game";
 import { duckHuntGameFoundationConfig } from "../../experiences/duck-hunt/config";
-import type { WebGpuGameplayCapabilitySnapshot } from "../../game/types/webgpu-capability";
+import { resolveMetaverseControlMode } from "../../metaverse/config/metaverse-control-modes";
+import type { WebGpuMetaverseCapabilitySnapshot } from "../../metaverse/types/webgpu-capability";
+import type { MetaverseControlModeId } from "../../metaverse/types/metaverse-control-mode";
 import type { CalibrationShellState } from "../../navigation";
 
 import type { MetaverseShellViewModel } from "../types/metaverse-shell";
 
 interface BuildMetaverseShellViewInput {
   readonly audioSnapshot: AudioSessionSnapshot;
-  readonly capabilitySnapshot: WebGpuGameplayCapabilitySnapshot;
+  readonly capabilitySnapshot: WebGpuMetaverseCapabilitySnapshot;
   readonly inputMode: GameplayInputModeId;
+  readonly metaverseControlMode: MetaverseControlModeId;
   readonly profile: PlayerProfile | null;
 }
 
@@ -37,7 +38,7 @@ function toResidualPercent(value: number): string {
 }
 
 function describeCapabilityReason(
-  snapshot: WebGpuGameplayCapabilitySnapshot
+  snapshot: WebGpuMetaverseCapabilitySnapshot
 ): string {
   switch (snapshot.reason) {
     case "adapter-ready":
@@ -127,11 +128,14 @@ export function buildMetaverseShellView({
   audioSnapshot,
   capabilitySnapshot,
   inputMode,
+  metaverseControlMode,
   profile
 }: BuildMetaverseShellViewInput): MetaverseShellViewModel {
   const audioMix =
     profile?.snapshot.audioSettings.mix ?? audioFoundationConfig.defaultMix;
   const selectedInputMode = resolveGameplayInputMode(inputMode);
+  const selectedMetaverseControlMode =
+    resolveMetaverseControlMode(metaverseControlMode);
 
   return {
     audioMix,
@@ -143,7 +147,8 @@ export function buildMetaverseShellView({
         : "pending"
       : "not required",
     capabilityReasonLabel: describeCapabilityReason(capabilitySnapshot),
-    inputModeLabel: selectedInputMode.label,
+    gameplayInputModeLabel: selectedInputMode.label,
+    metaverseControlModeLabel: selectedMetaverseControlMode.label,
     musicVolumeLabel: toPercent(Number(audioMix.musicVolume)),
     musicVolumeSliderValue: toSliderValue(Number(audioMix.musicVolume)),
     reticleCatalogLabel: reticleManifest.reticles

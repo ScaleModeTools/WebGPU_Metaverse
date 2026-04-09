@@ -1,7 +1,7 @@
 import {
   createMilliseconds,
   createRadians
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import { duckHuntLocalCombatSessionConfig } from "./duck-hunt-local-combat-session";
 import { duckHuntFirstPlayableWeaponDefinition } from "./duck-hunt-weapon-manifest";

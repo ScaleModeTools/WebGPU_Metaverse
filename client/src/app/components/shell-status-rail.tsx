@@ -6,8 +6,9 @@ interface ShellStatusRailProps {
   readonly calibrationSampleCount: number;
   readonly calibrationQualityLabel: string;
   readonly calibrationStatusLabel: string;
+  readonly gameplayInputModeLabel: string;
   readonly hydrationSource: StoredProfileHydrationResult["source"];
-  readonly inputModeLabel: string;
+  readonly metaverseControlModeLabel: string;
   readonly reticleCatalogLabel: string;
   readonly username: string;
 }
@@ -16,8 +17,9 @@ export function ShellStatusRail({
   calibrationSampleCount,
   calibrationQualityLabel,
   calibrationStatusLabel,
+  gameplayInputModeLabel,
   hydrationSource,
-  inputModeLabel,
+  metaverseControlModeLabel,
   reticleCatalogLabel,
   username
 }: ShellStatusRailProps) {
@@ -27,8 +29,9 @@ export function ShellStatusRail({
         calibrationSampleCount={calibrationSampleCount}
         calibrationQualityLabel={calibrationQualityLabel}
         calibrationStatusLabel={calibrationStatusLabel}
+        gameplayInputModeLabel={gameplayInputModeLabel}
         hydrationSource={hydrationSource}
-        inputModeLabel={inputModeLabel}
+        metaverseControlModeLabel={metaverseControlModeLabel}
         reticleCatalogLabel={reticleCatalogLabel}
         username={username}
       />

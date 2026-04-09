@@ -5,7 +5,7 @@ import {
   createCoopRoomDirectorySnapshot,
   createCoopRoomId,
   createCoopSessionId
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import { createClientModuleLoader } from "./load-client-module.mjs";
 

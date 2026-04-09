@@ -4,7 +4,7 @@ import type {
   CoopRoomServerEvent,
   CoopRoomSnapshot,
   CoopVector3SnapshotInput
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 import {
   createCoopFireShotCommand,
   createCoopJoinRoomCommand,
@@ -13,7 +13,7 @@ import {
   createCoopSetPlayerReadyCommand,
   createCoopStartSessionCommand,
   createCoopSyncPlayerPresenceCommand
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import {
   parseCoopRoomErrorMessage,

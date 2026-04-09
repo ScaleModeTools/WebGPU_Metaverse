@@ -1,4 +1,4 @@
-import { createRadians } from "@thumbshooter/shared";
+import { createRadians } from "@webgpu-metaverse/shared";
 
 import type { LocalArenaSimulationConfig } from "../types/local-arena-simulation";
 import type { LocalArenaEnemyRuntimeState } from "../types/local-arena-enemy-field";

@@ -1,11 +1,12 @@
 import { useEffect, useReducer, useState } from "react";
 
 import { BrowserAudioSession } from "../../audio";
-import { MouseGameplayInput, type GameplaySignal } from "../../game";
-import { WebGpuGameplayCapabilityProbe } from "../../game/classes/webgpu-gameplay-capability-probe";
-import { HandTrackingRuntime } from "../../game/classes/hand-tracking-runtime";
+import type { GameplaySignal } from "../../game";
+import { resolveControllerActionMatrix } from "../../input";
+import { WebGpuMetaverseCapabilityProbe } from "../../metaverse/classes/webgpu-metaverse-capability-probe";
 import { LocalProfileStorage } from "../../network";
 import { WebcamPermissionGateway, resolveShellNavigation } from "../../navigation";
+import { HandTrackingRuntime, MouseGameplayInput } from "../../tracking";
 
 import { metaverseAudioSessionConfig } from "../audio";
 import { useMetaverseShellAudioPolicy } from "./metaverse-shell-audio-policy";
@@ -31,7 +32,7 @@ function readBrowserStorage(): Storage | null {
 export function useMetaverseShellController(): MetaverseShellController {
   const [browserStorage] = useState(() => readBrowserStorage());
   const [profileStorage] = useState(() => new LocalProfileStorage());
-  const [capabilityProbe] = useState(() => new WebGpuGameplayCapabilityProbe());
+  const [capabilityProbe] = useState(() => new WebGpuMetaverseCapabilityProbe());
   const [handTrackingRuntime] = useState(() => new HandTrackingRuntime());
   const [mouseGameplayInput] = useState(() => new MouseGameplayInput());
   const [permissionGateway] = useState(() => new WebcamPermissionGateway());
@@ -70,8 +71,12 @@ export function useMetaverseShellController(): MetaverseShellController {
     audioSnapshot: state.audioSnapshot,
     capabilitySnapshot: state.capabilitySnapshot,
     inputMode: state.inputMode,
+    metaverseControlMode: state.metaverseControlMode,
     profile: state.profile
   });
+  const controllerActionMatrix = resolveControllerActionMatrix(
+    state.controllerConfiguration
+  );
   const audioPolicy = useMetaverseShellAudioPolicy({
     audioSession,
     dispatch,
@@ -130,6 +135,8 @@ export function useMetaverseShellController(): MetaverseShellController {
     activeExperienceId: state.activeExperienceId,
     capabilityStatus: state.capabilitySnapshot.status,
     coopRoomIdDraft: state.coopRoomIdDraft,
+    controllerActionMatrix,
+    controllerConfiguration: state.controllerConfiguration,
     debugPanelMode: state.debugPanelMode,
     gameplayInputSource,
     handTrackingRuntime,
@@ -137,6 +144,7 @@ export function useMetaverseShellController(): MetaverseShellController {
     inputMode: state.inputMode,
     isMenuOpen: state.isMenuOpen,
     loginError: state.loginError,
+    metaverseControlMode: state.metaverseControlMode,
     navigationSnapshot,
     permissionError: state.permissionError,
     permissionState: state.permissionState,
@@ -154,6 +162,8 @@ export function useMetaverseShellController(): MetaverseShellController {
       });
     },
     onClearProfile: profilePolicy.onClearProfile,
+    onDuckHuntControllerSchemeChange:
+      flowPolicy.onDuckHuntControllerSchemeChange,
     onEditProfile: profilePolicy.onEditProfile,
     onGameplayDebugPanelModeChange: (mode) => {
       dispatch({
@@ -167,7 +177,12 @@ export function useMetaverseShellController(): MetaverseShellController {
     onEnterMetaverseRequest: flowPolicy.onEnterMetaverseRequest,
     onExperienceLaunchRequest: flowPolicy.onExperienceLaunchRequest,
     onGameplayMenuOpen: gameplayMenuPolicy.onGameplayMenuOpen,
+    onGlobalControllerBindingPresetChange:
+      flowPolicy.onGlobalControllerBindingPresetChange,
     onInputModeChange: flowPolicy.onInputModeChange,
+    onMetaverseControlModeChange: flowPolicy.onMetaverseControlModeChange,
+    onMetaverseControllerSchemeChange:
+      flowPolicy.onMetaverseControllerSchemeChange,
     onLoginSubmit: entryPolicy.onLoginSubmit,
     onMusicVolumeChange: profilePolicy.onMusicVolumeChange,
     onRecalibrationRequest: profilePolicy.onRecalibrationRequest,

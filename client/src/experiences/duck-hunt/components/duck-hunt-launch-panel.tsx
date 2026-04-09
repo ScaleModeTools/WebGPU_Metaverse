@@ -4,12 +4,12 @@ import {
   createCoopRoomId,
   readExperienceCatalogEntry,
   readExperienceTickOwner,
+  resolveGameplayInputMode,
   type CoopRoomDirectoryEntrySnapshot,
   type GameplayInputModeId,
   type GameplaySessionMode
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
-import { resolveGameplayInputMode } from "../../../game";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

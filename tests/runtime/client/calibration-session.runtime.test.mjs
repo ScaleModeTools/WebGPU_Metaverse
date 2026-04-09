@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
-import { createCalibrationShotSample } from "@thumbshooter/shared";
+import { createCalibrationShotSample } from "@webgpu-metaverse/shared";
 
 import { createClientModuleLoader } from "./load-client-module.mjs";
 import { createTrackedHandSnapshot } from "./tracked-hand-pose-fixture.mjs";
@@ -16,18 +16,18 @@ after(async () => {
   await clientLoader?.close();
 });
 
-test("NinePointCalibrationSession captures one sample per trigger press and completes on the ninth anchor", async () => {
+test("TrackedHandCalibrationSession captures one sample per trigger press and completes on the ninth anchor", async () => {
   const {
-    DuckHuntNinePointCalibrationSession: NinePointCalibrationSession,
-    duckHuntGameFoundationConfig: gameFoundationConfig
-  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
-  const session = new NinePointCalibrationSession();
+    TrackedHandCalibrationSession,
+    trackedHandCalibrationConfig
+  } = await clientLoader.load("/src/tracking/index.ts");
+  const session = new TrackedHandCalibrationSession();
   const capturedAnchorIds = [];
   let fittedCalibration = null;
   let triggerCalibration = null;
   let sequenceNumber = 0;
 
-  for (const anchor of gameFoundationConfig.calibration.anchors) {
+  for (const anchor of trackedHandCalibrationConfig.anchors) {
     session.ingestTrackingSnapshot(
       createTrackedHandSnapshot(
         (sequenceNumber += 1),
@@ -82,7 +82,7 @@ test("NinePointCalibrationSession captures one sample per trigger press and comp
 
   assert.deepEqual(
     capturedAnchorIds,
-    gameFoundationConfig.calibration.anchors.map((anchor) => anchor.id)
+    trackedHandCalibrationConfig.anchors.map((anchor) => anchor.id)
   );
   assert.notEqual(fittedCalibration, null);
   assert.notEqual(triggerCalibration, null);
@@ -96,11 +96,11 @@ test("NinePointCalibrationSession captures one sample per trigger press and comp
   assert.equal(session.snapshot.currentAnchorId, null);
 });
 
-test("NinePointCalibrationSession resumes only the sequential stored anchor prefix", async () => {
-  const {
-    DuckHuntNinePointCalibrationSession: NinePointCalibrationSession
-  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
-  const session = new NinePointCalibrationSession([
+test("TrackedHandCalibrationSession resumes only the sequential stored anchor prefix", async () => {
+  const { TrackedHandCalibrationSession } = await clientLoader.load(
+    "/src/tracking/index.ts"
+  );
+  const session = new TrackedHandCalibrationSession([
     createCalibrationShotSample({
       anchorId: "center",
       intendedTarget: { x: 0.5, y: 0.5 },

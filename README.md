@@ -1,112 +1,162 @@
-# ThumbShooter
+# WebGPU Metaverse
 
-ThumbShooter is the repo and package namespace for WebGPU Metaverse, a browser
-shell that can launch multiple playable experiences. The first
-integrated experience is Duck Hunt, where the player aims with a webcam-tracked
-hand pose and fires by dropping the thumb relative to the index finger inside a
-WebGPU-rendered ocean hunting arena.
+WebGPU Metaverse is a metaverse-first browser game repo. It ships one React
+WebGPU shell, one Node server gateway, and one shared contract package. The
+first integrated experience is `duck-hunt`, which supports local
+single-player and server-authoritative co-op.
 
-## What Ships Now
+## Current Status
 
-- local username, profile, calibration, audio, and best-score persistence
-- shared browser audio unlock plus live Strudel shell/gameplay loops
-- explicit webcam permission flow plus worker-first MediaPipe Hand Landmarker
-- nine-point affine aim calibration
-- WebGPU ocean-arena gameplay with readable bird targets, a 3D scene
-  foundation, and semiautomatic thumb-drop firing
-- shared co-op room/session contracts, shared bird snapshots, and a
-  server-owned co-op room tick runtime
-- browser co-op room sync with join, ready-up, fire-shot, leave-room, and team
-  HUD state
-- clip-aware semiautomatic weapon behavior with off-screen reload
-- local hit, kill, score, streak, and round-phase tracking
-- completed / failed local rounds with restart-ready flow
-- typed Web Audio cues for UI, calibration, semiautomatic pistol fire, and
-  reload completion
-- HUD and in-game menu support for score, streak, kills, clip/reload state,
-  recalibration, and music/SFX controls
+- metaverse shell flow is live: profile setup -> metaverse hub -> experience
+  launch -> return to hub without a full reload
+- Duck Hunt is the first fully integrated experience under
+  `src/experiences/duck-hunt`
+- WebGPU stays behind an explicit capability gate
+- hand tracking stays worker-first and optional; mouse-first flows remain
+  available where camera setup is unnecessary
+- shared browser services such as `audio`, `network`, `tracking`, and `ui`
+  stay top-level reusable domains
 
-Still intentionally deferred:
+## What Works Today
 
-- remote teammate visuals and shared gun presentation
-- automatic weapons
+- profile, audio, calibration, and input-mode persistence
+- metaverse hub runtime with typed keyboard and mouse control modes
+- Duck Hunt launch flow from the shell into gameplay and back out again
+- Duck Hunt mouse input and camera thumb-trigger input
+- nine-point affine aim calibration for tracked input
+- worker-first MediaPipe Hand Landmarker integration
+- WebGPU gameplay runtime using `three/webgpu` and `three/tsl`
+- local single-player Duck Hunt
+- server-ticked co-op Duck Hunt rooms
+- shared shell and gameplay audio with Strudel BGM plus Web Audio SFX
+- runtime, typecheck, and bench gates through the repo entrypoints
 
-## Metaverse Transition
+## Control Surfaces
 
-The repo now treats the current shooter as the first named experience,
-`duck-hunt`, rather than the permanent top-level game shape. The active
-structure plan for the metaverse shell plus experience domains lives in
-`docs/metaverse-transition-spec.md`.
+### Metaverse Hub
 
-## Repo Map
+- `keyboard`: `W/S` move, `A/D` pan, `Q/E` tilt, `Shift` boost
+- `mouse`: left click forward, right click backward, edge-based pan/tilt,
+  Mouse Button 4 boost
 
-- `client`: React + Vite shell, metaverse composition, WebGPU experiences,
-  worker tracking, HUD
-- `server`: TypeScript metaverse gateway plus experience-authority slices
-- `packages/shared`: cross-workspace metaverse and experience contracts plus
-  invariant-bearing value objects
-- `tests`: runtime and contract coverage
-- `tools`: non-interactive build, test, bench, and verify entrypoints
-- `examples`: reference material only, never product code
+### Duck Hunt
 
-## Main Runtime Owners
+- `mouse`: direct cursor aim and click-to-fire
+- `camera-thumb-trigger`: aim with the tracked thumb-gun pose and fire by
+  dropping the thumb relative to the index finger
 
-- `MetaverseShell`: top-level browser-shell composition
-- `HandTrackingRuntime`: webcam boot, worker lifecycle, latest validated hand
-  snapshots
-- `LocalArenaSimulation`: calibrated aim, weapon loop, HUD snapshots, combat
-  integration
-- `WeaponRuntime`: clip, cadence, reload timing, and weapon HUD state
-- `LocalCombatSession`: local score, streak, timer, and active/completed/failed
-  round phases
-- `WebGpuGameplayRuntime`: renderer lifecycle, frame loop, and scene draw path
+## Repo Shape
 
-## Commands
+```text
+client/src
+  app/                      # shell composition only
+  metaverse/                # hub runtime, state, components, render
+  experiences/duck-hunt/    # Duck Hunt-owned client code
+  tracking/                 # shared hand/cursor tracking owners
+  audio/                    # shared browser audio services
+  navigation/               # shell flow legality and routing
+  network/                  # shared transport and persistence adapters
+  ui/                       # shared UI primitives and overlays
+
+server/src
+  metaverse/                # hub authority and session runtime
+  experiences/duck-hunt/    # Duck Hunt authority, rooms, ticks
+  index.ts                  # gateway composition root
+
+packages/shared/src
+  metaverse/                # experience ids, launch/session contracts
+  experiences/duck-hunt/    # Duck Hunt snapshots, commands, events
+
+tests
+  runtime/                  # runtime behavior coverage
+  typecheck/                # public contract type coverage
+```
+
+For new work, metaverse-wide shell code belongs in `metaverse` domains and
+experience-local code belongs in `experiences/<experienceId>`. Top-level
+service domains such as `audio`, `network`, `tracking`, and `ui` are for
+cross-experience reuse, not Duck Hunt-specific policy.
+
+## Workspace Packages
+
+- root package: `webgpu-metaverse`
+- client workspace: `@webgpu-metaverse/client`
+- server workspace: `@webgpu-metaverse/server`
+- shared contract workspace: `@webgpu-metaverse/shared`
+
+## Getting Started
+
+### Requirements
+
+- Node `>=24.13.0`
+- npm `>=11.6.2`
+
+### Install
 
 ```bash
 npm install
+```
+
+### Run Everything
+
+```bash
+npm run dev
+```
+
+This starts the client and the server together.
+
+### Run Separately
+
+```bash
+npm run dev:client
+npm run dev:server
+```
+
+Default local ports:
+
+- client dev server: `http://localhost:5173`
+- client preview: `http://localhost:4173`
+- server: `http://127.0.0.1:3210`
+
+### Build And Verify
+
+```bash
 ./tools/build
 ./tools/test
 ./tools/bench
 ./tools/verify
-npm run dev
-npm run dev:client
-npm run dev:server
-npm run start:server
 ```
 
-To review the current client locally:
+`./tools/verify` is the stop-ship gate.
 
-```bash
-npm install
-npm run dev:client
-```
+## Runtime Notes
 
-For local co-op development:
+- Use `http://localhost:5173/` when testing on the same machine. Plain HTTP LAN
+  origins do not satisfy the WebGPU secure-context requirement that
+  `localhost` does.
+- The client proxies `/metaverse/*` and `/experiences/*` requests to the local
+  server during development.
+- Duck Hunt co-op traffic lives under `/experiences/duck-hunt/coop/rooms`.
+- If needed, the client can target a different server origin through
+  `VITE_SERVER_ORIGIN`.
 
-```bash
-npm install
-npm run dev
-```
+## Contributor Orientation
 
-Use `http://localhost:5173/` when you are testing on the same machine.
-The Vite `Network` URL is useful for other devices, but plain HTTP LAN origins
-do not satisfy the WebGPU secure-context requirement that `localhost` does.
+- Root repo law lives in `AGENTS.md`.
+- The active metaverse structure source is
+  `docs/metaverse-transition-spec.md`.
+- `packages/shared` is the only cross-workspace contract surface.
+- `client/src/game` still exists as a transitional legacy subtree; new
+  metaverse-wide or experience-local work should prefer the explicit owners
+  above instead of adding new gravity there.
 
-## Fast Orientation
+## Locked Tech
 
-- `README.md` is the public blank-slate orientation surface.
-- `docs/metaverse-transition-spec.md` is the active escalated structure plan
-  for metaverse plus experience organization.
-- local/private steering for autonomous contributors lives outside this public
-  README and can be more detailed than what belongs here.
-
-## Locked Runtime
-
-- gameplay: Three.js `r183`, `three/webgpu`, `three/tsl`
-- UI shell: React + shadcn (`radix-nova`)
-- tracking: worker-first MediaPipe Hand Landmarker
-- audio: Strudel BGM, Web Audio SFX
-- fallback: explicit unsupported state, not silent renderer downgrade
-- first calibration model: 2D affine
-- first Duck Hunt weapon: semiautomatic pistol
+- React 19 + Vite client shell
+- shadcn (`radix-nova`) UI stack
+- Node TypeScript server
+- `three/webgpu` + `three/tsl` gameplay rendering
+- MediaPipe hand tracking behind a worker boundary
+- Strudel background music
+- raw Web Audio API sound effects
+- 2D affine calibration as the first tracked-input transform

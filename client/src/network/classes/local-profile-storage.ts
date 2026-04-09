@@ -5,7 +5,7 @@ import {
   createHandTriggerCalibrationSnapshot,
   createUsername,
   reticleIds
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 import type {
   AudioSettingsSnapshot,
   AffineAimTransformSnapshot,
@@ -13,12 +13,15 @@ import type {
   HandTriggerCalibrationSnapshot,
   GameplayInputModeId,
   PlayerProfileSnapshot
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 import {
   defaultGameplayInputMode,
   gameplayInputModeIds
-} from "@thumbshooter/shared";
-import { profileStoragePlan } from "../config/profile-storage";
+} from "@webgpu-metaverse/shared";
+import {
+  legacyProfileStoragePlans,
+  profileStoragePlan
+} from "../config/profile-storage";
 import type { ProfileStoragePlan } from "../types/profile-storage";
 import type {
   StoredCalibrationRecord,
@@ -32,6 +35,12 @@ const gameplayInputModeIdSet = new Set<string>(gameplayInputModeIds);
 const legacyGameplayInputModeAliases = new Map<string, GameplayInputModeId>([
   ["camera-thumb-shooter", "camera-thumb-trigger"]
 ]);
+const persistedProfileStorageKeys = [
+  "usernameStorageKey",
+  "profileStorageKey",
+  "calibrationStorageKey",
+  "inputModeStorageKey"
+] as const satisfies readonly (keyof ProfileStoragePlan)[];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -272,6 +281,59 @@ function readStoredInputMode(rawValue: string | null): GameplayInputModeId {
   return readCompatibleGameplayInputMode(rawValue) ?? defaultGameplayInputMode;
 }
 
+function readCompatibleStorageValue(
+  storage: Storage,
+  primaryPlan: ProfileStoragePlan,
+  keyName: (typeof persistedProfileStorageKeys)[number]
+): string | null {
+  for (const plan of [primaryPlan, ...legacyProfileStoragePlans]) {
+    const storedValue = storage.getItem(plan[keyName]);
+
+    if (storedValue !== null) {
+      return storedValue;
+    }
+  }
+
+  return null;
+}
+
+function clearCompatibleStorageValues(
+  storage: Storage,
+  primaryPlan: ProfileStoragePlan
+): void {
+  const removedKeys = new Set<string>();
+
+  for (const plan of [primaryPlan, ...legacyProfileStoragePlans]) {
+    for (const keyName of persistedProfileStorageKeys) {
+      const storageKey = plan[keyName];
+
+      if (removedKeys.has(storageKey)) {
+        continue;
+      }
+
+      removedKeys.add(storageKey);
+      storage.removeItem(storageKey);
+    }
+  }
+}
+
+function clearLegacyStorageValues(
+  storage: Storage,
+  primaryPlan: ProfileStoragePlan
+): void {
+  for (const plan of legacyProfileStoragePlans) {
+    for (const keyName of persistedProfileStorageKeys) {
+      const legacyStorageKey = plan[keyName];
+
+      if (legacyStorageKey === primaryPlan[keyName]) {
+        continue;
+      }
+
+      storage.removeItem(legacyStorageKey);
+    }
+  }
+}
+
 export class LocalProfileStorage {
   readonly #plan: ProfileStoragePlan;
 
@@ -289,13 +351,13 @@ export class LocalProfileStorage {
     }
 
     const inputMode = readStoredInputMode(
-      storage.getItem(this.#plan.inputModeStorageKey)
+      readCompatibleStorageValue(storage, this.#plan, "inputModeStorageKey")
     );
     const storedProfileRecord = parseStoredPlayerProfileRecord(
-      storage.getItem(this.#plan.profileStorageKey)
+      readCompatibleStorageValue(storage, this.#plan, "profileStorageKey")
     );
     const storedCalibrationRecord = parseStoredCalibrationRecord(
-      storage.getItem(this.#plan.calibrationStorageKey),
+      readCompatibleStorageValue(storage, this.#plan, "calibrationStorageKey"),
       this.#plan.calibrationRecordVersion
     );
 
@@ -316,7 +378,7 @@ export class LocalProfileStorage {
     }
 
     const storedUsername = readStoredUsername(
-      storage.getItem(this.#plan.usernameStorageKey)
+      readCompatibleStorageValue(storage, this.#plan, "usernameStorageKey")
     );
 
     if (storedUsername === null) {
@@ -368,6 +430,7 @@ export class LocalProfileStorage {
       JSON.stringify(storedCalibrationRecord)
     );
     storage.setItem(this.#plan.inputModeStorageKey, inputMode);
+    clearLegacyStorageValues(storage, this.#plan);
   }
 
   clearProfile(storage: Storage | null | undefined): void {
@@ -375,9 +438,6 @@ export class LocalProfileStorage {
       return;
     }
 
-    storage.removeItem(this.#plan.usernameStorageKey);
-    storage.removeItem(this.#plan.profileStorageKey);
-    storage.removeItem(this.#plan.calibrationStorageKey);
-    storage.removeItem(this.#plan.inputModeStorageKey);
+    clearCompatibleStorageValues(storage, this.#plan);
   }
 }

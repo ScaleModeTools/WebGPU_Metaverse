@@ -4,7 +4,7 @@ import type {
   Milliseconds,
   PlayerProfile,
   Radians
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import type { MetaverseShellControllerAction } from "../../client/src/app/types/metaverse-shell-controller";
 import {
@@ -22,8 +22,6 @@ import {
   type GameplayRuntimeConfig,
   type GameplayReticleVisualState,
   type GameplayTelemetrySnapshot,
-  type HandTriggerGestureConfig,
-  type HandTriggerGestureSnapshot,
   type GameplayRuntimeLifecycleState,
   type GameplaySignal,
   type GameplaySignalType,
@@ -39,6 +37,10 @@ import {
   weaponReadinessStates,
   weaponReloadStates
 } from "../../client/src/game/index";
+import type {
+  HandTriggerGestureConfig,
+  HandTriggerGestureSnapshot
+} from "../../client/src/tracking/index";
 import {
   duckHuntGameFoundationConfig as gameFoundationConfig
 } from "../../client/src/experiences/duck-hunt/index";
@@ -55,12 +57,16 @@ type ExpectedShellActionType =
   | "capabilityProbeStarted"
   | "capabilitySnapshotReceived"
   | "coopRoomIdDraftChanged"
+  | "duckHuntControllerSchemeChanged"
   | "experienceLaunchRequested"
+  | "globalBindingPresetChanged"
   | "gameplayDebugPanelModeChanged"
   | "gameplayExited"
   | "gameplayMenuSetOpen"
   | "inputModeChanged"
   | "loginRejected"
+  | "metaverseControlModeChanged"
+  | "metaverseControllerSchemeChanged"
   | "metaverseEntryRequested"
   | "metaverseReturnRequested"
   | "musicVolumeChanged"

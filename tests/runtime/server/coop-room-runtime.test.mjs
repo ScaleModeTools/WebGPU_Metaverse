@@ -15,7 +15,7 @@ import {
   createCoopSyncPlayerPresenceCommand,
   createMilliseconds,
   createUsername
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import { CoopRoomRuntime } from "../../../server/dist/classes/coop-room-runtime.js";
 

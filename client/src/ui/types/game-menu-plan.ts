@@ -1,4 +1,4 @@
-import type { AudioChannelId } from "@thumbshooter/shared";
+import type { AudioChannelId } from "@webgpu-metaverse/shared";
 import type { GameplayDebugPanelMode } from "../../game";
 
 export const gameMenuSectionIds = [

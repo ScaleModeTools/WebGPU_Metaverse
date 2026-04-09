@@ -7,7 +7,7 @@ import {
   createCoopRoomSnapshot,
   createCoopSessionId,
   createUsername
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import { createClientModuleLoader } from "./load-client-module.mjs";
 import { createTrackedHandSnapshot } from "./tracked-hand-pose-fixture.mjs";

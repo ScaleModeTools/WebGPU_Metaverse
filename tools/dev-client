@@ -4,7 +4,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 local_dev_dir="$repo_root/.local-dev"
-client_pid_file="$local_dev_dir/thumbshooter-dev-client.pid"
+client_pid_file="$local_dev_dir/webgpu-metaverse-dev-client.pid"
 
 cd "$repo_root"
 mkdir -p "$local_dev_dir"
@@ -73,7 +73,7 @@ resolve_existing_repo_vite_pids() {
 existing_dev_client_pid="$(resolve_existing_dev_client_pid || true)"
 
 if [[ -n "$existing_dev_client_pid" ]]; then
-  echo "Stopping existing ThumbShooter dev client session (pid $existing_dev_client_pid)."
+  echo "Stopping existing WebGPU Metaverse dev client session (pid $existing_dev_client_pid)."
   kill "$existing_dev_client_pid" 2>/dev/null || true
 
   for _ in {1..50}; do
@@ -85,7 +85,7 @@ if [[ -n "$existing_dev_client_pid" ]]; then
   done
 
   if kill -0 "$existing_dev_client_pid" 2>/dev/null; then
-    echo "ThumbShooter dev client session $existing_dev_client_pid did not exit cleanly."
+    echo "WebGPU Metaverse dev client session $existing_dev_client_pid did not exit cleanly."
     exit 1
   fi
 fi
@@ -93,7 +93,7 @@ fi
 mapfile -t existing_repo_vite_pids < <(resolve_existing_repo_vite_pids || true)
 
 if (( ${#existing_repo_vite_pids[@]} > 0 )); then
-  echo "Stopping existing ThumbShooter client Vite processes (${existing_repo_vite_pids[*]})."
+  echo "Stopping existing WebGPU Metaverse client Vite processes (${existing_repo_vite_pids[*]})."
 
   for existing_vite_pid in "${existing_repo_vite_pids[@]}"; do
     kill "$existing_vite_pid" 2>/dev/null || true
@@ -109,7 +109,7 @@ if (( ${#existing_repo_vite_pids[@]} > 0 )); then
     done
 
     if kill -0 "$existing_vite_pid" 2>/dev/null; then
-      echo "ThumbShooter client Vite process $existing_vite_pid did not exit cleanly."
+      echo "WebGPU Metaverse client Vite process $existing_vite_pid did not exit cleanly."
       exit 1
     fi
   done

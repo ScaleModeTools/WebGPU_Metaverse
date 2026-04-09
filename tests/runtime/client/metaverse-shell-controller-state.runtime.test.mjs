@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
-import { AudioSettings, PlayerProfile } from "@thumbshooter/shared";
+import { AudioSettings, PlayerProfile } from "@webgpu-metaverse/shared";
 
 import { createClientModuleLoader } from "./load-client-module.mjs";
 
@@ -53,7 +53,11 @@ test("createInitialMetaverseShellControllerState seeds typed shell policy from h
   assert.equal(state.inputMode, "mouse");
   assert.equal(state.usernameDraft, "shell-user");
   assert.equal(state.capabilitySnapshot.status, "checking");
+  assert.equal(state.controllerConfiguration.globalBindingPresetId, "standard");
+  assert.equal(state.controllerConfiguration.duckHuntControllerSchemeId, "mouse");
+  assert.equal(state.controllerConfiguration.metaverseControllerSchemeId, "keyboard");
   assert.equal(state.debugPanelMode, "hidden");
+  assert.equal(state.metaverseControlMode, "keyboard");
   assert.equal(state.shellStage, "main-menu");
   assert.equal(state.activeExperienceId, null);
   assert.equal(state.permissionState, "prompt");
@@ -82,6 +86,10 @@ test("reduceMetaverseShellControllerState keeps hub and experience mutations beh
     type: "profileConfirmed",
     profile: baseProfile
   });
+  assert.equal(
+    state.controllerConfiguration.duckHuntControllerSchemeId,
+    "camera-thumb-trigger"
+  );
   state = reduceMetaverseShellControllerState(state, {
     type: "permissionRequestStarted"
   });
@@ -126,6 +134,37 @@ test("reduceMetaverseShellControllerState keeps hub and experience mutations beh
   assert.equal(state.sessionMode, "co-op");
 
   state = reduceMetaverseShellControllerState(state, {
+    controlMode: "mouse",
+    type: "metaverseControlModeChanged"
+  });
+
+  assert.equal(state.metaverseControlMode, "mouse");
+  assert.equal(state.controllerConfiguration.metaverseControllerSchemeId, "mouse");
+
+  state = reduceMetaverseShellControllerState(state, {
+    type: "globalBindingPresetChanged",
+    globalBindingPresetId: "swap-primary-secondary"
+  });
+  state = reduceMetaverseShellControllerState(state, {
+    type: "metaverseControllerSchemeChanged",
+    metaverseControllerSchemeId: "gamepad"
+  });
+  state = reduceMetaverseShellControllerState(state, {
+    type: "duckHuntControllerSchemeChanged",
+    duckHuntControllerSchemeId: "gamepad-right-stick-aim"
+  });
+
+  assert.equal(
+    state.controllerConfiguration.globalBindingPresetId,
+    "swap-primary-secondary"
+  );
+  assert.equal(state.controllerConfiguration.metaverseControllerSchemeId, "gamepad");
+  assert.equal(
+    state.controllerConfiguration.duckHuntControllerSchemeId,
+    "gamepad-right-stick-aim"
+  );
+
+  state = reduceMetaverseShellControllerState(state, {
     type: "metaverseEntryRequested"
   });
 
@@ -154,6 +193,10 @@ test("reduceMetaverseShellControllerState keeps hub and experience mutations beh
   assert.equal(state.inputMode, "mouse");
   assert.equal(state.activeExperienceId, null);
   assert.equal(state.isMenuOpen, false);
+  assert.equal(
+    state.controllerConfiguration.duckHuntControllerSchemeId,
+    "gamepad-right-stick-aim"
+  );
 
   state = reduceMetaverseShellControllerState(state, {
     type: "setupRequested"
@@ -190,7 +233,11 @@ test("reduceMetaverseShellControllerState keeps hub and experience mutations beh
 
   assert.equal(state.profile, null);
   assert.equal(state.hydrationSource, "empty");
-  assert.equal(state.inputMode, "camera-thumb-trigger");
+  assert.equal(state.inputMode, "mouse");
+  assert.equal(state.metaverseControlMode, "keyboard");
+  assert.equal(state.controllerConfiguration.globalBindingPresetId, "standard");
+  assert.equal(state.controllerConfiguration.duckHuntControllerSchemeId, "mouse");
+  assert.equal(state.controllerConfiguration.metaverseControllerSchemeId, "keyboard");
   assert.equal(state.usernameDraft, "");
   assert.equal(state.isMenuOpen, false);
   assert.equal(state.sessionMode, "single-player");

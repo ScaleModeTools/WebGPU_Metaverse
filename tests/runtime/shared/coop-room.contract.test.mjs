@@ -13,7 +13,7 @@ import {
   createCoopSessionId,
   createCoopStartSessionCommand,
   createUsername
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 function requireValue(value, label) {
   assert.notEqual(value, null, `${label} should resolve`);

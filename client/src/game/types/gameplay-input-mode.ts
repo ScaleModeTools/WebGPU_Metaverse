@@ -6,4 +6,4 @@ export {
   type GameplayInputModeDefinition,
   type GameplayInputModeHudCopy,
   type GameplayInputModeId
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";

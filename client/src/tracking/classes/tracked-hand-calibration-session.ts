@@ -3,26 +3,23 @@ import {
   createCalibrationShotSample,
   createHandTriggerMetricSnapshot,
   type CalibrationShotSample
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
-import {
-  duckHuntCalibrationCaptureConfig,
-  duckHuntGameFoundationConfig
-} from "../config";
+import { handAimObservationConfig } from "../config/hand-aim-observation";
+import { trackedHandCalibrationConfig } from "../config/tracked-hand-calibration";
+import { readObservedAimPoint } from "../types/hand-aim-observation";
 import {
   evaluateHandTriggerGesture,
   summarizeHandTriggerCalibration
-} from "../../../game/types/hand-trigger-gesture";
+} from "../types/hand-trigger-gesture";
+import type { LatestHandTrackingSnapshot } from "../types/hand-tracking";
 import type {
-  CalibrationCaptureConfig,
-  NinePointCalibrationAdvanceResult,
-  NinePointCalibrationSnapshot
-} from "../../../game/types/calibration-session";
-import { handAimObservationConfig } from "../../../game/config/hand-aim-observation";
-import { readObservedAimPoint } from "../../../game/types/hand-aim-observation";
-import type { LatestHandTrackingSnapshot } from "../../../game/types/hand-tracking";
+  TrackedHandCalibrationAdvanceResult,
+  TrackedHandCalibrationConfig,
+  TrackedHandCalibrationSnapshot
+} from "../types/tracked-hand-calibration";
 
-function createSnapshotKey(snapshot: NinePointCalibrationSnapshot): string {
+function createSnapshotKey(snapshot: TrackedHandCalibrationSnapshot): string {
   return [
     snapshot.captureState,
     snapshot.currentAnchorId ?? "none",
@@ -32,10 +29,11 @@ function createSnapshotKey(snapshot: NinePointCalibrationSnapshot): string {
 }
 
 function resumeCalibrationSamples(
-  storedSamples: readonly CalibrationShotSample[]
+  storedSamples: readonly CalibrationShotSample[],
+  calibrationConfig: TrackedHandCalibrationConfig
 ): readonly CalibrationShotSample[] {
   const resumedSamples: CalibrationShotSample[] = [];
-  const anchors = duckHuntGameFoundationConfig.calibration.anchors;
+  const anchors = calibrationConfig.anchors;
 
   for (const [index, sample] of storedSamples.entries()) {
     if (sample.anchorId !== anchors[index]?.id) {
@@ -48,31 +46,32 @@ function resumeCalibrationSamples(
   return Object.freeze(resumedSamples);
 }
 
-export class DuckHuntNinePointCalibrationSession {
-  readonly #captureConfig: CalibrationCaptureConfig;
+export class TrackedHandCalibrationSession {
+  readonly #calibrationConfig: TrackedHandCalibrationConfig;
   readonly #storedSamples: CalibrationShotSample[];
 
-  #captureState: NinePointCalibrationSnapshot["captureState"];
+  #captureState: TrackedHandCalibrationSnapshot["captureState"];
   #failureReason: string | null = null;
   #latestReadyTriggerMetrics: CalibrationShotSample["readyTriggerMetrics"] = null;
   #triggerHeld = false;
 
   constructor(
     storedSamples: readonly CalibrationShotSample[] = [],
-    captureConfig: CalibrationCaptureConfig = duckHuntCalibrationCaptureConfig
+    calibrationConfig: TrackedHandCalibrationConfig = trackedHandCalibrationConfig
   ) {
-    this.#captureConfig = captureConfig;
-    this.#storedSamples = [...resumeCalibrationSamples(storedSamples)];
+    this.#calibrationConfig = calibrationConfig;
+    this.#storedSamples = [
+      ...resumeCalibrationSamples(storedSamples, calibrationConfig)
+    ];
     this.#captureState =
-      this.#storedSamples.length >= duckHuntGameFoundationConfig.calibration.anchors.length
+      this.#storedSamples.length >= calibrationConfig.anchors.length
         ? "complete"
         : "waiting-for-hand";
   }
 
-  get snapshot(): NinePointCalibrationSnapshot {
+  get snapshot(): TrackedHandCalibrationSnapshot {
     const currentAnchor =
-      duckHuntGameFoundationConfig.calibration.anchors[this.#storedSamples.length] ??
-      null;
+      this.#calibrationConfig.anchors[this.#storedSamples.length] ?? null;
 
     return Object.freeze({
       captureState: this.#captureState,
@@ -80,13 +79,13 @@ export class DuckHuntNinePointCalibrationSession {
       currentAnchorLabel: currentAnchor?.label ?? null,
       capturedSampleCount: this.#storedSamples.length,
       failureReason: this.#failureReason,
-      totalAnchorCount: duckHuntGameFoundationConfig.calibration.anchors.length
+      totalAnchorCount: this.#calibrationConfig.anchors.length
     });
   }
 
   ingestTrackingSnapshot(
     trackingSnapshot: LatestHandTrackingSnapshot
-  ): NinePointCalibrationAdvanceResult {
+  ): TrackedHandCalibrationAdvanceResult {
     const previousSnapshotKey = createSnapshotKey(this.snapshot);
 
     if (this.#captureState === "complete" || this.#captureState === "failed") {
@@ -114,7 +113,7 @@ export class DuckHuntNinePointCalibrationSession {
     const triggerGesture = evaluateHandTriggerGesture(
       trackingSnapshot.pose,
       this.#triggerHeld,
-      this.#captureConfig.triggerGesture
+      this.#calibrationConfig.triggerGesture
     );
     const nextTriggerHeld = triggerGesture.triggerPressed;
 
@@ -152,7 +151,7 @@ export class DuckHuntNinePointCalibrationSession {
     this.#triggerHeld = true;
 
     const currentAnchor =
-      duckHuntGameFoundationConfig.calibration.anchors[this.#storedSamples.length];
+      this.#calibrationConfig.anchors[this.#storedSamples.length];
 
     if (currentAnchor === undefined) {
       this.#captureState = "failed";
@@ -190,7 +189,7 @@ export class DuckHuntNinePointCalibrationSession {
 
     if (
       this.#storedSamples.length <
-      duckHuntGameFoundationConfig.calibration.anchors.length
+      this.#calibrationConfig.anchors.length
     ) {
       return {
         didChange: true,

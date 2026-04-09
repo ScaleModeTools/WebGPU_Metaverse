@@ -1,7 +1,7 @@
 import type {
   BackgroundMusicEngine,
   SoundEffectEngine
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import { audioFoundationConfig } from "../../client/src/audio/config/audio-foundation";
 import {

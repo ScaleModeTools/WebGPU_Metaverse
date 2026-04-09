@@ -1,4 +1,4 @@
-import type { AudioMixSnapshot } from "@thumbshooter/shared";
+import type { AudioMixSnapshot } from "@webgpu-metaverse/shared";
 
 import {
   initializeCatalogBackedBackgroundMusic,

@@ -4,8 +4,8 @@ import type {
   CoopRoomServerEvent,
   CoopRoomSnapshotInput,
   CoopPlayerId
-} from "@thumbshooter/shared";
-import { createCoopRoomSnapshotEvent } from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
+import { createCoopRoomSnapshotEvent } from "@webgpu-metaverse/shared";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;

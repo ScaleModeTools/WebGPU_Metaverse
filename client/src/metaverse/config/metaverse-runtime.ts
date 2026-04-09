@@ -29,12 +29,18 @@ export const metaverseRuntimeConfig = {
   movement: {
     baseSpeedUnitsPerSecond: 14,
     boostMultiplier: 2.15,
-    lookSensitivityRadiansPerPixel: 0.0022,
     maxAltitude: 22,
-    maxPitchRadians: 0.6,
     minAltitude: 2.25,
-    minPitchRadians: -0.6,
     worldRadius: 110
+  },
+  orientation: {
+    maxPitchRadians: 0.6,
+    maxTurnSpeedRadiansPerSecond: 1.9,
+    minPitchRadians: -0.6,
+    mouseEdgeTurn: {
+      deadZoneViewportFraction: 0.2,
+      responseExponent: 1.55
+    }
   },
   ocean: {
     emissiveColor: [0.08, 0.28, 0.37],

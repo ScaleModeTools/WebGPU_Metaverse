@@ -1,27 +1,22 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
-import type { PlayerProfile } from "@thumbshooter/shared";
+import type { PlayerProfile } from "@webgpu-metaverse/shared";
 
 import {
-  calibrationCaptureOmittedLandmarkIds,
-  calibrationOverlayLandmarkIds,
-  createCalibrationPoseCapture,
-  createCalibrationPoseCaptureExport,
-  type CalibrationPoseCaptureSnapshot
-} from "../types/calibration-pose-capture";
-import { HandTrackingRuntime } from "../../game/classes/hand-tracking-runtime";
-import {
-  duckHuntGameFoundationConfig
-} from "../../experiences/duck-hunt/config";
-import {
-  DuckHuntNinePointCalibrationSession
-} from "../../experiences/duck-hunt/runtime";
-import { handAimObservationConfig } from "../../game/config/hand-aim-observation";
-import { readObservedAimPoint } from "../../game/types/hand-aim-observation";
-import type {
-  HandTrackingPoseSnapshot,
-  TrackedHandTrackingSnapshot
-} from "../../game/types/hand-tracking";
+  handAimObservationConfig,
+  readObservedAimPoint,
+  type HandTrackingPoseSnapshot,
+  type HandTrackingRuntime,
+  trackedHandCalibrationCaptureOmittedLandmarkIds,
+  trackedHandCalibrationCaptureStates,
+  trackedHandCalibrationConfig,
+  trackedHandCalibrationOverlayLandmarkIds,
+  createTrackedHandCalibrationPoseCapture,
+  createTrackedHandCalibrationPoseCaptureExport,
+  type TrackedHandCalibrationPoseCaptureSnapshot,
+  type TrackedHandTrackingSnapshot,
+  TrackedHandCalibrationSession
+} from "../../tracking";
 import { StableInlineText } from "@/components/text-stability";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,33 +26,12 @@ import { ImmersiveStageFrame } from "../../ui/components/immersive-stage-frame";
 
 const calibrationPreviewMirrored = true;
 const calibrationPreviewFitMode = "cover";
-const handTrackingLifecycleLabels = [
-  "idle",
-  "booting",
-  "ready",
-  "failed"
-] as const;
-const calibrationCaptureStateLabels = [
-  "waiting-for-hand",
-  "ready-to-capture",
-  "release-trigger",
-  "complete",
-  "failed"
-] as const;
 const calibrationAnchorLabels = [
-  "Center",
-  "Top Left",
-  "Top Right",
-  "Bottom Left",
-  "Bottom Right",
-  "Top Center",
-  "Mid Right",
-  "Mid Left",
-  "Bottom Center",
+  ...trackedHandCalibrationConfig.anchors.map((anchor) => anchor.label),
   "complete"
-] as const;
+];
 
-interface CalibrationStageScreenProps {
+interface TrackedHandCalibrationStageScreenProps {
   readonly handTrackingRuntime: HandTrackingRuntime;
   readonly onCalibrationProgress: (
     nextProfile: PlayerProfile,
@@ -144,14 +118,13 @@ function downloadCalibrationPoseCaptureExport(content: string): void {
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
 }
 
-export function CalibrationStageScreen({
+export function TrackedHandCalibrationStageScreen({
   handTrackingRuntime,
   onCalibrationProgress,
   profile
-}: CalibrationStageScreenProps) {
+}: TrackedHandCalibrationStageScreenProps) {
   const [session] = useState(
-    () =>
-      new DuckHuntNinePointCalibrationSession(profile.snapshot.calibrationSamples)
+    () => new TrackedHandCalibrationSession(profile.snapshot.calibrationSamples)
   );
   const [captureSnapshot, setCaptureSnapshot] = useState(() => session.snapshot);
   const [runtimeLifecycle, setRuntimeLifecycle] = useState(
@@ -165,7 +138,7 @@ export function CalibrationStageScreen({
   );
   const [poseCaptureLabel, setPoseCaptureLabel] = useState("custom");
   const [poseCaptureSamples, setPoseCaptureSamples] = useState<
-    readonly CalibrationPoseCaptureSnapshot[]
+    readonly TrackedHandCalibrationPoseCaptureSnapshot[]
   >([]);
   const [poseCaptureStatus, setPoseCaptureStatus] = useState(
     "Tracking-ready samples export here."
@@ -182,7 +155,7 @@ export function CalibrationStageScreen({
   const poseCaptureExportJson = useMemo(
     () =>
       JSON.stringify(
-        createCalibrationPoseCaptureExport(poseCaptureSamples),
+        createTrackedHandCalibrationPoseCaptureExport(poseCaptureSamples),
         null,
         2
       ),
@@ -219,7 +192,10 @@ export function CalibrationStageScreen({
       return;
     }
 
-    const nextSample = createCalibrationPoseCapture(label, trackedSnapshot);
+    const nextSample = createTrackedHandCalibrationPoseCapture(
+      label,
+      trackedSnapshot
+    );
 
     setPoseCaptureSamples((currentSamples) => [...currentSamples, nextSample]);
     setPoseCaptureStatus(`Captured "${nextSample.label}".`);
@@ -269,10 +245,10 @@ export function CalibrationStageScreen({
       '[data-skeleton="thumb"]'
     );
     const overlayPoints = new Map<
-      (typeof calibrationOverlayLandmarkIds.capture)[number],
+      (typeof trackedHandCalibrationOverlayLandmarkIds.capture)[number],
       SVGCircleElement | null
     >(
-      calibrationOverlayLandmarkIds.capture.map((pointId) => [
+      trackedHandCalibrationOverlayLandmarkIds.capture.map((pointId) => [
         pointId,
         handOverlay?.querySelector<SVGCircleElement>(`[data-point="${pointId}"]`) ??
           null
@@ -332,7 +308,7 @@ export function CalibrationStageScreen({
             "points",
             formatOverlayPolyline(
               latestPose.pose,
-              calibrationOverlayLandmarkIds.index,
+              trackedHandCalibrationOverlayLandmarkIds.index,
               previewVideoWidthPx,
               previewVideoHeightPx
             )
@@ -341,12 +317,12 @@ export function CalibrationStageScreen({
             "points",
             formatOverlayPolyline(
               latestPose.pose,
-              calibrationOverlayLandmarkIds.thumb,
+              trackedHandCalibrationOverlayLandmarkIds.thumb,
               previewVideoWidthPx,
               previewVideoHeightPx
             )
           );
-          for (const pointId of calibrationOverlayLandmarkIds.capture) {
+          for (const pointId of trackedHandCalibrationOverlayLandmarkIds.capture) {
             setOverlayPoint(
               overlayPoints.get(pointId),
               latestPose.pose[pointId],
@@ -452,7 +428,7 @@ export function CalibrationStageScreen({
               strokeWidth="3.6"
               vectorEffect="non-scaling-stroke"
             />
-            {calibrationOverlayLandmarkIds.capture.map((pointId) => (
+            {trackedHandCalibrationOverlayLandmarkIds.capture.map((pointId) => (
               <circle
                 className="fill-white/90"
                 data-point={pointId}
@@ -479,10 +455,10 @@ export function CalibrationStageScreen({
               />
             </Badge>
             <Badge variant="outline">
-              <StableInlineText
-                reserveTexts={handTrackingLifecycleLabels}
-                text={runtimeLifecycle}
-              />
+            <StableInlineText
+              reserveTexts={["idle", "booting", "ready", "failed"]}
+              text={runtimeLifecycle}
+            />
             </Badge>
           </div>
           <p className="type-game-heading mt-3">
@@ -519,12 +495,12 @@ export function CalibrationStageScreen({
           </Badge>
           <Badge variant="outline">
             <StableInlineText
-              reserveTexts={calibrationCaptureStateLabels}
+              reserveTexts={trackedHandCalibrationCaptureStates}
               text={captureSnapshot.captureState}
             />
           </Badge>
           <Badge variant="outline">
-            {duckHuntGameFoundationConfig.calibration.transformModel}
+            {trackedHandCalibrationConfig.transformModel}
           </Badge>
         </div>
 
@@ -546,8 +522,8 @@ export function CalibrationStageScreen({
             rules as the webcam feed. Wrist landmark 0 was never part of this
             runtime. The trigger capture landmarks now include index base and
             middle PIP contact points, while{" "}
-            {calibrationCaptureOmittedLandmarkIds.join(" and ")} stay out of the
-            export.
+            {trackedHandCalibrationCaptureOmittedLandmarkIds.join(" and ")} stay
+            out of the export.
           </p>
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -641,7 +617,7 @@ export function CalibrationStageScreen({
           </pre>
         </div>
 
-        {duckHuntGameFoundationConfig.calibration.anchors.map((anchor, anchorIndex) => {
+        {trackedHandCalibrationConfig.anchors.map((anchor, anchorIndex) => {
           const isCaptured = anchorIndex < captureSnapshot.capturedSampleCount;
           const isCurrent = captureSnapshot.currentAnchorId === anchor.id;
 

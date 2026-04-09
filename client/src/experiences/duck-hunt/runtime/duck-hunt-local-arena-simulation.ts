@@ -4,7 +4,7 @@ import {
   type AffineAimTransformSnapshot,
   type HandTriggerCalibrationSnapshot,
   type NormalizedViewportPoint
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import { duckHuntGameplayRuntimeConfig } from "../config/duck-hunt-gameplay-runtime";
 import { duckHuntLocalArenaSimulationConfig } from "../config/duck-hunt-local-arena-simulation";
@@ -12,8 +12,6 @@ import {
   advanceGameplayCameraSnapshot,
   createGameplayCameraSnapshot
 } from "../../../game/states/gameplay-space";
-import { evaluateHandTriggerGesture } from "../../../game/types/hand-trigger-gesture";
-import { readObservedAimPoint } from "../../../game/types/hand-aim-observation";
 import {
   applyReticleScatter,
   countDownedEnemies,
@@ -27,7 +25,6 @@ import {
   summarizeEnemyField
 } from "../../../game/states/local-arena-enemy-field";
 import type { GameplaySignal } from "../../../game/types/gameplay-signal";
-import type { LatestHandTrackingSnapshot } from "../../../game/types/hand-tracking";
 import { createSinglePlayerGameplaySessionSnapshot } from "../../../game/types/gameplay-session";
 import type {
   GameplayCameraSnapshot,
@@ -41,7 +38,12 @@ import type {
   LocalArenaTargetFeedbackState,
   LocalArenaWeaponSnapshot
 } from "../../../game/types/local-arena-simulation";
-import { handAimObservationConfig } from "../../../game/config/hand-aim-observation";
+import {
+  evaluateHandTriggerGesture,
+  handAimObservationConfig,
+  readObservedAimPoint,
+  type LatestHandTrackingSnapshot
+} from "../../../tracking";
 import { DuckHuntLocalCombatSession } from "./duck-hunt-local-combat-session";
 import { DuckHuntWeaponRuntime } from "./duck-hunt-weapon-runtime";
 

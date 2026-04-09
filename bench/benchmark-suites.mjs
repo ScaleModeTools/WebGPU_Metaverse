@@ -108,7 +108,7 @@ export async function createBenchmarkSuites({ clientLoader }) {
     duckHuntLocalArenaSimulationConfig: localArenaSimulationConfig
   } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const { createLatestHandTrackingSnapshot } = await clientLoader.load(
-    "/src/game/types/hand-tracking.ts"
+    "/src/tracking/types/hand-tracking.ts"
   );
 
   return [

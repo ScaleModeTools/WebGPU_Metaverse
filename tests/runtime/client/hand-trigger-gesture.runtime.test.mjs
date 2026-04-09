@@ -4,7 +4,7 @@ import test, { after, before } from "node:test";
 import {
   createCalibrationShotSample,
   createHandTriggerCalibrationSnapshot
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import { createClientModuleLoader } from "./load-client-module.mjs";
 import { createTrackedHandPose } from "./tracked-hand-pose-fixture.mjs";
@@ -77,11 +77,9 @@ function distortPoseAlongIndexAxis(pose, factor) {
 }
 
 test("evaluateHandTriggerGesture uses the thumb and index chains without a wrist pivot", async () => {
-  const { evaluateHandTriggerGesture } = await clientLoader.load("/src/game/index.ts");
-  const {
-    duckHuntCalibrationCaptureConfig: calibrationCaptureConfig
-  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
-  const triggerConfig = calibrationCaptureConfig.triggerGesture;
+  const { cameraThumbTriggerGestureConfig, evaluateHandTriggerGesture } =
+    await clientLoader.load("/src/tracking/index.ts");
+  const triggerConfig = cameraThumbTriggerGestureConfig;
   const openPose = createTrackedHandPose(0.5, 0.4, 0);
   const pressedPose = createTrackedHandPose(0.5, 0.4, 1);
 
@@ -117,11 +115,9 @@ test("evaluateHandTriggerGesture uses the thumb and index chains without a wrist
 });
 
 test("evaluateHandTriggerGesture fires from either index-base or middle-PIP contact", async () => {
-  const { evaluateHandTriggerGesture } = await clientLoader.load("/src/game/index.ts");
-  const {
-    duckHuntCalibrationCaptureConfig: calibrationCaptureConfig
-  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
-  const triggerConfig = calibrationCaptureConfig.triggerGesture;
+  const { cameraThumbTriggerGestureConfig, evaluateHandTriggerGesture } =
+    await clientLoader.load("/src/tracking/index.ts");
+  const triggerConfig = cameraThumbTriggerGestureConfig;
   const readyPose = createFocusedTriggerPose({
     thumbBase: { x: 0.36, y: 0.58, z: 0.01 },
     thumbKnuckle: { x: 0.39, y: 0.54, z: 0.008 },
@@ -185,11 +181,9 @@ test("evaluateHandTriggerGesture fires from either index-base or middle-PIP cont
 });
 
 test("evaluateHandTriggerGesture keeps ready and pressed states stable under index-axis foreshortening", async () => {
-  const { evaluateHandTriggerGesture } = await clientLoader.load("/src/game/index.ts");
-  const {
-    duckHuntCalibrationCaptureConfig: calibrationCaptureConfig
-  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
-  const triggerConfig = calibrationCaptureConfig.triggerGesture;
+  const { cameraThumbTriggerGestureConfig, evaluateHandTriggerGesture } =
+    await clientLoader.load("/src/tracking/index.ts");
+  const triggerConfig = cameraThumbTriggerGestureConfig;
   const readyPose = createTrackedHandPose(0.5, 0.4, 0);
   const pressedPose = createTrackedHandPose(0.5, 0.4, 1);
 
@@ -213,9 +207,9 @@ test("evaluateHandTriggerGesture keeps ready and pressed states stable under ind
 });
 
 test("readObservedAimPoint projects from the index chain instead of using the raw tip", async () => {
-  const { readObservedAimPoint } = await clientLoader.load("/src/game/index.ts");
+  const { readObservedAimPoint } = await clientLoader.load("/src/tracking/index.ts");
   const { handAimObservationConfig } = await clientLoader.load(
-    "/src/game/config/hand-aim-observation.ts"
+    "/src/tracking/config/hand-aim-observation.ts"
   );
   const pose = createTrackedHandPose(0.5, 0.4, 0);
   const observedAimPoint = readObservedAimPoint(pose, handAimObservationConfig);
@@ -231,7 +225,9 @@ test("readObservedAimPoint projects from the index chain instead of using the ra
 });
 
 test("summarizeHandTriggerCalibration captures the tightest ready-to-press viewport window", async () => {
-  const { summarizeHandTriggerCalibration } = await clientLoader.load("/src/game/index.ts");
+  const { summarizeHandTriggerCalibration } = await clientLoader.load(
+    "/src/tracking/index.ts"
+  );
   const calibration = summarizeHandTriggerCalibration([
     createCalibrationShotSample({
       anchorId: "center",
@@ -278,13 +274,11 @@ test("summarizeHandTriggerCalibration captures the tightest ready-to-press viewp
 
 test("evaluateHandTriggerGesture tightens press detection when calibration shows a narrow ready window", async () => {
   const {
+    cameraThumbTriggerGestureConfig,
     evaluateHandTriggerGesture,
     resolveHandTriggerGestureThresholds
-  } = await clientLoader.load("/src/game/index.ts");
-  const {
-    duckHuntCalibrationCaptureConfig: calibrationCaptureConfig
-  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
-  const triggerConfig = calibrationCaptureConfig.triggerGesture;
+  } = await clientLoader.load("/src/tracking/index.ts");
+  const triggerConfig = cameraThumbTriggerGestureConfig;
   const calibration = createHandTriggerCalibrationSnapshot({
     sampleCount: 9,
     pressedAxisAngleDegreesMax: 20,

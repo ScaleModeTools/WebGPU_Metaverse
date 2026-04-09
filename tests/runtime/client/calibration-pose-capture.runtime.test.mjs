@@ -14,16 +14,16 @@ after(async () => {
   await clientLoader?.close();
 });
 
-test("createCalibrationPoseCapture exports the focused trigger landmarks only", async () => {
+test("createTrackedHandCalibrationPoseCapture exports the focused trigger landmarks only", async () => {
   const {
-    calibrationCaptureOmittedLandmarkIds,
-    calibrationOverlayLandmarkIds,
-    createCalibrationPoseCapture,
-    createCalibrationPoseCaptureExport
-  } = await clientLoader.load("/src/app/types/calibration-pose-capture.ts");
+    trackedHandCalibrationCaptureOmittedLandmarkIds,
+    trackedHandCalibrationOverlayLandmarkIds,
+    createTrackedHandCalibrationPoseCapture,
+    createTrackedHandCalibrationPoseCaptureExport
+  } = await clientLoader.load("/src/tracking/index.ts");
   const trackedSnapshot = createTrackedHandSnapshot(4, 0.48, 0.34, 0.9);
-  const capture = createCalibrationPoseCapture("shoot", trackedSnapshot);
-  const captureExport = createCalibrationPoseCaptureExport([capture]);
+  const capture = createTrackedHandCalibrationPoseCapture("shoot", trackedSnapshot);
+  const captureExport = createTrackedHandCalibrationPoseCaptureExport([capture]);
 
   assert.equal(capture.label, "shoot");
   assert.equal(typeof capture.capturedAtIso, "string");
@@ -49,21 +49,21 @@ test("createCalibrationPoseCapture exports the focused trigger landmarks only", 
   assert.equal(typeof capture.triggerGesture.engagementRatio, "number");
   assert.deepEqual(
     captureExport.captureLandmarkIds,
-    calibrationOverlayLandmarkIds.capture
+    trackedHandCalibrationOverlayLandmarkIds.capture
   );
   assert.deepEqual(
     captureExport.omittedRuntimeLandmarkIds,
-    calibrationCaptureOmittedLandmarkIds
+    trackedHandCalibrationCaptureOmittedLandmarkIds
   );
   assert.equal(captureExport.captures.length, 1);
 });
 
-test("createCalibrationPoseCapture normalizes blank labels to sample", async () => {
-  const { createCalibrationPoseCapture } = await clientLoader.load(
-    "/src/app/types/calibration-pose-capture.ts"
+test("createTrackedHandCalibrationPoseCapture normalizes blank labels to sample", async () => {
+  const { createTrackedHandCalibrationPoseCapture } = await clientLoader.load(
+    "/src/tracking/index.ts"
   );
   const trackedSnapshot = createTrackedHandSnapshot(2, 0.3, 0.22);
-  const capture = createCalibrationPoseCapture("   ", trackedSnapshot);
+  const capture = createTrackedHandCalibrationPoseCapture("   ", trackedSnapshot);
 
   assert.equal(capture.label, "sample");
 });

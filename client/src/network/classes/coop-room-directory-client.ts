@@ -1,4 +1,4 @@
-import type { CoopRoomDirectorySnapshot } from "@thumbshooter/shared";
+import type { CoopRoomDirectorySnapshot } from "@webgpu-metaverse/shared";
 
 import {
   parseCoopRoomDirectorySnapshot,

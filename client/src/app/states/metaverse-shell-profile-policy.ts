@@ -1,11 +1,11 @@
 import { startTransition, useEffect, useEffectEvent } from "react";
 import type { Dispatch } from "react";
 
-import type { PlayerProfile } from "@thumbshooter/shared";
+import type { PlayerProfile } from "@webgpu-metaverse/shared";
 
 import { audioFoundationConfig } from "../../audio";
-import type { HandTrackingRuntime } from "../../game/classes/hand-tracking-runtime";
 import type { LocalProfileStorage } from "../../network";
+import type { HandTrackingRuntime } from "../../tracking";
 import type { MetaverseAudioSession } from "../audio";
 
 import type {

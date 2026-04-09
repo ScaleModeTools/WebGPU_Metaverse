@@ -1,7 +1,7 @@
 import type {
+  MetaverseFlightInputSnapshot,
   FocusedExperiencePortalSnapshot,
   MetaverseCameraSnapshot,
-  MetaverseMovementInputSnapshot,
   MetaversePortalConfig,
   MetaverseRuntimeConfig,
   MetaverseVector3Snapshot
@@ -95,15 +95,24 @@ export function directionFromYawPitch(
 
 export function rotateMetaverseCameraSnapshot(
   cameraSnapshot: MetaverseCameraSnapshot,
-  movementX: number,
-  movementY: number,
-  config: MetaverseRuntimeConfig["movement"]
+  yawAxis: number,
+  pitchAxis: number,
+  config: MetaverseRuntimeConfig["orientation"],
+  deltaSeconds: number
 ): MetaverseCameraSnapshot {
+  if (deltaSeconds <= 0) {
+    return cameraSnapshot;
+  }
+
+  const clampedYawAxis = clamp(yawAxis, -1, 1);
+  const clampedPitchAxis = clamp(pitchAxis, -1, 1);
   const yawRadians = wrapRadians(
-    cameraSnapshot.yawRadians - movementX * config.lookSensitivityRadiansPerPixel
+    cameraSnapshot.yawRadians +
+      clampedYawAxis * config.maxTurnSpeedRadiansPerSecond * deltaSeconds
   );
   const pitchRadians = clamp(
-    cameraSnapshot.pitchRadians - movementY * config.lookSensitivityRadiansPerPixel,
+    cameraSnapshot.pitchRadians +
+      clampedPitchAxis * config.maxTurnSpeedRadiansPerSecond * deltaSeconds,
     config.minPitchRadians,
     config.maxPitchRadians
   );
@@ -117,9 +126,59 @@ export function rotateMetaverseCameraSnapshot(
   });
 }
 
+export function resolveMetaverseMouseLookAxes(
+  pointerX: number | null,
+  pointerY: number | null,
+  viewportWidth: number,
+  viewportHeight: number,
+  config: MetaverseRuntimeConfig["orientation"]["mouseEdgeTurn"]
+): Pick<MetaverseFlightInputSnapshot, "pitchAxis" | "yawAxis"> {
+  if (
+    pointerX === null ||
+    pointerY === null ||
+    viewportWidth <= 0 ||
+    viewportHeight <= 0
+  ) {
+    return Object.freeze({
+      pitchAxis: 0,
+      yawAxis: 0
+    });
+  }
+
+  const centeredX = (pointerX - 0.5) * viewportWidth;
+  const centeredY = (0.5 - pointerY) * viewportHeight;
+  const offsetDistance = Math.hypot(centeredX, centeredY);
+  const halfMinViewportAxis =
+    Math.max(1, Math.min(viewportWidth, viewportHeight)) * 0.5;
+  const deadZoneRadius =
+    halfMinViewportAxis * config.deadZoneViewportFraction;
+
+  if (offsetDistance <= deadZoneRadius) {
+    return Object.freeze({
+      pitchAxis: 0,
+      yawAxis: 0
+    });
+  }
+
+  const progress = clamp(
+    (offsetDistance - deadZoneRadius) /
+      Math.max(1, halfMinViewportAxis - deadZoneRadius),
+    0,
+    1
+  );
+  const magnitude = Math.pow(progress, config.responseExponent);
+  const directionX = centeredX / offsetDistance;
+  const directionY = centeredY / offsetDistance;
+
+  return Object.freeze({
+    pitchAxis: directionY * magnitude,
+    yawAxis: directionX * magnitude
+  });
+}
+
 export function advanceMetaverseCameraSnapshot(
   cameraSnapshot: MetaverseCameraSnapshot,
-  inputSnapshot: MetaverseMovementInputSnapshot,
+  inputSnapshot: MetaverseFlightInputSnapshot,
   config: MetaverseRuntimeConfig,
   deltaSeconds: number
 ): MetaverseCameraSnapshot {
@@ -127,33 +186,34 @@ export function advanceMetaverseCameraSnapshot(
     return cameraSnapshot;
   }
 
-  const forwardX = Math.sin(cameraSnapshot.yawRadians);
-  const forwardZ = -Math.cos(cameraSnapshot.yawRadians);
-  const rightX = Math.cos(cameraSnapshot.yawRadians);
-  const rightZ = Math.sin(cameraSnapshot.yawRadians);
-  const intentX =
-    (inputSnapshot.moveForward ? forwardX : 0) -
-    (inputSnapshot.moveBackward ? forwardX : 0) +
-    (inputSnapshot.strafeRight ? rightX : 0) -
-    (inputSnapshot.strafeLeft ? rightX : 0);
-  const intentY =
-    (inputSnapshot.ascend ? 1 : 0) - (inputSnapshot.descend ? 1 : 0);
-  const intentZ =
-    (inputSnapshot.moveForward ? forwardZ : 0) -
-    (inputSnapshot.moveBackward ? forwardZ : 0) +
-    (inputSnapshot.strafeRight ? rightZ : 0) -
-    (inputSnapshot.strafeLeft ? rightZ : 0);
-  const normalizedIntent = normalizeVector3(intentX, intentY, intentZ, freezeVector3(0, 0, 0));
+  const rotatedCameraSnapshot = rotateMetaverseCameraSnapshot(
+    cameraSnapshot,
+    inputSnapshot.yawAxis,
+    inputSnapshot.pitchAxis,
+    config.orientation,
+    deltaSeconds
+  );
+  const forwardX = Math.sin(rotatedCameraSnapshot.yawRadians);
+  const forwardZ = -Math.cos(rotatedCameraSnapshot.yawRadians);
+  const moveAxis = clamp(inputSnapshot.moveAxis, -1, 1);
+  const normalizedIntent = normalizeVector3(
+    forwardX * moveAxis,
+    0,
+    forwardZ * moveAxis,
+    freezeVector3(0, 0, 0)
+  );
   const speed =
     config.movement.baseSpeedUnitsPerSecond *
     (inputSnapshot.boost ? config.movement.boostMultiplier : 1);
-  const unclampedX = cameraSnapshot.position.x + normalizedIntent.x * speed * deltaSeconds;
+  const unclampedX =
+    rotatedCameraSnapshot.position.x + normalizedIntent.x * speed * deltaSeconds;
   const unclampedY = clamp(
-    cameraSnapshot.position.y + normalizedIntent.y * speed * deltaSeconds,
+    rotatedCameraSnapshot.position.y,
     config.movement.minAltitude,
     config.movement.maxAltitude
   );
-  const unclampedZ = cameraSnapshot.position.z + normalizedIntent.z * speed * deltaSeconds;
+  const unclampedZ =
+    rotatedCameraSnapshot.position.z + normalizedIntent.z * speed * deltaSeconds;
   const horizontalDistance = Math.hypot(unclampedX, unclampedZ);
   const radiusScale =
     horizontalDistance <= config.movement.worldRadius
@@ -161,14 +221,14 @@ export function advanceMetaverseCameraSnapshot(
       : config.movement.worldRadius / horizontalDistance;
 
   return Object.freeze({
-    lookDirection: cameraSnapshot.lookDirection,
-    pitchRadians: cameraSnapshot.pitchRadians,
+    lookDirection: rotatedCameraSnapshot.lookDirection,
+    pitchRadians: rotatedCameraSnapshot.pitchRadians,
     position: freezeVector3(
       unclampedX * radiusScale,
       unclampedY,
       unclampedZ * radiusScale
     ),
-    yawRadians: cameraSnapshot.yawRadians
+    yawRadians: rotatedCameraSnapshot.yawRadians
   });
 }
 

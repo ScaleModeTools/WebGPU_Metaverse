@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
-import { createHandTriggerCalibrationSnapshot } from "@thumbshooter/shared";
+import { createHandTriggerCalibrationSnapshot } from "@webgpu-metaverse/shared";
 
 import { createClientModuleLoader } from "./load-client-module.mjs";
 import { createTrackedHandSnapshot } from "./tracked-hand-pose-fixture.mjs";
@@ -117,12 +117,12 @@ function createArenaConfig() {
 }
 
 test("LocalArenaSimulation publishes calibrated aim, arena counts, and early scatter state", async () => {
-  const { readObservedAimPoint } = await clientLoader.load("/src/game/index.ts");
+  const { readObservedAimPoint } = await clientLoader.load("/src/tracking/index.ts");
   const {
     DuckHuntLocalArenaSimulation: LocalArenaSimulation
   } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const { handAimObservationConfig } = await clientLoader.load(
-    "/src/game/config/hand-aim-observation.ts"
+    "/src/tracking/config/hand-aim-observation.ts"
   );
   const simulation = new LocalArenaSimulation(
     {

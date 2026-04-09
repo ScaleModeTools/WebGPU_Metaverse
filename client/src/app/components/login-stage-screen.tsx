@@ -39,7 +39,7 @@ export function LoginStageScreen({
 }: LoginStageScreenProps) {
   return (
     <StageScreenLayout
-      description="Create or resume your local profile. Username, input mode, calibration data, and audio mix stay on this device."
+      description="Create or resume your local profile. Username, Duck Hunt input mode, calibration data, and audio mix stay on this device."
       eyebrow="Login"
       title="Create or resume local profile"
     >
@@ -87,8 +87,8 @@ export function LoginStageScreen({
             <CardHeader>
               <CardTitle>What persists now</CardTitle>
               <CardDescription>
-                The local profile stays on this device, including input mode and
-                calibration data when you capture it.
+                The local profile stays on this device, including Duck Hunt
+                input mode and calibration data when you capture it.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
@@ -102,7 +102,7 @@ export function LoginStageScreen({
                 Calibration key: {profileStoragePlan.calibrationStorageKey}
               </div>
               <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-3">
-                Input mode key: {profileStoragePlan.inputModeStorageKey}
+                Duck Hunt input key: {profileStoragePlan.inputModeStorageKey}
               </div>
             </CardContent>
           </Card>

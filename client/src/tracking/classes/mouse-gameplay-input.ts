@@ -1,11 +1,11 @@
 import type {
   AffineAimTransformSnapshot,
   NormalizedViewportPoint
-} from "@thumbshooter/shared";
-import { createNormalizedViewportPoint } from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
+import { createNormalizedViewportPoint } from "@webgpu-metaverse/shared";
 
 import type { GameplayInputSource } from "../types/gameplay-input-source";
-import type { HandTrackingTelemetrySnapshot } from "../types/gameplay-presentation";
+import type { HandTrackingTelemetrySnapshot } from "../types/hand-tracking-telemetry";
 import {
   createLatestHandTrackingSnapshot,
   createUnavailableHandTrackingSnapshot,

@@ -1,9 +1,17 @@
-import { defaultGameplayInputMode } from "../../game";
-import type { GameplaySessionMode } from "@thumbshooter/shared";
-import { AudioSettings } from "@thumbshooter/shared";
+import type { GameplaySessionMode } from "@webgpu-metaverse/shared";
+import {
+  AudioSettings,
+  defaultGameplayInputMode
+} from "@webgpu-metaverse/shared";
 
-import type { WebGpuGameplayCapabilitySnapshot } from "../../game/types/webgpu-capability";
 import { defaultDuckHuntCoopRoomId } from "../../experiences/duck-hunt/network";
+import {
+  createInitialControllerConfigurationState,
+  reduceControllerConfigurationState,
+  resetControllerConfigurationState
+} from "../../input";
+import { defaultMetaverseControlMode } from "../../metaverse/config/metaverse-control-modes";
+import type { WebGpuMetaverseCapabilitySnapshot } from "../../metaverse/types/webgpu-capability";
 
 import type {
   MetaverseShellControllerAction,
@@ -14,7 +22,7 @@ import type {
 export const initialCapabilitySnapshot = Object.freeze({
   status: "checking",
   reason: "pending"
-}) satisfies WebGpuGameplayCapabilitySnapshot;
+}) satisfies WebGpuMetaverseCapabilitySnapshot;
 const defaultSessionMode: GameplaySessionMode = "single-player";
 
 function resolveNextShellStageAfterModeChange(
@@ -68,12 +76,17 @@ export function createInitialMetaverseShellControllerState({
     audioSnapshot,
     capabilitySnapshot: initialCapabilitySnapshot,
     coopRoomIdDraft: defaultDuckHuntCoopRoomId,
+    controllerConfiguration: createInitialControllerConfigurationState({
+      gameplayInputMode: hydratedProfile.inputMode,
+      metaverseControlMode: defaultMetaverseControlMode
+    }),
     debugPanelMode: "hidden",
     hasConfirmedProfile: false,
     hydrationSource: hydratedProfile.source,
     inputMode: hydratedProfile.inputMode,
     isMenuOpen: false,
     loginError: null,
+    metaverseControlMode: defaultMetaverseControlMode,
     permissionError: null,
     permissionState: "prompt",
     profile: hydratedProfile.profile,
@@ -88,6 +101,16 @@ export function reduceMetaverseShellControllerState(
   action: MetaverseShellControllerAction
 ): MetaverseShellControllerState {
   switch (action.type) {
+    case "duckHuntControllerSchemeChanged":
+    case "globalBindingPresetChanged":
+    case "metaverseControllerSchemeChanged":
+      return {
+        ...state,
+        controllerConfiguration: reduceControllerConfigurationState(
+          state.controllerConfiguration,
+          action
+        )
+      };
     case "audioSnapshotChanged":
       return {
         ...state,
@@ -200,9 +223,30 @@ export function reduceMetaverseShellControllerState(
             ...state,
             activeExperienceId: null,
             debugPanelMode: "hidden",
+            controllerConfiguration: reduceControllerConfigurationState(
+              state.controllerConfiguration,
+              {
+                type: "gameplayInputModeSynchronized",
+                gameplayInputMode: action.inputMode
+              }
+            ),
             inputMode: action.inputMode,
             isMenuOpen: false,
             shellStage: resolveNextShellStageAfterModeChange(state)
+          };
+    case "metaverseControlModeChanged":
+      return action.controlMode === state.metaverseControlMode
+        ? state
+        : {
+            ...state,
+            controllerConfiguration: reduceControllerConfigurationState(
+              state.controllerConfiguration,
+              {
+                type: "metaverseControlModeSynchronized",
+                metaverseControlMode: action.controlMode
+              }
+            ),
+            metaverseControlMode: action.controlMode
           };
     case "loginRejected":
       return {
@@ -245,6 +289,8 @@ export function reduceMetaverseShellControllerState(
         inputMode: defaultGameplayInputMode,
         isMenuOpen: false,
         loginError: null,
+        metaverseControlMode: defaultMetaverseControlMode,
+        controllerConfiguration: resetControllerConfigurationState(),
         permissionError: null,
         permissionState: "prompt",
         profile: null,

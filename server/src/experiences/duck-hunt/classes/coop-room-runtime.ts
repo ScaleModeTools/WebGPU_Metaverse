@@ -14,11 +14,11 @@ import type {
   CoopSyncPlayerPresenceCommand,
   CoopVector3Snapshot,
   Username
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 import {
   createCoopRoomSnapshot,
   createCoopRoomSnapshotEvent
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import { coopRoomRuntimeConfig } from "../config/coop-room-runtime.js";
 import type {

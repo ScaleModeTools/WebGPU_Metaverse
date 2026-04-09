@@ -9,8 +9,8 @@ import type {
   CoopRoomSnapshot,
   CoopSessionId,
   Username
-} from "@thumbshooter/shared";
-import { createCoopSessionId, createMilliseconds } from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
+import { createCoopSessionId, createMilliseconds } from "@webgpu-metaverse/shared";
 
 import type {
   LocalCombatSessionPhase,

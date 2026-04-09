@@ -1,7 +1,7 @@
 import {
   createNormalizedViewportPoint,
   type NormalizedViewportPoint
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 export const handTrackingLifecycleStates = [
   "idle",

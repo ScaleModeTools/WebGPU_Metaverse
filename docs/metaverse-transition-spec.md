@@ -5,7 +5,7 @@ Last updated: 2026-04-09
 
 ## Goal
 
-The ThumbShooter repo becomes WebGPU Metaverse, a metaverse shell that can
+The repo becomes WebGPU Metaverse, a metaverse shell that can
 launch multiple playable experiences. The repo stays one monorepo with one
 `client`, one `server`, and one `packages/shared` contract surface. New games
 are added as named experiences inside those workspaces instead of becoming
@@ -15,10 +15,11 @@ separate repos by default.
 
 - Keep one browser shell and one server gateway. Do not fork a new repo or
   workspace per game by default.
-- Keep `ThumbShooter` as the repo/package/storage namespace. Use `WebGPU
-  Metaverse` or `metaverse-shell` for cross-experience product naming, `Duck
-  Hunt` for the first experience, and control-specific names such as
-  `camera-thumb-trigger` for input modes.
+- Use `WebGPU Metaverse` as the repo/package/storage namespace inside code.
+  Leave `ThumbShooter` only where the GitHub repo slug or a compatibility
+  migration still requires it. Use `metaverse-shell` for cross-experience code
+  naming, `Duck Hunt` for the first experience, and control-specific names
+  such as `camera-thumb-trigger` for input modes.
 - Add metaverse shell and world code under named `metaverse` domains.
 - Add playable game code under `experiences/<experienceId>` domains in
   `client`, `server`, `packages/shared`, and `tests`.

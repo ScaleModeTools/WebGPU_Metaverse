@@ -8,9 +8,6 @@ export {
   DuckHuntLocalCombatSession
 } from "./duck-hunt-local-combat-session";
 export {
-  DuckHuntNinePointCalibrationSession
-} from "./duck-hunt-nine-point-calibration-session";
-export {
   DuckHuntWebGpuGameplayRuntime
 } from "./duck-hunt-webgpu-gameplay-runtime";
 export {

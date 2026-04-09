@@ -1,4 +1,4 @@
-import { createMilliseconds } from "@thumbshooter/shared";
+import { createMilliseconds } from "@webgpu-metaverse/shared";
 
 import type { LocalCombatSessionConfig } from "../../../game/types/local-combat-session";
 

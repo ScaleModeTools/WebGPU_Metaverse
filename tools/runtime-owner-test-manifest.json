@@ -7,19 +7,25 @@
       ]
     },
     {
-      "ownerPath": "client/src/game/classes/hand-tracking-runtime.ts",
+      "ownerPath": "client/src/tracking/classes/hand-tracking-runtime.ts",
       "testPaths": [
         "tests/runtime/client/hand-tracking-runtime.test.mjs"
       ]
     },
     {
-      "ownerPath": "client/src/game/classes/mouse-gameplay-input.ts",
+      "ownerPath": "client/src/tracking/classes/mouse-gameplay-input.ts",
       "testPaths": [
         "tests/runtime/client/mouse-gameplay-input.runtime.test.mjs"
       ]
     },
     {
-      "ownerPath": "client/src/game/classes/webgpu-gameplay-capability-probe.ts",
+      "ownerPath": "client/src/tracking/classes/tracked-hand-calibration-session.ts",
+      "testPaths": [
+        "tests/runtime/client/calibration-session.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/classes/webgpu-metaverse-capability-probe.ts",
       "testPaths": [
         "tests/runtime/client/game-runtime.test.mjs"
       ]

@@ -12,8 +12,9 @@ interface ProfileSummaryCardProps {
   readonly calibrationSampleCount: number;
   readonly calibrationQualityLabel: string;
   readonly calibrationStatusLabel: string;
+  readonly gameplayInputModeLabel: string;
   readonly hydrationSource: StoredProfileHydrationResult["source"];
-  readonly inputModeLabel: string;
+  readonly metaverseControlModeLabel: string;
   readonly reticleCatalogLabel: string;
   readonly username: string;
 }
@@ -22,8 +23,9 @@ export function ProfileSummaryCard({
   calibrationSampleCount,
   calibrationQualityLabel,
   calibrationStatusLabel,
+  gameplayInputModeLabel,
   hydrationSource,
-  inputModeLabel,
+  metaverseControlModeLabel,
   reticleCatalogLabel,
   username
 }: ProfileSummaryCardProps) {
@@ -52,7 +54,10 @@ export function ProfileSummaryCard({
           Calibration quality: {calibrationQualityLabel}
         </div>
         <div className="rounded-xl border border-border/70 bg-muted/35 px-3 py-3">
-          Input mode: {inputModeLabel}
+          Duck Hunt input: {gameplayInputModeLabel}
+        </div>
+        <div className="rounded-xl border border-border/70 bg-muted/35 px-3 py-3">
+          Hub controls: {metaverseControlModeLabel}
         </div>
         <div className="rounded-xl border border-border/70 bg-muted/35 px-3 py-3">
           Reticle catalog: {reticleCatalogLabel}

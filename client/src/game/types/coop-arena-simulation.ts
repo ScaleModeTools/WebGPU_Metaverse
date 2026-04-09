@@ -5,7 +5,7 @@ import type {
   CoopRoomSnapshot,
   Milliseconds,
   CoopVector3SnapshotInput
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import type { LocalArenaSimulationConfig } from "./local-arena-simulation";
 import type { WeaponDefinition } from "./weapon-contract";

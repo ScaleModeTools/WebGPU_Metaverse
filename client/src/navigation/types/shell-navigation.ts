@@ -1,4 +1,4 @@
-import type { GameplayInputModeId } from "@thumbshooter/shared";
+import type { GameplayInputModeId } from "@webgpu-metaverse/shared";
 import type { NavigationStepId } from "./navigation-flow";
 
 export const webcamPermissionStates = [

@@ -7,7 +7,7 @@ import {
   createCoopPlayerId,
   createCoopRoomId,
   createUsername
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import { CoopRoomDirectory } from "../../../server/dist/classes/coop-room-directory.js";
 

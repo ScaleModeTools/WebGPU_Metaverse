@@ -4,7 +4,7 @@ import type {
   CoopRoomId,
   CoopRoomServerEvent,
   CoopRoomSnapshot
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 import { createCoopRoomRuntimeConfig } from "../config/coop-room-runtime.js";
 

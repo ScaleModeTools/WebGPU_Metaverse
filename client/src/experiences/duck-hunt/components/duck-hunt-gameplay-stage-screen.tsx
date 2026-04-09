@@ -12,20 +12,22 @@ import type {
   CoopRoomId,
   CoopPlayerId,
   HandTriggerCalibrationSnapshot
-} from "@thumbshooter/shared";
-import { createCoopPlayerId, type Username } from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
+import { createCoopPlayerId, type Username } from "@webgpu-metaverse/shared";
 
 import type {
   GameplayDebugPanelMode,
   GameplayInputModeId,
-  GameplayInputSource,
   GameplaySessionMode,
   GameplaySignal,
-  GameplayTelemetrySnapshot,
-  HandTrackingTelemetrySnapshot
+  GameplayTelemetrySnapshot
 } from "../../../game";
 import type { GameplayArenaRuntime } from "../../../game/types/gameplay-arena-runtime";
 import { type CoopRoomClientStatusSnapshot } from "../../../network";
+import type {
+  GameplayInputSource,
+  HandTrackingTelemetrySnapshot
+} from "../../../tracking";
 import {
   GameplayDebugOverlay,
   GameplayDeveloperPanel,

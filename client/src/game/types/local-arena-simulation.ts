@@ -2,9 +2,9 @@ import type {
   Milliseconds,
   NormalizedViewportPoint,
   Radians
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
-import type { HandTrackingPoseState } from "./hand-tracking";
+import type { HandTrackingPoseState } from "../../tracking";
 import type {
   SinglePlayerGameplaySessionSnapshot
 } from "./gameplay-session";

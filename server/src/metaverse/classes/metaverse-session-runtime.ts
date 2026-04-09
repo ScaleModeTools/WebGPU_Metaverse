@@ -4,7 +4,7 @@ import {
   readExperienceCatalogEntry,
   type ExperienceId,
   type MetaverseSessionSnapshot
-} from "@thumbshooter/shared";
+} from "@webgpu-metaverse/shared";
 
 export interface MetaverseSessionRuntimeConfig {
   readonly availableExperienceIds?: readonly ExperienceId[];
