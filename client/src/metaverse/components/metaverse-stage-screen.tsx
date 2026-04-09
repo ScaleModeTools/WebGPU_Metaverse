@@ -153,7 +153,7 @@ export function MetaverseStageScreen({
                     </ToggleGroupItem>
                   ))}
                 </ToggleGroup>
-                <div className="rounded-[1rem] border border-border/70 bg-background/70 px-3 py-3 text-sm text-muted-foreground">
+                <div className="rounded-3xl border border-border/70 bg-background/70 px-3 py-3 text-sm text-muted-foreground">
                   {selectedControlMode.description}
                 </div>
                 <div className="flex flex-wrap gap-2">

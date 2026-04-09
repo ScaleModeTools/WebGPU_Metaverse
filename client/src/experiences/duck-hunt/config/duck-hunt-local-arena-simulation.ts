@@ -5,7 +5,7 @@ import {
 
 import { duckHuntLocalCombatSessionConfig } from "./duck-hunt-local-combat-session";
 import { duckHuntFirstPlayableWeaponDefinition } from "./duck-hunt-weapon-manifest";
-import type { LocalArenaSimulationConfig } from "../../../game/types/local-arena-simulation";
+import type { LocalArenaSimulationConfig } from "../types/duck-hunt-local-arena-simulation";
 
 export const duckHuntLocalArenaSimulationConfig = {
   birdAltitudeBounds: {

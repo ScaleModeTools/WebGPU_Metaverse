@@ -11,31 +11,36 @@ import type {
   AffineAimTransformSnapshot,
   CoopRoomId,
   CoopPlayerId,
-  HandTriggerCalibrationSnapshot
+  HandTriggerCalibrationSnapshot,
+  GameplayInputModeId,
+  GameplaySessionMode
 } from "@webgpu-metaverse/shared";
 import { createCoopPlayerId, type Username } from "@webgpu-metaverse/shared";
 
 import type {
   GameplayDebugPanelMode,
-  GameplayInputModeId,
-  GameplaySessionMode,
-  GameplaySignal,
   GameplayTelemetrySnapshot
-} from "../../../game";
-import type { GameplayArenaRuntime } from "../../../game/types/gameplay-arena-runtime";
+} from "../types/duck-hunt-gameplay-presentation";
+import type { GameplaySignal } from "../types/duck-hunt-gameplay-signal";
+import type { GameplayArenaRuntime } from "../types/duck-hunt-gameplay-arena-runtime";
 import { type CoopRoomClientStatusSnapshot } from "../../../network";
 import type {
   GameplayInputSource,
   HandTrackingTelemetrySnapshot
 } from "../../../tracking";
-import {
-  GameplayDebugOverlay,
-  GameplayDeveloperPanel,
-  GameplayHudOverlay,
-  GameplayReticleOverlay
-} from "../../../ui";
-
 import { ImmersiveStageFrame } from "../../../ui/components/immersive-stage-frame";
+import {
+  DuckHuntGameplayDebugOverlay
+} from "./duck-hunt-gameplay-debug-overlay";
+import {
+  DuckHuntGameplayDeveloperPanel
+} from "./duck-hunt-gameplay-developer-panel";
+import {
+  DuckHuntGameplayHudOverlay
+} from "./duck-hunt-gameplay-hud-overlay";
+import {
+  DuckHuntGameplayReticleOverlay
+} from "./duck-hunt-gameplay-reticle-overlay";
 import { duckHuntGameplayRuntimeConfig } from "../config";
 import { createDuckHuntCoopRoomClient } from "../network";
 import {
@@ -385,19 +390,19 @@ export function DuckHuntGameplayStageScreen({
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgb(56_189_248/0.08),transparent_28%)]" />
         {showDeveloperUi ? (
           <>
-            <GameplayDeveloperPanel gameplayTelemetry={gameplayTelemetry} />
-            <GameplayDebugOverlay
+            <DuckHuntGameplayDeveloperPanel gameplayTelemetry={gameplayTelemetry} />
+            <DuckHuntGameplayDebugOverlay
               gameplayTelemetry={gameplayTelemetry}
               mode={debugPanelMode}
               trackingTelemetry={trackingTelemetry}
             />
           </>
         ) : null}
-        <GameplayReticleOverlay
+        <DuckHuntGameplayReticleOverlay
           reticleConfig={duckHuntGameplayRuntimeConfig.reticle}
           reticleSource={gameplayRuntime}
         />
-        <GameplayHudOverlay
+        <DuckHuntGameplayHudOverlay
           audioStatusLabel={audioStatusLabel}
           bestScore={bestScore}
           coopReadyActionAvailable={

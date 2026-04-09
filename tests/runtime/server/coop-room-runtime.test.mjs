@@ -17,7 +17,7 @@ import {
   createUsername
 } from "@webgpu-metaverse/shared";
 
-import { CoopRoomRuntime } from "../../../server/dist/classes/coop-room-runtime.js";
+import { CoopRoomRuntime } from "../../../server/dist/experiences/duck-hunt/classes/coop-room-runtime.js";
 
 function requireValue(value, label) {
   assert.notEqual(value, null, `${label} should resolve`);

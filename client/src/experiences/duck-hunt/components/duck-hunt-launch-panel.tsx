@@ -196,7 +196,7 @@ export function DuckHuntLaunchPanel({
   }, [coopRoomDirectoryClient, sessionMode]);
 
   return (
-    <div className="w-full max-w-2xl rounded-[1.6rem] border border-border/70 bg-card/88 p-5 shadow-[0_28px_90px_rgb(15_23_42_/_0.28)] backdrop-blur-xl">
+    <div className="w-full max-w-2xl rounded-[1.6rem] border border-border/70 bg-card/88 p-5 shadow-[0_28px_90px_rgb(15_23_42/0.28)] backdrop-blur-xl">
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex flex-col gap-2">

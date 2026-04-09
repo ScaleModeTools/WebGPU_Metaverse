@@ -5,11 +5,14 @@ import type {
   PlayerProfile,
   Radians
 } from "@webgpu-metaverse/shared";
+import {
+  gameplayInputModeIds,
+  gameplaySessionModes
+} from "@webgpu-metaverse/shared";
+import type { GameplayInputModeId } from "@webgpu-metaverse/shared";
 
 import type { MetaverseShellControllerAction } from "../../client/src/app/types/metaverse-shell-controller";
 import {
-  gameplaySessionModes,
-  gameplayInputModeIds,
   gameplayDebugPanelModes,
   gameplayRuntimeLifecycleStates,
   gameplayReticleVisualStates,
@@ -18,7 +21,6 @@ import {
   type FirstPlayableWeaponId,
   type GameplayDebugPanelMode,
   type GameplayHudSnapshot,
-  type GameplayInputModeId,
   type GameplayRuntimeConfig,
   type GameplayReticleVisualState,
   type GameplayTelemetrySnapshot,
@@ -36,7 +38,7 @@ import {
   type WeaponReloadState,
   weaponReadinessStates,
   weaponReloadStates
-} from "../../client/src/game/index";
+} from "../../client/src/experiences/duck-hunt/index";
 import type {
   HandTriggerGestureConfig,
   HandTriggerGestureSnapshot

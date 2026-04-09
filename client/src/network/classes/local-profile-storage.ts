@@ -18,10 +18,7 @@ import {
   defaultGameplayInputMode,
   gameplayInputModeIds
 } from "@webgpu-metaverse/shared";
-import {
-  legacyProfileStoragePlans,
-  profileStoragePlan
-} from "../config/profile-storage";
+import { profileStoragePlan } from "../config/profile-storage";
 import type { ProfileStoragePlan } from "../types/profile-storage";
 import type {
   StoredCalibrationRecord,
@@ -32,9 +29,6 @@ import type {
 const reticleIdSet = new Set<string>(reticleIds);
 const calibrationAnchorIdSet = new Set<string>(calibrationAnchorIds);
 const gameplayInputModeIdSet = new Set<string>(gameplayInputModeIds);
-const legacyGameplayInputModeAliases = new Map<string, GameplayInputModeId>([
-  ["camera-thumb-shooter", "camera-thumb-trigger"]
-]);
 const persistedProfileStorageKeys = [
   "usernameStorageKey",
   "profileStorageKey",
@@ -87,16 +81,10 @@ function isGameplayInputMode(value: unknown): value is GameplayInputModeId {
   return typeof value === "string" && gameplayInputModeIdSet.has(value);
 }
 
-function readCompatibleGameplayInputMode(
+function readStoredGameplayInputMode(
   value: unknown
 ): GameplayInputModeId | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const normalizedValue = legacyGameplayInputModeAliases.get(value) ?? value;
-
-  return isGameplayInputMode(normalizedValue) ? normalizedValue : null;
+  return isGameplayInputMode(value) ? value : null;
 }
 
 function isCalibrationShotSample(
@@ -226,22 +214,7 @@ function parseStoredCalibrationRecord(
   }
 
   if (
-    parsedValue.version === undefined &&
-    Array.isArray(parsedValue.calibrationSamples) &&
-    parsedValue.calibrationSamples.every(isCalibrationShotSample)
-  ) {
-    return {
-      version: expectedVersion,
-      aimCalibration: null,
-      calibrationSamples: parsedValue.calibrationSamples.map((sample) =>
-        createCalibrationShotSample(sample)
-      ),
-      triggerCalibration: null
-    };
-  }
-
-  if (
-    (parsedValue.version !== 1 && parsedValue.version !== expectedVersion) ||
+    parsedValue.version !== expectedVersion ||
     !Array.isArray(parsedValue.calibrationSamples) ||
     !parsedValue.calibrationSamples.every(isCalibrationShotSample)
   ) {
@@ -259,9 +232,8 @@ function parseStoredCalibrationRecord(
       createCalibrationShotSample(sample)
     ),
     triggerCalibration:
-      parsedValue.version === expectedVersion &&
-      (parsedValue.triggerCalibration === null ||
-        isHandTriggerCalibrationSnapshot(parsedValue.triggerCalibration))
+      parsedValue.triggerCalibration === null ||
+      isHandTriggerCalibrationSnapshot(parsedValue.triggerCalibration)
         ? parsedValue.triggerCalibration === null
           ? null
           : createHandTriggerCalibrationSnapshot(parsedValue.triggerCalibration)
@@ -278,59 +250,23 @@ function readStoredUsername(rawValue: string | null): PlayerProfileSnapshot["use
 }
 
 function readStoredInputMode(rawValue: string | null): GameplayInputModeId {
-  return readCompatibleGameplayInputMode(rawValue) ?? defaultGameplayInputMode;
+  return readStoredGameplayInputMode(rawValue) ?? defaultGameplayInputMode;
 }
 
-function readCompatibleStorageValue(
+function readStorageValue(
   storage: Storage,
-  primaryPlan: ProfileStoragePlan,
+  plan: ProfileStoragePlan,
   keyName: (typeof persistedProfileStorageKeys)[number]
 ): string | null {
-  for (const plan of [primaryPlan, ...legacyProfileStoragePlans]) {
-    const storedValue = storage.getItem(plan[keyName]);
-
-    if (storedValue !== null) {
-      return storedValue;
-    }
-  }
-
-  return null;
+  return storage.getItem(plan[keyName]);
 }
 
-function clearCompatibleStorageValues(
+function clearStorageValues(
   storage: Storage,
-  primaryPlan: ProfileStoragePlan
+  plan: ProfileStoragePlan
 ): void {
-  const removedKeys = new Set<string>();
-
-  for (const plan of [primaryPlan, ...legacyProfileStoragePlans]) {
-    for (const keyName of persistedProfileStorageKeys) {
-      const storageKey = plan[keyName];
-
-      if (removedKeys.has(storageKey)) {
-        continue;
-      }
-
-      removedKeys.add(storageKey);
-      storage.removeItem(storageKey);
-    }
-  }
-}
-
-function clearLegacyStorageValues(
-  storage: Storage,
-  primaryPlan: ProfileStoragePlan
-): void {
-  for (const plan of legacyProfileStoragePlans) {
-    for (const keyName of persistedProfileStorageKeys) {
-      const legacyStorageKey = plan[keyName];
-
-      if (legacyStorageKey === primaryPlan[keyName]) {
-        continue;
-      }
-
-      storage.removeItem(legacyStorageKey);
-    }
+  for (const keyName of persistedProfileStorageKeys) {
+    storage.removeItem(plan[keyName]);
   }
 }
 
@@ -351,13 +287,13 @@ export class LocalProfileStorage {
     }
 
     const inputMode = readStoredInputMode(
-      readCompatibleStorageValue(storage, this.#plan, "inputModeStorageKey")
+      readStorageValue(storage, this.#plan, "inputModeStorageKey")
     );
     const storedProfileRecord = parseStoredPlayerProfileRecord(
-      readCompatibleStorageValue(storage, this.#plan, "profileStorageKey")
+      readStorageValue(storage, this.#plan, "profileStorageKey")
     );
     const storedCalibrationRecord = parseStoredCalibrationRecord(
-      readCompatibleStorageValue(storage, this.#plan, "calibrationStorageKey"),
+      readStorageValue(storage, this.#plan, "calibrationStorageKey"),
       this.#plan.calibrationRecordVersion
     );
 
@@ -378,7 +314,7 @@ export class LocalProfileStorage {
     }
 
     const storedUsername = readStoredUsername(
-      readCompatibleStorageValue(storage, this.#plan, "usernameStorageKey")
+      readStorageValue(storage, this.#plan, "usernameStorageKey")
     );
 
     if (storedUsername === null) {
@@ -430,7 +366,6 @@ export class LocalProfileStorage {
       JSON.stringify(storedCalibrationRecord)
     );
     storage.setItem(this.#plan.inputModeStorageKey, inputMode);
-    clearLegacyStorageValues(storage, this.#plan);
   }
 
   clearProfile(storage: Storage | null | undefined): void {
@@ -438,6 +373,6 @@ export class LocalProfileStorage {
       return;
     }
 
-    clearCompatibleStorageValues(storage, this.#plan);
+    clearStorageValues(storage, this.#plan);
   }
 }

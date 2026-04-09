@@ -11,7 +11,7 @@ import {
 import {
   type GameplayDebugPanelMode,
   type GameplaySignal
-} from "../../game";
+} from "../../experiences/duck-hunt";
 import type { MetaverseControlModeId } from "../../metaverse";
 import type { WebGpuMetaverseCapabilitySnapshot } from "../../metaverse";
 import type {
@@ -98,7 +98,7 @@ interface ShellStageRouterProps {
 function GameplayStageFallback() {
   return (
     <ImmersiveStageFrame className="bg-game-stage">
-      <section className="flex flex-1 flex-col justify-end bg-[radial-gradient(circle_at_top,_rgb(56_189_248_/_0.08),_transparent_28%),linear-gradient(180deg,rgb(15_23_42_/_0.06),transparent_32%)] p-6 sm:p-8">
+      <section className="flex flex-1 flex-col justify-end bg-[radial-gradient(circle_at_top,rgb(56_189_248/0.08),transparent_28%),linear-gradient(180deg,rgb(15_23_42/0.06),transparent_32%)] p-6 sm:p-8">
         <div className="max-w-xl rounded-[1.5rem] border border-border/70 bg-card/72 p-5 backdrop-blur-md">
           <p className="text-sm font-medium text-foreground">Booting WebGPU stage</p>
           <p className="mt-3 text-sm text-muted-foreground">

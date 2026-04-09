@@ -38,23 +38,10 @@ interface MetaverseRendererHost {
   dispose(): void;
 }
 
-interface MetaverseRendererFallbackHandle {
-  _getFallback?: ((error: unknown) => MetaverseRendererHost) | null;
-}
-
 interface MetaverseRendererTuningHandle {
   outputColorSpace?: string;
   toneMapping?: number;
   toneMappingExposure?: number;
-}
-
-function disableImplicitWebGlFallback(renderer: MetaverseRendererHost): void {
-  const fallbackHandle = renderer as MetaverseRendererHost &
-    MetaverseRendererFallbackHandle;
-
-  if ("_getFallback" in fallbackHandle) {
-    fallbackHandle._getFallback = null;
-  }
 }
 
 function createDefaultRenderer(canvas: HTMLCanvasElement): MetaverseRendererHost {
@@ -66,7 +53,6 @@ function createDefaultRenderer(canvas: HTMLCanvasElement): MetaverseRendererHost
   const tuningHandle = renderer as MetaverseRendererHost &
     MetaverseRendererTuningHandle;
 
-  disableImplicitWebGlFallback(renderer);
   tuningHandle.toneMapping = ACESFilmicToneMapping;
   tuningHandle.toneMappingExposure = 1.04;
   tuningHandle.outputColorSpace = SRGBColorSpace;

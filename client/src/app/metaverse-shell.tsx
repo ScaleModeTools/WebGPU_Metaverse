@@ -1,4 +1,4 @@
-import { GameMenuDialog } from "../ui";
+import { DuckHuntGameMenuDialog } from "../experiences/duck-hunt/components";
 
 import { ShellProgressHeader } from "./components/shell-progress-header";
 import { ShellStageRouter } from "./components/shell-stage-router";
@@ -98,7 +98,7 @@ export function MetaverseShell() {
       )}
 
       {controller.profile !== null ? (
-        <GameMenuDialog
+        <DuckHuntGameMenuDialog
           audioStatusLabel={controller.shellView.audioStatusLabel}
           calibrationQualityLabel={controller.shellView.calibrationQualityLabel}
           debugPanelMode={controller.debugPanelMode}

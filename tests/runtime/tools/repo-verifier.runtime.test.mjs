@@ -26,8 +26,8 @@ function createFixtureRepo(overrides = {}) {
             testPaths: ["tests/runtime/client/audio-runtime.test.mjs"]
           },
           {
-            ownerPath: "client/src/game/classes/webgpu-gameplay-runtime.ts",
-            testPaths: ["tests/runtime/client/webgpu-gameplay-runtime.test.mjs"]
+            ownerPath: "client/src/experiences/duck-hunt/classes/webgpu-gameplay-runtime.ts",
+            testPaths: ["tests/runtime/experiences/duck-hunt/webgpu-gameplay-runtime.test.mjs"]
           },
           {
             ownerPath: "client/src/navigation/guards/resolve-shell-navigation.ts",
@@ -107,7 +107,7 @@ function createFixtureRepo(overrides = {}) {
     "client/src/ui/index.ts": `import { buttonLabel } from "../components/ui/button.tsx"; export const uiPlan = buttonLabel; `,
     "client/src/components/ui/button.tsx": "export const buttonLabel = 'button';\n",
     "client/src/audio/classes/browser-audio-session.ts": `export async function bootAudio() { return import("@strudel/web/web.mjs"); } `,
-    "client/src/game/classes/webgpu-gameplay-runtime.ts": `import { WebGPURenderer } from "three/webgpu"; import { color } from "three/tsl"; export function createRuntime() { return { WebGPURenderer, color }; } `,
+    "client/src/experiences/duck-hunt/classes/webgpu-gameplay-runtime.ts": `import { WebGPURenderer } from "three/webgpu"; import { color } from "three/tsl"; export function createRuntime() { return { WebGPURenderer, color }; } `,
     "client/src/tracking/workers/hand-tracking-worker.ts": `import { HandLandmarker } from "@mediapipe/tasks-vision"; export const workerTask = HandLandmarker; `,
     "client/src/network/classes/local-profile-storage.ts": "export const storage = 'profile';\n",
     "client/src/navigation/guards/resolve-shell-navigation.ts": `import { createRuntime } from "../game/runtime-entry.ts"; export const navigation = createRuntime; `,
@@ -119,7 +119,7 @@ function createFixtureRepo(overrides = {}) {
     "tests/runtime/client/audio-runtime.test.mjs": "export const audioRuntimeTest = true;\n",
     "tests/runtime/client/navigation-runtime.test.mjs": "export const navigationRuntimeTest = true;\n",
     "tests/runtime/client/local-profile-storage.runtime.test.mjs": "export const profileRuntimeTest = true;\n",
-    "tests/runtime/client/webgpu-gameplay-runtime.test.mjs": "export const gameplayRuntimeTest = true;\n"
+    "tests/runtime/experiences/duck-hunt/webgpu-gameplay-runtime.test.mjs": "export const gameplayRuntimeTest = true;\n"
   };
 
   for (const [relativePath, contents] of Object.entries({ ...files, ...overrides })) {
@@ -145,7 +145,7 @@ test("collectRepoVerificationErrors accepts a repo fixture that matches the curr
 
 test("collectRepoVerificationErrors reports illegal client domain imports", () => {
   const repoRoot = createFixtureRepo({
-    "client/src/network/classes/local-profile-storage.ts": `import { createRuntime } from "../../game/classes/webgpu-gameplay-runtime.ts"; export const storage = createRuntime; `
+    "client/src/network/classes/local-profile-storage.ts": `import { createRuntime } from "../../experiences/duck-hunt/classes/webgpu-gameplay-runtime.ts"; export const storage = createRuntime; `
   });
 
   const errors = collectRepoVerificationErrors({ repoRoot, trackedFiles: [] });
@@ -153,7 +153,7 @@ test("collectRepoVerificationErrors reports illegal client domain imports", () =
   assert.ok(
     errors.some((error) =>
       error.includes(
-        "Illegal client domain import in client/src/network/classes/local-profile-storage.ts: network must not depend on game."
+        "Illegal client domain import in client/src/network/classes/local-profile-storage.ts: network must not depend on experiences."
       )
     )
   );
@@ -161,7 +161,7 @@ test("collectRepoVerificationErrors reports illegal client domain imports", () =
 
 test("collectRepoVerificationErrors reports illegal runtime package ownership and banned gameplay APIs", () => {
   const repoRoot = createFixtureRepo({
-    "client/src/game/classes/webgpu-gameplay-runtime.ts": `import { ShaderMaterial } from "three"; export const runtime = ShaderMaterial; `,
+    "client/src/experiences/duck-hunt/classes/webgpu-gameplay-runtime.ts": `import { ShaderMaterial } from "three"; export const runtime = ShaderMaterial; `,
     "client/src/app/vision-screen.ts": `import { HandLandmarker } from "@mediapipe/tasks-vision"; export const view = HandLandmarker; `,
     "client/src/app/audio-screen.ts": `export async function bootAudio() { return import("@strudel/web"); } `
   });
@@ -171,7 +171,7 @@ test("collectRepoVerificationErrors reports illegal runtime package ownership an
   assert.ok(
     errors.some((error) =>
       error.includes(
-        "Illegal gameplay import in client/src/game/classes/webgpu-gameplay-runtime.ts: gameplay code must import Three through three/webgpu or three/tsl only."
+        "Illegal gameplay import in client/src/experiences/duck-hunt/classes/webgpu-gameplay-runtime.ts: gameplay code must import Three through three/webgpu or three/tsl only."
       )
     )
   );
@@ -179,7 +179,7 @@ test("collectRepoVerificationErrors reports illegal runtime package ownership an
   assert.ok(
     errors.some((error) =>
       error.includes(
-        "Illegal gameplay API in client/src/game/classes/webgpu-gameplay-runtime.ts: use three/tsl plus NodeMaterial patterns instead of legacy gameplay material hooks."
+        "Illegal gameplay API in client/src/experiences/duck-hunt/classes/webgpu-gameplay-runtime.ts: use three/tsl plus NodeMaterial patterns instead of legacy gameplay material hooks."
       )
     )
   );
@@ -203,7 +203,7 @@ test("collectRepoVerificationErrors reports illegal runtime package ownership an
 
 test("collectRepoVerificationErrors reports missing runtime owner test manifest coverage", () => {
   const repoRoot = createFixtureRepo({
-    "client/src/game/classes/local-arena-simulation.ts": "export class LocalArenaSimulation {}\n"
+    "client/src/experiences/duck-hunt/classes/local-arena-simulation.ts": "export class LocalArenaSimulation {}\n"
   });
 
   const errors = collectRepoVerificationErrors({ repoRoot, trackedFiles: [] });
@@ -211,7 +211,7 @@ test("collectRepoVerificationErrors reports missing runtime owner test manifest 
   assert.ok(
     errors.some((error) =>
       error.includes(
-        "Missing runtime owner test manifest entry for client/src/game/classes/local-arena-simulation.ts"
+        "Missing runtime owner test manifest entry for client/src/experiences/duck-hunt/classes/local-arena-simulation.ts"
       )
     )
   );
@@ -227,8 +227,8 @@ test("collectRepoVerificationErrors reports missing runtime test files reference
             testPaths: ["tests/runtime/client/missing-audio-runtime.test.mjs"]
           },
           {
-            ownerPath: "client/src/game/classes/webgpu-gameplay-runtime.ts",
-            testPaths: ["tests/runtime/client/webgpu-gameplay-runtime.test.mjs"]
+            ownerPath: "client/src/experiences/duck-hunt/classes/webgpu-gameplay-runtime.ts",
+            testPaths: ["tests/runtime/experiences/duck-hunt/webgpu-gameplay-runtime.test.mjs"]
           },
           {
             ownerPath: "client/src/navigation/guards/resolve-shell-navigation.ts",

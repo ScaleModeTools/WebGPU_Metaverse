@@ -6,7 +6,7 @@ import type {
   LocalCombatSessionPhase,
   LocalCombatSessionSnapshot,
   LocalCombatShotOutcome
-} from "../../../game/types/local-combat-session";
+} from "../types/duck-hunt-local-combat-session";
 
 function normalizeCount(value: number): number {
   if (!Number.isFinite(value)) {

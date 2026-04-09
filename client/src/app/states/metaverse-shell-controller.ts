@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useState } from "react";
 
 import { BrowserAudioSession } from "../../audio";
-import type { GameplaySignal } from "../../game";
+import type { GameplaySignal } from "../../experiences/duck-hunt";
 import { resolveControllerActionMatrix } from "../../input";
 import { WebGpuMetaverseCapabilityProbe } from "../../metaverse/classes/webgpu-metaverse-capability-probe";
 import { LocalProfileStorage } from "../../network";

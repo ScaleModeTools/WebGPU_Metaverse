@@ -1,4 +1,4 @@
-import type { GameplaySignal } from "../../../game";
+import type { GameplaySignal } from "../types/duck-hunt-gameplay-signal";
 import type { AudioContentCatalog } from "../../../audio";
 import { schedulePulse } from "../../../audio";
 

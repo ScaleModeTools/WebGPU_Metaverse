@@ -131,7 +131,7 @@ function createArenaConfig() {
 
 test("local arena enemy field keeps targeting and motion behavior on typed submodules", async () => {
   const enemyField = await clientLoader.load(
-    "/src/game/states/local-arena-enemy-field.ts"
+    "/src/experiences/duck-hunt/states/duck-hunt-local-arena-enemy-field.ts"
   );
   const config = createArenaConfig();
   const { enemyRuntimeStates } = enemyField.createEnemyField(config);
@@ -188,7 +188,7 @@ test("local arena enemy field keeps targeting and motion behavior on typed submo
 
 test("local arena reticle scatter keeps its current escape direction until the scatter finishes", async () => {
   const enemyField = await clientLoader.load(
-    "/src/game/states/local-arena-enemy-field.ts"
+    "/src/experiences/duck-hunt/states/duck-hunt-local-arena-enemy-field.ts"
   );
   const config = createArenaConfig();
   const { enemyRuntimeStates } = enemyField.createEnemyField(config);

@@ -11,7 +11,7 @@ import { duckHuntLocalArenaSimulationConfig } from "../config/duck-hunt-local-ar
 import {
   advanceGameplayCameraSnapshot,
   createGameplayCameraSnapshot
-} from "../../../game/states/gameplay-space";
+} from "../states/duck-hunt-gameplay-space";
 import {
   applyReticleScatter,
   countDownedEnemies,
@@ -23,13 +23,15 @@ import {
   setEnemyDowned,
   stepEnemyField,
   summarizeEnemyField
-} from "../../../game/states/local-arena-enemy-field";
-import type { GameplaySignal } from "../../../game/types/gameplay-signal";
-import { createSinglePlayerGameplaySessionSnapshot } from "../../../game/types/gameplay-session";
+} from "../states/duck-hunt-local-arena-enemy-field";
+import type { GameplaySignal } from "../types/duck-hunt-gameplay-signal";
+import {
+  createSinglePlayerGameplaySessionSnapshot
+} from "../types/duck-hunt-gameplay-session";
 import type {
   GameplayCameraSnapshot,
   GameplayViewportSnapshot
-} from "../../../game/types/gameplay-runtime";
+} from "../types/duck-hunt-gameplay-runtime";
 import type {
   LocalArenaEnemyRenderState,
   LocalArenaHudSnapshot,
@@ -37,7 +39,7 @@ import type {
   LocalArenaTargetFeedbackSnapshot,
   LocalArenaTargetFeedbackState,
   LocalArenaWeaponSnapshot
-} from "../../../game/types/local-arena-simulation";
+} from "../types/duck-hunt-local-arena-simulation";
 import {
   evaluateHandTriggerGesture,
   handAimObservationConfig,

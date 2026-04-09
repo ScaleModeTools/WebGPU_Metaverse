@@ -10,7 +10,7 @@ import type { AudioSessionSnapshot } from "../../audio";
 import type {
   GameplayDebugPanelMode,
   GameplaySignal
-} from "../../game";
+} from "../../experiences/duck-hunt";
 import type {
   ControllerActionMatrix,
   ControllerConfigurationState,

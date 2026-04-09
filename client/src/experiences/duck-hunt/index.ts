@@ -1,3 +1,5 @@
+export { gameplaySessionModes } from "@webgpu-metaverse/shared";
+export { DuckHuntGameMenuDialog } from "./components/duck-hunt-game-menu-dialog";
 export { DuckHuntGameplayStageScreen } from "./components/duck-hunt-gameplay-stage-screen";
 export { DuckHuntLaunchPanel } from "./components/duck-hunt-launch-panel";
 export {
@@ -10,6 +12,7 @@ export {
 export {
   duckHuntCoopArenaSimulationConfig,
   duckHuntGameFoundationConfig,
+  gameMenuPlan,
   duckHuntGameplayRuntimeConfig,
   duckHuntLocalArenaSimulationConfig,
   duckHuntLocalCombatSessionConfig,
@@ -35,3 +38,63 @@ export {
   DuckHuntWebGpuGameplayRuntime,
   DuckHuntWeaponRuntime
 } from "./runtime";
+export {
+  gameplayDebugPanelModes,
+  gameplayReticleStyledStates,
+  gameplayReticleVisualStates,
+  gameplayRuntimeLifecycleStates,
+  gameplaySignalTypes,
+  localArenaEnemyBehaviorStates,
+  localArenaTargetFeedbackStates,
+  weaponReadinessStates,
+  weaponReloadStates
+} from "./types";
+export type {
+  FirstPlayableWeaponId,
+  TriggerGestureMode,
+  WeaponReloadRule,
+  CoopArenaLocalIdentity,
+  CoopArenaRoomSource,
+  CoopArenaSimulationConfig,
+  GameMenuPlan,
+  GameplayArenaRuntime,
+  GameplayArenaHudSnapshot,
+  GameplayCameraSnapshot,
+  GameplayDebugPanelMode,
+  GameplayHudSnapshot,
+  GameplayReticleStyledState,
+  GameplayReticleVisualState,
+  GameplayRuntimeConfig,
+  GameplayRuntimeLifecycleState,
+  GameplaySessionPhase,
+  GameplaySessionSnapshot,
+  GameplaySignal,
+  GameplaySignalType,
+  GameplayTelemetrySnapshot,
+  GameplayVector3Snapshot,
+  GameplayViewportSnapshot,
+  LocalArenaArenaSnapshot,
+  LocalArenaEnemyBehaviorState,
+  LocalArenaEnemyRenderState,
+  LocalArenaEnemySeed,
+  LocalArenaHudSnapshot,
+  LocalArenaSimulationConfig,
+  LocalArenaTargetFeedbackSnapshot,
+  LocalArenaTargetFeedbackState,
+  LocalArenaWeaponSnapshot,
+  LocalCombatSessionConfig,
+  LocalCombatSessionPhase,
+  LocalCombatSessionSnapshot,
+  LocalCombatShotOutcome,
+  SinglePlayerGameplaySessionSnapshot,
+  CoopGameplaySessionPlayerSnapshot,
+  CoopGameplaySessionSnapshot,
+  WeaponCadenceConfig,
+  WeaponDefinition,
+  WeaponHudSnapshot,
+  WeaponReadinessState,
+  WeaponReloadConfig,
+  WeaponReloadSnapshot,
+  WeaponReloadState,
+  WeaponSpreadConfig
+} from "./types";

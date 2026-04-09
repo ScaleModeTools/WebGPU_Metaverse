@@ -4,6 +4,7 @@ export {
 export {
   duckHuntGameFoundationConfig
 } from "./duck-hunt-game-foundation";
+export { gameMenuPlan } from "./duck-hunt-game-menu-plan";
 export {
   duckHuntGameplayRuntimeConfig
 } from "./duck-hunt-gameplay-runtime";

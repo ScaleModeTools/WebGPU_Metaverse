@@ -16,6 +16,7 @@ import type {
   CoopBirdBehaviorState,
   CoopRoomClientCommand,
   CoopRoomDirectorySnapshot,
+  CoopRoomDirectorySnapshotInput,
   CoopRoundPhase,
   CoopRoomPhase,
   CoopRoomSnapshot,
@@ -168,6 +169,15 @@ type CoopRoomClientCommandCatalogMatches = AssertTrue<
   IsEqual<
     (typeof coopRoomClientCommandTypes)[number],
     CoopRoomClientCommand["type"]
+  >
+>;
+type CoopRoomDirectoryServiceMatches = AssertTrue<
+  IsEqual<CoopRoomDirectorySnapshot["service"], "webgpu-metaverse-server">
+>;
+type CoopRoomDirectoryInputServiceMatches = AssertTrue<
+  IsEqual<
+    CoopRoomDirectorySnapshotInput["service"],
+    "webgpu-metaverse-server" | undefined
   >
 >;
 

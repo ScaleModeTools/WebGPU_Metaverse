@@ -120,52 +120,7 @@ test("LocalProfileStorage rehydrates username-only storage into a fresh profile"
   assert.equal(hydration.profile?.calibrationSampleCount, 0);
 });
 
-test("LocalProfileStorage reads legacy ThumbShooter storage keys and rewrites them under the active namespace", async () => {
-  const { LocalProfileStorage } = await clientLoader.load(
-    "/src/network/classes/local-profile-storage.ts"
-  );
-  const { legacyProfileStoragePlans, profileStoragePlan } = await clientLoader.load(
-    "/src/network/config/profile-storage.ts"
-  );
-  const storage = new MemoryStorage();
-  const legacyPlan = legacyProfileStoragePlans[0];
-  const profileStorage = new LocalProfileStorage();
-
-  storage.setItem(
-    legacyPlan.profileStorageKey,
-    JSON.stringify({
-      username: "legacy-user",
-      selectedReticleId: "default-ring",
-      audioSettings: AudioSettings.create().snapshot,
-      bestScore: 12
-    })
-  );
-  storage.setItem(
-    legacyPlan.calibrationStorageKey,
-    JSON.stringify({
-      version: 2,
-      aimCalibration: null,
-      calibrationSamples: [createCalibrationFixture()],
-      triggerCalibration: null
-    })
-  );
-  storage.setItem(legacyPlan.inputModeStorageKey, "camera-thumb-shooter");
-
-  const hydration = profileStorage.loadProfile(storage);
-
-  assert.equal(hydration.inputMode, "camera-thumb-trigger");
-  assert.equal(hydration.profile?.snapshot.username, "legacy-user");
-  assert.equal(hydration.profile?.snapshot.bestScore, 12);
-
-  profileStorage.saveProfile(storage, hydration.profile.snapshot, hydration.inputMode);
-
-  assert.notEqual(storage.getItem(profileStoragePlan.profileStorageKey), null);
-  assert.equal(storage.getItem(legacyPlan.profileStorageKey), null);
-  assert.equal(storage.getItem(legacyPlan.calibrationStorageKey), null);
-  assert.equal(storage.getItem(legacyPlan.inputModeStorageKey), null);
-});
-
-test("LocalProfileStorage maps the legacy thumb-shooter input mode id onto the trigger input mode", async () => {
+test("LocalProfileStorage defaults unknown gameplay input mode ids back to mouse", async () => {
   const { LocalProfileStorage } = await clientLoader.load(
     "/src/network/classes/local-profile-storage.ts"
   );
@@ -174,16 +129,16 @@ test("LocalProfileStorage maps the legacy thumb-shooter input mode id onto the t
   );
   const storage = new MemoryStorage();
 
-  storage.setItem(profileStoragePlan.usernameStorageKey, "legacy-user");
+  storage.setItem(profileStoragePlan.usernameStorageKey, "shell-user");
   storage.setItem(profileStoragePlan.inputModeStorageKey, "camera-thumb-shooter");
 
   const hydration = new LocalProfileStorage().loadProfile(storage);
 
-  assert.equal(hydration.inputMode, "camera-thumb-trigger");
-  assert.equal(hydration.profile?.snapshot.username, "legacy-user");
+  assert.equal(hydration.inputMode, "mouse");
+  assert.equal(hydration.profile?.snapshot.username, "shell-user");
 });
 
-test("LocalProfileStorage hydrates legacy calibration records without a persisted fit", async () => {
+test("LocalProfileStorage ignores outdated calibration records without the current version", async () => {
   const { LocalProfileStorage } = await clientLoader.load(
     "/src/network/classes/local-profile-storage.ts"
   );
@@ -213,7 +168,7 @@ test("LocalProfileStorage hydrates legacy calibration records without a persiste
   assert.equal(hydration.profile?.snapshot.username, "legacy-user");
   assert.equal(hydration.profile?.snapshot.aimCalibration, null);
   assert.equal(hydration.profile?.snapshot.bestScore, 0);
-  assert.equal(hydration.profile?.calibrationSampleCount, 1);
+  assert.equal(hydration.profile?.calibrationSampleCount, 0);
   assert.equal(hydration.profile?.snapshot.triggerCalibration, null);
 });
 

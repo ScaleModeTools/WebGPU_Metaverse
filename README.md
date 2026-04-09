@@ -143,12 +143,9 @@ Default local ports:
 ## Contributor Orientation
 
 - Root repo law lives in `AGENTS.md`.
-- The active metaverse structure source is
-  `docs/metaverse-transition-spec.md`.
 - `packages/shared` is the only cross-workspace contract surface.
-- `client/src/game` still exists as a transitional legacy subtree; new
-  metaverse-wide or experience-local work should prefer the explicit owners
-  above instead of adding new gravity there.
+- Metaverse shell code lives in `client/src/metaverse` and experience-local
+  code lives in `client/src/experiences/<experienceId>`.
 
 ## Locked Tech
 

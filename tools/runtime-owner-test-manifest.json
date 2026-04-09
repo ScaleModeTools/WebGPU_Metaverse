@@ -67,21 +67,9 @@
       ]
     },
     {
-      "ownerPath": "server/src/classes/coop-room-directory.ts",
-      "testPaths": [
-        "tests/runtime/server/coop-room-directory.test.mjs"
-      ]
-    },
-    {
       "ownerPath": "server/src/experiences/duck-hunt/classes/coop-room-directory.ts",
       "testPaths": [
         "tests/runtime/server/coop-room-directory.test.mjs"
-      ]
-    },
-    {
-      "ownerPath": "server/src/classes/coop-room-runtime.ts",
-      "testPaths": [
-        "tests/runtime/server/coop-room-runtime.test.mjs"
       ]
     },
     {
@@ -91,9 +79,21 @@
       ]
     },
     {
+      "ownerPath": "server/src/experiences/duck-hunt/adapters/duck-hunt-coop-room-http-adapter.ts",
+      "testPaths": [
+        "tests/runtime/server/duck-hunt-coop-room-http-adapter.test.mjs"
+      ]
+    },
+    {
       "ownerPath": "server/src/metaverse/classes/metaverse-session-runtime.ts",
       "testPaths": [
         "tests/runtime/server/metaverse-session-runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/adapters/metaverse-session-http-adapter.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse-session-http-adapter.test.mjs"
       ]
     },
     {

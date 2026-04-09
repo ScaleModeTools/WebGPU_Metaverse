@@ -261,7 +261,7 @@ export interface CoopRoomDirectorySnapshot {
 export interface CoopRoomDirectorySnapshotInput {
   readonly coOpRooms: readonly CoopRoomDirectoryEntrySnapshotInput[];
   readonly rendererTarget?: "webgpu";
-  readonly service?: "webgpu-metaverse-server" | "thumbshooter-server";
+  readonly service?: "webgpu-metaverse-server";
   readonly status?: "co-op-contract-slice-ready";
 }
 
@@ -415,9 +415,7 @@ function normalizeFiniteNumber(rawValue: number): number {
 function normalizeCoopRoomService(
   rawValue: CoopRoomDirectorySnapshotInput["service"]
 ): CoopRoomDirectorySnapshot["service"] {
-  return rawValue === undefined || rawValue === "thumbshooter-server"
-    ? "webgpu-metaverse-server"
-    : rawValue;
+  return rawValue ?? "webgpu-metaverse-server";
 }
 
 function normalizeWeaponId(rawValue: string | undefined): string {

@@ -6,7 +6,7 @@ import type {
   WeaponReadinessState,
   WeaponReloadState,
   WeaponReloadSnapshot
-} from "../../../game/types/weapon-contract";
+} from "../types/duck-hunt-weapon-contract";
 
 interface WeaponRuntimeFrameInput {
   readonly hasTrackedHand: boolean;

@@ -446,7 +446,7 @@ export function TrackedHandCalibrationStageScreen({
           </svg>
         </div>
 
-        <div className="surface-game-overlay absolute left-3 top-3 z-10 max-w-xs rounded-[1.25rem] p-4 sm:left-4 sm:top-4">
+        <div className="surface-game-overlay absolute left-3 top-3 z-10 max-w-xs rounded-4xl p-4 sm:left-4 sm:top-4">
           <div className="flex flex-wrap gap-2">
             <Badge variant="outline">Optional calibration</Badge>
             <Badge variant="secondary">
@@ -474,7 +474,7 @@ export function TrackedHandCalibrationStageScreen({
           </p>
 
           {runtimeFailureReason !== null ? (
-            <div className="surface-game-danger mt-4 flex flex-col gap-3 rounded-[1rem] p-3">
+            <div className="surface-game-danger mt-4 flex flex-col gap-3 rounded-3xl p-3">
               <p className="type-label text-current">Tracking failed</p>
               <p className="type-body text-current">
                 {runtimeFailureReason}
@@ -504,7 +504,7 @@ export function TrackedHandCalibrationStageScreen({
           </Badge>
         </div>
 
-        <div className="surface-game-overlay absolute bottom-3 left-3 z-10 w-[min(28rem,calc(100%-1.5rem))] rounded-[1.25rem] p-4 sm:bottom-4 sm:left-4 sm:w-[28rem]">
+        <div className="surface-game-overlay absolute bottom-3 left-3 z-10 w-[min(28rem,calc(100%-1.5rem))] rounded-4xl p-4 sm:bottom-4 sm:left-4 sm:w-md">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline">Pose capture</Badge>
             <Badge variant="secondary">
@@ -612,7 +612,7 @@ export function TrackedHandCalibrationStageScreen({
 
           <p className="type-game-detail mt-3">{poseCaptureStatus}</p>
 
-          <pre className="surface-game-inset type-game-detail mt-3 max-h-56 overflow-auto rounded-[1rem] p-3 text-[11px]">
+          <pre className="surface-game-inset type-game-detail mt-3 max-h-56 overflow-auto rounded-3xl p-3 text-[11px]">
             {poseCaptureExportJson}
           </pre>
         </div>

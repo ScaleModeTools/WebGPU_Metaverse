@@ -237,5 +237,6 @@ test("createCoopRoomDirectorySnapshot normalizes live room summaries", () => {
   assert.equal(directorySnapshot.coOpRooms[0]?.roundPhaseRemainingMs, 850.5);
   assert.equal(directorySnapshot.coOpRooms[0]?.requiredReadyPlayerCount, 1);
   assert.equal(directorySnapshot.coOpRooms[0]?.tick, 7);
+  assert.equal(directorySnapshot.service, "webgpu-metaverse-server");
   assert.equal(Object.isFrozen(directorySnapshot.coOpRooms), true);
 });

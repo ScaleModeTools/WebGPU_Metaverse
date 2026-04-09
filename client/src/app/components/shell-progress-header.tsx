@@ -26,7 +26,7 @@ export function ShellProgressHeader({
   sfxVolumeLabel
 }: ShellProgressHeaderProps) {
   return (
-    <header className="rounded-[2rem] border border-border/70 bg-card/82 p-6 shadow-[0_24px_80px_rgb(15_23_42_/_0.14)] backdrop-blur-xl">
+    <header className="rounded-[2rem] border border-border/70 bg-card/82 p-6 shadow-[0_24px_80px_rgb(15_23_42/0.14)] backdrop-blur-xl">
       <div className="flex flex-col gap-6">
         <div className="flex flex-wrap gap-2">
           <Badge>Ocean metaverse shell live</Badge>

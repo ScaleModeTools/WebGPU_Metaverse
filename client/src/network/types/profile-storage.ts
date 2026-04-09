@@ -1,15 +1,11 @@
-export type ActiveProfileStorageNamespace = "webgpu-metaverse.profile";
-export type LegacyProfileStorageNamespace = "thumbshooter.profile";
-export type ProfileStorageNamespace =
-  | ActiveProfileStorageNamespace
-  | LegacyProfileStorageNamespace;
+export type ProfileStorageNamespace = "webgpu-metaverse.profile";
 
 export type ProfileStorageSegment =
   | "username"
   | "record"
   | "calibration"
   | "input-mode";
-export type CalibrationRecordVersion = 1 | 2;
+export type CalibrationRecordVersion = 2;
 
 export type ProfileStorageKey<TSegment extends ProfileStorageSegment> =
   `${ProfileStorageNamespace}.${TSegment}`;

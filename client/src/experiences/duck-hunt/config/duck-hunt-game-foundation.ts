@@ -1,7 +1,7 @@
 import type {
   TriggerGestureMode,
   WeaponReloadRule
-} from "../../../game/types/game-foundation";
+} from "../types/duck-hunt-game-foundation";
 
 const supportedReloadRules = [
   "reticle-offscreen"

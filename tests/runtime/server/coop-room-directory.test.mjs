@@ -9,7 +9,7 @@ import {
   createUsername
 } from "@webgpu-metaverse/shared";
 
-import { CoopRoomDirectory } from "../../../server/dist/classes/coop-room-directory.js";
+import { CoopRoomDirectory } from "../../../server/dist/experiences/duck-hunt/classes/coop-room-directory.js";
 
 function requireValue(value, label) {
   assert.notEqual(value, null, `${label} should resolve`);

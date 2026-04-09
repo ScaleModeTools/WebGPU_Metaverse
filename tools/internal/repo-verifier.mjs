@@ -46,7 +46,6 @@ const clientDomainPolicies = new Map([
       "ui",
       "navigation",
       "audio",
-      "game",
       "input",
       "metaverse",
       "experiences",
@@ -68,7 +67,6 @@ const clientDomainPolicies = new Map([
       "components",
       "navigation",
       "audio",
-      "game",
       "tracking",
       "assets",
       "shared"
@@ -80,7 +78,7 @@ const clientDomainPolicies = new Map([
   ],
   [
     "navigation",
-    new Set(["navigation", "game", "network", "shared"])
+    new Set(["navigation", "network", "shared"])
   ],
   [
     "audio",
@@ -93,10 +91,6 @@ const clientDomainPolicies = new Map([
   [
     "assets",
     new Set(["assets", "shared"])
-  ],
-  [
-    "game",
-    new Set(["game", "tracking", "shared"])
   ],
   [
     "metaverse",
@@ -115,7 +109,6 @@ const clientDomainPolicies = new Map([
     "experiences",
     new Set([
       "experiences",
-      "game",
       "ui",
       "components",
       "navigation",
@@ -506,19 +499,6 @@ function verifyExternalPackageBoundaries(repoRoot, sourceFiles, errors) {
 
     for (const specifier of specifiers) {
       if (
-        repoRelativePath.startsWith("client/src/game/") &&
-        (specifier === "react" ||
-          specifier.startsWith("react/") ||
-          specifier === "react-dom" ||
-          specifier.startsWith("react-dom/") ||
-          specifier === "lucide-react")
-      ) {
-        errors.push(
-          `Illegal external package in ${repoRelativePath}: game domain must stay React/UI-icon free.`
-        );
-      }
-
-      if (
         repoRelativePath.startsWith("client/src/audio/") &&
         (specifier === "react" ||
           specifier.startsWith("react/") ||
@@ -573,18 +553,17 @@ function verifyExternalPackageBoundaries(repoRoot, sourceFiles, errors) {
 
       if (
         repoRelativePath.startsWith("client/src/") &&
-        !repoRelativePath.startsWith("client/src/game/") &&
         !repoRelativePath.startsWith("client/src/metaverse/") &&
         !repoRelativePath.startsWith("client/src/experiences/") &&
         (specifier === "three" || specifier.startsWith("three/"))
       ) {
         errors.push(
-          `Illegal runtime package in ${repoRelativePath}: Three.js packages belong in client/src/game, client/src/metaverse, or client/src/experiences only.`
+          `Illegal runtime package in ${repoRelativePath}: Three.js packages belong in client/src/metaverse or client/src/experiences only.`
         );
       }
 
       if (
-        repoRelativePath.startsWith("client/src/game/") &&
+        repoRelativePath.startsWith("client/src/experiences/") &&
         !declarationFile &&
         (specifier === "three" ||
           (specifier.startsWith("three/") &&
@@ -632,7 +611,7 @@ function verifyExternalPackageBoundaries(repoRoot, sourceFiles, errors) {
     }
 
     if (
-      sourceDomain === "game" &&
+      repoRelativePath.startsWith("client/src/experiences/") &&
       !declarationFile &&
       /\b(?:ShaderMaterial|RawShaderMaterial|EffectComposer)\b|\bonBeforeCompile\b/.test(
         readFileSync(filePath, "utf8")

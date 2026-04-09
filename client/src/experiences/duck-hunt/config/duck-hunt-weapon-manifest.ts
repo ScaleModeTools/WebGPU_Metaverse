@@ -1,7 +1,7 @@
 import { createMilliseconds } from "@webgpu-metaverse/shared";
 
-import type { FirstPlayableWeaponId } from "../../../game/types/game-foundation";
-import type { WeaponDefinition } from "../../../game/types/weapon-contract";
+import type { FirstPlayableWeaponId } from "../types/duck-hunt-game-foundation";
+import type { WeaponDefinition } from "../types/duck-hunt-weapon-contract";
 import { cameraThumbTriggerGestureConfig } from "../../../tracking";
 
 export const duckHuntWeaponManifest = {

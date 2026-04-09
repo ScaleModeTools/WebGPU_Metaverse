@@ -15,30 +15,30 @@ import {
   advanceGameplayCameraSnapshot,
   createDistanceSquaredFromRay,
   createGameplayCameraSnapshot
-} from "../../../game/states/gameplay-space";
-import type { GameplaySignal } from "../../../game/types/gameplay-signal";
+} from "../states/duck-hunt-gameplay-space";
+import type { GameplaySignal } from "../types/duck-hunt-gameplay-signal";
 import {
   createCoopGameplaySessionSnapshot,
   createPendingCoopGameplaySessionSnapshot
-} from "../../../game/types/gameplay-session";
+} from "../types/duck-hunt-gameplay-session";
 import type {
   CoopArenaLocalIdentity,
   CoopArenaRoomSource,
   CoopArenaSimulationConfig
-} from "../../../game/types/coop-arena-simulation";
+} from "../types/duck-hunt-coop-arena-simulation";
 import type {
   GameplayArenaHudSnapshot,
   GameplayCameraSnapshot,
   GameplayViewportSnapshot
-} from "../../../game/types/gameplay-runtime";
-import type { MutableEnemyRenderState } from "../../../game/types/local-arena-enemy-field";
+} from "../types/duck-hunt-gameplay-runtime";
+import type { MutableEnemyRenderState } from "../types/duck-hunt-local-arena-enemy-field";
 import type {
   LocalArenaArenaSnapshot,
   LocalArenaEnemyRenderState,
   LocalArenaTargetFeedbackSnapshot,
   LocalArenaTargetFeedbackState,
   LocalArenaWeaponSnapshot
-} from "../../../game/types/local-arena-simulation";
+} from "../types/duck-hunt-local-arena-simulation";
 import {
   evaluateHandTriggerGesture,
   handAimObservationConfig,

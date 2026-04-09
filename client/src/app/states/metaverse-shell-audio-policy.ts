@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent } from "react";
 import type { Dispatch } from "react";
 
-import type { GameplaySignal } from "../../game";
+import type { GameplaySignal } from "../../experiences/duck-hunt";
 import type { ShellNavigationSnapshot } from "../../navigation";
 import {
   metaverseShellBackgroundTrackId,

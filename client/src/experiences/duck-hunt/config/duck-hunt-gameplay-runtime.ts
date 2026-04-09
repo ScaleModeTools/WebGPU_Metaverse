@@ -3,7 +3,7 @@ import {
   createRadians
 } from "@webgpu-metaverse/shared";
 
-import type { GameplayRuntimeConfig } from "../../../game/types/gameplay-runtime";
+import type { GameplayRuntimeConfig } from "../types/duck-hunt-gameplay-runtime";
 
 export const duckHuntGameplayRuntimeConfig = {
   camera: {

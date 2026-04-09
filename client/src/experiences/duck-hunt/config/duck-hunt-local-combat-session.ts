@@ -1,6 +1,6 @@
 import { createMilliseconds } from "@webgpu-metaverse/shared";
 
-import type { LocalCombatSessionConfig } from "../../../game/types/local-combat-session";
+import type { LocalCombatSessionConfig } from "../types/duck-hunt-local-combat-session";
 
 export const duckHuntLocalCombatSessionConfig = {
   durationLossPerRoundMs: createMilliseconds(1_000),

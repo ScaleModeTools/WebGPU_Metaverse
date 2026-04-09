@@ -11,22 +11,24 @@ import {
 } from "three/webgpu";
 
 import { duckHuntGameplayRuntimeConfig } from "../config/duck-hunt-gameplay-runtime";
-import { resolveGameplayReticleVisualState } from "../../../game/render/gameplay-reticle-presentation";
+import {
+  resolveGameplayReticleVisualState
+} from "../render/duck-hunt-gameplay-reticle-presentation";
 import {
   createGameplayScene,
   type GameplaySceneCanvasHost
-} from "../../../game/render/webgpu-gameplay-scene";
+} from "../render/duck-hunt-webgpu-gameplay-scene";
 import type {
   GameplayReticleVisualState,
   GameplayTelemetrySnapshot
-} from "../../../game/types/gameplay-presentation";
-import type { GameplayArenaRuntime } from "../../../game/types/gameplay-arena-runtime";
+} from "../types/duck-hunt-gameplay-presentation";
+import type { GameplayArenaRuntime } from "../types/duck-hunt-gameplay-arena-runtime";
 import type {
   GameplayArenaHudSnapshot,
   GameplayViewportSnapshot,
   GameplayHudSnapshot,
   GameplayRuntimeConfig
-} from "../../../game/types/gameplay-runtime";
+} from "../types/duck-hunt-gameplay-runtime";
 import {
   handAimObservationConfig,
   readObservedAimPoint,
@@ -62,23 +64,10 @@ interface GameplayRuntimeDependencies {
   readonly requestAnimationFrame?: typeof globalThis.requestAnimationFrame;
 }
 
-interface GameplayRendererFallbackHandle {
-  _getFallback?: ((error: unknown) => GameplayRendererHost) | null;
-}
-
 interface GameplayRendererTuningHandle {
   outputColorSpace?: string;
   toneMapping?: number;
   toneMappingExposure?: number;
-}
-
-function disableImplicitWebGlFallback(renderer: GameplayRendererHost): void {
-  const fallbackHandle = renderer as GameplayRendererHost &
-    GameplayRendererFallbackHandle;
-
-  if ("_getFallback" in fallbackHandle) {
-    fallbackHandle._getFallback = null;
-  }
 }
 
 function createDefaultRenderer(canvas: HTMLCanvasElement): GameplayRendererHost {
@@ -90,7 +79,6 @@ function createDefaultRenderer(canvas: HTMLCanvasElement): GameplayRendererHost 
   const tuningHandle = renderer as GameplayRendererHost &
     GameplayRendererTuningHandle;
 
-  disableImplicitWebGlFallback(renderer);
   tuningHandle.toneMapping = ACESFilmicToneMapping;
   tuningHandle.toneMappingExposure = 1.05;
   tuningHandle.outputColorSpace = SRGBColorSpace;
