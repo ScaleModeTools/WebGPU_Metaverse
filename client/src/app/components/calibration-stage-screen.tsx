@@ -10,9 +10,13 @@ import {
   type CalibrationPoseCaptureSnapshot
 } from "../types/calibration-pose-capture";
 import { HandTrackingRuntime } from "../../game/classes/hand-tracking-runtime";
-import { NinePointCalibrationSession } from "../../game/classes/nine-point-calibration-session";
+import {
+  duckHuntGameFoundationConfig
+} from "../../experiences/duck-hunt/config";
+import {
+  DuckHuntNinePointCalibrationSession
+} from "../../experiences/duck-hunt/runtime";
 import { handAimObservationConfig } from "../../game/config/hand-aim-observation";
-import { gameFoundationConfig } from "../../game/config/game-foundation";
 import { readObservedAimPoint } from "../../game/types/hand-aim-observation";
 import type {
   HandTrackingPoseSnapshot,
@@ -23,7 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import { ImmersiveStageFrame } from "./immersive-stage-frame";
+import { ImmersiveStageFrame } from "../../ui/components/immersive-stage-frame";
 
 const calibrationPreviewMirrored = true;
 const calibrationPreviewFitMode = "cover";
@@ -146,7 +150,8 @@ export function CalibrationStageScreen({
   profile
 }: CalibrationStageScreenProps) {
   const [session] = useState(
-    () => new NinePointCalibrationSession(profile.snapshot.calibrationSamples)
+    () =>
+      new DuckHuntNinePointCalibrationSession(profile.snapshot.calibrationSamples)
   );
   const [captureSnapshot, setCaptureSnapshot] = useState(() => session.snapshot);
   const [runtimeLifecycle, setRuntimeLifecycle] = useState(
@@ -519,7 +524,7 @@ export function CalibrationStageScreen({
             />
           </Badge>
           <Badge variant="outline">
-            {gameFoundationConfig.calibration.transformModel}
+            {duckHuntGameFoundationConfig.calibration.transformModel}
           </Badge>
         </div>
 
@@ -636,7 +641,7 @@ export function CalibrationStageScreen({
           </pre>
         </div>
 
-        {gameFoundationConfig.calibration.anchors.map((anchor, anchorIndex) => {
+        {duckHuntGameFoundationConfig.calibration.anchors.map((anchor, anchorIndex) => {
           const isCaptured = anchorIndex < captureSnapshot.capturedSampleCount;
           const isCurrent = captureSnapshot.currentAnchorId === anchor.id;
 

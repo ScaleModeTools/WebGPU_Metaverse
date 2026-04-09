@@ -1,7 +1,4 @@
-import type { AudioTrackId } from "./audio-foundation";
 import type { AudioMixSnapshot } from "@thumbshooter/shared";
-
-import type { AudioCueId } from "./audio-foundation";
 
 export const audioSessionUnlockStates = [
   "locked",
@@ -21,11 +18,14 @@ export type AudioSessionUnlockState = (typeof audioSessionUnlockStates)[number];
 export type BackgroundMusicRuntimeState =
   (typeof backgroundMusicRuntimeStates)[number];
 
-export interface AudioSessionSnapshot {
-  readonly backgroundTrackId: AudioTrackId | null;
+export interface AudioSessionSnapshot<
+  TrackId extends string = string,
+  CueId extends string = string
+> {
+  readonly backgroundTrackId: TrackId | null;
   readonly unlockState: AudioSessionUnlockState;
   readonly backgroundMusicState: BackgroundMusicRuntimeState;
   readonly mix: AudioMixSnapshot;
-  readonly lastCueId: AudioCueId | null;
+  readonly lastCueId: CueId | null;
   readonly failureReason: string | null;
 }

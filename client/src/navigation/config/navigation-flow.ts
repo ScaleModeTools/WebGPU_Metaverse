@@ -11,18 +11,23 @@ export const navigationFlow = {
     },
     {
       id: "permissions",
-      label: "Optional webcam permission for thumb-shooter mode",
+      label: "Optional webcam permission for thumb-trigger mode",
       requiresPrevious: ["main-menu"]
     },
     {
       id: "calibration",
-      label: "Optional nine-point calibration for thumb-shooter mode",
+      label: "Optional nine-point calibration for thumb-trigger mode",
       requiresPrevious: ["permissions"]
     },
     {
-      id: "gameplay",
-      label: "Start local arena gameplay",
+      id: "metaverse",
+      label: "Explore the ocean hub world and inspect experience portals",
       requiresPrevious: ["main-menu"]
+    },
+    {
+      id: "gameplay",
+      label: "Launch the selected experience",
+      requiresPrevious: ["metaverse"]
     },
     {
       id: "unsupported",

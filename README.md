@@ -1,8 +1,10 @@
 # ThumbShooter
 
-ThumbShooter is a browser FPS prototype where the player aims with a webcam-
-tracked hand pose and fires by dropping the thumb relative to the index finger
-inside a WebGPU-rendered ocean hunting arena.
+ThumbShooter is the repo and package namespace for WebGPU Metaverse, a browser
+shell that can launch multiple playable experiences. The first
+integrated experience is Duck Hunt, where the player aims with a webcam-tracked
+hand pose and fires by dropping the thumb relative to the index finger inside a
+WebGPU-rendered ocean hunting arena.
 
 ## What Ships Now
 
@@ -29,19 +31,27 @@ Still intentionally deferred:
 - remote teammate visuals and shared gun presentation
 - automatic weapons
 
+## Metaverse Transition
+
+The repo now treats the current shooter as the first named experience,
+`duck-hunt`, rather than the permanent top-level game shape. The active
+structure plan for the metaverse shell plus experience domains lives in
+`docs/metaverse-transition-spec.md`.
+
 ## Repo Map
 
-- `client`: React + Vite shell, WebGPU gameplay runtime, worker tracking, HUD
-- `server`: TypeScript service boundary for future authority/network slices
-- `packages/shared`: cross-workspace contracts and invariant-bearing value
-  objects
+- `client`: React + Vite shell, metaverse composition, WebGPU experiences,
+  worker tracking, HUD
+- `server`: TypeScript metaverse gateway plus experience-authority slices
+- `packages/shared`: cross-workspace metaverse and experience contracts plus
+  invariant-bearing value objects
 - `tests`: runtime and contract coverage
 - `tools`: non-interactive build, test, bench, and verify entrypoints
 - `examples`: reference material only, never product code
 
 ## Main Runtime Owners
 
-- `ThumbShooterShell`: top-level browser-shell composition
+- `MetaverseShell`: top-level browser-shell composition
 - `HandTrackingRuntime`: webcam boot, worker lifecycle, latest validated hand
   snapshots
 - `LocalArenaSimulation`: calibrated aim, weapon loop, HUD snapshots, combat
@@ -86,6 +96,8 @@ do not satisfy the WebGPU secure-context requirement that `localhost` does.
 ## Fast Orientation
 
 - `README.md` is the public blank-slate orientation surface.
+- `docs/metaverse-transition-spec.md` is the active escalated structure plan
+  for metaverse plus experience organization.
 - local/private steering for autonomous contributors lives outside this public
   README and can be more detailed than what belongs here.
 
@@ -97,4 +109,4 @@ do not satisfy the WebGPU secure-context requirement that `localhost` does.
 - audio: Strudel BGM, Web Audio SFX
 - fallback: explicit unsupported state, not silent renderer downgrade
 - first calibration model: 2D affine
-- first weapon: semiautomatic pistol
+- first Duck Hunt weapon: semiautomatic pistol

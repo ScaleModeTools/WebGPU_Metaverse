@@ -1,5 +1,5 @@
 export const gameplayInputModeIds = [
-  "camera-thumb-shooter",
+  "camera-thumb-trigger",
   "mouse"
 ] as const;
 
@@ -23,15 +23,15 @@ export interface GameplayInputModeDefinition {
 }
 
 export const defaultGameplayInputMode: GameplayInputModeId =
-  "camera-thumb-shooter";
+  "camera-thumb-trigger";
 
 export const gameplayInputModes = [
   {
-    id: "camera-thumb-shooter",
-    label: "Thumb shooter",
+    id: "camera-thumb-trigger",
+    label: "Thumb trigger",
     shortLabel: "Camera",
     description:
-      "Worker-first hand tracking with webcam permission, nine-point calibration, and thumb-drop firing.",
+      "Worker-first hand tracking with webcam permission, nine-point calibration, and thumb-drop trigger input.",
     controlsSummary: [
       "Aim with the thumb-gun pose",
       "Shoot by dropping the thumb relative to the index finger",

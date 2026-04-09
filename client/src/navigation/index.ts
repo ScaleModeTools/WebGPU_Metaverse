@@ -4,8 +4,8 @@ export { resolveShellNavigation } from "./guards/resolve-shell-navigation";
 export { navigationStepIds } from "./types/navigation-flow";
 export {
   calibrationShellStates,
-  gameplayEntryStepIds,
-  gameplayShellStates,
+  metaverseEntryStepIds,
+  shellStageStates,
   gameplayCapabilityStates,
   webcamPermissionStates
 } from "./types/shell-navigation";
@@ -16,9 +16,9 @@ export type {
 } from "./types/navigation-flow";
 export type {
   CalibrationShellState,
-  GameplayEntryStepId,
-  GameplayShellState,
+  MetaverseEntryStepId,
   GameplayCapabilityState,
+  ShellStageState,
   ShellNavigationProgress,
   ShellNavigationSnapshot,
   WebcamPermissionState

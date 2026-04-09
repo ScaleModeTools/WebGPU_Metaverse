@@ -17,9 +17,10 @@ after(async () => {
 });
 
 test("NinePointCalibrationSession captures one sample per trigger press and completes on the ninth anchor", async () => {
-  const { NinePointCalibrationSession, gameFoundationConfig } = await clientLoader.load(
-    "/src/game/index.ts"
-  );
+  const {
+    DuckHuntNinePointCalibrationSession: NinePointCalibrationSession,
+    duckHuntGameFoundationConfig: gameFoundationConfig
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const session = new NinePointCalibrationSession();
   const capturedAnchorIds = [];
   let fittedCalibration = null;
@@ -96,9 +97,9 @@ test("NinePointCalibrationSession captures one sample per trigger press and comp
 });
 
 test("NinePointCalibrationSession resumes only the sequential stored anchor prefix", async () => {
-  const { NinePointCalibrationSession } = await clientLoader.load(
-    "/src/game/classes/nine-point-calibration-session.ts"
-  );
+  const {
+    DuckHuntNinePointCalibrationSession: NinePointCalibrationSession
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const session = new NinePointCalibrationSession([
     createCalibrationShotSample({
       anchorId: "center",

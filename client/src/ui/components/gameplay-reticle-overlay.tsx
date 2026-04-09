@@ -1,9 +1,13 @@
 import type { NormalizedViewportPoint } from "@thumbshooter/shared";
 import { useEffect, useRef } from "react";
 
-import { gameplayRuntimeConfig, type GameplayReticleVisualState } from "../../game";
+import type {
+  GameplayReticleVisualState,
+  GameplayRuntimeConfig
+} from "../../game";
 
 interface GameplayReticleOverlayProps {
+  readonly reticleConfig: GameplayRuntimeConfig["reticle"];
   readonly reticleSource: {
     readonly reticleAimPoint: NormalizedViewportPoint | null;
     readonly reticleVisualState: GameplayReticleVisualState;
@@ -16,27 +20,14 @@ interface GameplayReticleOverlayProps {
   };
 }
 
-const reticleConfig = gameplayRuntimeConfig.reticle;
-const reticleSpanWorldUnits = Math.max(
-  reticleConfig.haloOuterRadius * 2,
-  reticleConfig.horizontalBarSize.width,
-  reticleConfig.verticalBarSize.height
-);
-const halfReticleSpanWorldUnits = reticleSpanWorldUnits * 0.5;
-const haloRadius =
-  reticleConfig.haloInnerRadius +
-  (reticleConfig.haloOuterRadius - reticleConfig.haloInnerRadius) * 0.5;
-const ringRadius =
-  reticleConfig.innerRadius +
-  (reticleConfig.outerRadius - reticleConfig.innerRadius) * 0.5;
-
 function formatRgbColor(color: readonly [number, number, number]): string {
   return `rgb(${color.map((channel) => Math.round(channel * 255)).join(" ")})`;
 }
 
 function syncReticleSize(
   svgElement: SVGSVGElement | null,
-  overlayHeight: number
+  overlayHeight: number,
+  reticleSpanWorldUnits: number
 ): void {
   if (svgElement === null) {
     return;
@@ -50,8 +41,21 @@ function syncReticleSize(
 }
 
 export function GameplayReticleOverlay({
+  reticleConfig,
   reticleSource
 }: GameplayReticleOverlayProps) {
+  const reticleSpanWorldUnits = Math.max(
+    reticleConfig.haloOuterRadius * 2,
+    reticleConfig.horizontalBarSize.width,
+    reticleConfig.verticalBarSize.height
+  );
+  const halfReticleSpanWorldUnits = reticleSpanWorldUnits * 0.5;
+  const haloRadius =
+    reticleConfig.haloInnerRadius +
+    (reticleConfig.haloOuterRadius - reticleConfig.haloInnerRadius) * 0.5;
+  const ringRadius =
+    reticleConfig.innerRadius +
+    (reticleConfig.outerRadius - reticleConfig.innerRadius) * 0.5;
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const positionRef = useRef<HTMLDivElement | null>(null);
   const styleRef = useRef<HTMLDivElement | null>(null);
@@ -119,7 +123,11 @@ export function GameplayReticleOverlay({
         height: Math.max(1, height),
         width: Math.max(1, width)
       };
-      syncReticleSize(svgRef.current, overlaySizeRef.current.height);
+      syncReticleSize(
+        svgRef.current,
+        overlaySizeRef.current.height,
+        reticleSpanWorldUnits
+      );
       syncReticlePresentation(aimPointRef.current, visualStateRef.current);
     };
 
@@ -130,7 +138,11 @@ export function GameplayReticleOverlay({
 
       syncOverlaySize(overlayRect.width, overlayRect.height);
     } else {
-      syncReticleSize(svgRef.current, overlaySizeRef.current.height);
+      syncReticleSize(
+        svgRef.current,
+        overlaySizeRef.current.height,
+        reticleSpanWorldUnits
+      );
     }
 
     syncReticlePresentation(
@@ -166,7 +178,7 @@ export function GameplayReticleOverlay({
       unsubscribe();
       resizeObserver.disconnect();
     };
-  }, [reticleSource]);
+  }, [reticleConfig, reticleSource, reticleSpanWorldUnits]);
 
   return (
     <div className="pointer-events-none absolute inset-0 z-20" ref={overlayRef}>

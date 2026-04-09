@@ -77,9 +77,10 @@ function distortPoseAlongIndexAxis(pose, factor) {
 }
 
 test("evaluateHandTriggerGesture uses the thumb and index chains without a wrist pivot", async () => {
-  const { calibrationCaptureConfig, evaluateHandTriggerGesture } = await clientLoader.load(
-    "/src/game/index.ts"
-  );
+  const { evaluateHandTriggerGesture } = await clientLoader.load("/src/game/index.ts");
+  const {
+    duckHuntCalibrationCaptureConfig: calibrationCaptureConfig
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const triggerConfig = calibrationCaptureConfig.triggerGesture;
   const openPose = createTrackedHandPose(0.5, 0.4, 0);
   const pressedPose = createTrackedHandPose(0.5, 0.4, 1);
@@ -116,9 +117,10 @@ test("evaluateHandTriggerGesture uses the thumb and index chains without a wrist
 });
 
 test("evaluateHandTriggerGesture fires from either index-base or middle-PIP contact", async () => {
-  const { calibrationCaptureConfig, evaluateHandTriggerGesture } = await clientLoader.load(
-    "/src/game/index.ts"
-  );
+  const { evaluateHandTriggerGesture } = await clientLoader.load("/src/game/index.ts");
+  const {
+    duckHuntCalibrationCaptureConfig: calibrationCaptureConfig
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const triggerConfig = calibrationCaptureConfig.triggerGesture;
   const readyPose = createFocusedTriggerPose({
     thumbBase: { x: 0.36, y: 0.58, z: 0.01 },
@@ -183,9 +185,10 @@ test("evaluateHandTriggerGesture fires from either index-base or middle-PIP cont
 });
 
 test("evaluateHandTriggerGesture keeps ready and pressed states stable under index-axis foreshortening", async () => {
-  const { calibrationCaptureConfig, evaluateHandTriggerGesture } = await clientLoader.load(
-    "/src/game/index.ts"
-  );
+  const { evaluateHandTriggerGesture } = await clientLoader.load("/src/game/index.ts");
+  const {
+    duckHuntCalibrationCaptureConfig: calibrationCaptureConfig
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const triggerConfig = calibrationCaptureConfig.triggerGesture;
   const readyPose = createTrackedHandPose(0.5, 0.4, 0);
   const pressedPose = createTrackedHandPose(0.5, 0.4, 1);
@@ -275,10 +278,12 @@ test("summarizeHandTriggerCalibration captures the tightest ready-to-press viewp
 
 test("evaluateHandTriggerGesture tightens press detection when calibration shows a narrow ready window", async () => {
   const {
-    calibrationCaptureConfig,
     evaluateHandTriggerGesture,
     resolveHandTriggerGestureThresholds
   } = await clientLoader.load("/src/game/index.ts");
+  const {
+    duckHuntCalibrationCaptureConfig: calibrationCaptureConfig
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const triggerConfig = calibrationCaptureConfig.triggerGesture;
   const calibration = createHandTriggerCalibrationSnapshot({
     sampleCount: 9,

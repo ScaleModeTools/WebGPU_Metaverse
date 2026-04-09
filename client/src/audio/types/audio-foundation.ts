@@ -1,17 +1,24 @@
-export const audioTrackIds = [
-  "shell-attract-loop",
-  "birds-arena-loop"
-] as const;
-export const audioCueIds = [
-  "ui-confirm",
-  "ui-menu-open",
-  "ui-menu-close",
-  "calibration-shot",
-  "weapon-pistol-shot",
-  "weapon-reload",
-  "enemy-hit",
-  "enemy-scatter"
-] as const;
+import type {
+  AudioMixSnapshot,
+  BackgroundMusicEngine,
+  SoundEffectEngine
+} from "@thumbshooter/shared";
 
-export type AudioTrackId = (typeof audioTrackIds)[number];
-export type AudioCueId = (typeof audioCueIds)[number];
+export interface AudioFoundationConfig {
+  readonly defaultMix: AudioMixSnapshot;
+  readonly music: {
+    readonly engine: BackgroundMusicEngine;
+    readonly licenseConstraint: "agpl-open-source-required";
+    readonly mode: "procedural-reactive-bgm";
+    readonly startPolicy: "shell-load-play-after-unlock";
+  };
+  readonly runtime: {
+    readonly graphOwnership: "single-shared-audio-context";
+    readonly settingsPersistence: "player-profile";
+    readonly unlockPolicy: "first-user-gesture";
+  };
+  readonly soundEffects: {
+    readonly engine: SoundEffectEngine;
+    readonly synthesisStrategy: "typed-procedural-cues";
+  };
+}

@@ -102,11 +102,11 @@ function createTrackedSnapshot(sequenceNumber, x, y, triggerCurl = 0) {
 
 export async function createBenchmarkSuites({ clientLoader }) {
   const {
-    LocalArenaSimulation,
-    WeaponRuntime,
-    firstPlayableWeaponDefinition,
-    localArenaSimulationConfig
-  } = await clientLoader.load("/src/game/index.ts");
+    DuckHuntLocalArenaSimulation: LocalArenaSimulation,
+    DuckHuntWeaponRuntime: WeaponRuntime,
+    duckHuntFirstPlayableWeaponDefinition: firstPlayableWeaponDefinition,
+    duckHuntLocalArenaSimulationConfig: localArenaSimulationConfig
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const { createLatestHandTrackingSnapshot } = await clientLoader.load(
     "/src/game/types/hand-tracking.ts"
   );

@@ -6,11 +6,10 @@ import type {
   Radians
 } from "@thumbshooter/shared";
 
-import type { ThumbShooterShellControllerAction } from "../../client/src/app/types/thumbshooter-shell-controller";
+import type { MetaverseShellControllerAction } from "../../client/src/app/types/metaverse-shell-controller";
 import {
   gameplaySessionModes,
   gameplayInputModeIds,
-  gameFoundationConfig,
   gameplayDebugPanelModes,
   gameplayRuntimeLifecycleStates,
   gameplayReticleVisualStates,
@@ -40,10 +39,13 @@ import {
   weaponReadinessStates,
   weaponReloadStates
 } from "../../client/src/game/index";
+import {
+  duckHuntGameFoundationConfig as gameFoundationConfig
+} from "../../client/src/experiences/duck-hunt/index";
 import type { AssertTrue, IsAssignable, IsEqual } from "./type-assertions";
 
-type ThumbShooterShellControllerActionType =
-  ThumbShooterShellControllerAction["type"];
+type MetaverseShellControllerActionType =
+  MetaverseShellControllerAction["type"];
 
 type ExpectedShellActionType =
   | "audioSnapshotChanged"
@@ -53,13 +55,14 @@ type ExpectedShellActionType =
   | "capabilityProbeStarted"
   | "capabilitySnapshotReceived"
   | "coopRoomIdDraftChanged"
+  | "experienceLaunchRequested"
   | "gameplayDebugPanelModeChanged"
   | "gameplayExited"
   | "gameplayMenuSetOpen"
-  | "gameplayStartRequested"
   | "inputModeChanged"
   | "loginRejected"
-  | "mainMenuRequested"
+  | "metaverseEntryRequested"
+  | "metaverseReturnRequested"
   | "musicVolumeChanged"
   | "permissionRequestStarted"
   | "permissionResolved"
@@ -67,6 +70,7 @@ type ExpectedShellActionType =
   | "profileConfirmed"
   | "profileEditRequested"
   | "sessionModeChanged"
+  | "setupRequested"
   | "sfxVolumeChanged"
   | "usernameDraftChanged";
 type ExpectedGameplayRuntimeLifecycleState =
@@ -108,7 +112,7 @@ type ExpectedGameplayReticleVisualState =
   | "reload-required"
   | "reloading"
   | "round-paused";
-type ExpectedGameplayInputModeId = "camera-thumb-shooter" | "mouse";
+type ExpectedGameplayInputModeId = "camera-thumb-trigger" | "mouse";
 type ExpectedGameplaySessionMode = "single-player" | "co-op";
 type ExpectedGameplaySessionPhase =
   | "active"
@@ -117,7 +121,7 @@ type ExpectedGameplaySessionPhase =
   | "waiting-for-players";
 
 type ShellActionTypesMatch = AssertTrue<
-  IsEqual<ThumbShooterShellControllerActionType, ExpectedShellActionType>
+  IsEqual<MetaverseShellControllerActionType, ExpectedShellActionType>
 >;
 type GameplayRuntimeLifecycleMatches = AssertTrue<
   IsEqual<
@@ -182,7 +186,7 @@ type GameplayDebugPanelModeCatalogMatches = AssertTrue<
 type GameplayDebugActionModeMatches = AssertTrue<
   IsEqual<
     Extract<
-      ThumbShooterShellControllerAction,
+      MetaverseShellControllerAction,
       { readonly type: "gameplayDebugPanelModeChanged" }
     >["mode"],
     GameplayDebugPanelMode
@@ -215,7 +219,7 @@ type GameplayHudSessionModeMatches = AssertTrue<
 type SessionModeActionPayloadMatches = AssertTrue<
   IsEqual<
     Extract<
-      ThumbShooterShellControllerAction,
+      MetaverseShellControllerAction,
       { readonly type: "sessionModeChanged" }
     >["sessionMode"],
     GameplaySessionMode
@@ -335,7 +339,7 @@ type WeaponDefinitionSpreadFieldIsNumber = AssertTrue<
 type MusicVolumePayloadIsNumber = AssertTrue<
   IsEqual<
     Extract<
-      ThumbShooterShellControllerAction,
+      MetaverseShellControllerAction,
       { readonly type: "musicVolumeChanged" }
     >["sliderValue"],
     number
@@ -344,7 +348,7 @@ type MusicVolumePayloadIsNumber = AssertTrue<
 type GameplayMenuTogglePayloadIsBoolean = AssertTrue<
   IsEqual<
     Extract<
-      ThumbShooterShellControllerAction,
+      MetaverseShellControllerAction,
       { readonly type: "gameplayMenuSetOpen" }
     >["open"],
     boolean
@@ -353,7 +357,7 @@ type GameplayMenuTogglePayloadIsBoolean = AssertTrue<
 type CoopRoomDraftPayloadIsString = AssertTrue<
   IsEqual<
     Extract<
-      ThumbShooterShellControllerAction,
+      MetaverseShellControllerAction,
       { readonly type: "coopRoomIdDraftChanged" }
     >["coopRoomIdDraft"],
     string
@@ -362,7 +366,7 @@ type CoopRoomDraftPayloadIsString = AssertTrue<
 type ProfileConfirmedPayloadUsesPlayerProfile = AssertTrue<
   IsEqual<
     Extract<
-      ThumbShooterShellControllerAction,
+      MetaverseShellControllerAction,
       { readonly type: "profileConfirmed" }
     >["profile"],
     PlayerProfile

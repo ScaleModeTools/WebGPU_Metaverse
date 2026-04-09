@@ -46,7 +46,7 @@ interface GameMenuDialogProps {
   readonly musicVolume: SliderValue;
   readonly onDebugPanelModeChange: (mode: GameplayDebugPanelMode) => void;
   readonly onInputModeChange: (inputMode: GameplayInputModeId) => void;
-  readonly onMainMenuRequest: () => void;
+  readonly onReturnToMetaverseRequest: () => void;
   readonly sfxVolume: SliderValue;
   readonly onMusicVolumeChange: (nextValue: number) => void;
   readonly onOpenChange: (open: boolean) => void;
@@ -67,7 +67,7 @@ export function GameMenuDialog({
   musicVolume,
   onDebugPanelModeChange,
   onInputModeChange,
-  onMainMenuRequest,
+  onReturnToMetaverseRequest,
   sfxVolume,
   onMusicVolumeChange,
   onOpenChange,
@@ -103,8 +103,8 @@ export function GameMenuDialog({
           </div>
           <DialogTitle>In-game menu</DialogTitle>
           <DialogDescription>
-            Adjust the live arena session, return to the main menu, or switch
-            to a different control path.
+            Adjust the live arena session, return to the metaverse portal, or
+            switch to a different control path.
           </DialogDescription>
         </DialogHeader>
 
@@ -141,7 +141,7 @@ export function GameMenuDialog({
               <div>
                 <p className="type-label">Session mode</p>
                 <p className="type-body-muted">
-                  Changing the authority model returns the session to the main menu.
+                  Changing the authority model returns the session to the metaverse.
                 </p>
               </div>
               <Badge variant="outline">Authority</Badge>
@@ -175,7 +175,7 @@ export function GameMenuDialog({
               <div>
                 <p className="type-label">Input mode</p>
                 <p className="type-body-muted">
-                  Changing the active input returns the session to the main menu.
+                  Changing the active input returns the session to the metaverse.
                 </p>
               </div>
               <Badge variant="outline">
@@ -325,8 +325,12 @@ export function GameMenuDialog({
             </div>
 
             <div className="flex flex-col gap-3 md:flex-row">
-              <Button onClick={onMainMenuRequest} type="button" variant="secondary">
-                Return to main menu
+              <Button
+                onClick={onReturnToMetaverseRequest}
+                type="button"
+                variant="secondary"
+              >
+                Return to metaverse
               </Button>
               {selectedInputMode.requiresCalibration ? (
                 <Button onClick={onRecalibrationRequest} type="button" variant="outline">

@@ -1,6 +1,5 @@
 import type { CoopRoomDirectorySnapshot } from "@thumbshooter/shared";
 
-import { coopRoomDirectoryClientConfig } from "../config/coop-room-directory";
 import {
   parseCoopRoomDirectorySnapshot,
   resolveCoopRoomDirectoryUrl
@@ -31,7 +30,7 @@ export class CoopRoomDirectoryClient {
   readonly #fetch: typeof globalThis.fetch;
 
   constructor(
-    config: CoopRoomDirectoryClientConfig = coopRoomDirectoryClientConfig,
+    config: CoopRoomDirectoryClientConfig,
     dependencies: CoopRoomDirectoryClientDependencies = {}
   ) {
     this.#config = config;
@@ -40,7 +39,10 @@ export class CoopRoomDirectoryClient {
 
   async fetchSnapshot(): Promise<CoopRoomDirectorySnapshot> {
     const response = await this.#fetch(
-      resolveCoopRoomDirectoryUrl(this.#config.serverOrigin),
+      resolveCoopRoomDirectoryUrl(
+        this.#config.serverOrigin,
+        this.#config.roomCollectionPath
+      ),
       {
         cache: "no-store"
       }

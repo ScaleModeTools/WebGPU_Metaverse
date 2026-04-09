@@ -13,39 +13,9 @@
       ]
     },
     {
-      "ownerPath": "client/src/game/classes/local-combat-session.ts",
-      "testPaths": [
-        "tests/runtime/client/local-combat-session.runtime.test.mjs"
-      ]
-    },
-    {
       "ownerPath": "client/src/game/classes/mouse-gameplay-input.ts",
       "testPaths": [
         "tests/runtime/client/mouse-gameplay-input.runtime.test.mjs"
-      ]
-    },
-    {
-      "ownerPath": "client/src/game/classes/local-arena-simulation.ts",
-      "testPaths": [
-        "tests/runtime/client/local-arena-simulation.runtime.test.mjs"
-      ]
-    },
-    {
-      "ownerPath": "client/src/game/classes/coop-arena-simulation.ts",
-      "testPaths": [
-        "tests/runtime/client/coop-arena-simulation.runtime.test.mjs"
-      ]
-    },
-    {
-      "ownerPath": "client/src/game/classes/nine-point-calibration-session.ts",
-      "testPaths": [
-        "tests/runtime/client/calibration-session.runtime.test.mjs"
-      ]
-    },
-    {
-      "ownerPath": "client/src/game/classes/weapon-runtime.ts",
-      "testPaths": [
-        "tests/runtime/client/weapon-runtime.runtime.test.mjs"
       ]
     },
     {
@@ -55,9 +25,9 @@
       ]
     },
     {
-      "ownerPath": "client/src/game/classes/webgpu-gameplay-runtime.ts",
+      "ownerPath": "client/src/metaverse/classes/webgpu-metaverse-runtime.ts",
       "testPaths": [
-        "tests/runtime/client/webgpu-gameplay-runtime.test.mjs"
+        "tests/runtime/client/metaverse-runtime.test.mjs"
       ]
     },
     {
@@ -97,9 +67,27 @@
       ]
     },
     {
+      "ownerPath": "server/src/experiences/duck-hunt/classes/coop-room-directory.ts",
+      "testPaths": [
+        "tests/runtime/server/coop-room-directory.test.mjs"
+      ]
+    },
+    {
       "ownerPath": "server/src/classes/coop-room-runtime.ts",
       "testPaths": [
         "tests/runtime/server/coop-room-runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/experiences/duck-hunt/classes/coop-room-runtime.ts",
+      "testPaths": [
+        "tests/runtime/server/coop-room-runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/classes/metaverse-session-runtime.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse-session-runtime.test.mjs"
       ]
     },
     {

@@ -50,10 +50,11 @@ function isCurrentRoomPayload(value: unknown): value is Record<string, unknown> 
 
 export function resolveCoopRoomSnapshotUrl(
   serverOrigin: string,
+  roomCollectionPath: string,
   roomId: CoopRoomId,
   playerId?: CoopPlayerId
 ): string {
-  const snapshotUrl = new URL(`/coop/rooms/${roomId}`, serverOrigin);
+  const snapshotUrl = new URL(`${roomCollectionPath}/${roomId}`, serverOrigin);
 
   if (playerId !== undefined) {
     snapshotUrl.searchParams.set("playerId", playerId);
@@ -64,9 +65,10 @@ export function resolveCoopRoomSnapshotUrl(
 
 export function resolveCoopRoomCommandUrl(
   serverOrigin: string,
+  roomCollectionPath: string,
   roomId: CoopRoomId
 ): string {
-  return new URL(`/coop/rooms/${roomId}/commands`, serverOrigin).toString();
+  return new URL(`${roomCollectionPath}/${roomId}/commands`, serverOrigin).toString();
 }
 
 export function serializeCoopRoomClientCommand(

@@ -14,9 +14,10 @@ after(async () => {
 });
 
 test("WeaponRuntime tracks semiautomatic cadence, clip state, and off-screen reload timing", async () => {
-  const { WeaponRuntime, firstPlayableWeaponDefinition } = await clientLoader.load(
-    "/src/game/index.ts"
-  );
+  const {
+    DuckHuntWeaponRuntime: WeaponRuntime,
+    duckHuntFirstPlayableWeaponDefinition: firstPlayableWeaponDefinition
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const weapon = new WeaponRuntime({
     ...firstPlayableWeaponDefinition,
     cadence: {

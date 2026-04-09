@@ -1,4 +1,4 @@
-import { gameFoundationConfig } from "../../game/config/game-foundation";
+import { duckHuntGameFoundationConfig } from "../../experiences/duck-hunt/config";
 import type { WebcamPermissionState } from "../../navigation";
 import { StableInlineText } from "@/components/text-stability";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +23,7 @@ interface PermissionStageScreenProps {
 
 const permissionRequestLabels = [
   "Requesting permission",
-  "Enable webcam for thumb-shooter"
+  "Enable webcam for thumb-trigger"
 ] as const;
 const permissionStatusLabels = [
   "Permission: prompt",
@@ -47,9 +47,9 @@ export function PermissionStageScreen({
 }: PermissionStageScreenProps) {
   return (
     <StageScreenLayout
-      description="Mouse mode skips this step. Enable webcam access only when you want thumb-shooter tracking and firing."
+      description="Mouse mode skips this step. Enable webcam access only when you want thumb-trigger tracking and firing."
       eyebrow="Optional camera setup"
-      title="Enable webcam for thumb-shooter mode"
+      title="Enable webcam for thumb-trigger mode"
     >
       <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
         <div className="flex flex-col gap-5">
@@ -71,10 +71,10 @@ export function PermissionStageScreen({
           <div className="rounded-[1.5rem] border border-border/70 bg-muted/35 p-5">
             <div className="flex flex-col gap-3">
               <p className="text-sm text-muted-foreground">
-                ThumbShooter requests a user-facing webcam stream and releases it
-                immediately after the permission boundary succeeds. The
-                worker-owned Hand Landmarker boots lazily on the calibration
-                screen.
+                WebGPU Metaverse requests a user-facing webcam stream and
+                releases it immediately after the permission boundary succeeds.
+                The worker-owned Hand Landmarker boots lazily on the
+                calibration screen.
               </p>
               <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-3 text-sm text-muted-foreground">
                 {capabilityReasonLabel}
@@ -98,7 +98,7 @@ export function PermissionStageScreen({
                 text={
                   permissionState === "requesting"
                     ? "Requesting permission"
-                    : "Enable webcam for thumb-shooter"
+                    : "Enable webcam for thumb-trigger"
                 }
               />
             </Button>
@@ -115,13 +115,13 @@ export function PermissionStageScreen({
           </CardHeader>
           <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
             <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-3">
-              Renderer target: {gameFoundationConfig.renderer.target}
+              Renderer target: {duckHuntGameFoundationConfig.renderer.target}
             </div>
             <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-3">
-              Import surface: {gameFoundationConfig.renderer.threeImportSurface}
+              Import surface: {duckHuntGameFoundationConfig.renderer.threeImportSurface}
             </div>
             <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-3">
-              Fallback policy: {gameFoundationConfig.runtime.webGpuFallbackPolicy}
+              Fallback policy: {duckHuntGameFoundationConfig.runtime.webGpuFallbackPolicy}
             </div>
           </CardContent>
         </Card>

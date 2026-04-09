@@ -1,0 +1,37 @@
+import type {
+  AudioBusNodeLike,
+  AudioContextLike
+} from "./audio-session-runtime";
+import type {
+  StrudelModuleLike,
+  StrudelPatternLike
+} from "./strudel-runtime";
+
+export interface BackgroundMusicTrackDefinition {
+  readonly buildPattern: (strudel: StrudelModuleLike) => StrudelPatternLike;
+  readonly label: string;
+}
+
+export type BackgroundMusicTrackCatalog<TrackId extends string> = Readonly<
+  Record<TrackId, BackgroundMusicTrackDefinition>
+>;
+
+export interface AudioCueDefinition {
+  readonly label: string;
+  play(input: {
+    readonly context: AudioContextLike;
+    readonly sfxBus: AudioBusNodeLike;
+  }): void;
+}
+
+export type AudioCueCatalog<CueId extends string> = Readonly<
+  Record<CueId, AudioCueDefinition>
+>;
+
+export interface AudioContentCatalog<
+  TrackId extends string,
+  CueId extends string
+> {
+  readonly backgroundTracks: BackgroundMusicTrackCatalog<TrackId>;
+  readonly cues: AudioCueCatalog<CueId>;
+}

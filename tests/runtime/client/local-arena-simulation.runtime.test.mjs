@@ -117,9 +117,10 @@ function createArenaConfig() {
 }
 
 test("LocalArenaSimulation publishes calibrated aim, arena counts, and early scatter state", async () => {
-  const { LocalArenaSimulation, readObservedAimPoint } = await clientLoader.load(
-    "/src/game/index.ts"
-  );
+  const { readObservedAimPoint } = await clientLoader.load("/src/game/index.ts");
+  const {
+    DuckHuntLocalArenaSimulation: LocalArenaSimulation
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const { handAimObservationConfig } = await clientLoader.load(
     "/src/game/config/hand-aim-observation.ts"
   );
@@ -148,7 +149,9 @@ test("LocalArenaSimulation publishes calibrated aim, arena counts, and early sca
 });
 
 test("LocalArenaSimulation completes the round and restartSession advances to a harder round", async () => {
-  const { LocalArenaSimulation } = await clientLoader.load("/src/game/index.ts");
+  const {
+    DuckHuntLocalArenaSimulation: LocalArenaSimulation
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const emittedSignals = [];
   const simulation = new LocalArenaSimulation(
     {
@@ -218,7 +221,9 @@ test("LocalArenaSimulation completes the round and restartSession advances to a 
 });
 
 test("LocalArenaSimulation applies trigger calibration before a shot becomes valid", async () => {
-  const { LocalArenaSimulation } = await clientLoader.load("/src/game/index.ts");
+  const {
+    DuckHuntLocalArenaSimulation: LocalArenaSimulation
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const simulation = new LocalArenaSimulation(
     {
       xCoefficients: [1, 0, 0],
@@ -258,7 +263,9 @@ test("LocalArenaSimulation applies trigger calibration before a shot becomes val
 });
 
 test("LocalArenaSimulation requires a ready state before a tracked press can fire", async () => {
-  const { LocalArenaSimulation } = await clientLoader.load("/src/game/index.ts");
+  const {
+    DuckHuntLocalArenaSimulation: LocalArenaSimulation
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const simulation = new LocalArenaSimulation(
     {
       xCoefficients: [1, 0, 0],
@@ -287,7 +294,9 @@ test("LocalArenaSimulation requires a ready state before a tracked press can fir
 });
 
 test("LocalArenaSimulation exposes reload state and completes off-screen reloads", async () => {
-  const { LocalArenaSimulation } = await clientLoader.load("/src/game/index.ts");
+  const {
+    DuckHuntLocalArenaSimulation: LocalArenaSimulation
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const emittedSignals = [];
   const simulation = new LocalArenaSimulation(
     {
@@ -364,7 +373,9 @@ test("LocalArenaSimulation exposes reload state and completes off-screen reloads
 });
 
 test("LocalArenaSimulation turns the camera when the reticle rides the screen edge dead zone", async () => {
-  const { LocalArenaSimulation } = await clientLoader.load("/src/game/index.ts");
+  const {
+    DuckHuntLocalArenaSimulation: LocalArenaSimulation
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const simulation = new LocalArenaSimulation(
     {
       xCoefficients: [1, 0, 0],
@@ -394,7 +405,9 @@ test("LocalArenaSimulation turns the camera when the reticle rides the screen ed
 });
 
 test("LocalArenaSimulation keeps the camera fixed after the round is no longer active", async () => {
-  const { LocalArenaSimulation } = await clientLoader.load("/src/game/index.ts");
+  const {
+    DuckHuntLocalArenaSimulation: LocalArenaSimulation
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const simulation = new LocalArenaSimulation(
     {
       xCoefficients: [1, 0, 0],

@@ -29,6 +29,9 @@ import type {
 const reticleIdSet = new Set<string>(reticleIds);
 const calibrationAnchorIdSet = new Set<string>(calibrationAnchorIds);
 const gameplayInputModeIdSet = new Set<string>(gameplayInputModeIds);
+const legacyGameplayInputModeAliases = new Map<string, GameplayInputModeId>([
+  ["camera-thumb-shooter", "camera-thumb-trigger"]
+]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -73,6 +76,18 @@ function isCalibrationAnchorId(
 
 function isGameplayInputMode(value: unknown): value is GameplayInputModeId {
   return typeof value === "string" && gameplayInputModeIdSet.has(value);
+}
+
+function readCompatibleGameplayInputMode(
+  value: unknown
+): GameplayInputModeId | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalizedValue = legacyGameplayInputModeAliases.get(value) ?? value;
+
+  return isGameplayInputMode(normalizedValue) ? normalizedValue : null;
 }
 
 function isCalibrationShotSample(
@@ -254,7 +269,7 @@ function readStoredUsername(rawValue: string | null): PlayerProfileSnapshot["use
 }
 
 function readStoredInputMode(rawValue: string | null): GameplayInputModeId {
-  return isGameplayInputMode(rawValue) ? rawValue : defaultGameplayInputMode;
+  return readCompatibleGameplayInputMode(rawValue) ?? defaultGameplayInputMode;
 }
 
 export class LocalProfileStorage {

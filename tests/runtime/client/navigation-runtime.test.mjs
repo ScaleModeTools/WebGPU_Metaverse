@@ -13,46 +13,65 @@ after(async () => {
   await clientLoader?.close();
 });
 
-test("resolveShellNavigation routes completed shell progress into the main menu before gameplay starts", async () => {
+test("resolveShellNavigation keeps completed setup in the pre-metaverse screen until entry is requested", async () => {
   const { resolveShellNavigation } = await clientLoader.load(
     "/src/navigation/guards/resolve-shell-navigation.ts"
   );
 
   const snapshot = resolveShellNavigation({
     hasConfirmedProfile: true,
-    inputMode: "camera-thumb-shooter",
+    inputMode: "camera-thumb-trigger",
     webcamPermission: "granted",
     gameplayCapability: "supported",
     calibrationShell: "reviewed",
-    gameplayShell: "main-menu"
+    shellStage: "main-menu"
   });
 
   assert.deepEqual(snapshot, {
     activeStep: "main-menu",
     canAdvanceFromPermissions: true,
-    canEnterGameplayShell: true,
+    canEnterMetaverse: true,
     isUnsupportedRoute: false,
-    nextGameplayStep: "gameplay"
+    nextMetaverseStep: "metaverse"
   });
 });
 
-test("resolveShellNavigation enters gameplay only after an explicit start request", async () => {
+test("resolveShellNavigation enters the metaverse only after an explicit hub request", async () => {
   const { resolveShellNavigation } = await clientLoader.load(
     "/src/navigation/guards/resolve-shell-navigation.ts"
   );
 
   const snapshot = resolveShellNavigation({
     hasConfirmedProfile: true,
-    inputMode: "camera-thumb-shooter",
+    inputMode: "camera-thumb-trigger",
     webcamPermission: "granted",
     gameplayCapability: "supported",
     calibrationShell: "reviewed",
-    gameplayShell: "gameplay"
+    shellStage: "metaverse"
+  });
+
+  assert.equal(snapshot.activeStep, "metaverse");
+  assert.equal(snapshot.canEnterMetaverse, true);
+  assert.equal(snapshot.nextMetaverseStep, "metaverse");
+});
+
+test("resolveShellNavigation enters gameplay only when the metaverse prerequisites are already satisfied", async () => {
+  const { resolveShellNavigation } = await clientLoader.load(
+    "/src/navigation/guards/resolve-shell-navigation.ts"
+  );
+
+  const snapshot = resolveShellNavigation({
+    hasConfirmedProfile: true,
+    inputMode: "camera-thumb-trigger",
+    webcamPermission: "granted",
+    gameplayCapability: "supported",
+    calibrationShell: "reviewed",
+    shellStage: "gameplay"
   });
 
   assert.equal(snapshot.activeStep, "gameplay");
-  assert.equal(snapshot.canEnterGameplayShell, true);
-  assert.equal(snapshot.nextGameplayStep, "gameplay");
+  assert.equal(snapshot.canEnterMetaverse, true);
+  assert.equal(snapshot.nextMetaverseStep, "metaverse");
 });
 
 test("resolveShellNavigation routes unsupported capability into the unsupported screen", async () => {
@@ -62,19 +81,19 @@ test("resolveShellNavigation routes unsupported capability into the unsupported 
 
   const snapshot = resolveShellNavigation({
     hasConfirmedProfile: true,
-    inputMode: "camera-thumb-shooter",
+    inputMode: "camera-thumb-trigger",
     webcamPermission: "granted",
     gameplayCapability: "unsupported",
     calibrationShell: "reviewed",
-    gameplayShell: "main-menu"
+    shellStage: "main-menu"
   });
 
   assert.equal(snapshot.activeStep, "unsupported");
   assert.equal(snapshot.isUnsupportedRoute, true);
-  assert.equal(snapshot.nextGameplayStep, null);
+  assert.equal(snapshot.nextMetaverseStep, null);
 });
 
-test("resolveShellNavigation lets mouse mode skip webcam permission and calibration", async () => {
+test("resolveShellNavigation lets mouse mode skip webcam permission and calibration before metaverse entry", async () => {
   const { resolveShellNavigation } = await clientLoader.load(
     "/src/navigation/guards/resolve-shell-navigation.ts"
   );
@@ -85,50 +104,50 @@ test("resolveShellNavigation lets mouse mode skip webcam permission and calibrat
     webcamPermission: "prompt",
     gameplayCapability: "supported",
     calibrationShell: "pending",
-    gameplayShell: "main-menu"
+    shellStage: "main-menu"
   });
 
   assert.equal(snapshot.activeStep, "main-menu");
-  assert.equal(snapshot.canEnterGameplayShell, true);
-  assert.equal(snapshot.nextGameplayStep, "gameplay");
+  assert.equal(snapshot.canEnterMetaverse, true);
+  assert.equal(snapshot.nextMetaverseStep, "metaverse");
 });
 
-test("resolveShellNavigation keeps camera mode in the main menu until gameplay is requested", async () => {
+test("resolveShellNavigation keeps camera mode in setup until metaverse entry is requested", async () => {
   const { resolveShellNavigation } = await clientLoader.load(
     "/src/navigation/guards/resolve-shell-navigation.ts"
   );
 
   const snapshot = resolveShellNavigation({
     hasConfirmedProfile: true,
-    inputMode: "camera-thumb-shooter",
+    inputMode: "camera-thumb-trigger",
     webcamPermission: "prompt",
     gameplayCapability: "supported",
     calibrationShell: "pending",
-    gameplayShell: "main-menu"
+    shellStage: "main-menu"
   });
 
   assert.equal(snapshot.activeStep, "main-menu");
-  assert.equal(snapshot.canEnterGameplayShell, false);
-  assert.equal(snapshot.nextGameplayStep, "permissions");
+  assert.equal(snapshot.canEnterMetaverse, false);
+  assert.equal(snapshot.nextMetaverseStep, "permissions");
 });
 
-test("resolveShellNavigation routes camera mode into permissions after start is requested", async () => {
+test("resolveShellNavigation routes camera mode into permissions after metaverse entry is requested", async () => {
   const { resolveShellNavigation } = await clientLoader.load(
     "/src/navigation/guards/resolve-shell-navigation.ts"
   );
 
   const snapshot = resolveShellNavigation({
     hasConfirmedProfile: true,
-    inputMode: "camera-thumb-shooter",
+    inputMode: "camera-thumb-trigger",
     webcamPermission: "prompt",
     gameplayCapability: "supported",
     calibrationShell: "pending",
-    gameplayShell: "gameplay"
+    shellStage: "metaverse"
   });
 
   assert.equal(snapshot.activeStep, "permissions");
-  assert.equal(snapshot.canEnterGameplayShell, false);
-  assert.equal(snapshot.nextGameplayStep, "permissions");
+  assert.equal(snapshot.canEnterMetaverse, false);
+  assert.equal(snapshot.nextMetaverseStep, "permissions");
 });
 
 test("WebcamPermissionGateway grants permission and stops returned tracks", async () => {

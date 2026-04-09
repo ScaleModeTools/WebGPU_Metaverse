@@ -92,6 +92,30 @@ export type {
   GameplayInputModeId
 } from "./gameplay-input-mode.js";
 export {
+  experienceCatalog,
+  experienceIds,
+  readExperienceCatalogEntry,
+  readExperienceTickOwner
+} from "./metaverse/experience-catalog.js";
+export type {
+  ExperienceCatalogEntrySnapshot,
+  ExperienceId
+} from "./metaverse/experience-catalog.js";
+export {
+  createMetaverseSessionSnapshot
+} from "./metaverse/metaverse-session-contract.js";
+export type {
+  MetaverseSessionSnapshot,
+  MetaverseSessionSnapshotInput
+} from "./metaverse/metaverse-session-contract.js";
+export {
+  createPortalLaunchSelectionSnapshot
+} from "./metaverse/portal-launch-contract.js";
+export type {
+  PortalLaunchSelectionSnapshot,
+  PortalLaunchSelectionSnapshotInput
+} from "./metaverse/portal-launch-contract.js";
+export {
   coopRoundPhases,
   coopBirdBehaviorStates,
   coopPlayerShotOutcomeStates,
@@ -122,7 +146,7 @@ export {
   createCoopSetPlayerReadyCommand,
   gameplaySessionModes,
   gameplayTickOwners
-} from "./coop-room-contract.js";
+} from "./experiences/duck-hunt/duck-hunt-room-contract.js";
 export type {
   CoopBirdBehaviorState,
   CoopBirdId,
@@ -173,4 +197,4 @@ export type {
   CoopVector3SnapshotInput,
   GameplaySessionMode,
   GameplayTickOwner
-} from "./coop-room-contract.js";
+} from "./experiences/duck-hunt/duck-hunt-room-contract.js";

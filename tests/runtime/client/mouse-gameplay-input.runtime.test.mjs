@@ -41,8 +41,12 @@ test("MouseGameplayInput emits tracked snapshots that preserve direct cursor aim
   const { MouseGameplayInput } = await clientLoader.load(
     "/src/game/classes/mouse-gameplay-input.ts"
   );
-  const { readObservedAimPoint, evaluateHandTriggerGesture, firstPlayableWeaponDefinition } =
-    await clientLoader.load("/src/game/index.ts");
+  const { readObservedAimPoint, evaluateHandTriggerGesture } = await clientLoader.load(
+    "/src/game/index.ts"
+  );
+  const {
+    duckHuntFirstPlayableWeaponDefinition: firstPlayableWeaponDefinition
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const { handAimObservationConfig } = await clientLoader.load(
     "/src/game/config/hand-aim-observation.ts"
   );
@@ -178,8 +182,11 @@ test("MouseGameplayInput emits tracked snapshots that preserve direct cursor aim
 });
 
 test("MouseGameplayInput lets the fullscreen viewport edge drive off-screen reloads", async () => {
-  const { MouseGameplayInput, LocalArenaSimulation, localArenaSimulationConfig } =
-    await clientLoader.load("/src/game/index.ts");
+  const { MouseGameplayInput } = await clientLoader.load("/src/game/index.ts");
+  const {
+    DuckHuntLocalArenaSimulation: LocalArenaSimulation,
+    duckHuntLocalArenaSimulationConfig: localArenaSimulationConfig
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const fakeWindow = new FakeWindow();
   let nowMs = 100;
   const input = new MouseGameplayInput({

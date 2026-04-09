@@ -2,7 +2,7 @@ import { Suspense, lazy } from "react";
 import type { FormEvent } from "react";
 
 import {
-  createCoopRoomId,
+  type ExperienceId,
   type GameplaySessionMode,
   type PlayerProfile
 } from "@thumbshooter/shared";
@@ -12,32 +12,40 @@ import {
   type GameplayDebugPanelMode,
   type GameplayInputModeId,
   type GameplayInputSource,
-  firstPlayableWeaponDefinition,
   type GameplaySignal
 } from "../../game";
 import type { HandTrackingRuntime } from "../../game/classes/hand-tracking-runtime";
 import type { WebGpuGameplayCapabilitySnapshot } from "../../game/types/webgpu-capability";
 import type {
-  GameplayEntryStepId,
+  MetaverseEntryStepId,
   NavigationStepId,
   WebcamPermissionState
 } from "../../navigation";
-import { defaultCoopRoomId } from "../../network";
+import {
+  duckHuntFirstPlayableWeaponDefinition
+} from "../../experiences/duck-hunt/config";
+import { resolveDuckHuntGameplayCoopRoomId } from "../../experiences/duck-hunt/network";
 
 import { CalibrationStageScreen } from "./calibration-stage-screen";
-import { ImmersiveStageFrame } from "./immersive-stage-frame";
+import { ImmersiveStageFrame } from "../../ui/components/immersive-stage-frame";
 import { LoginStageScreen } from "./login-stage-screen";
 import { MainMenuStageScreen } from "./main-menu-stage-screen";
 import { PermissionStageScreen } from "./permission-stage-screen";
 import { UnsupportedStageScreen } from "./unsupported-stage-screen";
 
-const GameplayStageScreen = lazy(async () =>
-  import("./gameplay-stage-screen").then((module) => ({
-    default: module.GameplayStageScreen
+const MetaverseStageScreen = lazy(async () =>
+  import("../../metaverse").then((module) => ({
+    default: module.MetaverseStageScreen
+  }))
+);
+const DuckHuntGameplayStageScreen = lazy(async () =>
+  import("../../experiences/duck-hunt/components").then((module) => ({
+    default: module.DuckHuntGameplayStageScreen
   }))
 );
 
 interface ShellStageRouterProps {
+  readonly activeExperienceId: ExperienceId | null;
   readonly activeStep: NavigationStepId;
   readonly audioStatusLabel: string;
   readonly bestScore: number;
@@ -51,7 +59,7 @@ interface ShellStageRouterProps {
   readonly hasStoredProfile: boolean;
   readonly inputMode: GameplayInputModeId;
   readonly loginError: string | null;
-  readonly nextGameplayStep: GameplayEntryStepId | null;
+  readonly nextMetaverseStep: MetaverseEntryStepId | null;
   readonly permissionError: string | null;
   readonly permissionState: WebcamPermissionState;
   readonly profile: PlayerProfile | null;
@@ -66,8 +74,9 @@ interface ShellStageRouterProps {
   readonly onClearProfile: () => void;
   readonly onCoopRoomIdDraftChange: (coopRoomIdDraft: string) => void;
   readonly onEditProfile: () => void;
+  readonly onEnterMetaverseRequest: () => void;
+  readonly onExperienceLaunchRequest: (experienceId: ExperienceId) => void;
   readonly onGameplaySignal: (signal: GameplaySignal) => void;
-  readonly onGameplayStartRequest: () => void;
   readonly onInputModeChange: (inputMode: GameplayInputModeId) => void;
   readonly onLoginSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onOpenGameplayMenu: () => void;
@@ -75,20 +84,18 @@ interface ShellStageRouterProps {
   readonly onRecalibrationRequest: () => void;
   readonly onRetryCapabilityProbe: () => void;
   readonly onSessionModeChange: (mode: GameplaySessionMode) => void;
+  readonly onSetupRequest: () => void;
   readonly setUsernameDraft: (value: string) => void;
 }
 
 function GameplayStageFallback() {
   return (
-    <ImmersiveStageFrame>
+    <ImmersiveStageFrame className="bg-game-stage">
       <section className="flex flex-1 flex-col justify-end bg-[radial-gradient(circle_at_top,_rgb(56_189_248_/_0.08),_transparent_28%),linear-gradient(180deg,rgb(15_23_42_/_0.06),transparent_32%)] p-6 sm:p-8">
         <div className="max-w-xl rounded-[1.5rem] border border-border/70 bg-card/72 p-5 backdrop-blur-md">
-          <p className="text-sm font-medium text-foreground">
-            Booting WebGPU gameplay runtime
-          </p>
+          <p className="text-sm font-medium text-foreground">Booting WebGPU stage</p>
           <p className="mt-3 text-sm text-muted-foreground">
-            Loading the live renderer and calibrated reticle path for the current
-            session.
+            Loading the live renderer and the current shell route.
           </p>
         </div>
       </section>
@@ -97,6 +104,7 @@ function GameplayStageFallback() {
 }
 
 export function ShellStageRouter({
+  activeExperienceId,
   activeStep,
   audioStatusLabel,
   bestScore,
@@ -110,7 +118,7 @@ export function ShellStageRouter({
   hasStoredProfile,
   inputMode,
   loginError,
-  nextGameplayStep,
+  nextMetaverseStep,
   permissionError,
   permissionState,
   profile,
@@ -122,8 +130,9 @@ export function ShellStageRouter({
   onClearProfile,
   onCoopRoomIdDraftChange,
   onEditProfile,
+  onEnterMetaverseRequest,
+  onExperienceLaunchRequest,
   onGameplaySignal,
-  onGameplayStartRequest,
   onInputModeChange,
   onLoginSubmit,
   onOpenGameplayMenu,
@@ -131,14 +140,14 @@ export function ShellStageRouter({
   onRecalibrationRequest,
   onRetryCapabilityProbe,
   onSessionModeChange,
+  onSetupRequest,
   setUsernameDraft
 }: ShellStageRouterProps) {
   const gameplayAimCalibration =
     inputMode === "mouse"
       ? mouseGameplayAimCalibrationSnapshot
       : profile?.snapshot.aimCalibration ?? null;
-  const selectedCoopRoomId = createCoopRoomId(coopRoomIdDraft);
-  const gameplayCoopRoomId = selectedCoopRoomId ?? defaultCoopRoomId;
+  const gameplayCoopRoomId = resolveDuckHuntGameplayCoopRoomId(coopRoomIdDraft);
 
   return (
     <section>
@@ -177,16 +186,30 @@ export function ShellStageRouter({
           calibrationQualityLabel={calibrationQualityLabel}
           capabilityReasonLabel={capabilityReasonLabel}
           capabilityStatus={capabilityStatus}
-          coopRoomIdDraft={coopRoomIdDraft}
           inputMode={inputMode}
-          nextGameplayStep={nextGameplayStep}
-          onCoopRoomIdDraftChange={onCoopRoomIdDraftChange}
+          nextMetaverseStep={nextMetaverseStep}
+          onEnterMetaverse={onEnterMetaverseRequest}
           onInputModeChange={onInputModeChange}
           onRecalibrationRequest={onRecalibrationRequest}
-          onSessionModeChange={onSessionModeChange}
-          onStartGame={onGameplayStartRequest}
-          sessionMode={sessionMode}
         />
+      ) : null}
+
+      {activeStep === "metaverse" && profile !== null ? (
+        <Suspense fallback={<GameplayStageFallback />}>
+          <MetaverseStageScreen
+            audioStatusLabel={audioStatusLabel}
+            calibrationQualityLabel={calibrationQualityLabel}
+            coopRoomIdDraft={coopRoomIdDraft}
+            inputMode={inputMode}
+            onCoopRoomIdDraftChange={onCoopRoomIdDraftChange}
+            onExperienceLaunchRequest={onExperienceLaunchRequest}
+            onRecalibrationRequest={onRecalibrationRequest}
+            onSessionModeChange={onSessionModeChange}
+            onSetupRequest={onSetupRequest}
+            sessionMode={sessionMode}
+            username={profile.snapshot.username}
+          />
+        </Suspense>
       ) : null}
 
       {activeStep === "unsupported" ? (
@@ -198,10 +221,11 @@ export function ShellStageRouter({
       ) : null}
 
       {activeStep === "gameplay" &&
+      activeExperienceId === "duck-hunt" &&
       profile !== null &&
       gameplayAimCalibration !== null ? (
         <Suspense fallback={<GameplayStageFallback />}>
-          <GameplayStageScreen
+          <DuckHuntGameplayStageScreen
             aimCalibration={gameplayAimCalibration}
             audioStatusLabel={audioStatusLabel}
             bestScore={bestScore}
@@ -216,7 +240,7 @@ export function ShellStageRouter({
             trackingSource={gameplayInputSource}
             triggerCalibration={profile.snapshot.triggerCalibration}
             username={profile.snapshot.username}
-            weaponLabel={firstPlayableWeaponDefinition.displayName}
+            weaponLabel={duckHuntFirstPlayableWeaponDefinition.displayName}
           />
         </Suspense>
       ) : null}

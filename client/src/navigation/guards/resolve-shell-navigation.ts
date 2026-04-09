@@ -1,13 +1,13 @@
 import { resolveGameplayInputMode } from "@thumbshooter/shared";
 import type {
-  GameplayEntryStepId,
+  MetaverseEntryStepId,
   ShellNavigationProgress,
   ShellNavigationSnapshot
 } from "../types/shell-navigation";
 
-function resolveNextGameplayStep(
+function resolveNextMetaverseStep(
   progress: ShellNavigationProgress
-): GameplayEntryStepId | null {
+): MetaverseEntryStepId | null {
   const inputMode = resolveGameplayInputMode(progress.inputMode);
 
   if (progress.gameplayCapability !== "supported") {
@@ -28,7 +28,7 @@ function resolveNextGameplayStep(
     return "calibration";
   }
 
-  return "gameplay";
+  return "metaverse";
 }
 
 export function resolveShellNavigation(
@@ -38,9 +38,9 @@ export function resolveShellNavigation(
     return {
       activeStep: "login",
       canAdvanceFromPermissions: false,
-      canEnterGameplayShell: false,
+      canEnterMetaverse: false,
       isUnsupportedRoute: false,
-      nextGameplayStep: null
+      nextMetaverseStep: null
     };
   }
 
@@ -48,32 +48,43 @@ export function resolveShellNavigation(
     return {
       activeStep: "unsupported",
       canAdvanceFromPermissions: false,
-      canEnterGameplayShell: false,
+      canEnterMetaverse: false,
       isUnsupportedRoute: true,
-      nextGameplayStep: null
+      nextMetaverseStep: null
     };
   }
 
-  const nextGameplayStep = resolveNextGameplayStep(progress);
+  const nextMetaverseStep = resolveNextMetaverseStep(progress);
 
   if (
-    progress.gameplayShell === "main-menu" ||
-    nextGameplayStep === null
+    progress.shellStage === "main-menu" ||
+    nextMetaverseStep === null
   ) {
     return {
       activeStep: "main-menu",
       canAdvanceFromPermissions: true,
-      canEnterGameplayShell: nextGameplayStep === "gameplay",
+      canEnterMetaverse: nextMetaverseStep === "metaverse",
       isUnsupportedRoute: false,
-      nextGameplayStep
+      nextMetaverseStep
+    };
+  }
+
+  if (progress.shellStage === "metaverse") {
+    return {
+      activeStep: nextMetaverseStep,
+      canAdvanceFromPermissions: true,
+      canEnterMetaverse: nextMetaverseStep === "metaverse",
+      isUnsupportedRoute: false,
+      nextMetaverseStep
     };
   }
 
   return {
-    activeStep: nextGameplayStep,
+    activeStep:
+      nextMetaverseStep === "metaverse" ? "gameplay" : nextMetaverseStep,
     canAdvanceFromPermissions: true,
-    canEnterGameplayShell: nextGameplayStep === "gameplay",
+    canEnterMetaverse: nextMetaverseStep === "metaverse",
     isUnsupportedRoute: false,
-    nextGameplayStep
+    nextMetaverseStep
   };
 }

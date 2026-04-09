@@ -29,9 +29,9 @@ export function ShellProgressHeader({
     <header className="rounded-[2rem] border border-border/70 bg-card/82 p-6 shadow-[0_24px_80px_rgb(15_23_42_/_0.14)] backdrop-blur-xl">
       <div className="flex flex-col gap-6">
         <div className="flex flex-wrap gap-2">
-          <Badge>Local arena gameplay live</Badge>
-          <Badge variant="secondary">Mouse starts immediately</Badge>
-          <Badge variant="secondary">Camera setup optional</Badge>
+          <Badge>Ocean metaverse shell live</Badge>
+          <Badge variant="secondary">Mouse enters immediately</Badge>
+          <Badge variant="secondary">Camera setup still optional</Badge>
           <Badge variant="outline">WebGPU required</Badge>
         </div>
 
@@ -39,17 +39,17 @@ export function ShellProgressHeader({
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <p className="type-kicker">
-                ThumbShooter
+                WebGPU Metaverse
               </p>
               <h1 className="type-display max-w-4xl">
-                Login confirms your local profile, then the main menu handles
-                input choice and gameplay launch.
+                Login confirms the local profile, setup prepares the controller
+                path, and the ocean hub launches named experiences.
               </h1>
               <p className="type-lead max-w-3xl">
-                Mouse players can enter the arena without touching webcam
-                permissions. Thumb-shooter setup stays available from the menu
-                when you want worker tracking, webcam permission, and nine-point
-                calibration.
+                Mouse players can enter the metaverse without touching webcam
+                permissions. Thumb-trigger setup stays explicit whenever you
+                want worker tracking, webcam permission, and nine-point
+                calibration before a portal launch.
               </p>
             </div>
 

@@ -5,11 +5,12 @@ import type {
 
 import { audioFoundationConfig } from "../../client/src/audio/config/audio-foundation";
 import {
-  audioCueIds,
-  audioTrackIds,
-  type AudioCueId,
-  type AudioTrackId
-} from "../../client/src/audio/types/audio-foundation";
+  metaverseAudioCueIds,
+  metaverseAudioSessionConfig,
+  metaverseAudioTrackIds,
+  type MetaverseAudioCueId,
+  type MetaverseAudioTrackId
+} from "../../client/src/app/audio/index";
 import type { AssertTrue, IsAssignable, IsEqual } from "./type-assertions";
 
 type ExpectedAudioTrackId = "shell-attract-loop" | "birds-arena-loop";
@@ -24,14 +25,16 @@ type ExpectedAudioCueId =
   | "enemy-scatter";
 
 type AudioTrackIdMatches = AssertTrue<
-  IsEqual<AudioTrackId, ExpectedAudioTrackId>
+  IsEqual<MetaverseAudioTrackId, ExpectedAudioTrackId>
 >;
-type AudioCueIdMatches = AssertTrue<IsEqual<AudioCueId, ExpectedAudioCueId>>;
+type AudioCueIdMatches = AssertTrue<
+  IsEqual<MetaverseAudioCueId, ExpectedAudioCueId>
+>;
 type AudioTrackCatalogMatches = AssertTrue<
-  IsEqual<(typeof audioTrackIds)[number], AudioTrackId>
+  IsEqual<(typeof metaverseAudioTrackIds)[number], MetaverseAudioTrackId>
 >;
 type AudioCueCatalogMatches = AssertTrue<
-  IsEqual<(typeof audioCueIds)[number], AudioCueId>
+  IsEqual<(typeof metaverseAudioCueIds)[number], MetaverseAudioCueId>
 >;
 type UnlockPolicyIsFixedImplementationValue = AssertTrue<
   IsEqual<
@@ -57,22 +60,22 @@ type SoundEffectsEngineUsesSharedEngineContract = AssertTrue<
     SoundEffectEngine
   >
 >;
-type ShellTrackUsesTrackId = AssertTrue<
+type SessionInitialTrackUsesShellTrack = AssertTrue<
   IsEqual<
-    (typeof audioFoundationConfig)["music"]["shellTrack"],
+    (typeof metaverseAudioSessionConfig)["initialBackgroundTrackId"],
     "shell-attract-loop"
   >
 >;
-type GameplayTrackUsesTrackId = AssertTrue<
+type SessionCatalogUsesTrackIds = AssertTrue<
   IsEqual<
-    (typeof audioFoundationConfig)["music"]["gameplayTrack"],
-    "birds-arena-loop"
+    keyof (typeof metaverseAudioSessionConfig)["contentCatalog"]["backgroundTracks"],
+    MetaverseAudioTrackId
   >
 >;
-type CueCatalogUsesReadonlyCueIds = AssertTrue<
+type SessionCatalogUsesCueIds = AssertTrue<
   IsAssignable<
-    (typeof audioFoundationConfig)["soundEffects"]["cueIds"],
-    readonly AudioCueId[]
+    keyof (typeof metaverseAudioSessionConfig)["contentCatalog"]["cues"],
+    MetaverseAudioCueId
   >
 >;
 
@@ -85,6 +88,6 @@ export type ClientAudioContractTypeTests =
   | StartPolicyIsFixedImplementationValue
   | MusicEngineUsesSharedEngineContract
   | SoundEffectsEngineUsesSharedEngineContract
-  | ShellTrackUsesTrackId
-  | GameplayTrackUsesTrackId
-  | CueCatalogUsesReadonlyCueIds;
+  | SessionInitialTrackUsesShellTrack
+  | SessionCatalogUsesTrackIds
+  | SessionCatalogUsesCueIds;

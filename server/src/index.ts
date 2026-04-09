@@ -31,7 +31,8 @@ import {
   createUsername
 } from "@thumbshooter/shared";
 
-import { CoopRoomDirectory } from "./classes/coop-room-directory.js";
+import { CoopRoomDirectory } from "./experiences/duck-hunt/classes/coop-room-directory.js";
+import { MetaverseSessionRuntime } from "./metaverse/classes/metaverse-session-runtime.js";
 import type { ServerRuntimeConfig } from "./types/server-runtime-config.js";
 
 const runtimeConfig: ServerRuntimeConfig = {
@@ -40,6 +41,7 @@ const runtimeConfig: ServerRuntimeConfig = {
 };
 
 const coopRoomDirectory = new CoopRoomDirectory();
+const metaverseSessionRuntime = new MetaverseSessionRuntime();
 
 function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error;
@@ -361,7 +363,25 @@ function writeJson(
   response.end(JSON.stringify(payload));
 }
 
-function matchRoomPath(
+function isMetaverseSessionPath(pathname: string): boolean {
+  const segments = pathname.split("/").filter((segment) => segment.length > 0);
+
+  return segments.length === 2 && segments[0] === "metaverse" && segments[1] === "session";
+}
+
+function isDuckHuntDirectoryPath(pathname: string): boolean {
+  const segments = pathname.split("/").filter((segment) => segment.length > 0);
+
+  return (
+    segments.length === 4 &&
+    segments[0] === "experiences" &&
+    segments[1] === "duck-hunt" &&
+    segments[2] === "coop" &&
+    segments[3] === "rooms"
+  );
+}
+
+function matchDuckHuntRoomPath(
   pathname: string
 ): {
   readonly isCommandPath: boolean;
@@ -369,22 +389,30 @@ function matchRoomPath(
 } | null {
   const segments = pathname.split("/").filter((segment) => segment.length > 0);
 
-  if (segments.length === 3 && segments[0] === "coop" && segments[1] === "rooms") {
+  if (
+    segments.length === 5 &&
+    segments[0] === "experiences" &&
+    segments[1] === "duck-hunt" &&
+    segments[2] === "coop" &&
+    segments[3] === "rooms"
+  ) {
     return {
       isCommandPath: false,
-      rawRoomId: segments[2]!
+      rawRoomId: segments[4]!
     };
   }
 
   if (
-    segments.length === 4 &&
-    segments[0] === "coop" &&
-    segments[1] === "rooms" &&
-    segments[3] === "commands"
+    segments.length === 6 &&
+    segments[0] === "experiences" &&
+    segments[1] === "duck-hunt" &&
+    segments[2] === "coop" &&
+    segments[3] === "rooms" &&
+    segments[5] === "commands"
   ) {
     return {
       isCommandPath: true,
-      rawRoomId: segments[2]!
+      rawRoomId: segments[4]!
     };
   }
 
@@ -396,7 +424,7 @@ const server = createServer(async (request, response) => {
     request.url ?? "/",
     `http://${runtimeConfig.host}:${runtimeConfig.port}`
   );
-  const matchedRoomPath = matchRoomPath(requestUrl.pathname);
+  const matchedDuckHuntRoomPath = matchDuckHuntRoomPath(requestUrl.pathname);
   const nowMs = Date.now();
 
   if (request.method === "OPTIONS") {
@@ -406,7 +434,12 @@ const server = createServer(async (request, response) => {
     return;
   }
 
-  if (request.method === "GET" && requestUrl.pathname === "/") {
+  if (request.method === "GET" && isMetaverseSessionPath(requestUrl.pathname)) {
+    writeJson(response, 200, metaverseSessionRuntime.readSessionSnapshot());
+    return;
+  }
+
+  if (request.method === "GET" && isDuckHuntDirectoryPath(requestUrl.pathname)) {
     const roomSnapshots = coopRoomDirectory.listRoomSnapshots(nowMs);
     const directoryEntries: CoopRoomDirectoryEntrySnapshotInput[] =
       roomSnapshots.map((roomSnapshot) => ({
@@ -438,9 +471,13 @@ const server = createServer(async (request, response) => {
     return;
   }
 
-  if (matchedRoomPath !== null && request.method === "GET" && !matchedRoomPath.isCommandPath) {
+  if (
+    matchedDuckHuntRoomPath !== null &&
+    request.method === "GET" &&
+    !matchedDuckHuntRoomPath.isCommandPath
+  ) {
     try {
-      const roomId = resolveRoomId(matchedRoomPath.rawRoomId);
+      const roomId = resolveRoomId(matchedDuckHuntRoomPath.rawRoomId);
       const observerPlayerIdRaw = requestUrl.searchParams.get("playerId");
       const resolvedObserverPlayerId =
         observerPlayerIdRaw === null ? undefined : resolvePlayerId(observerPlayerIdRaw);
@@ -481,9 +518,13 @@ const server = createServer(async (request, response) => {
     return;
   }
 
-  if (matchedRoomPath !== null && request.method === "POST" && matchedRoomPath.isCommandPath) {
+  if (
+    matchedDuckHuntRoomPath !== null &&
+    request.method === "POST" &&
+    matchedDuckHuntRoomPath.isCommandPath
+  ) {
     try {
-      const roomId = resolveRoomId(matchedRoomPath.rawRoomId);
+      const roomId = resolveRoomId(matchedDuckHuntRoomPath.rawRoomId);
 
       const body = await readJsonBody(request);
       const command = parseCoopRoomCommand(body, roomId);

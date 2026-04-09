@@ -6,6 +6,8 @@ import type {
   AudioChannelId,
   AudioSettingsSnapshot,
   Degrees,
+  ExperienceCatalogEntrySnapshot,
+  ExperienceId,
   GameplayInputModeId,
   HandTriggerCalibrationSnapshot,
   HandTriggerMetricSnapshot,
@@ -21,10 +23,12 @@ import type {
   GameplaySessionMode,
   GameplayTickOwner,
   Milliseconds,
+  MetaverseSessionSnapshot,
   NormalizedViewportScalar,
   NormalizedViewportPointInput,
   NormalizedViewportPoint,
   PlayerProfileSnapshot,
+  PortalLaunchSelectionSnapshot,
   Radians,
   ReticleId,
   SoundEffectEngine,
@@ -59,7 +63,8 @@ type ExpectedCalibrationAnchorId =
 type ExpectedReticleId = "default-ring" | "precision-ring";
 type ExpectedAudioChannelId = "music" | "sfx";
 type ExpectedBackgroundMusicEngine = "strudel-web";
-type ExpectedGameplayInputModeId = "camera-thumb-shooter" | "mouse";
+type ExpectedGameplayInputModeId = "camera-thumb-trigger" | "mouse";
+type ExpectedExperienceId = "duck-hunt";
 type ExpectedGameplaySessionMode = "single-player" | "co-op";
 type ExpectedGameplayTickOwner = "client" | "server";
 type ExpectedSoundEffectEngine = "web-audio-api";
@@ -95,11 +100,27 @@ type BackgroundMusicEngineMatches = AssertTrue<
 type GameplayInputModeMatches = AssertTrue<
   IsEqual<GameplayInputModeId, ExpectedGameplayInputModeId>
 >;
+type ExperienceIdMatches = AssertTrue<IsEqual<ExperienceId, ExpectedExperienceId>>;
 type GameplaySessionModeMatches = AssertTrue<
   IsEqual<GameplaySessionMode, ExpectedGameplaySessionMode>
 >;
 type GameplayTickOwnerMatches = AssertTrue<
   IsEqual<GameplayTickOwner, ExpectedGameplayTickOwner>
+>;
+type ExperienceCatalogEntryIdMatches = AssertTrue<
+  IsEqual<ExperienceCatalogEntrySnapshot["id"], ExperienceId>
+>;
+type PortalLaunchSelectionUsesExperienceId = AssertTrue<
+  IsEqual<PortalLaunchSelectionSnapshot["experienceId"], ExperienceId>
+>;
+type PortalLaunchSelectionUsesTickOwner = AssertTrue<
+  IsEqual<PortalLaunchSelectionSnapshot["tickOwner"], GameplayTickOwner>
+>;
+type MetaverseSessionUsesExperienceId = AssertTrue<
+  IsEqual<MetaverseSessionSnapshot["activeExperienceId"], ExperienceId | null>
+>;
+type MetaverseSessionAvailableIdsUseExperienceIds = AssertTrue<
+  IsEqual<MetaverseSessionSnapshot["availableExperienceIds"][number], ExperienceId>
 >;
 type SoundEffectEngineMatches = AssertTrue<
   IsEqual<SoundEffectEngine, ExpectedSoundEffectEngine>
@@ -243,8 +264,14 @@ export type SharedContractTypeTests =
   | AudioChannelIdMatches
   | BackgroundMusicEngineMatches
   | GameplayInputModeMatches
+  | ExperienceIdMatches
   | GameplaySessionModeMatches
   | GameplayTickOwnerMatches
+  | ExperienceCatalogEntryIdMatches
+  | PortalLaunchSelectionUsesExperienceId
+  | PortalLaunchSelectionUsesTickOwner
+  | MetaverseSessionUsesExperienceId
+  | MetaverseSessionAvailableIdsUseExperienceIds
   | SoundEffectEngineMatches
   | AffineAimTransformFitQualityMatches
   | AffineAimTransformFitQualityCatalogMatches

@@ -37,6 +37,55 @@ function createFakeAudioContext() {
   return context;
 }
 
+function createTestAudioSessionConfig() {
+  return {
+    contentCatalog: {
+      backgroundTracks: {
+        "birds-arena-loop": {
+          buildPattern() {
+            throw new Error("background track pattern should not run in this test");
+          },
+          label: "Birds arena loop"
+        },
+        "shell-attract-loop": {
+          buildPattern() {
+            throw new Error("background track pattern should not run in this test");
+          },
+          label: "Shell attract loop"
+        }
+      },
+      cues: {
+        "ui-confirm": {
+          label: "UI confirm",
+          play() {}
+        }
+      }
+    },
+    foundation: {
+      defaultMix: {
+        musicVolume: 1,
+        sfxVolume: 1
+      },
+      music: {
+        engine: "strudel-web",
+        licenseConstraint: "agpl-open-source-required",
+        mode: "procedural-reactive-bgm",
+        startPolicy: "shell-load-play-after-unlock"
+      },
+      runtime: {
+        graphOwnership: "single-shared-audio-context",
+        settingsPersistence: "player-profile",
+        unlockPolicy: "first-user-gesture"
+      },
+      soundEffects: {
+        engine: "web-audio-api",
+        synthesisStrategy: "typed-procedural-cues"
+      }
+    },
+    initialBackgroundTrackId: "shell-attract-loop"
+  };
+}
+
 test("BrowserAudioSession unlocks, primes music, switches typed tracks, and syncs mix buses", async () => {
   const { BrowserAudioSession } = await clientLoader.load(
     "/src/audio/classes/browser-audio-session.ts"
@@ -46,27 +95,30 @@ test("BrowserAudioSession unlocks, primes music, switches typed tracks, and sync
   const playedTracks = [];
   let stopCalls = 0;
   const context = createFakeAudioContext();
-  const session = new BrowserAudioSession({
-    createAudioContext: () => context,
-    createGainBus: (_context, initialGain) => {
-      const bus = createFakeGainBus(initialGain, []);
-      createdBuses.push(bus);
-      return bus;
-    },
-    async initializeBackgroundMusic() {
-      return {
-        playTrack(trackId) {
-          playedTracks.push(trackId);
-        },
-        stop() {
-          stopCalls += 1;
-        }
-      };
-    },
-    playCue({ cueId }) {
-      playedCues.push(cueId);
+  const session = new BrowserAudioSession(
+    createTestAudioSessionConfig(),
+    {
+      createAudioContext: () => context,
+      createGainBus: (_context, initialGain) => {
+        const bus = createFakeGainBus(initialGain, []);
+        createdBuses.push(bus);
+        return bus;
+      },
+      async initializeBackgroundMusic() {
+        return {
+          playTrack(trackId) {
+            playedTracks.push(trackId);
+          },
+          stop() {
+            stopCalls += 1;
+          }
+        };
+      },
+      playCue({ cueId }) {
+        playedCues.push(cueId);
+      }
     }
-  });
+  );
 
   const deferredTrackSnapshot = session.syncBackgroundTrack("birds-arena-loop");
   const unlockSnapshot = await session.unlock();
@@ -96,16 +148,19 @@ test("BrowserAudioSession reports unsupported audio contexts deterministically",
   const { BrowserAudioSession } = await clientLoader.load(
     "/src/audio/classes/browser-audio-session.ts"
   );
-  const session = new BrowserAudioSession({
-    createAudioContext: () => null,
-    createGainBus: () => {
-      throw new Error("should not create gain buses");
-    },
-    async initializeBackgroundMusic() {
-      throw new Error("should not initialize background music");
-    },
-    playCue() {}
-  });
+  const session = new BrowserAudioSession(
+    createTestAudioSessionConfig(),
+    {
+      createAudioContext: () => null,
+      createGainBus: () => {
+        throw new Error("should not create gain buses");
+      },
+      async initializeBackgroundMusic() {
+        throw new Error("should not initialize background music");
+      },
+      playCue() {}
+    }
+  );
 
   const unlockSnapshot = await session.unlock();
 
@@ -117,15 +172,18 @@ test("BrowserAudioSession records background music failures without dropping unl
   const { BrowserAudioSession } = await clientLoader.load(
     "/src/audio/classes/browser-audio-session.ts"
   );
-  const session = new BrowserAudioSession({
-    createAudioContext: () => createFakeAudioContext(),
-    createGainBus: (_context, initialGain) =>
-      createFakeGainBus(initialGain, []),
-    async initializeBackgroundMusic() {
-      throw new Error("bgm init failed");
-    },
-    playCue() {}
-  });
+  const session = new BrowserAudioSession(
+    createTestAudioSessionConfig(),
+    {
+      createAudioContext: () => createFakeAudioContext(),
+      createGainBus: (_context, initialGain) =>
+        createFakeGainBus(initialGain, []),
+      async initializeBackgroundMusic() {
+        throw new Error("bgm init failed");
+      },
+      playCue() {}
+    }
+  );
 
   const unlockSnapshot = await session.unlock();
 

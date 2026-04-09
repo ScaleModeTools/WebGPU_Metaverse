@@ -174,9 +174,10 @@ function createArenaConfig() {
 }
 
 test("WebGpuGameplayRuntime rejects unsupported navigators explicitly", async () => {
-  const { LocalArenaSimulation, WebGpuGameplayRuntime } = await clientLoader.load(
-    "/src/game/index.ts"
-  );
+  const {
+    DuckHuntLocalArenaSimulation: LocalArenaSimulation,
+    DuckHuntWebGpuGameplayRuntime: WebGpuGameplayRuntime
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const arenaSimulation = new LocalArenaSimulation(
     {
       xCoefficients: [1, 0, 0],
@@ -214,10 +215,12 @@ test("WebGpuGameplayRuntime rejects unsupported navigators explicitly", async ()
 
 test("WebGpuGameplayRuntime renders the calibrated reticle from live tracking snapshots", async () => {
   const {
-    LocalArenaSimulation,
-    WebGpuGameplayRuntime,
     readObservedAimPoint
   } = await clientLoader.load("/src/game/index.ts");
+  const {
+    DuckHuntLocalArenaSimulation: LocalArenaSimulation,
+    DuckHuntWebGpuGameplayRuntime: WebGpuGameplayRuntime
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const { handAimObservationConfig } = await clientLoader.load(
     "/src/game/config/hand-aim-observation.ts"
   );
@@ -336,9 +339,10 @@ test("WebGpuGameplayRuntime renders the calibrated reticle from live tracking sn
 });
 
 test("WebGpuGameplayRuntime publishes throttled UI updates for shell observers", async () => {
-  const { LocalArenaSimulation, WebGpuGameplayRuntime } = await clientLoader.load(
-    "/src/game/index.ts"
-  );
+  const {
+    DuckHuntLocalArenaSimulation: LocalArenaSimulation,
+    DuckHuntWebGpuGameplayRuntime: WebGpuGameplayRuntime
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const trackingSource = {
     latestPose: {
       trackingState: "tracked",
@@ -408,9 +412,10 @@ test("WebGpuGameplayRuntime publishes throttled UI updates for shell observers",
 });
 
 test("WebGpuGameplayRuntime publishes reticle updates on every frame", async () => {
-  const { LocalArenaSimulation, WebGpuGameplayRuntime } = await clientLoader.load(
-    "/src/game/index.ts"
-  );
+  const {
+    DuckHuntLocalArenaSimulation: LocalArenaSimulation,
+    DuckHuntWebGpuGameplayRuntime: WebGpuGameplayRuntime
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const trackingSource = {
     latestPose: {
       trackingState: "tracked",
@@ -480,9 +485,10 @@ test("WebGpuGameplayRuntime publishes reticle updates on every frame", async () 
 });
 
 test("WebGpuGameplayRuntime ignores stale async boots after disposal", async () => {
-  const { LocalArenaSimulation, WebGpuGameplayRuntime } = await clientLoader.load(
-    "/src/game/index.ts"
-  );
+  const {
+    DuckHuntLocalArenaSimulation: LocalArenaSimulation,
+    DuckHuntWebGpuGameplayRuntime: WebGpuGameplayRuntime
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const renderer = new DeferredRenderer();
   const arenaSimulation = new LocalArenaSimulation(
     {
@@ -534,9 +540,10 @@ test("WebGpuGameplayRuntime ignores stale async boots after disposal", async () 
 });
 
 test("WebGpuGameplayRuntime serializes overlapping start requests", async () => {
-  const { LocalArenaSimulation, WebGpuGameplayRuntime } = await clientLoader.load(
-    "/src/game/index.ts"
-  );
+  const {
+    DuckHuntLocalArenaSimulation: LocalArenaSimulation,
+    DuckHuntWebGpuGameplayRuntime: WebGpuGameplayRuntime
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const firstRenderer = new DeferredRenderer();
   const secondRenderer = new FakeRenderer();
   const arenaSimulation = new LocalArenaSimulation(
@@ -604,9 +611,10 @@ test("WebGpuGameplayRuntime serializes overlapping start requests", async () => 
 });
 
 test("WebGpuGameplayRuntime serializes overlapping start requests across runtime instances", async () => {
-  const { LocalArenaSimulation, WebGpuGameplayRuntime } = await clientLoader.load(
-    "/src/game/index.ts"
-  );
+  const {
+    DuckHuntLocalArenaSimulation: LocalArenaSimulation,
+    DuckHuntWebGpuGameplayRuntime: WebGpuGameplayRuntime
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const firstRenderer = new DeferredRenderer();
   const secondRenderer = new FakeRenderer();
   const createdRenderers = [];
@@ -677,9 +685,10 @@ test("WebGpuGameplayRuntime serializes overlapping start requests across runtime
 });
 
 test("WebGpuGameplayRuntime binds browser frame APIs before scheduling gameplay", async () => {
-  const { LocalArenaSimulation, WebGpuGameplayRuntime } = await clientLoader.load(
-    "/src/game/index.ts"
-  );
+  const {
+    DuckHuntLocalArenaSimulation: LocalArenaSimulation,
+    DuckHuntWebGpuGameplayRuntime: WebGpuGameplayRuntime
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const arenaSimulation = new LocalArenaSimulation(
     {
       xCoefficients: [1, 0, 0],
@@ -751,9 +760,10 @@ test("WebGpuGameplayRuntime binds browser frame APIs before scheduling gameplay"
 });
 
 test("WebGpuGameplayRuntime surfaces render-loop failures as runtime failures", async () => {
-  const { LocalArenaSimulation, WebGpuGameplayRuntime } = await clientLoader.load(
-    "/src/game/index.ts"
-  );
+  const {
+    DuckHuntLocalArenaSimulation: LocalArenaSimulation,
+    DuckHuntWebGpuGameplayRuntime: WebGpuGameplayRuntime
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const renderer = new ThrowingRenderer();
   const arenaSimulation = new LocalArenaSimulation(
     {

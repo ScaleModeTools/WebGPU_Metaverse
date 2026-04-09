@@ -187,6 +187,7 @@ test("CoopRoomClient joins, polls shared snapshots, and posts fire-shot commands
   const roomClient = new CoopRoomClient(
     {
       defaultPollIntervalMs: createMilliseconds(75),
+      roomCollectionPath: "/experiences/duck-hunt/coop/rooms",
       roomId,
       serverOrigin: "http://127.0.0.1:3210"
     },
@@ -249,7 +250,7 @@ test("CoopRoomClient joins, polls shared snapshots, and posts fire-shot commands
   assert.equal(requests[3]?.method, "GET");
   assert.equal(
     requests[3]?.url,
-    "http://127.0.0.1:3210/coop/rooms/co-op-harbor?playerId=coop-player-1"
+    "http://127.0.0.1:3210/experiences/duck-hunt/coop/rooms/co-op-harbor?playerId=coop-player-1"
   );
   assert.equal(scheduledPolls[0]?.delay, 50);
 
@@ -317,6 +318,7 @@ test("CoopRoomClient posts leader kick-player commands", async () => {
   const roomClient = new CoopRoomClient(
     {
       defaultPollIntervalMs: createMilliseconds(75),
+      roomCollectionPath: "/experiences/duck-hunt/coop/rooms",
       roomId,
       serverOrigin: "http://127.0.0.1:3210"
     },
@@ -388,6 +390,7 @@ test("CoopRoomClient accepts a new room session even when its tick restarts", as
   const roomClient = new CoopRoomClient(
     {
       defaultPollIntervalMs: createMilliseconds(75),
+      roomCollectionPath: "/experiences/duck-hunt/coop/rooms",
       roomId,
       serverOrigin: "http://127.0.0.1:3210"
     },
@@ -447,6 +450,7 @@ test("CoopRoomClient stops polling when the server reports local room membership
   const roomClient = new CoopRoomClient(
     {
       defaultPollIntervalMs: createMilliseconds(75),
+      roomCollectionPath: "/experiences/duck-hunt/coop/rooms",
       roomId,
       serverOrigin: "http://127.0.0.1:3210"
     },
@@ -515,6 +519,7 @@ test("CoopRoomClient reports an outdated room snapshot contract instead of accep
   const roomClient = new CoopRoomClient(
     {
       defaultPollIntervalMs: createMilliseconds(75),
+      roomCollectionPath: "/experiences/duck-hunt/coop/rooms",
       roomId,
       serverOrigin: "http://127.0.0.1:3210"
     },

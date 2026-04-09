@@ -15,7 +15,6 @@ import {
   createCoopSyncPlayerPresenceCommand
 } from "@thumbshooter/shared";
 
-import { coopRoomClientConfig } from "../config/coop-room-client";
 import {
   parseCoopRoomErrorMessage,
   parseCoopRoomServerEvent,
@@ -190,7 +189,7 @@ export class CoopRoomClient {
   #statusSnapshot: CoopRoomClientStatusSnapshot;
 
   constructor(
-    config: CoopRoomClientConfig = coopRoomClientConfig,
+    config: CoopRoomClientConfig,
     dependencies: CoopRoomClientDependencies = {}
   ) {
     this.#config = config;
@@ -604,6 +603,7 @@ export class CoopRoomClient {
       const response = await this.#fetch(
         resolveCoopRoomSnapshotUrl(
           this.#config.serverOrigin,
+          this.#config.roomCollectionPath,
           this.#config.roomId,
           this.#playerId
         ),
@@ -645,7 +645,11 @@ export class CoopRoomClient {
     requestInit: RequestInit = {}
   ): Promise<CoopRoomServerEvent> {
     const response = await this.#fetch(
-      resolveCoopRoomCommandUrl(this.#config.serverOrigin, this.#config.roomId),
+      resolveCoopRoomCommandUrl(
+        this.#config.serverOrigin,
+        this.#config.roomCollectionPath,
+        this.#config.roomId
+      ),
       {
         body: serializeCoopRoomClientCommand(command),
         headers: {

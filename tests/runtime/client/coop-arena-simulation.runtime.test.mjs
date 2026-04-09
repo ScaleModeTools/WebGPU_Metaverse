@@ -111,7 +111,9 @@ function createRoomSnapshot({
 }
 
 test("CoopArenaSimulation projects authoritative birds and confirms hits from room snapshots", async () => {
-  const { CoopArenaSimulation } = await clientLoader.load("/src/game/index.ts");
+  const {
+    DuckHuntCoopArenaSimulation: CoopArenaSimulation
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const roomId = createCoopRoomId("co-op-harbor");
   const sessionId = createCoopSessionId("co-op-harbor-session-1");
   const playerId = createCoopPlayerId("coop-player-1");
@@ -215,7 +217,9 @@ test("CoopArenaSimulation projects authoritative birds and confirms hits from ro
 });
 
 test("CoopArenaSimulation projects authoritative birds forward between shared room ticks", async () => {
-  const { CoopArenaSimulation } = await clientLoader.load("/src/game/index.ts");
+  const {
+    DuckHuntCoopArenaSimulation: CoopArenaSimulation
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const roomId = createCoopRoomId("co-op-harbor");
   const sessionId = createCoopSessionId("co-op-harbor-session-1");
   const playerId = createCoopPlayerId("coop-player-1");
@@ -274,7 +278,9 @@ test("CoopArenaSimulation projects authoritative birds forward between shared ro
 });
 
 test("CoopArenaSimulation keeps the camera fixed while the round is not in combat", async () => {
-  const { CoopArenaSimulation } = await clientLoader.load("/src/game/index.ts");
+  const {
+    DuckHuntCoopArenaSimulation: CoopArenaSimulation
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const roomId = createCoopRoomId("co-op-harbor");
   const sessionId = createCoopSessionId("co-op-harbor-session-1");
   const playerId = createCoopPlayerId("coop-player-1");

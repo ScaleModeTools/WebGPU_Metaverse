@@ -1,6 +1,6 @@
 import { AudioSettings } from "@thumbshooter/shared";
 
-import { audioCueIds } from "../types/audio-foundation";
+import type { AudioFoundationConfig } from "../types/audio-foundation";
 
 export const audioFoundationConfig = {
   runtime: {
@@ -12,14 +12,11 @@ export const audioFoundationConfig = {
     engine: "strudel-web",
     mode: "procedural-reactive-bgm",
     startPolicy: "shell-load-play-after-unlock",
-    shellTrack: "shell-attract-loop",
-    gameplayTrack: "birds-arena-loop",
     licenseConstraint: "agpl-open-source-required"
   },
   soundEffects: {
     engine: "web-audio-api",
-    synthesisStrategy: "typed-procedural-cues",
-    cueIds: audioCueIds
+    synthesisStrategy: "typed-procedural-cues"
   },
   defaultMix: AudioSettings.create().snapshot.mix
-} as const;
+} as const satisfies AudioFoundationConfig;

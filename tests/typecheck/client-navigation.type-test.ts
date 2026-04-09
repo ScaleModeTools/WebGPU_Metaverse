@@ -11,6 +11,7 @@ type ExpectedNavigationStepId =
   | "main-menu"
   | "permissions"
   | "calibration"
+  | "metaverse"
   | "gameplay"
   | "unsupported";
 
@@ -53,10 +54,19 @@ type CalibrationRequiresPermissions = AssertTrue<
     readonly ["permissions"]
   >
 >;
-type GameplayRequiresMainMenu = AssertTrue<
+type MetaverseRequiresMainMenu = AssertTrue<
+  IsEqual<
+    Extract<
+      (typeof navigationFlow.steps)[number],
+      { readonly id: "metaverse" }
+    >["requiresPrevious"],
+    readonly ["main-menu"]
+  >
+>;
+type GameplayRequiresMetaverse = AssertTrue<
   IsEqual<
     Extract<(typeof navigationFlow.steps)[number], { readonly id: "gameplay" }>["requiresPrevious"],
-    readonly ["main-menu"]
+    readonly ["metaverse"]
   >
 >;
 
@@ -68,4 +78,5 @@ export type ClientNavigationTypeTests =
   | MainMenuRequiresLogin
   | PermissionsRequireMainMenu
   | CalibrationRequiresPermissions
-  | GameplayRequiresMainMenu;
+  | MetaverseRequiresMainMenu
+  | GameplayRequiresMetaverse;

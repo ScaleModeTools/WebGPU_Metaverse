@@ -14,7 +14,9 @@ after(async () => {
 });
 
 test("LocalCombatSession tracks hits, kills, score, streaks, and completion", async () => {
-  const { LocalCombatSession } = await clientLoader.load("/src/game/index.ts");
+  const {
+    DuckHuntLocalCombatSession: LocalCombatSession
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const session = new LocalCombatSession(2, {
     durationLossPerRoundMs: 1_000,
     minimumRoundDurationMs: 2_000,
@@ -57,7 +59,9 @@ test("LocalCombatSession tracks hits, kills, score, streaks, and completion", as
 });
 
 test("LocalCombatSession fails on timer expiry and reset starts a fresh round", async () => {
-  const { LocalCombatSession } = await clientLoader.load("/src/game/index.ts");
+  const {
+    DuckHuntLocalCombatSession: LocalCombatSession
+  } = await clientLoader.load("/src/experiences/duck-hunt/index.ts");
   const session = new LocalCombatSession(3, {
     durationLossPerRoundMs: 100,
     minimumRoundDurationMs: 500,

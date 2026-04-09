@@ -1,4 +1,4 @@
-import { calibrationCaptureConfig } from "../../game/config/calibration-capture";
+import { duckHuntCalibrationCaptureConfig } from "../../experiences/duck-hunt/config";
 import { handAimObservationConfig } from "../../game/config/hand-aim-observation";
 import { readObservedAimPoint } from "../../game/types/hand-aim-observation";
 import { evaluateHandTriggerGesture } from "../../game/types/hand-trigger-gesture";
@@ -112,7 +112,7 @@ export function createCalibrationPoseCapture(
   const triggerGesture = evaluateHandTriggerGesture(
     trackingSnapshot.pose,
     false,
-    calibrationCaptureConfig.triggerGesture
+    duckHuntCalibrationCaptureConfig.triggerGesture
   );
 
   return Object.freeze({

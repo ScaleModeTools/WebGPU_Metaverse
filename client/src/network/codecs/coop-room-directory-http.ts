@@ -26,8 +26,11 @@ function isCurrentDirectoryEntryPayload(value: unknown): value is Record<string,
   );
 }
 
-export function resolveCoopRoomDirectoryUrl(serverOrigin: string): string {
-  return new URL("/", serverOrigin).toString();
+export function resolveCoopRoomDirectoryUrl(
+  serverOrigin: string,
+  roomCollectionPath: string
+): string {
+  return new URL(roomCollectionPath, serverOrigin).toString();
 }
 
 export function parseCoopRoomDirectorySnapshot(

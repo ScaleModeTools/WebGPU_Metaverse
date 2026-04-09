@@ -103,7 +103,7 @@ function createFixtureRepo(overrides = {}) {
       null,
       2
     ),
-    "client/src/app/thumbshooter-shell.tsx": `import { uiPlan } from "../ui/index.ts"; export const shell = uiPlan; `,
+    "client/src/app/metaverse-shell.tsx": `import { uiPlan } from "../ui/index.ts"; export const shell = uiPlan; `,
     "client/src/ui/index.ts": `import { buttonLabel } from "../components/ui/button.tsx"; export const uiPlan = buttonLabel; `,
     "client/src/components/ui/button.tsx": "export const buttonLabel = 'button';\n",
     "client/src/audio/classes/browser-audio-session.ts": `export async function bootAudio() { return import("@strudel/web/web.mjs"); } `,

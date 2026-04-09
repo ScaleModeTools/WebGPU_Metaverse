@@ -33,7 +33,7 @@ function createJsonResponse(ok, payload) {
   };
 }
 
-test("CoopRoomDirectoryClient fetches typed room summaries from the server root", async () => {
+test("CoopRoomDirectoryClient fetches typed room summaries from the Duck Hunt experience namespace", async () => {
   const { CoopRoomDirectoryClient } = await clientLoader.load("/src/network/index.ts");
   const directorySnapshot = createCoopRoomDirectorySnapshot({
     coOpRooms: [
@@ -56,6 +56,7 @@ test("CoopRoomDirectoryClient fetches typed room summaries from the server root"
   const requests = [];
   const directoryClient = new CoopRoomDirectoryClient(
     {
+      roomCollectionPath: "/experiences/duck-hunt/coop/rooms",
       serverOrigin: "http://127.0.0.1:3210"
     },
     {
@@ -71,7 +72,10 @@ test("CoopRoomDirectoryClient fetches typed room summaries from the server root"
 
   const fetchedSnapshot = await directoryClient.fetchSnapshot();
 
-  assert.equal(requests[0]?.url, "http://127.0.0.1:3210/");
+  assert.equal(
+    requests[0]?.url,
+    "http://127.0.0.1:3210/experiences/duck-hunt/coop/rooms"
+  );
   assert.equal(requests[0]?.cache, "no-store");
   assert.equal(fetchedSnapshot.coOpRooms[0]?.roomId, "co-op-harbor");
   assert.equal(fetchedSnapshot.coOpRooms[0]?.readyPlayerCount, 2);
@@ -82,6 +86,7 @@ test("CoopRoomDirectoryClient rejects outdated room summaries that omit current 
   const { CoopRoomDirectoryClient } = await clientLoader.load("/src/network/index.ts");
   const directoryClient = new CoopRoomDirectoryClient(
     {
+      roomCollectionPath: "/experiences/duck-hunt/coop/rooms",
       serverOrigin: "http://127.0.0.1:3210"
     },
     {

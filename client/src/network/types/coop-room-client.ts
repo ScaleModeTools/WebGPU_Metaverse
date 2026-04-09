@@ -21,6 +21,7 @@ export type CoopRoomClientState = (typeof coopRoomClientStates)[number];
 export interface CoopRoomClientConfig {
   readonly defaultPollIntervalMs: Milliseconds;
   readonly roomId: CoopRoomId;
+  readonly roomCollectionPath: string;
   readonly serverOrigin: string;
 }
 

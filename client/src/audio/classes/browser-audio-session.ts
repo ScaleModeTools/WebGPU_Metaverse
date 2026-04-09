@@ -1,8 +1,11 @@
 import type { AudioMixSnapshot } from "@thumbshooter/shared";
 
-import { audioFoundationConfig } from "../config/audio-foundation";
-import { buildBackgroundMusicTrack } from "../config/background-music-tracks";
-import type { AudioCueId, AudioTrackId } from "../types/audio-foundation";
+import {
+  initializeCatalogBackedBackgroundMusic,
+  playCatalogCue
+} from "../services/procedural-browser-audio";
+import type { AudioContentCatalog } from "../types/audio-catalog";
+import type { AudioFoundationConfig } from "../types/audio-foundation";
 import type {
   AudioBusNodeLike,
   AudioContextLike,
@@ -11,13 +14,25 @@ import type {
 } from "../types/audio-session-runtime";
 import type { AudioSessionSnapshot } from "../types/audio-session";
 
+export interface BrowserAudioSessionConfig<
+  TrackId extends string = string,
+  CueId extends string = string
+> {
+  readonly contentCatalog: AudioContentCatalog<TrackId, CueId>;
+  readonly foundation: AudioFoundationConfig;
+  readonly initialBackgroundTrackId: TrackId | null;
+}
+
 interface WindowWithWebkitAudioContext extends Window {
   readonly webkitAudioContext?: typeof AudioContext;
 }
 
-function freezeAudioSessionSnapshot(
-  snapshot: AudioSessionSnapshot
-): AudioSessionSnapshot {
+function freezeAudioSessionSnapshot<
+  TrackId extends string,
+  CueId extends string
+>(
+  snapshot: AudioSessionSnapshot<TrackId, CueId>
+): AudioSessionSnapshot<TrackId, CueId> {
   return Object.freeze({
     backgroundTrackId: snapshot.backgroundTrackId,
     unlockState: snapshot.unlockState,
@@ -31,12 +46,14 @@ function freezeAudioSessionSnapshot(
   });
 }
 
-function createInitialSnapshot(): AudioSessionSnapshot {
-  return freezeAudioSessionSnapshot({
-    backgroundTrackId: audioFoundationConfig.music.shellTrack,
+function createInitialSnapshot<TrackId extends string, CueId extends string>(
+  config: BrowserAudioSessionConfig<TrackId, CueId>
+): AudioSessionSnapshot<TrackId, CueId> {
+  return freezeAudioSessionSnapshot<TrackId, CueId>({
+    backgroundTrackId: config.initialBackgroundTrackId,
     unlockState: "locked",
     backgroundMusicState: "idle",
-    mix: audioFoundationConfig.defaultMix,
+    mix: config.foundation.defaultMix,
     lastCueId: null,
     failureReason: null
   });
@@ -63,153 +80,64 @@ function createGainBus(
   });
 }
 
-function schedulePulse(
-  context: AudioContext,
-  destination: AudioNode,
-  startTime: number,
-  frequency: number,
-  durationSeconds: number,
-  type: OscillatorType,
-  peakGain: number,
-  sweepTargetFrequency?: number
-): void {
-  const oscillator = new OscillatorNode(context, {
-    frequency,
-    type
-  });
-  const envelope = new GainNode(context, {
-    gain: 0.0001
-  });
-
-  oscillator.connect(envelope);
-  envelope.connect(destination);
-
-  envelope.gain.setValueAtTime(0.0001, startTime);
-  envelope.gain.exponentialRampToValueAtTime(peakGain, startTime + 0.015);
-  envelope.gain.exponentialRampToValueAtTime(
-    0.0001,
-    startTime + durationSeconds
-  );
-
-  if (sweepTargetFrequency !== undefined) {
-    oscillator.frequency.exponentialRampToValueAtTime(
-      sweepTargetFrequency,
-      startTime + durationSeconds
-    );
-  }
-
-  oscillator.start(startTime);
-  oscillator.stop(startTime + durationSeconds + 0.03);
-}
-
-function playBrowserCue({
-  context,
-  cueId,
-  sfxBus
-}: {
-  readonly context: AudioContextLike;
-  readonly cueId: AudioCueId;
-  readonly sfxBus: AudioBusNodeLike;
-}): void {
-  const browserContext = context as AudioContext;
-  const destinationBus = sfxBus as GainNode;
-  const now = browserContext.currentTime + 0.01;
-
-  switch (cueId) {
-    case "ui-confirm":
-      schedulePulse(browserContext, destinationBus, now, 660, 0.12, "triangle", 0.09, 990);
-      break;
-    case "ui-menu-open":
-      schedulePulse(browserContext, destinationBus, now, 330, 0.14, "sawtooth", 0.06, 660);
-      schedulePulse(browserContext, destinationBus, now + 0.05, 660, 0.11, "triangle", 0.04);
-      break;
-    case "ui-menu-close":
-      schedulePulse(browserContext, destinationBus, now, 740, 0.16, "triangle", 0.05, 280);
-      break;
-    case "calibration-shot":
-    case "weapon-pistol-shot":
-      schedulePulse(browserContext, destinationBus, now, 240, 0.07, "square", 0.09, 105);
-      break;
-    case "weapon-reload":
-      schedulePulse(browserContext, destinationBus, now, 460, 0.1, "triangle", 0.05, 320);
-      schedulePulse(browserContext, destinationBus, now + 0.08, 420, 0.14, "triangle", 0.04, 220);
-      break;
-    case "enemy-hit":
-      schedulePulse(browserContext, destinationBus, now, 180, 0.08, "square", 0.06, 120);
-      schedulePulse(browserContext, destinationBus, now + 0.045, 260, 0.07, "triangle", 0.035, 180);
-      break;
-    case "enemy-scatter":
-      schedulePulse(browserContext, destinationBus, now, 280, 0.08, "sawtooth", 0.03, 520);
-      schedulePulse(browserContext, destinationBus, now + 0.06, 360, 0.08, "sawtooth", 0.025, 660);
-      break;
-  }
-}
-
-async function initializeBrowserBackgroundMusic(
-  {
-    context,
-    musicBus
-  }: {
-    readonly context: AudioContextLike;
-    readonly musicBus: AudioBusNodeLike;
-  }
-): Promise<BackgroundMusicEngineLike> {
-  const module = await import("@strudel/web/web.mjs");
-
-  await module.initStrudel({
-    audioContext: context as AudioContext
-  });
-
-  const outputNode = module.getSuperdoughAudioController().output?.destinationGain;
-
-  if (outputNode === null || outputNode === undefined) {
-    throw new Error("Strudel did not expose a routable background music output.");
-  }
-
-  outputNode.disconnect();
-  outputNode.connect(musicBus);
-
+function createDefaultBrowserAudioSessionDependencies<
+  TrackId extends string,
+  CueId extends string
+>(
+  contentCatalog: AudioContentCatalog<TrackId, CueId>
+): BrowserAudioSessionDependencies<TrackId, CueId> {
   return {
-    playTrack(trackId: AudioTrackId) {
-      module.hush();
-      buildBackgroundMusicTrack(trackId, module).play();
+    createAudioContext: createBrowserAudioContext,
+    createGainBus,
+    initializeBackgroundMusic({ context, musicBus }) {
+      return initializeCatalogBackedBackgroundMusic({
+        backgroundTracks: contentCatalog.backgroundTracks,
+        context,
+        musicBus
+      });
     },
-    stop() {
-      module.hush();
+    playCue({ context, cueId, sfxBus }) {
+      playCatalogCue({
+        context,
+        cueCatalog: contentCatalog.cues,
+        cueId,
+        sfxBus
+      });
     }
   };
 }
 
-const defaultBrowserAudioSessionDependencies: BrowserAudioSessionDependencies = {
-  createAudioContext: createBrowserAudioContext,
-  createGainBus,
-  initializeBackgroundMusic: initializeBrowserBackgroundMusic,
-  playCue: playBrowserCue
-};
-
-export class BrowserAudioSession {
+export class BrowserAudioSession<
+  TrackId extends string = string,
+  CueId extends string = string
+> {
   #audioContext: AudioContextLike | null = null;
-  #backgroundMusicEngine: BackgroundMusicEngineLike | null = null;
+  #backgroundMusicEngine: BackgroundMusicEngineLike<TrackId> | null = null;
   #masterGain: AudioBusNodeLike | null = null;
   #musicGain: AudioBusNodeLike | null = null;
-  #playingTrackId: AudioTrackId | null = null;
+  #playingTrackId: TrackId | null = null;
   #sfxGain: AudioBusNodeLike | null = null;
-  #snapshot = createInitialSnapshot();
-  #unlockPromise: Promise<AudioSessionSnapshot> | null = null;
+  #snapshot: AudioSessionSnapshot<TrackId, CueId>;
+  #unlockPromise: Promise<AudioSessionSnapshot<TrackId, CueId>> | null = null;
   #strudelPrimePromise: Promise<void> | null = null;
-  readonly #dependencies: BrowserAudioSessionDependencies;
+  readonly #dependencies: BrowserAudioSessionDependencies<TrackId, CueId>;
 
   constructor(
-    dependencies: BrowserAudioSessionDependencies = defaultBrowserAudioSessionDependencies
+    config: BrowserAudioSessionConfig<TrackId, CueId>,
+    dependencies: BrowserAudioSessionDependencies<TrackId, CueId> =
+      createDefaultBrowserAudioSessionDependencies(config.contentCatalog)
   ) {
     this.#dependencies = dependencies;
+    this.#snapshot = createInitialSnapshot(config);
   }
 
-  get snapshot(): AudioSessionSnapshot {
+  get snapshot(): AudioSessionSnapshot<TrackId, CueId> {
     return this.#snapshot;
   }
 
-  syncBackgroundTrack(trackId: AudioTrackId | null): AudioSessionSnapshot {
+  syncBackgroundTrack(
+    trackId: TrackId | null
+  ): AudioSessionSnapshot<TrackId, CueId> {
     this.#snapshot = freezeAudioSessionSnapshot({
       ...this.#snapshot,
       backgroundTrackId: trackId
@@ -218,7 +146,7 @@ export class BrowserAudioSession {
     return this.#syncBackgroundTrackPlayback();
   }
 
-  syncMix(mix: AudioMixSnapshot): AudioSessionSnapshot {
+  syncMix(mix: AudioMixSnapshot): AudioSessionSnapshot<TrackId, CueId> {
     if (this.#musicGain !== null) {
       this.#musicGain.gain.value = Number(mix.musicVolume);
     }
@@ -235,7 +163,7 @@ export class BrowserAudioSession {
     return this.#snapshot;
   }
 
-  async unlock(): Promise<AudioSessionSnapshot> {
+  async unlock(): Promise<AudioSessionSnapshot<TrackId, CueId>> {
     if (this.#snapshot.unlockState === "unlocked") {
       return this.#snapshot;
     }
@@ -248,7 +176,7 @@ export class BrowserAudioSession {
     return this.#unlockPromise;
   }
 
-  playCue(cueId: AudioCueId): AudioSessionSnapshot {
+  playCue(cueId: CueId): AudioSessionSnapshot<TrackId, CueId> {
     if (
       this.#audioContext === null ||
       this.#sfxGain === null ||
@@ -271,7 +199,7 @@ export class BrowserAudioSession {
     return this.#snapshot;
   }
 
-  async #unlockInternal(): Promise<AudioSessionSnapshot> {
+  async #unlockInternal(): Promise<AudioSessionSnapshot<TrackId, CueId>> {
     this.#snapshot = freezeAudioSessionSnapshot({
       ...this.#snapshot,
       unlockState: "unlocking",
@@ -390,7 +318,7 @@ export class BrowserAudioSession {
     return this.#strudelPrimePromise;
   }
 
-  #syncBackgroundTrackPlayback(): AudioSessionSnapshot {
+  #syncBackgroundTrackPlayback(): AudioSessionSnapshot<TrackId, CueId> {
     if (
       this.#snapshot.unlockState !== "unlocked" ||
       this.#backgroundMusicEngine === null

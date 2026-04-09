@@ -3,6 +3,7 @@ export const navigationStepIds = [
   "main-menu",
   "permissions",
   "calibration",
+  "metaverse",
   "gameplay",
   "unsupported"
 ] as const;

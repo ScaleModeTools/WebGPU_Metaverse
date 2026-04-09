@@ -5,6 +5,7 @@ export { GameplayDeveloperPanel } from "./components/gameplay-developer-panel";
 export { GameplayDebugOverlay } from "./components/gameplay-debug-overlay";
 export { GameplayHudOverlay } from "./components/gameplay-hud-overlay";
 export { GameplayReticleOverlay } from "./components/gameplay-reticle-overlay";
+export { ImmersiveStageFrame } from "./components/immersive-stage-frame";
 export {
   gameMenuEntryActions,
   gameMenuSectionIds
