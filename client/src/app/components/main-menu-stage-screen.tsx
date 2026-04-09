@@ -96,17 +96,35 @@ function resolveCoopRoomPhaseLabel(
   }
 
   if (roomEntry.phase === "active") {
+    if (roomEntry.roundPhase === "cooldown") {
+      return "Cooldown";
+    }
+
     return "Live";
   }
 
   return "Cleared";
 }
 
+function formatDirectoryRoundTime(roundTimeRemainingMs: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(roundTimeRemainingMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
 function formatCoopRoomStatus(
   roomEntry: CoopRoomDirectoryEntrySnapshot
 ): string {
   if (roomEntry.phase === "active") {
-    return `${roomEntry.birdsRemaining} birds remaining`;
+    if (roomEntry.roundPhase === "cooldown") {
+      return `Round ${roomEntry.roundNumber + 1} starts in ${formatDirectoryRoundTime(
+        roomEntry.roundPhaseRemainingMs
+      )}`;
+    }
+
+    return `Round ${roomEntry.roundNumber} • ${roomEntry.birdsRemaining} birds remaining`;
   }
 
   return `${roomEntry.connectedPlayerCount}/${roomEntry.capacity} connected • ${roomEntry.readyPlayerCount}/${roomEntry.requiredReadyPlayerCount} ready`;

@@ -127,6 +127,13 @@ const baseCoopRoomRuntimeConfig = {
     y: 1.35,
     z: 0
   },
+  playerInactivityTimeoutMs: createMilliseconds(10_000),
+  rounds: {
+    cooldownDurationMs: createMilliseconds(3_000),
+    durationLossPerRoundMs: createMilliseconds(1_000),
+    initialDurationMs: createMilliseconds(25_000),
+    minimumDurationMs: createMilliseconds(12_000)
+  },
   requiredReadyPlayerCount: 2,
   reticleScatterRadius: 0.72,
   scatterRadius: 5.2,

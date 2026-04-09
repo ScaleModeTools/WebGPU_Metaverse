@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createCoopBirdId,
   createCoopFireShotCommand,
+  createCoopKickPlayerCommand,
   createCoopLeaveRoomCommand,
   createCoopRoomDirectorySnapshot,
   createCoopPlayerId,
@@ -96,6 +97,10 @@ test("createCoopRoomSnapshot clones nested arrays and normalizes hot snapshot va
       birdsCleared: 1.2,
       birdsRemaining: 3.9,
       phase: "active",
+      roundDurationMs: 9_999.8,
+      roundNumber: 3.6,
+      roundPhase: "cooldown",
+      roundPhaseRemainingMs: 1_249.4,
       requiredReadyPlayerCount: 0,
       sessionId,
       teamHitsLanded: 1.1,
@@ -127,6 +132,10 @@ test("createCoopRoomSnapshot clones nested arrays and normalizes hot snapshot va
   assert.equal(snapshot.players[0]?.activity.shotsFired, 5);
   assert.equal(snapshot.players[0]?.presence.stateSequence, 2);
   assert.equal(snapshot.players[0]?.presence.weaponId, "semiautomatic-pistol");
+  assert.equal(snapshot.session.roundDurationMs, 9_999.8);
+  assert.equal(snapshot.session.roundNumber, 3);
+  assert.equal(snapshot.session.roundPhase, "cooldown");
+  assert.equal(snapshot.session.roundPhaseRemainingMs, 1_249.4);
   assert.equal(snapshot.session.requiredReadyPlayerCount, 1);
   assert.equal(Object.isFrozen(snapshot), true);
   assert.equal(Object.isFrozen(snapshot.birds), true);
@@ -182,6 +191,21 @@ test("createCoopStartSessionCommand preserves the party leader identity", () => 
   assert.equal(command.playerId, "player-leader");
 });
 
+test("createCoopKickPlayerCommand preserves both actor and target identities", () => {
+  const command = createCoopKickPlayerCommand({
+    playerId: requireValue(createCoopPlayerId("player-leader"), "playerId"),
+    roomId: requireValue(createCoopRoomId("harbor-room"), "roomId"),
+    targetPlayerId: requireValue(
+      createCoopPlayerId("player-target"),
+      "targetPlayerId"
+    )
+  });
+
+  assert.equal(command.type, "kick-player");
+  assert.equal(command.playerId, "player-leader");
+  assert.equal(command.targetPlayerId, "player-target");
+});
+
 test("createCoopRoomDirectorySnapshot normalizes live room summaries", () => {
   const directorySnapshot = createCoopRoomDirectorySnapshot({
     coOpRooms: [
@@ -191,6 +215,9 @@ test("createCoopRoomDirectorySnapshot normalizes live room summaries", () => {
         connectedPlayerCount: 2.6,
         phase: "waiting-for-players",
         readyPlayerCount: 1.9,
+        roundNumber: 4.2,
+        roundPhase: "cooldown",
+        roundPhaseRemainingMs: 850.5,
         requiredReadyPlayerCount: 0,
         roomId: requireValue(createCoopRoomId("harbor-room"), "roomId"),
         sessionId: requireValue(
@@ -205,6 +232,9 @@ test("createCoopRoomDirectorySnapshot normalizes live room summaries", () => {
   assert.equal(directorySnapshot.coOpRooms[0]?.capacity, 1);
   assert.equal(directorySnapshot.coOpRooms[0]?.connectedPlayerCount, 2);
   assert.equal(directorySnapshot.coOpRooms[0]?.readyPlayerCount, 1);
+  assert.equal(directorySnapshot.coOpRooms[0]?.roundNumber, 4);
+  assert.equal(directorySnapshot.coOpRooms[0]?.roundPhase, "cooldown");
+  assert.equal(directorySnapshot.coOpRooms[0]?.roundPhaseRemainingMs, 850.5);
   assert.equal(directorySnapshot.coOpRooms[0]?.requiredReadyPlayerCount, 1);
   assert.equal(directorySnapshot.coOpRooms[0]?.tick, 7);
   assert.equal(Object.isFrozen(directorySnapshot.coOpRooms), true);

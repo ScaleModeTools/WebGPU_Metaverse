@@ -2,7 +2,8 @@ import type {
   CoopRoomClientCommand,
   CoopRoomId,
   CoopRoomServerEvent,
-  CoopRoomSnapshotInput
+  CoopRoomSnapshotInput,
+  CoopPlayerId
 } from "@thumbshooter/shared";
 import { createCoopRoomSnapshotEvent } from "@thumbshooter/shared";
 
@@ -12,9 +13,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function resolveCoopRoomSnapshotUrl(
   serverOrigin: string,
-  roomId: CoopRoomId
+  roomId: CoopRoomId,
+  playerId?: CoopPlayerId
 ): string {
-  return new URL(`/coop/rooms/${roomId}`, serverOrigin).toString();
+  const snapshotUrl = new URL(`/coop/rooms/${roomId}`, serverOrigin);
+
+  if (playerId !== undefined) {
+    snapshotUrl.searchParams.set("playerId", playerId);
+  }
+
+  return snapshotUrl.toString();
 }
 
 export function resolveCoopRoomCommandUrl(

@@ -92,6 +92,7 @@ export type {
   GameplayInputModeId
 } from "./gameplay-input-mode.js";
 export {
+  coopRoundPhases,
   coopBirdBehaviorStates,
   coopPlayerShotOutcomeStates,
   coopRoomClientCommandTypes,
@@ -101,6 +102,7 @@ export {
   createCoopBirdSnapshot,
   createCoopFireShotCommand,
   createCoopJoinRoomCommand,
+  createCoopKickPlayerCommand,
   createCoopLeaveRoomCommand,
   createCoopPlayerActivitySnapshot,
   createCoopPlayerId,
@@ -130,6 +132,8 @@ export type {
   CoopFireShotCommandInput,
   CoopJoinRoomCommand,
   CoopJoinRoomCommandInput,
+  CoopKickPlayerCommand,
+  CoopKickPlayerCommandInput,
   CoopLeaveRoomCommand,
   CoopLeaveRoomCommandInput,
   CoopPlayerActivitySnapshot,
@@ -147,6 +151,7 @@ export type {
   CoopRoomDirectorySnapshot,
   CoopRoomDirectorySnapshotInput,
   CoopRoomId,
+  CoopRoundPhase,
   CoopRoomPhase,
   CoopRoomServerEvent,
   CoopRoomServerEventType,

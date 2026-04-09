@@ -43,6 +43,13 @@ export interface CoopRoomRuntimeConfig {
     readonly y: number;
     readonly z: number;
   };
+  readonly playerInactivityTimeoutMs: Milliseconds;
+  readonly rounds: {
+    readonly cooldownDurationMs: Milliseconds;
+    readonly durationLossPerRoundMs: Milliseconds;
+    readonly initialDurationMs: Milliseconds;
+    readonly minimumDurationMs: Milliseconds;
+  };
   readonly requiredReadyPlayerCount: number;
   readonly reticleScatterRadius: number;
   readonly roomId: CoopRoomId;

@@ -301,7 +301,8 @@ export class CoopArenaSimulation {
       roomSnapshot === null
         ? createPendingCoopGameplaySessionSnapshot(this.#roomSource.roomId)
         : createCoopGameplaySessionSnapshot(roomSnapshot, this.#localPlayerId);
-    const sessionActive = session.phase === "active";
+    const sessionActive =
+      session.phase === "active" && session.roundPhase === "combat";
     const weaponFrame = this.#weaponRuntime.advance({
       hasTrackedHand: trackingSnapshot.trackingState === "tracked",
       isReticleOffscreen: projectedAimPoint.isReticleOffscreen,
@@ -419,7 +420,7 @@ export class CoopArenaSimulation {
         hasTrackedHand: trackingState === "tracked",
         isReticleOffscreen,
         nowMs,
-        sessionActive: session.phase === "active",
+        sessionActive: session.phase === "active" && session.roundPhase === "combat",
         triggerPressed: trackingState === "tracked" && this.#weaponRuntime.triggerHeld
       }),
       freezeTargetFeedbackSnapshot(

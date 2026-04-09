@@ -1,14 +1,16 @@
 import type {
+  Milliseconds,
   CoopVector3Snapshot,
   CoopPlayerId,
   CoopPlayerShotOutcomeState,
+  CoopRoundPhase,
   CoopRoomId,
   CoopRoomPhase,
   CoopRoomSnapshot,
   CoopSessionId,
   Username
 } from "@thumbshooter/shared";
-import { createCoopSessionId } from "@thumbshooter/shared";
+import { createCoopSessionId, createMilliseconds } from "@thumbshooter/shared";
 
 import type {
   LocalCombatSessionPhase,
@@ -51,6 +53,10 @@ export interface CoopGameplaySessionSnapshot {
   readonly phase: CoopRoomPhase;
   readonly playerCount: number;
   readonly players: readonly CoopGameplaySessionPlayerSnapshot[];
+  readonly roundDurationMs: Milliseconds;
+  readonly roundNumber: number;
+  readonly roundPhase: CoopRoundPhase;
+  readonly roundPhaseRemainingMs: Milliseconds;
   readonly readyPlayerCount: number;
   readonly requiredReadyPlayerCount: number;
   readonly roomId: CoopRoomId;
@@ -127,6 +133,10 @@ export function createPendingCoopGameplaySessionSnapshot(
     phase: "waiting-for-players",
     playerCount: 0,
     players: Object.freeze([]),
+    roundDurationMs: createMilliseconds(0),
+    roundNumber: 1,
+    roundPhase: "combat",
+    roundPhaseRemainingMs: createMilliseconds(0),
     readyPlayerCount: 0,
     requiredReadyPlayerCount: 0,
     roomId,
@@ -174,6 +184,9 @@ export function createCoopGameplaySessionSnapshot(
     });
   });
 
+  const allConnectedPlayersReady =
+    connectedPlayerCount > 0 && readyPlayerCount === connectedPlayerCount;
+
   return Object.freeze({
     birdsCleared: roomSnapshot.session.birdsCleared,
     birdsRemaining: roomSnapshot.session.birdsRemaining,
@@ -183,12 +196,17 @@ export function createCoopGameplaySessionSnapshot(
     localPlayerCanStart:
       roomSnapshot.session.phase === "waiting-for-players" &&
       localPlayerIsLeader &&
-      readyPlayerCount >= roomSnapshot.session.requiredReadyPlayerCount,
+      readyPlayerCount >= roomSnapshot.session.requiredReadyPlayerCount &&
+      allConnectedPlayersReady,
     localPlayerIsLeader,
     mode: "co-op",
     phase: roomSnapshot.session.phase,
     playerCount: roomSnapshot.players.length,
     players: Object.freeze(players),
+    roundDurationMs: roomSnapshot.session.roundDurationMs,
+    roundNumber: roomSnapshot.session.roundNumber,
+    roundPhase: roomSnapshot.session.roundPhase,
+    roundPhaseRemainingMs: roomSnapshot.session.roundPhaseRemainingMs,
     readyPlayerCount,
     requiredReadyPlayerCount: roomSnapshot.session.requiredReadyPlayerCount,
     roomId: roomSnapshot.roomId,

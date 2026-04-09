@@ -10,6 +10,9 @@ import { Button } from "@/components/ui/button";
 interface GameplayHudOverlayProps {
   readonly audioStatusLabel: string;
   readonly bestScore: number;
+  readonly coopKickActionPendingPlayerId:
+    | CoopGameplaySessionPlayerSnapshot["playerId"]
+    | null;
   readonly coopReadyActionAvailable: boolean;
   readonly coopReadyActionBusy: boolean;
   readonly coopReadyActionDisabled: boolean;
@@ -19,6 +22,9 @@ interface GameplayHudOverlayProps {
   readonly coopStartActionDisabled: boolean;
   readonly hudSnapshot: GameplayHudSnapshot;
   readonly inputMode: GameplayInputModeId;
+  readonly onKickCoopPlayer: (
+    playerId: CoopGameplaySessionPlayerSnapshot["playerId"]
+  ) => void;
   readonly onOpenMenu: () => void;
   readonly onRestartSession: () => void;
   readonly onRetryRuntime: () => void;
@@ -140,16 +146,20 @@ function formatRoundTime(roundTimeRemainingMs: number): string {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-function formatSessionPhase(phase: GameplayHudSnapshot["session"]["phase"]): string {
-  if (phase === "waiting-for-players") {
+function formatSessionPhase(hudSnapshot: GameplayHudSnapshot): string {
+  if (hudSnapshot.session.phase === "waiting-for-players") {
     return "Waiting";
   }
 
-  if (phase === "active") {
+  if (hudSnapshot.session.mode === "co-op" && hudSnapshot.session.roundPhase === "cooldown") {
+    return "Cooldown";
+  }
+
+  if (hudSnapshot.session.phase === "active") {
     return "Active";
   }
 
-  if (phase === "completed") {
+  if (hudSnapshot.session.phase === "completed") {
     return "Completed";
   }
 
@@ -164,7 +174,7 @@ function formatSessionStatus(hudSnapshot: GameplayHudSnapshot): string {
       }
 
       if (hudSnapshot.session.localPlayerCanStart) {
-        return "Leader can start the session";
+        return `Leader can start round ${hudSnapshot.session.roundNumber}`;
       }
 
       if (
@@ -177,11 +187,19 @@ function formatSessionStatus(hudSnapshot: GameplayHudSnapshot): string {
       return formatCoopLobbyCounts(hudSnapshot);
     }
 
-    if (hudSnapshot.session.phase === "active") {
-      return `${hudSnapshot.session.birdsRemaining} birds remaining`;
+    if (hudSnapshot.session.phase === "completed") {
+      return "Shared room cleared";
     }
 
-    return "Shared room cleared";
+    if (hudSnapshot.session.roundPhase === "cooldown") {
+      return `Round ${hudSnapshot.session.roundNumber + 1} starts in ${formatRoundTime(
+        hudSnapshot.session.roundPhaseRemainingMs
+      )}`;
+    }
+
+    return `Round ${hudSnapshot.session.roundNumber} • ${hudSnapshot.session.birdsRemaining} birds • ${formatRoundTime(
+      hudSnapshot.session.roundPhaseRemainingMs
+    )} remaining`;
   }
 
   if (hudSnapshot.session.phase === "active") {
@@ -233,6 +251,20 @@ function formatCoopLobbyBadge(hudSnapshot: GameplayHudSnapshot): string {
     return "Single-player";
   }
 
+  if (hudSnapshot.session.phase === "completed") {
+    return "Room cleared";
+  }
+
+  if (hudSnapshot.session.phase === "active") {
+    if (hudSnapshot.session.roundPhase === "cooldown") {
+      return `Round ${hudSnapshot.session.roundNumber + 1} in ${formatRoundTime(
+        hudSnapshot.session.roundPhaseRemainingMs
+      )}`;
+    }
+
+    return `Round ${hudSnapshot.session.roundNumber} • ${hudSnapshot.session.birdsRemaining} birds`;
+  }
+
   const lobbyCounts = formatCoopLobbyCounts(hudSnapshot);
 
   if (
@@ -277,6 +309,7 @@ function formatCoopPlayerOutcome(
 export function GameplayHudOverlay({
   audioStatusLabel,
   bestScore,
+  coopKickActionPendingPlayerId,
   coopReadyActionAvailable,
   coopReadyActionBusy,
   coopReadyActionDisabled,
@@ -286,6 +319,7 @@ export function GameplayHudOverlay({
   coopStartActionDisabled,
   hudSnapshot,
   inputMode,
+  onKickCoopPlayer,
   onOpenMenu,
   onRestartSession,
   onRetryRuntime,
@@ -375,7 +409,7 @@ export function GameplayHudOverlay({
         <div className="rounded-[1.5rem] border border-white/12 bg-white/6 p-4 backdrop-blur-md">
           <p className="text-sm font-medium text-white">Session</p>
           <p className="mt-2 text-2xl font-semibold text-white">
-            {formatSessionPhase(hudSnapshot.session.phase)}
+            {formatSessionPhase(hudSnapshot)}
           </p>
           <p className="mt-2 text-sm text-white/72">{formatSessionStatus(hudSnapshot)}</p>
         </div>
@@ -436,7 +470,7 @@ export function GameplayHudOverlay({
             <div>
               <p className="text-sm font-medium text-white">Team activity</p>
               <p className="mt-1 text-sm text-white/72">
-                Shared room snapshots drive teammate status, shot outcomes, and bird pressure.
+                Shared room snapshots drive teammate status, round cadence, shot outcomes, and bird pressure.
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -447,7 +481,7 @@ export function GameplayHudOverlay({
                   onClick={onStartCoopSession}
                   type="button"
                 >
-                  {coopStartActionBusy ? "Starting..." : "Start session"}
+                  {coopStartActionBusy ? "Starting..." : "Start game"}
                 </Button>
               ) : null}
               {coopReadyActionAvailable ? (
@@ -490,6 +524,24 @@ export function GameplayHudOverlay({
                   <p className="mt-2 text-sm text-white/72">
                     {formatCoopPlayerOutcome(playerSnapshot, hudSnapshot.session.phase)}
                   </p>
+                  {hudSnapshot.session.phase === "waiting-for-players" &&
+                  hudSnapshot.session.localPlayerIsLeader &&
+                  !playerSnapshot.isLocalPlayer ? (
+                    <Button
+                      className="mt-3"
+                      disabled={coopKickActionPendingPlayerId !== null}
+                      onClick={() => {
+                        onKickCoopPlayer(playerSnapshot.playerId);
+                      }}
+                      size="xs"
+                      type="button"
+                      variant="destructive"
+                    >
+                      {coopKickActionPendingPlayerId === playerSnapshot.playerId
+                        ? "Removing..."
+                        : "Boot player"}
+                    </Button>
+                  ) : null}
                   <p className="mt-3 text-xs uppercase tracking-[0.22em] text-white/52">
                     {`${playerSnapshot.hitsLanded} hits / ${playerSnapshot.shotsFired} shots`}
                   </p>

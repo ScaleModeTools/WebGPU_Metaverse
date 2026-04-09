@@ -13,6 +13,10 @@ export const gameplayTickOwners = [
   "client",
   "server"
 ] as const;
+export const coopRoundPhases = [
+  "combat",
+  "cooldown"
+] as const;
 export const coopRoomPhases = [
   "waiting-for-players",
   "active",
@@ -32,6 +36,7 @@ export const coopRoomClientCommandTypes = [
   "join-room",
   "set-player-ready",
   "start-session",
+  "kick-player",
   "leave-room",
   "fire-shot",
   "sync-player-presence"
@@ -42,6 +47,7 @@ export const coopRoomServerEventTypes = [
 
 export type GameplaySessionMode = (typeof gameplaySessionModes)[number];
 export type GameplayTickOwner = (typeof gameplayTickOwners)[number];
+export type CoopRoundPhase = (typeof coopRoundPhases)[number];
 export type CoopRoomPhase = (typeof coopRoomPhases)[number];
 export type CoopBirdBehaviorState = (typeof coopBirdBehaviorStates)[number];
 export type CoopPlayerShotOutcomeState =
@@ -171,6 +177,10 @@ export interface CoopSessionSnapshot {
   readonly leaderPlayerId: CoopPlayerId | null;
   readonly mode: "co-op";
   readonly phase: CoopRoomPhase;
+  readonly roundDurationMs: Milliseconds;
+  readonly roundNumber: number;
+  readonly roundPhase: CoopRoundPhase;
+  readonly roundPhaseRemainingMs: Milliseconds;
   readonly requiredReadyPlayerCount: number;
   readonly sessionId: CoopSessionId;
   readonly teamHitsLanded: number;
@@ -182,6 +192,10 @@ export interface CoopSessionSnapshotInput {
   readonly birdsRemaining: number;
   readonly leaderPlayerId?: CoopPlayerId | null;
   readonly phase: CoopRoomPhase;
+  readonly roundDurationMs?: number;
+  readonly roundNumber?: number;
+  readonly roundPhase?: CoopRoundPhase;
+  readonly roundPhaseRemainingMs?: number;
   readonly requiredReadyPlayerCount: number;
   readonly sessionId: CoopSessionId;
   readonly teamHitsLanded: number;
@@ -212,6 +226,9 @@ export interface CoopRoomDirectoryEntrySnapshot {
   readonly connectedPlayerCount: number;
   readonly phase: CoopRoomPhase;
   readonly readyPlayerCount: number;
+  readonly roundNumber: number;
+  readonly roundPhase: CoopRoundPhase;
+  readonly roundPhaseRemainingMs: Milliseconds;
   readonly requiredReadyPlayerCount: number;
   readonly roomId: CoopRoomId;
   readonly sessionId: CoopSessionId;
@@ -224,6 +241,9 @@ export interface CoopRoomDirectoryEntrySnapshotInput {
   readonly connectedPlayerCount: number;
   readonly phase: CoopRoomPhase;
   readonly readyPlayerCount: number;
+  readonly roundNumber?: number;
+  readonly roundPhase?: CoopRoundPhase;
+  readonly roundPhaseRemainingMs?: number;
   readonly requiredReadyPlayerCount: number;
   readonly roomId: CoopRoomId;
   readonly sessionId: CoopSessionId;
@@ -283,6 +303,19 @@ export interface CoopStartSessionCommandInput {
   readonly roomId: CoopRoomId;
 }
 
+export interface CoopKickPlayerCommand {
+  readonly playerId: CoopPlayerId;
+  readonly roomId: CoopRoomId;
+  readonly targetPlayerId: CoopPlayerId;
+  readonly type: "kick-player";
+}
+
+export interface CoopKickPlayerCommandInput {
+  readonly playerId: CoopPlayerId;
+  readonly roomId: CoopRoomId;
+  readonly targetPlayerId: CoopPlayerId;
+}
+
 export interface CoopLeaveRoomCommand {
   readonly playerId: CoopPlayerId;
   readonly roomId: CoopRoomId;
@@ -338,6 +371,7 @@ export type CoopRoomClientCommand =
   | CoopJoinRoomCommand
   | CoopSetPlayerReadyCommand
   | CoopStartSessionCommand
+  | CoopKickPlayerCommand
   | CoopLeaveRoomCommand
   | CoopFireShotCommand
   | CoopSyncPlayerPresenceCommand;
@@ -592,6 +626,13 @@ export function createCoopSessionSnapshot(
     leaderPlayerId: input.leaderPlayerId ?? null,
     mode: "co-op",
     phase: input.phase,
+    roundDurationMs: createMilliseconds(input.roundDurationMs ?? 0),
+    roundNumber: Math.max(
+      1,
+      normalizeFiniteNonNegativeInteger(input.roundNumber ?? 1)
+    ),
+    roundPhase: input.roundPhase ?? "combat",
+    roundPhaseRemainingMs: createMilliseconds(input.roundPhaseRemainingMs ?? 0),
     requiredReadyPlayerCount: Math.max(
       1,
       normalizeFiniteNonNegativeInteger(input.requiredReadyPlayerCount)
@@ -628,6 +669,12 @@ export function createCoopRoomDirectoryEntrySnapshot(
     ),
     phase: input.phase,
     readyPlayerCount: normalizeFiniteNonNegativeInteger(input.readyPlayerCount),
+    roundNumber: Math.max(
+      1,
+      normalizeFiniteNonNegativeInteger(input.roundNumber ?? 1)
+    ),
+    roundPhase: input.roundPhase ?? "combat",
+    roundPhaseRemainingMs: createMilliseconds(input.roundPhaseRemainingMs ?? 0),
     requiredReadyPlayerCount: Math.max(
       1,
       normalizeFiniteNonNegativeInteger(input.requiredReadyPlayerCount)
@@ -681,6 +728,17 @@ export function createCoopStartSessionCommand(
     playerId: input.playerId,
     roomId: input.roomId,
     type: "start-session"
+  });
+}
+
+export function createCoopKickPlayerCommand(
+  input: CoopKickPlayerCommandInput
+): CoopKickPlayerCommand {
+  return Object.freeze({
+    playerId: input.playerId,
+    roomId: input.roomId,
+    targetPlayerId: input.targetPlayerId,
+    type: "kick-player"
   });
 }
 

@@ -1,5 +1,6 @@
 import type {
   CoopRoomClientCommand,
+  CoopPlayerId,
   CoopRoomId,
   CoopRoomServerEvent,
   CoopRoomSnapshot
@@ -18,21 +19,49 @@ export class CoopRoomDirectory {
   }
 
   listRoomSnapshots(nowMs: number): readonly CoopRoomSnapshot[] {
+    const roomSnapshots: CoopRoomSnapshot[] = [];
+
+    for (const [roomId, roomRuntime] of this.#roomRuntimes.entries()) {
+      const roomSnapshot = roomRuntime.advanceTo(nowMs);
+
+      if (roomSnapshot.players.length === 0) {
+        this.#roomRuntimes.delete(roomId);
+        continue;
+      }
+
+      roomSnapshots.push(roomSnapshot);
+    }
+
     return Object.freeze(
-      [...this.#roomRuntimes.values()]
-        .map((roomRuntime) => roomRuntime.advanceTo(nowMs))
-        .sort((leftRoom, rightRoom) => leftRoom.roomId.localeCompare(rightRoom.roomId))
+      roomSnapshots.sort((leftRoom, rightRoom) =>
+        leftRoom.roomId.localeCompare(rightRoom.roomId)
+      )
     );
   }
 
-  advanceRoom(roomId: CoopRoomId, nowMs: number): CoopRoomSnapshot {
+  advanceRoom(
+    roomId: CoopRoomId,
+    nowMs: number,
+    observingPlayerId?: CoopPlayerId
+  ): CoopRoomSnapshot {
     const roomRuntime = this.#roomRuntimes.get(roomId);
 
     if (roomRuntime === undefined) {
       throw new Error(`Unknown co-op room: ${roomId}`);
     }
 
-    return roomRuntime.advanceTo(nowMs);
+    if (observingPlayerId !== undefined) {
+      roomRuntime.markPlayerSeen(observingPlayerId, nowMs);
+    }
+
+    const roomSnapshot = roomRuntime.advanceTo(nowMs);
+
+    if (roomSnapshot.players.length === 0) {
+      this.#roomRuntimes.delete(roomId);
+      throw new Error(`Unknown co-op room: ${roomId}`);
+    }
+
+    return roomSnapshot;
   }
 
   acceptCommand(

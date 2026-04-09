@@ -93,3 +93,25 @@ test("CoopRoomDirectory drops empty rooms after the last player leaves", () => {
     /Unknown co-op room: co-op-empty/
   );
 });
+
+test("CoopRoomDirectory prunes rooms once their players stop polling", () => {
+  const roomDirectory = new CoopRoomDirectory();
+  const roomId = requireValue(createCoopRoomId("co-op-stale"), "roomId");
+  const playerId = requireValue(createCoopPlayerId("stale-player"), "playerId");
+
+  roomDirectory.acceptCommand(
+    createCoopJoinRoomCommand({
+      playerId,
+      ready: false,
+      roomId,
+      username: requireValue(createUsername("solo"), "soloUsername")
+    }),
+    0
+  );
+
+  assert.equal(roomDirectory.listRoomSnapshots(10_500).length, 0);
+  assert.throws(
+    () => roomDirectory.advanceRoom(roomId, 10_500, playerId),
+    /Unknown co-op room: co-op-stale/
+  );
+});

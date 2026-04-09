@@ -3,8 +3,41 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+server_host="127.0.0.1"
+server_port="3210"
 
 cd "$repo_root"
+
+# Fail fast when another process already owns the locked local co-op port.
+node \
+  --input-type=module \
+  --eval '
+    import { createServer } from "node:net";
+
+    const host = process.argv[1];
+    const port = Number(process.argv[2]);
+
+    const server = createServer();
+
+    server.once("error", (error) => {
+      if ("code" in error && error.code === "EADDRINUSE") {
+        console.error(
+          `ThumbShooter dev server could not start because http://${host}:${port} is already in use. Stop the existing server process or run \`npm run dev:client\` if you only need the browser shell.`
+        );
+        process.exit(1);
+      }
+
+      throw error;
+    });
+
+    server.listen(port, host, () => {
+      server.close(() => {
+        process.exit(0);
+      });
+    });
+  ' \
+  "$server_host" \
+  "$server_port"
 
 # Avoid the workspace build scripts here because they aggressively clean `dist/`
 # trees. Cleaning during dev startup can race an already-running watcher and

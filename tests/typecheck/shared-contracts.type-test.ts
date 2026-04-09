@@ -14,6 +14,7 @@ import type {
   CoopBirdBehaviorState,
   CoopRoomClientCommand,
   CoopRoomDirectorySnapshot,
+  CoopRoundPhase,
   CoopRoomPhase,
   CoopRoomSnapshot,
   CoopPlayerShotOutcomeState,
@@ -33,6 +34,7 @@ import type {
 import {
   affineAimTransformFitQualities,
   coopBirdBehaviorStates,
+  coopRoundPhases,
   coopPlayerShotOutcomeStates,
   coopRoomClientCommandTypes,
   coopRoomPhases,
@@ -62,6 +64,7 @@ type ExpectedGameplaySessionMode = "single-player" | "co-op";
 type ExpectedGameplayTickOwner = "client" | "server";
 type ExpectedSoundEffectEngine = "web-audio-api";
 type ExpectedAffineAimTransformFitQuality = "stable" | "usable" | "degraded";
+type ExpectedCoopRoundPhase = "combat" | "cooldown";
 type ExpectedCoopRoomPhase = "waiting-for-players" | "active" | "completed";
 type ExpectedCoopBirdBehaviorState = "glide" | "scatter" | "downed";
 type ExpectedCoopPlayerShotOutcomeState = "miss" | "scatter" | "hit";
@@ -69,6 +72,7 @@ type ExpectedCoopRoomClientCommandType =
   | "join-room"
   | "set-player-ready"
   | "start-session"
+  | "kick-player"
   | "leave-room"
   | "fire-shot"
   | "sync-player-presence";
@@ -107,6 +111,12 @@ type AffineAimTransformFitQualityCatalogMatches = AssertTrue<
 >;
 type CoopRoomPhaseMatches = AssertTrue<
   IsEqual<CoopRoomPhase, ExpectedCoopRoomPhase>
+>;
+type CoopRoundPhaseMatches = AssertTrue<
+  IsEqual<CoopRoundPhase, ExpectedCoopRoundPhase>
+>;
+type CoopRoundPhaseCatalogMatches = AssertTrue<
+  IsEqual<(typeof coopRoundPhases)[number], CoopRoundPhase>
 >;
 type CoopRoomPhaseCatalogMatches = AssertTrue<
   IsEqual<(typeof coopRoomPhases)[number], CoopRoomPhase>
@@ -208,6 +218,15 @@ type CoopRoomPlayerUsernameUsesSharedUsername = AssertTrue<
 type CoopRoomRequiredReadyCountUsesNumber = AssertTrue<
   IsEqual<CoopRoomSnapshot["session"]["requiredReadyPlayerCount"], number>
 >;
+type CoopRoomRoundNumberUsesNumber = AssertTrue<
+  IsEqual<CoopRoomSnapshot["session"]["roundNumber"], number>
+>;
+type CoopRoomRoundPhaseUsesRoundPhase = AssertTrue<
+  IsEqual<CoopRoomSnapshot["session"]["roundPhase"], CoopRoundPhase>
+>;
+type CoopRoomDirectoryEntryRoundPhaseUsesRoundPhase = AssertTrue<
+  IsEqual<CoopRoomDirectorySnapshot["coOpRooms"][number]["roundPhase"], CoopRoundPhase>
+>;
 type CoopRoomLeaderPlayerUsesSharedId = AssertTrue<
   IsEqual<CoopRoomSnapshot["session"]["leaderPlayerId"], CoopRoomSnapshot["players"][number]["playerId"] | null>
 >;
@@ -225,6 +244,8 @@ export type SharedContractTypeTests =
   | SoundEffectEngineMatches
   | AffineAimTransformFitQualityMatches
   | AffineAimTransformFitQualityCatalogMatches
+  | CoopRoundPhaseMatches
+  | CoopRoundPhaseCatalogMatches
   | CoopRoomPhaseMatches
   | CoopRoomPhaseCatalogMatches
   | CoopBirdBehaviorMatches
@@ -255,5 +276,8 @@ export type SharedContractTypeTests =
   | CoopRoomBirdPositionUsesWorldPoint
   | CoopRoomPlayerUsernameUsesSharedUsername
   | CoopRoomRequiredReadyCountUsesNumber
+  | CoopRoomRoundNumberUsesNumber
+  | CoopRoomRoundPhaseUsesRoundPhase
   | CoopRoomLeaderPlayerUsesSharedId
+  | CoopRoomDirectoryEntryRoundPhaseUsesRoundPhase
   | CoopRoomDirectoryEntryUsesRoomPhase;

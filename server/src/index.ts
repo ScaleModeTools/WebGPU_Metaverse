@@ -7,6 +7,7 @@ import {
 import type {
   CoopFireShotCommand,
   CoopJoinRoomCommand,
+  CoopKickPlayerCommand,
   CoopLeaveRoomCommand,
   CoopRoomClientCommand,
   CoopRoomDirectoryEntrySnapshotInput,
@@ -17,6 +18,7 @@ import type {
 } from "@thumbshooter/shared";
 import {
   createCoopFireShotCommand,
+  createCoopKickPlayerCommand,
   createCoopRoomDirectorySnapshot,
   createCoopPlayerId,
   createCoopLeaveRoomCommand,
@@ -39,8 +41,16 @@ const runtimeConfig: ServerRuntimeConfig = {
 
 const coopRoomDirectory = new CoopRoomDirectory();
 
+function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error;
+}
+
 function isUnknownRoomError(error: unknown): error is Error {
   return error instanceof Error && error.message.startsWith("Unknown co-op room:");
+}
+
+function isUnknownPlayerError(error: unknown): error is Error {
+  return error instanceof Error && error.message.startsWith("Unknown co-op player:");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -93,6 +103,10 @@ function resolveRoomId(rawRoomId: string): CoopRoomId {
   }
 
   return roomId;
+}
+
+function resolvePlayerId(rawPlayerId: string): ReturnType<typeof createCoopPlayerId> {
+  return createCoopPlayerId(rawPlayerId);
 }
 
 function parseJoinRoomCommand(
@@ -155,6 +169,32 @@ function parseStartSessionCommand(
   return createCoopStartSessionCommand({
     playerId,
     roomId
+  });
+}
+
+function parseKickPlayerCommand(
+  body: Record<string, unknown>,
+  roomId: CoopRoomId
+): CoopKickPlayerCommand {
+  const playerId = createCoopPlayerId(
+    readStringField(body.playerId, "playerId")
+  );
+  const targetPlayerId = createCoopPlayerId(
+    readStringField(body.targetPlayerId, "targetPlayerId")
+  );
+
+  if (playerId === null) {
+    throw new Error("Invalid playerId.");
+  }
+
+  if (targetPlayerId === null) {
+    throw new Error("Invalid targetPlayerId.");
+  }
+
+  return createCoopKickPlayerCommand({
+    playerId,
+    roomId,
+    targetPlayerId
   });
 }
 
@@ -261,6 +301,8 @@ function parseCoopRoomCommand(
       return parseSetPlayerReadyCommand(body, roomId);
     case "start-session":
       return parseStartSessionCommand(body, roomId);
+    case "kick-player":
+      return parseKickPlayerCommand(body, roomId);
     case "leave-room":
       return parseLeaveRoomCommand(body, roomId);
     case "fire-shot":
@@ -376,6 +418,9 @@ const server = createServer(async (request, response) => {
         readyPlayerCount: roomSnapshot.players.filter(
           (playerSnapshot) => playerSnapshot.connected && playerSnapshot.ready
         ).length,
+        roundNumber: roomSnapshot.session.roundNumber,
+        roundPhase: roomSnapshot.session.roundPhase,
+        roundPhaseRemainingMs: roomSnapshot.session.roundPhaseRemainingMs,
         requiredReadyPlayerCount: roomSnapshot.session.requiredReadyPlayerCount,
         roomId: roomSnapshot.roomId,
         sessionId: roomSnapshot.session.sessionId,
@@ -395,15 +440,33 @@ const server = createServer(async (request, response) => {
   if (matchedRoomPath !== null && request.method === "GET" && !matchedRoomPath.isCommandPath) {
     try {
       const roomId = resolveRoomId(matchedRoomPath.rawRoomId);
+      const observerPlayerIdRaw = requestUrl.searchParams.get("playerId");
+      const resolvedObserverPlayerId =
+        observerPlayerIdRaw === null ? undefined : resolvePlayerId(observerPlayerIdRaw);
+
+      if (observerPlayerIdRaw !== null && resolvedObserverPlayerId === null) {
+        throw new Error("Invalid playerId.");
+      }
+
+      const observerPlayerId = resolvedObserverPlayerId ?? undefined;
 
       writeJson(
         response,
         200,
-        createCoopRoomSnapshotEvent(coopRoomDirectory.advanceRoom(roomId, nowMs))
+        createCoopRoomSnapshotEvent(
+          coopRoomDirectory.advanceRoom(roomId, nowMs, observerPlayerId)
+        )
       );
     } catch (error) {
       if (isUnknownRoomError(error)) {
         writeJson(response, 404, {
+          error: error.message
+        });
+        return;
+      }
+
+      if (isUnknownPlayerError(error)) {
+        writeJson(response, 409, {
           error: error.message
         });
         return;
@@ -434,6 +497,13 @@ const server = createServer(async (request, response) => {
         return;
       }
 
+      if (isUnknownPlayerError(error)) {
+        writeJson(response, 409, {
+          error: error.message
+        });
+        return;
+      }
+
       writeJson(response, 400, {
         error:
           error instanceof Error ? error.message : "Invalid co-op room command."
@@ -446,6 +516,17 @@ const server = createServer(async (request, response) => {
   writeJson(response, 404, {
     error: "Route not found."
   });
+});
+
+server.on("error", (error) => {
+  if (isErrnoException(error) && error.code === "EADDRINUSE") {
+    console.error(
+      `ThumbShooter server could not listen on http://${runtimeConfig.host}:${runtimeConfig.port} because the address is already in use.`
+    );
+    process.exit(1);
+  }
+
+  throw error;
 });
 
 server.listen(runtimeConfig.port, runtimeConfig.host, () => {

@@ -159,6 +159,8 @@ export function GameplayStageScreen({
     () => coopRoomClient?.statusSnapshot ?? idleCoopRoomStatusSnapshot
   );
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [coopKickActionPendingPlayerId, setCoopKickActionPendingPlayerId] =
+    useState<CoopPlayerId | null>(null);
   const [coopReadyActionPending, setCoopReadyActionPending] = useState(false);
   const [coopSessionStartPending, setCoopSessionStartPending] = useState(false);
   const subscribeGameplayUiUpdates = useCallback(
@@ -323,6 +325,31 @@ export function GameplayStageScreen({
       });
   });
 
+  const handleKickCoopPlayer = useEffectEvent((targetPlayerId: CoopPlayerId) => {
+    if (
+      coopRoomClient === null ||
+      coopKickActionPendingPlayerId !== null ||
+      hudSnapshot.session.mode !== "co-op" ||
+      hudSnapshot.session.phase !== "waiting-for-players" ||
+      !hudSnapshot.session.localPlayerIsLeader ||
+      targetPlayerId === coopPlayerId
+    ) {
+      return;
+    }
+
+    setCoopKickActionPendingPlayerId(targetPlayerId);
+    void coopRoomClient
+      .kickPlayer(targetPlayerId)
+      .catch(() => {
+        // The room client snapshots surface transport errors to the HUD.
+      })
+      .finally(() => {
+        setCoopKickActionPendingPlayerId((currentPlayerId) =>
+          currentPlayerId === targetPlayerId ? null : currentPlayerId
+        );
+      });
+  });
+
   useEffect(() => {
     bestScoreRef.current = bestScore;
   }, [bestScore]);
@@ -387,8 +414,7 @@ export function GameplayStageScreen({
           }
           coopStartActionAvailable={
             hudSnapshot.session.mode === "co-op" &&
-            hudSnapshot.session.phase === "waiting-for-players" &&
-            hudSnapshot.session.localPlayerIsLeader
+            hudSnapshot.session.localPlayerCanStart
           }
           coopStartActionBusy={coopSessionStartPending}
           coopStartActionDisabled={
@@ -403,10 +429,12 @@ export function GameplayStageScreen({
           hudSnapshot={hudSnapshot}
           inputMode={inputMode}
           onOpenMenu={onOpenMenu}
+          onKickCoopPlayer={handleKickCoopPlayer}
           onRestartSession={handleRestartSession}
           onRetryRuntime={handleRetryRuntime}
           onStartCoopSession={handleStartCoopSession}
           onToggleCoopReady={handleToggleCoopReady}
+          coopKickActionPendingPlayerId={coopKickActionPendingPlayerId}
           runtimeError={runtimeError ?? coopRoomStatus.lastError}
           selectedReticleLabel={selectedReticleLabel}
           username={username}

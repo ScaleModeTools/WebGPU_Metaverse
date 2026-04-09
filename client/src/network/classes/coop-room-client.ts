@@ -8,6 +8,7 @@ import type {
 import {
   createCoopFireShotCommand,
   createCoopJoinRoomCommand,
+  createCoopKickPlayerCommand,
   createCoopLeaveRoomCommand,
   createCoopSetPlayerReadyCommand,
   createCoopStartSessionCommand,
@@ -74,6 +75,31 @@ function findPlayerAckSequence(
   );
 
   return playerSnapshot?.activity.lastAcknowledgedShotSequence ?? 0;
+}
+
+function hasPlayerMembership(
+  roomSnapshot: CoopRoomSnapshot,
+  playerId: CoopPlayerId | null
+): boolean {
+  if (playerId === null) {
+    return true;
+  }
+
+  return roomSnapshot.players.some(
+    (candidate) => candidate.playerId === playerId
+  );
+}
+
+function resolveMembershipLossMessage(message: string): string | null {
+  if (message.startsWith("Unknown co-op room:")) {
+    return "The co-op room is no longer available.";
+  }
+
+  if (message.startsWith("Unknown co-op player:")) {
+    return "You are no longer in the co-op room.";
+  }
+
+  return null;
 }
 
 function resolveFetchDependency(
@@ -192,7 +218,7 @@ export class CoopRoomClient {
   async setPlayerReady(ready: boolean): Promise<CoopRoomSnapshot> {
     this.#assertNotDisposed();
 
-    if (this.#playerId === null) {
+    if (this.#playerId === null || !this.#statusSnapshot.joined) {
       throw new Error("Co-op room client must join before updating readiness.");
     }
 
@@ -209,12 +235,7 @@ export class CoopRoomClient {
 
       return serverEvent.room;
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Co-op room readiness update failed.";
-
-      this.#setError(message);
+      this.#applyRoomAccessError(error, "Co-op room readiness update failed.");
       throw error;
     }
   }
@@ -222,7 +243,7 @@ export class CoopRoomClient {
   async startSession(): Promise<CoopRoomSnapshot> {
     this.#assertNotDisposed();
 
-    if (this.#playerId === null) {
+    if (this.#playerId === null || !this.#statusSnapshot.joined) {
       throw new Error("Co-op room client must join before starting the session.");
     }
 
@@ -238,10 +259,32 @@ export class CoopRoomClient {
 
       return serverEvent.room;
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Co-op session start failed.";
+      this.#applyRoomAccessError(error, "Co-op session start failed.");
+      throw error;
+    }
+  }
 
-      this.#setError(message);
+  async kickPlayer(targetPlayerId: CoopPlayerId): Promise<CoopRoomSnapshot> {
+    this.#assertNotDisposed();
+
+    if (this.#playerId === null || !this.#statusSnapshot.joined) {
+      throw new Error("Co-op room client must join before removing a player.");
+    }
+
+    try {
+      const serverEvent = await this.#postCommand(
+        createCoopKickPlayerCommand({
+          playerId: this.#playerId,
+          roomId: this.#config.roomId,
+          targetPlayerId
+        })
+      );
+
+      this.#applyServerEvent(serverEvent);
+
+      return serverEvent.room;
+    } catch (error) {
+      this.#applyRoomAccessError(error, "Co-op player removal failed.");
       throw error;
     }
   }
@@ -250,7 +293,11 @@ export class CoopRoomClient {
     origin: CoopVector3SnapshotInput,
     aimDirection: CoopVector3SnapshotInput
   ): void {
-    if (this.#playerId === null || this.#statusSnapshot.state === "disposed") {
+    if (
+      this.#playerId === null ||
+      this.#statusSnapshot.state === "disposed" ||
+      !this.#statusSnapshot.joined
+    ) {
       return;
     }
 
@@ -268,11 +315,7 @@ export class CoopRoomClient {
         this.#applyServerEvent(serverEvent);
       })
       .catch((error: unknown) => {
-        this.#setError(
-          error instanceof Error
-            ? error.message
-            : "Co-op fire-shot command failed."
-        );
+        this.#applyRoomAccessError(error, "Co-op fire-shot command failed.");
       });
   }
 
@@ -356,6 +399,11 @@ export class CoopRoomClient {
       return;
     }
 
+    if (!hasPlayerMembership(serverEvent.room, this.#playerId)) {
+      this.#setMembershipLost("You are no longer in the co-op room.");
+      return;
+    }
+
     if (!this.#shouldAcceptRoomSnapshot(serverEvent.room)) {
       return;
     }
@@ -397,7 +445,11 @@ export class CoopRoomClient {
   #schedulePoll(delayMs: number): void {
     this.#cancelScheduledPoll();
 
-    if (this.#statusSnapshot.state === "disposed" || this.#playerId === null) {
+    if (
+      this.#statusSnapshot.state === "disposed" ||
+      this.#playerId === null ||
+      !this.#statusSnapshot.joined
+    ) {
       return;
     }
 
@@ -491,7 +543,11 @@ export class CoopRoomClient {
 
     try {
       const response = await this.#fetch(
-        resolveCoopRoomSnapshotUrl(this.#config.serverOrigin, this.#config.roomId)
+        resolveCoopRoomSnapshotUrl(
+          this.#config.serverOrigin,
+          this.#config.roomId,
+          this.#playerId
+        )
       );
       const payload = await response.json();
 
@@ -503,13 +559,13 @@ export class CoopRoomClient {
 
       this.#applyServerEvent(parseCoopRoomServerEvent(payload));
     } catch (error) {
-      this.#setError(
-        error instanceof Error
-          ? error.message
-          : "Co-op room snapshot poll failed."
-      );
+      this.#applyRoomAccessError(error, "Co-op room snapshot poll failed.");
     } finally {
-      if (!this.#isDisposed() && this.#playerId !== null) {
+      if (
+        !this.#isDisposed() &&
+        this.#playerId !== null &&
+        this.#statusSnapshot.joined
+      ) {
         this.#schedulePoll(this.#resolvePollDelayMs());
       }
     }
@@ -520,6 +576,7 @@ export class CoopRoomClient {
       | ReturnType<typeof createCoopJoinRoomCommand>
       | ReturnType<typeof createCoopSetPlayerReadyCommand>
       | ReturnType<typeof createCoopStartSessionCommand>
+      | ReturnType<typeof createCoopKickPlayerCommand>
       | ReturnType<typeof createCoopLeaveRoomCommand>
       | ReturnType<typeof createCoopFireShotCommand>
       | ReturnType<typeof createCoopSyncPlayerPresenceCommand>,
@@ -561,6 +618,39 @@ export class CoopRoomClient {
     } catch {
       // Best-effort disconnect signaling should never block disposal.
     }
+  }
+
+  #applyRoomAccessError(error: unknown, fallbackMessage: string): void {
+    const message =
+      error instanceof Error ? error.message : fallbackMessage;
+    const membershipLossMessage = resolveMembershipLossMessage(message);
+
+    if (membershipLossMessage !== null) {
+      this.#setMembershipLost(membershipLossMessage);
+      return;
+    }
+
+    this.#setError(message);
+  }
+
+  #setMembershipLost(message: string): void {
+    if (this.#statusSnapshot.state === "disposed") {
+      return;
+    }
+
+    this.#cancelScheduledPoll();
+    this.#cancelScheduledPlayerPresenceSync();
+    this.#pendingPlayerPresenceUpdate = null;
+    this.#roomSnapshot = null;
+    this.#statusSnapshot = freezeStatusSnapshot(
+      this.#config.roomId,
+      this.#playerId,
+      "error",
+      false,
+      this.#statusSnapshot.lastSnapshotTick,
+      message
+    );
+    this.#notifyUpdates();
   }
 
   #resolvePollDelayMs(): number {

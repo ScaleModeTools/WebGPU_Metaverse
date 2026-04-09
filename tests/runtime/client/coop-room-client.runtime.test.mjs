@@ -247,6 +247,10 @@ test("CoopRoomClient joins, polls shared snapshots, and posts fire-shot commands
 
   assert.equal(roomClient.roomSnapshot?.tick.currentTick, 1);
   assert.equal(requests[3]?.method, "GET");
+  assert.equal(
+    requests[3]?.url,
+    "http://127.0.0.1:3210/coop/rooms/co-op-harbor?playerId=coop-player-1"
+  );
   assert.equal(scheduledPolls[0]?.delay, 50);
 
   roomClient.fireShot(
@@ -270,4 +274,150 @@ test("CoopRoomClient joins, polls shared snapshots, and posts fire-shot commands
   assert.ok(clearedTimers.length >= 1);
   assert.equal(requests[5]?.method, "POST");
   assert.match(String(requests[5]?.body), /"type":"leave-room"/);
+});
+
+test("CoopRoomClient posts leader kick-player commands", async () => {
+  const { CoopRoomClient } = await clientLoader.load("/src/network/index.ts");
+  const roomId = createCoopRoomId("co-op-harbor");
+  const sessionId = createCoopSessionId("co-op-harbor-session-1");
+  const playerId = createCoopPlayerId("leader-player-1");
+  const targetPlayerId = createCoopPlayerId("player-2");
+  const username = createUsername("coop-user");
+
+  assert.notEqual(roomId, null);
+  assert.notEqual(sessionId, null);
+  assert.notEqual(playerId, null);
+  assert.notEqual(targetPlayerId, null);
+  assert.notEqual(username, null);
+
+  const requests = [];
+  const responseQueue = [
+    createRoomSnapshotEvent({
+      playerId,
+      roomId,
+      sessionId,
+      tick: 0,
+      phase: "waiting-for-players"
+    }),
+    createRoomSnapshotEvent({
+      playerId,
+      roomId,
+      sessionId,
+      tick: 0,
+      phase: "waiting-for-players"
+    }),
+    createRoomSnapshotEvent({
+      playerId,
+      roomId,
+      sessionId,
+      tick: 0,
+      phase: "waiting-for-players"
+    })
+  ];
+  const roomClient = new CoopRoomClient(
+    {
+      defaultPollIntervalMs: createMilliseconds(75),
+      roomId,
+      serverOrigin: "http://127.0.0.1:3210"
+    },
+    {
+      async fetch(input, init) {
+        const queuedResponse = responseQueue.shift();
+
+        assert.notEqual(queuedResponse, undefined);
+        requests.push({
+          body: init?.body ?? null,
+          method: init?.method ?? "GET",
+          url: String(input)
+        });
+
+        return createJsonResponse(true, queuedResponse);
+      },
+      setTimeout() {
+        return 1;
+      },
+      clearTimeout() {}
+    }
+  );
+
+  await roomClient.ensureJoined({
+    playerId,
+    ready: true,
+    username
+  });
+  await roomClient.kickPlayer(targetPlayerId);
+  roomClient.dispose();
+  await flushAsyncWork();
+
+  assert.match(String(requests[1]?.body), /"type":"kick-player"/);
+  assert.match(String(requests[1]?.body), /"targetPlayerId":"player-2"/);
+});
+
+test("CoopRoomClient stops polling when the server reports local room membership loss", async () => {
+  const { CoopRoomClient } = await clientLoader.load("/src/network/index.ts");
+  const roomId = createCoopRoomId("co-op-harbor");
+  const sessionId = createCoopSessionId("co-op-harbor-session-1");
+  const playerId = createCoopPlayerId("coop-player-1");
+  const username = createUsername("coop-user");
+
+  assert.notEqual(roomId, null);
+  assert.notEqual(sessionId, null);
+  assert.notEqual(playerId, null);
+  assert.notEqual(username, null);
+
+  const scheduledPolls = [];
+  const roomClient = new CoopRoomClient(
+    {
+      defaultPollIntervalMs: createMilliseconds(75),
+      roomId,
+      serverOrigin: "http://127.0.0.1:3210"
+    },
+    {
+      async fetch(input, init) {
+        if (init?.method === "POST") {
+          return createJsonResponse(
+            true,
+            createRoomSnapshotEvent({
+              playerId,
+              roomId,
+              sessionId,
+              tick: 0,
+              phase: "waiting-for-players"
+            })
+          );
+        }
+
+        return createJsonResponse(false, {
+          error: `Unknown co-op player: ${playerId}`
+        });
+      },
+      setTimeout(callback, delay) {
+        scheduledPolls.push({
+          callback,
+          delay
+        });
+        return scheduledPolls.length;
+      },
+      clearTimeout() {}
+    }
+  );
+
+  await roomClient.ensureJoined({
+    playerId,
+    ready: false,
+    username
+  });
+
+  assert.equal(scheduledPolls.length, 1);
+
+  scheduledPolls.shift()?.callback();
+  await flushAsyncWork();
+
+  assert.equal(roomClient.statusSnapshot.joined, false);
+  assert.equal(roomClient.statusSnapshot.state, "error");
+  assert.equal(
+    roomClient.statusSnapshot.lastError,
+    "You are no longer in the co-op room."
+  );
+  assert.equal(scheduledPolls.length, 0);
 });
