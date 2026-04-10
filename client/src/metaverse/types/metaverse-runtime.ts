@@ -4,6 +4,7 @@ import type {
   MetaverseControlModeId,
   MetaverseFlightInputSnapshot
 } from "./metaverse-control-mode";
+import type { MetaverseLocomotionModeId } from "./metaverse-locomotion-mode";
 
 export const metaverseRuntimeLifecycleStates = [
   "idle",
@@ -24,6 +25,11 @@ export interface MetaverseVector3Snapshot {
 export interface MetaverseCameraSnapshot {
   readonly lookDirection: MetaverseVector3Snapshot;
   readonly pitchRadians: number;
+  readonly position: MetaverseVector3Snapshot;
+  readonly yawRadians: number;
+}
+
+export interface MetaverseCharacterPresentationSnapshot {
   readonly position: MetaverseVector3Snapshot;
   readonly yawRadians: number;
 }
@@ -114,6 +120,7 @@ export interface MetaverseHudSnapshot {
   readonly focusedMountable: FocusedMountableSnapshot | null;
   readonly focusedPortal: FocusedExperiencePortalSnapshot | null;
   readonly lifecycle: MetaverseRuntimeLifecycleState;
+  readonly locomotionMode: MetaverseLocomotionModeId;
   readonly mountedEnvironment: MountedEnvironmentSnapshot | null;
 }
 
@@ -141,6 +148,18 @@ export interface MetaverseRuntimeConfig {
     readonly maxAltitude: number;
     readonly minAltitude: number;
     readonly worldRadius: number;
+  };
+  readonly groundedBody: {
+    readonly baseSpeedUnitsPerSecond: number;
+    readonly boostMultiplier: number;
+    readonly capsuleHalfHeightMeters: number;
+    readonly capsuleRadiusMeters: number;
+    readonly controllerOffsetMeters: number;
+    readonly eyeHeightMeters: number;
+    readonly gravityUnitsPerSecond: number;
+    readonly maxTurnSpeedRadiansPerSecond: number;
+    readonly snapToGroundDistanceMeters: number;
+    readonly spawnPosition: MetaverseVector3Snapshot;
   };
   readonly orientation: {
     readonly maxPitchRadians: number;

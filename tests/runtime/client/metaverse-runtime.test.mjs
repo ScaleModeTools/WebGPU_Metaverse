@@ -5,6 +5,141 @@ import { createClientModuleLoader } from "./load-client-module.mjs";
 
 let clientLoader;
 
+class FakeRapierVector3 {
+  constructor(x, y, z) {
+    this.x = x;
+    this.y = y;
+    this.z = z;
+  }
+}
+
+class FakeColliderDesc {
+  constructor(shape, payload) {
+    this.payload = payload;
+    this.shape = shape;
+    this.translation = new FakeRapierVector3(0, 0, 0);
+  }
+
+  setTranslation(x, y, z) {
+    this.translation = new FakeRapierVector3(x, y, z);
+
+    return this;
+  }
+}
+
+class FakeCollider {
+  constructor(shape, payload, translation) {
+    this.payload = payload;
+    this.shape = shape;
+    this.translationVector = translation;
+  }
+
+  get standingOffset() {
+    return this.shape === "capsule"
+      ? this.payload.halfHeight + this.payload.radius
+      : 0;
+  }
+
+  setTranslation(translation) {
+    this.translationVector = new FakeRapierVector3(
+      translation.x,
+      translation.y,
+      translation.z
+    );
+  }
+
+  translation() {
+    return this.translationVector;
+  }
+}
+
+class FakeCharacterController {
+  constructor() {
+    this.grounded = false;
+    this.lastMovement = new FakeRapierVector3(0, 0, 0);
+    this.snapDistance = 0;
+  }
+
+  computeColliderMovement(collider, desiredTranslationDelta) {
+    const currentTranslation = collider.translation();
+    const minCenterY = collider.standingOffset;
+    const unclampedCenterY = currentTranslation.y + desiredTranslationDelta.y;
+    const nextCenterY =
+      unclampedCenterY <= minCenterY + this.snapDistance
+        ? minCenterY
+        : unclampedCenterY;
+
+    this.lastMovement = new FakeRapierVector3(
+      desiredTranslationDelta.x,
+      nextCenterY - currentTranslation.y,
+      desiredTranslationDelta.z
+    );
+    this.grounded = nextCenterY === minCenterY;
+  }
+
+  computedGrounded() {
+    return this.grounded;
+  }
+
+  computedMovement() {
+    return this.lastMovement;
+  }
+
+  enableSnapToGround(distance) {
+    this.snapDistance = distance;
+  }
+
+  free() {}
+
+  setApplyImpulsesToDynamicBodies() {}
+
+  setCharacterMass() {}
+}
+
+class FakeRapierWorld {
+  createCharacterController() {
+    return new FakeCharacterController();
+  }
+
+  createCollider(colliderDesc) {
+    return new FakeCollider(
+      colliderDesc.shape,
+      colliderDesc.payload,
+      colliderDesc.translation
+    );
+  }
+
+  removeCollider() {}
+}
+
+function createFakePhysicsRuntime(RapierPhysicsRuntime) {
+  return new RapierPhysicsRuntime({
+    async createPhysicsAddon() {
+      return {
+        RAPIER: {
+          ColliderDesc: {
+            capsule(halfHeight, radius) {
+              return new FakeColliderDesc("capsule", {
+                halfHeight,
+                radius
+              });
+            },
+            cuboid(halfExtentX, halfExtentY, halfExtentZ) {
+              return new FakeColliderDesc("cuboid", {
+                halfExtentX,
+                halfExtentY,
+                halfExtentZ
+              });
+            }
+          },
+          Vector3: FakeRapierVector3
+        },
+        world: new FakeRapierWorld()
+      };
+    }
+  });
+}
+
 class FakeMetaverseRenderer {
   compileAsyncCalls = [];
   disposed = false;
@@ -60,6 +195,7 @@ test("WebGpuMetaverseRuntime starts from an idle snapshot and rejects missing na
   assert.equal(runtime.hudSnapshot.focusedPortal, null);
   assert.equal(runtime.hudSnapshot.mountedEnvironment, null);
   assert.equal(runtime.hudSnapshot.controlMode, "keyboard");
+  assert.equal(runtime.hudSnapshot.locomotionMode, "grounded");
 
   await assert.rejects(
     () => runtime.start({}, {}),
@@ -100,9 +236,10 @@ test("resolveMetaverseMouseLookAxes keeps the center dead zone quiet and turns t
 });
 
 test("WebGpuMetaverseRuntime prewarms the booted scene before the first render when compileAsync is available", async () => {
-  const { WebGpuMetaverseRuntime } = await clientLoader.load(
-    "/src/metaverse/classes/webgpu-metaverse-runtime.ts"
-  );
+  const [{ WebGpuMetaverseRuntime }, { RapierPhysicsRuntime }] = await Promise.all([
+    clientLoader.load("/src/metaverse/classes/webgpu-metaverse-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
   const renderer = new FakeMetaverseRenderer();
   const originalWindow = globalThis.window;
   let scheduledFrame = null;
@@ -131,6 +268,7 @@ test("WebGpuMetaverseRuntime prewarms the booted scene before the first render w
       cancelAnimationFrame: globalThis.window.cancelAnimationFrame.bind(globalThis.window),
       createRenderer: () => renderer,
       devicePixelRatio: 1.5,
+      physicsRuntime: createFakePhysicsRuntime(RapierPhysicsRuntime),
       requestAnimationFrame: globalThis.window.requestAnimationFrame.bind(globalThis.window)
     });
     const startSnapshot = await runtime.start(fakeCanvas, {
@@ -138,6 +276,7 @@ test("WebGpuMetaverseRuntime prewarms the booted scene before the first render w
     });
 
     assert.equal(startSnapshot.lifecycle, "running");
+    assert.equal(startSnapshot.locomotionMode, "grounded");
     assert.equal(renderer.initCalls, 1);
     assert.equal(renderer.compileAsyncCalls.length, 1);
     assert.equal(renderer.renderCalls, 1);
@@ -145,11 +284,68 @@ test("WebGpuMetaverseRuntime prewarms the booted scene before the first render w
     assert.deepEqual(renderer.sizes.at(0), [1280, 720]);
     assert.equal(renderer.compileAsyncCalls[0]?.scene?.isScene, true);
     assert.equal(renderer.compileAsyncCalls[0]?.camera?.isPerspectiveCamera, true);
+    assert.equal(startSnapshot.camera.position.y, 1.62);
     assert.equal(typeof scheduledFrame, "function");
 
     runtime.dispose();
 
     assert.equal(renderer.disposed, true);
+  } finally {
+    globalThis.window = originalWindow;
+  }
+});
+
+test("WebGpuMetaverseRuntime switches between grounded and fly locomotion without losing the current camera truth", async () => {
+  const [{ WebGpuMetaverseRuntime }, { RapierPhysicsRuntime }] = await Promise.all([
+    clientLoader.load("/src/metaverse/classes/webgpu-metaverse-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
+  const renderer = new FakeMetaverseRenderer();
+  const originalWindow = globalThis.window;
+  const fakeCanvas = {
+    addEventListener() {},
+    clientHeight: 720,
+    clientWidth: 1280,
+    removeEventListener() {}
+  };
+
+  globalThis.window = {
+    addEventListener() {},
+    cancelAnimationFrame() {},
+    devicePixelRatio: 1,
+    removeEventListener() {},
+    requestAnimationFrame() {
+      return 1;
+    }
+  };
+
+  try {
+    const runtime = new WebGpuMetaverseRuntime(undefined, {
+      cancelAnimationFrame: globalThis.window.cancelAnimationFrame.bind(globalThis.window),
+      createRenderer: () => renderer,
+      physicsRuntime: createFakePhysicsRuntime(RapierPhysicsRuntime),
+      requestAnimationFrame: globalThis.window.requestAnimationFrame.bind(globalThis.window)
+    });
+    const startSnapshot = await runtime.start(fakeCanvas, {
+      gpu: {}
+    });
+
+    assert.equal(startSnapshot.locomotionMode, "grounded");
+    assert.equal(startSnapshot.camera.position.y, 1.62);
+
+    runtime.setLocomotionMode("fly");
+
+    assert.equal(runtime.hudSnapshot.locomotionMode, "fly");
+    assert.equal(runtime.hudSnapshot.camera.position.y, 1.62);
+
+    runtime.setLocomotionMode("grounded");
+
+    assert.equal(runtime.hudSnapshot.locomotionMode, "grounded");
+    assert.equal(runtime.hudSnapshot.camera.position.y, 1.62);
+    assert.equal(runtime.hudSnapshot.camera.position.x, 0);
+    assert.equal(runtime.hudSnapshot.camera.position.z, 24);
+
+    runtime.dispose();
   } finally {
     globalThis.window = originalWindow;
   }
@@ -416,15 +612,39 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
 
   await sceneRuntime.boot();
 
+  const characterRoot = sceneRuntime.scene.getObjectByName(
+    "metaverse_character/metaverse-mannequin-v1"
+  );
+
   assert.deepEqual(loadPaths, [
     "/models/metaverse/characters/metaverse-mannequin.gltf",
     "/models/metaverse/attachments/metaverse-service-pistol.gltf"
   ]);
-  assert.ok(
-    sceneRuntime.scene.getObjectByName("metaverse_character/metaverse-mannequin-v1")
-  );
+  assert.ok(characterRoot);
   assert.ok(sceneRuntime.scene.getObjectByName("socket_debug/hand_r_socket"));
   assert.ok(sceneRuntime.scene.getObjectByName("socket_debug/head_socket"));
+
+  sceneRuntime.syncPresentation(
+    {
+      lookDirection: { x: 0, y: 0, z: -1 },
+      pitchRadians: 0,
+      position: { x: 3.2, y: 1.62, z: -5.4 },
+      yawRadians: 0.7
+    },
+    null,
+    0,
+    0,
+    {
+      position: { x: 3.2, y: 0, z: -5.4 },
+      yawRadians: 0.7
+    }
+  );
+
+  assert.equal(characterRoot.visible, true);
+  assert.equal(characterRoot.position.x, 3.2);
+  assert.equal(characterRoot.position.y, 0);
+  assert.equal(characterRoot.position.z, -5.4);
+  assert.equal(characterRoot.rotation.y, 0.7);
 
   const attachmentRoot = sceneRuntime.scene.getObjectByName(
     "metaverse_attachment/metaverse-service-pistol-v1"
@@ -450,6 +670,20 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
     new Quaternion()
   );
 
+  sceneRuntime.syncPresentation(
+    {
+      lookDirection: { x: 0, y: 0, z: -1 },
+      pitchRadians: 0,
+      position: { x: 3.2, y: 1.62, z: -5.4 },
+      yawRadians: 0.7
+    },
+    null,
+    100,
+    0,
+    null
+  );
+
+  assert.equal(characterRoot.visible, false);
   assert.equal(attachmentRoot.parent?.name, "hand_r_socket");
   assert.equal(attachmentRoot.position.length(), 0);
   assert.deepEqual(attachmentRoot.quaternion.toArray(), [0, 0, 0, 1]);

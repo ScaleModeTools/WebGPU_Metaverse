@@ -33,6 +33,22 @@ export const metaverseRuntimeConfig = {
     minAltitude: 2.25,
     worldRadius: 110
   },
+  groundedBody: {
+    baseSpeedUnitsPerSecond: 8.5,
+    boostMultiplier: 1.75,
+    capsuleHalfHeightMeters: 0.48,
+    capsuleRadiusMeters: 0.34,
+    controllerOffsetMeters: 0.02,
+    eyeHeightMeters: 1.62,
+    gravityUnitsPerSecond: 18,
+    maxTurnSpeedRadiansPerSecond: 1.9,
+    snapToGroundDistanceMeters: 0.22,
+    spawnPosition: {
+      x: 0,
+      y: 0,
+      z: 24
+    }
+  },
   orientation: {
     maxPitchRadians: 0.6,
     maxTurnSpeedRadiansPerSecond: 1.9,

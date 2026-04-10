@@ -49,6 +49,7 @@ const clientDomainPolicies = new Map([
       "input",
       "metaverse",
       "experiences",
+      "physics",
       "tracking",
       "network",
       "assets",
@@ -97,6 +98,7 @@ const clientDomainPolicies = new Map([
     new Set([
       "metaverse",
       "experiences",
+      "physics",
       "ui",
       "components",
       "navigation",
@@ -109,6 +111,7 @@ const clientDomainPolicies = new Map([
     "experiences",
     new Set([
       "experiences",
+      "physics",
       "ui",
       "components",
       "navigation",
@@ -121,6 +124,10 @@ const clientDomainPolicies = new Map([
   [
     "tracking",
     new Set(["tracking", "shared"])
+  ],
+  [
+    "physics",
+    new Set(["physics", "shared"])
   ],
   [
     "lib",
@@ -561,11 +568,12 @@ function verifyExternalPackageBoundaries(repoRoot, sourceFiles, errors) {
       if (
         repoRelativePath.startsWith("client/src/") &&
         !repoRelativePath.startsWith("client/src/metaverse/") &&
+        !repoRelativePath.startsWith("client/src/physics/") &&
         !repoRelativePath.startsWith("client/src/experiences/") &&
         (specifier === "three" || specifier.startsWith("three/"))
       ) {
         errors.push(
-          `Illegal runtime package in ${repoRelativePath}: Three.js packages belong in client/src/metaverse or client/src/experiences only.`
+          `Illegal runtime package in ${repoRelativePath}: Three.js packages belong in client/src/metaverse, client/src/physics, or client/src/experiences only.`
         );
       }
 

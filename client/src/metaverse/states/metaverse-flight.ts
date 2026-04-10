@@ -93,6 +93,44 @@ export function directionFromYawPitch(
   );
 }
 
+export function advanceMetaversePitchRadians(
+  pitchRadians: number,
+  pitchAxis: number,
+  config: MetaverseRuntimeConfig["orientation"],
+  deltaSeconds: number
+): number {
+  if (deltaSeconds <= 0) {
+    return pitchRadians;
+  }
+
+  return clamp(
+    pitchRadians +
+      clamp(pitchAxis, -1, 1) *
+        config.maxTurnSpeedRadiansPerSecond *
+        deltaSeconds,
+    config.minPitchRadians,
+    config.maxPitchRadians
+  );
+}
+
+export function advanceMetaverseYawRadians(
+  yawRadians: number,
+  yawAxis: number,
+  config: MetaverseRuntimeConfig["orientation"],
+  deltaSeconds: number
+): number {
+  if (deltaSeconds <= 0) {
+    return yawRadians;
+  }
+
+  return wrapRadians(
+    yawRadians +
+      clamp(yawAxis, -1, 1) *
+        config.maxTurnSpeedRadiansPerSecond *
+        deltaSeconds
+  );
+}
+
 export function rotateMetaverseCameraSnapshot(
   cameraSnapshot: MetaverseCameraSnapshot,
   yawAxis: number,
@@ -104,17 +142,17 @@ export function rotateMetaverseCameraSnapshot(
     return cameraSnapshot;
   }
 
-  const clampedYawAxis = clamp(yawAxis, -1, 1);
-  const clampedPitchAxis = clamp(pitchAxis, -1, 1);
-  const yawRadians = wrapRadians(
-    cameraSnapshot.yawRadians +
-      clampedYawAxis * config.maxTurnSpeedRadiansPerSecond * deltaSeconds
+  const yawRadians = advanceMetaverseYawRadians(
+    cameraSnapshot.yawRadians,
+    yawAxis,
+    config,
+    deltaSeconds
   );
-  const pitchRadians = clamp(
-    cameraSnapshot.pitchRadians +
-      clampedPitchAxis * config.maxTurnSpeedRadiansPerSecond * deltaSeconds,
-    config.minPitchRadians,
-    config.maxPitchRadians
+  const pitchRadians = advanceMetaversePitchRadians(
+    cameraSnapshot.pitchRadians,
+    pitchAxis,
+    config,
+    deltaSeconds
   );
   const lookDirection = directionFromYawPitch(yawRadians, pitchRadians);
 

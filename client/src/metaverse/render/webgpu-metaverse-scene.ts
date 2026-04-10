@@ -49,6 +49,7 @@ import {
 import type {
   MetaverseAttachmentProofConfig,
   MetaverseCharacterProofConfig,
+  MetaverseCharacterPresentationSnapshot,
   MetaverseEnvironmentAssetProofConfig,
   MetaverseEnvironmentColliderProofConfig,
   MetaverseEnvironmentLodProofConfig,
@@ -185,6 +186,8 @@ const metaverseCharacterAnchorPosition = Object.freeze({
   y: 0,
   z: -18
 });
+
+const metaverseCharacterProofAnchorRotationYRadians = Math.PI * 0.86;
 
 const metaverseCharacterScaleBoundsMeters = Object.freeze({
   max: 2.4,
@@ -594,6 +597,33 @@ function applyCharacterSeatMountTransform(
   characterProofRuntime.anchorGroup.updateMatrixWorld(true);
 }
 
+function syncCharacterPresentation(
+  characterProofRuntime: MetaverseCharacterProofRuntime,
+  characterPresentation: MetaverseCharacterPresentationSnapshot | null,
+  mountedCharacterRuntime: MountedCharacterRuntime | null
+): void {
+  const shouldShowCharacter =
+    characterPresentation !== null || mountedCharacterRuntime !== null;
+
+  characterProofRuntime.anchorGroup.visible = shouldShowCharacter;
+
+  if (characterPresentation === null || mountedCharacterRuntime !== null) {
+    return;
+  }
+
+  characterProofRuntime.anchorGroup.position.set(
+    characterPresentation.position.x,
+    characterPresentation.position.y,
+    characterPresentation.position.z
+  );
+  characterProofRuntime.anchorGroup.rotation.set(
+    0,
+    characterPresentation.yawRadians,
+    0
+  );
+  characterProofRuntime.anchorGroup.updateMatrixWorld(true);
+}
+
 function mountCharacterOnEnvironmentAsset(
   characterProofRuntime: MetaverseCharacterProofRuntime,
   environmentAsset: MetaverseEnvironmentDynamicAssetRuntime
@@ -693,7 +723,7 @@ async function loadMetaverseCharacterProofRuntime(
     metaverseCharacterAnchorPosition.y,
     metaverseCharacterAnchorPosition.z
   );
-  anchorGroup.rotation.y = Math.PI * 0.86;
+  anchorGroup.rotation.y = metaverseCharacterProofAnchorRotationYRadians;
   anchorGroup.add(characterAsset.scene);
   anchorGroup.updateMatrixWorld(true);
   const mixer = new AnimationMixer(characterAsset.scene);
@@ -1243,7 +1273,8 @@ export function createMetaverseScene(
     cameraSnapshot: MetaverseCameraSnapshot,
     focusedPortal: FocusedExperiencePortalSnapshot | null,
     nowMs: number,
-    deltaSeconds: number
+    deltaSeconds: number,
+    characterPresentation?: MetaverseCharacterPresentationSnapshot | null
   ): MetaverseSceneInteractionSnapshot;
   syncViewport(
     renderer: MetaverseSceneRendererHost,
@@ -1435,11 +1466,24 @@ export function createMetaverseScene(
 
       await renderer.compileAsync(scene, camera);
     },
-    syncPresentation(cameraSnapshot, focusedPortal, nowMs, deltaSeconds) {
+    syncPresentation(
+      cameraSnapshot,
+      focusedPortal,
+      nowMs,
+      deltaSeconds,
+      characterPresentation = null
+    ) {
       syncCamera(camera, cameraSnapshot);
       characterProofRuntime?.mixer.update(deltaSeconds);
       if (environmentProofRuntime !== null) {
         syncEnvironmentProofRuntime(environmentProofRuntime, cameraSnapshot, nowMs);
+      }
+      if (characterProofRuntime !== null) {
+        syncCharacterPresentation(
+          characterProofRuntime,
+          characterPresentation,
+          mountedCharacterRuntime
+        );
       }
       if (characterProofRuntime !== null && mountedCharacterRuntime !== null) {
         applyCharacterSeatMountTransform(characterProofRuntime);

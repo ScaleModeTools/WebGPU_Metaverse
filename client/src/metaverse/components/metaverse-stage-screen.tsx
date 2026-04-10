@@ -23,7 +23,13 @@ import {
   metaverseControlModes,
   resolveMetaverseControlMode
 } from "../config/metaverse-control-modes";
+import {
+  defaultMetaverseLocomotionMode,
+  metaverseLocomotionModes,
+  resolveMetaverseLocomotionMode
+} from "../config/metaverse-locomotion-modes";
 import type { MetaverseControlModeId } from "../types/metaverse-control-mode";
+import type { MetaverseLocomotionModeId } from "../types/metaverse-locomotion-mode";
 import type {
   MetaverseAttachmentProofConfig,
   MetaverseCharacterProofConfig,
@@ -79,6 +85,8 @@ export function MetaverseStageScreen({
         environmentProofConfig
       })
   );
+  const [metaverseLocomotionMode, setMetaverseLocomotionMode] =
+    useState<MetaverseLocomotionModeId>(defaultMetaverseLocomotionMode);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const subscribeUiUpdates = useCallback(
     (notifyReact: () => void) => metaverseRuntime.subscribeUiUpdates(notifyReact),
@@ -90,10 +98,17 @@ export function MetaverseStageScreen({
     () => metaverseRuntime.hudSnapshot
   );
   const selectedControlMode = resolveMetaverseControlMode(metaverseControlMode);
+  const selectedLocomotionMode = resolveMetaverseLocomotionMode(
+    metaverseLocomotionMode
+  );
 
   useEffect(() => {
     metaverseRuntime.setControlMode(metaverseControlMode);
   }, [metaverseControlMode, metaverseRuntime]);
+
+  useEffect(() => {
+    metaverseRuntime.setLocomotionMode(metaverseLocomotionMode);
+  }, [metaverseLocomotionMode, metaverseRuntime]);
 
   useEffect(() => {
     if (canvasRef.current === null) {
@@ -149,11 +164,49 @@ export function MetaverseStageScreen({
                 Welcome back, {username}
               </h1>
               <p className="mt-2 text-sm text-muted-foreground">
-                The hub no longer uses pointer lock. Choose one fly-cam control
-                mode at a time, keep the camera behavior predictable, and swap
-                back to setup whenever you want to change launch policy.
+                Keep hub traversal and hub controls separate. Grounded mode now
+                runs through a capsule body on the ocean plane, while fly stays
+                available as the fallback inspection path.
               </p>
               <div className="mt-4 flex flex-col gap-3">
+                <ToggleGroup
+                  className="w-full justify-start"
+                  onValueChange={(nextValue) => {
+                    if (nextValue.length === 0) {
+                      return;
+                    }
+
+                    setMetaverseLocomotionMode(
+                      nextValue as MetaverseLocomotionModeId
+                    );
+                  }}
+                  type="single"
+                  value={metaverseLocomotionMode}
+                  variant="outline"
+                >
+                  {metaverseLocomotionModes.map((locomotionMode) => (
+                    <ToggleGroupItem
+                      className="flex-1"
+                      key={locomotionMode.id}
+                      value={locomotionMode.id}
+                    >
+                      {locomotionMode.label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+                <div className="rounded-3xl border border-border/70 bg-background/70 px-3 py-3 text-sm text-muted-foreground">
+                  {selectedLocomotionMode.description}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedLocomotionMode.controlsSummary.map((instruction) => (
+                    <div
+                      className="rounded-full border border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground"
+                      key={instruction}
+                    >
+                      {instruction}
+                    </div>
+                  ))}
+                </div>
                 <ToggleGroup
                   className="w-full justify-start"
                   onValueChange={(nextValue) => {
@@ -197,6 +250,9 @@ export function MetaverseStageScreen({
                 </Button>
                 <div className="rounded-full border border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
                   Hub controls: {resolveMetaverseControlMode(hudSnapshot.controlMode).label}
+                </div>
+                <div className="rounded-full border border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
+                  Locomotion: {resolveMetaverseLocomotionMode(hudSnapshot.locomotionMode).label}
                 </div>
               </div>
             </div>

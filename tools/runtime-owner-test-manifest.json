@@ -37,6 +37,19 @@
       ]
     },
     {
+      "ownerPath": "client/src/physics/classes/metaverse-grounded-body-runtime.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse-grounded-body-runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/physics/classes/rapier-physics-runtime.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse-grounded-body-runtime.test.mjs",
+        "tests/runtime/client/metaverse-runtime.test.mjs"
+      ]
+    },
+    {
       "ownerPath": "client/src/navigation/adapters/webcam-permission-gateway.ts",
       "testPaths": [
         "tests/runtime/client/navigation-runtime.test.mjs"
