@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
 import {
+  createMetaverseJoinPresenceCommand,
+  createMetaverseLeavePresenceCommand,
   createMetaversePlayerId,
   createMetaversePresenceRosterEvent,
+  createMetaverseSyncPresenceCommand,
   createMilliseconds,
   createUsername
 } from "@webgpu-metaverse/shared";
@@ -178,7 +181,24 @@ test("MetaversePresenceClient joins, polls roster snapshots, syncs pose, and lea
   assert.equal(client.statusSnapshot.joined, true);
   assert.equal(client.statusSnapshot.state, "connected");
   assert.equal(requests[0]?.method, "POST");
-  assert.match(String(requests[0]?.body), /"type":"join-presence"/);
+  assert.deepEqual(
+    JSON.parse(String(requests[0]?.body)),
+    createMetaverseJoinPresenceCommand({
+      characterId: "metaverse-mannequin-v1",
+      playerId,
+      pose: {
+        animationVocabulary: "idle",
+        locomotionMode: "grounded",
+        position: {
+          x: 0,
+          y: 1.62,
+          z: 24
+        },
+        yawRadians: 0
+      },
+      username
+    })
+  );
   assert.equal(scheduledTasks[0]?.delay, 0);
 
   scheduledTasks.shift()?.callback();
@@ -207,7 +227,23 @@ test("MetaversePresenceClient joins, polls roster snapshots, syncs pose, and lea
   await flushAsyncWork();
 
   assert.equal(requests[2]?.method, "POST");
-  assert.match(String(requests[2]?.body), /"type":"sync-presence"/);
+  assert.deepEqual(
+    JSON.parse(String(requests[2]?.body)),
+    createMetaverseSyncPresenceCommand({
+      playerId,
+      pose: {
+        animationVocabulary: "walk",
+        locomotionMode: "grounded",
+        position: {
+          x: 2.5,
+          y: 1.62,
+          z: 22
+        },
+        stateSequence: 1,
+        yawRadians: 0.6
+      }
+    })
+  );
   assert.equal(client.rosterSnapshot?.players[0]?.pose.position.x, 2.5);
   assert.equal(client.statusSnapshot.lastSnapshotSequence, 3);
 
@@ -217,7 +253,12 @@ test("MetaversePresenceClient joins, polls roster snapshots, syncs pose, and lea
   assert.equal(client.statusSnapshot.state, "disposed");
   assert.ok(clearedTimers.length >= 1);
   assert.equal(requests[3]?.method, "POST");
-  assert.match(String(requests[3]?.body), /"type":"leave-presence"/);
+  assert.deepEqual(
+    JSON.parse(String(requests[3]?.body)),
+    createMetaverseLeavePresenceCommand({
+      playerId
+    })
+  );
 });
 
 test("MetaversePresenceClient marks membership loss when the local player disappears from the roster", async () => {
@@ -287,5 +328,107 @@ test("MetaversePresenceClient marks membership loss when the local player disapp
   assert.equal(
     client.statusSnapshot.lastError,
     "You are no longer in the metaverse presence roster."
+  );
+});
+
+test("MetaversePresenceClient rejoins automatically after an unknown-player poll failure", async () => {
+  const { MetaversePresenceClient } = await clientLoader.load("/src/network/index.ts");
+  const playerId = createMetaversePlayerId("harbor-pilot-1");
+  const username = createUsername("Harbor Pilot");
+
+  assert.notEqual(playerId, null);
+  assert.notEqual(username, null);
+
+  const requests = [];
+  const scheduledTasks = [];
+  const responseQueue = [
+    createJsonResponse(
+      true,
+      createRosterEvent({
+        localPlayerId: playerId,
+        snapshotSequence: 1
+      })
+    ),
+    createJsonResponse(false, {
+      error: `Unknown metaverse player: ${playerId}`
+    }),
+    createJsonResponse(
+      true,
+      createRosterEvent({
+        localPlayerId: playerId,
+        snapshotSequence: 2
+      })
+    )
+  ];
+  const client = new MetaversePresenceClient(
+    {
+      defaultPollIntervalMs: createMilliseconds(150),
+      presencePath: "/metaverse/presence",
+      serverOrigin: "http://127.0.0.1:3210"
+    },
+    {
+      async fetch(input, init) {
+        const queuedResponse = responseQueue.shift();
+
+        assert.notEqual(queuedResponse, undefined);
+        requests.push({
+          body: init?.body ?? null,
+          method: init?.method ?? "GET",
+          url: String(input)
+        });
+
+        return queuedResponse;
+      },
+      setTimeout(callback, delay) {
+        scheduledTasks.push({
+          callback,
+          delay
+        });
+        return scheduledTasks.length;
+      }
+    }
+  );
+
+  await client.ensureJoined({
+    characterId: "metaverse-mannequin-v1",
+    playerId,
+    pose: {
+      animationVocabulary: "idle",
+      locomotionMode: "grounded",
+      position: {
+        x: 0,
+        y: 1.62,
+        z: 24
+      },
+      yawRadians: 0
+    },
+    username
+  });
+
+  scheduledTasks.shift()?.callback();
+  await flushAsyncWork();
+
+  assert.equal(client.statusSnapshot.state, "connected");
+  assert.equal(client.statusSnapshot.joined, true);
+  assert.equal(client.statusSnapshot.lastError, null);
+  assert.equal(requests[1]?.method, "GET");
+  assert.equal(requests[2]?.method, "POST");
+  assert.deepEqual(
+    JSON.parse(String(requests[2]?.body)),
+    createMetaverseJoinPresenceCommand({
+      characterId: "metaverse-mannequin-v1",
+      playerId,
+      pose: {
+        animationVocabulary: "idle",
+        locomotionMode: "grounded",
+        position: {
+          x: 0,
+          y: 1.62,
+          z: 24
+        },
+        yawRadians: 0
+      },
+      username
+    })
   );
 });

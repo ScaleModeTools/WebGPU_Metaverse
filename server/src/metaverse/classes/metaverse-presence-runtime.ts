@@ -82,6 +82,10 @@ export class MetaversePresenceRuntime {
       throw new Error(`Unknown metaverse player: ${observerPlayerId}`);
     }
 
+    if (observerPlayerId !== undefined) {
+      this.#recordObserverHeartbeat(observerPlayerId, normalizedNowMs);
+    }
+
     return createMetaversePresenceRosterSnapshot({
       players: [...this.#playersById.values()]
         .map((playerRuntime) =>
@@ -177,6 +181,19 @@ export class MetaversePresenceRuntime {
       playerRuntime.pose = nextPose;
       this.#snapshotSequence += 1;
     }
+  }
+
+  #recordObserverHeartbeat(
+    observerPlayerId: MetaversePlayerId,
+    nowMs: number
+  ): void {
+    const observerRuntime = this.#playersById.get(observerPlayerId);
+
+    if (observerRuntime === undefined) {
+      return;
+    }
+
+    observerRuntime.lastSeenAtMs = nowMs;
   }
 
   #pruneInactivePlayers(nowMs: number): void {

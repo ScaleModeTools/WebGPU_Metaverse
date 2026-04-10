@@ -139,3 +139,40 @@ test("MetaversePresenceRuntime prunes inactive players and rejects unknown-playe
     /Unknown metaverse player: stale-harbor-pilot/
   );
 });
+
+test("MetaversePresenceRuntime treats observer polling as presence activity", () => {
+  const runtime = new MetaversePresenceRuntime({
+    playerInactivityTimeoutMs: createMilliseconds(500),
+    tickIntervalMs: createMilliseconds(150)
+  });
+  const playerId = requireValue(
+    createMetaversePlayerId("watchful-harbor-pilot"),
+    "playerId"
+  );
+  const username = requireValue(createUsername("Watchful Pilot"), "username");
+
+  runtime.acceptCommand(
+    createMetaverseJoinPresenceCommand({
+      characterId: "metaverse-mannequin-v1",
+      playerId,
+      pose: {
+        animationVocabulary: "idle",
+        locomotionMode: "grounded",
+        position: {
+          x: 0,
+          y: 1.62,
+          z: 24
+        },
+        stateSequence: 1,
+        yawRadians: 0
+      },
+      username
+    }),
+    0
+  );
+
+  assert.equal(runtime.readRosterSnapshot(200, playerId).players.length, 1);
+  assert.equal(runtime.readRosterSnapshot(400, playerId).players.length, 1);
+  assert.equal(runtime.readRosterSnapshot(800, playerId).players.length, 1);
+  assert.equal(runtime.readRosterSnapshot(1_301).players.length, 0);
+});

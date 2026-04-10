@@ -70,6 +70,17 @@ function readStringField(value: unknown, fieldName: string): string {
   return value;
 }
 
+function readRecordField(
+  value: unknown,
+  fieldName: string
+): Record<string, unknown> {
+  if (!isRecord(value)) {
+    throw new Error(`Expected object field: ${fieldName}`);
+  }
+
+  return value;
+}
+
 function readNumberField(value: unknown, fieldName: string): number {
   if (typeof value !== "number") {
     throw new Error(`Expected numeric field: ${fieldName}`);
@@ -88,19 +99,19 @@ function resolvePlayerId(rawPlayerId: string) {
   return playerId;
 }
 
-function parsePresencePose(body: Record<string, unknown>) {
-  if (!isVector3Input(body.position)) {
+function parsePresencePose(poseBody: Record<string, unknown>) {
+  if (!isVector3Input(poseBody.position)) {
     throw new Error("Expected position.x, position.y, and position.z numeric fields.");
   }
 
   const animationVocabulary =
-    body.animationVocabulary === undefined
+    poseBody.animationVocabulary === undefined
       ? undefined
-      : readStringField(body.animationVocabulary, "animationVocabulary");
+      : readStringField(poseBody.animationVocabulary, "animationVocabulary");
   const locomotionMode =
-    body.locomotionMode === undefined
+    poseBody.locomotionMode === undefined
       ? undefined
-      : readStringField(body.locomotionMode, "locomotionMode");
+      : readStringField(poseBody.locomotionMode, "locomotionMode");
 
   if (
     animationVocabulary !== undefined &&
@@ -133,13 +144,13 @@ function parsePresencePose(body: Record<string, unknown>) {
           locomotionMode:
             locomotionMode as typeof metaversePresenceLocomotionModeIds[number]
         }),
-    position: body.position,
-    ...(body.stateSequence === undefined
+    position: poseBody.position,
+    ...(poseBody.stateSequence === undefined
       ? {}
       : {
-          stateSequence: readNumberField(body.stateSequence, "stateSequence")
+          stateSequence: readNumberField(poseBody.stateSequence, "stateSequence")
         }),
-    yawRadians: readNumberField(body.yawRadians, "yawRadians")
+    yawRadians: readNumberField(poseBody.yawRadians, "yawRadians")
   };
 }
 
@@ -153,7 +164,7 @@ function parseJoinPresenceCommand(body: Record<string, unknown>) {
   return createMetaverseJoinPresenceCommand({
     characterId: readStringField(body.characterId, "characterId"),
     playerId: resolvePlayerId(readStringField(body.playerId, "playerId")),
-    pose: parsePresencePose(body),
+    pose: parsePresencePose(readRecordField(body.pose, "pose")),
     username
   });
 }
@@ -167,7 +178,7 @@ function parseLeavePresenceCommand(body: Record<string, unknown>) {
 function parseSyncPresenceCommand(body: Record<string, unknown>) {
   return createMetaverseSyncPresenceCommand({
     playerId: resolvePlayerId(readStringField(body.playerId, "playerId")),
-    pose: parsePresencePose(body)
+    pose: parsePresencePose(readRecordField(body.pose, "pose"))
   });
 }
 

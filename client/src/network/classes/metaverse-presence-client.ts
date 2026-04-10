@@ -96,7 +96,12 @@ export class MetaversePresenceClient {
   readonly #setTimeout: typeof globalThis.setTimeout;
   readonly #updateListeners = new Set<() => void>();
 
+  #joinRequest: MetaversePresenceJoinRequest | null = null;
   #joinPromise: Promise<MetaversePresenceRosterSnapshot> | null = null;
+  #lastPresencePose: Omit<
+    MetaversePresencePoseSnapshotInput,
+    "stateSequence"
+  > | null = null;
   #nextPresenceSequence = 0;
   #pendingPresenceUpdate: PendingMetaversePresenceUpdate | null = null;
   #playerId: MetaversePlayerId | null = null;
@@ -157,6 +162,8 @@ export class MetaversePresenceClient {
       return this.#joinPromise;
     }
 
+    this.#joinRequest = request;
+    this.#lastPresencePose = request.pose;
     this.#playerId = request.playerId;
     this.#statusSnapshot = freezeStatusSnapshot(
       request.playerId,
@@ -182,6 +189,8 @@ export class MetaversePresenceClient {
   syncPresence(
     pose: Omit<MetaversePresencePoseSnapshotInput, "stateSequence">
   ): void {
+    this.#lastPresencePose = pose;
+
     if (
       this.#playerId === null ||
       this.#statusSnapshot.state === "disposed" ||
@@ -236,6 +245,10 @@ export class MetaversePresenceClient {
 
       if (!this.#isDisposed()) {
         this.#schedulePoll(0);
+
+        if (this.#pendingPresenceUpdate !== null) {
+          this.#schedulePresenceSync(0);
+        }
       }
 
       return serverEvent.roster;
@@ -313,7 +326,8 @@ export class MetaversePresenceClient {
     if (
       this.#playerId === null ||
       this.#statusSnapshot.state === "disposed" ||
-      this.#pendingPresenceUpdate === null
+      this.#pendingPresenceUpdate === null ||
+      !this.#statusSnapshot.joined
     ) {
       return;
     }
@@ -470,11 +484,47 @@ export class MetaversePresenceClient {
     const membershipLossMessage = resolveMembershipLossMessage(message);
 
     if (membershipLossMessage !== null) {
-      this.#setMembershipLost(membershipLossMessage);
+      this.#recoverMembershipLoss(membershipLossMessage);
       return;
     }
 
     this.#setError(message);
+  }
+
+  #recoverMembershipLoss(message: string): void {
+    if (this.#statusSnapshot.state === "disposed") {
+      return;
+    }
+
+    const joinRequest = this.#joinRequest;
+    const lastPresencePose = this.#lastPresencePose;
+
+    if (joinRequest === null || lastPresencePose === null) {
+      this.#setMembershipLost(message);
+      return;
+    }
+
+    this.#cancelScheduledPoll();
+    this.#cancelScheduledPresenceSync();
+    this.#rosterSnapshot = null;
+    this.#statusSnapshot = freezeStatusSnapshot(
+      this.#playerId,
+      "joining",
+      false,
+      this.#statusSnapshot.lastSnapshotSequence,
+      null
+    );
+    this.#notifyUpdates();
+
+    void this.ensureJoined({
+      ...joinRequest,
+      pose: lastPresencePose
+    }).catch((error) => {
+      const nextMessage =
+        error instanceof Error ? error.message : message;
+
+      this.#setError(nextMessage);
+    });
   }
 
   #setMembershipLost(message: string): void {
