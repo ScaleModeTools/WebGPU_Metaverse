@@ -62,9 +62,11 @@ class FakeCollider {
 
 class FakeCharacterController {
   constructor(world) {
+    this.autostepEnabled = false;
     this.grounded = false;
     this.lastMovement = new FakeRapierVector3(0, 0, 0);
     this.snapDistance = 0;
+    this.stepHeight = 0;
     this.world = world;
   }
 
@@ -72,23 +74,52 @@ class FakeCharacterController {
     const currentTranslation = collider.translation();
     const currentFootY = currentTranslation.y - collider.standingOffset;
     const capsuleRadius = collider.payload.radius ?? 0;
+    let nextCenterX = currentTranslation.x + desiredTranslationDelta.x;
+    let nextCenterZ = currentTranslation.z + desiredTranslationDelta.z;
+    const proposedSurfaceY = this.findSurfaceY(
+      nextCenterX,
+      nextCenterZ,
+      capsuleRadius
+    );
+
+    if (
+      proposedSurfaceY !== null &&
+      proposedSurfaceY - currentFootY > this.snapDistance &&
+      (!this.autostepEnabled ||
+        proposedSurfaceY - currentFootY > this.stepHeight)
+    ) {
+      nextCenterX = currentTranslation.x;
+      nextCenterZ = currentTranslation.z;
+    }
+
     const supportingSurfaceY = this.findSurfaceY(
-      currentTranslation.x,
-      currentTranslation.z,
+      nextCenterX,
+      nextCenterZ,
       capsuleRadius
     );
     const desiredFootY = currentFootY + desiredTranslationDelta.y;
-    const nextFootY =
-      supportingSurfaceY !== null &&
-      desiredFootY <= supportingSurfaceY + this.snapDistance
-        ? supportingSurfaceY
-        : desiredFootY;
+    let nextFootY = desiredFootY;
+
+    if (supportingSurfaceY !== null) {
+      if (supportingSurfaceY > currentFootY) {
+        const stepRise = supportingSurfaceY - currentFootY;
+
+        if (this.autostepEnabled && stepRise <= this.stepHeight) {
+          nextFootY = supportingSurfaceY;
+        }
+      }
+
+      if (desiredFootY <= supportingSurfaceY + this.snapDistance) {
+        nextFootY = supportingSurfaceY;
+      }
+    }
+
     const nextCenterY = nextFootY + collider.standingOffset;
 
     this.lastMovement = new FakeRapierVector3(
-      desiredTranslationDelta.x,
+      nextCenterX - currentTranslation.x,
       nextCenterY - currentTranslation.y,
-      desiredTranslationDelta.z
+      nextCenterZ - currentTranslation.z
     );
     this.grounded =
       supportingSurfaceY !== null &&
@@ -107,7 +138,14 @@ class FakeCharacterController {
     this.snapDistance = distance;
   }
 
-  enableAutostep() {}
+  enableAutostep(maxHeight) {
+    this.autostepEnabled = true;
+    this.stepHeight = maxHeight;
+  }
+
+  disableAutostep() {
+    this.autostepEnabled = false;
+  }
 
   free() {}
 
@@ -223,6 +261,13 @@ function freezeVector3(x, y, z) {
   return Object.freeze({ x, y, z });
 }
 
+const forwardTravelInput = Object.freeze({
+  boost: false,
+  moveAxis: 1,
+  pitchAxis: 0,
+  yawAxis: 0
+});
+
 function createGroundColliderConfig(config) {
   return {
     halfExtents: freezeVector3(
@@ -248,6 +293,15 @@ async function createTraversalHarness(options = {}) {
     ...metaverseRuntimeConfig,
     ...options.config
   };
+  const surfaceColliderSnapshots = (options.surfaceColliderSnapshots ?? []).map(
+    (collider) =>
+      Object.freeze({
+        traversalAffordance: collider.traversalAffordance ?? "support",
+        halfExtents: collider.halfExtents,
+        rotation: collider.rotation,
+        translation: collider.translation
+      })
+  );
   const physicsRuntime = createFakePhysicsRuntime(RapierPhysicsRuntime);
 
   await physicsRuntime.init();
@@ -259,7 +313,7 @@ async function createTraversalHarness(options = {}) {
     groundCollider.translation
   );
 
-  for (const collider of options.surfaceColliderSnapshots ?? []) {
+  for (const collider of surfaceColliderSnapshots) {
     physicsRuntime.createFixedCuboidCollider(
       collider.halfExtents,
       collider.translation,
@@ -299,7 +353,7 @@ async function createTraversalHarness(options = {}) {
 
       dynamicPoseMap.set(environmentAssetId, poseSnapshot);
     },
-    surfaceColliderSnapshots: options.surfaceColliderSnapshots ?? []
+    surfaceColliderSnapshots
   });
 
   return {
@@ -308,6 +362,18 @@ async function createTraversalHarness(options = {}) {
     groundedBodyRuntime,
     traversalRuntime
   };
+}
+
+function resolveGroundedEntryFrame(traversalRuntime, maxFrames = 240) {
+  for (let frame = 0; frame < maxFrames; frame += 1) {
+    traversalRuntime.advance(forwardTravelInput, 1 / 60);
+
+    if (traversalRuntime.locomotionMode === "grounded") {
+      return frame + 1;
+    }
+  }
+
+  return null;
 }
 
 before(async () => {
@@ -392,6 +458,306 @@ test("MetaverseTraversalRuntime routes skiff mounting through the traversal owne
       traversalRuntime.cameraSnapshot.position.y,
       config.ocean.height + config.swim.cameraEyeHeightMeters
     );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime exits swim onto low step-eligible support and holds grounded after entry", async () => {
+  const { config, groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.17, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.02, 30)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+
+    assert.equal(traversalRuntime.locomotionMode, "swim");
+
+    for (let frame = 0; frame < 20; frame += 1) {
+      traversalRuntime.advance(
+        Object.freeze({
+          boost: false,
+          moveAxis: 1,
+          pitchAxis: 0,
+          yawAxis: 0
+        }),
+        1 / 60
+      );
+    }
+
+    assert.equal(traversalRuntime.locomotionMode, "swim");
+
+    for (let frame = 0; frame < 180; frame += 1) {
+      traversalRuntime.advance(
+        Object.freeze({
+          boost: false,
+          moveAxis: 1,
+          pitchAxis: 0,
+          yawAxis: 0
+        }),
+        1 / 60
+      );
+
+      if (traversalRuntime.locomotionMode === "grounded") {
+        break;
+      }
+    }
+
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+    assert.ok(groundedBodyRuntime.snapshot.grounded);
+    assert.ok(
+      traversalRuntime.cameraSnapshot.position.y >
+        config.ocean.height + config.swim.cameraEyeHeightMeters
+    );
+
+    for (let frame = 0; frame < 12; frame += 1) {
+      traversalRuntime.advance(
+        Object.freeze({
+          boost: false,
+          moveAxis: 0,
+          pitchAxis: 0,
+          yawAxis: 0
+        }),
+        1 / 60
+      );
+    }
+
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime keeps low authored support walkable while grounded autostep is locally gated", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.1, 3),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.02, 24)
+        }),
+        Object.freeze({
+          halfExtents: freezeVector3(3, 0.17, 2),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, 0.08, 28)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    for (let frame = 0; frame < 36; frame += 1) {
+      traversalRuntime.advance(forwardTravelInput, 1 / 60);
+    }
+
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+    assert.ok(groundedBodyRuntime.snapshot.grounded);
+    assert.ok(groundedBodyRuntime.snapshot.position.y > 0.2);
+    assert.ok(groundedBodyRuntime.snapshot.position.z > 26.1);
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime keeps tall support blocked while grounded until a real climb or jump slice exists", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.1, 3),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.02, 24)
+        }),
+        Object.freeze({
+          halfExtents: freezeVector3(3, 0.46, 2),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, 0, 28)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    for (let frame = 0; frame < 36; frame += 1) {
+      traversalRuntime.advance(forwardTravelInput, 1 / 60);
+    }
+
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+    assert.ok(groundedBodyRuntime.snapshot.grounded);
+    assert.ok(groundedBodyRuntime.snapshot.position.y < 0.12);
+    assert.ok(groundedBodyRuntime.snapshot.position.z < 26);
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime ignores a side blocker while exiting swim onto dock support", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.17, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.02, 30)
+        }),
+        Object.freeze({
+          traversalAffordance: "blocker",
+          halfExtents: freezeVector3(0.46, 0.46, 0.46),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0.68, 0, 30)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+
+    assert.equal(traversalRuntime.locomotionMode, "swim");
+
+    for (let frame = 0; frame < 240; frame += 1) {
+      traversalRuntime.advance(
+        Object.freeze({
+          boost: false,
+          moveAxis: 1,
+          pitchAxis: 0,
+          yawAxis: 0
+        }),
+        1 / 60
+      );
+
+      if (traversalRuntime.locomotionMode === "grounded") {
+        break;
+      }
+    }
+
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime ignores blocker-affordance shoreline overlap while exiting onto dock support", async () => {
+  const dockHarness =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.17, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.02, 30)
+        })
+      ]
+    });
+  const blockedHarness =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.17, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.02, 30)
+        }),
+        Object.freeze({
+          traversalAffordance: "blocker",
+          halfExtents: freezeVector3(0.46, 0.46, 0.46),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, 0, 26.3)
+        })
+      ]
+    });
+
+  try {
+    dockHarness.traversalRuntime.boot();
+    blockedHarness.traversalRuntime.boot();
+
+    assert.equal(dockHarness.traversalRuntime.locomotionMode, "swim");
+    assert.equal(blockedHarness.traversalRuntime.locomotionMode, "swim");
+
+    const dockExitFrame = resolveGroundedEntryFrame(
+      dockHarness.traversalRuntime
+    );
+    const blockedExitFrame = resolveGroundedEntryFrame(
+      blockedHarness.traversalRuntime
+    );
+
+    assert.notEqual(dockExitFrame, null);
+    assert.equal(blockedExitFrame, dockExitFrame);
+  } finally {
+    dockHarness.groundedBodyRuntime.dispose();
+    blockedHarness.groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime keeps swim mode over low blocker-affordance water objects", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          traversalAffordance: "blocker",
+          halfExtents: freezeVector3(0.45, 0.12, 0.45),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, 0.02, 30)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+
+    assert.equal(traversalRuntime.locomotionMode, "swim");
+    assert.equal(resolveGroundedEntryFrame(traversalRuntime), null);
+    assert.equal(traversalRuntime.locomotionMode, "swim");
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime keeps tall waterborne support in swim mode when it exceeds step height", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(0.46, 0.46, 0.46),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, 0, 30)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+
+    assert.equal(traversalRuntime.locomotionMode, "swim");
+
+    let enteredGrounded = false;
+
+    for (let frame = 0; frame < 240; frame += 1) {
+      traversalRuntime.advance(
+        Object.freeze({
+          boost: false,
+          moveAxis: 1,
+          pitchAxis: 0,
+          yawAxis: 0
+        }),
+        1 / 60
+      );
+      enteredGrounded ||= traversalRuntime.locomotionMode === "grounded";
+    }
+
+    assert.equal(enteredGrounded, false);
+    assert.equal(traversalRuntime.locomotionMode, "swim");
   } finally {
     groundedBodyRuntime.dispose();
   }

@@ -9,6 +9,7 @@ import {
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 import {
+  MetaverseDynamicCuboidBodyRuntime,
   MetaverseGroundedBodyRuntime,
   RapierPhysicsRuntime,
   type PhysicsVector3Snapshot,
@@ -139,6 +140,10 @@ type MetaversePhysicsDebugObject = Object3D & {
 type MouseFlightButtonInputKey = "boost" | "moveBackward" | "moveForward";
 
 const metaverseUiUpdateIntervalMs = 120;
+const metaversePushableBodyAdditionalMass = 12;
+const metaversePushableBodyAngularDamping = 10;
+const metaversePushableBodyGravityScale = 1;
+const metaversePushableBodyLinearDamping = 4.5;
 
 function freezePresenceHudSnapshot(
   state: MetaverseHudSnapshot["presence"]["state"],
@@ -350,6 +355,10 @@ export class WebGpuMetaverseRuntime {
   #metaversePresenceUnsubscribe: (() => void) | null = null;
   #mountedEnvironment: MountedEnvironmentSnapshot | null = null;
   #physicsDebugObject: MetaversePhysicsDebugObject | null = null;
+  #pushableBodyRuntimesByEnvironmentAssetId = new Map<
+    string,
+    MetaverseDynamicCuboidBodyRuntime
+  >();
   #remoteCharacterPresentations: readonly MetaverseRemoteCharacterPresentationSnapshot[] =
     Object.freeze([]);
   #renderer: MetaverseRendererHost | null = null;
@@ -819,6 +828,79 @@ export class WebGpuMetaverseRuntime {
     }
   }
 
+  async #bootPushableEnvironmentBodies(): Promise<void> {
+    if (this.#environmentProofConfig === null) {
+      return;
+    }
+
+    this.#pushableBodyRuntimesByEnvironmentAssetId.clear();
+
+    for (const environmentAsset of this.#environmentProofConfig.assets) {
+      if (
+        environmentAsset.placement !== "dynamic" ||
+        environmentAsset.traversalAffordance !== "pushable"
+      ) {
+        continue;
+      }
+
+      if (environmentAsset.placements.length !== 1) {
+        throw new Error(
+          `Metaverse pushable environment asset ${environmentAsset.label} requires exactly one placement.`
+        );
+      }
+
+      if (environmentAsset.collider === null) {
+        throw new Error(
+          `Metaverse pushable environment asset ${environmentAsset.label} requires collider metadata.`
+        );
+      }
+
+      const placement = environmentAsset.placements[0]!;
+      const collider = environmentAsset.collider;
+      const pushableBodyRuntime = new MetaverseDynamicCuboidBodyRuntime(
+        {
+          additionalMass: metaversePushableBodyAdditionalMass,
+          angularDamping: metaversePushableBodyAngularDamping,
+          colliderCenter: freezeVector3(
+            collider.center.x * placement.scale,
+            collider.center.y * placement.scale,
+            collider.center.z * placement.scale
+          ),
+          gravityScale: metaversePushableBodyGravityScale,
+          halfExtents: freezeVector3(
+            Math.abs(collider.size.x * placement.scale) * 0.5,
+            Math.abs(collider.size.y * placement.scale) * 0.5,
+            Math.abs(collider.size.z * placement.scale) * 0.5
+          ),
+          linearDamping: metaversePushableBodyLinearDamping,
+          lockRotations: true,
+          spawnPosition: freezeVector3(
+            placement.position.x,
+            placement.position.y,
+            placement.position.z
+          ),
+          spawnYawRadians: placement.rotationYRadians
+        },
+        this.#physicsRuntime
+      );
+
+      await pushableBodyRuntime.init();
+      this.#pushableBodyRuntimesByEnvironmentAssetId.set(
+        environmentAsset.environmentAssetId,
+        pushableBodyRuntime
+      );
+      const pushableBodySnapshot = pushableBodyRuntime.syncSnapshot();
+
+      this.#sceneRuntime.setDynamicEnvironmentPose(
+        environmentAsset.environmentAssetId,
+        Object.freeze({
+          position: pushableBodySnapshot.position,
+          yawRadians: pushableBodySnapshot.yawRadians
+        })
+      );
+    }
+  }
+
   async #bootGroundedRuntime(): Promise<void> {
     await this.#physicsRuntime.init();
     this.#groundCollider ??= this.#physicsRuntime.createFixedCuboidCollider(
@@ -830,6 +912,10 @@ export class WebGpuMetaverseRuntime {
       freezeVector3(0, this.#config.ocean.height - 0.5, 0)
     );
     await this.#bootStaticEnvironmentCollision();
+    await this.#bootPushableEnvironmentBodies();
+    this.#groundedBodyRuntime.setApplyImpulsesToDynamicBodies(
+      this.#pushableBodyRuntimesByEnvironmentAssetId.size > 0
+    );
     await this.#groundedBodyRuntime.init(this.#traversalRuntime.cameraSnapshot.yawRadians);
     this.#traversalRuntime.boot();
 
@@ -860,7 +946,33 @@ export class WebGpuMetaverseRuntime {
     }
 
     this.#environmentColliders = [];
+    for (const [
+      environmentAssetId,
+      pushableBodyRuntime
+    ] of this.#pushableBodyRuntimesByEnvironmentAssetId.entries()) {
+      pushableBodyRuntime.dispose();
+      this.#sceneRuntime.setDynamicEnvironmentPose(environmentAssetId, null);
+    }
+    this.#pushableBodyRuntimesByEnvironmentAssetId.clear();
+    this.#groundedBodyRuntime.setApplyImpulsesToDynamicBodies(false);
     this.#groundedBodyRuntime.dispose();
+  }
+
+  #syncPushableBodyPresentations(): void {
+    for (const [
+      environmentAssetId,
+      pushableBodyRuntime
+    ] of this.#pushableBodyRuntimesByEnvironmentAssetId.entries()) {
+      const pushableBodySnapshot = pushableBodyRuntime.syncSnapshot();
+
+      this.#sceneRuntime.setDynamicEnvironmentPose(
+        environmentAssetId,
+        Object.freeze({
+          position: pushableBodySnapshot.position,
+          yawRadians: pushableBodySnapshot.yawRadians
+        })
+      );
+    }
   }
 
   #bootPresenceRuntime(): void {
@@ -1080,6 +1192,7 @@ export class WebGpuMetaverseRuntime {
       movementInput,
       deltaSeconds
     );
+    this.#syncPushableBodyPresentations();
     this.#syncPresencePose();
     this.#syncRemoteCharacterPresentationsFromPresence();
 

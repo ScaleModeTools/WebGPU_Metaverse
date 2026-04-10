@@ -17,6 +17,7 @@ import type {
 } from "../types/metaverse-runtime";
 
 export interface MetaversePlacedCuboidColliderSnapshot {
+  readonly traversalAffordance: MetaverseEnvironmentAssetProofConfig["traversalAffordance"];
   readonly halfExtents: PhysicsVector3Snapshot;
   readonly rotation: PhysicsQuaternionSnapshot;
   readonly translation: PhysicsVector3Snapshot;
@@ -107,6 +108,7 @@ export function resolvePlacedCuboidColliders(
     for (const collider of environmentAsset.physicsColliders) {
       colliders.push(
         Object.freeze({
+          traversalAffordance: environmentAsset.traversalAffordance,
           halfExtents: freezeVector3(
             Math.abs(collider.size.x * placement.scale) * 0.5,
             Math.abs(collider.size.y * placement.scale) * 0.5,

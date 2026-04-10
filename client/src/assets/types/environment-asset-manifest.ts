@@ -13,6 +13,16 @@ export const environmentAssetPlacements = [
 export type EnvironmentAssetPlacement =
   (typeof environmentAssetPlacements)[number];
 
+export const environmentTraversalAffordanceIds = [
+  "support",
+  "blocker",
+  "mount",
+  "pushable"
+] as const;
+
+export type EnvironmentTraversalAffordanceId =
+  (typeof environmentTraversalAffordanceIds)[number];
+
 export interface EnvironmentColliderVector3 {
   readonly x: number;
   readonly y: number;
@@ -40,6 +50,7 @@ export interface EnvironmentAssetDescriptor<
   readonly collider: EnvironmentBoxColliderDescriptor | null;
   readonly collisionPath: string | null;
   readonly mount: EnvironmentMountDescriptor | null;
+  readonly traversalAffordance: EnvironmentTraversalAffordanceId;
 }
 
 export interface EnvironmentAssetManifest<

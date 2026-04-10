@@ -223,9 +223,11 @@ export class MetaverseGroundedBodyRuntime {
   readonly #config: MetaverseGroundedBodyConfig;
   readonly #physicsRuntime: RapierPhysicsRuntime;
 
+  #autostepEnabled = true;
   #characterController: RapierCharacterControllerHandle | null = null;
   #collider: RapierColliderHandle | null = null;
   #forwardSpeedUnitsPerSecond = 0;
+  #applyImpulsesToDynamicBodies = false;
   #snapshot: MetaverseGroundedBodySnapshot;
 
   constructor(
@@ -263,13 +265,11 @@ export class MetaverseGroundedBodyRuntime {
     );
 
     controller.setUp?.(this.#physicsRuntime.createVector3(0, 1, 0));
-    controller.setApplyImpulsesToDynamicBodies(false);
-    controller.setCharacterMass(1);
-    controller.enableAutostep(
-      this.#config.stepHeightMeters,
-      this.#config.stepWidthMeters,
-      false
+    controller.setApplyImpulsesToDynamicBodies(
+      this.#applyImpulsesToDynamicBodies
     );
+    controller.setCharacterMass(1);
+    this.#syncAutostepConfiguration(controller);
     controller.enableSnapToGround(this.#config.snapToGroundDistanceMeters);
     controller.setMaxSlopeClimbAngle?.(this.#config.maxSlopeClimbAngleRadians);
     controller.setMinSlopeSlideAngle?.(this.#config.minSlopeSlideAngleRadians);
@@ -290,6 +290,22 @@ export class MetaverseGroundedBodyRuntime {
       initialYawRadians,
       false
     );
+  }
+
+  setApplyImpulsesToDynamicBodies(enabled: boolean): void {
+    this.#applyImpulsesToDynamicBodies = enabled;
+    this.#characterController?.setApplyImpulsesToDynamicBodies(enabled);
+  }
+
+  setAutostepEnabled(enabled: boolean): void {
+    this.#autostepEnabled = enabled;
+    const controller = this.#characterController;
+
+    if (controller === null) {
+      return;
+    }
+
+    this.#syncAutostepConfiguration(controller);
   }
 
   advance(
@@ -418,6 +434,8 @@ export class MetaverseGroundedBodyRuntime {
 
     this.#characterController?.free?.();
     this.#characterController = null;
+    this.#applyImpulsesToDynamicBodies = false;
+    this.#autostepEnabled = true;
     this.#forwardSpeedUnitsPerSecond = 0;
     this.#snapshot = freezeGroundedBodySnapshot(
       this.#config,
@@ -463,6 +481,21 @@ export class MetaverseGroundedBodyRuntime {
     }
 
     return this.#collider;
+  }
+
+  #syncAutostepConfiguration(
+    controller: RapierCharacterControllerHandle
+  ): void {
+    if (this.#autostepEnabled) {
+      controller.enableAutostep(
+        this.#config.stepHeightMeters,
+        this.#config.stepWidthMeters,
+        false
+      );
+      return;
+    }
+
+    controller.disableAutostep?.();
   }
 
   #rootToColliderCenter(

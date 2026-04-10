@@ -34,8 +34,63 @@ class FakeColliderDesc {
   }
 }
 
+class FakeRigidBodyDesc {
+  constructor() {
+    this.additionalMass = 0;
+    this.angularDamping = 0;
+    this.gravityScale = 1;
+    this.linearDamping = 0;
+    this.lockRotationsEnabled = false;
+    this.rotation = { x: 0, y: 0, z: 0, w: 1 };
+    this.translation = new FakeRapierVector3(0, 0, 0);
+  }
+
+  lockRotations() {
+    this.lockRotationsEnabled = true;
+
+    return this;
+  }
+
+  setAdditionalMass(mass) {
+    this.additionalMass = mass;
+
+    return this;
+  }
+
+  setAngularDamping(damping) {
+    this.angularDamping = damping;
+
+    return this;
+  }
+
+  setGravityScale(scale) {
+    this.gravityScale = scale;
+
+    return this;
+  }
+
+  setLinearDamping(damping) {
+    this.linearDamping = damping;
+
+    return this;
+  }
+
+  setRotation(rotation) {
+    this.rotation = rotation;
+
+    return this;
+  }
+
+  setTranslation(x, y, z) {
+    this.translation = new FakeRapierVector3(x, y, z);
+
+    return this;
+  }
+}
+
 class FakeCollider {
-  constructor(shape, payload, translation) {
+  constructor(shape, payload, translation, parentBody = null) {
+    this.parentBody = parentBody;
     this.payload = payload;
     this.shape = shape;
     this.translationVector = translation;
@@ -56,12 +111,61 @@ class FakeCollider {
   }
 
   translation() {
+    if (this.parentBody !== null) {
+      const parentTranslation = this.parentBody.translation();
+
+      return new FakeRapierVector3(
+        parentTranslation.x + this.translationVector.x,
+        parentTranslation.y + this.translationVector.y,
+        parentTranslation.z + this.translationVector.z
+      );
+    }
+
+    return this.translationVector;
+  }
+}
+
+class FakeRigidBody {
+  constructor(bodyDesc) {
+    this.additionalMass = bodyDesc.additionalMass;
+    this.angularDamping = bodyDesc.angularDamping;
+    this.gravityScale = bodyDesc.gravityScale;
+    this.linearDamping = bodyDesc.linearDamping;
+    this.linvelVector = new FakeRapierVector3(0, 0, 0);
+    this.lockRotationsEnabled = bodyDesc.lockRotationsEnabled;
+    this.rotationQuaternion = bodyDesc.rotation;
+    this.translationVector = bodyDesc.translation;
+  }
+
+  linvel() {
+    return this.linvelVector;
+  }
+
+  setLinvel(velocity) {
+    this.linvelVector = new FakeRapierVector3(
+      velocity.x,
+      velocity.y,
+      velocity.z
+    );
+  }
+
+  setTranslation(translation) {
+    this.translationVector = new FakeRapierVector3(
+      translation.x,
+      translation.y,
+      translation.z
+    );
+  }
+
+  translation() {
     return this.translationVector;
   }
 }
 
 class FakeCharacterController {
   constructor(world) {
+    this.applyImpulsesToDynamicBodies = false;
+    this.autostepEnabled = false;
     this.grounded = false;
     this.lastMovement = new FakeRapierVector3(0, 0, 0);
     this.maxSlopeClimbAngle = null;
@@ -86,7 +190,8 @@ class FakeCharacterController {
     if (
       proposedSurfaceY !== null &&
       proposedSurfaceY - currentFootY > this.snapDistance &&
-      proposedSurfaceY - currentFootY > this.stepHeight
+      (!this.autostepEnabled ||
+        proposedSurfaceY - currentFootY > this.stepHeight)
     ) {
       nextCenterX = currentTranslation.x;
       nextCenterZ = currentTranslation.z;
@@ -104,7 +209,7 @@ class FakeCharacterController {
       if (supportingSurfaceY > currentFootY) {
         const stepRise = supportingSurfaceY - currentFootY;
 
-        if (stepRise <= this.stepHeight) {
+        if (this.autostepEnabled && stepRise <= this.stepHeight) {
           nextFootY = supportingSurfaceY;
         }
       }
@@ -139,7 +244,12 @@ class FakeCharacterController {
   }
 
   enableAutostep(maxHeight) {
+    this.autostepEnabled = true;
     this.stepHeight = maxHeight;
+  }
+
+  disableAutostep() {
+    this.autostepEnabled = false;
   }
 
   free() {}
@@ -152,7 +262,9 @@ class FakeCharacterController {
     this.minSlopeSlideAngle = angle;
   }
 
-  setApplyImpulsesToDynamicBodies() {}
+  setApplyImpulsesToDynamicBodies(enabled) {
+    this.applyImpulsesToDynamicBodies = enabled;
+  }
 
   setCharacterMass() {}
 
@@ -192,6 +304,7 @@ class FakeRapierWorld {
     this.colliders = [];
     this.lastCharacterController = null;
     this.queryColliders = [];
+    this.rigidBodies = [];
     this.timestep = 1 / 60;
   }
 
@@ -203,11 +316,12 @@ class FakeRapierWorld {
     return controller;
   }
 
-  createCollider(colliderDesc) {
+  createCollider(colliderDesc, parentBody = null) {
     const collider = new FakeCollider(
       colliderDesc.shape,
       colliderDesc.payload,
-      colliderDesc.translation
+      colliderDesc.translation,
+      parentBody
     );
 
     this.colliders.push(collider);
@@ -215,10 +329,28 @@ class FakeRapierWorld {
     return collider;
   }
 
+  createRigidBody(bodyDesc) {
+    const rigidBody = new FakeRigidBody(bodyDesc);
+
+    this.rigidBodies.push(rigidBody);
+
+    return rigidBody;
+  }
+
   removeCollider(collider) {
     this.colliders = this.colliders.filter((candidate) => candidate !== collider);
     this.queryColliders = this.queryColliders.filter(
       (candidate) => candidate !== collider
+    );
+  }
+
+  removeRigidBody(rigidBody) {
+    this.rigidBodies = this.rigidBodies.filter((candidate) => candidate !== rigidBody);
+    this.colliders = this.colliders.filter(
+      (candidate) => candidate.parentBody !== rigidBody
+    );
+    this.queryColliders = this.queryColliders.filter(
+      (candidate) => candidate.parentBody !== rigidBody
     );
   }
 
@@ -258,6 +390,11 @@ function createFakePhysicsRuntimeWithWorld(RapierPhysicsRuntime) {
                   indices,
                   vertices
                 });
+              }
+            },
+            RigidBodyDesc: {
+              dynamic() {
+                return new FakeRigidBodyDesc();
               }
             },
             Vector3: FakeRapierVector3
@@ -566,4 +703,144 @@ test("MetaverseGroundedBodyRuntime applies slope rules and exposes jump readines
     groundedBodyRuntime.dispose();
     physicsRuntime.removeCollider(groundCollider);
   }
+});
+
+test("MetaverseGroundedBodyRuntime toggles dynamic-body impulses without moving locomotion policy out of physics", async () => {
+  const { MetaverseGroundedBodyRuntime, RapierPhysicsRuntime } =
+    await clientLoader.load("/src/physics/index.ts");
+  const { physicsRuntime, world } =
+    createFakePhysicsRuntimeWithWorld(RapierPhysicsRuntime);
+  const groundedBodyRuntime = new MetaverseGroundedBodyRuntime(
+    {
+      baseSpeedUnitsPerSecond: 4,
+      boostMultiplier: 2,
+      capsuleHalfHeightMeters: 0.48,
+      capsuleRadiusMeters: 0.34,
+      controllerOffsetMeters: 0.02,
+      eyeHeightMeters: 1.62,
+      gravityUnitsPerSecond: 18,
+      maxTurnSpeedRadiansPerSecond: Math.PI * 0.5,
+      snapToGroundDistanceMeters: 0.22,
+      spawnPosition: {
+        x: 0,
+        y: 0,
+        z: 0
+      },
+      worldRadius: 8
+    },
+    physicsRuntime
+  );
+
+  groundedBodyRuntime.setApplyImpulsesToDynamicBodies(true);
+  await groundedBodyRuntime.init();
+
+  assert.equal(world.lastCharacterController?.applyImpulsesToDynamicBodies, true);
+
+  groundedBodyRuntime.setApplyImpulsesToDynamicBodies(false);
+
+  assert.equal(world.lastCharacterController?.applyImpulsesToDynamicBodies, false);
+  groundedBodyRuntime.dispose();
+});
+
+test("MetaverseGroundedBodyRuntime can disable and restore autostep without changing default grounded behavior", async () => {
+  const { MetaverseGroundedBodyRuntime, RapierPhysicsRuntime } =
+    await clientLoader.load("/src/physics/index.ts");
+  const { physicsRuntime, world } =
+    createFakePhysicsRuntimeWithWorld(RapierPhysicsRuntime);
+  const groundedBodyRuntime = new MetaverseGroundedBodyRuntime(
+    {
+      baseSpeedUnitsPerSecond: 4,
+      boostMultiplier: 2,
+      capsuleHalfHeightMeters: 0.48,
+      capsuleRadiusMeters: 0.34,
+      controllerOffsetMeters: 0.02,
+      eyeHeightMeters: 1.62,
+      gravityUnitsPerSecond: 18,
+      maxTurnSpeedRadiansPerSecond: Math.PI * 0.5,
+      snapToGroundDistanceMeters: 0.22,
+      spawnPosition: {
+        x: 0,
+        y: 0,
+        z: 0
+      },
+      worldRadius: 8
+    },
+    physicsRuntime
+  );
+
+  await groundedBodyRuntime.init();
+
+  assert.equal(world.lastCharacterController?.autostepEnabled, true);
+
+  groundedBodyRuntime.setAutostepEnabled(false);
+
+  assert.equal(world.lastCharacterController?.autostepEnabled, false);
+
+  groundedBodyRuntime.setAutostepEnabled(true);
+
+  assert.equal(world.lastCharacterController?.autostepEnabled, true);
+  groundedBodyRuntime.dispose();
+});
+
+test("MetaverseDynamicCuboidBodyRuntime snapshots a dynamic pushable body pose from physics", async () => {
+  const { MetaverseDynamicCuboidBodyRuntime, RapierPhysicsRuntime } =
+    await clientLoader.load("/src/physics/index.ts");
+  const { physicsRuntime, world } =
+    createFakePhysicsRuntimeWithWorld(RapierPhysicsRuntime);
+  const dynamicBodyRuntime = new MetaverseDynamicCuboidBodyRuntime(
+    {
+      additionalMass: 12,
+      angularDamping: 8,
+      colliderCenter: {
+        x: 0,
+        y: 0,
+        z: 0
+      },
+      gravityScale: 1,
+      halfExtents: {
+        x: 0.46,
+        y: 0.46,
+        z: 0.46
+      },
+      linearDamping: 4,
+      lockRotations: true,
+      spawnPosition: {
+        x: -3.8,
+        y: 0.46,
+        z: -14.4
+      },
+      spawnYawRadians: Math.PI * 0.04
+    },
+    physicsRuntime
+  );
+
+  await dynamicBodyRuntime.init();
+
+  const rigidBody = world.rigidBodies[0];
+
+  assert.ok(rigidBody);
+  assert.equal(rigidBody.lockRotationsEnabled, true);
+  assert.equal(rigidBody.additionalMass, 12);
+
+  rigidBody.setTranslation(
+    new FakeRapierVector3(-2.6, 0.46, -13.1)
+  );
+  rigidBody.setLinvel(
+    new FakeRapierVector3(1.2, 0, 0.4)
+  );
+
+  assert.deepEqual(dynamicBodyRuntime.syncSnapshot(), {
+    linearVelocity: {
+      x: 1.2,
+      y: 0,
+      z: 0.4
+    },
+    position: {
+      x: -2.6,
+      y: 0.46,
+      z: -13.1
+    },
+    yawRadians: Math.PI * 0.04
+  });
+  dynamicBodyRuntime.dispose();
 });

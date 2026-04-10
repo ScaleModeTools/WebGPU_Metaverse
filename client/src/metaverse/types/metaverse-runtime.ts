@@ -116,6 +116,12 @@ export interface MetaverseEnvironmentLodProofConfig {
   readonly tier: string;
 }
 
+export type MetaverseEnvironmentTraversalAffordanceId =
+  | "support"
+  | "blocker"
+  | "mount"
+  | "pushable";
+
 export interface MetaverseEnvironmentAssetProofConfig {
   readonly collisionPath: string | null;
   readonly collider: MetaverseEnvironmentColliderProofConfig | null;
@@ -126,6 +132,7 @@ export interface MetaverseEnvironmentAssetProofConfig {
   readonly placement: "dynamic" | "instanced" | "static";
   readonly placements: readonly MetaverseEnvironmentPlacementProofConfig[];
   readonly physicsColliders: readonly MetaverseEnvironmentColliderProofConfig[] | null;
+  readonly traversalAffordance: MetaverseEnvironmentTraversalAffordanceId;
 }
 
 export interface MetaverseEnvironmentProofConfig {

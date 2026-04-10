@@ -5,6 +5,10 @@ export const metaverseHubCrateEnvironmentAssetId = createEnvironmentAssetId(
   "metaverse-hub-crate-v1"
 );
 
+export const metaverseHubPushableCrateEnvironmentAssetId = createEnvironmentAssetId(
+  "metaverse-hub-pushable-crate-v1"
+);
+
 export const metaverseHubDockEnvironmentAssetId = createEnvironmentAssetId(
   "metaverse-hub-dock-v1"
 );
@@ -18,6 +22,7 @@ export const environmentPropManifest = defineEnvironmentAssetManifest([
     id: metaverseHubCrateEnvironmentAssetId,
     label: "Metaverse hub crate",
     placement: "instanced",
+    traversalAffordance: "blocker",
     physicsColliders: [
       {
         center: {
@@ -56,6 +61,7 @@ export const environmentPropManifest = defineEnvironmentAssetManifest([
     id: metaverseHubDockEnvironmentAssetId,
     label: "Metaverse hub dock",
     placement: "static",
+    traversalAffordance: "support",
     physicsColliders: [
       {
         center: {
@@ -91,9 +97,42 @@ export const environmentPropManifest = defineEnvironmentAssetManifest([
     mount: null
   },
   {
+    id: metaverseHubPushableCrateEnvironmentAssetId,
+    label: "Metaverse hub pushable crate",
+    placement: "dynamic",
+    traversalAffordance: "pushable",
+    physicsColliders: null,
+    renderModel: {
+      defaultTier: "high",
+      lods: [
+        {
+          tier: "high",
+          modelPath: "/models/metaverse/environment/metaverse-hub-crate-high.gltf",
+          maxDistanceMeters: null
+        }
+      ]
+    },
+    collider: {
+      center: {
+        x: 0,
+        y: 0,
+        z: 0
+      },
+      shape: "box",
+      size: {
+        x: 0.92,
+        y: 0.92,
+        z: 0.92
+      }
+    },
+    collisionPath: null,
+    mount: null
+  },
+  {
     id: metaverseHubSkiffEnvironmentAssetId,
     label: "Metaverse hub skiff",
     placement: "dynamic",
+    traversalAffordance: "mount",
     physicsColliders: null,
     renderModel: {
       defaultTier: "high",

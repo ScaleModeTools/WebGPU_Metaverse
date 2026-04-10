@@ -63,6 +63,33 @@ interface MetaverseTraversalRuntimeDependencies {
 type AutomaticSurfaceLocomotionModeId = "grounded" | "swim";
 
 const metaverseWalkAnimationSpeedThresholdUnitsPerSecond = 0.75;
+const automaticSurfaceWaterlineThresholdMeters = 0.05;
+const automaticSurfaceExitSupportProbeCount = 3;
+const automaticSurfaceGroundedHoldProbeCount = 2;
+const automaticSurfaceGroundedHoldPaddingFactor = 0.45;
+const automaticSurfaceProbeForwardDistanceFactor = 0.88;
+const automaticSurfaceProbeLateralDistanceFactor = 0.72;
+const automaticSurfaceStepHeightLeewayMeters = 0.04;
+const automaticSurfaceBlockingHeightToleranceMeters = 0.01;
+
+interface AutomaticSurfaceSupportSnapshot {
+  readonly centerStepBlocked: boolean;
+  readonly centerStepSupportHeightMeters: number | null;
+  readonly forwardStepBlocked: boolean;
+  readonly forwardStepSupportHeightMeters: number | null;
+  readonly highestStepSupportHeightMeters: number | null;
+  readonly stepSupportedProbeCount: number;
+}
+
+interface AutomaticSurfaceProbeSupportSnapshot {
+  readonly stepSupportHeightMeters: number | null;
+  readonly supportHeightMeters: number | null;
+}
+
+interface AutomaticSurfaceLocomotionDecision {
+  readonly locomotionMode: AutomaticSurfaceLocomotionModeId;
+  readonly supportHeightMeters: number | null;
+}
 
 function toFiniteNumber(value: number, fallback = 0): number {
   return Number.isFinite(value) ? value : fallback;
@@ -153,6 +180,35 @@ function resolveShapedDragScale(
       normalizedSpeed,
       Math.max(0.1, toFiniteNumber(dragCurveExponent, 1))
     )
+  );
+}
+
+function resolvePlanarProbeOffset(
+  forwardMeters: number,
+  lateralMeters: number,
+  yawRadians: number
+): PhysicsVector3Snapshot {
+  const forwardX = Math.sin(yawRadians);
+  const forwardZ = -Math.cos(yawRadians);
+  const rightX = Math.cos(yawRadians);
+  const rightZ = Math.sin(yawRadians);
+
+  return freezeVector3(
+    forwardX * forwardMeters + rightX * lateralMeters,
+    0,
+    forwardZ * forwardMeters + rightZ * lateralMeters
+  );
+}
+
+function hasBlockingSupport(
+  probeSupport: AutomaticSurfaceProbeSupportSnapshot
+): boolean {
+  return (
+    probeSupport.supportHeightMeters !== null &&
+    (probeSupport.stepSupportHeightMeters === null ||
+      probeSupport.supportHeightMeters >
+        probeSupport.stepSupportHeightMeters +
+          automaticSurfaceBlockingHeightToleranceMeters)
   );
 }
 
@@ -431,6 +487,7 @@ export class MetaverseTraversalRuntime {
   }
 
   reset(): void {
+    this.#groundedBodyRuntime.setAutostepEnabled(false);
     this.#cameraSnapshot = createMetaverseCameraSnapshot(this.#config.camera);
     this.#characterPresentationSnapshot = null;
     this.#groundedPitchRadians = this.#config.camera.initialPitchRadians;
@@ -532,16 +589,19 @@ export class MetaverseTraversalRuntime {
 
   #enterGroundedLocomotion(
     position: PhysicsVector3Snapshot,
-    yawRadians: number
+    yawRadians: number,
+    supportHeightMeters: number | null = null
   ): void {
     if (!this.#groundedBodyRuntime.isInitialized) {
       return;
     }
 
+    this.#groundedBodyRuntime.setAutostepEnabled(false);
     this.#groundedBodyRuntime.teleport(
       freezeVector3(
         position.x,
-        this.#resolveSurfaceHeightMeters(position.x, position.z),
+        supportHeightMeters ??
+          this.#resolveSurfaceHeightMeters(position.x, position.z),
         position.z
       ),
       yawRadians
@@ -561,6 +621,7 @@ export class MetaverseTraversalRuntime {
     position: PhysicsVector3Snapshot,
     yawRadians: number
   ): void {
+    this.#groundedBodyRuntime.setAutostepEnabled(false);
     this.#swimForwardSpeedUnitsPerSecond = 0;
     this.#swimSnapshot = this.#createSurfaceLocomotionSnapshot(
       freezeVector3(position.x, this.#config.ocean.height, position.z),
@@ -576,24 +637,74 @@ export class MetaverseTraversalRuntime {
   }
 
   #resolveAutomaticSurfaceLocomotionMode(
-    position: PhysicsVector3Snapshot
-  ): AutomaticSurfaceLocomotionModeId {
-    return this.#isWaterbornePosition(
+    position: PhysicsVector3Snapshot,
+    yawRadians: number,
+    currentLocomotionMode: AutomaticSurfaceLocomotionModeId
+  ): AutomaticSurfaceLocomotionDecision {
+    const supportSnapshot = this.#sampleAutomaticSurfaceSupport(
       position,
-      this.#config.groundedBody.capsuleRadiusMeters
-    )
-      ? "swim"
-      : "grounded";
+      yawRadians,
+      currentLocomotionMode === "grounded"
+        ? this.#config.groundedBody.capsuleRadiusMeters *
+            automaticSurfaceGroundedHoldPaddingFactor
+        : 0
+    );
+    if (currentLocomotionMode === "grounded") {
+      const shouldStayGrounded =
+        supportSnapshot.centerStepSupportHeightMeters !== null ||
+        supportSnapshot.stepSupportedProbeCount >=
+          automaticSurfaceGroundedHoldProbeCount;
+
+      return shouldStayGrounded
+        ? {
+            locomotionMode: "grounded",
+            supportHeightMeters:
+              supportSnapshot.centerStepSupportHeightMeters ??
+              supportSnapshot.highestStepSupportHeightMeters
+          }
+        : {
+            locomotionMode: "swim",
+            supportHeightMeters: null
+          };
+    }
+
+    const canExitWater =
+      supportSnapshot.centerStepSupportHeightMeters !== null &&
+      !supportSnapshot.centerStepBlocked &&
+      supportSnapshot.forwardStepSupportHeightMeters !== null &&
+      !supportSnapshot.forwardStepBlocked &&
+      supportSnapshot.stepSupportedProbeCount >=
+        automaticSurfaceExitSupportProbeCount;
+
+    return canExitWater
+      ? {
+          locomotionMode: "grounded",
+          supportHeightMeters:
+            supportSnapshot.centerStepSupportHeightMeters ??
+            supportSnapshot.highestStepSupportHeightMeters
+        }
+      : {
+          locomotionMode: "swim",
+          supportHeightMeters: null
+        };
   }
 
   #syncAutomaticSurfaceLocomotion(
     position: PhysicsVector3Snapshot,
     yawRadians: number
   ): void {
-    const locomotionMode = this.#resolveAutomaticSurfaceLocomotionMode(position);
+    const locomotionDecision = this.#resolveAutomaticSurfaceLocomotionMode(
+      position,
+      yawRadians,
+      this.#locomotionMode === "grounded" ? "grounded" : "swim"
+    );
 
-    if (locomotionMode === "grounded") {
-      this.#enterGroundedLocomotion(position, yawRadians);
+    if (locomotionDecision.locomotionMode === "grounded") {
+      this.#enterGroundedLocomotion(
+        position,
+        yawRadians,
+        locomotionDecision.supportHeightMeters
+      );
       return;
     }
 
@@ -601,6 +712,7 @@ export class MetaverseTraversalRuntime {
   }
 
   #mountEnvironment(mountedEnvironment: MountedEnvironmentSnapshot): void {
+    this.#groundedBodyRuntime.setAutostepEnabled(false);
     this.#setLocomotionMode("mounted");
 
     if (mountedEnvironment.environmentAssetId !== "metaverse-hub-skiff-v1") {
@@ -674,6 +786,10 @@ export class MetaverseTraversalRuntime {
     let highestSurfaceY: number | null = null;
 
     for (const collider of this.#surfaceColliderSnapshots) {
+      if (collider.traversalAffordance !== "support") {
+        continue;
+      }
+
       const localOffset = rotateVectorByQuaternion(
         x - collider.translation.x,
         0,
@@ -709,6 +825,220 @@ export class MetaverseTraversalRuntime {
     );
   }
 
+  #shouldEnableGroundedAutostep(
+    position: PhysicsVector3Snapshot,
+    yawRadians: number,
+    moveAxis: number
+  ): boolean {
+    const movementDirection = Math.sign(clamp(moveAxis, -1, 1));
+
+    if (movementDirection === 0) {
+      return false;
+    }
+
+    const currentSupportHeightMeters = position.y;
+    const maxEligibleStepRiseMeters =
+      this.#config.groundedBody.stepHeightMeters +
+      automaticSurfaceStepHeightLeewayMeters;
+    const probeForwardDistanceMeters =
+      this.#config.groundedBody.capsuleRadiusMeters *
+      automaticSurfaceProbeForwardDistanceFactor *
+      movementDirection;
+    const probeLateralDistanceMeters =
+      this.#config.groundedBody.capsuleRadiusMeters *
+      automaticSurfaceProbeLateralDistanceFactor;
+
+    for (const probeOffset of [
+      resolvePlanarProbeOffset(probeForwardDistanceMeters, 0, yawRadians),
+      resolvePlanarProbeOffset(
+        probeForwardDistanceMeters * 0.72,
+        -probeLateralDistanceMeters,
+        yawRadians
+      ),
+      resolvePlanarProbeOffset(
+        probeForwardDistanceMeters * 0.72,
+        probeLateralDistanceMeters,
+        yawRadians
+      )
+    ]) {
+      const supportHeightMeters = this.#resolveSurfaceSupportHeightMeters(
+        position.x + probeOffset.x,
+        position.z + probeOffset.z
+      );
+
+      if (supportHeightMeters === null) {
+        continue;
+      }
+
+      const supportRiseMeters =
+        supportHeightMeters - currentSupportHeightMeters;
+
+      if (
+        supportRiseMeters > automaticSurfaceBlockingHeightToleranceMeters &&
+        supportRiseMeters <= maxEligibleStepRiseMeters
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  #sampleAutomaticSurfaceSupport(
+    position: PhysicsVector3Snapshot,
+    yawRadians: number,
+    paddingMeters: number
+  ): AutomaticSurfaceSupportSnapshot {
+    const probeForwardDistanceMeters =
+      this.#config.groundedBody.capsuleRadiusMeters *
+      automaticSurfaceProbeForwardDistanceFactor;
+    const probeLateralDistanceMeters =
+      this.#config.groundedBody.capsuleRadiusMeters *
+      automaticSurfaceProbeLateralDistanceFactor;
+    const centerProbeSupport = this.#resolveAutomaticSurfaceProbeSupport(
+      position.x,
+      position.z,
+      paddingMeters
+    );
+    const forwardProbeOffset = resolvePlanarProbeOffset(
+      probeForwardDistanceMeters,
+      0,
+      yawRadians
+    );
+    const forwardProbeSupport = this.#resolveAutomaticSurfaceProbeSupport(
+      position.x + forwardProbeOffset.x,
+      position.z + forwardProbeOffset.z,
+      paddingMeters
+    );
+    const forwardLeftProbeOffset = resolvePlanarProbeOffset(
+      probeForwardDistanceMeters * 0.72,
+      -probeLateralDistanceMeters,
+      yawRadians
+    );
+    const forwardLeftProbeSupport =
+      this.#resolveAutomaticSurfaceProbeSupport(
+        position.x + forwardLeftProbeOffset.x,
+        position.z + forwardLeftProbeOffset.z,
+        paddingMeters
+      );
+    const forwardRightProbeOffset = resolvePlanarProbeOffset(
+      probeForwardDistanceMeters * 0.72,
+      probeLateralDistanceMeters,
+      yawRadians
+    );
+    const forwardRightProbeSupport =
+      this.#resolveAutomaticSurfaceProbeSupport(
+        position.x + forwardRightProbeOffset.x,
+        position.z + forwardRightProbeOffset.z,
+        paddingMeters
+      );
+    const rearProbeOffset = resolvePlanarProbeOffset(
+      -probeForwardDistanceMeters * 0.48,
+      0,
+      yawRadians
+    );
+    const rearProbeSupport = this.#resolveAutomaticSurfaceProbeSupport(
+      position.x + rearProbeOffset.x,
+      position.z + rearProbeOffset.z,
+      paddingMeters
+    );
+    let highestStepSupportHeightMeters: number | null = null;
+    let stepSupportedProbeCount = 0;
+
+    for (const probeSupport of [
+      centerProbeSupport,
+      forwardProbeSupport,
+      forwardLeftProbeSupport,
+      forwardRightProbeSupport,
+      rearProbeSupport
+    ]) {
+      if (probeSupport.stepSupportHeightMeters === null) {
+        continue;
+      }
+
+      stepSupportedProbeCount += 1;
+      if (
+        highestStepSupportHeightMeters === null ||
+        probeSupport.stepSupportHeightMeters > highestStepSupportHeightMeters
+      ) {
+        highestStepSupportHeightMeters = probeSupport.stepSupportHeightMeters;
+      }
+    }
+
+    return {
+      centerStepBlocked: hasBlockingSupport(centerProbeSupport),
+      centerStepSupportHeightMeters:
+        centerProbeSupport.stepSupportHeightMeters,
+      forwardStepBlocked: hasBlockingSupport(forwardProbeSupport),
+      forwardStepSupportHeightMeters:
+        forwardProbeSupport.stepSupportHeightMeters,
+      highestStepSupportHeightMeters,
+      stepSupportedProbeCount
+    };
+  }
+
+  #resolveAutomaticSurfaceProbeSupport(
+    x: number,
+    z: number,
+    paddingMeters = 0
+  ): AutomaticSurfaceProbeSupportSnapshot {
+    let highestStepSupportHeightMeters: number | null = null;
+    let highestSupportHeightMeters: number | null = null;
+    const highestStepRiseAboveWaterMeters =
+      this.#config.groundedBody.stepHeightMeters +
+      automaticSurfaceStepHeightLeewayMeters;
+
+    for (const collider of this.#surfaceColliderSnapshots) {
+      if (collider.traversalAffordance !== "support") {
+        continue;
+      }
+
+      const localOffset = rotateVectorByQuaternion(
+        x - collider.translation.x,
+        0,
+        z - collider.translation.z,
+        -collider.rotation.x,
+        -collider.rotation.y,
+        -collider.rotation.z,
+        collider.rotation.w
+      );
+
+      if (
+        Math.abs(localOffset.x) > collider.halfExtents.x + paddingMeters ||
+        Math.abs(localOffset.z) > collider.halfExtents.z + paddingMeters
+      ) {
+        continue;
+      }
+
+      const surfaceY = collider.translation.y + collider.halfExtents.y;
+      const riseAboveWaterMeters = surfaceY - this.#config.ocean.height;
+
+      if (riseAboveWaterMeters <= automaticSurfaceWaterlineThresholdMeters) {
+        continue;
+      }
+
+      if (
+        highestSupportHeightMeters === null ||
+        surfaceY > highestSupportHeightMeters
+      ) {
+        highestSupportHeightMeters = surfaceY;
+      }
+
+      if (
+        riseAboveWaterMeters <= highestStepRiseAboveWaterMeters &&
+        (highestStepSupportHeightMeters === null ||
+          surfaceY > highestStepSupportHeightMeters)
+      ) {
+        highestStepSupportHeightMeters = surfaceY;
+      }
+    }
+
+    return {
+      stepSupportHeightMeters: highestStepSupportHeightMeters,
+      supportHeightMeters: highestSupportHeightMeters
+    };
+  }
+
   #isWaterbornePosition(
     position: PhysicsVector3Snapshot,
     paddingMeters = 0
@@ -729,6 +1059,21 @@ export class MetaverseTraversalRuntime {
     movementInput: MetaverseFlightInputSnapshot,
     deltaSeconds: number
   ): MetaverseCameraSnapshot {
+    const currentBodySnapshot = this.#groundedBodyRuntime.snapshot;
+    const nextGroundedYawRadians = wrapRadians(
+      currentBodySnapshot.yawRadians +
+        clamp(movementInput.yawAxis, -1, 1) *
+          this.#config.groundedBody.maxTurnSpeedRadiansPerSecond *
+          deltaSeconds
+    );
+
+    this.#groundedBodyRuntime.setAutostepEnabled(
+      this.#shouldEnableGroundedAutostep(
+        currentBodySnapshot.position,
+        nextGroundedYawRadians,
+        movementInput.moveAxis
+      )
+    );
     this.#groundedPitchRadians = advanceMetaversePitchRadians(
       this.#groundedPitchRadians,
       movementInput.pitchAxis,
@@ -745,7 +1090,13 @@ export class MetaverseTraversalRuntime {
       deltaSeconds
     );
 
-    if (this.#resolveAutomaticSurfaceLocomotionMode(bodySnapshot.position) === "swim") {
+    const locomotionDecision = this.#resolveAutomaticSurfaceLocomotionMode(
+      bodySnapshot.position,
+      bodySnapshot.yawRadians,
+      "grounded"
+    );
+
+    if (locomotionDecision.locomotionMode === "swim") {
       this.#enterSwimLocomotion(bodySnapshot.position, bodySnapshot.yawRadians);
 
       return this.#cameraSnapshot;
@@ -779,10 +1130,17 @@ export class MetaverseTraversalRuntime {
       nextSwimState.forwardSpeedUnitsPerSecond;
     this.#swimSnapshot = nextSwimState.snapshot;
 
-    if (this.#resolveAutomaticSurfaceLocomotionMode(this.#swimSnapshot.position) === "grounded") {
+    const locomotionDecision = this.#resolveAutomaticSurfaceLocomotionMode(
+      this.#swimSnapshot.position,
+      this.#swimSnapshot.yawRadians,
+      "swim"
+    );
+
+    if (locomotionDecision.locomotionMode === "grounded") {
       this.#enterGroundedLocomotion(
         this.#swimSnapshot.position,
-        this.#swimSnapshot.yawRadians
+        this.#swimSnapshot.yawRadians,
+        locomotionDecision.supportHeightMeters
       );
 
       return this.#cameraSnapshot;

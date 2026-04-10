@@ -51,6 +51,7 @@ test("resolvePlacedCuboidColliders applies placement translation rotation and sc
         scale: 2
       }
     ],
+    traversalAffordance: "support",
     physicsColliders: [
       {
         center: { x: 1, y: 0.5, z: -2 },
@@ -61,6 +62,7 @@ test("resolvePlacedCuboidColliders applies placement translation rotation and sc
   });
 
   assert.equal(colliders.length, 1);
+  assert.equal(colliders[0]?.traversalAffordance, "support");
   assert.deepEqual(colliders[0]?.halfExtents, {
     x: 2,
     y: 1,
@@ -106,6 +108,7 @@ test("resolvePlacedCollisionTriMeshes bakes placement transforms into world-spac
           scale: 2
         }
       ],
+      traversalAffordance: "blocker",
       physicsColliders: null
     },
     collisionScene

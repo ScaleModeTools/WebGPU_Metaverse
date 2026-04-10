@@ -132,6 +132,11 @@ interface MetaverseCharacterProofRuntime {
   readonly scene: Group;
 }
 
+interface MetaverseRemoteCharacterPresentationRuntime {
+  readonly characterRuntime: MetaverseCharacterProofRuntime;
+  targetPresentation: MetaverseCharacterPresentationSnapshot;
+}
+
 interface MetaverseEnvironmentLodObjectRuntime {
   readonly maxDistanceMeters: number | null;
   readonly object: Group;
@@ -164,9 +169,17 @@ interface MetaverseEnvironmentDynamicAssetRuntime {
   readonly environmentAssetId: string;
   readonly label: string;
   readonly motionPhase: number;
-  readonly mount: MetaverseEnvironmentMountProofConfig;
+  readonly mount: MetaverseEnvironmentMountProofConfig | null;
   readonly scene: Group;
+  readonly seatSocketNode: Object3D | null;
+  readonly traversalAffordance: MetaverseEnvironmentAssetProofConfig["traversalAffordance"];
+}
+
+interface MetaverseMountableEnvironmentDynamicAssetRuntime
+  extends MetaverseEnvironmentDynamicAssetRuntime {
+  readonly mount: MetaverseEnvironmentMountProofConfig;
   readonly seatSocketNode: Object3D;
+  readonly traversalAffordance: "mount";
 }
 
 interface MountedCharacterRuntime {
@@ -217,6 +230,8 @@ const metaverseCharacterScaleBoundsMeters = Object.freeze({
 });
 
 const environmentLodSwitchHysteresisMeters = 1.25;
+const remoteCharacterInterpolationRatePerSecond = 12;
+const remoteCharacterTeleportSnapDistanceMeters = 3.5;
 
 function createDefaultSceneAssetLoader(): SceneAssetLoader {
   return new GLTFLoader() as SceneAssetLoader;
@@ -540,18 +555,27 @@ function syncEnvironmentProofRuntime(
       dynamicEnvironmentPoseOverrides
     );
 
-    dynamicAssetRuntime.anchorGroup.position.set(
-      basePose.position.x,
-      basePose.position.y +
-        Math.sin(nowMs * 0.0014 + dynamicAssetRuntime.motionPhase) * 0.18,
-      basePose.position.z
-    );
-    dynamicAssetRuntime.anchorGroup.rotation.set(
-      Math.sin(nowMs * 0.001 + dynamicAssetRuntime.motionPhase) * 0.03,
-      basePose.yawRadians +
-        Math.sin(nowMs * 0.0008 + dynamicAssetRuntime.motionPhase) * 0.05,
-      Math.sin(nowMs * 0.0011 + dynamicAssetRuntime.motionPhase) * 0.04
-    );
+    if (dynamicAssetRuntime.traversalAffordance === "mount") {
+      dynamicAssetRuntime.anchorGroup.position.set(
+        basePose.position.x,
+        basePose.position.y +
+          Math.sin(nowMs * 0.0014 + dynamicAssetRuntime.motionPhase) * 0.18,
+        basePose.position.z
+      );
+      dynamicAssetRuntime.anchorGroup.rotation.set(
+        Math.sin(nowMs * 0.001 + dynamicAssetRuntime.motionPhase) * 0.03,
+        basePose.yawRadians +
+          Math.sin(nowMs * 0.0008 + dynamicAssetRuntime.motionPhase) * 0.05,
+        Math.sin(nowMs * 0.0011 + dynamicAssetRuntime.motionPhase) * 0.04
+      );
+    } else {
+      dynamicAssetRuntime.anchorGroup.position.set(
+        basePose.position.x,
+        basePose.position.y,
+        basePose.position.z
+      );
+      dynamicAssetRuntime.anchorGroup.rotation.set(0, basePose.yawRadians, 0);
+    }
     dynamicAssetRuntime.anchorGroup.scale.setScalar(dynamicAssetRuntime.basePlacement.scale);
     dynamicAssetRuntime.anchorGroup.updateMatrixWorld(true);
   }
@@ -585,16 +609,20 @@ function resolveFocusedMountableEnvironmentRuntime(
   cameraSnapshot: MetaverseCameraSnapshot
 ): {
   readonly distanceFromCamera: number;
-  readonly environmentAsset: MetaverseEnvironmentDynamicAssetRuntime;
+  readonly environmentAsset: MetaverseMountableEnvironmentDynamicAssetRuntime;
 } | null {
   let nearestEnvironmentAsset:
     | {
         readonly distanceFromCamera: number;
-        readonly environmentAsset: MetaverseEnvironmentDynamicAssetRuntime;
+        readonly environmentAsset: MetaverseMountableEnvironmentDynamicAssetRuntime;
       }
     | null = null;
 
   for (const environmentAsset of environmentProofRuntime.dynamicAssets) {
+    if (!isMountableDynamicEnvironmentAssetRuntime(environmentAsset)) {
+      continue;
+    }
+
     const localCameraPosition = environmentAsset.anchorGroup.worldToLocal(
       new Vector3(
         cameraSnapshot.position.x,
@@ -635,6 +663,16 @@ function resolveFocusedMountableEnvironmentRuntime(
   }
 
   return nearestEnvironmentAsset;
+}
+
+function isMountableDynamicEnvironmentAssetRuntime(
+  environmentAsset: MetaverseEnvironmentDynamicAssetRuntime
+): environmentAsset is MetaverseMountableEnvironmentDynamicAssetRuntime {
+  return (
+    environmentAsset.traversalAffordance === "mount" &&
+    environmentAsset.mount !== null &&
+    environmentAsset.seatSocketNode !== null
+  );
 }
 
 function resolveFocusedMountableSnapshot(
@@ -823,17 +861,80 @@ function cloneMetaverseCharacterProofRuntime(
   return clonedRuntime;
 }
 
+function resolveRemoteCharacterInterpolationAlpha(deltaSeconds: number): number {
+  if (deltaSeconds <= 0) {
+    return 0;
+  }
+
+  return 1 - Math.exp(-remoteCharacterInterpolationRatePerSecond * deltaSeconds);
+}
+
+function syncInterpolatedRemoteCharacterPresentation(
+  remoteCharacterRuntime: MetaverseRemoteCharacterPresentationRuntime,
+  deltaSeconds: number
+): void {
+  const anchorGroup = remoteCharacterRuntime.characterRuntime.anchorGroup;
+  const targetPresentation = remoteCharacterRuntime.targetPresentation;
+  const positionDeltaX = targetPresentation.position.x - anchorGroup.position.x;
+  const positionDeltaY = targetPresentation.position.y - anchorGroup.position.y;
+  const positionDeltaZ = targetPresentation.position.z - anchorGroup.position.z;
+  const positionDistance = Math.hypot(
+    positionDeltaX,
+    positionDeltaY,
+    positionDeltaZ
+  );
+
+  anchorGroup.visible = true;
+
+  if (positionDistance >= remoteCharacterTeleportSnapDistanceMeters) {
+    anchorGroup.position.set(
+      targetPresentation.position.x,
+      targetPresentation.position.y,
+      targetPresentation.position.z
+    );
+    anchorGroup.rotation.set(0, targetPresentation.yawRadians, 0);
+    anchorGroup.updateMatrixWorld(true);
+    return;
+  }
+
+  const interpolationAlpha =
+    resolveRemoteCharacterInterpolationAlpha(deltaSeconds);
+
+  if (interpolationAlpha <= 0) {
+    return;
+  }
+
+  const yawDifference = wrapRadians(
+    targetPresentation.yawRadians - anchorGroup.rotation.y
+  );
+
+  anchorGroup.position.set(
+    anchorGroup.position.x + positionDeltaX * interpolationAlpha,
+    anchorGroup.position.y + positionDeltaY * interpolationAlpha,
+    anchorGroup.position.z + positionDeltaZ * interpolationAlpha
+  );
+  anchorGroup.rotation.set(
+    0,
+    wrapRadians(anchorGroup.rotation.y + yawDifference * interpolationAlpha),
+    0
+  );
+  anchorGroup.updateMatrixWorld(true);
+}
+
 function syncRemoteCharacterPresentations(
   scene: Scene,
   sourceCharacterRuntime: MetaverseCharacterProofRuntime | null,
-  remoteCharacterRuntimesByPlayerId: Map<string, MetaverseCharacterProofRuntime>,
+  remoteCharacterRuntimesByPlayerId: Map<
+    string,
+    MetaverseRemoteCharacterPresentationRuntime
+  >,
   remoteCharacterPresentations: readonly MetaverseRemoteCharacterPresentationSnapshot[],
   deltaSeconds: number
 ): void {
   if (sourceCharacterRuntime === null) {
     for (const remoteCharacterRuntime of remoteCharacterRuntimesByPlayerId.values()) {
-      remoteCharacterRuntime.anchorGroup.parent?.remove(
-        remoteCharacterRuntime.anchorGroup
+      remoteCharacterRuntime.characterRuntime.anchorGroup.parent?.remove(
+        remoteCharacterRuntime.characterRuntime.anchorGroup
       );
     }
 
@@ -851,26 +952,37 @@ function syncRemoteCharacterPresentations(
     );
 
     if (remoteCharacterRuntime === undefined) {
-      remoteCharacterRuntime = cloneMetaverseCharacterProofRuntime(
+      const characterRuntime = cloneMetaverseCharacterProofRuntime(
         sourceCharacterRuntime,
         remoteCharacterPresentation.playerId
       );
+      remoteCharacterRuntime = {
+        characterRuntime,
+        targetPresentation: remoteCharacterPresentation.presentation
+      };
       remoteCharacterRuntimesByPlayerId.set(
         remoteCharacterPresentation.playerId,
         remoteCharacterRuntime
       );
-      scene.add(remoteCharacterRuntime.anchorGroup);
+      scene.add(characterRuntime.anchorGroup);
+      syncCharacterPresentation(
+        characterRuntime,
+        remoteCharacterPresentation.presentation,
+        null
+      );
+    } else {
+      remoteCharacterRuntime.targetPresentation =
+        remoteCharacterPresentation.presentation;
     }
 
     syncCharacterAnimation(
-      remoteCharacterRuntime,
+      remoteCharacterRuntime.characterRuntime,
       remoteCharacterPresentation.presentation.animationVocabulary
     );
-    remoteCharacterRuntime.mixer.update(deltaSeconds);
-    syncCharacterPresentation(
+    remoteCharacterRuntime.characterRuntime.mixer.update(deltaSeconds);
+    syncInterpolatedRemoteCharacterPresentation(
       remoteCharacterRuntime,
-      remoteCharacterPresentation.presentation,
-      null
+      deltaSeconds
     );
   }
 
@@ -879,8 +991,8 @@ function syncRemoteCharacterPresentations(
       continue;
     }
 
-    remoteCharacterRuntime.anchorGroup.parent?.remove(
-      remoteCharacterRuntime.anchorGroup
+    remoteCharacterRuntime.characterRuntime.anchorGroup.parent?.remove(
+      remoteCharacterRuntime.characterRuntime.anchorGroup
     );
     remoteCharacterRuntimesByPlayerId.delete(playerId);
   }
@@ -888,7 +1000,7 @@ function syncRemoteCharacterPresentations(
 
 function mountCharacterOnEnvironmentAsset(
   characterProofRuntime: MetaverseCharacterProofRuntime,
-  environmentAsset: MetaverseEnvironmentDynamicAssetRuntime
+  environmentAsset: MetaverseMountableEnvironmentDynamicAssetRuntime
 ): MountedCharacterRuntime {
   const previousParent = characterProofRuntime.anchorGroup.parent;
 
@@ -1258,6 +1370,15 @@ async function loadDynamicEnvironmentAssetProofRuntime(
   createSceneAssetLoader: () => SceneAssetLoader,
   dynamicAssetIndex: number
 ): Promise<MetaverseEnvironmentDynamicAssetRuntime> {
+  if (
+    environmentAssetProofConfig.traversalAffordance !== "mount" &&
+    environmentAssetProofConfig.traversalAffordance !== "pushable"
+  ) {
+    throw new Error(
+      `Metaverse dynamic environment asset ${environmentAssetProofConfig.label} must use mount or pushable affordance.`
+    );
+  }
+
   if (environmentAssetProofConfig.placements.length !== 1) {
     throw new Error(
       `Metaverse dynamic environment asset ${environmentAssetProofConfig.label} requires exactly one placement.`
@@ -1276,12 +1397,6 @@ async function loadDynamicEnvironmentAssetProofRuntime(
     );
   }
 
-  if (environmentAssetProofConfig.mount === null) {
-    throw new Error(
-      `Metaverse dynamic environment asset ${environmentAssetProofConfig.label} requires mount metadata.`
-    );
-  }
-
   const sceneAssetLoader = createSceneAssetLoader();
   const environmentAsset = await sceneAssetLoader.loadAsync(
     environmentAssetProofConfig.lods[0]!.modelPath
@@ -1289,11 +1404,28 @@ async function loadDynamicEnvironmentAssetProofRuntime(
   const anchorGroup = new Group();
   const placement = environmentAssetProofConfig.placements[0]!;
   const environmentScene = environmentAsset.scene;
-  const seatSocketNode = findNamedNode(
-    environmentScene,
-    environmentAssetProofConfig.mount.seatSocketName,
-    `Metaverse dynamic environment asset ${environmentAssetProofConfig.label}`
-  );
+  let seatSocketNode: Object3D | null = null;
+
+  if (environmentAssetProofConfig.traversalAffordance === "mount") {
+    if (environmentAssetProofConfig.mount === null) {
+      throw new Error(
+        `Metaverse dynamic environment asset ${environmentAssetProofConfig.label} requires mount metadata.`
+      );
+    }
+
+    seatSocketNode = findNamedNode(
+      environmentScene,
+      environmentAssetProofConfig.mount.seatSocketName,
+      `Metaverse dynamic environment asset ${environmentAssetProofConfig.label}`
+    );
+    seatSocketNode.add(
+      createSocketDebugMarker(environmentAssetProofConfig.mount.seatSocketName)
+    );
+  } else if (environmentAssetProofConfig.mount !== null) {
+    throw new Error(
+      `Metaverse pushable environment asset ${environmentAssetProofConfig.label} cannot expose mount metadata.`
+    );
+  }
 
   anchorGroup.name = `metaverse_environment_asset/${environmentAssetProofConfig.environmentAssetId}`;
   environmentScene.name = [
@@ -1301,7 +1433,6 @@ async function loadDynamicEnvironmentAssetProofRuntime(
     environmentAssetProofConfig.environmentAssetId,
     environmentAssetProofConfig.lods[0]!.tier
   ].join("/");
-  seatSocketNode.add(createSocketDebugMarker(environmentAssetProofConfig.mount.seatSocketName));
   anchorGroup.add(environmentScene);
   applyPlacementTransform(anchorGroup, placement);
 
@@ -1314,7 +1445,8 @@ async function loadDynamicEnvironmentAssetProofRuntime(
     motionPhase: dynamicAssetIndex * 0.8,
     mount: environmentAssetProofConfig.mount,
     scene: environmentScene,
-    seatSocketNode
+    seatSocketNode,
+    traversalAffordance: environmentAssetProofConfig.traversalAffordance
   };
 }
 
@@ -1671,7 +1803,7 @@ export function createMetaverseScene(
   >();
   const remoteCharacterRuntimesByPlayerId = new Map<
     string,
-    MetaverseCharacterProofRuntime
+    MetaverseRemoteCharacterPresentationRuntime
   >();
 
   camera.position.set(
@@ -1828,8 +1960,8 @@ export function createMetaverseScene(
 
       dynamicEnvironmentPoseOverrides.clear();
       for (const remoteCharacterRuntime of remoteCharacterRuntimesByPlayerId.values()) {
-        remoteCharacterRuntime.anchorGroup.parent?.remove(
-          remoteCharacterRuntime.anchorGroup
+        remoteCharacterRuntime.characterRuntime.anchorGroup.parent?.remove(
+          remoteCharacterRuntime.characterRuntime.anchorGroup
         );
       }
       remoteCharacterRuntimesByPlayerId.clear();

@@ -40,8 +40,63 @@ class FakeColliderDesc {
   }
 }
 
+class FakeRigidBodyDesc {
+  constructor() {
+    this.additionalMass = 0;
+    this.angularDamping = 0;
+    this.gravityScale = 1;
+    this.linearDamping = 0;
+    this.lockRotationsEnabled = false;
+    this.rotation = { x: 0, y: 0, z: 0, w: 1 };
+    this.translation = new FakeRapierVector3(0, 0, 0);
+  }
+
+  lockRotations() {
+    this.lockRotationsEnabled = true;
+
+    return this;
+  }
+
+  setAdditionalMass(mass) {
+    this.additionalMass = mass;
+
+    return this;
+  }
+
+  setAngularDamping(damping) {
+    this.angularDamping = damping;
+
+    return this;
+  }
+
+  setGravityScale(scale) {
+    this.gravityScale = scale;
+
+    return this;
+  }
+
+  setLinearDamping(damping) {
+    this.linearDamping = damping;
+
+    return this;
+  }
+
+  setRotation(rotation) {
+    this.rotation = rotation;
+
+    return this;
+  }
+
+  setTranslation(x, y, z) {
+    this.translation = new FakeRapierVector3(x, y, z);
+
+    return this;
+  }
+}
+
 class FakeCollider {
-  constructor(shape, payload, translation) {
+  constructor(shape, payload, translation, parentBody = null) {
+    this.parentBody = parentBody;
     this.payload = payload;
     this.shape = shape;
     this.translationVector = translation;
@@ -62,12 +117,60 @@ class FakeCollider {
   }
 
   translation() {
+    if (this.parentBody !== null) {
+      const parentTranslation = this.parentBody.translation();
+
+      return new FakeRapierVector3(
+        parentTranslation.x + this.translationVector.x,
+        parentTranslation.y + this.translationVector.y,
+        parentTranslation.z + this.translationVector.z
+      );
+    }
+
+    return this.translationVector;
+  }
+}
+
+class FakeRigidBody {
+  constructor(bodyDesc) {
+    this.additionalMass = bodyDesc.additionalMass;
+    this.angularDamping = bodyDesc.angularDamping;
+    this.gravityScale = bodyDesc.gravityScale;
+    this.linearDamping = bodyDesc.linearDamping;
+    this.linvelVector = new FakeRapierVector3(0, 0, 0);
+    this.lockRotationsEnabled = bodyDesc.lockRotationsEnabled;
+    this.rotationQuaternion = bodyDesc.rotation;
+    this.translationVector = bodyDesc.translation;
+  }
+
+  linvel() {
+    return this.linvelVector;
+  }
+
+  setLinvel(velocity) {
+    this.linvelVector = new FakeRapierVector3(
+      velocity.x,
+      velocity.y,
+      velocity.z
+    );
+  }
+
+  setTranslation(translation) {
+    this.translationVector = new FakeRapierVector3(
+      translation.x,
+      translation.y,
+      translation.z
+    );
+  }
+
+  translation() {
     return this.translationVector;
   }
 }
 
 class FakeCharacterController {
   constructor(world) {
+    this.applyImpulsesToDynamicBodies = false;
     this.grounded = false;
     this.lastMovement = new FakeRapierVector3(0, 0, 0);
     this.snapDistance = 0;
@@ -117,7 +220,9 @@ class FakeCharacterController {
 
   free() {}
 
-  setApplyImpulsesToDynamicBodies() {}
+  setApplyImpulsesToDynamicBodies(enabled) {
+    this.applyImpulsesToDynamicBodies = enabled;
+  }
 
   setCharacterMass() {}
 
@@ -155,24 +260,39 @@ class FakeCharacterController {
 class FakeRapierWorld {
   constructor() {
     this.colliders = [];
+    this.lastCharacterController = null;
     this.queryColliders = [];
+    this.rigidBodies = [];
     this.timestep = 1 / 60;
   }
 
   createCharacterController() {
-    return new FakeCharacterController(this);
+    const controller = new FakeCharacterController(this);
+
+    this.lastCharacterController = controller;
+
+    return controller;
   }
 
-  createCollider(colliderDesc) {
+  createCollider(colliderDesc, parentBody = null) {
     const collider = new FakeCollider(
       colliderDesc.shape,
       colliderDesc.payload,
-      colliderDesc.translation
+      colliderDesc.translation,
+      parentBody
     );
 
     this.colliders.push(collider);
 
     return collider;
+  }
+
+  createRigidBody(bodyDesc) {
+    const rigidBody = new FakeRigidBody(bodyDesc);
+
+    this.rigidBodies.push(rigidBody);
+
+    return rigidBody;
   }
 
   removeCollider(collider) {
@@ -182,13 +302,30 @@ class FakeRapierWorld {
     );
   }
 
+  removeRigidBody(rigidBody) {
+    this.rigidBodies = this.rigidBodies.filter((candidate) => candidate !== rigidBody);
+    this.colliders = this.colliders.filter(
+      (candidate) => candidate.parentBody !== rigidBody
+    );
+    this.queryColliders = this.queryColliders.filter(
+      (candidate) => candidate.parentBody !== rigidBody
+    );
+  }
+
   step() {
     this.queryColliders = [...this.colliders];
   }
 }
 
 function createFakePhysicsRuntime(RapierPhysicsRuntime) {
-  return new RapierPhysicsRuntime({
+  return createFakePhysicsRuntimeWithWorld(RapierPhysicsRuntime).physicsRuntime;
+}
+
+function createFakePhysicsRuntimeWithWorld(RapierPhysicsRuntime) {
+  const world = new FakeRapierWorld();
+
+  return {
+    physicsRuntime: new RapierPhysicsRuntime({
     async createPhysicsAddon() {
       return {
         RAPIER: {
@@ -213,12 +350,19 @@ function createFakePhysicsRuntime(RapierPhysicsRuntime) {
               });
             }
           },
+          RigidBodyDesc: {
+            dynamic() {
+              return new FakeRigidBodyDesc();
+            }
+          },
           Vector3: FakeRapierVector3
         },
-        world: new FakeRapierWorld()
+        world
       };
     }
-  });
+    }),
+    world
+  };
 }
 
 class FakeMetaverseRenderer {
@@ -565,7 +709,8 @@ async function createSkiffMountProofSlice() {
               scale: 1
             }
           ],
-          physicsColliders: null
+          physicsColliders: null,
+          traversalAffordance: "mount"
         }
       ]
     }
@@ -607,6 +752,7 @@ async function createStaticSurfaceProofSlice() {
               scale: 1
             }
           ],
+          traversalAffordance: "support",
           physicsColliders: [
             {
               center: { x: 0, y: 0, z: 0 },
@@ -614,6 +760,66 @@ async function createStaticSurfaceProofSlice() {
               size: { x: 8, y: 0.4, z: 8 }
             }
           ]
+        }
+      ]
+    }
+  };
+}
+
+async function createPushableCrateProofSlice() {
+  const {
+    BoxGeometry,
+    Group,
+    Mesh,
+    MeshStandardMaterial
+  } = await import("three/webgpu");
+  const crateScene = new Group();
+  const crateMesh = new Mesh(
+    new BoxGeometry(0.92, 0.92, 0.92),
+    new MeshStandardMaterial({ color: 0x8b5a2b })
+  );
+
+  crateScene.name = "metaverse_hub_pushable_crate_root";
+  crateScene.add(crateMesh);
+
+  return {
+    createSceneAssetLoader: () => ({
+      async loadAsync() {
+        return {
+          animations: [],
+          scene: crateScene
+        };
+      }
+    }),
+    environmentProofConfig: {
+      assets: [
+        {
+          collisionPath: null,
+          collider: {
+            center: { x: 0, y: 0, z: 0 },
+            shape: "box",
+            size: { x: 0.92, y: 0.92, z: 0.92 }
+          },
+          environmentAssetId: "metaverse-hub-pushable-crate-v1",
+          label: "Metaverse hub pushable crate",
+          lods: [
+            {
+              maxDistanceMeters: null,
+              modelPath: "/models/metaverse/environment/metaverse-hub-crate-high.gltf",
+              tier: "high"
+            }
+          ],
+          mount: null,
+          placement: "dynamic",
+          placements: [
+            {
+              position: { x: -3.8, y: 0.46, z: -14.4 },
+              rotationYRadians: Math.PI * 0.04,
+              scale: 1
+            }
+          ],
+          physicsColliders: null,
+          traversalAffordance: "pushable"
         }
       ]
     }
@@ -1126,13 +1332,16 @@ test("metaverse asset proof resolves static, instanced, and dynamic environment 
     "/src/app/states/metaverse-asset-proof.ts"
   );
 
-  assert.equal(metaverseEnvironmentProofConfig.assets.length, 3);
+  assert.equal(metaverseEnvironmentProofConfig.assets.length, 4);
 
   const crateAsset = metaverseEnvironmentProofConfig.assets.find(
     (asset) => asset.environmentAssetId === "metaverse-hub-crate-v1"
   );
   const dockAsset = metaverseEnvironmentProofConfig.assets.find(
     (asset) => asset.environmentAssetId === "metaverse-hub-dock-v1"
+  );
+  const pushableCrateAsset = metaverseEnvironmentProofConfig.assets.find(
+    (asset) => asset.environmentAssetId === "metaverse-hub-pushable-crate-v1"
   );
   const skiffAsset = metaverseEnvironmentProofConfig.assets.find(
     (asset) => asset.environmentAssetId === "metaverse-hub-skiff-v1"
@@ -1141,6 +1350,7 @@ test("metaverse asset proof resolves static, instanced, and dynamic environment 
   assert.ok(crateAsset);
   assert.equal(crateAsset.collisionPath, null);
   assert.equal(crateAsset.placement, "instanced");
+  assert.equal(crateAsset.traversalAffordance, "blocker");
   assert.ok(crateAsset.lods.length >= 2);
   assert.ok(crateAsset.placements.length > 1);
   assert.equal(crateAsset.physicsColliders?.length, 1);
@@ -1148,17 +1358,137 @@ test("metaverse asset proof resolves static, instanced, and dynamic environment 
   assert.ok(dockAsset);
   assert.equal(dockAsset.collisionPath, null);
   assert.equal(dockAsset.placement, "static");
+  assert.equal(dockAsset.traversalAffordance, "support");
   assert.ok(dockAsset.lods.length >= 2);
   assert.equal(dockAsset.placements.length, 1);
   assert.equal(dockAsset.physicsColliders?.length, 1);
 
+  assert.ok(pushableCrateAsset);
+  assert.equal(pushableCrateAsset.collisionPath, null);
+  assert.equal(pushableCrateAsset.placement, "dynamic");
+  assert.equal(pushableCrateAsset.traversalAffordance, "pushable");
+  assert.equal(pushableCrateAsset.lods.length, 1);
+  assert.equal(pushableCrateAsset.placements.length, 1);
+  assert.equal(pushableCrateAsset.physicsColliders, null);
+  assert.equal(pushableCrateAsset.mount, null);
+  assert.equal(pushableCrateAsset.collider?.shape, "box");
+
   assert.ok(skiffAsset);
   assert.equal(skiffAsset.placement, "dynamic");
+  assert.equal(skiffAsset.traversalAffordance, "mount");
   assert.equal(skiffAsset.lods.length, 1);
   assert.equal(skiffAsset.placements.length, 1);
   assert.equal(skiffAsset.physicsColliders, null);
   assert.equal(skiffAsset.mount?.seatSocketName, "seat_socket");
   assert.equal(skiffAsset.collider?.shape, "box");
+});
+
+test("createMetaverseScene syncs pushable dynamic assets from exact pose overrides without exposing mount focus", async () => {
+  const [{ createMetaverseScene }, { metaverseRuntimeConfig }] = await Promise.all([
+    clientLoader.load("/src/metaverse/render/webgpu-metaverse-scene.ts"),
+    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts")
+  ]);
+  const { createSceneAssetLoader, environmentProofConfig } =
+    await createPushableCrateProofSlice();
+  const sceneRuntime = createMetaverseScene(metaverseRuntimeConfig, {
+    createSceneAssetLoader,
+    environmentProofConfig,
+    warn() {}
+  });
+
+  await sceneRuntime.boot();
+
+  const initialInteractionSnapshot = sceneRuntime.syncPresentation(
+    {
+      lookDirection: { x: 0, y: 0, z: -1 },
+      pitchRadians: 0,
+      position: { x: -3.8, y: 1.2, z: -14.4 },
+      yawRadians: 0
+    },
+    null,
+    0,
+    0
+  );
+
+  assert.equal(initialInteractionSnapshot.focusedMountable, null);
+
+  sceneRuntime.setDynamicEnvironmentPose("metaverse-hub-pushable-crate-v1", {
+    position: { x: -2.4, y: 0.46, z: -13.2 },
+    yawRadians: 0.6
+  });
+  sceneRuntime.syncPresentation(
+    {
+      lookDirection: { x: 0, y: 0, z: -1 },
+      pitchRadians: 0,
+      position: { x: -2.4, y: 1.2, z: -13.2 },
+      yawRadians: 0
+    },
+    null,
+    1000,
+    1 / 60
+  );
+
+  const pushableRoot = sceneRuntime.scene.getObjectByName(
+    "metaverse_environment_asset/metaverse-hub-pushable-crate-v1"
+  );
+
+  assert.ok(pushableRoot);
+  assert.ok(Math.abs(pushableRoot.position.x - -2.4) < 0.0001);
+  assert.ok(Math.abs(pushableRoot.position.y - 0.46) < 0.0001);
+  assert.ok(Math.abs(pushableRoot.position.z - -13.2) < 0.0001);
+  assert.ok(Math.abs(pushableRoot.rotation.y - 0.6) < 0.0001);
+});
+
+test("WebGpuMetaverseRuntime boots pushable rigid bodies and enables dynamic-body impulses only for that slice", async () => {
+  const [{ WebGpuMetaverseRuntime }, { RapierPhysicsRuntime }] = await Promise.all([
+    clientLoader.load("/src/metaverse/classes/webgpu-metaverse-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
+  const { createSceneAssetLoader, environmentProofConfig } =
+    await createPushableCrateProofSlice();
+  const { physicsRuntime, world } =
+    createFakePhysicsRuntimeWithWorld(RapierPhysicsRuntime);
+  const renderer = new FakeMetaverseRenderer();
+  const originalWindow = globalThis.window;
+  const fakeCanvas = {
+    addEventListener() {},
+    clientHeight: 720,
+    clientWidth: 1280,
+    removeEventListener() {}
+  };
+
+  globalThis.window = {
+    addEventListener() {},
+    cancelAnimationFrame() {},
+    devicePixelRatio: 1,
+    removeEventListener() {},
+    requestAnimationFrame() {
+      return 1;
+    }
+  };
+
+  try {
+    const runtime = new WebGpuMetaverseRuntime(undefined, {
+      cancelAnimationFrame: globalThis.window.cancelAnimationFrame.bind(globalThis.window),
+      createRenderer: () => renderer,
+      createSceneAssetLoader,
+      environmentProofConfig,
+      physicsRuntime,
+      requestAnimationFrame: globalThis.window.requestAnimationFrame.bind(globalThis.window)
+    });
+
+    await runtime.start(fakeCanvas, {
+      gpu: {}
+    });
+
+    assert.equal(world.rigidBodies.length, 1);
+    assert.equal(world.lastCharacterController?.applyImpulsesToDynamicBodies, true);
+    assert.equal(runtime.hudSnapshot.focusedMountable, null);
+
+    runtime.dispose();
+  } finally {
+    globalThis.window = originalWindow;
+  }
 });
 
 test("createMetaverseScene boots one manifest-driven character and hand socket attachment proof slice", async () => {
@@ -1375,6 +1705,75 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
   assert.equal(remoteCharacterRoot.position.z, -6.2);
   assert.equal(remoteCharacterRoot.rotation.y, -0.4);
 
+  sceneRuntime.syncPresentation(
+    {
+      lookDirection: { x: 0, y: 0, z: -1 },
+      pitchRadians: 0,
+      position: { x: 3.2, y: 1.62, z: -5.4 },
+      yawRadians: 0.7
+    },
+    null,
+    16,
+    1 / 60,
+    {
+      animationVocabulary: "walk",
+      position: { x: 3.2, y: 0, z: -5.4 },
+      yawRadians: 0.7
+    },
+    [
+      {
+        characterId: "metaverse-mannequin-v1",
+        playerId: "remote-pilot-2",
+        presentation: {
+          animationVocabulary: "walk",
+          position: { x: 1.2, y: 0, z: -4.8 },
+          yawRadians: 0.3
+        }
+      }
+    ]
+  );
+
+  assert.ok(remoteCharacterRoot.position.x > -1.5);
+  assert.ok(remoteCharacterRoot.position.x < 1.2);
+  assert.ok(remoteCharacterRoot.position.z > -6.2);
+  assert.ok(remoteCharacterRoot.position.z < -4.8);
+  assert.ok(remoteCharacterRoot.rotation.y > -0.4);
+  assert.ok(remoteCharacterRoot.rotation.y < 0.3);
+
+  for (let frame = 0; frame < 45; frame += 1) {
+    sceneRuntime.syncPresentation(
+      {
+        lookDirection: { x: 0, y: 0, z: -1 },
+        pitchRadians: 0,
+        position: { x: 3.2, y: 1.62, z: -5.4 },
+        yawRadians: 0.7
+      },
+      null,
+      32 + frame * 16,
+      1 / 60,
+      {
+        animationVocabulary: "walk",
+        position: { x: 3.2, y: 0, z: -5.4 },
+        yawRadians: 0.7
+      },
+      [
+        {
+          characterId: "metaverse-mannequin-v1",
+          playerId: "remote-pilot-2",
+          presentation: {
+            animationVocabulary: "walk",
+            position: { x: 1.2, y: 0, z: -4.8 },
+            yawRadians: 0.3
+          }
+        }
+      ]
+    );
+  }
+
+  assert.ok(Math.abs(remoteCharacterRoot.position.x - 1.2) < 0.05);
+  assert.ok(Math.abs(remoteCharacterRoot.position.z - -4.8) < 0.05);
+  assert.ok(Math.abs(remoteCharacterRoot.rotation.y - 0.3) < 0.05);
+
   sceneRuntime.scene.updateMatrixWorld(true);
 
   const handSocket = sceneRuntime.scene.getObjectByName("hand_r_socket");
@@ -1524,6 +1923,7 @@ test("createMetaverseScene switches environment LOD tiers and instantiates repea
               scale: 1
             }
           ],
+          traversalAffordance: "support",
           physicsColliders: null
         },
         {
@@ -1557,6 +1957,7 @@ test("createMetaverseScene switches environment LOD tiers and instantiates repea
               scale: 0.92
             }
           ],
+          traversalAffordance: "blocker",
           physicsColliders: null
         }
       ]
@@ -1879,7 +2280,8 @@ test("createMetaverseScene mounts and dismounts a dynamic environment asset thro
               scale: 1
             }
           ],
-          physicsColliders: null
+          physicsColliders: null,
+          traversalAffordance: "mount"
         }
       ]
     },

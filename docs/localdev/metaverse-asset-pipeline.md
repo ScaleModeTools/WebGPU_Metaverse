@@ -47,6 +47,11 @@ once the implementation landed.
   - `interact`
   - `seated`
 - environment placements: `static`, `instanced`, `dynamic`
+- local environment traversal affordance ids:
+  - `support`
+  - `blocker`
+  - `mount`
+  - `pushable`
 - first LOD tier ids: `high`, `medium`, `low`
 - simple colliders only by default; render meshes are not the collision path
 - runtime attachment and seat alignment use socket hierarchy, not ad hoc
@@ -92,11 +97,18 @@ once the implementation landed.
   - socketed attachments
   - static, instanced, and dynamic environment assets
   - mount and dismount via `seat_socket`
+  - local dynamic pushable environment assets driven by physics-owned pose sync
   - distance-based LOD switching
   - startup and stable-scene performance hardening
 - current gate coverage lives in:
   - `tests/runtime/client/metaverse-asset-pipeline.test.mjs`
   - `tests/runtime/client/metaverse-runtime.test.mjs`
+- current environment asset truth now also carries local traversal affordance
+  metadata through the metaverse proof slice; this remains client-local and is
+  not a shared contract
+- dynamic environment proof assets now separate local `mount` versus
+  `pushable` behavior; only mount assets expose seat metadata and motion
+  presentation, while pushables stay physics-owned and non-mountable
 - `./tools/verify` remains the stop-ship gate
 
 ## Pause State

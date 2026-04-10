@@ -49,6 +49,12 @@
       ]
     },
     {
+      "ownerPath": "client/src/physics/classes/metaverse-dynamic-cuboid-body-runtime.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse-grounded-body-runtime.test.mjs"
+      ]
+    },
+    {
       "ownerPath": "client/src/physics/classes/rapier-physics-runtime.ts",
       "testPaths": [
         "tests/runtime/client/metaverse-grounded-body-runtime.test.mjs",

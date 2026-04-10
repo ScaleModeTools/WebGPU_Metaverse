@@ -11,6 +11,7 @@ import {
   environmentPropManifest,
   metaverseHubCrateEnvironmentAssetId,
   metaverseHubDockEnvironmentAssetId,
+  metaverseHubPushableCrateEnvironmentAssetId,
   metaverseHubSkiffEnvironmentAssetId
 } from "@/assets/config/environment-prop-manifest";
 import type { AssetLodGroup } from "@/assets/types/asset-lod";
@@ -180,6 +181,14 @@ const metaverseHubDockPlacements = Object.freeze([
   })
 ] satisfies readonly MetaverseEnvironmentPlacementProofConfig[]);
 
+const metaverseHubPushableCratePlacements = Object.freeze([
+  Object.freeze({
+    position: Object.freeze({ x: -3.8, y: 0.46, z: -14.4 }),
+    rotationYRadians: Math.PI * 0.04,
+    scale: 1
+  })
+] satisfies readonly MetaverseEnvironmentPlacementProofConfig[]);
+
 const metaverseHubSkiffPlacements = Object.freeze([
   Object.freeze({
     position: Object.freeze({ x: 12.2, y: 0.12, z: -13.8 }),
@@ -259,40 +268,67 @@ function resolveMetaverseEnvironmentAssetProofConfig(
     );
   }
 
-  if (environmentDescriptor.placement === "dynamic") {
-    if (environmentDescriptor.collisionPath === null) {
+  if (environmentDescriptor.traversalAffordance === "mount") {
+    if (environmentDescriptor.placement !== "dynamic") {
       throw new Error(
-        `Metaverse dynamic environment asset ${environmentDescriptor.label} requires a collision path.`
+        `Metaverse environment asset ${environmentDescriptor.label} may only use mount affordance on dynamic placement.`
       );
     }
+  } else if (environmentDescriptor.mount !== null) {
+    throw new Error(
+      `Metaverse environment asset ${environmentDescriptor.label} cannot expose mount metadata without mount affordance.`
+    );
+  }
 
+  if (environmentDescriptor.placement === "dynamic") {
     if (environmentDescriptor.collider === null) {
       throw new Error(
         `Metaverse dynamic environment asset ${environmentDescriptor.label} requires collider metadata.`
       );
     }
 
-    if (environmentDescriptor.mount === null) {
+    if (
+      environmentDescriptor.traversalAffordance !== "mount" &&
+      environmentDescriptor.traversalAffordance !== "pushable"
+    ) {
       throw new Error(
-        `Metaverse dynamic environment asset ${environmentDescriptor.label} requires mount metadata.`
+        `Metaverse dynamic environment asset ${environmentDescriptor.label} must use mount or pushable affordance.`
       );
     }
 
-    if (environmentDescriptor.mount.seatSocketId !== "seat_socket") {
+    if (environmentDescriptor.traversalAffordance === "mount") {
+      if (environmentDescriptor.collisionPath === null) {
+        throw new Error(
+          `Metaverse dynamic environment asset ${environmentDescriptor.label} requires a collision path.`
+        );
+      }
+
+      if (environmentDescriptor.mount === null) {
+        throw new Error(
+          `Metaverse dynamic environment asset ${environmentDescriptor.label} requires mount metadata.`
+        );
+      }
+
+      if (environmentDescriptor.mount.seatSocketId !== "seat_socket") {
+        throw new Error(
+          `Metaverse dynamic environment asset ${environmentDescriptor.label} must mount through seat_socket.`
+        );
+      }
+
+      if (!characterProofConfig.socketNames.includes(environmentDescriptor.mount.seatSocketId)) {
+        throw new Error(
+          `Metaverse dynamic environment asset ${environmentDescriptor.label} requires character socket ${environmentDescriptor.mount.seatSocketId}.`
+        );
+      }
+    } else if (environmentDescriptor.mount !== null) {
       throw new Error(
-        `Metaverse dynamic environment asset ${environmentDescriptor.label} must mount through seat_socket.`
+        `Metaverse pushable environment asset ${environmentDescriptor.label} cannot expose mount metadata.`
       );
     }
 
     if (environmentDescriptor.renderModel.lods.length !== 1) {
       throw new Error(
         `Metaverse dynamic environment asset ${environmentDescriptor.label} must stay single-LOD until seat switching is implemented.`
-      );
-    }
-
-    if (!characterProofConfig.socketNames.includes(environmentDescriptor.mount.seatSocketId)) {
-      throw new Error(
-        `Metaverse dynamic environment asset ${environmentDescriptor.label} requires character socket ${environmentDescriptor.mount.seatSocketId}.`
       );
     }
   }
@@ -308,7 +344,8 @@ function resolveMetaverseEnvironmentAssetProofConfig(
     placements,
     physicsColliders: resolveEnvironmentPhysicsColliders(
       environmentDescriptor.physicsColliders
-    )
+    ),
+    traversalAffordance: environmentDescriptor.traversalAffordance
   });
 }
 
@@ -323,6 +360,10 @@ function resolveMetaverseEnvironmentProofConfig(
     {
       assetId: metaverseHubCrateEnvironmentAssetId,
       placements: metaverseHubCratePlacements
+    },
+    {
+      assetId: metaverseHubPushableCrateEnvironmentAssetId,
+      placements: metaverseHubPushableCratePlacements
     },
     {
       assetId: metaverseHubSkiffEnvironmentAssetId,
