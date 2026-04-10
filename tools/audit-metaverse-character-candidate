@@ -1,0 +1,298 @@
+#!/usr/bin/env node
+
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
+const canonicalBoneNames = Object.freeze([
+  "humanoid_root",
+  "hips",
+  "spine",
+  "chest",
+  "neck"
+]);
+
+const canonicalSocketIds = Object.freeze([
+  "hand_r_socket",
+  "hand_l_socket",
+  "head_socket",
+  "hip_socket",
+  "seat_socket"
+]);
+
+const canonicalNames = new Set([...canonicalBoneNames, ...canonicalSocketIds]);
+const canonicalBoneParentByName = Object.freeze({
+  humanoid_root: null,
+  hips: "humanoid_root",
+  spine: "hips",
+  chest: "spine",
+  neck: "chest"
+});
+const canonicalSocketParentById = Object.freeze({
+  hand_r_socket: "chest",
+  hand_l_socket: "chest",
+  head_socket: "neck",
+  hip_socket: "hips",
+  seat_socket: "hips"
+});
+const transformTolerance = 0.0001;
+
+function usage() {
+  console.error("Usage: ./tools/audit-metaverse-character-candidate <path-to-.glb-or-.gltf>");
+}
+
+function parseGlbDocument(filePath) {
+  const bytes = readFileSync(filePath);
+  const magic = bytes.subarray(0, 4).toString("utf8");
+
+  if (magic !== "glTF") {
+    throw new Error(`${filePath} is not a valid GLB file.`);
+  }
+
+  const jsonChunkLength = bytes.readUInt32LE(12);
+  const jsonChunkType = bytes.readUInt32LE(16);
+
+  if (jsonChunkType !== 0x4e4f534a) {
+    throw new Error(`${filePath} does not contain a JSON chunk in the expected location.`);
+  }
+
+  return JSON.parse(bytes.subarray(20, 20 + jsonChunkLength).toString("utf8").trim());
+}
+
+function loadAssetDocument(filePath) {
+  if (filePath.endsWith(".glb")) {
+    return parseGlbDocument(filePath);
+  }
+
+  if (filePath.endsWith(".gltf")) {
+    return JSON.parse(readFileSync(filePath, "utf8"));
+  }
+
+  throw new Error(`${filePath} must be a .glb or .gltf asset.`);
+}
+
+function collectNamedNodes(document) {
+  return new Map(
+    (document.nodes ?? [])
+      .map((node) => {
+        if (typeof node.name !== "string") {
+          return null;
+        }
+
+        return [
+          node.name,
+          {
+            children: node.children ?? [],
+            rotation: node.rotation ?? [0, 0, 0, 1],
+            scale: node.scale ?? null,
+            translation: node.translation ?? [0, 0, 0]
+          }
+        ];
+      })
+      .filter((entry) => entry !== null)
+  );
+}
+
+function collectParentNameByNodeName(document) {
+  const parentNameByNodeName = new Map();
+
+  for (const node of document.nodes ?? []) {
+    if (typeof node.name !== "string") {
+      continue;
+    }
+
+    for (const childIndex of node.children ?? []) {
+      const childName = document.nodes?.[childIndex]?.name;
+
+      if (typeof childName === "string") {
+        parentNameByNodeName.set(childName, node.name);
+      }
+    }
+  }
+
+  return parentNameByNodeName;
+}
+
+function resolveNamedCanonicalChildren(document, childIndices) {
+  return (childIndices ?? [])
+    .map((childIndex) => document.nodes?.[childIndex]?.name)
+    .filter((childName) => typeof childName === "string" && canonicalNames.has(childName));
+}
+
+function maxDirectDelta(actual, expected) {
+  let maxDelta = 0;
+
+  for (let index = 0; index < actual.length; index += 1) {
+    maxDelta = Math.max(maxDelta, Math.abs(actual[index] - expected[index]));
+  }
+
+  return maxDelta;
+}
+
+function quaternionDelta(actual, expected) {
+  let maxDelta = 0;
+  let maxNegatedDelta = 0;
+
+  for (let index = 0; index < actual.length; index += 1) {
+    maxDelta = Math.max(maxDelta, Math.abs(actual[index] - expected[index]));
+    maxNegatedDelta = Math.max(maxNegatedDelta, Math.abs(actual[index] + expected[index]));
+  }
+
+  return Math.min(maxDelta, maxNegatedDelta);
+}
+
+function formatArray(values) {
+  return `[${values.map((value) => Number(value).toFixed(6)).join(", ")}]`;
+}
+
+const candidatePathArgument = process.argv[2];
+
+if (candidatePathArgument === undefined) {
+  usage();
+  process.exit(1);
+}
+
+const repoRoot = process.cwd();
+const candidatePath = path.resolve(repoRoot, candidatePathArgument);
+const mannequinRenderPath = path.join(
+  repoRoot,
+  "client/public/models/metaverse/characters/metaverse-mannequin.gltf"
+);
+const canonicalAnimationPackPath = path.join(
+  repoRoot,
+  "client/public/models/metaverse/characters/metaverse-mannequin-canonical-animations.glb"
+);
+
+const candidateDocument = loadAssetDocument(candidatePath);
+const mannequinDocument = loadAssetDocument(mannequinRenderPath);
+const canonicalAnimationPackDocument = loadAssetDocument(canonicalAnimationPackPath);
+const candidateNodesByName = collectNamedNodes(candidateDocument);
+const canonicalPackNodesByName = collectNamedNodes(canonicalAnimationPackDocument);
+const candidateParentNameByNodeName = collectParentNameByNodeName(candidateDocument);
+const nodeScaleNames = [...candidateNodesByName.entries()]
+  .filter(([, node]) => node.scale !== null)
+  .map(([name]) => name);
+const animationNames = (candidateDocument.animations ?? [])
+  .map((animation) => animation.name)
+  .filter((name) => typeof name === "string");
+const missingCanonicalBones = canonicalBoneNames.filter((name) => !candidateNodesByName.has(name));
+const missingCanonicalSockets = canonicalSocketIds.filter((name) => !candidateNodesByName.has(name));
+const transformProblems = [];
+
+for (const canonicalName of [...canonicalBoneNames, ...canonicalSocketIds]) {
+  const candidateNode = candidateNodesByName.get(canonicalName);
+  const canonicalPackNode = canonicalPackNodesByName.get(canonicalName);
+
+  if (candidateNode === undefined || canonicalPackNode === undefined) {
+    continue;
+  }
+
+  const expectedParent =
+    canonicalBoneParentByName[canonicalName] ?? canonicalSocketParentById[canonicalName] ?? null;
+  const rawParentName = candidateParentNameByNodeName.get(canonicalName) ?? null;
+  const canonicalParentName = canonicalNames.has(rawParentName) ? rawParentName : null;
+
+  if (canonicalParentName !== expectedParent) {
+    transformProblems.push(
+      `${canonicalName}: expected canonical parent ${String(expectedParent)}, received ${String(canonicalParentName)}`
+    );
+  }
+
+  const translationDelta = maxDirectDelta(
+    candidateNode.translation,
+    canonicalPackNode.translation
+  );
+
+  if (translationDelta > transformTolerance) {
+    transformProblems.push(
+      `${canonicalName}: translation drift ${translationDelta.toFixed(6)} candidate=${formatArray(candidateNode.translation)} canonical=${formatArray(canonicalPackNode.translation)}`
+    );
+  }
+
+  const rotationDelta = quaternionDelta(candidateNode.rotation, canonicalPackNode.rotation);
+
+  if (rotationDelta > transformTolerance) {
+    transformProblems.push(
+      `${canonicalName}: rotation drift ${rotationDelta.toFixed(6)} candidate=${formatArray(candidateNode.rotation)} canonical=${formatArray(canonicalPackNode.rotation)}`
+    );
+  }
+
+  const candidateChildren = resolveNamedCanonicalChildren(candidateDocument, candidateNode.children);
+  const canonicalChildren = resolveNamedCanonicalChildren(
+    canonicalAnimationPackDocument,
+    canonicalPackNode.children
+  );
+
+  if (
+    candidateChildren.length !== canonicalChildren.length ||
+    candidateChildren.some((childName, index) => childName !== canonicalChildren[index])
+  ) {
+    transformProblems.push(
+      `${canonicalName}: canonical child ordering mismatch candidate=${JSON.stringify(candidateChildren)} canonical=${JSON.stringify(canonicalChildren)}`
+    );
+  }
+}
+
+const candidateRootNames = (candidateDocument.scenes?.[candidateDocument.scene ?? 0]?.nodes ?? [])
+  .map((nodeIndex) => candidateDocument.nodes?.[nodeIndex]?.name)
+  .filter((name) => typeof name === "string");
+const mannequinRootNames = (mannequinDocument.scenes?.[mannequinDocument.scene ?? 0]?.nodes ?? [])
+  .map((nodeIndex) => mannequinDocument.nodes?.[nodeIndex]?.name)
+  .filter((name) => typeof name === "string");
+const passes = (
+  missingCanonicalBones.length === 0 &&
+  missingCanonicalSockets.length === 0 &&
+  nodeScaleNames.length === 0 &&
+  transformProblems.length === 0
+);
+
+console.log(`# Metaverse Character Candidate Audit`);
+console.log("");
+console.log(`- candidate: \`${path.relative(repoRoot, candidatePath)}\``);
+console.log(`- scenes: ${(candidateDocument.scenes ?? []).length}`);
+console.log(`- nodes: ${(candidateDocument.nodes ?? []).length}`);
+console.log(`- skins: ${(candidateDocument.skins ?? []).length}`);
+console.log(`- meshes: ${(candidateDocument.meshes ?? []).length}`);
+console.log(`- materials: ${(candidateDocument.materials ?? []).length}`);
+console.log(`- animations: ${animationNames.length}`);
+console.log(`- candidate scene roots: ${candidateRootNames.join(", ") || "(none)"}`);
+console.log(`- mannequin scene roots: ${mannequinRootNames.join(", ") || "(none)"}`);
+console.log("");
+console.log(`## Animation Names`);
+console.log("");
+
+for (const animationName of animationNames) {
+  console.log(`- ${animationName}`);
+}
+
+console.log("");
+console.log("## Canonical Rig Gaps");
+console.log("");
+console.log(
+  `- missing canonical bones: ${missingCanonicalBones.length === 0 ? "(none)" : missingCanonicalBones.join(", ")}`
+);
+console.log(
+  `- missing canonical sockets: ${missingCanonicalSockets.length === 0 ? "(none)" : missingCanonicalSockets.join(", ")}`
+);
+console.log(
+  `- nodes with explicit scale transforms: ${nodeScaleNames.length === 0 ? "(none)" : nodeScaleNames.join(", ")}`
+);
+console.log("");
+console.log("## Compatibility Problems");
+console.log("");
+
+if (transformProblems.length === 0) {
+  console.log("- (none)");
+} else {
+  for (const problem of transformProblems) {
+    console.log(`- ${problem}`);
+  }
+}
+
+console.log("");
+console.log("## Verdict");
+console.log("");
+console.log(
+  passes
+    ? "- PASS: candidate matches the current repo canonical rig gate closely enough for a manifest swap."
+    : "- FAIL: candidate does not match the current repo canonical rig gate. Keep it outside shipped manifests until it is externally conditioned."
+);

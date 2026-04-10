@@ -38,6 +38,81 @@ async function loadMetaverseAssetDocument(assetPath) {
   return JSON.parse(assetBuffer.toString("utf8"));
 }
 
+function collectNamedNodeDescriptors(document) {
+  return new Map(
+    (document.nodes ?? [])
+      .map((node) => {
+        if (typeof node.name !== "string") {
+          return null;
+        }
+
+        return [
+          node.name,
+          {
+            children: node.children ?? [],
+            rotation: node.rotation ?? [0, 0, 0, 1],
+            translation: node.translation ?? [0, 0, 0]
+          }
+        ];
+      })
+      .filter((entry) => entry !== null)
+  );
+}
+
+function collectParentNameByNodeName(document) {
+  const parentNameByNodeName = new Map();
+
+  for (const node of document.nodes ?? []) {
+    if (typeof node.name !== "string") {
+      continue;
+    }
+
+    for (const childIndex of node.children ?? []) {
+      const childName = document.nodes?.[childIndex]?.name;
+
+      if (typeof childName === "string") {
+        parentNameByNodeName.set(childName, node.name);
+      }
+    }
+  }
+
+  return parentNameByNodeName;
+}
+
+function resolveNamedChildNodeNames(document, childIndices) {
+  return (childIndices ?? [])
+    .map((childIndex) => document.nodes?.[childIndex]?.name)
+    .filter((name) => typeof name === "string");
+}
+
+function assertNumberArraysClose(actual, expected, tolerance, message) {
+  assert.equal(actual.length, expected.length, `${message} length mismatch.`);
+
+  for (let index = 0; index < actual.length; index += 1) {
+    assert.ok(
+      Math.abs(actual[index] - expected[index]) <= tolerance,
+      `${message} at index ${index}: expected ${expected[index]}, received ${actual[index]}.`
+    );
+  }
+}
+
+function assertQuaternionArraysEquivalent(actual, expected, tolerance, message) {
+  assert.equal(actual.length, expected.length, `${message} length mismatch.`);
+
+  let maxDirectDelta = 0;
+  let maxNegatedDelta = 0;
+
+  for (let index = 0; index < actual.length; index += 1) {
+    maxDirectDelta = Math.max(maxDirectDelta, Math.abs(actual[index] - expected[index]));
+    maxNegatedDelta = Math.max(maxNegatedDelta, Math.abs(actual[index] + expected[index]));
+  }
+
+  assert.ok(
+    Math.min(maxDirectDelta, maxNegatedDelta) <= tolerance,
+    `${message}: expected ${expected.join(",")}, received ${actual.join(",")}.`
+  );
+}
+
 function collectMetaverseDeliveryPaths({
   animationClipManifest,
   attachmentModelManifest,
@@ -364,4 +439,100 @@ test("proof delivery assets keep canonical character sockets, animation vocabula
 
   assert.deepEqual([...animationPackClipNames].sort(), [...animationVocabularyIds].sort());
   assert.ok(skiffNodeNames.has("seat_socket"));
+});
+
+test("active full-body character render asset stays compatible with the canonical animation pack rig", async () => {
+  const [
+    {
+      metaverseActiveFullBodyCharacterAssetId,
+      characterModelManifest
+    },
+    { metaverseMannequinCanonicalAnimationPackSourcePath },
+    {
+      humanoidV1BoneNames,
+      humanoidV1BoneParentByName,
+      humanoidV1SocketParentById,
+      socketIds
+    }
+  ] = await Promise.all([
+    clientLoader.load("/src/assets/config/character-model-manifest.ts"),
+    clientLoader.load("/src/assets/config/animation-clip-manifest.ts"),
+    clientLoader.load("/src/assets/types/asset-socket.ts")
+  ]);
+
+  const activeCharacter =
+    characterModelManifest.byId[metaverseActiveFullBodyCharacterAssetId];
+  const activeCharacterDocument = await loadMetaverseAssetDocument(
+    activeCharacter.renderModel.lods[0].modelPath
+  );
+  const canonicalAnimationPackDocument = await loadMetaverseAssetDocument(
+    metaverseMannequinCanonicalAnimationPackSourcePath
+  );
+  const activeNodesByName = collectNamedNodeDescriptors(activeCharacterDocument);
+  const canonicalPackNodesByName = collectNamedNodeDescriptors(canonicalAnimationPackDocument);
+  const activeParentNameByNodeName = collectParentNameByNodeName(activeCharacterDocument);
+  const canonicalNames = new Set([...humanoidV1BoneNames, ...socketIds]);
+
+  for (const boneName of humanoidV1BoneNames) {
+    const activeNode = activeNodesByName.get(boneName);
+    const canonicalPackNode = canonicalPackNodesByName.get(boneName);
+
+    assert.ok(activeNode, `Active character is missing canonical bone ${boneName}.`);
+    assert.ok(canonicalPackNode, `Canonical pack is missing canonical bone ${boneName}.`);
+    assert.equal(
+      canonicalNames.has(activeParentNameByNodeName.get(boneName))
+        ? activeParentNameByNodeName.get(boneName)
+        : null,
+      humanoidV1BoneParentByName[boneName],
+      `Active character bone ${boneName} must preserve canonical parentage.`
+    );
+    assert.deepEqual(
+      resolveNamedChildNodeNames(activeCharacterDocument, activeNode.children).filter((childName) =>
+        canonicalNames.has(childName)
+      ),
+      resolveNamedChildNodeNames(canonicalAnimationPackDocument, canonicalPackNode.children).filter(
+        (childName) => canonicalNames.has(childName)
+      ),
+      `Active character bone ${boneName} must preserve canonical child ordering.`
+    );
+    assertNumberArraysClose(
+      activeNode.translation,
+      canonicalPackNode.translation,
+      0.0001,
+      `Active character bone ${boneName} translation must stay aligned with the canonical pack`
+    );
+    assertQuaternionArraysEquivalent(
+      activeNode.rotation,
+      canonicalPackNode.rotation,
+      0.0001,
+      `Active character bone ${boneName} rotation must stay aligned with the canonical pack`
+    );
+  }
+
+  for (const socketId of socketIds) {
+    const activeNode = activeNodesByName.get(socketId);
+    const canonicalPackNode = canonicalPackNodesByName.get(socketId);
+
+    assert.ok(activeNode, `Active character is missing canonical socket ${socketId}.`);
+    assert.ok(canonicalPackNode, `Canonical pack is missing canonical socket ${socketId}.`);
+    assert.equal(
+      canonicalNames.has(activeParentNameByNodeName.get(socketId))
+        ? activeParentNameByNodeName.get(socketId)
+        : null,
+      humanoidV1SocketParentById[socketId],
+      `Active character socket ${socketId} must preserve canonical parentage.`
+    );
+    assertNumberArraysClose(
+      activeNode.translation,
+      canonicalPackNode.translation,
+      0.0001,
+      `Active character socket ${socketId} translation must stay aligned with the canonical pack`
+    );
+    assertQuaternionArraysEquivalent(
+      activeNode.rotation,
+      canonicalPackNode.rotation,
+      0.0001,
+      `Active character socket ${socketId} rotation must stay aligned with the canonical pack`
+    );
+  }
 });

@@ -65,6 +65,9 @@ hold:
    transforms.
 5. Exported content stays meter-scale and remains compatible with the current
    metaverse character bounds validation.
+6. A full-body render asset that reuses the current canonical animation pack
+   preserves canonical local bone and socket transforms closely enough that the
+   pack plays without runtime retargeting or corrective transform hacks.
 
 ## Current Local Proof Assets
 

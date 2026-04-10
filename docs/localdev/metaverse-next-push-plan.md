@@ -1,7 +1,7 @@
 # Metaverse Next Push Plan
 
-Status: in progress. Push 1, Push 2, Push 3, Push 4, and Push 5 are complete.
-Push 6 is the active slice.
+Status: in progress. Push 1, Push 2, Push 3, Push 4, Push 5, and Push 6 are
+complete. Push 7 is the active slice.
 
 This note now tracks only the current next push. Completed pushes stay
 compressed here unless they still shape the next implementation.
@@ -10,19 +10,23 @@ compressed here unless they still shape the next implementation.
 
 - the metaverse proof consumer now routes through one explicit local active
   full-body character selection seam instead of hardcoding a mannequin id
-- the character manifest already models multiple character assets and
-  per-vocabulary clip source paths, so the next character swap should happen
-  through typed manifest selection rather than a runtime special case
-- the active proof character now resolves a shipped canonical animation pack
-  for `idle`, `walk`, `aim`, `interact`, and `seated`; the generated local
-  walk fallback is removed
-- the active full-body render asset is still the mannequin; the remaining
-  Push 6 work is the later Mesh2Motion-derived full-body mesh swap through the
-  same manifest-owned seam
+- the active proof character already resolves a shipped canonical animation
+  pack for `idle`, `walk`, `aim`, `interact`, and `seated`, and the generated
+  local walk fallback is removed
+- the runtime now expects canonical `humanoid_v1` rig, socket, and vocabulary
+  truth from manifests; it does not compensate for missing or renamed authored
+  data
+- asset-pipeline coverage now locks the active full-body render asset against
+  the current canonical animation pack for canonical parentage and local
+  transform compatibility, so the eventual Mesh2Motion swap must fit the
+  existing rig truth instead of widening runtime behavior
+- the active full-body render asset is still the mannequin, so the next earned
+  step is one Mesh2Motion-derived full-body render swap through the existing
+  manifest seam, not a broader character-pipeline expansion
 - Mesh2Motion is acceptable as an external authoring intermediate, but the
   repo still consumes only shipped local artifacts that satisfy the canonical
   rig, delivery, and naming rules after export
-- shared-contract promotion remains paused; this character-delivery slice is
+- shared-contract promotion remains paused; this character-delivery work is
   still client-local
 
 ## Completed Pushes
@@ -33,43 +37,50 @@ compressed here unless they still shape the next implementation.
    and pushable semantics
 4. completed: dynamic pushable body ownership and pose sync
 5. completed: metaverse-local autostep gating so tall support stays blocked
+6. completed: manifest-owned canonical character animation intake proof; the
+   active full-body path now resolves a shipped `.glb` canonical pack and no
+   longer falls back to generated walk
 
 ## Push Sequence
 
-### Push 6 — Authored Character Delivery Proof
+### Push 7 — Mesh2Motion Full-Body Render Swap
 
-Status: in progress.
+Status: pending.
 
 Scope:
 
-- bring one Mesh2Motion-derived full-body metaverse character into the current
-  proof slice as the active `humanoid_v1` character
-- ship one authored canonical animation set covering:
-  - `idle`
-  - `walk`
-  - `aim`
-  - `interact`
-  - `seated`
-- keep the runtime change limited to manifest, proof-config, loading, and
-  validation work needed to consume shipped authored assets
+- replace the active mannequin full-body render asset with one
+  Mesh2Motion-derived full-body character through the existing manifest seam
+- reuse the current canonical animation pack and the current runtime consumer
+  without adding retargeting, corrective offsets, or loader compatibility hacks
+- keep code changes limited to shipped asset delivery, manifest selection,
+  proof selection, validation, and any local docs or tests that the new asset
+  earns
 
 Must stay local:
 
-- character asset ids, animation clip ids, proof selection, rig/socket truth,
-  and delivery metadata stay inside:
+- Mesh2Motion remains an external offline authoring intermediate only; the
+  repo does not gain Mesh2Motion project files, runtime metadata, importer
+  tooling, or automation
+- character asset ids, render-model paths, collision proxy paths, proof
+  selection, rig/socket truth, and validation stay inside:
   - `client/src/assets`
   - `client/src/app/states`
   - `client/src/metaverse`
   - `tests/runtime/client`
-- Mesh2Motion remains an external authoring intermediate only; the repo does
-  not gain Mesh2Motion project files, runtime metadata, or shared contracts
+  - `docs/localdev`
+- compatibility truth remains the current local `humanoid_v1` rig, sockets,
+  presentation modes, and canonical clip ids, not a new public contract
 
 Must not be promoted yet:
 
-- no `@webgpu-metaverse/shared` character or animation contract
-- no server or storage avatar selection or persistence shape
-- no cross-workspace public avatar catalog
-- no generic runtime retargeting contract
+- no `@webgpu-metaverse/shared` character, rig, or animation contract
+- no generic retargeting system, pose-correction layer, or DCC interchange
+  schema
+- no modular mesh-kit system, first-person art split, or JSON-driven material
+  generation pipeline
+- no avatar customization, persistence, networking, or cross-workspace public
+  character catalog
 
 Concrete repo surfaces:
 
@@ -77,9 +88,11 @@ Concrete repo surfaces:
 - `client/src/assets/config/character-model-manifest.ts`
 - `client/src/assets/config/animation-clip-manifest.ts`
 - `client/src/app/states/metaverse-asset-proof.ts`
-- `client/src/metaverse/render/webgpu-metaverse-scene.ts`
 - `tests/runtime/client/metaverse-asset-pipeline.test.mjs`
 - `tests/runtime/client/metaverse-runtime.test.mjs`
+- `docs/localdev/metaverse-next-push-plan.md`
+- `docs/localdev/metaverse-asset-delivery-rules.md` only if the new shipped
+  character earns a durable clarification
 
 Hard constraints for Mesh2Motion import/export compatibility:
 
@@ -96,58 +109,68 @@ Hard constraints for Mesh2Motion import/export compatibility:
   - `seat_socket`
 - socket ids remain exported authored bones with stable parentage, not stripped
   helpers
-- canonical clip names stay exactly:
-  - `idle`
-  - `walk`
-  - `aim`
-  - `interact`
-  - `seated`
+- the new full-body render asset must remain compatible with the current
+  canonical animation pack; matching names alone is not enough
+- exported bind pose, rest pose, local bone orientation, and upright root
+  orientation must stay close enough to the current mannequin rig that
+  `idle`, `walk`, `aim`, `interact`, and `seated` play without visible twist,
+  hip drift, socket drift, or attachment breakage
 - shipped roots stay upright, meter-scale, and free of node `scale`
   transforms
+- runtime must not add retargeting, corrective transforms, alias maps, or
+  character-specific special cases to make the asset fit
+- `hand_r_socket` attachment mounting and `seat_socket` mount alignment remain
+  identity-transform consumers
 - shipped filenames stay lowercase kebab-case and unversioned under
   `/models/metaverse/characters/...`
+- the shipped render asset and collision proxy stay separate files; collision
+  remains simple and does not reuse the render mesh
 - this character refresh moves toward locked `GLB + KTX2 + Meshopt`; do not
-  add more proof-only embedded `.gltf` for new character work
-- if clips ship in separate files, manifests still resolve them only through
-  typed `sourcePath` entries
+  add a new proof-only embedded `.gltf` full-body character
+- if Mesh2Motion authoring needs Blender cleanup, that stays outside the repo;
+  only the shipped local artifact enters the repo
 
-Push 6 phases:
+Push 7 phases:
 
-1. completed: active metaverse full-body character selection now routes
-   through one explicit local manifest-owned seam, and the proof consumer
-   validates that the chosen asset is `humanoid_v1` and supports `full-body`
-   presentation
-2. completed: ship one authored canonical vocabulary set into local manifests
-   as a separate local `.glb` animation pack, and require full canonical
-   vocabulary coverage on the active proof path
-3. completed: remove generated walk fallback for the active proof character;
-   missing authored `walk` now fails load instead of warning
-4. pending: replace the active mannequin full-body render asset with one
-   Mesh2Motion-derived full-body character while preserving the same local rig,
-   naming, socket, and manifest rules
+1. completed: lock the active full-body render asset against the current
+   canonical animation pack with asset-pipeline validation for canonical
+   parentage and local bone/socket transform compatibility
+2. pending: ship one Mesh2Motion-derived full-body render asset and collision
+   proxy through the existing local manifest seam
+3. pending: flip `metaverseActiveFullBodyCharacterAssetId` to the new shipped
+   asset only after the current canonical pack reuses cleanly without runtime
+   hacks
 
 Exit check:
 
-- one shipped Mesh2Motion-derived full-body character is the active metaverse
-  proof character
-- manifest data resolves all five canonical vocabularies with authored clips
-- the active authored character path no longer relies on the generated walk
-  fallback
-- `hand_r_socket` attachment mounting and `seat_socket` mount alignment still
-  work unchanged
-- runtime and asset-pipeline coverage prove:
-  - active full-body character selection stays manifest-driven
-  - canonical sockets remain present
-  - canonical vocabulary coverage resolves without runtime alias hacks
-  - delivery naming and transform rules still hold
+- one shipped Mesh2Motion-derived full-body character is selected by
+  `metaverseActiveFullBodyCharacterAssetId`
+- the new character reuses the existing canonical animation clip ids and the
+  current proof config resolves it through the same manifest-owned seam
+- runtime boot, `walk`, `aim`, `interact`, `seated`, `hand_r_socket`
+  attachment mounting, and `seat_socket` mount alignment all work on the new
+  asset without runtime compatibility hacks
+- asset-pipeline coverage proves canonical bones and sockets remain present,
+  delivery naming rules still hold, and no new authoring-workspace paths enter
+  manifests
+- runtime coverage proves the active character loads through the same manifest
+  seam and does not rely on fallback animation generation, path rewrites, or
+  character-specific loader behavior
+- if the new render asset cannot reuse the current canonical pack cleanly,
+  stop and treat that as a later authored-animation refresh push rather than
+  widening this slice
+- `./tools/verify` passes
 
 Wait until later pushes:
 
-- separate first-person arms art or body-mode-specific character assets
-- blend graphs, additive aim layers, or upper-body layering
-- runtime IK, foot planting, or hand-on-weapon refinement
-- avatar selection UI, persistence, networking, or shared-contract promotion
-- facial rigging, cloth, morph customization, or other presentation expansion
+- shipping a second authored animation pack tuned specifically to the new mesh
+  if the current pack proves insufficient
+- blend graphs, additive aim layers, upper-body layering, turn-in-place, or
+  runtime IK
+- modular mesh kits, separate first-person arms art, or body-mode-specific
+  character assets
+- JSON-driven material generation, prompt schemas, or broader visual expansion
+- avatar customization, persistence, networking, or shared-contract promotion
 
 ## Asset Pipeline Note
 
