@@ -22,6 +22,6 @@ export const attachmentModelManifest = defineAttachmentAssetManifest([
     },
     defaultSocketId: "hand_r_socket",
     allowedSocketIds: ["hand_r_socket", "hand_l_socket", "hip_socket"],
-    compatibleSkeletons: ["humanoid_v1"]
+    compatibleSkeletons: ["humanoid_v1", "humanoid_v2"]
   }
 ] as const);

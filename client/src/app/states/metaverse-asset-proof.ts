@@ -19,6 +19,7 @@ import {
   metaverseHubSkiffEnvironmentAssetId
 } from "@/assets/config/environment-prop-manifest";
 import type { AssetLodGroup } from "@/assets/types/asset-lod";
+import type { SkeletonId } from "@/assets/types/asset-socket";
 import type {
   EnvironmentAssetDescriptor,
   EnvironmentBoxColliderDescriptor,
@@ -47,6 +48,16 @@ function resolveLodModelPath(renderModel: AssetLodGroup): string {
   return preferredLod.modelPath;
 }
 
+function isSupportedFullBodySkeleton(skeleton: SkeletonId): boolean {
+  switch (skeleton) {
+    case "humanoid_v1":
+    case "humanoid_v2":
+      return true;
+  }
+
+  return false;
+}
+
 function resolveMetaverseCharacterProofConfig(): MetaverseCharacterProofConfig {
   const characterDescriptor = characterModelManifest.characters.find(
     (character) => character.id === metaverseActiveFullBodyCharacterAssetId
@@ -58,9 +69,9 @@ function resolveMetaverseCharacterProofConfig(): MetaverseCharacterProofConfig {
     );
   }
 
-  if (characterDescriptor.skeleton !== "humanoid_v1") {
+  if (!isSupportedFullBodySkeleton(characterDescriptor.skeleton)) {
     throw new Error(
-      `Metaverse full-body proof character ${characterDescriptor.label} must stay on humanoid_v1.`
+      `Metaverse full-body proof character ${characterDescriptor.label} must use a supported humanoid skeleton.`
     );
   }
 

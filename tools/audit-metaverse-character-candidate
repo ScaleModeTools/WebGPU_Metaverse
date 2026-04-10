@@ -3,14 +3,100 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-const canonicalBoneNames = Object.freeze([
-  "humanoid_root",
-  "hips",
-  "spine",
-  "chest",
-  "neck"
-]);
+const skeletonConfigs = Object.freeze({
+  humanoid_v1: Object.freeze({
+    boneParentByName: Object.freeze({
+      humanoid_root: null,
+      hips: "humanoid_root",
+      spine: "hips",
+      chest: "spine",
+      neck: "chest"
+    }),
+    compareReferenceAnimationPack: true,
+    referenceAnimationPackPath:
+      "client/public/models/metaverse/characters/metaverse-mannequin-canonical-animations.glb",
+    referenceRenderPath:
+      "client/public/models/metaverse/characters/metaverse-mannequin.gltf",
+    requiredBoneNames: Object.freeze([
+      "humanoid_root",
+      "hips",
+      "spine",
+      "chest",
+      "neck"
+    ]),
+    socketParentById: Object.freeze({
+      hand_r_socket: "chest",
+      hand_l_socket: "chest",
+      head_socket: "neck",
+      hip_socket: "hips",
+      seat_socket: "hips"
+    })
+  }),
+  humanoid_v2: Object.freeze({
+    boneParentByName: Object.freeze({
+      root: null,
+      pelvis: "root",
+      spine_01: "pelvis",
+      spine_02: "spine_01",
+      spine_03: "spine_02",
+      neck_01: "spine_03",
+      head: "neck_01",
+      clavicle_l: "spine_03",
+      upperarm_l: "clavicle_l",
+      lowerarm_l: "upperarm_l",
+      hand_l: "lowerarm_l",
+      clavicle_r: "spine_03",
+      upperarm_r: "clavicle_r",
+      lowerarm_r: "upperarm_r",
+      hand_r: "lowerarm_r",
+      thigh_l: "pelvis",
+      calf_l: "thigh_l",
+      foot_l: "calf_l",
+      ball_l: "foot_l",
+      thigh_r: "pelvis",
+      calf_r: "thigh_r",
+      foot_r: "calf_r",
+      ball_r: "foot_r"
+    }),
+    compareReferenceAnimationPack: false,
+    referenceAnimationPackPath: null,
+    referenceRenderPath: null,
+    requiredBoneNames: Object.freeze([
+      "root",
+      "pelvis",
+      "spine_01",
+      "spine_02",
+      "spine_03",
+      "neck_01",
+      "head",
+      "clavicle_l",
+      "upperarm_l",
+      "lowerarm_l",
+      "hand_l",
+      "clavicle_r",
+      "upperarm_r",
+      "lowerarm_r",
+      "hand_r",
+      "thigh_l",
+      "calf_l",
+      "foot_l",
+      "ball_l",
+      "thigh_r",
+      "calf_r",
+      "foot_r",
+      "ball_r"
+    ]),
+    socketParentById: Object.freeze({
+      hand_r_socket: "hand_r",
+      hand_l_socket: "hand_l",
+      head_socket: "head",
+      hip_socket: "pelvis",
+      seat_socket: "pelvis"
+    })
+  })
+});
 
+const supportedSkeletonIds = Object.freeze(Object.keys(skeletonConfigs));
 const canonicalSocketIds = Object.freeze([
   "hand_r_socket",
   "hand_l_socket",
@@ -18,26 +104,46 @@ const canonicalSocketIds = Object.freeze([
   "hip_socket",
   "seat_socket"
 ]);
-
-const canonicalNames = new Set([...canonicalBoneNames, ...canonicalSocketIds]);
-const canonicalBoneParentByName = Object.freeze({
-  humanoid_root: null,
-  hips: "humanoid_root",
-  spine: "hips",
-  chest: "spine",
-  neck: "chest"
-});
-const canonicalSocketParentById = Object.freeze({
-  hand_r_socket: "chest",
-  hand_l_socket: "chest",
-  head_socket: "neck",
-  hip_socket: "hips",
-  seat_socket: "hips"
-});
 const transformTolerance = 0.0001;
 
 function usage() {
-  console.error("Usage: ./tools/audit-metaverse-character-candidate <path-to-.glb-or-.gltf>");
+  console.error(
+    `Usage: ./tools/audit-metaverse-character-candidate [--skeleton=${supportedSkeletonIds.join("|")}] <path-to-.glb-or-.gltf>`
+  );
+}
+
+function parseArguments(argv) {
+  let skeletonId = "humanoid_v1";
+  let candidatePathArgument = null;
+
+  for (const argument of argv) {
+    if (argument.startsWith("--skeleton=")) {
+      skeletonId = argument.slice("--skeleton=".length);
+      continue;
+    }
+
+    if (candidatePathArgument !== null) {
+      throw new Error(`Unexpected extra argument: ${argument}`);
+    }
+
+    candidatePathArgument = argument;
+  }
+
+  if (!(skeletonId in skeletonConfigs)) {
+    throw new Error(
+      `Unsupported skeleton ${skeletonId}. Expected one of: ${supportedSkeletonIds.join(", ")}.`
+    );
+  }
+
+  if (candidatePathArgument === null) {
+    usage();
+    process.exit(1);
+  }
+
+  return {
+    candidatePathArgument,
+    skeletonId
+  };
 }
 
 function parseGlbDocument(filePath) {
@@ -112,7 +218,7 @@ function collectParentNameByNodeName(document) {
   return parentNameByNodeName;
 }
 
-function resolveNamedCanonicalChildren(document, childIndices) {
+function resolveNamedCanonicalChildren(document, childIndices, canonicalNames) {
   return (childIndices ?? [])
     .map((childIndex) => document.nodes?.[childIndex]?.name)
     .filter((childName) => typeof childName === "string" && canonicalNames.has(childName));
@@ -144,29 +250,121 @@ function formatArray(values) {
   return `[${values.map((value) => Number(value).toFixed(6)).join(", ")}]`;
 }
 
-const candidatePathArgument = process.argv[2];
-
-if (candidatePathArgument === undefined) {
-  usage();
-  process.exit(1);
+function collectSceneRootNames(document) {
+  return (document.scenes?.[document.scene ?? 0]?.nodes ?? [])
+    .map((nodeIndex) => document.nodes?.[nodeIndex]?.name)
+    .filter((name) => typeof name === "string");
 }
 
-const repoRoot = process.cwd();
-const candidatePath = path.resolve(repoRoot, candidatePathArgument);
-const mannequinRenderPath = path.join(
-  repoRoot,
-  "client/public/models/metaverse/characters/metaverse-mannequin.gltf"
-);
-const canonicalAnimationPackPath = path.join(
-  repoRoot,
-  "client/public/models/metaverse/characters/metaverse-mannequin-canonical-animations.glb"
-);
+function collectTransformProblems({
+  candidateDocument,
+  candidateNodesByName,
+  candidateParentNameByNodeName,
+  canonicalNames,
+  referenceAnimationPackDocument,
+  skeletonConfig
+}) {
+  const transformProblems = [];
 
+  for (const canonicalName of [
+    ...skeletonConfig.requiredBoneNames,
+    ...canonicalSocketIds
+  ]) {
+    const candidateNode = candidateNodesByName.get(canonicalName);
+
+    if (candidateNode === undefined) {
+      continue;
+    }
+
+    const expectedParent =
+      skeletonConfig.boneParentByName[canonicalName] ??
+      skeletonConfig.socketParentById[canonicalName] ??
+      null;
+    const rawParentName = candidateParentNameByNodeName.get(canonicalName) ?? null;
+    const canonicalParentName = canonicalNames.has(rawParentName) ? rawParentName : null;
+
+    if (canonicalParentName !== expectedParent) {
+      transformProblems.push(
+        `${canonicalName}: expected canonical parent ${String(expectedParent)}, received ${String(canonicalParentName)}`
+      );
+    }
+
+    if (referenceAnimationPackDocument === null) {
+      continue;
+    }
+
+    const referenceNodesByName = collectNamedNodes(referenceAnimationPackDocument);
+    const referenceNode = referenceNodesByName.get(canonicalName);
+
+    if (referenceNode === undefined) {
+      continue;
+    }
+
+    const translationDelta = maxDirectDelta(
+      candidateNode.translation,
+      referenceNode.translation
+    );
+
+    if (translationDelta > transformTolerance) {
+      transformProblems.push(
+        `${canonicalName}: translation drift ${translationDelta.toFixed(6)} candidate=${formatArray(candidateNode.translation)} reference=${formatArray(referenceNode.translation)}`
+      );
+    }
+
+    const rotationDelta = quaternionDelta(candidateNode.rotation, referenceNode.rotation);
+
+    if (rotationDelta > transformTolerance) {
+      transformProblems.push(
+        `${canonicalName}: rotation drift ${rotationDelta.toFixed(6)} candidate=${formatArray(candidateNode.rotation)} reference=${formatArray(referenceNode.rotation)}`
+      );
+    }
+
+    const candidateChildren = resolveNamedCanonicalChildren(
+      candidateDocument,
+      candidateNode.children,
+      canonicalNames
+    );
+    const referenceChildren = resolveNamedCanonicalChildren(
+      referenceAnimationPackDocument,
+      referenceNode.children,
+      canonicalNames
+    );
+
+    if (
+      candidateChildren.length !== referenceChildren.length ||
+      candidateChildren.some((childName, index) => childName !== referenceChildren[index])
+    ) {
+      transformProblems.push(
+        `${canonicalName}: canonical child ordering mismatch candidate=${JSON.stringify(candidateChildren)} reference=${JSON.stringify(referenceChildren)}`
+      );
+    }
+  }
+
+  return transformProblems;
+}
+
+const { candidatePathArgument, skeletonId } = parseArguments(process.argv.slice(2));
+const repoRoot = process.cwd();
+const skeletonConfig = skeletonConfigs[skeletonId];
+const canonicalNames = new Set([
+  ...skeletonConfig.requiredBoneNames,
+  ...canonicalSocketIds
+]);
+const candidatePath = path.resolve(repoRoot, candidatePathArgument);
+const referenceRenderPath =
+  skeletonConfig.referenceRenderPath === null
+    ? null
+    : path.join(repoRoot, skeletonConfig.referenceRenderPath);
+const referenceAnimationPackPath =
+  skeletonConfig.referenceAnimationPackPath === null
+    ? null
+    : path.join(repoRoot, skeletonConfig.referenceAnimationPackPath);
 const candidateDocument = loadAssetDocument(candidatePath);
-const mannequinDocument = loadAssetDocument(mannequinRenderPath);
-const canonicalAnimationPackDocument = loadAssetDocument(canonicalAnimationPackPath);
+const referenceRenderDocument =
+  referenceRenderPath === null ? null : loadAssetDocument(referenceRenderPath);
+const referenceAnimationPackDocument =
+  referenceAnimationPackPath === null ? null : loadAssetDocument(referenceAnimationPackPath);
 const candidateNodesByName = collectNamedNodes(candidateDocument);
-const canonicalPackNodesByName = collectNamedNodes(canonicalAnimationPackDocument);
 const candidateParentNameByNodeName = collectParentNameByNodeName(candidateDocument);
 const nodeScaleNames = [...candidateNodesByName.entries()]
   .filter(([, node]) => node.scale !== null)
@@ -174,80 +372,35 @@ const nodeScaleNames = [...candidateNodesByName.entries()]
 const animationNames = (candidateDocument.animations ?? [])
   .map((animation) => animation.name)
   .filter((name) => typeof name === "string");
-const missingCanonicalBones = canonicalBoneNames.filter((name) => !candidateNodesByName.has(name));
-const missingCanonicalSockets = canonicalSocketIds.filter((name) => !candidateNodesByName.has(name));
-const transformProblems = [];
-
-for (const canonicalName of [...canonicalBoneNames, ...canonicalSocketIds]) {
-  const candidateNode = candidateNodesByName.get(canonicalName);
-  const canonicalPackNode = canonicalPackNodesByName.get(canonicalName);
-
-  if (candidateNode === undefined || canonicalPackNode === undefined) {
-    continue;
-  }
-
-  const expectedParent =
-    canonicalBoneParentByName[canonicalName] ?? canonicalSocketParentById[canonicalName] ?? null;
-  const rawParentName = candidateParentNameByNodeName.get(canonicalName) ?? null;
-  const canonicalParentName = canonicalNames.has(rawParentName) ? rawParentName : null;
-
-  if (canonicalParentName !== expectedParent) {
-    transformProblems.push(
-      `${canonicalName}: expected canonical parent ${String(expectedParent)}, received ${String(canonicalParentName)}`
-    );
-  }
-
-  const translationDelta = maxDirectDelta(
-    candidateNode.translation,
-    canonicalPackNode.translation
-  );
-
-  if (translationDelta > transformTolerance) {
-    transformProblems.push(
-      `${canonicalName}: translation drift ${translationDelta.toFixed(6)} candidate=${formatArray(candidateNode.translation)} canonical=${formatArray(canonicalPackNode.translation)}`
-    );
-  }
-
-  const rotationDelta = quaternionDelta(candidateNode.rotation, canonicalPackNode.rotation);
-
-  if (rotationDelta > transformTolerance) {
-    transformProblems.push(
-      `${canonicalName}: rotation drift ${rotationDelta.toFixed(6)} candidate=${formatArray(candidateNode.rotation)} canonical=${formatArray(canonicalPackNode.rotation)}`
-    );
-  }
-
-  const candidateChildren = resolveNamedCanonicalChildren(candidateDocument, candidateNode.children);
-  const canonicalChildren = resolveNamedCanonicalChildren(
-    canonicalAnimationPackDocument,
-    canonicalPackNode.children
-  );
-
-  if (
-    candidateChildren.length !== canonicalChildren.length ||
-    candidateChildren.some((childName, index) => childName !== canonicalChildren[index])
-  ) {
-    transformProblems.push(
-      `${canonicalName}: canonical child ordering mismatch candidate=${JSON.stringify(candidateChildren)} canonical=${JSON.stringify(canonicalChildren)}`
-    );
-  }
-}
-
-const candidateRootNames = (candidateDocument.scenes?.[candidateDocument.scene ?? 0]?.nodes ?? [])
-  .map((nodeIndex) => candidateDocument.nodes?.[nodeIndex]?.name)
-  .filter((name) => typeof name === "string");
-const mannequinRootNames = (mannequinDocument.scenes?.[mannequinDocument.scene ?? 0]?.nodes ?? [])
-  .map((nodeIndex) => mannequinDocument.nodes?.[nodeIndex]?.name)
-  .filter((name) => typeof name === "string");
-const passes = (
+const missingCanonicalBones = skeletonConfig.requiredBoneNames.filter(
+  (name) => !candidateNodesByName.has(name)
+);
+const missingCanonicalSockets = canonicalSocketIds.filter(
+  (name) => !candidateNodesByName.has(name)
+);
+const transformProblems = collectTransformProblems({
+  candidateDocument,
+  candidateNodesByName,
+  candidateParentNameByNodeName,
+  canonicalNames,
+  referenceAnimationPackDocument: skeletonConfig.compareReferenceAnimationPack
+    ? referenceAnimationPackDocument
+    : null,
+  skeletonConfig
+});
+const candidateRootNames = collectSceneRootNames(candidateDocument);
+const referenceRootNames =
+  referenceRenderDocument === null ? [] : collectSceneRootNames(referenceRenderDocument);
+const passes =
   missingCanonicalBones.length === 0 &&
   missingCanonicalSockets.length === 0 &&
   nodeScaleNames.length === 0 &&
-  transformProblems.length === 0
-);
+  transformProblems.length === 0;
 
-console.log(`# Metaverse Character Candidate Audit`);
+console.log("# Metaverse Character Candidate Audit");
 console.log("");
 console.log(`- candidate: \`${path.relative(repoRoot, candidatePath)}\``);
+console.log(`- skeleton: \`${skeletonId}\``);
 console.log(`- scenes: ${(candidateDocument.scenes ?? []).length}`);
 console.log(`- nodes: ${(candidateDocument.nodes ?? []).length}`);
 console.log(`- skins: ${(candidateDocument.skins ?? []).length}`);
@@ -255,13 +408,21 @@ console.log(`- meshes: ${(candidateDocument.meshes ?? []).length}`);
 console.log(`- materials: ${(candidateDocument.materials ?? []).length}`);
 console.log(`- animations: ${animationNames.length}`);
 console.log(`- candidate scene roots: ${candidateRootNames.join(", ") || "(none)"}`);
-console.log(`- mannequin scene roots: ${mannequinRootNames.join(", ") || "(none)"}`);
+
+if (referenceRootNames.length > 0) {
+  console.log(`- reference scene roots: ${referenceRootNames.join(", ")}`);
+}
+
 console.log("");
-console.log(`## Animation Names`);
+console.log("## Animation Names");
 console.log("");
 
 for (const animationName of animationNames) {
   console.log(`- ${animationName}`);
+}
+
+if (animationNames.length === 0) {
+  console.log("- (none)");
 }
 
 console.log("");
@@ -293,6 +454,6 @@ console.log("## Verdict");
 console.log("");
 console.log(
   passes
-    ? "- PASS: candidate matches the current repo canonical rig gate closely enough for a manifest swap."
-    : "- FAIL: candidate does not match the current repo canonical rig gate. Keep it outside shipped manifests until it is externally conditioned."
+    ? `- PASS: candidate matches the ${skeletonId} repo rig gate.`
+    : `- FAIL: candidate does not match the ${skeletonId} repo rig gate. Keep it outside shipped manifests until it is externally conditioned.`
 );

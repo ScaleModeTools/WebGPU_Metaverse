@@ -1,5 +1,11 @@
 export {
   animationClipManifest,
+  mesh2motionHumanoidAimAnimationClipId,
+  mesh2motionHumanoidCanonicalAnimationPackSourcePath,
+  mesh2motionHumanoidIdleAnimationClipId,
+  mesh2motionHumanoidInteractAnimationClipId,
+  mesh2motionHumanoidSeatedAnimationClipId,
+  mesh2motionHumanoidWalkAnimationClipId,
   metaverseMannequinAimAnimationClipId,
   metaverseMannequinCanonicalAnimationPackSourcePath,
   metaverseMannequinIdleAnimationClipId,
@@ -13,6 +19,7 @@ export {
 } from "./config/attachment-model-manifest";
 export {
   characterModelManifest,
+  mesh2motionHumanoidCharacterAssetId,
   metaverseMannequinArmsCharacterAssetId,
   metaverseMannequinCharacterAssetId
 } from "./config/character-model-manifest";
@@ -31,10 +38,16 @@ export {
 } from "./types/asset-id";
 export { lodTierIds } from "./types/asset-lod";
 export {
+  humanoidV2BoneNames,
+  humanoidV2BoneParentByName,
+  humanoidV2SocketParentById,
   humanoidV1BoneNames,
   humanoidV1BoneParentByName,
   humanoidV1SocketParentById,
+  skeletonBoneNamesById,
+  skeletonBoneParentByNameById,
   skeletonIds,
+  skeletonSocketParentById,
   socketIds
 } from "./types/asset-socket";
 export {
@@ -71,7 +84,11 @@ export type {
 } from "./types/asset-lod";
 export type {
   HumanoidV1BoneName,
+  HumanoidV2BoneName,
+  SkeletonBoneName,
+  SkeletonBoneParentByName,
   SkeletonId,
+  SkeletonSocketParentById,
   SocketId
 } from "./types/asset-socket";
 export type {

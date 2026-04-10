@@ -1,14 +1,23 @@
 # Metaverse Canonical Rig
 
-Status: local durable truth for pipeline step 6.
+Role: canonical. Describes how supported metaverse humanoid rigs, sockets, and
+animation vocabulary work.
+
+Status: local durable truth.
 
 Promote this into `@webgpu-metaverse/shared` only when storage, server
 validation, or cross-workspace consumers need the same public contract.
 
-## Skeleton
+## Supported Skeletons
 
-- canonical skeleton id: `humanoid_v1`
-- required deform and attachment chain:
+Canonical skeleton ids:
+
+- `humanoid_v1`
+- `humanoid_v2`
+
+### `humanoid_v1`
+
+Required deform and attachment chain:
 
 ```text
 humanoid_root
@@ -19,6 +28,41 @@ humanoid_root
     │       │   └── head_socket
     │       ├── hand_l_socket
     │       └── hand_r_socket
+    ├── hip_socket
+    └── seat_socket
+```
+
+### `humanoid_v2`
+
+Required core deform and attachment chain:
+
+```text
+root
+└── pelvis
+    ├── spine_01
+    │   └── spine_02
+    │       └── spine_03
+    │           ├── neck_01
+    │           │   └── head
+    │           │       └── head_socket
+    │           ├── clavicle_l
+    │           │   └── upperarm_l
+    │           │       └── lowerarm_l
+    │           │           └── hand_l
+    │           │               └── hand_l_socket
+    │           └── clavicle_r
+    │               └── upperarm_r
+    │                   └── lowerarm_r
+    │                       └── hand_r
+    │                           └── hand_r_socket
+    ├── thigh_l
+    │   └── calf_l
+    │       └── foot_l
+    │           └── ball_l
+    ├── thigh_r
+    │   └── calf_r
+    │       └── foot_r
+    │           └── ball_r
     ├── hip_socket
     └── seat_socket
 ```
@@ -53,27 +97,30 @@ then use the canonical clip name for authored asset lookup.
 
 ## Retargeting Acceptance Rules
 
-A clip or character rig is accepted into `humanoid_v1` only when all of these
-hold:
+A clip or character rig is accepted into a supported humanoid skeleton only
+when all of these hold:
 
-1. The exported rig preserves the required bone and socket names exactly.
+1. The exported rig preserves the required skeleton-specific bone names and
+   stable socket names exactly.
 2. `head_socket`, `hand_l_socket`, `hand_r_socket`, `hip_socket`, and
-   `seat_socket` remain exported bone nodes with stable parentage.
+   `seat_socket` remain exported bone nodes with skeleton-specific stable
+   parentage.
 3. The resulting asset can resolve at least one canonical vocabulary id through
    manifest data without runtime alias hacks.
 4. Attachments still mount through socket hierarchy with identity local
    transforms.
 5. Exported content stays meter-scale and remains compatible with the current
    metaverse character bounds validation.
-6. A full-body render asset that reuses the current canonical animation pack
-   preserves canonical local bone and socket transforms closely enough that the
-   pack plays without runtime retargeting or corrective transform hacks.
+6. A full-body render asset and its selected canonical animation pack preserve
+   matching local bone and socket transforms closely enough that the pack plays
+   without runtime retargeting or corrective transform hacks.
 
 ## Current Local Proof Assets
 
+- `mesh2motion-humanoid-v1`
 - `metaverse-mannequin-v1`
 - `metaverse-mannequin-arms-v1`
 
-Both local character asset ids intentionally resolve through the same authored
-mannequin rig delivery for now. That keeps the canonical socket and vocabulary
-contract locked before distinct first-person art lands.
+`mesh2motion-humanoid-v1` is the active full-body proof character and targets
+`humanoid_v2`. The mannequin assets remain available on `humanoid_v1` until a
+later cleanup push proves there is no remaining local consumer.

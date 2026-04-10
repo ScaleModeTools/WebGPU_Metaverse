@@ -164,14 +164,22 @@ after(async () => {
   await clientLoader?.close();
 });
 
-test("canonical humanoid rig keeps stable bone and socket parentage", async () => {
+test("canonical humanoid rig definitions keep stable bone and socket parentage", async () => {
   const {
     humanoidV1BoneNames,
     humanoidV1BoneParentByName,
     humanoidV1SocketParentById,
+    humanoidV2BoneNames,
+    humanoidV2BoneParentByName,
+    humanoidV2SocketParentById,
+    skeletonBoneNamesById,
+    skeletonBoneParentByNameById,
+    skeletonIds,
+    skeletonSocketParentById,
     socketIds
   } = await clientLoader.load("/src/assets/types/asset-socket.ts");
 
+  assert.deepEqual(skeletonIds, ["humanoid_v1", "humanoid_v2"]);
   assert.deepEqual(humanoidV1BoneNames, [
     "humanoid_root",
     "hips",
@@ -194,11 +202,83 @@ test("canonical humanoid rig keeps stable bone and socket parentage", async () =
     seat_socket: "hips"
   });
   assert.deepEqual(Object.keys(humanoidV1SocketParentById).sort(), [...socketIds].sort());
+
+  assert.deepEqual(humanoidV2BoneNames, [
+    "root",
+    "pelvis",
+    "spine_01",
+    "spine_02",
+    "spine_03",
+    "neck_01",
+    "head",
+    "clavicle_l",
+    "upperarm_l",
+    "lowerarm_l",
+    "hand_l",
+    "clavicle_r",
+    "upperarm_r",
+    "lowerarm_r",
+    "hand_r",
+    "thigh_l",
+    "calf_l",
+    "foot_l",
+    "ball_l",
+    "thigh_r",
+    "calf_r",
+    "foot_r",
+    "ball_r"
+  ]);
+  assert.deepEqual(humanoidV2BoneParentByName, {
+    root: null,
+    pelvis: "root",
+    spine_01: "pelvis",
+    spine_02: "spine_01",
+    spine_03: "spine_02",
+    neck_01: "spine_03",
+    head: "neck_01",
+    clavicle_l: "spine_03",
+    upperarm_l: "clavicle_l",
+    lowerarm_l: "upperarm_l",
+    hand_l: "lowerarm_l",
+    clavicle_r: "spine_03",
+    upperarm_r: "clavicle_r",
+    lowerarm_r: "upperarm_r",
+    hand_r: "lowerarm_r",
+    thigh_l: "pelvis",
+    calf_l: "thigh_l",
+    foot_l: "calf_l",
+    ball_l: "foot_l",
+    thigh_r: "pelvis",
+    calf_r: "thigh_r",
+    foot_r: "calf_r",
+    ball_r: "foot_r"
+  });
+  assert.deepEqual(humanoidV2SocketParentById, {
+    hand_r_socket: "hand_r",
+    hand_l_socket: "hand_l",
+    head_socket: "head",
+    hip_socket: "pelvis",
+    seat_socket: "pelvis"
+  });
+  assert.deepEqual(Object.keys(humanoidV2SocketParentById).sort(), [...socketIds].sort());
+  assert.deepEqual(skeletonBoneNamesById.humanoid_v1, humanoidV1BoneNames);
+  assert.deepEqual(skeletonBoneNamesById.humanoid_v2, humanoidV2BoneNames);
+  assert.deepEqual(
+    skeletonBoneParentByNameById.humanoid_v1,
+    humanoidV1BoneParentByName
+  );
+  assert.deepEqual(
+    skeletonBoneParentByNameById.humanoid_v2,
+    humanoidV2BoneParentByName
+  );
+  assert.deepEqual(skeletonSocketParentById.humanoid_v1, humanoidV1SocketParentById);
+  assert.deepEqual(skeletonSocketParentById.humanoid_v2, humanoidV2SocketParentById);
 });
 
-test("character manifests expose two humanoid-compatible assets on the same vocabulary", async () => {
+test("character manifests expose dual humanoid skeletons on the same vocabulary", async () => {
   const [
     {
+      mesh2motionHumanoidCharacterAssetId,
       metaverseActiveFullBodyCharacterAssetId,
       metaverseMannequinArmsCharacterAssetId,
       metaverseMannequinCharacterAssetId,
@@ -206,6 +286,7 @@ test("character manifests expose two humanoid-compatible assets on the same voca
     },
     {
       animationClipManifest,
+      mesh2motionHumanoidCanonicalAnimationPackSourcePath,
       metaverseMannequinCanonicalAnimationPackSourcePath
     },
     { animationVocabularyIds, canonicalAnimationClipNamesByVocabulary },
@@ -219,6 +300,7 @@ test("character manifests expose two humanoid-compatible assets on the same voca
 
   const characterIds = characterModelManifest.characters.map((character) => character.id);
 
+  assert.ok(characterIds.includes(mesh2motionHumanoidCharacterAssetId));
   assert.ok(characterIds.includes(metaverseMannequinCharacterAssetId));
   assert.ok(characterIds.includes(metaverseMannequinArmsCharacterAssetId));
   assert.ok(characterIds.includes(metaverseActiveFullBodyCharacterAssetId));
@@ -227,14 +309,20 @@ test("character manifests expose two humanoid-compatible assets on the same voca
     characterModelManifest.byId[metaverseActiveFullBodyCharacterAssetId];
 
   assert.ok(activeFullBodyCharacter);
-  assert.equal(activeFullBodyCharacter.skeleton, "humanoid_v1");
+  assert.equal(activeFullBodyCharacter.id, mesh2motionHumanoidCharacterAssetId);
+  assert.equal(activeFullBodyCharacter.skeleton, "humanoid_v2");
   assert.ok(activeFullBodyCharacter.presentationModes.includes("full-body"));
 
-  const humanoidCharacters = characterModelManifest.characters.filter(
+  const v1HumanoidCharacters = characterModelManifest.characters.filter(
     (character) => character.skeleton === "humanoid_v1"
   );
+  const v2HumanoidCharacters = characterModelManifest.characters.filter(
+    (character) => character.skeleton === "humanoid_v2"
+  );
+  const humanoidCharacters = [...v1HumanoidCharacters, ...v2HumanoidCharacters];
 
-  assert.ok(humanoidCharacters.length >= 2);
+  assert.ok(v1HumanoidCharacters.length >= 2);
+  assert.ok(v2HumanoidCharacters.length >= 1);
 
   for (const character of humanoidCharacters) {
     assert.deepEqual(character.socketIds, socketIds);
@@ -271,7 +359,14 @@ test("character manifests expose two humanoid-compatible assets on the same voca
 
   assert.deepEqual(
     [...activeClipSourcePaths],
-    [metaverseMannequinCanonicalAnimationPackSourcePath]
+    [mesh2motionHumanoidCanonicalAnimationPackSourcePath]
+  );
+  assert.ok(
+    animationClipManifest.clips.some(
+      (clip) =>
+        clip.sourcePath === metaverseMannequinCanonicalAnimationPackSourcePath &&
+        clip.targetSkeleton === "humanoid_v1"
+    )
   );
 });
 
@@ -378,14 +473,50 @@ test("current proof-slice gltf assets keep embedded payloads and normalized node
   }
 });
 
+test("shipped metaverse glb assets keep normalized node scale", async () => {
+  const manifests = await Promise.all([
+    clientLoader.load("/src/assets/config/animation-clip-manifest.ts"),
+    clientLoader.load("/src/assets/config/attachment-model-manifest.ts"),
+    clientLoader.load("/src/assets/config/character-model-manifest.ts"),
+    clientLoader.load("/src/assets/config/environment-prop-manifest.ts")
+  ]);
+  const [
+    { animationClipManifest },
+    { attachmentModelManifest },
+    { characterModelManifest },
+    { environmentPropManifest }
+  ] = manifests;
+
+  const proofGlbPaths = collectMetaverseDeliveryPaths({
+    animationClipManifest,
+    attachmentModelManifest,
+    characterModelManifest,
+    environmentPropManifest
+  }).filter((assetPath) => assetPath.endsWith(".glb"));
+
+  const proofDocuments = await Promise.all(
+    proofGlbPaths.map(async (assetPath) => [assetPath, await loadMetaverseAssetDocument(assetPath)])
+  );
+
+  for (const [assetPath, document] of proofDocuments) {
+    assert.equal(document.asset?.version, "2.0");
+
+    for (const node of document.nodes ?? []) {
+      assert.equal(
+        "scale" in node,
+        false,
+        `${assetPath} should not ship node scale transforms.`
+      );
+    }
+  }
+});
+
 test("proof delivery assets keep canonical character sockets, animation vocabulary clips, and mount seat sockets", async () => {
   const [
-    { humanoidV1BoneNames, socketIds },
-    { characterModelManifest, metaverseMannequinCharacterAssetId },
-    {
-      metaverseMannequinCanonicalAnimationPackSourcePath
-    },
-    { animationVocabularyIds },
+    { skeletonBoneNamesById, socketIds },
+    { characterModelManifest },
+    { animationClipManifest },
+    { animationVocabularyIds, canonicalAnimationClipNamesByVocabulary },
     { environmentPropManifest, metaverseHubSkiffEnvironmentAssetId }
   ] = await Promise.all([
     clientLoader.load("/src/assets/types/asset-socket.ts"),
@@ -395,31 +526,9 @@ test("proof delivery assets keep canonical character sockets, animation vocabula
     clientLoader.load("/src/assets/config/environment-prop-manifest.ts")
   ]);
 
-  const mannequinAsset = characterModelManifest.byId[metaverseMannequinCharacterAssetId];
   const skiffAsset = environmentPropManifest.byId[metaverseHubSkiffEnvironmentAssetId];
-  const mannequinDocument = await loadMetaverseAssetDocument(
-    mannequinAsset.renderModel.lods[0].modelPath
-  );
-  const animationPackDocument = await loadMetaverseAssetDocument(
-    metaverseMannequinCanonicalAnimationPackSourcePath
-  );
   const skiffDocument = await loadMetaverseAssetDocument(
     skiffAsset.renderModel.lods[0].modelPath
-  );
-  const mannequinNodeNames = new Set(
-    (mannequinDocument.nodes ?? [])
-      .map((node) => node.name)
-      .filter((name) => typeof name === "string")
-  );
-  const animationPackNodeNames = new Set(
-    (animationPackDocument.nodes ?? [])
-      .map((node) => node.name)
-      .filter((name) => typeof name === "string")
-  );
-  const animationPackClipNames = new Set(
-    (animationPackDocument.animations ?? [])
-      .map((animation) => animation.name)
-      .filter((name) => typeof name === "string")
   );
   const skiffNodeNames = new Set(
     (skiffDocument.nodes ?? [])
@@ -427,17 +536,78 @@ test("proof delivery assets keep canonical character sockets, animation vocabula
       .filter((name) => typeof name === "string")
   );
 
-  for (const boneName of humanoidV1BoneNames) {
-    assert.ok(mannequinNodeNames.has(boneName));
-    assert.ok(animationPackNodeNames.has(boneName));
+  for (const character of characterModelManifest.characters) {
+    const characterDocument = await loadMetaverseAssetDocument(
+      character.renderModel.lods[0].modelPath
+    );
+    const characterNodeNames = new Set(
+      (characterDocument.nodes ?? [])
+        .map((node) => node.name)
+        .filter((name) => typeof name === "string")
+    );
+
+    for (const boneName of skeletonBoneNamesById[character.skeleton]) {
+      assert.ok(
+        characterNodeNames.has(boneName),
+        `${character.label} is missing canonical bone ${boneName}.`
+      );
+    }
+
+    for (const socketId of socketIds) {
+      assert.ok(
+        characterNodeNames.has(socketId),
+        `${character.label} is missing canonical socket ${socketId}.`
+      );
+    }
+
+    const clipSourcePaths = new Set();
+
+    for (const clipId of character.animationClipIds) {
+      const clipDescriptor = animationClipManifest.byId[clipId];
+
+      assert.ok(clipDescriptor);
+      assert.equal(clipDescriptor.targetSkeleton, character.skeleton);
+      assert.equal(
+        clipDescriptor.clipName,
+        canonicalAnimationClipNamesByVocabulary[clipDescriptor.vocabulary]
+      );
+      clipSourcePaths.add(clipDescriptor.sourcePath);
+    }
+
+    for (const clipSourcePath of clipSourcePaths) {
+      const animationPackDocument = await loadMetaverseAssetDocument(clipSourcePath);
+      const animationPackNodeNames = new Set(
+        (animationPackDocument.nodes ?? [])
+          .map((node) => node.name)
+          .filter((name) => typeof name === "string")
+      );
+      const animationPackClipNames = new Set(
+        (animationPackDocument.animations ?? [])
+          .map((animation) => animation.name)
+          .filter((name) => typeof name === "string")
+      );
+
+      for (const boneName of skeletonBoneNamesById[character.skeleton]) {
+        assert.ok(
+          animationPackNodeNames.has(boneName),
+          `${clipSourcePath} is missing canonical bone ${boneName}.`
+        );
+      }
+
+      for (const socketId of socketIds) {
+        assert.ok(
+          animationPackNodeNames.has(socketId),
+          `${clipSourcePath} is missing canonical socket ${socketId}.`
+        );
+      }
+
+      assert.deepEqual(
+        [...animationPackClipNames].sort(),
+        [...animationVocabularyIds].sort()
+      );
+    }
   }
 
-  for (const socketId of socketIds) {
-    assert.ok(mannequinNodeNames.has(socketId));
-    assert.ok(animationPackNodeNames.has(socketId));
-  }
-
-  assert.deepEqual([...animationPackClipNames].sort(), [...animationVocabularyIds].sort());
   assert.ok(skiffNodeNames.has("seat_socket"));
 });
 
@@ -447,11 +617,11 @@ test("active full-body character render asset stays compatible with the canonica
       metaverseActiveFullBodyCharacterAssetId,
       characterModelManifest
     },
-    { metaverseMannequinCanonicalAnimationPackSourcePath },
+    { animationClipManifest },
     {
-      humanoidV1BoneNames,
-      humanoidV1BoneParentByName,
-      humanoidV1SocketParentById,
+      skeletonBoneNamesById,
+      skeletonBoneParentByNameById,
+      skeletonSocketParentById,
       socketIds
     }
   ] = await Promise.all([
@@ -462,18 +632,32 @@ test("active full-body character render asset stays compatible with the canonica
 
   const activeCharacter =
     characterModelManifest.byId[metaverseActiveFullBodyCharacterAssetId];
+  const activeClipSourcePaths = new Set(
+    activeCharacter.animationClipIds.map(
+      (clipId) => animationClipManifest.byId[clipId].sourcePath
+    )
+  );
+
+  assert.equal(activeClipSourcePaths.size, 1);
+
+  const activeAnimationPackPath = [...activeClipSourcePaths][0];
   const activeCharacterDocument = await loadMetaverseAssetDocument(
     activeCharacter.renderModel.lods[0].modelPath
   );
   const canonicalAnimationPackDocument = await loadMetaverseAssetDocument(
-    metaverseMannequinCanonicalAnimationPackSourcePath
+    activeAnimationPackPath
   );
   const activeNodesByName = collectNamedNodeDescriptors(activeCharacterDocument);
   const canonicalPackNodesByName = collectNamedNodeDescriptors(canonicalAnimationPackDocument);
   const activeParentNameByNodeName = collectParentNameByNodeName(activeCharacterDocument);
-  const canonicalNames = new Set([...humanoidV1BoneNames, ...socketIds]);
+  const activeSkeletonBoneNames = skeletonBoneNamesById[activeCharacter.skeleton];
+  const activeSkeletonBoneParentByName =
+    skeletonBoneParentByNameById[activeCharacter.skeleton];
+  const activeSkeletonSocketParentById =
+    skeletonSocketParentById[activeCharacter.skeleton];
+  const canonicalNames = new Set([...activeSkeletonBoneNames, ...socketIds]);
 
-  for (const boneName of humanoidV1BoneNames) {
+  for (const boneName of activeSkeletonBoneNames) {
     const activeNode = activeNodesByName.get(boneName);
     const canonicalPackNode = canonicalPackNodesByName.get(boneName);
 
@@ -483,7 +667,7 @@ test("active full-body character render asset stays compatible with the canonica
       canonicalNames.has(activeParentNameByNodeName.get(boneName))
         ? activeParentNameByNodeName.get(boneName)
         : null,
-      humanoidV1BoneParentByName[boneName],
+      activeSkeletonBoneParentByName[boneName],
       `Active character bone ${boneName} must preserve canonical parentage.`
     );
     assert.deepEqual(
@@ -519,7 +703,7 @@ test("active full-body character render asset stays compatible with the canonica
       canonicalNames.has(activeParentNameByNodeName.get(socketId))
         ? activeParentNameByNodeName.get(socketId)
         : null,
-      humanoidV1SocketParentById[socketId],
+      activeSkeletonSocketParentById[socketId],
       `Active character socket ${socketId} must preserve canonical parentage.`
     );
     assertNumberArraysClose(

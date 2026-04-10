@@ -1331,11 +1331,12 @@ test("metaverse asset proof resolves the active full-body humanoid character fro
   const [
     {
       characterModelManifest,
+      mesh2motionHumanoidCharacterAssetId,
       metaverseActiveFullBodyCharacterAssetId
     },
     {
       animationClipManifest,
-      metaverseMannequinCanonicalAnimationPackSourcePath
+      mesh2motionHumanoidCanonicalAnimationPackSourcePath
     },
     { animationVocabularyIds },
     { metaverseCharacterProofConfig }
@@ -1350,7 +1351,8 @@ test("metaverse asset proof resolves the active full-body humanoid character fro
     characterModelManifest.byId[metaverseActiveFullBodyCharacterAssetId];
 
   assert.ok(activeCharacter);
-  assert.equal(activeCharacter.skeleton, "humanoid_v1");
+  assert.equal(activeCharacter.id, mesh2motionHumanoidCharacterAssetId);
+  assert.equal(activeCharacter.skeleton, "humanoid_v2");
   assert.ok(activeCharacter.presentationModes.includes("full-body"));
   assert.equal(
     metaverseCharacterProofConfig.characterId,
@@ -1366,7 +1368,7 @@ test("metaverse asset proof resolves the active full-body humanoid character fro
   );
   assert.deepEqual(
     new Set(metaverseCharacterProofConfig.animationClips.map((clip) => clip.sourcePath)),
-    new Set([metaverseMannequinCanonicalAnimationPackSourcePath])
+    new Set([mesh2motionHumanoidCanonicalAnimationPackSourcePath])
   );
 
   for (const clipId of activeCharacter.animationClipIds) {

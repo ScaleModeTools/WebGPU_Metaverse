@@ -1,6 +1,9 @@
 # Metaverse Asset Delivery Rules
 
-Status: local durable truth for pipeline step 9.
+Role: canonical. Describes how shipped metaverse asset files are packaged and
+validated.
+
+Status: local durable truth.
 
 Promote these checks into `/tools` only when automated conversion or validation
 actually lands. Until then, the rules live here and narrow runtime tests keep
@@ -55,10 +58,13 @@ Proof-slice allowance rules:
 6. Characters targeting `humanoid_v1` preserve `humanoid_root`, `hips`,
    `spine`, `chest`, `neck`, and every canonical socket id from
    `metaverse-canonical-rig.md`.
-7. Mountable dynamic environment assets export `seat_socket`.
-8. Collision proxies ship as separate files and stay simpler than the render
+7. Characters targeting `humanoid_v2` preserve `root`, `pelvis`, the required
+   spine, neck, head, arm, and leg chains, and every canonical socket id from
+   `metaverse-canonical-rig.md`.
+8. Mountable dynamic environment assets export `seat_socket`.
+9. Collision proxies ship as separate files and stay simpler than the render
    mesh.
-9. Multi-tier assets keep one file per tier and use `-high`, `-medium`, or
+10. Multi-tier assets keep one file per tier and use `-high`, `-medium`, or
    `-low` suffixes that match the manifest `tier`.
 
 ## KTX2 Conversion Checklist
