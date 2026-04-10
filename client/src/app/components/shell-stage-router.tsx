@@ -35,6 +35,11 @@ import { MainMenuStageScreen } from "./main-menu-stage-screen";
 import { PermissionStageScreen } from "./permission-stage-screen";
 import { TrackedHandCalibrationStageScreen } from "./tracked-hand-calibration-stage-screen";
 import { UnsupportedStageScreen } from "./unsupported-stage-screen";
+import {
+  metaverseAttachmentProofConfig,
+  metaverseCharacterProofConfig,
+  metaverseEnvironmentProofConfig
+} from "../states/metaverse-asset-proof";
 
 const MetaverseStageScreen = lazy(async () =>
   import("../../metaverse").then((module) => ({
@@ -208,9 +213,12 @@ export function ShellStageRouter({
       {activeStep === "metaverse" && profile !== null ? (
         <Suspense fallback={<GameplayStageFallback />}>
           <MetaverseStageScreen
+            attachmentProofConfig={metaverseAttachmentProofConfig}
             audioStatusLabel={audioStatusLabel}
             calibrationQualityLabel={calibrationQualityLabel}
+            characterProofConfig={metaverseCharacterProofConfig}
             coopRoomIdDraft={coopRoomIdDraft}
+            environmentProofConfig={metaverseEnvironmentProofConfig}
             gameplayInputMode={inputMode}
             metaverseControlMode={metaverseControlMode}
             onCoopRoomIdDraftChange={onCoopRoomIdDraftChange}

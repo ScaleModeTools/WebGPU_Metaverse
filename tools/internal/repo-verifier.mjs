@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import {
   existsSync,
   readFileSync,
@@ -247,10 +247,17 @@ function resolveClientImportDomain(repoRoot, sourceFilePath, specifier) {
 }
 
 function getTrackedFiles(repoRoot) {
-  const trackedFilesOutput = execFileSync("git", ["ls-files"], {
+  const trackedFilesResult = spawnSync("git", ["ls-files"], {
     cwd: repoRoot,
     encoding: "utf8"
   });
+  const trackedFilesOutput =
+    typeof trackedFilesResult.stdout === "string" ? trackedFilesResult.stdout : "";
+
+  if (trackedFilesResult.status !== 0) {
+    throw trackedFilesResult.error ??
+      new Error(`git ls-files failed with exit code ${trackedFilesResult.status ?? "unknown"}.`);
+  }
 
   return trackedFilesOutput
     .split("\n")

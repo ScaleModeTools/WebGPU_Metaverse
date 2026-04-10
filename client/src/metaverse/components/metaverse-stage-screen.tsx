@@ -24,12 +24,20 @@ import {
   resolveMetaverseControlMode
 } from "../config/metaverse-control-modes";
 import type { MetaverseControlModeId } from "../types/metaverse-control-mode";
+import type {
+  MetaverseAttachmentProofConfig,
+  MetaverseCharacterProofConfig,
+  MetaverseEnvironmentProofConfig
+} from "../types/metaverse-runtime";
 import { WebGpuMetaverseRuntime } from "../classes/webgpu-metaverse-runtime";
 
 interface MetaverseStageScreenProps {
+  readonly attachmentProofConfig: MetaverseAttachmentProofConfig | null;
   readonly audioStatusLabel: string;
   readonly calibrationQualityLabel: string;
+  readonly characterProofConfig: MetaverseCharacterProofConfig | null;
   readonly coopRoomIdDraft: string;
+  readonly environmentProofConfig: MetaverseEnvironmentProofConfig | null;
   readonly gameplayInputMode: GameplayInputModeId;
   readonly metaverseControlMode: MetaverseControlModeId;
   readonly onCoopRoomIdDraftChange: (coopRoomIdDraft: string) => void;
@@ -45,9 +53,12 @@ interface MetaverseStageScreenProps {
 }
 
 export function MetaverseStageScreen({
+  attachmentProofConfig,
   audioStatusLabel,
   calibrationQualityLabel,
+  characterProofConfig,
   coopRoomIdDraft,
+  environmentProofConfig,
   gameplayInputMode,
   metaverseControlMode,
   onCoopRoomIdDraftChange,
@@ -60,7 +71,14 @@ export function MetaverseStageScreen({
   username
 }: MetaverseStageScreenProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [metaverseRuntime] = useState(() => new WebGpuMetaverseRuntime());
+  const [metaverseRuntime] = useState(
+    () =>
+      new WebGpuMetaverseRuntime(undefined, {
+        attachmentProofConfig,
+        characterProofConfig,
+        environmentProofConfig
+      })
+  );
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const subscribeUiUpdates = useCallback(
     (notifyReact: () => void) => metaverseRuntime.subscribeUiUpdates(notifyReact),
@@ -101,10 +119,16 @@ export function MetaverseStageScreen({
   }, [metaverseRuntime]);
 
   const focusedPortal = hudSnapshot.focusedPortal;
+  const focusedMountable = hudSnapshot.focusedMountable;
   const focusDistanceLabel =
     focusedPortal === null
       ? null
       : `${focusedPortal.distanceFromCamera.toFixed(1)}m from portal`;
+  const mountedEnvironment = hudSnapshot.mountedEnvironment;
+  const mountDistanceLabel =
+    focusedMountable === null
+      ? null
+      : `${focusedMountable.distanceFromCamera.toFixed(1)}m inside mount collider`;
 
   return (
     <ImmersiveStageFrame className="bg-game-stage">
@@ -195,6 +219,37 @@ export function MetaverseStageScreen({
                 <p className="mt-3 text-sm text-destructive">{runtimeError}</p>
               ) : null}
             </div>
+
+            {mountedEnvironment !== null || focusedMountable !== null ? (
+              <div className="pointer-events-auto max-w-sm rounded-[1.4rem] border border-border/70 bg-card/82 p-4 shadow-[0_20px_60px_rgb(15_23_42_/_0.22)] backdrop-blur-xl">
+                <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">
+                  Seat Mount
+                </p>
+                <p className="mt-2 text-sm text-foreground">
+                  {mountedEnvironment !== null
+                    ? `${mountedEnvironment.label} mounted.`
+                    : `${focusedMountable?.label} is in range.`}
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {mountedEnvironment !== null
+                    ? "Leave the seat to restore the mannequin to its pre-mount anchor."
+                    : mountDistanceLabel}
+                </p>
+                <div className="mt-4">
+                  <Button
+                    onClick={() => {
+                      metaverseRuntime.toggleMount();
+                    }}
+                    type="button"
+                    variant={mountedEnvironment !== null ? "outline" : "default"}
+                  >
+                    {mountedEnvironment !== null
+                      ? `Leave ${mountedEnvironment.label}`
+                      : `Board ${focusedMountable?.label}`}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="flex justify-end">

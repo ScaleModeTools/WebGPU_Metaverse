@@ -18,8 +18,13 @@ import {
   type MetaverseSceneCanvasHost
 } from "../render/webgpu-metaverse-scene";
 import type {
+  MetaverseAttachmentProofConfig,
+  FocusedMountableSnapshot,
   FocusedExperiencePortalSnapshot,
+  MetaverseCharacterProofConfig,
+  MetaverseEnvironmentProofConfig,
   MetaverseHudSnapshot,
+  MountedEnvironmentSnapshot,
   MetaverseRuntimeConfig
 } from "../types/metaverse-runtime";
 import {
@@ -31,6 +36,7 @@ import type {
 } from "../types/metaverse-control-mode";
 
 interface MetaverseRendererHost {
+  compileAsync?(scene: Scene, camera: Camera): Promise<void>;
   init(): Promise<void | MetaverseRendererHost>;
   render(scene: Scene, camera: Camera): void;
   setPixelRatio(pixelRatio: number): void;
@@ -42,6 +48,19 @@ interface MetaverseRendererTuningHandle {
   outputColorSpace?: string;
   toneMapping?: number;
   toneMappingExposure?: number;
+}
+
+interface MetaverseRuntimeDependencies {
+  readonly attachmentProofConfig?: MetaverseAttachmentProofConfig | null;
+  readonly cancelAnimationFrame?: typeof globalThis.cancelAnimationFrame;
+  readonly characterProofConfig?: MetaverseCharacterProofConfig | null;
+  readonly createRenderer?: (
+    canvas: HTMLCanvasElement
+  ) => MetaverseRendererHost;
+  readonly devicePixelRatio?: number;
+  readonly environmentProofConfig?: MetaverseEnvironmentProofConfig | null;
+  readonly readNowMs?: () => number;
+  readonly requestAnimationFrame?: typeof globalThis.requestAnimationFrame;
 }
 
 function createDefaultRenderer(canvas: HTMLCanvasElement): MetaverseRendererHost {
@@ -85,14 +104,18 @@ function freezeHudSnapshot(
   failureReason: string | null,
   camera: MetaverseHudSnapshot["camera"],
   focusedPortal: FocusedExperiencePortalSnapshot | null,
+  focusedMountable: FocusedMountableSnapshot | null,
+  mountedEnvironment: MountedEnvironmentSnapshot | null,
   controlMode: MetaverseHudSnapshot["controlMode"]
 ): MetaverseHudSnapshot {
   return Object.freeze({
     camera,
     controlMode,
     failureReason,
+    focusedMountable,
     focusedPortal,
-    lifecycle
+    lifecycle,
+    mountedEnvironment
   });
 }
 
@@ -203,35 +226,53 @@ export class WebGpuMetaverseRuntime {
   #cameraSnapshot = createMetaverseCameraSnapshot(metaverseRuntimeConfig.camera);
   #canvas: HTMLCanvasElement | null = null;
   #controlMode: MetaverseControlModeId = defaultMetaverseControlMode;
+  #focusedMountable: FocusedMountableSnapshot | null = null;
   #focusedPortal: FocusedExperiencePortalSnapshot | null = null;
   #hudSnapshot = freezeHudSnapshot(
     "idle",
     null,
     this.#cameraSnapshot,
     null,
+    null,
+    null,
     this.#controlMode
   );
   #inputCleanup: (() => void) | null = null;
   #lastFrameAtMs: number | null = null;
   #lastUiUpdateAtMs = Number.NEGATIVE_INFINITY;
+  #mountedEnvironment: MountedEnvironmentSnapshot | null = null;
   #renderer: MetaverseRendererHost | null = null;
+  #runtimeEpoch = 0;
   #requestAnimationFrame: typeof globalThis.requestAnimationFrame;
   #cancelAnimationFrame: typeof globalThis.cancelAnimationFrame;
   #readNowMs: () => number;
+  #startPromise: Promise<MetaverseHudSnapshot> | null = null;
 
-  constructor(config: MetaverseRuntimeConfig = metaverseRuntimeConfig) {
+  constructor(
+    config: MetaverseRuntimeConfig = metaverseRuntimeConfig,
+    dependencies: MetaverseRuntimeDependencies = {}
+  ) {
     this.#config = config;
-    this.#createRenderer = createDefaultRenderer;
-    this.#devicePixelRatio = globalThis.window?.devicePixelRatio ?? 1;
-    this.#requestAnimationFrame = requestBrowserAnimationFrame;
-    this.#cancelAnimationFrame = cancelBrowserAnimationFrame;
-    this.#readNowMs = readNowMs;
-    this.#sceneRuntime = createMetaverseScene(config);
+    this.#createRenderer = dependencies.createRenderer ?? createDefaultRenderer;
+    this.#devicePixelRatio =
+      dependencies.devicePixelRatio ?? globalThis.window?.devicePixelRatio ?? 1;
+    this.#requestAnimationFrame =
+      dependencies.requestAnimationFrame ?? requestBrowserAnimationFrame;
+    this.#cancelAnimationFrame =
+      dependencies.cancelAnimationFrame ?? cancelBrowserAnimationFrame;
+    this.#readNowMs = dependencies.readNowMs ?? readNowMs;
+    this.#sceneRuntime = createMetaverseScene(config, {
+      attachmentProofConfig: dependencies.attachmentProofConfig ?? null,
+      characterProofConfig: dependencies.characterProofConfig ?? null,
+      environmentProofConfig: dependencies.environmentProofConfig ?? null
+    });
     this.#cameraSnapshot = createMetaverseCameraSnapshot(config.camera);
     this.#hudSnapshot = freezeHudSnapshot(
       "idle",
       null,
       this.#cameraSnapshot,
+      null,
+      null,
       null,
       this.#controlMode
     );
@@ -263,11 +304,52 @@ export class WebGpuMetaverseRuntime {
     );
   }
 
+  toggleMount(): void {
+    const sceneInteractionSnapshot = this.#sceneRuntime.toggleMount(
+      this.#cameraSnapshot
+    );
+
+    this.#focusedMountable = sceneInteractionSnapshot.focusedMountable;
+    this.#mountedEnvironment = sceneInteractionSnapshot.mountedEnvironment;
+    this.#setHudSnapshot(
+      this.#hudSnapshot.lifecycle,
+      this.#hudSnapshot.failureReason,
+      true
+    );
+  }
+
   async start(
     canvas: HTMLCanvasElement,
     navigatorLike: Navigator | null | undefined = globalThis.window?.navigator
   ): Promise<MetaverseHudSnapshot> {
+    if (this.#startPromise !== null) {
+      this.dispose();
+
+      try {
+        await this.#startPromise;
+      } catch {
+        // Disposal makes stale boot failures non-actionable for the next start.
+      }
+    }
+
+    const startPromise = this.#startInternal(canvas, navigatorLike);
+    this.#startPromise = startPromise;
+
+    try {
+      return await startPromise;
+    } finally {
+      if (this.#startPromise === startPromise) {
+        this.#startPromise = null;
+      }
+    }
+  }
+
+  async #startInternal(
+    canvas: HTMLCanvasElement,
+    navigatorLike: Navigator | null | undefined
+  ): Promise<MetaverseHudSnapshot> {
     this.dispose();
+    const runtimeEpoch = ++this.#runtimeEpoch;
 
     if (navigatorLike?.gpu === undefined) {
       const failureReason = "WebGPU is unavailable for the metaverse runtime.";
@@ -278,7 +360,9 @@ export class WebGpuMetaverseRuntime {
 
     this.#canvas = canvas;
     this.#cameraSnapshot = createMetaverseCameraSnapshot(this.#config.camera);
+    this.#focusedMountable = null;
     this.#focusedPortal = null;
+    this.#mountedEnvironment = null;
     this.#setHudSnapshot("booting", null, true);
     this.#installInputListeners(canvas);
     const renderer = this.#createRenderer(canvas);
@@ -287,15 +371,53 @@ export class WebGpuMetaverseRuntime {
 
     try {
       await renderer.init();
+      await this.#sceneRuntime.boot();
+      this.#sceneRuntime.syncViewport(
+        renderer,
+        canvas as MetaverseSceneCanvasHost,
+        this.#devicePixelRatio
+      );
+      await this.#sceneRuntime.prewarm(renderer);
     } catch (error) {
-      this.#renderer = null;
+      if (this.#renderer === renderer) {
+        this.#renderer = null;
+      }
+
       renderer.dispose();
       this.#removeInputListeners();
-      this.#canvas = null;
-      const failureReason = resolveRuntimeFailureReason(error);
+      if (this.#canvas === canvas) {
+        this.#canvas = null;
+      }
 
-      this.#setHudSnapshot("failed", failureReason, true);
-      throw new Error(failureReason);
+      if (runtimeEpoch === this.#runtimeEpoch) {
+        const failureReason = resolveRuntimeFailureReason(error);
+
+        this.#setHudSnapshot("failed", failureReason, true);
+        throw new Error(failureReason);
+      }
+
+      throw error instanceof Error
+        ? error
+        : new Error(resolveRuntimeFailureReason(error));
+    }
+
+    if (
+      runtimeEpoch !== this.#runtimeEpoch ||
+      this.#renderer !== renderer ||
+      this.#canvas !== canvas
+    ) {
+      if (this.#renderer === renderer) {
+        this.#renderer = null;
+      }
+
+      if (this.#canvas === canvas) {
+        this.#canvas = null;
+      }
+
+      this.#removeInputListeners();
+      renderer.dispose();
+
+      return this.#hudSnapshot;
     }
 
     this.#lastFrameAtMs = this.#readNowMs();
@@ -306,6 +428,8 @@ export class WebGpuMetaverseRuntime {
   }
 
   dispose(): void {
+    this.#runtimeEpoch += 1;
+
     if (this.#animationFrameHandle !== 0) {
       this.#cancelAnimationFrame(this.#animationFrameHandle);
       this.#animationFrameHandle = 0;
@@ -317,7 +441,9 @@ export class WebGpuMetaverseRuntime {
     this.#canvas = null;
     this.#lastFrameAtMs = null;
     this.#lastUiUpdateAtMs = Number.NEGATIVE_INFINITY;
+    this.#focusedMountable = null;
     this.#focusedPortal = null;
+    this.#mountedEnvironment = null;
     this.#resetTransientInputState();
     this.#cameraSnapshot = createMetaverseCameraSnapshot(this.#config.camera);
     this.#sceneRuntime.resetPresentation();
@@ -512,11 +638,14 @@ export class WebGpuMetaverseRuntime {
       this.#canvas as MetaverseSceneCanvasHost,
       this.#devicePixelRatio
     );
-    this.#sceneRuntime.syncPresentation(
+    const sceneInteractionSnapshot = this.#sceneRuntime.syncPresentation(
       this.#cameraSnapshot,
       this.#focusedPortal,
-      nowMs
+      nowMs,
+      deltaSeconds
     );
+    this.#focusedMountable = sceneInteractionSnapshot.focusedMountable;
+    this.#mountedEnvironment = sceneInteractionSnapshot.mountedEnvironment;
     this.#renderer.render(this.#sceneRuntime.scene, this.#sceneRuntime.camera);
     this.#setHudSnapshot("running", null, forceUiUpdate);
   }
@@ -531,6 +660,8 @@ export class WebGpuMetaverseRuntime {
       failureReason,
       this.#cameraSnapshot,
       this.#focusedPortal,
+      this.#focusedMountable,
+      this.#mountedEnvironment,
       this.#controlMode
     );
 

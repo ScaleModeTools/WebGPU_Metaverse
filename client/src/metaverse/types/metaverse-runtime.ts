@@ -38,9 +38,72 @@ export interface MetaversePortalConfig {
   readonly ringColor: readonly [number, number, number];
 }
 
+export interface MetaverseCharacterProofConfig {
+  readonly animationClipName: string;
+  readonly animationSourcePath: string;
+  readonly characterId: string;
+  readonly label: string;
+  readonly modelPath: string;
+  readonly socketNames: readonly string[];
+}
+
+export interface MetaverseAttachmentProofConfig {
+  readonly attachmentId: string;
+  readonly label: string;
+  readonly modelPath: string;
+  readonly socketName: string;
+}
+
+export interface MetaverseEnvironmentColliderProofConfig {
+  readonly center: MetaverseVector3Snapshot;
+  readonly shape: "box";
+  readonly size: MetaverseVector3Snapshot;
+}
+
+export interface MetaverseEnvironmentMountProofConfig {
+  readonly seatSocketName: string;
+}
+
+export interface MetaverseEnvironmentPlacementProofConfig {
+  readonly position: MetaverseVector3Snapshot;
+  readonly rotationYRadians: number;
+  readonly scale: number;
+}
+
+export interface MetaverseEnvironmentLodProofConfig {
+  readonly maxDistanceMeters: number | null;
+  readonly modelPath: string;
+  readonly tier: string;
+}
+
+export interface MetaverseEnvironmentAssetProofConfig {
+  readonly collider: MetaverseEnvironmentColliderProofConfig | null;
+  readonly environmentAssetId: string;
+  readonly label: string;
+  readonly lods: readonly MetaverseEnvironmentLodProofConfig[];
+  readonly mount: MetaverseEnvironmentMountProofConfig | null;
+  readonly placement: "dynamic" | "instanced" | "static";
+  readonly placements: readonly MetaverseEnvironmentPlacementProofConfig[];
+}
+
+export interface MetaverseEnvironmentProofConfig {
+  readonly assets: readonly MetaverseEnvironmentAssetProofConfig[];
+}
+
 export interface FocusedExperiencePortalSnapshot {
   readonly distanceFromCamera: number;
   readonly experienceId: ExperienceId;
+  readonly label: string;
+}
+
+export interface FocusedMountableSnapshot {
+  readonly distanceFromCamera: number;
+  readonly environmentAssetId: string;
+  readonly label: string;
+}
+
+export interface MountedEnvironmentSnapshot {
+  readonly environmentAssetId: string;
   readonly label: string;
 }
 
@@ -48,8 +111,10 @@ export interface MetaverseHudSnapshot {
   readonly camera: MetaverseCameraSnapshot;
   readonly controlMode: MetaverseControlModeId;
   readonly failureReason: string | null;
+  readonly focusedMountable: FocusedMountableSnapshot | null;
   readonly focusedPortal: FocusedExperiencePortalSnapshot | null;
   readonly lifecycle: MetaverseRuntimeLifecycleState;
+  readonly mountedEnvironment: MountedEnvironmentSnapshot | null;
 }
 
 export interface MetaverseRuntimeConfig {
