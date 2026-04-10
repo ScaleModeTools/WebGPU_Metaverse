@@ -2,6 +2,7 @@ import type { Object3D } from "three/webgpu";
 import { RapierHelper } from "three/addons/helpers/RapierHelper.js";
 
 import type {
+  PhysicsQuaternionSnapshot,
   PhysicsVector3Snapshot,
   RapierApiHandle,
   RapierCharacterControllerHandle,
@@ -24,6 +25,32 @@ const defaultGravity = Object.freeze({
 
 function toFiniteNumber(value: number, fallback = 0): number {
   return Number.isFinite(value) ? value : fallback;
+}
+
+function sanitizeQuaternion(
+  rotation: PhysicsQuaternionSnapshot
+): PhysicsQuaternionSnapshot {
+  const x = toFiniteNumber(rotation.x);
+  const y = toFiniteNumber(rotation.y);
+  const z = toFiniteNumber(rotation.z);
+  const w = toFiniteNumber(rotation.w, 1);
+  const magnitude = Math.hypot(x, y, z, w);
+
+  if (magnitude <= 0.000001) {
+    return Object.freeze({
+      x: 0,
+      y: 0,
+      z: 0,
+      w: 1
+    });
+  }
+
+  return Object.freeze({
+    x: x / magnitude,
+    y: y / magnitude,
+    z: z / magnitude,
+    w: w / magnitude
+  });
 }
 
 async function createDefaultPhysicsAddon(): Promise<RapierPhysicsAddon> {
@@ -103,6 +130,15 @@ export class RapierPhysicsRuntime {
     );
   }
 
+  stepSimulation(deltaSeconds: number): void {
+    const world = this.#requireAddon().world;
+    const timestepSeconds = toFiniteNumber(deltaSeconds, 1 / 60);
+
+    world.timestep =
+      timestepSeconds > 0 ? timestepSeconds : 1 / 60;
+    world.step();
+  }
+
   createDebugHelper():
     | (Object3D & { dispose?(): void; update?(): void })
     | null {
@@ -111,7 +147,13 @@ export class RapierPhysicsRuntime {
 
   createFixedCuboidCollider(
     halfExtents: PhysicsVector3Snapshot,
-    translation: PhysicsVector3Snapshot
+    translation: PhysicsVector3Snapshot,
+    rotation: PhysicsQuaternionSnapshot = Object.freeze({
+      x: 0,
+      y: 0,
+      z: 0,
+      w: 1
+    })
   ): RapierColliderHandle {
     const addon = this.#requireAddon();
     const colliderDesc = addon.RAPIER.ColliderDesc.cuboid(
@@ -125,6 +167,17 @@ export class RapierPhysicsRuntime {
       toFiniteNumber(translation.y),
       toFiniteNumber(translation.z)
     );
+    colliderDesc.setRotation(sanitizeQuaternion(rotation));
+
+    return addon.world.createCollider(colliderDesc);
+  }
+
+  createFixedTriMeshCollider(
+    vertices: Float32Array,
+    indices: Uint32Array
+  ): RapierColliderHandle {
+    const addon = this.#requireAddon();
+    const colliderDesc = addon.RAPIER.ColliderDesc.trimesh(vertices, indices);
 
     return addon.world.createCollider(colliderDesc);
   }

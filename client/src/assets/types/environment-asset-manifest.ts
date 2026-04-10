@@ -35,6 +35,7 @@ export interface EnvironmentAssetDescriptor<
   readonly id: TId;
   readonly label: string;
   readonly placement: EnvironmentAssetPlacement;
+  readonly physicsColliders: readonly EnvironmentBoxColliderDescriptor[] | null;
   readonly renderModel: AssetLodGroup;
   readonly collider: EnvironmentBoxColliderDescriptor | null;
   readonly collisionPath: string | null;

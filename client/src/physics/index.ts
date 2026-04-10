@@ -4,6 +4,7 @@ export type {
   MetaverseGroundedBodyConfig,
   MetaverseGroundedBodyIntentSnapshot,
   MetaverseGroundedBodySnapshot,
+  PhysicsQuaternionSnapshot,
   PhysicsVector3Snapshot,
   RapierCharacterControllerHandle,
   RapierColliderHandle,

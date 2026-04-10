@@ -18,6 +18,21 @@ export const environmentPropManifest = defineEnvironmentAssetManifest([
     id: metaverseHubCrateEnvironmentAssetId,
     label: "Metaverse hub crate",
     placement: "instanced",
+    physicsColliders: [
+      {
+        center: {
+          x: 0,
+          y: 0,
+          z: 0
+        },
+        shape: "box",
+        size: {
+          x: 0.92,
+          y: 0.92,
+          z: 0.92
+        }
+      }
+    ],
     renderModel: {
       defaultTier: "high",
       lods: [
@@ -41,6 +56,21 @@ export const environmentPropManifest = defineEnvironmentAssetManifest([
     id: metaverseHubDockEnvironmentAssetId,
     label: "Metaverse hub dock",
     placement: "static",
+    physicsColliders: [
+      {
+        center: {
+          x: 0,
+          y: 0,
+          z: 0
+        },
+        shape: "box",
+        size: {
+          x: 8.4,
+          y: 0.34,
+          z: 4.2
+        }
+      }
+    ],
     renderModel: {
       defaultTier: "high",
       lods: [
@@ -64,6 +94,7 @@ export const environmentPropManifest = defineEnvironmentAssetManifest([
     id: metaverseHubSkiffEnvironmentAssetId,
     label: "Metaverse hub skiff",
     placement: "dynamic",
+    physicsColliders: null,
     renderModel: {
       defaultTier: "high",
       lods: [

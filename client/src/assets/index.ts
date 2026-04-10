@@ -1,6 +1,7 @@
 export {
   animationClipManifest,
-  metaverseMannequinIdleAnimationClipId
+  metaverseMannequinIdleAnimationClipId,
+  metaverseMannequinWalkAnimationClipId
 } from "./config/animation-clip-manifest";
 export {
   attachmentModelManifest,

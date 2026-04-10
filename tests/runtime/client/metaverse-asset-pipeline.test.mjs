@@ -138,6 +138,7 @@ test("character manifests expose two humanoid-compatible assets on the same voca
     });
 
     assert.ok(clipVocabularies.includes("idle"));
+    assert.ok(clipVocabularies.includes("walk"));
 
     for (const clipId of character.animationClipIds) {
       const clipDescriptor = animationClipManifest.byId[clipId];

@@ -3,7 +3,10 @@ import {
 } from "../types/asset-id";
 import { socketIds } from "../types/asset-socket";
 import { defineCharacterAssetManifest } from "../types/character-asset-manifest";
-import { metaverseMannequinIdleAnimationClipId } from "./animation-clip-manifest";
+import {
+  metaverseMannequinIdleAnimationClipId,
+  metaverseMannequinWalkAnimationClipId
+} from "./animation-clip-manifest";
 
 export const metaverseMannequinCharacterAssetId = createCharacterAssetId(
   "metaverse-mannequin-v1"
@@ -28,7 +31,8 @@ const metaverseMannequinCollisionPath =
   "/models/metaverse/characters/metaverse-mannequin-collision.gltf";
 
 const metaverseMannequinAnimationClipIds = [
-  metaverseMannequinIdleAnimationClipId
+  metaverseMannequinIdleAnimationClipId,
+  metaverseMannequinWalkAnimationClipId
 ] as const;
 
 export const characterModelManifest = defineCharacterAssetManifest([

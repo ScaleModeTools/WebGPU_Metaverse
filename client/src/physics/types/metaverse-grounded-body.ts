@@ -4,6 +4,13 @@ export interface PhysicsVector3Snapshot {
   readonly z: number;
 }
 
+export interface PhysicsQuaternionSnapshot {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly w: number;
+}
+
 export interface MetaverseGroundedBodyIntentSnapshot {
   readonly boost: boolean;
   readonly moveAxis: number;
@@ -15,20 +22,25 @@ export interface MetaverseGroundedBodySnapshot {
   readonly capsuleRadiusMeters: number;
   readonly eyeHeightMeters: number;
   readonly grounded: boolean;
+  readonly planarSpeedUnitsPerSecond: number;
   readonly position: PhysicsVector3Snapshot;
   readonly yawRadians: number;
 }
 
 export interface MetaverseGroundedBodyConfig {
+  readonly accelerationUnitsPerSecondSquared: number;
   readonly baseSpeedUnitsPerSecond: number;
   readonly boostMultiplier: number;
   readonly capsuleHalfHeightMeters: number;
   readonly capsuleRadiusMeters: number;
   readonly controllerOffsetMeters: number;
+  readonly decelerationUnitsPerSecondSquared: number;
   readonly eyeHeightMeters: number;
   readonly gravityUnitsPerSecond: number;
   readonly maxTurnSpeedRadiansPerSecond: number;
   readonly snapToGroundDistanceMeters: number;
+  readonly stepHeightMeters: number;
+  readonly stepWidthMeters: number;
   readonly spawnPosition: PhysicsVector3Snapshot;
   readonly worldRadius: number;
 }
@@ -44,6 +56,7 @@ export interface RapierVectorConstructor {
 }
 
 export interface RapierColliderDescHandle {
+  setRotation(rotation: PhysicsQuaternionSnapshot): RapierColliderDescHandle;
   setTranslation(x: number, y: number, z: number): RapierColliderDescHandle;
 }
 
@@ -54,6 +67,10 @@ export interface RapierColliderDescFactory {
     halfExtentX: number,
     halfExtentY: number,
     halfExtentZ: number
+  ): RapierColliderDescHandle;
+  trimesh(
+    vertices: Float32Array,
+    indices: Uint32Array
   ): RapierColliderDescHandle;
 }
 
@@ -69,8 +86,16 @@ export interface RapierCharacterControllerHandle {
     collider: RapierColliderHandle,
     desiredTranslationDelta: RapierVectorLike
   ): void;
+  enableAutostep(
+    maxHeight: number,
+    minWidth: number,
+    includeDynamicBodies: boolean
+  ): void;
   enableSnapToGround(distance: number): void;
   free?(): void;
+  setUp?(up: RapierVectorLike): void;
+  setMaxSlopeClimbAngle?(angle: number): void;
+  setMinSlopeSlideAngle?(angle: number): void;
   setApplyImpulsesToDynamicBodies(enabled: boolean): void;
   setCharacterMass(mass: number | null): void;
 }
@@ -79,6 +104,8 @@ export interface RapierWorldHandle {
   createCharacterController(offset: number): RapierCharacterControllerHandle;
   createCollider(colliderDesc: RapierColliderDescHandle): RapierColliderHandle;
   removeCollider(collider: RapierColliderHandle, wakeUp: boolean): void;
+  step(): void;
+  timestep: number;
 }
 
 export interface RapierWorldConstructor {

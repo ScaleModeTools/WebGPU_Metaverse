@@ -6,6 +6,7 @@ import {
   SRGBColorSpace,
   WebGPURenderer
 } from "three/webgpu";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 import {
   MetaverseGroundedBodyRuntime,
@@ -21,8 +22,13 @@ import {
 import { metaverseRuntimeConfig } from "../config/metaverse-runtime";
 import {
   createMetaverseScene,
-  type MetaverseSceneCanvasHost
+  type MetaverseSceneCanvasHost,
+  type SceneAssetLoader
 } from "../render/webgpu-metaverse-scene";
+import {
+  resolvePlacedCollisionTriMeshes,
+  resolvePlacedCuboidColliders
+} from "../states/metaverse-environment-collision";
 import {
   advanceMetaverseCameraSnapshot,
   advanceMetaversePitchRadians,
@@ -71,6 +77,7 @@ interface MetaverseRuntimeDependencies {
   readonly createRenderer?: (
     canvas: HTMLCanvasElement
   ) => MetaverseRendererHost;
+  readonly createSceneAssetLoader?: () => SceneAssetLoader;
   readonly devicePixelRatio?: number;
   readonly environmentProofConfig?: MetaverseEnvironmentProofConfig | null;
   readonly physicsRuntime?: RapierPhysicsRuntime;
@@ -105,6 +112,7 @@ type MetaversePhysicsDebugObject = Object3D & {
 type MouseFlightButtonInputKey = "boost" | "moveBackward" | "moveForward";
 
 const metaverseUiUpdateIntervalMs = 120;
+const metaverseWalkAnimationSpeedThresholdUnitsPerSecond = 0.75;
 
 function createDefaultRenderer(canvas: HTMLCanvasElement): MetaverseRendererHost {
   const renderer = new WebGPURenderer({
@@ -120,6 +128,10 @@ function createDefaultRenderer(canvas: HTMLCanvasElement): MetaverseRendererHost
   tuningHandle.outputColorSpace = SRGBColorSpace;
 
   return renderer;
+}
+
+function createDefaultSceneAssetLoader(): SceneAssetLoader {
+  return new GLTFLoader() as SceneAssetLoader;
 }
 
 function requestBrowserAnimationFrame(callback: FrameRequestCallback): number {
@@ -162,6 +174,11 @@ function createCharacterPresentationSnapshot(
   bodySnapshot: MetaverseGroundedBodySnapshot
 ): MetaverseCharacterPresentationSnapshot {
   return Object.freeze({
+    animationVocabulary:
+      bodySnapshot.planarSpeedUnitsPerSecond >=
+      metaverseWalkAnimationSpeedThresholdUnitsPerSecond
+        ? "walk"
+        : "idle",
     position: Object.freeze({
       x: bodySnapshot.position.x,
       y: bodySnapshot.position.y,
@@ -297,7 +314,9 @@ function resolveRuntimeFailureReason(error: unknown): string {
 export class WebGpuMetaverseRuntime {
   readonly #config: MetaverseRuntimeConfig;
   readonly #createRenderer: (canvas: HTMLCanvasElement) => MetaverseRendererHost;
+  readonly #createSceneAssetLoader: () => SceneAssetLoader;
   readonly #devicePixelRatio: number;
+  readonly #environmentProofConfig: MetaverseEnvironmentProofConfig | null;
   readonly #groundedBodyRuntime: MetaverseGroundedBodyRuntime;
   readonly #keyboardInput = createKeyboardFlightInputState();
   readonly #mouseInput = createMouseFlightInputState();
@@ -310,6 +329,7 @@ export class WebGpuMetaverseRuntime {
   #cameraSnapshot = createMetaverseCameraSnapshot(metaverseRuntimeConfig.camera);
   #canvas: HTMLCanvasElement | null = null;
   #controlMode: MetaverseControlModeId = defaultMetaverseControlMode;
+  #environmentColliders: RapierColliderHandle[] = [];
   #focusedMountable: FocusedMountableSnapshot | null = null;
   #focusedPortal: FocusedExperiencePortalSnapshot | null = null;
   #groundCollider: RapierColliderHandle | null = null;
@@ -344,8 +364,11 @@ export class WebGpuMetaverseRuntime {
   ) {
     this.#config = config;
     this.#createRenderer = dependencies.createRenderer ?? createDefaultRenderer;
+    this.#createSceneAssetLoader =
+      dependencies.createSceneAssetLoader ?? createDefaultSceneAssetLoader;
     this.#devicePixelRatio =
       dependencies.devicePixelRatio ?? globalThis.window?.devicePixelRatio ?? 1;
+    this.#environmentProofConfig = dependencies.environmentProofConfig ?? null;
     this.#physicsRuntime =
       dependencies.physicsRuntime ?? new RapierPhysicsRuntime();
     this.#groundedBodyRuntime = new MetaverseGroundedBodyRuntime(
@@ -365,7 +388,8 @@ export class WebGpuMetaverseRuntime {
     this.#sceneRuntime = createMetaverseScene(config, {
       attachmentProofConfig: dependencies.attachmentProofConfig ?? null,
       characterProofConfig: dependencies.characterProofConfig ?? null,
-      environmentProofConfig: dependencies.environmentProofConfig ?? null
+      createSceneAssetLoader: this.#createSceneAssetLoader,
+      environmentProofConfig: this.#environmentProofConfig
     });
     this.#showPhysicsDebug = dependencies.showPhysicsDebug ?? false;
     this.#cameraSnapshot = createMetaverseCameraSnapshot(config.camera);
@@ -737,6 +761,54 @@ export class WebGpuMetaverseRuntime {
     });
   }
 
+  async #bootStaticEnvironmentCollision(): Promise<void> {
+    if (this.#environmentProofConfig === null) {
+      return;
+    }
+
+    const sceneAssetLoader = this.#createSceneAssetLoader();
+    const collisionAssetsByPath = new Map<string, Awaited<ReturnType<SceneAssetLoader["loadAsync"]>>>();
+
+    for (const environmentAsset of this.#environmentProofConfig.assets) {
+      for (const collider of resolvePlacedCuboidColliders(environmentAsset)) {
+        this.#environmentColliders.push(
+          this.#physicsRuntime.createFixedCuboidCollider(
+            collider.halfExtents,
+            collider.translation,
+            collider.rotation
+          )
+        );
+      }
+
+      if (
+        environmentAsset.placement === "dynamic" ||
+        environmentAsset.physicsColliders !== null ||
+        environmentAsset.collisionPath === null
+      ) {
+        continue;
+      }
+
+      let collisionAsset = collisionAssetsByPath.get(environmentAsset.collisionPath);
+
+      if (collisionAsset === undefined) {
+        collisionAsset = await sceneAssetLoader.loadAsync(environmentAsset.collisionPath);
+        collisionAssetsByPath.set(environmentAsset.collisionPath, collisionAsset);
+      }
+
+      for (const triMeshCollider of resolvePlacedCollisionTriMeshes(
+        environmentAsset,
+        collisionAsset.scene
+      )) {
+        this.#environmentColliders.push(
+          this.#physicsRuntime.createFixedTriMeshCollider(
+            triMeshCollider.vertices,
+            triMeshCollider.indices
+          )
+        );
+      }
+    }
+  }
+
   async #bootGroundedRuntime(): Promise<void> {
     await this.#physicsRuntime.init();
     this.#groundCollider ??= this.#physicsRuntime.createFixedCuboidCollider(
@@ -747,6 +819,7 @@ export class WebGpuMetaverseRuntime {
       ),
       freezeVector3(0, this.#config.ocean.height - 0.5, 0)
     );
+    await this.#bootStaticEnvironmentCollision();
     await this.#groundedBodyRuntime.init(this.#cameraSnapshot.yawRadians);
 
     if (this.#locomotionMode === "grounded") {
@@ -783,6 +856,11 @@ export class WebGpuMetaverseRuntime {
       this.#groundCollider = null;
     }
 
+    for (const environmentCollider of this.#environmentColliders) {
+      this.#physicsRuntime.removeCollider(environmentCollider);
+    }
+
+    this.#environmentColliders = [];
     this.#groundedBodyRuntime.dispose();
   }
 

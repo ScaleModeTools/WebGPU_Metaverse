@@ -53,21 +53,28 @@ function resolveMetaverseCharacterProofConfig(): MetaverseCharacterProofConfig {
     );
   }
 
-  const clipId = characterDescriptor.animationClipIds[0];
-
-  if (clipId === undefined) {
+  if (characterDescriptor.animationClipIds[0] === undefined) {
     throw new Error(`Metaverse character ${characterDescriptor.label} has no animation clip ids.`);
   }
 
-  const clipDescriptor = animationClipManifest.clips.find((clip) => clip.id === clipId);
-
-  if (clipDescriptor === undefined) {
-    throw new Error(`Metaverse animation manifest is missing clip ${clipId}.`);
-  }
-
   return Object.freeze({
-    animationClipName: clipDescriptor.clipName,
-    animationSourcePath: clipDescriptor.sourcePath,
+    animationClips: Object.freeze(
+      characterDescriptor.animationClipIds.map((clipId) => {
+        const clipDescriptor = animationClipManifest.clips.find(
+          (clip) => clip.id === clipId
+        );
+
+        if (clipDescriptor === undefined) {
+          throw new Error(`Metaverse animation manifest is missing clip ${clipId}.`);
+        }
+
+        return Object.freeze({
+          clipName: clipDescriptor.clipName,
+          sourcePath: clipDescriptor.sourcePath,
+          vocabulary: clipDescriptor.vocabulary
+        });
+      })
+    ),
     characterId: characterDescriptor.id,
     label: characterDescriptor.label,
     modelPath: resolveLodModelPath(characterDescriptor.renderModel),
@@ -203,6 +210,32 @@ function resolveEnvironmentCollider(
   });
 }
 
+function resolveEnvironmentPhysicsColliders(
+  colliders: readonly EnvironmentBoxColliderDescriptor[] | null
+): readonly MetaverseEnvironmentColliderProofConfig[] | null {
+  if (colliders === null) {
+    return null;
+  }
+
+  return Object.freeze(
+    colliders.map((collider) =>
+      Object.freeze({
+        center: Object.freeze({
+          x: collider.center.x,
+          y: collider.center.y,
+          z: collider.center.z
+        }),
+        shape: collider.shape,
+        size: Object.freeze({
+          x: collider.size.x,
+          y: collider.size.y,
+          z: collider.size.z
+        })
+      })
+    )
+  );
+}
+
 function resolveEnvironmentMount(
   mount: EnvironmentMountDescriptor | null
 ): MetaverseEnvironmentMountProofConfig | null {
@@ -265,13 +298,17 @@ function resolveMetaverseEnvironmentAssetProofConfig(
   }
 
   return Object.freeze({
+    collisionPath: environmentDescriptor.collisionPath,
     collider: resolveEnvironmentCollider(environmentDescriptor.collider),
     environmentAssetId: environmentDescriptor.id,
     label: environmentDescriptor.label,
     lods: resolveEnvironmentLods(environmentDescriptor.renderModel),
     mount: resolveEnvironmentMount(environmentDescriptor.mount),
     placement: environmentDescriptor.placement,
-    placements
+    placements,
+    physicsColliders: resolveEnvironmentPhysicsColliders(
+      environmentDescriptor.physicsColliders
+    )
   });
 }
 

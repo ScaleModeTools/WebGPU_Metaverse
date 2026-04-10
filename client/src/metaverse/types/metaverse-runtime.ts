@@ -16,6 +16,17 @@ export const metaverseRuntimeLifecycleStates = [
 export type MetaverseRuntimeLifecycleState =
   (typeof metaverseRuntimeLifecycleStates)[number];
 
+export const metaverseCharacterAnimationVocabularyIds = [
+  "idle",
+  "walk",
+  "aim",
+  "interact",
+  "seated"
+] as const;
+
+export type MetaverseCharacterAnimationVocabularyId =
+  (typeof metaverseCharacterAnimationVocabularyIds)[number];
+
 export interface MetaverseVector3Snapshot {
   readonly x: number;
   readonly y: number;
@@ -30,8 +41,15 @@ export interface MetaverseCameraSnapshot {
 }
 
 export interface MetaverseCharacterPresentationSnapshot {
+  readonly animationVocabulary: MetaverseCharacterAnimationVocabularyId;
   readonly position: MetaverseVector3Snapshot;
   readonly yawRadians: number;
+}
+
+export interface MetaverseCharacterAnimationClipProofConfig {
+  readonly clipName: string;
+  readonly sourcePath: string;
+  readonly vocabulary: MetaverseCharacterAnimationVocabularyId;
 }
 
 export interface MetaversePortalConfig {
@@ -45,8 +63,7 @@ export interface MetaversePortalConfig {
 }
 
 export interface MetaverseCharacterProofConfig {
-  readonly animationClipName: string;
-  readonly animationSourcePath: string;
+  readonly animationClips: readonly MetaverseCharacterAnimationClipProofConfig[];
   readonly characterId: string;
   readonly label: string;
   readonly modelPath: string;
@@ -83,6 +100,7 @@ export interface MetaverseEnvironmentLodProofConfig {
 }
 
 export interface MetaverseEnvironmentAssetProofConfig {
+  readonly collisionPath: string | null;
   readonly collider: MetaverseEnvironmentColliderProofConfig | null;
   readonly environmentAssetId: string;
   readonly label: string;
@@ -90,6 +108,7 @@ export interface MetaverseEnvironmentAssetProofConfig {
   readonly mount: MetaverseEnvironmentMountProofConfig | null;
   readonly placement: "dynamic" | "instanced" | "static";
   readonly placements: readonly MetaverseEnvironmentPlacementProofConfig[];
+  readonly physicsColliders: readonly MetaverseEnvironmentColliderProofConfig[] | null;
 }
 
 export interface MetaverseEnvironmentProofConfig {
@@ -150,15 +169,19 @@ export interface MetaverseRuntimeConfig {
     readonly worldRadius: number;
   };
   readonly groundedBody: {
+    readonly accelerationUnitsPerSecondSquared: number;
     readonly baseSpeedUnitsPerSecond: number;
     readonly boostMultiplier: number;
     readonly capsuleHalfHeightMeters: number;
     readonly capsuleRadiusMeters: number;
     readonly controllerOffsetMeters: number;
+    readonly decelerationUnitsPerSecondSquared: number;
     readonly eyeHeightMeters: number;
     readonly gravityUnitsPerSecond: number;
     readonly maxTurnSpeedRadiansPerSecond: number;
     readonly snapToGroundDistanceMeters: number;
+    readonly stepHeightMeters: number;
+    readonly stepWidthMeters: number;
     readonly spawnPosition: MetaverseVector3Snapshot;
   };
   readonly orientation: {

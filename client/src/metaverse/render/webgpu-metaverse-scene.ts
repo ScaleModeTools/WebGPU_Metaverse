@@ -1,4 +1,5 @@
 import {
+  AnimationAction,
   AnimationClip,
   AnimationMixer,
   BackSide,
@@ -19,10 +20,12 @@ import {
   type Object3D,
   PerspectiveCamera,
   Quaternion,
+  QuaternionKeyframeTrack,
   PlaneGeometry,
   Scene,
   SphereGeometry,
   TorusGeometry,
+  VectorKeyframeTrack,
   Vector3
 } from "three/webgpu";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
@@ -48,6 +51,7 @@ import {
 
 import type {
   MetaverseAttachmentProofConfig,
+  MetaverseCharacterAnimationVocabularyId,
   MetaverseCharacterProofConfig,
   MetaverseCharacterPresentationSnapshot,
   MetaverseEnvironmentAssetProofConfig,
@@ -99,16 +103,21 @@ interface PortalSharedRenderResources {
   readonly supportMaterial: MeshStandardNodeMaterial;
 }
 
-interface LoadedSceneAsset {
+export interface LoadedSceneAsset {
   readonly animations: readonly AnimationClip[];
   readonly scene: Group;
 }
 
-interface SceneAssetLoader {
+export interface SceneAssetLoader {
   loadAsync(path: string): Promise<LoadedSceneAsset>;
 }
 
 interface MetaverseCharacterProofRuntime {
+  activeAnimationVocabulary: MetaverseCharacterAnimationVocabularyId;
+  readonly actionsByVocabulary: ReadonlyMap<
+    MetaverseCharacterAnimationVocabularyId,
+    AnimationAction
+  >;
   readonly anchorGroup: Group;
   readonly mixer: AnimationMixer;
   readonly seatSocketNode: Object3D;
@@ -624,6 +633,36 @@ function syncCharacterPresentation(
   characterProofRuntime.anchorGroup.updateMatrixWorld(true);
 }
 
+function syncCharacterAnimation(
+  characterProofRuntime: MetaverseCharacterProofRuntime,
+  targetVocabulary: MetaverseCharacterAnimationVocabularyId
+): void {
+  const nextVocabulary = characterProofRuntime.actionsByVocabulary.has(targetVocabulary)
+    ? targetVocabulary
+    : "idle";
+
+  if (nextVocabulary === characterProofRuntime.activeAnimationVocabulary) {
+    return;
+  }
+
+  const nextAction = characterProofRuntime.actionsByVocabulary.get(nextVocabulary);
+  const previousAction = characterProofRuntime.actionsByVocabulary.get(
+    characterProofRuntime.activeAnimationVocabulary
+  );
+
+  if (nextAction === undefined) {
+    return;
+  }
+
+  nextAction.reset().play();
+
+  if (previousAction !== undefined && previousAction !== nextAction) {
+    nextAction.crossFadeFrom(previousAction, 0.18, true);
+  }
+
+  characterProofRuntime.activeAnimationVocabulary = nextVocabulary;
+}
+
 function mountCharacterOnEnvironmentAsset(
   characterProofRuntime: MetaverseCharacterProofRuntime,
   environmentAsset: MetaverseEnvironmentDynamicAssetRuntime
@@ -683,6 +722,86 @@ function validateCharacterScale(
   }
 }
 
+function createQuaternionTrackValues(
+  node: Object3D,
+  axis: Vector3,
+  anglesRadians: readonly number[]
+): readonly number[] {
+  const baseQuaternion = node.quaternion.clone();
+  const offsetQuaternion = new Quaternion();
+  const values: number[] = [];
+
+  for (const angleRadians of anglesRadians) {
+    const trackQuaternion = baseQuaternion
+      .clone()
+      .multiply(offsetQuaternion.setFromAxisAngle(axis, angleRadians));
+
+    values.push(
+      trackQuaternion.x,
+      trackQuaternion.y,
+      trackQuaternion.z,
+      trackQuaternion.w
+    );
+  }
+
+  return values;
+}
+
+function createGeneratedWalkClip(characterScene: Group): AnimationClip {
+  const hipsNode = findNamedNode(characterScene, "hips", "Metaverse character walk proof");
+  const leftHandSocketNode = findSocketNode(characterScene, "hand_l_socket");
+  const rightHandSocketNode = findSocketNode(characterScene, "hand_r_socket");
+  const chestNode = findNamedNode(characterScene, "chest", "Metaverse character walk proof");
+  const keyframeTimes = [0, 0.25, 0.5, 0.75, 1] as const;
+  const armSwingAnglesRadians = [0.38, 0, -0.38, 0, 0.38] as const;
+  const chestSwayAnglesRadians = [0.06, 0, -0.06, 0, 0.06] as const;
+  const bobOffsetsMeters = [0, 0.035, 0, 0.035, 0] as const;
+  const hipsPositionValues: number[] = [];
+
+  for (const bobOffsetMeters of bobOffsetsMeters) {
+    hipsPositionValues.push(
+      hipsNode.position.x,
+      hipsNode.position.y + bobOffsetMeters,
+      hipsNode.position.z
+    );
+  }
+
+  return new AnimationClip("walk", 1, [
+    new QuaternionKeyframeTrack(
+      `${leftHandSocketNode.name}.quaternion`,
+      keyframeTimes,
+      createQuaternionTrackValues(
+        leftHandSocketNode,
+        new Vector3(1, 0, 0),
+        armSwingAnglesRadians
+      )
+    ),
+    new QuaternionKeyframeTrack(
+      `${rightHandSocketNode.name}.quaternion`,
+      keyframeTimes,
+      createQuaternionTrackValues(
+        rightHandSocketNode,
+        new Vector3(1, 0, 0),
+        armSwingAnglesRadians.map((angleRadians) => -angleRadians)
+      )
+    ),
+    new QuaternionKeyframeTrack(
+      `${chestNode.name}.quaternion`,
+      keyframeTimes,
+      createQuaternionTrackValues(
+        chestNode,
+        new Vector3(0, 0, 1),
+        chestSwayAnglesRadians
+      )
+    ),
+    new VectorKeyframeTrack(
+      `${hipsNode.name}.position`,
+      keyframeTimes,
+      hipsPositionValues
+    )
+  ]);
+}
+
 async function loadMetaverseCharacterProofRuntime(
   characterProofConfig: MetaverseCharacterProofConfig,
   createSceneAssetLoader: () => SceneAssetLoader,
@@ -690,19 +809,9 @@ async function loadMetaverseCharacterProofRuntime(
 ): Promise<MetaverseCharacterProofRuntime> {
   const sceneAssetLoader = createSceneAssetLoader();
   const characterAsset = await sceneAssetLoader.loadAsync(characterProofConfig.modelPath);
-  const animationAsset =
-    characterProofConfig.animationSourcePath === characterProofConfig.modelPath
-      ? characterAsset
-      : await sceneAssetLoader.loadAsync(characterProofConfig.animationSourcePath);
-  const idleClip = animationAsset.animations.find(
-    (animation) => animation.name === characterProofConfig.animationClipName
-  );
-
-  if (idleClip === undefined) {
-    throw new Error(
-      `Metaverse character ${characterProofConfig.characterId} is missing animation ${characterProofConfig.animationClipName}.`
-    );
-  }
+  const animationAssetsByPath = new Map<string, LoadedSceneAsset>([
+    [characterProofConfig.modelPath, characterAsset]
+  ]);
 
   ensureSkinnedMesh(characterAsset.scene);
 
@@ -727,11 +836,61 @@ async function loadMetaverseCharacterProofRuntime(
   anchorGroup.add(characterAsset.scene);
   anchorGroup.updateMatrixWorld(true);
   const mixer = new AnimationMixer(characterAsset.scene);
-  const idleAction = mixer.clipAction(idleClip);
+  const actionsByVocabulary = new Map<
+    MetaverseCharacterAnimationVocabularyId,
+    AnimationAction
+  >();
+
+  for (const animationClipConfig of characterProofConfig.animationClips) {
+    let animationAsset = animationAssetsByPath.get(animationClipConfig.sourcePath);
+
+    if (animationAsset === undefined) {
+      animationAsset = await sceneAssetLoader.loadAsync(animationClipConfig.sourcePath);
+      animationAssetsByPath.set(animationClipConfig.sourcePath, animationAsset);
+    }
+
+    let clip = animationAsset.animations.find(
+      (animation) => animation.name === animationClipConfig.clipName
+    );
+
+    if (clip === undefined && animationClipConfig.vocabulary === "walk") {
+      clip = createGeneratedWalkClip(characterAsset.scene);
+      warn(
+        `Metaverse character ${characterProofConfig.characterId} is missing authored walk animation; using a generated local proof clip.`
+      );
+    }
+
+    if (clip === undefined) {
+      throw new Error(
+        `Metaverse character ${characterProofConfig.characterId} is missing animation ${animationClipConfig.clipName}.`
+      );
+    }
+
+    if (actionsByVocabulary.has(animationClipConfig.vocabulary)) {
+      throw new Error(
+        `Metaverse character ${characterProofConfig.characterId} has duplicate animation vocabulary ${animationClipConfig.vocabulary}.`
+      );
+    }
+
+    actionsByVocabulary.set(
+      animationClipConfig.vocabulary,
+      mixer.clipAction(clip)
+    );
+  }
+
+  const idleAction = actionsByVocabulary.get("idle");
+
+  if (idleAction === undefined) {
+    throw new Error(
+      `Metaverse character ${characterProofConfig.characterId} requires an idle animation vocabulary.`
+    );
+  }
 
   idleAction.play();
 
   return {
+    activeAnimationVocabulary: "idle",
+    actionsByVocabulary,
     anchorGroup,
     mixer,
     seatSocketNode,
@@ -1474,7 +1633,13 @@ export function createMetaverseScene(
       characterPresentation = null
     ) {
       syncCamera(camera, cameraSnapshot);
-      characterProofRuntime?.mixer.update(deltaSeconds);
+      if (characterProofRuntime !== null) {
+        syncCharacterAnimation(
+          characterProofRuntime,
+          characterPresentation?.animationVocabulary ?? "idle"
+        );
+        characterProofRuntime.mixer.update(deltaSeconds);
+      }
       if (environmentProofRuntime !== null) {
         syncEnvironmentProofRuntime(environmentProofRuntime, cameraSnapshot, nowMs);
       }

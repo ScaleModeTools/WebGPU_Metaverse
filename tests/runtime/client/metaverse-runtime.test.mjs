@@ -16,8 +16,15 @@ class FakeRapierVector3 {
 class FakeColliderDesc {
   constructor(shape, payload) {
     this.payload = payload;
+    this.rotation = { x: 0, y: 0, z: 0, w: 1 };
     this.shape = shape;
     this.translation = new FakeRapierVector3(0, 0, 0);
+  }
+
+  setRotation(rotation) {
+    this.rotation = rotation;
+
+    return this;
   }
 
   setTranslation(x, y, z) {
@@ -54,27 +61,38 @@ class FakeCollider {
 }
 
 class FakeCharacterController {
-  constructor() {
+  constructor(world) {
     this.grounded = false;
     this.lastMovement = new FakeRapierVector3(0, 0, 0);
     this.snapDistance = 0;
+    this.world = world;
   }
 
   computeColliderMovement(collider, desiredTranslationDelta) {
     const currentTranslation = collider.translation();
-    const minCenterY = collider.standingOffset;
-    const unclampedCenterY = currentTranslation.y + desiredTranslationDelta.y;
-    const nextCenterY =
-      unclampedCenterY <= minCenterY + this.snapDistance
-        ? minCenterY
-        : unclampedCenterY;
+    const currentFootY = currentTranslation.y - collider.standingOffset;
+    const capsuleRadius = collider.payload.radius ?? 0;
+    const supportingSurfaceY = this.findSurfaceY(
+      currentTranslation.x,
+      currentTranslation.z,
+      capsuleRadius
+    );
+    const desiredFootY = currentFootY + desiredTranslationDelta.y;
+    const nextFootY =
+      supportingSurfaceY !== null &&
+      desiredFootY <= supportingSurfaceY + this.snapDistance
+        ? supportingSurfaceY
+        : desiredFootY;
+    const nextCenterY = nextFootY + collider.standingOffset;
 
     this.lastMovement = new FakeRapierVector3(
       desiredTranslationDelta.x,
       nextCenterY - currentTranslation.y,
       desiredTranslationDelta.z
     );
-    this.grounded = nextCenterY === minCenterY;
+    this.grounded =
+      supportingSurfaceY !== null &&
+      Math.abs(nextFootY - supportingSurfaceY) <= 0.0001;
   }
 
   computedGrounded() {
@@ -89,27 +107,78 @@ class FakeCharacterController {
     this.snapDistance = distance;
   }
 
+  enableAutostep() {}
+
   free() {}
 
   setApplyImpulsesToDynamicBodies() {}
 
   setCharacterMass() {}
+
+  findSurfaceY(centerX, centerZ, capsuleRadius) {
+    let highestSurfaceY = null;
+
+    for (const candidate of this.world.queryColliders) {
+      if (candidate.shape !== "cuboid") {
+        continue;
+      }
+
+      const halfExtentX = candidate.payload.halfExtentX ?? 0;
+      const halfExtentY = candidate.payload.halfExtentY ?? 0;
+      const halfExtentZ = candidate.payload.halfExtentZ ?? 0;
+      const candidateTranslation = candidate.translation();
+
+      if (
+        Math.abs(centerX - candidateTranslation.x) > halfExtentX + capsuleRadius ||
+        Math.abs(centerZ - candidateTranslation.z) > halfExtentZ + capsuleRadius
+      ) {
+        continue;
+      }
+
+      const surfaceY = candidateTranslation.y + halfExtentY;
+
+      if (highestSurfaceY === null || surfaceY > highestSurfaceY) {
+        highestSurfaceY = surfaceY;
+      }
+    }
+
+    return highestSurfaceY;
+  }
 }
 
 class FakeRapierWorld {
+  constructor() {
+    this.colliders = [];
+    this.queryColliders = [];
+    this.timestep = 1 / 60;
+  }
+
   createCharacterController() {
-    return new FakeCharacterController();
+    return new FakeCharacterController(this);
   }
 
   createCollider(colliderDesc) {
-    return new FakeCollider(
+    const collider = new FakeCollider(
       colliderDesc.shape,
       colliderDesc.payload,
       colliderDesc.translation
     );
+
+    this.colliders.push(collider);
+
+    return collider;
   }
 
-  removeCollider() {}
+  removeCollider(collider) {
+    this.colliders = this.colliders.filter((candidate) => candidate !== collider);
+    this.queryColliders = this.queryColliders.filter(
+      (candidate) => candidate !== collider
+    );
+  }
+
+  step() {
+    this.queryColliders = [...this.colliders];
+  }
 }
 
 function createFakePhysicsRuntime(RapierPhysicsRuntime) {
@@ -129,6 +198,12 @@ function createFakePhysicsRuntime(RapierPhysicsRuntime) {
                 halfExtentX,
                 halfExtentY,
                 halfExtentZ
+              });
+            },
+            trimesh(vertices, indices) {
+              return new FakeColliderDesc("trimesh", {
+                indices,
+                vertices
               });
             }
           },
@@ -454,19 +529,24 @@ test("metaverse asset proof resolves static, instanced, and dynamic environment 
   );
 
   assert.ok(crateAsset);
+  assert.equal(crateAsset.collisionPath, null);
   assert.equal(crateAsset.placement, "instanced");
   assert.ok(crateAsset.lods.length >= 2);
   assert.ok(crateAsset.placements.length > 1);
+  assert.equal(crateAsset.physicsColliders?.length, 1);
 
   assert.ok(dockAsset);
+  assert.equal(dockAsset.collisionPath, null);
   assert.equal(dockAsset.placement, "static");
   assert.ok(dockAsset.lods.length >= 2);
   assert.equal(dockAsset.placements.length, 1);
+  assert.equal(dockAsset.physicsColliders?.length, 1);
 
   assert.ok(skiffAsset);
   assert.equal(skiffAsset.placement, "dynamic");
   assert.equal(skiffAsset.lods.length, 1);
   assert.equal(skiffAsset.placements.length, 1);
+  assert.equal(skiffAsset.physicsColliders, null);
   assert.equal(skiffAsset.mount?.seatSocketName, "seat_socket");
   assert.equal(skiffAsset.collider?.shape, "box");
 });
@@ -583,8 +663,18 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
       socketName: "hand_r_socket"
     },
     characterProofConfig: {
-      animationClipName: "idle",
-      animationSourcePath: "/models/metaverse/characters/metaverse-mannequin.gltf",
+      animationClips: [
+        {
+          clipName: "idle",
+          sourcePath: "/models/metaverse/characters/metaverse-mannequin.gltf",
+          vocabulary: "idle"
+        },
+        {
+          clipName: "walk",
+          sourcePath: "/models/metaverse/characters/metaverse-mannequin.gltf",
+          vocabulary: "walk"
+        }
+      ],
       characterId: "metaverse-mannequin-v1",
       label: "Metaverse mannequin",
       modelPath: "/models/metaverse/characters/metaverse-mannequin.gltf",
@@ -635,6 +725,7 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
     0,
     0,
     {
+      animationVocabulary: "walk",
       position: { x: 3.2, y: 0, z: -5.4 },
       yawRadians: 0.7
     }
@@ -772,6 +863,7 @@ test("createMetaverseScene switches environment LOD tiers and instantiates repea
     environmentProofConfig: {
       assets: [
         {
+          collisionPath: null,
           collider: null,
           environmentAssetId: "metaverse-hub-dock-v1",
           label: "Metaverse hub dock",
@@ -795,9 +887,11 @@ test("createMetaverseScene switches environment LOD tiers and instantiates repea
               rotationYRadians: 0,
               scale: 1
             }
-          ]
+          ],
+          physicsColliders: null
         },
         {
+          collisionPath: null,
           collider: null,
           environmentAssetId: "metaverse-hub-crate-v1",
           label: "Metaverse hub crate",
@@ -826,7 +920,8 @@ test("createMetaverseScene switches environment LOD tiers and instantiates repea
               rotationYRadians: Math.PI * 0.1,
               scale: 0.92
             }
-          ]
+          ],
+          physicsColliders: null
         }
       ]
     },
@@ -1087,8 +1182,18 @@ test("createMetaverseScene mounts and dismounts a dynamic environment asset thro
 
   const sceneRuntime = createMetaverseScene(metaverseRuntimeConfig, {
     characterProofConfig: {
-      animationClipName: "idle",
-      animationSourcePath: "/models/metaverse/characters/metaverse-mannequin.gltf",
+      animationClips: [
+        {
+          clipName: "idle",
+          sourcePath: "/models/metaverse/characters/metaverse-mannequin.gltf",
+          vocabulary: "idle"
+        },
+        {
+          clipName: "walk",
+          sourcePath: "/models/metaverse/characters/metaverse-mannequin.gltf",
+          vocabulary: "walk"
+        }
+      ],
       characterId: "metaverse-mannequin-v1",
       label: "Metaverse mannequin",
       modelPath: "/models/metaverse/characters/metaverse-mannequin.gltf",
@@ -1112,6 +1217,7 @@ test("createMetaverseScene mounts and dismounts a dynamic environment asset thro
     environmentProofConfig: {
       assets: [
         {
+          collisionPath: "/models/metaverse/environment/metaverse-hub-skiff-collision.gltf",
           collider: {
             center: { x: 0, y: 1, z: 0 },
             shape: "box",
@@ -1136,7 +1242,8 @@ test("createMetaverseScene mounts and dismounts a dynamic environment asset thro
               rotationYRadians: Math.PI * 0.8,
               scale: 1
             }
-          ]
+          ],
+          physicsColliders: null
         }
       ]
     },

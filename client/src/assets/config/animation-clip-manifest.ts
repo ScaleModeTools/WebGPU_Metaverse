@@ -8,6 +8,10 @@ export const metaverseMannequinIdleAnimationClipId = createAnimationClipId(
   "metaverse-mannequin-idle-v1"
 );
 
+export const metaverseMannequinWalkAnimationClipId = createAnimationClipId(
+  "metaverse-mannequin-walk-v1"
+);
+
 export const animationClipManifest = defineAnimationClipManifest([
   {
     id: metaverseMannequinIdleAnimationClipId,
@@ -16,6 +20,15 @@ export const animationClipManifest = defineAnimationClipManifest([
     clipName: canonicalAnimationClipNamesByVocabulary.idle,
     targetSkeleton: "humanoid_v1",
     vocabulary: "idle",
+    loopMode: "repeat"
+  },
+  {
+    id: metaverseMannequinWalkAnimationClipId,
+    label: "Metaverse mannequin walk proof",
+    sourcePath: "/models/metaverse/characters/metaverse-mannequin.gltf",
+    clipName: canonicalAnimationClipNamesByVocabulary.walk,
+    targetSkeleton: "humanoid_v1",
+    vocabulary: "walk",
     loopMode: "repeat"
   }
 ] as const);
