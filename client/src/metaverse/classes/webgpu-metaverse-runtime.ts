@@ -1,7 +1,6 @@
 import {
   ACESFilmicToneMapping,
   type Camera,
-  type Object3D,
   type Scene,
   SRGBColorSpace,
   WebGPURenderer
@@ -9,37 +8,18 @@ import {
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 import {
-  MetaverseDynamicCuboidBodyRuntime,
   MetaverseGroundedBodyRuntime,
-  RapierPhysicsRuntime,
-  type PhysicsVector3Snapshot,
-  type RapierColliderHandle
+  RapierPhysicsRuntime
 } from "@/physics";
-import type {
-  MetaversePlayerId,
-  MetaversePresenceAnimationVocabularyId,
-  MetaversePresenceLocomotionModeId,
-  MetaversePresencePoseSnapshotInput,
-  MetaversePresenceRosterSnapshot,
-  Username
-} from "@webgpu-metaverse/shared";
-import type {
-  MetaversePresenceClientStatusSnapshot,
-  MetaversePresenceJoinRequest
-} from "@/network";
 import { defaultMetaverseControlMode } from "../config/metaverse-control-modes";
 import { metaverseRuntimeConfig } from "../config/metaverse-runtime";
 import { MetaverseTraversalRuntime } from "./metaverse-traversal-runtime";
+import { MetaverseEnvironmentPhysicsRuntime } from "./metaverse-environment-physics-runtime";
 import {
   createMetaverseScene,
   type MetaverseSceneCanvasHost,
   type SceneAssetLoader
 } from "../render/webgpu-metaverse-scene";
-import {
-  resolvePlacedCollisionTriMeshes,
-  resolvePlacedCuboidColliders,
-  type MetaversePlacedCuboidColliderSnapshot
-} from "../states/metaverse-environment-collision";
 import {
   createMetaverseCameraSnapshot,
   resolveFocusedPortalSnapshot
@@ -52,12 +32,16 @@ import type {
   MetaverseCharacterProofConfig,
   MetaverseCharacterPresentationSnapshot,
   MetaverseEnvironmentProofConfig,
-  MetaverseRemoteCharacterPresentationSnapshot,
   MetaverseHudSnapshot,
   MetaverseRuntimeConfig,
   MountedEnvironmentSnapshot
 } from "../types/metaverse-runtime";
 import { MetaverseFlightInputRuntime } from "./metaverse-flight-input-runtime";
+import {
+  MetaversePresenceRuntime,
+  type MetaverseLocalPlayerIdentity,
+  type MetaversePresenceClientRuntime
+} from "./metaverse-presence-runtime";
 
 interface MetaverseRendererHost {
   compileAsync?(scene: Scene, camera: Camera): Promise<void>;
@@ -92,49 +76,7 @@ interface MetaverseRuntimeDependencies {
   readonly showPhysicsDebug?: boolean;
 }
 
-interface MetaverseLocalPlayerIdentity {
-  readonly characterId: string;
-  readonly playerId: MetaversePlayerId;
-  readonly username: Username;
-}
-
-interface MetaversePresenceClientRuntime {
-  readonly rosterSnapshot: MetaversePresenceRosterSnapshot | null;
-  readonly statusSnapshot: MetaversePresenceClientStatusSnapshot;
-  ensureJoined(
-    request: MetaversePresenceJoinRequest
-  ): Promise<MetaversePresenceRosterSnapshot>;
-  subscribeUpdates(listener: () => void): () => void;
-  syncPresence(
-    pose: Omit<MetaversePresencePoseSnapshotInput, "stateSequence">
-  ): void;
-  dispose(): void;
-}
-
-type MetaversePhysicsDebugObject = Object3D & {
-  dispose?(): void;
-  update?(): void;
-};
-
 const metaverseUiUpdateIntervalMs = 120;
-const metaversePushableBodyAdditionalMass = 12;
-const metaversePushableBodyAngularDamping = 10;
-const metaversePushableBodyGravityScale = 1;
-const metaversePushableBodyLinearDamping = 4.5;
-
-function freezePresenceHudSnapshot(
-  state: MetaverseHudSnapshot["presence"]["state"],
-  joined: boolean,
-  lastError: string | null,
-  remotePlayerCount: number
-): MetaverseHudSnapshot["presence"] {
-  return Object.freeze({
-    joined,
-    lastError,
-    remotePlayerCount,
-    state
-  });
-}
 
 function createDefaultRenderer(canvas: HTMLCanvasElement): MetaverseRendererHost {
   const renderer = new WebGPURenderer({
@@ -176,22 +118,6 @@ function readNowMs(): number {
   return globalThis.performance?.now() ?? Date.now();
 }
 
-function toFiniteNumber(value: number, fallback = 0): number {
-  return Number.isFinite(value) ? value : fallback;
-}
-
-function freezeVector3(
-  x: number,
-  y: number,
-  z: number
-): PhysicsVector3Snapshot {
-  return Object.freeze({
-    x: toFiniteNumber(x),
-    y: toFiniteNumber(y),
-    z: toFiniteNumber(z)
-  });
-}
-
 function freezeHudSnapshot(
   lifecycle: MetaverseHudSnapshot["lifecycle"],
   failureReason: string | null,
@@ -230,52 +156,28 @@ function resolveRuntimeFailureReason(error: unknown): string {
 
 export class WebGpuMetaverseRuntime {
   readonly #config: MetaverseRuntimeConfig;
-  readonly #createMetaversePresenceClient: (() => MetaversePresenceClientRuntime) | null;
   readonly #createRenderer: (canvas: HTMLCanvasElement) => MetaverseRendererHost;
   readonly #createSceneAssetLoader: () => SceneAssetLoader;
   readonly #devicePixelRatio: number;
   readonly #environmentProofConfig: MetaverseEnvironmentProofConfig | null;
+  readonly #environmentPhysicsRuntime: MetaverseEnvironmentPhysicsRuntime;
   readonly #flightInputRuntime = new MetaverseFlightInputRuntime();
   readonly #groundedBodyRuntime: MetaverseGroundedBodyRuntime;
-  readonly #localPlayerIdentity: MetaverseLocalPlayerIdentity | null;
   readonly #physicsRuntime: RapierPhysicsRuntime;
+  readonly #presenceRuntime: MetaversePresenceRuntime;
   readonly #sceneRuntime: ReturnType<typeof createMetaverseScene>;
-  readonly #showPhysicsDebug: boolean;
-  readonly #surfaceColliderSnapshots: readonly MetaversePlacedCuboidColliderSnapshot[];
   readonly #traversalRuntime: MetaverseTraversalRuntime;
   readonly #uiUpdateListeners = new Set<() => void>();
 
   #animationFrameHandle = 0;
   #canvas: HTMLCanvasElement | null = null;
   #controlMode: MetaverseControlModeId = defaultMetaverseControlMode;
-  #environmentColliders: RapierColliderHandle[] = [];
   #focusedMountable: FocusedMountableSnapshot | null = null;
   #focusedPortal: FocusedExperiencePortalSnapshot | null = null;
-  #groundCollider: RapierColliderHandle | null = null;
   #hudSnapshot: MetaverseHudSnapshot;
   #lastFrameAtMs: number | null = null;
-  #lastPresencePose:
-    | {
-        readonly animationVocabulary: MetaversePresenceAnimationVocabularyId;
-        readonly locomotionMode: MetaversePresenceLocomotionModeId;
-        readonly x: number;
-        readonly y: number;
-        readonly yawRadians: number;
-        readonly z: number;
-      }
-    | null = null;
-  #lastPresenceRosterSnapshot: MetaversePresenceRosterSnapshot | null = null;
   #lastUiUpdateAtMs = Number.NEGATIVE_INFINITY;
-  #metaversePresenceClient: MetaversePresenceClientRuntime | null = null;
-  #metaversePresenceUnsubscribe: (() => void) | null = null;
   #mountedEnvironment: MountedEnvironmentSnapshot | null = null;
-  #physicsDebugObject: MetaversePhysicsDebugObject | null = null;
-  #pushableBodyRuntimesByEnvironmentAssetId = new Map<
-    string,
-    MetaverseDynamicCuboidBodyRuntime
-  >();
-  #remoteCharacterPresentations: readonly MetaverseRemoteCharacterPresentationSnapshot[] =
-    Object.freeze([]);
   #renderer: MetaverseRendererHost | null = null;
   #runtimeEpoch = 0;
   #requestAnimationFrame: typeof globalThis.requestAnimationFrame;
@@ -288,8 +190,6 @@ export class WebGpuMetaverseRuntime {
     dependencies: MetaverseRuntimeDependencies = {}
   ) {
     this.#config = config;
-    this.#createMetaversePresenceClient =
-      dependencies.createMetaversePresenceClient ?? null;
     this.#createRenderer = dependencies.createRenderer ?? createDefaultRenderer;
     this.#createSceneAssetLoader =
       dependencies.createSceneAssetLoader ?? createDefaultSceneAssetLoader;
@@ -298,14 +198,6 @@ export class WebGpuMetaverseRuntime {
     this.#environmentProofConfig = dependencies.environmentProofConfig ?? null;
     this.#physicsRuntime =
       dependencies.physicsRuntime ?? new RapierPhysicsRuntime();
-    this.#surfaceColliderSnapshots =
-      this.#environmentProofConfig === null
-        ? Object.freeze([])
-        : Object.freeze(
-            this.#environmentProofConfig.assets.flatMap((environmentAsset) =>
-              resolvePlacedCuboidColliders(environmentAsset)
-            )
-          );
     this.#groundedBodyRuntime = new MetaverseGroundedBodyRuntime(
       {
         ...config.groundedBody,
@@ -315,7 +207,6 @@ export class WebGpuMetaverseRuntime {
       },
       this.#physicsRuntime
     );
-    this.#localPlayerIdentity = dependencies.localPlayerIdentity ?? null;
     this.#requestAnimationFrame =
       dependencies.requestAnimationFrame ?? requestBrowserAnimationFrame;
     this.#cancelAnimationFrame =
@@ -327,6 +218,17 @@ export class WebGpuMetaverseRuntime {
       createSceneAssetLoader: this.#createSceneAssetLoader,
       environmentProofConfig: this.#environmentProofConfig
     });
+    this.#environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
+      config,
+      {
+        createSceneAssetLoader: this.#createSceneAssetLoader,
+        environmentProofConfig: this.#environmentProofConfig,
+        groundedBodyRuntime: this.#groundedBodyRuntime,
+        physicsRuntime: this.#physicsRuntime,
+        sceneRuntime: this.#sceneRuntime,
+        showPhysicsDebug: dependencies.showPhysicsDebug ?? false
+      }
+    );
     this.#traversalRuntime = new MetaverseTraversalRuntime(config, {
       groundedBodyRuntime: this.#groundedBodyRuntime,
       readDynamicEnvironmentPose: (environmentAssetId) =>
@@ -337,9 +239,17 @@ export class WebGpuMetaverseRuntime {
           poseSnapshot
         );
       },
-      surfaceColliderSnapshots: this.#surfaceColliderSnapshots
+      surfaceColliderSnapshots:
+        this.#environmentPhysicsRuntime.surfaceColliderSnapshots
     });
-    this.#showPhysicsDebug = dependencies.showPhysicsDebug ?? false;
+    this.#presenceRuntime = new MetaversePresenceRuntime({
+      createMetaversePresenceClient:
+        dependencies.createMetaversePresenceClient ?? null,
+      localPlayerIdentity: dependencies.localPlayerIdentity ?? null,
+      onPresenceUpdate: () => {
+        this.#syncOrPublishRuntimeState(true);
+      }
+    });
     this.#hudSnapshot = freezeHudSnapshot(
       "idle",
       null,
@@ -349,7 +259,7 @@ export class WebGpuMetaverseRuntime {
       null,
       this.#controlMode,
       this.#traversalRuntime.locomotionMode,
-      this.#resolvePresenceHudSnapshot()
+      this.#presenceRuntime.resolveHudSnapshot()
     );
   }
 
@@ -434,10 +344,7 @@ export class WebGpuMetaverseRuntime {
     this.#focusedMountable = null;
     this.#focusedPortal = null;
     this.#mountedEnvironment = null;
-    this.#lastPresencePose = null;
-    this.#lastPresenceRosterSnapshot = null;
-    this.#remoteCharacterPresentations = Object.freeze([]);
-    this.#teardownPresenceRuntime();
+    this.#presenceRuntime.dispose();
     this.#setHudSnapshot("booting", null, true);
     this.#flightInputRuntime.install(canvas);
     const renderer = this.#createRenderer(canvas);
@@ -461,7 +368,7 @@ export class WebGpuMetaverseRuntime {
 
       renderer.dispose();
       this.#flightInputRuntime.dispose();
-      this.#disposeGroundedRuntime();
+      this.#environmentPhysicsRuntime.dispose();
       if (this.#canvas === canvas) {
         this.#canvas = null;
       }
@@ -492,14 +399,17 @@ export class WebGpuMetaverseRuntime {
       }
 
       this.#flightInputRuntime.dispose();
-      this.#disposeGroundedRuntime();
+      this.#environmentPhysicsRuntime.dispose();
       renderer.dispose();
 
       return this.#hudSnapshot;
     }
 
     this.#lastFrameAtMs = this.#readNowMs();
-    this.#bootPresenceRuntime();
+    this.#presenceRuntime.boot(
+      this.#readCharacterPresentationSnapshot(),
+      this.#traversalRuntime.locomotionMode
+    );
     this.#syncFrame(this.#lastFrameAtMs, true);
     this.#queueNextFrame();
 
@@ -523,11 +433,8 @@ export class WebGpuMetaverseRuntime {
     this.#focusedMountable = null;
     this.#focusedPortal = null;
     this.#mountedEnvironment = null;
-    this.#disposeGroundedRuntime();
-    this.#teardownPresenceRuntime();
-    this.#lastPresencePose = null;
-    this.#lastPresenceRosterSnapshot = null;
-    this.#remoteCharacterPresentations = Object.freeze([]);
+    this.#environmentPhysicsRuntime.dispose();
+    this.#presenceRuntime.dispose();
     this.#traversalRuntime.reset();
     this.#sceneRuntime.resetPresentation();
 
@@ -544,400 +451,17 @@ export class WebGpuMetaverseRuntime {
     });
   }
 
-  async #bootStaticEnvironmentCollision(): Promise<void> {
-    if (this.#environmentProofConfig === null) {
-      return;
-    }
-
-    const sceneAssetLoader = this.#createSceneAssetLoader();
-    const collisionAssetsByPath = new Map<string, Awaited<ReturnType<SceneAssetLoader["loadAsync"]>>>();
-
-    for (const environmentAsset of this.#environmentProofConfig.assets) {
-      for (const collider of resolvePlacedCuboidColliders(environmentAsset)) {
-        this.#environmentColliders.push(
-          this.#physicsRuntime.createFixedCuboidCollider(
-            collider.halfExtents,
-            collider.translation,
-            collider.rotation
-          )
-        );
-      }
-
-      if (
-        environmentAsset.placement === "dynamic" ||
-        environmentAsset.physicsColliders !== null ||
-        environmentAsset.collisionPath === null
-      ) {
-        continue;
-      }
-
-      let collisionAsset = collisionAssetsByPath.get(environmentAsset.collisionPath);
-
-      if (collisionAsset === undefined) {
-        collisionAsset = await sceneAssetLoader.loadAsync(environmentAsset.collisionPath);
-        collisionAssetsByPath.set(environmentAsset.collisionPath, collisionAsset);
-      }
-
-      for (const triMeshCollider of resolvePlacedCollisionTriMeshes(
-        environmentAsset,
-        collisionAsset.scene
-      )) {
-        this.#environmentColliders.push(
-          this.#physicsRuntime.createFixedTriMeshCollider(
-            triMeshCollider.vertices,
-            triMeshCollider.indices
-          )
-        );
-      }
-    }
-  }
-
-  async #bootPushableEnvironmentBodies(): Promise<void> {
-    if (this.#environmentProofConfig === null) {
-      return;
-    }
-
-    this.#pushableBodyRuntimesByEnvironmentAssetId.clear();
-
-    for (const environmentAsset of this.#environmentProofConfig.assets) {
-      if (
-        environmentAsset.placement !== "dynamic" ||
-        environmentAsset.traversalAffordance !== "pushable"
-      ) {
-        continue;
-      }
-
-      if (environmentAsset.placements.length !== 1) {
-        throw new Error(
-          `Metaverse pushable environment asset ${environmentAsset.label} requires exactly one placement.`
-        );
-      }
-
-      if (environmentAsset.collider === null) {
-        throw new Error(
-          `Metaverse pushable environment asset ${environmentAsset.label} requires collider metadata.`
-        );
-      }
-
-      const placement = environmentAsset.placements[0]!;
-      const collider = environmentAsset.collider;
-      const pushableBodyRuntime = new MetaverseDynamicCuboidBodyRuntime(
-        {
-          additionalMass: metaversePushableBodyAdditionalMass,
-          angularDamping: metaversePushableBodyAngularDamping,
-          colliderCenter: freezeVector3(
-            collider.center.x * placement.scale,
-            collider.center.y * placement.scale,
-            collider.center.z * placement.scale
-          ),
-          gravityScale: metaversePushableBodyGravityScale,
-          halfExtents: freezeVector3(
-            Math.abs(collider.size.x * placement.scale) * 0.5,
-            Math.abs(collider.size.y * placement.scale) * 0.5,
-            Math.abs(collider.size.z * placement.scale) * 0.5
-          ),
-          linearDamping: metaversePushableBodyLinearDamping,
-          lockRotations: true,
-          spawnPosition: freezeVector3(
-            placement.position.x,
-            placement.position.y,
-            placement.position.z
-          ),
-          spawnYawRadians: placement.rotationYRadians
-        },
-        this.#physicsRuntime
-      );
-
-      await pushableBodyRuntime.init();
-      this.#pushableBodyRuntimesByEnvironmentAssetId.set(
-        environmentAsset.environmentAssetId,
-        pushableBodyRuntime
-      );
-      const pushableBodySnapshot = pushableBodyRuntime.syncSnapshot();
-
-      this.#sceneRuntime.setDynamicEnvironmentPose(
-        environmentAsset.environmentAssetId,
-        Object.freeze({
-          position: pushableBodySnapshot.position,
-          yawRadians: pushableBodySnapshot.yawRadians
-        })
-      );
-    }
-  }
-
   async #bootGroundedRuntime(): Promise<void> {
-    await this.#physicsRuntime.init();
-    this.#groundCollider ??= this.#physicsRuntime.createFixedCuboidCollider(
-      freezeVector3(
-        Math.max(this.#config.movement.worldRadius, this.#config.ocean.planeWidth * 0.5),
-        0.5,
-        Math.max(this.#config.movement.worldRadius, this.#config.ocean.planeDepth * 0.5)
-      ),
-      freezeVector3(0, this.#config.ocean.height - 0.5, 0)
+    await this.#environmentPhysicsRuntime.boot(
+      this.#traversalRuntime.cameraSnapshot.yawRadians
     );
-    await this.#bootStaticEnvironmentCollision();
-    await this.#bootPushableEnvironmentBodies();
-    this.#groundedBodyRuntime.setApplyImpulsesToDynamicBodies(
-      this.#pushableBodyRuntimesByEnvironmentAssetId.size > 0
-    );
-    await this.#groundedBodyRuntime.init(this.#traversalRuntime.cameraSnapshot.yawRadians);
     this.#traversalRuntime.boot();
-
-    if (this.#showPhysicsDebug && this.#physicsDebugObject === null) {
-      const physicsDebugObject = this.#physicsRuntime.createDebugHelper();
-
-      if (physicsDebugObject !== null) {
-        this.#physicsDebugObject = physicsDebugObject;
-        this.#sceneRuntime.scene.add(physicsDebugObject);
-      }
-    }
-  }
-
-  #disposeGroundedRuntime(): void {
-    if (this.#physicsDebugObject !== null) {
-      this.#physicsDebugObject.parent?.remove(this.#physicsDebugObject);
-      this.#physicsDebugObject.dispose?.();
-      this.#physicsDebugObject = null;
-    }
-
-    if (this.#groundCollider !== null) {
-      this.#physicsRuntime.removeCollider(this.#groundCollider);
-      this.#groundCollider = null;
-    }
-
-    for (const environmentCollider of this.#environmentColliders) {
-      this.#physicsRuntime.removeCollider(environmentCollider);
-    }
-
-    this.#environmentColliders = [];
-    for (const [
-      environmentAssetId,
-      pushableBodyRuntime
-    ] of this.#pushableBodyRuntimesByEnvironmentAssetId.entries()) {
-      pushableBodyRuntime.dispose();
-      this.#sceneRuntime.setDynamicEnvironmentPose(environmentAssetId, null);
-    }
-    this.#pushableBodyRuntimesByEnvironmentAssetId.clear();
-    this.#groundedBodyRuntime.setApplyImpulsesToDynamicBodies(false);
-    this.#groundedBodyRuntime.dispose();
-  }
-
-  #syncPushableBodyPresentations(): void {
-    for (const [
-      environmentAssetId,
-      pushableBodyRuntime
-    ] of this.#pushableBodyRuntimesByEnvironmentAssetId.entries()) {
-      const pushableBodySnapshot = pushableBodyRuntime.syncSnapshot();
-
-      this.#sceneRuntime.setDynamicEnvironmentPose(
-        environmentAssetId,
-        Object.freeze({
-          position: pushableBodySnapshot.position,
-          yawRadians: pushableBodySnapshot.yawRadians
-        })
-      );
-    }
-  }
-
-  #bootPresenceRuntime(): void {
-    if (!this.#isPresenceConfigured()) {
-      return;
-    }
-
-    const metaversePresenceClient = this.#createMetaversePresenceClient?.() ?? null;
-
-    if (metaversePresenceClient === null) {
-      return;
-    }
-
-    this.#metaversePresenceClient = metaversePresenceClient;
-    this.#metaversePresenceUnsubscribe = metaversePresenceClient.subscribeUpdates(() => {
-      if (this.#metaversePresenceClient !== metaversePresenceClient) {
-        return;
-      }
-
-      this.#syncRemoteCharacterPresentationsFromPresence();
-      this.#syncOrPublishRuntimeState(true);
-    });
-
-    const joinRequest = this.#createPresenceJoinRequest();
-
-    if (joinRequest === null) {
-      return;
-    }
-
-    void metaversePresenceClient.ensureJoined(joinRequest).catch(() => {
-      if (this.#metaversePresenceClient !== metaversePresenceClient) {
-        return;
-      }
-
-      this.#syncOrPublishRuntimeState(true);
-    });
-  }
-
-  #teardownPresenceRuntime(): void {
-    this.#metaversePresenceUnsubscribe?.();
-    this.#metaversePresenceUnsubscribe = null;
-    this.#metaversePresenceClient?.dispose();
-    this.#metaversePresenceClient = null;
-  }
-
-  #isPresenceConfigured(): boolean {
-    return (
-      this.#createMetaversePresenceClient !== null &&
-      this.#localPlayerIdentity !== null
-    );
-  }
-
-  #createPresenceJoinRequest(): MetaversePresenceJoinRequest | null {
-    if (this.#localPlayerIdentity === null) {
-      return null;
-    }
-
-    const characterPresentation = this.#traversalRuntime.characterPresentationSnapshot;
-
-    if (characterPresentation === null) {
-      return null;
-    }
-
-    return {
-      characterId: this.#localPlayerIdentity.characterId,
-      playerId: this.#localPlayerIdentity.playerId,
-      pose: this.#createPresencePoseInput(
-        characterPresentation,
-        this.#traversalRuntime.locomotionMode
-      ),
-      username: this.#localPlayerIdentity.username
-    };
-  }
-
-  #createPresencePoseInput(
-    characterPresentation: MetaverseCharacterPresentationSnapshot,
-    locomotionMode: MetaverseHudSnapshot["locomotionMode"]
-  ): Omit<MetaversePresencePoseSnapshotInput, "stateSequence"> {
-    return {
-      animationVocabulary: characterPresentation.animationVocabulary,
-      locomotionMode,
-      position: characterPresentation.position,
-      yawRadians: characterPresentation.yawRadians
-    };
   }
 
   #readCharacterPresentationSnapshot():
     | MetaverseCharacterPresentationSnapshot
     | null {
     return this.#traversalRuntime.characterPresentationSnapshot;
-  }
-
-  #syncPresencePose(): void {
-    const metaversePresenceClient = this.#metaversePresenceClient;
-
-    if (
-      metaversePresenceClient === null ||
-      this.#localPlayerIdentity === null ||
-      !metaversePresenceClient.statusSnapshot.joined
-    ) {
-      return;
-    }
-
-    const characterPresentation = this.#readCharacterPresentationSnapshot();
-
-    if (characterPresentation === null) {
-      return;
-    }
-
-    const nextPresencePose = {
-      animationVocabulary: characterPresentation.animationVocabulary,
-      locomotionMode: this.#traversalRuntime.locomotionMode,
-      x: characterPresentation.position.x,
-      y: characterPresentation.position.y,
-      yawRadians: characterPresentation.yawRadians,
-      z: characterPresentation.position.z
-    } as const;
-
-    if (
-      this.#lastPresencePose !== null &&
-      this.#lastPresencePose.animationVocabulary ===
-        nextPresencePose.animationVocabulary &&
-      this.#lastPresencePose.locomotionMode === nextPresencePose.locomotionMode &&
-      this.#lastPresencePose.x === nextPresencePose.x &&
-      this.#lastPresencePose.y === nextPresencePose.y &&
-      this.#lastPresencePose.z === nextPresencePose.z &&
-      this.#lastPresencePose.yawRadians === nextPresencePose.yawRadians
-    ) {
-      return;
-    }
-
-    this.#lastPresencePose = nextPresencePose;
-    metaversePresenceClient.syncPresence(
-      this.#createPresencePoseInput(
-        characterPresentation,
-        this.#traversalRuntime.locomotionMode
-      )
-    );
-  }
-
-  #syncRemoteCharacterPresentationsFromPresence(): void {
-    const metaversePresenceClient = this.#metaversePresenceClient;
-    const rosterSnapshot = metaversePresenceClient?.rosterSnapshot ?? null;
-
-    if (rosterSnapshot === this.#lastPresenceRosterSnapshot) {
-      return;
-    }
-
-    this.#lastPresenceRosterSnapshot = rosterSnapshot;
-
-    if (rosterSnapshot === null || this.#localPlayerIdentity === null) {
-      this.#remoteCharacterPresentations = Object.freeze([]);
-      return;
-    }
-
-    const remoteCharacterPresentations: MetaverseRemoteCharacterPresentationSnapshot[] =
-      [];
-
-    for (const playerSnapshot of rosterSnapshot.players) {
-      if (playerSnapshot.playerId === this.#localPlayerIdentity.playerId) {
-        continue;
-      }
-
-      remoteCharacterPresentations.push(
-        Object.freeze({
-          characterId: playerSnapshot.characterId,
-          playerId: playerSnapshot.playerId,
-          presentation: Object.freeze({
-            animationVocabulary: playerSnapshot.pose.animationVocabulary,
-            position: playerSnapshot.pose.position,
-            yawRadians: playerSnapshot.pose.yawRadians
-          })
-        })
-      );
-    }
-
-    this.#remoteCharacterPresentations = Object.freeze(remoteCharacterPresentations);
-  }
-
-  #resolvePresenceHudSnapshot(): MetaverseHudSnapshot["presence"] {
-    if (!this.#isPresenceConfigured()) {
-      return freezePresenceHudSnapshot("disabled", false, null, 0);
-    }
-
-    const metaversePresenceClient = this.#metaversePresenceClient;
-
-    if (metaversePresenceClient === null) {
-      return freezePresenceHudSnapshot(
-        "idle",
-        false,
-        null,
-        this.#remoteCharacterPresentations.length
-      );
-    }
-
-    return freezePresenceHudSnapshot(
-      metaversePresenceClient.statusSnapshot.state,
-      metaversePresenceClient.statusSnapshot.joined,
-      metaversePresenceClient.statusSnapshot.lastError,
-      this.#remoteCharacterPresentations.length
-    );
   }
 
   #syncFrame(nowMs: number, forceUiUpdate: boolean): void {
@@ -956,9 +480,12 @@ export class WebGpuMetaverseRuntime {
       movementInput,
       deltaSeconds
     );
-    this.#syncPushableBodyPresentations();
-    this.#syncPresencePose();
-    this.#syncRemoteCharacterPresentationsFromPresence();
+    this.#environmentPhysicsRuntime.syncPushableBodyPresentations();
+    this.#presenceRuntime.syncPresencePose(
+      this.#readCharacterPresentationSnapshot(),
+      this.#traversalRuntime.locomotionMode
+    );
+    this.#presenceRuntime.syncRemoteCharacterPresentations();
 
     this.#focusedPortal = resolveFocusedPortalSnapshot(
       cameraSnapshot,
@@ -975,10 +502,10 @@ export class WebGpuMetaverseRuntime {
       nowMs,
       deltaSeconds,
       this.#traversalRuntime.characterPresentationSnapshot,
-      this.#remoteCharacterPresentations
+      this.#presenceRuntime.remoteCharacterPresentations
     );
 
-    this.#physicsDebugObject?.update?.();
+    this.#environmentPhysicsRuntime.syncDebugPresentation();
     this.#focusedMountable = sceneInteractionSnapshot.focusedMountable;
     this.#mountedEnvironment = sceneInteractionSnapshot.mountedEnvironment;
     this.#renderer.render(this.#sceneRuntime.scene, this.#sceneRuntime.camera);
@@ -1016,7 +543,7 @@ export class WebGpuMetaverseRuntime {
       this.#mountedEnvironment,
       this.#controlMode,
       this.#traversalRuntime.locomotionMode,
-      this.#resolvePresenceHudSnapshot()
+      this.#presenceRuntime.resolveHudSnapshot()
     );
 
     if (

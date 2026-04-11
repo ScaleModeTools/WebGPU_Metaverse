@@ -37,6 +37,18 @@
       ]
     },
     {
+      "ownerPath": "client/src/metaverse/classes/metaverse-environment-physics-runtime.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse-runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/classes/metaverse-presence-runtime.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse-runtime.test.mjs"
+      ]
+    },
+    {
       "ownerPath": "client/src/metaverse/classes/metaverse-flight-input-runtime.ts",
       "testPaths": [
         "tests/runtime/client/metaverse-flight-input-runtime.test.mjs"

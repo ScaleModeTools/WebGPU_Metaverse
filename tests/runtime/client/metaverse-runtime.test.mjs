@@ -1045,6 +1045,133 @@ test("WebGpuMetaverseRuntime boots metaverse presence without moving traversal p
   }
 });
 
+test("MetaversePresenceRuntime detects roster object mutations without relying on replacement", async () => {
+  const { MetaversePresenceRuntime } = await clientLoader.load(
+    "/src/metaverse/classes/metaverse-presence-runtime.ts"
+  );
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const rosterSnapshot = {
+    players: [
+      {
+        characterId: "metaverse-mannequin-v1",
+        playerId: localPlayerId,
+        pose: {
+          animationVocabulary: "idle",
+          locomotionMode: "grounded",
+          position: {
+            x: 0,
+            y: 1,
+            z: 0
+          },
+          stateSequence: 1,
+          yawRadians: 0
+        },
+        username: localUsername
+      },
+      {
+        characterId: "metaverse-mannequin-v1",
+        playerId: remotePlayerId,
+        pose: {
+          animationVocabulary: "walk",
+          locomotionMode: "swim",
+          position: {
+            x: -3,
+            y: 0.2,
+            z: 8
+          },
+          stateSequence: 1,
+          yawRadians: 0.45
+        },
+        username: remoteUsername
+      }
+    ],
+    snapshotSequence: 1,
+    tickIntervalMs: 120
+  };
+  let disposeCalls = 0;
+  const fakePresenceClient = {
+    rosterSnapshot,
+    statusSnapshot: Object.freeze({
+      joined: true,
+      lastError: null,
+      lastSnapshotSequence: 1,
+      playerId: localPlayerId,
+      state: "connected"
+    }),
+    dispose() {
+      disposeCalls += 1;
+    },
+    ensureJoined() {
+      return Promise.resolve(rosterSnapshot);
+    },
+    subscribeUpdates() {
+      return () => {};
+    },
+    syncPresence() {}
+  };
+  const presenceRuntime = new MetaversePresenceRuntime({
+    createMetaversePresenceClient: () => fakePresenceClient,
+    localPlayerIdentity: {
+      characterId: "metaverse-mannequin-v1",
+      playerId: localPlayerId,
+      username: localUsername
+    },
+    onPresenceUpdate() {}
+  });
+
+  presenceRuntime.boot(
+    {
+      animationVocabulary: "idle",
+      position: {
+        x: 0,
+        y: 1,
+        z: 0
+      },
+      yawRadians: 0
+    },
+    "grounded"
+  );
+  presenceRuntime.syncRemoteCharacterPresentations();
+
+  assert.equal(presenceRuntime.remoteCharacterPresentations.length, 1);
+  assert.equal(
+    presenceRuntime.remoteCharacterPresentations[0]?.presentation.position.x,
+    -3
+  );
+
+  rosterSnapshot.players[1] = {
+    ...rosterSnapshot.players[1],
+    pose: {
+      ...rosterSnapshot.players[1].pose,
+      position: {
+        x: -2,
+        y: 0.2,
+        z: 8
+      },
+      stateSequence: 2
+    }
+  };
+  presenceRuntime.syncRemoteCharacterPresentations();
+
+  assert.equal(
+    presenceRuntime.remoteCharacterPresentations[0]?.presentation.position.x,
+    -2
+  );
+
+  presenceRuntime.dispose();
+
+  assert.equal(disposeCalls, 1);
+});
+
 test("WebGpuMetaverseRuntime resolves grounded surface travel automatically when solid support is present", async () => {
   const [
     { WebGpuMetaverseRuntime },
