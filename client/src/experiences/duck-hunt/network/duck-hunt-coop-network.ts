@@ -7,6 +7,7 @@ import {
 import {
   CoopRoomClient,
   CoopRoomDirectoryClient,
+  createNativeWebTransportBrowserFactory,
   createDuckHuntCoopRoomPlayerPresenceWebTransportDatagramTransport,
   createCoopRoomHttpTransport,
   createCoopRoomWebTransportTransport,
@@ -62,6 +63,19 @@ function resolveDuckHuntCoopWebTransportUrl(): string | null {
   return configuredUrl;
 }
 
+function resolveDuckHuntCoopWebTransportServerCertificateSha256():
+  | string
+  | null {
+  const configuredHash =
+    import.meta.env?.VITE_DUCK_HUNT_COOP_WEBTRANSPORT_SERVER_CERT_SHA256?.trim();
+
+  if (configuredHash === undefined || configuredHash.length === 0) {
+    return null;
+  }
+
+  return configuredHash;
+}
+
 export const duckHuntCoopRoomCollectionPath =
   "/experiences/duck-hunt/coop/rooms" as const;
 export const duckHuntRoomDirectoryRefreshIntervalMs = 3_000;
@@ -93,6 +107,12 @@ export function createDuckHuntCoopRoomClient(
         readonly WebTransport?: unknown;
       }
     ).WebTransport === "function";
+  const webTransportFactory = shouldUseWebTransport
+    ? createNativeWebTransportBrowserFactory({
+        serverCertificateSha256Hex:
+          resolveDuckHuntCoopWebTransportServerCertificateSha256()
+      })
+    : null;
 
   const httpTransport = createCoopRoomHttpTransport({
     ...duckHuntCoopRoomClientConfig,
@@ -101,7 +121,11 @@ export function createDuckHuntCoopRoomClient(
   const playerPresenceDatagramTransport = shouldUseWebTransport
     ? createDuckHuntCoopRoomPlayerPresenceWebTransportDatagramTransport({
         webTransportUrl
-      })
+      }, webTransportFactory === null
+        ? {}
+        : {
+            webTransportFactory
+          })
     : null;
 
   return new CoopRoomClient({
@@ -116,10 +140,17 @@ export function createDuckHuntCoopRoomClient(
     transport: shouldUseWebTransport
       ? (() => {
           const transportFailover = createWebTransportHttpFallbackInvoker(
-            createCoopRoomWebTransportTransport({
-              roomId,
-              webTransportUrl
-            }),
+            createCoopRoomWebTransportTransport(
+              {
+                roomId,
+                webTransportUrl
+              },
+              webTransportFactory === null
+                ? {}
+                : {
+                    webTransportFactory
+                  }
+            ),
             httpTransport
           );
 

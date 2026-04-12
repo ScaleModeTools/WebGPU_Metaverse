@@ -11,8 +11,10 @@ import type {
 
 import type {
   MetaversePresenceClientStatusSnapshot,
-  MetaversePresenceJoinRequest
+  MetaversePresenceJoinRequest,
+  RealtimeReliableTransportStatusSnapshot
 } from "@/network";
+import { createDisabledRealtimeReliableTransportStatusSnapshot } from "@/network";
 import type {
   MetaverseCharacterPresentationSnapshot,
   MetaverseHudSnapshot,
@@ -27,6 +29,7 @@ export interface MetaverseLocalPlayerIdentity {
 }
 
 export interface MetaversePresenceClientRuntime {
+  readonly reliableTransportStatusSnapshot: RealtimeReliableTransportStatusSnapshot;
   readonly rosterSnapshot: MetaversePresenceRosterSnapshot | null;
   readonly statusSnapshot: MetaversePresenceClientStatusSnapshot;
   ensureJoined(
@@ -301,6 +304,13 @@ export class MetaversePresenceRuntime {
 
   get isJoined(): boolean {
     return this.#metaversePresenceClient?.statusSnapshot.joined ?? false;
+  }
+
+  get reliableTransportStatusSnapshot(): RealtimeReliableTransportStatusSnapshot {
+    return (
+      this.#metaversePresenceClient?.reliableTransportStatusSnapshot ??
+      createDisabledRealtimeReliableTransportStatusSnapshot()
+    );
   }
 
   boot(

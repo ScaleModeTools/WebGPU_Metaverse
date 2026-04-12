@@ -4,5 +4,5 @@ import type { MetaverseAuthoritativeWorldRuntimeConfig } from "../types/metavers
 
 export const metaverseAuthoritativeWorldRuntimeConfig = {
   playerInactivityTimeoutMs: createMilliseconds(10_000),
-  tickIntervalMs: createMilliseconds(150)
+  tickIntervalMs: createMilliseconds(50)
 } as const satisfies MetaverseAuthoritativeWorldRuntimeConfig;

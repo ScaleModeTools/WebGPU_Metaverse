@@ -188,6 +188,12 @@
       ]
     },
     {
+      "ownerPath": "client/src/network/adapters/native-webtransport-browser-factory.ts",
+      "testPaths": [
+        "tests/runtime/client/native-webtransport-browser-factory.runtime.test.mjs"
+      ]
+    },
+    {
       "ownerPath": "client/src/network/adapters/metaverse-realtime-world-driver-vehicle-control-webtransport-datagram-transport.ts",
       "testPaths": [
         "tests/runtime/client/metaverse-realtime-world-driver-vehicle-control-webtransport-datagram-transport.runtime.test.mjs"
@@ -233,6 +239,12 @@
       "ownerPath": "server/src/experiences/duck-hunt/adapters/duck-hunt-coop-room-webtransport-datagram-adapter.ts",
       "testPaths": [
         "tests/runtime/server/duck-hunt-coop-room-webtransport-datagram-adapter.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/adapters/localdev-webtransport-server.ts",
+      "testPaths": [
+        "tests/runtime/server/localdev-webtransport-server.test.mjs"
       ]
     },
     {

@@ -8,9 +8,15 @@ import type {
 
 import type {
   AuthoritativeServerClockConfig,
-  MetaverseWorldClientStatusSnapshot
+  MetaverseWorldClientStatusSnapshot,
+  RealtimeDatagramTransportStatusSnapshot,
+  RealtimeReliableTransportStatusSnapshot
 } from "@/network";
-import { AuthoritativeServerClock } from "@/network";
+import {
+  AuthoritativeServerClock,
+  createDisabledRealtimeDatagramTransportStatusSnapshot,
+  createDisabledRealtimeReliableTransportStatusSnapshot
+} from "@/network";
 import type {
   MetaverseRemoteCharacterPresentationSnapshot,
   MetaverseRemoteVehiclePresentationSnapshot
@@ -19,6 +25,9 @@ import type { MetaverseLocalPlayerIdentity } from "./metaverse-presence-runtime"
 import type { RoutedDriverVehicleControlIntentSnapshot } from "../traversal/types/traversal";
 
 export interface MetaverseWorldClientRuntime {
+  readonly currentPollIntervalMs: number;
+  readonly driverVehicleControlDatagramStatusSnapshot: RealtimeDatagramTransportStatusSnapshot;
+  readonly reliableTransportStatusSnapshot: RealtimeReliableTransportStatusSnapshot;
   readonly statusSnapshot: MetaverseWorldClientStatusSnapshot;
   readonly worldSnapshotBuffer: readonly MetaverseRealtimeWorldSnapshot[];
   ensureConnected(
@@ -300,12 +309,89 @@ export class MetaverseRemoteWorldRuntime {
     return (this.#metaverseWorldClient?.worldSnapshotBuffer.length ?? 0) > 0;
   }
 
+  get isConnected(): boolean {
+    return this.#metaverseWorldClient?.statusSnapshot.connected ?? false;
+  }
+
+  get currentPollIntervalMs(): number | null {
+    return this.#metaverseWorldClient?.currentPollIntervalMs ?? null;
+  }
+
+  get latestAuthoritativeTickIntervalMs(): number | null {
+    const latestSnapshot =
+      this.#metaverseWorldClient?.worldSnapshotBuffer[
+        (this.#metaverseWorldClient?.worldSnapshotBuffer.length ?? 0) - 1
+      ] ?? null;
+
+    if (latestSnapshot === null) {
+      return null;
+    }
+
+    return Number(latestSnapshot.tick.tickIntervalMs);
+  }
+
+  get reliableTransportStatusSnapshot(): RealtimeReliableTransportStatusSnapshot {
+    return (
+      this.#metaverseWorldClient?.reliableTransportStatusSnapshot ??
+      createDisabledRealtimeReliableTransportStatusSnapshot()
+    );
+  }
+
+  get driverVehicleControlDatagramStatusSnapshot():
+    | RealtimeDatagramTransportStatusSnapshot {
+    return (
+      this.#metaverseWorldClient?.driverVehicleControlDatagramStatusSnapshot ??
+      createDisabledRealtimeDatagramTransportStatusSnapshot()
+    );
+  }
+
   get remoteCharacterPresentations(): readonly MetaverseRemoteCharacterPresentationSnapshot[] {
     return this.#remoteCharacterPresentations;
   }
 
   get remoteVehiclePresentations(): readonly MetaverseRemoteVehiclePresentationSnapshot[] {
     return this.#remoteVehiclePresentations;
+  }
+
+  readFreshAuthoritativeVehicleSnapshot(
+    environmentAssetId: string,
+    maxAuthoritativeSnapshotAgeMs: number
+  ): MetaverseRealtimeVehicleSnapshot | null {
+    const latestWorldSnapshot =
+      this.#metaverseWorldClient?.worldSnapshotBuffer[
+        (this.#metaverseWorldClient?.worldSnapshotBuffer.length ?? 0) - 1
+      ] ?? null;
+
+    if (latestWorldSnapshot === null) {
+      return null;
+    }
+
+    const localWallClockMs = this.#readWallClockMs();
+
+    this.#authoritativeServerClock.observeServerTime(
+      Number(latestWorldSnapshot.tick.serverTimeMs),
+      localWallClockMs
+    );
+
+    const authoritativeSnapshotAgeMs = Math.max(
+      0,
+      this.#authoritativeServerClock.readEstimatedServerTimeMs(localWallClockMs) -
+        Number(latestWorldSnapshot.tick.serverTimeMs)
+    );
+
+    if (
+      authoritativeSnapshotAgeMs >
+      Math.max(0, maxAuthoritativeSnapshotAgeMs)
+    ) {
+      return null;
+    }
+
+    return (
+      latestWorldSnapshot.vehicles.find(
+        (vehicleSnapshot) =>
+          vehicleSnapshot.environmentAssetId === environmentAssetId
+      ) ?? null
+    );
   }
 
   boot(): void {

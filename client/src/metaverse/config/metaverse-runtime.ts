@@ -100,6 +100,13 @@ export const metaverseRuntimeConfig = {
   skiff: {
     accelerationCurveExponent: 1.08,
     accelerationUnitsPerSecondSquared: 12,
+    authoritativeCorrection: {
+      grossSnapDistanceThresholdMeters: 3.5,
+      grossSnapYawThresholdRadians: 0.75,
+      routineBlendAlpha: 0.35,
+      routinePositionBlendThresholdMeters: 0.9,
+      routineYawBlendThresholdRadians: 0.18
+    },
     baseSpeedUnitsPerSecond: 10.5,
     boostCurveExponent: 1.02,
     boostMultiplier: 1.55,

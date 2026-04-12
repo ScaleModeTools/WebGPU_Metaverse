@@ -343,6 +343,46 @@ test("MetaversePresenceClient marks membership loss when the local player disapp
   );
 });
 
+test("MetaversePresenceClient exposes reliable transport truth through its network-owned resolver", async () => {
+  const { MetaversePresenceClient } = await clientLoader.load("/src/network/index.ts");
+  const reliableTransportStatusSnapshot = Object.freeze({
+    activeTransport: "http",
+    browserWebTransportAvailable: false,
+    enabled: true,
+    fallbackActive: false,
+    lastTransportError: null,
+    preference: "http",
+    webTransportConfigured: false,
+    webTransportStatus: "not-requested"
+  });
+  const client = new MetaversePresenceClient(
+    {
+      defaultPollIntervalMs: createMilliseconds(150),
+      presencePath: "/metaverse/presence",
+      serverOrigin: "http://127.0.0.1:3210"
+    },
+    {
+      resolveReliableTransportStatusSnapshot: () =>
+        reliableTransportStatusSnapshot,
+      transport: {
+        async pollRosterSnapshot() {
+          throw new Error("Unexpected roster poll.");
+        },
+        async sendCommand() {
+          throw new Error("Unexpected command send.");
+        }
+      }
+    }
+  );
+
+  assert.equal(
+    client.reliableTransportStatusSnapshot,
+    reliableTransportStatusSnapshot
+  );
+
+  client.dispose();
+});
+
 test("MetaversePresenceClient rejoins automatically after an unknown-player poll failure", async () => {
   const { MetaversePresenceClient } = await clientLoader.load("/src/network/index.ts");
   const playerId = createMetaversePlayerId("harbor-pilot-1");

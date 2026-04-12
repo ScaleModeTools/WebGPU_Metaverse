@@ -7,6 +7,7 @@ export { createMetaverseRealtimeWorldDriverVehicleControlWebTransportDatagramTra
 export { createMetaverseWorldHttpTransport } from "./adapters/metaverse-world-http-transport";
 export { createMetaverseWorldWebTransportTransport } from "./adapters/metaverse-world-webtransport-transport";
 export { LatestWinsWebTransportJsonDatagramChannel } from "./adapters/latest-wins-webtransport-json-datagram-channel";
+export { createNativeWebTransportBrowserFactory } from "./adapters/native-webtransport-browser-factory";
 export { ReliableWebTransportJsonRequestChannel } from "./adapters/reliable-webtransport-json-request-channel";
 export { AuthoritativeServerClock } from "./classes/authoritative-server-clock";
 export { CoopRoomClient } from "./classes/coop-room-client";
@@ -19,6 +20,17 @@ export { MetaverseWorldClient } from "./classes/metaverse-world-client";
 export { metaversePresenceClientStates } from "./types/metaverse-presence-client";
 export { metaverseWorldClientStates } from "./types/metaverse-world-client";
 export { networkCommandDeliveryHints } from "./types/transport-command-options";
+export {
+  createDisabledRealtimeDatagramTransportStatusSnapshot,
+  createDisabledRealtimeReliableTransportStatusSnapshot,
+  createRealtimeDatagramTransportStatusSnapshot,
+  createRealtimeReliableTransportStatusSnapshot,
+  realtimeDatagramTransportKinds,
+  realtimeDatagramTransportStates,
+  realtimeReliableTransportKinds,
+  realtimeTransportPreferences,
+  realtimeWebTransportStatuses
+} from "./types/realtime-transport-status";
 export type { ProfileStoragePlan } from "./types/profile-storage";
 export type {
   CoopRoomDirectoryClientConfig
@@ -64,3 +76,12 @@ export type {
   StoredPlayerProfileRecord,
   StoredProfileHydrationResult
 } from "./types/stored-player-profile";
+export type {
+  RealtimeDatagramTransportKind,
+  RealtimeDatagramTransportState,
+  RealtimeDatagramTransportStatusSnapshot,
+  RealtimeReliableTransportKind,
+  RealtimeReliableTransportStatusSnapshot,
+  RealtimeTransportPreference,
+  RealtimeWebTransportStatus
+} from "./types/realtime-transport-status";

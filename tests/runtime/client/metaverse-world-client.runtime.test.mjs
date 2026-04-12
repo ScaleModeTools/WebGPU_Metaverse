@@ -32,6 +32,7 @@ function createWorldEvent({
   snapshotSequence,
   currentTick,
   serverTimeMs,
+  tickIntervalMs = 50,
   vehicleX = 8
 }) {
   const vehicleId = createMetaverseVehicleId("metaverse-hub-skiff-v1");
@@ -64,7 +65,7 @@ function createWorldEvent({
       tick: {
         currentTick,
         serverTimeMs,
-        tickIntervalMs: 150
+        tickIntervalMs
       },
       vehicles: [
         {
@@ -124,7 +125,7 @@ test("MetaverseWorldClient connects, buffers newer snapshots, and disposes clean
   const client = new MetaverseWorldClient(
     {
       defaultCommandIntervalMs: createMilliseconds(50),
-      defaultPollIntervalMs: createMilliseconds(150),
+      defaultPollIntervalMs: createMilliseconds(50),
       maxBufferedSnapshots: 2,
       serverOrigin: "http://127.0.0.1:3210",
       worldCommandPath: "/metaverse/world/commands",
@@ -190,7 +191,7 @@ test("MetaverseWorldClient connects, buffers newer snapshots, and disposes clean
   assert.equal(client.worldSnapshotBuffer.length, 2);
   assert.equal(client.worldSnapshotBuffer[1]?.snapshotSequence, 2);
   assert.equal(client.statusSnapshot.lastWorldTick, 11);
-  assert.equal(scheduledTasks[0]?.delay, 150);
+  assert.equal(scheduledTasks[0]?.delay, 50);
 
   scheduledTasks.shift()?.callback();
   await flushAsyncWork();
@@ -215,7 +216,7 @@ test("MetaverseWorldClient exposes driver-control datagram support as a separate
   const client = new MetaverseWorldClient(
     {
       defaultCommandIntervalMs: createMilliseconds(50),
-      defaultPollIntervalMs: createMilliseconds(150),
+      defaultPollIntervalMs: createMilliseconds(50),
       maxBufferedSnapshots: 2,
       serverOrigin: "http://127.0.0.1:3210",
       worldCommandPath: "/metaverse/world/commands",
@@ -252,6 +253,11 @@ test("MetaverseWorldClient exposes driver-control datagram support as a separate
   );
 
   assert.equal(client.supportsDriverVehicleControlDatagrams, true);
+  assert.equal(client.driverVehicleControlDatagramStatusSnapshot.state, "active");
+  assert.equal(
+    client.driverVehicleControlDatagramStatusSnapshot.activeTransport,
+    "webtransport-datagram"
+  );
 
   client.dispose();
 
@@ -276,7 +282,7 @@ test("MetaverseWorldClient coalesces latest driver vehicle control commands behi
   const client = new MetaverseWorldClient(
     {
       defaultCommandIntervalMs: createMilliseconds(50),
-      defaultPollIntervalMs: createMilliseconds(150),
+      defaultPollIntervalMs: createMilliseconds(50),
       maxBufferedSnapshots: 2,
       serverOrigin: "http://127.0.0.1:3210",
       worldCommandPath: "/metaverse/world/commands",
@@ -366,7 +372,7 @@ test("MetaverseWorldClient prefers driver-control datagrams over reliable comman
   const client = new MetaverseWorldClient(
     {
       defaultCommandIntervalMs: createMilliseconds(50),
-      defaultPollIntervalMs: createMilliseconds(150),
+      defaultPollIntervalMs: createMilliseconds(50),
       maxBufferedSnapshots: 2,
       serverOrigin: "http://127.0.0.1:3210",
       worldCommandPath: "/metaverse/world/commands",
@@ -442,6 +448,11 @@ test("MetaverseWorldClient prefers driver-control datagrams over reliable comman
       playerId
     })
   );
+  assert.equal(client.driverVehicleControlDatagramStatusSnapshot.state, "active");
+  assert.equal(
+    client.driverVehicleControlDatagramStatusSnapshot.lastTransportError,
+    null
+  );
 });
 
 test("MetaverseWorldClient falls back to reliable commands after a driver-control datagram send failure", async () => {
@@ -463,7 +474,7 @@ test("MetaverseWorldClient falls back to reliable commands after a driver-contro
   const client = new MetaverseWorldClient(
     {
       defaultCommandIntervalMs: createMilliseconds(50),
-      defaultPollIntervalMs: createMilliseconds(150),
+      defaultPollIntervalMs: createMilliseconds(50),
       maxBufferedSnapshots: 2,
       serverOrigin: "http://127.0.0.1:3210",
       worldCommandPath: "/metaverse/world/commands",
@@ -529,8 +540,63 @@ test("MetaverseWorldClient falls back to reliable commands after a driver-contro
   assert.equal(sentDatagrams.length, 1);
   assert.equal(sentCommands.length, 2);
   assert.equal(client.supportsDriverVehicleControlDatagrams, false);
+  assert.equal(
+    client.driverVehicleControlDatagramStatusSnapshot.state,
+    "degraded-to-reliable"
+  );
+  assert.equal(
+    client.driverVehicleControlDatagramStatusSnapshot.activeTransport,
+    "reliable-command-fallback"
+  );
+  assert.equal(
+    client.driverVehicleControlDatagramStatusSnapshot.lastTransportError,
+    "Datagram transport unavailable."
+  );
   assert.equal(client.worldSnapshotBuffer.length, 1);
   assert.equal(client.worldSnapshotBuffer[0]?.snapshotSequence, 1);
+});
+
+test("MetaverseWorldClient exposes reliable transport truth through its network-owned resolver", async () => {
+  const { MetaverseWorldClient } = await clientLoader.load("/src/network/index.ts");
+  const reliableTransportStatusSnapshot = Object.freeze({
+    activeTransport: "http",
+    browserWebTransportAvailable: false,
+    enabled: true,
+    fallbackActive: false,
+    lastTransportError: null,
+    preference: "http",
+    webTransportConfigured: false,
+    webTransportStatus: "not-requested"
+  });
+  const client = new MetaverseWorldClient(
+    {
+      defaultCommandIntervalMs: createMilliseconds(50),
+      defaultPollIntervalMs: createMilliseconds(50),
+      maxBufferedSnapshots: 2,
+      serverOrigin: "http://127.0.0.1:3210",
+      worldCommandPath: "/metaverse/world/commands",
+      worldPath: "/metaverse/world"
+    },
+    {
+      resolveReliableTransportStatusSnapshot: () =>
+        reliableTransportStatusSnapshot,
+      transport: {
+        async pollWorldSnapshot() {
+          throw new Error("Unexpected world poll.");
+        },
+        async sendCommand() {
+          throw new Error("Unexpected world command.");
+        }
+      }
+    }
+  );
+
+  assert.equal(
+    client.reliableTransportStatusSnapshot,
+    reliableTransportStatusSnapshot
+  );
+
+  client.dispose();
 });
 
 test("MetaverseWorldClient rejects stale world snapshots and keeps the newest accepted buffer", async () => {
@@ -559,7 +625,7 @@ test("MetaverseWorldClient rejects stale world snapshots and keeps the newest ac
   const client = new MetaverseWorldClient(
     {
       defaultCommandIntervalMs: createMilliseconds(50),
-      defaultPollIntervalMs: createMilliseconds(150),
+      defaultPollIntervalMs: createMilliseconds(50),
       maxBufferedSnapshots: 2,
       serverOrigin: "http://127.0.0.1:3210",
       worldCommandPath: "/metaverse/world/commands",
@@ -625,7 +691,7 @@ test("MetaverseWorldClient resyncs after an unknown-player poll failure when aut
   const client = new MetaverseWorldClient(
     {
       defaultCommandIntervalMs: createMilliseconds(50),
-      defaultPollIntervalMs: createMilliseconds(150),
+      defaultPollIntervalMs: createMilliseconds(50),
       maxBufferedSnapshots: 2,
       serverOrigin: "http://127.0.0.1:3210",
       worldCommandPath: "/metaverse/world/commands",
@@ -667,7 +733,7 @@ test("MetaverseWorldClient resyncs after an unknown-player poll failure when aut
   assert.equal(client.statusSnapshot.state, "error");
   assert.equal(client.statusSnapshot.connected, false);
   assert.equal(client.worldSnapshotBuffer.length, 0);
-  assert.equal(scheduledTasks[0]?.delay, 150);
+  assert.equal(scheduledTasks[0]?.delay, 50);
 
   scheduledTasks.shift()?.callback();
   await flushAsyncWork();

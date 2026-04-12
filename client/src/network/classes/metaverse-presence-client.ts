@@ -18,11 +18,18 @@ import type {
   MetaversePresenceJoinRequest
 } from "../types/metaverse-presence-client";
 import type { MetaversePresenceTransport } from "../types/metaverse-presence-transport";
+import {
+  createRealtimeReliableTransportStatusSnapshot,
+  type RealtimeReliableTransportStatusSnapshot
+} from "../types/realtime-transport-status";
 import type { NetworkCommandTransportOptions } from "../types/transport-command-options";
 
 interface MetaversePresenceClientDependencies {
   readonly clearTimeout?: typeof globalThis.clearTimeout;
   readonly fetch?: typeof globalThis.fetch;
+  readonly resolveReliableTransportStatusSnapshot?:
+    | (() => RealtimeReliableTransportStatusSnapshot)
+    | undefined;
   readonly setTimeout?: typeof globalThis.setTimeout;
   readonly transport?: MetaversePresenceTransport;
 }
@@ -76,6 +83,9 @@ function resolveMembershipLossMessage(message: string): string | null {
 export class MetaversePresenceClient {
   readonly #clearTimeout: typeof globalThis.clearTimeout;
   readonly #config: MetaversePresenceClientConfig;
+  readonly #resolveReliableTransportStatusSnapshot:
+    | (() => RealtimeReliableTransportStatusSnapshot)
+    | null;
   readonly #setTimeout: typeof globalThis.setTimeout;
   readonly #transport: MetaversePresenceTransport;
   readonly #updateListeners = new Set<() => void>();
@@ -100,6 +110,8 @@ export class MetaversePresenceClient {
     dependencies: MetaversePresenceClientDependencies = {}
   ) {
     this.#config = config;
+    this.#resolveReliableTransportStatusSnapshot =
+      dependencies.resolveReliableTransportStatusSnapshot ?? null;
     this.#setTimeout = dependencies.setTimeout ?? globalThis.setTimeout.bind(globalThis);
     this.#clearTimeout =
       dependencies.clearTimeout ?? globalThis.clearTimeout.bind(globalThis);
@@ -122,6 +134,22 @@ export class MetaversePresenceClient {
 
   get statusSnapshot(): MetaversePresenceClientStatusSnapshot {
     return this.#statusSnapshot;
+  }
+
+  get reliableTransportStatusSnapshot(): RealtimeReliableTransportStatusSnapshot {
+    return (
+      this.#resolveReliableTransportStatusSnapshot?.() ??
+      createRealtimeReliableTransportStatusSnapshot({
+        activeTransport: "http",
+        browserWebTransportAvailable: false,
+        enabled: true,
+        fallbackActive: false,
+        lastTransportError: null,
+        preference: "http",
+        webTransportConfigured: false,
+        webTransportStatus: "not-requested"
+      })
+    );
   }
 
   subscribeUpdates(listener: () => void): () => void {

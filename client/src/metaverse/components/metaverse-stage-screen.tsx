@@ -32,6 +32,7 @@ import { createMetaverseWorldClient } from "../config/metaverse-world-network";
 import {
   resolveMetaverseLocomotionMode
 } from "../config/metaverse-locomotion-modes";
+import { MetaverseDeveloperOverlay } from "./metaverse-developer-overlay";
 import type { MetaverseControlModeId } from "../types/metaverse-control-mode";
 import type {
   MetaverseAttachmentProofConfig,
@@ -117,6 +118,7 @@ export function MetaverseStageScreen({
   const selectedLocomotionMode = resolveMetaverseLocomotionMode(
     hudSnapshot.locomotionMode
   );
+  const showDeveloperOverlay = import.meta.env.DEV;
 
   useEffect(() => {
     metaverseRuntime.setControlMode(metaverseControlMode);
@@ -373,6 +375,10 @@ export function MetaverseStageScreen({
             ) : null}
           </div>
         </div>
+
+        {showDeveloperOverlay ? (
+          <MetaverseDeveloperOverlay hudSnapshot={hudSnapshot} />
+        ) : null}
       </div>
     </ImmersiveStageFrame>
   );

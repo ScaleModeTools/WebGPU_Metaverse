@@ -17,13 +17,34 @@ import type {
   MetaverseWorldClientStatusSnapshot
 } from "../types/metaverse-world-client";
 import type { MetaverseWorldTransport } from "../types/metaverse-world-transport";
+import {
+  createRealtimeDatagramTransportStatusSnapshot,
+  createRealtimeReliableTransportStatusSnapshot,
+  type RealtimeDatagramTransportStatusSnapshot,
+  type RealtimeReliableTransportStatusSnapshot
+} from "../types/realtime-transport-status";
 
 interface MetaverseWorldClientDependencies {
   readonly clearTimeout?: typeof globalThis.clearTimeout;
   readonly driverVehicleControlDatagramTransport?: MetaverseRealtimeWorldDriverVehicleControlDatagramTransport;
   readonly fetch?: typeof globalThis.fetch;
+  readonly resolveDriverVehicleControlDatagramTransportStatusSnapshot?:
+    | ((
+        context: MetaverseWorldDriverVehicleControlDatagramTransportStatusContext
+      ) => RealtimeDatagramTransportStatusSnapshot)
+    | undefined;
+  readonly resolveReliableTransportStatusSnapshot?:
+    | (() => RealtimeReliableTransportStatusSnapshot)
+    | undefined;
   readonly setTimeout?: typeof globalThis.setTimeout;
   readonly transport?: MetaverseWorldTransport;
+}
+
+interface MetaverseWorldDriverVehicleControlDatagramTransportStatusContext {
+  readonly datagramTransportAvailable: boolean;
+  readonly hasSuccessfulDatagramSend: boolean;
+  readonly lastTransportError: string | null;
+  readonly usingReliableFallback: boolean;
 }
 
 type TimeoutHandle = ReturnType<typeof globalThis.setTimeout>;
@@ -88,6 +109,14 @@ export class MetaverseWorldClient {
   readonly #config: MetaverseWorldClientConfig;
   readonly #driverVehicleControlDatagramTransport: MetaverseRealtimeWorldDriverVehicleControlDatagramTransport | null;
   readonly #maxBufferedSnapshots: number;
+  readonly #resolveDriverVehicleControlDatagramTransportStatusSnapshot:
+    | ((
+        context: MetaverseWorldDriverVehicleControlDatagramTransportStatusContext
+      ) => RealtimeDatagramTransportStatusSnapshot)
+    | null;
+  readonly #resolveReliableTransportStatusSnapshot:
+    | (() => RealtimeReliableTransportStatusSnapshot)
+    | null;
   readonly #setTimeout: typeof globalThis.setTimeout;
   readonly #transport: MetaverseWorldTransport;
   readonly #updateListeners = new Set<() => void>();
@@ -95,6 +124,8 @@ export class MetaverseWorldClient {
   #commandSyncHandle: TimeoutHandle | null = null;
   #commandSyncInFlight = false;
   #connectPromise: Promise<MetaverseRealtimeWorldSnapshot> | null = null;
+  #driverVehicleControlDatagramLastError: string | null = null;
+  #hasSuccessfulDriverVehicleControlDatagramSend = false;
   #lastDriverVehicleControlIntent: MetaverseDriverVehicleControlIntentSnapshot | null =
     null;
   #nextDriverVehicleControlSequence = 0;
@@ -117,6 +148,11 @@ export class MetaverseWorldClient {
     this.#maxBufferedSnapshots = clampBufferedSnapshotCount(
       config.maxBufferedSnapshots
     );
+    this.#resolveDriverVehicleControlDatagramTransportStatusSnapshot =
+      dependencies.resolveDriverVehicleControlDatagramTransportStatusSnapshot ??
+      null;
+    this.#resolveReliableTransportStatusSnapshot =
+      dependencies.resolveReliableTransportStatusSnapshot ?? null;
     this.#setTimeout =
       dependencies.setTimeout ?? globalThis.setTimeout.bind(globalThis);
     this.#clearTimeout =
@@ -147,6 +183,35 @@ export class MetaverseWorldClient {
 
   get worldSnapshotBuffer(): readonly MetaverseRealtimeWorldSnapshot[] {
     return this.#worldSnapshotBuffer;
+  }
+
+  get currentPollIntervalMs(): number {
+    return this.#resolvePollDelayMs();
+  }
+
+  get reliableTransportStatusSnapshot(): RealtimeReliableTransportStatusSnapshot {
+    return (
+      this.#resolveReliableTransportStatusSnapshot?.() ??
+      createRealtimeReliableTransportStatusSnapshot({
+        activeTransport: "http",
+        browserWebTransportAvailable: false,
+        enabled: true,
+        fallbackActive: false,
+        lastTransportError: null,
+        preference: "http",
+        webTransportConfigured: false,
+        webTransportStatus: "not-requested"
+      })
+    );
+  }
+
+  get driverVehicleControlDatagramStatusSnapshot():
+    | RealtimeDatagramTransportStatusSnapshot {
+    return (
+      this.#resolveDriverVehicleControlDatagramTransportStatusSnapshot?.(
+        this.#createDriverVehicleControlDatagramTransportStatusContext()
+      ) ?? this.#createDefaultDriverVehicleControlDatagramStatusSnapshot()
+    );
   }
 
   get supportsDriverVehicleControlDatagrams(): boolean {
@@ -479,9 +544,38 @@ export class MetaverseWorldClient {
       await this.#driverVehicleControlDatagramTransport.sendDriverVehicleControlDatagram(
         command
       );
+
+      const transportStatusChanged =
+        !this.#hasSuccessfulDriverVehicleControlDatagramSend ||
+        this.#driverVehicleControlDatagramLastError !== null;
+
+      this.#hasSuccessfulDriverVehicleControlDatagramSend = true;
+      this.#driverVehicleControlDatagramLastError = null;
+
+      if (transportStatusChanged) {
+        this.#notifyUpdates();
+      }
+
       return null;
-    } catch {
+    } catch (error) {
+      const nextError =
+        error instanceof Error &&
+        typeof error.message === "string" &&
+        error.message.trim().length > 0
+          ? error.message
+          : "Metaverse driver vehicle control datagram send failed.";
+
+      const transportStatusChanged =
+        !this.#useReliableDriverVehicleControlFallback ||
+        this.#driverVehicleControlDatagramLastError !== nextError;
+
+      this.#driverVehicleControlDatagramLastError = nextError;
       this.#useReliableDriverVehicleControlFallback = true;
+
+      if (transportStatusChanged) {
+        this.#notifyUpdates();
+      }
+
       return this.#transport.sendCommand(command);
     }
   }
@@ -531,5 +625,57 @@ export class MetaverseWorldClient {
     for (const listener of this.#updateListeners) {
       listener();
     }
+  }
+
+  #createDriverVehicleControlDatagramTransportStatusContext(): MetaverseWorldDriverVehicleControlDatagramTransportStatusContext {
+    return Object.freeze({
+      datagramTransportAvailable:
+        this.#driverVehicleControlDatagramTransport !== null,
+      hasSuccessfulDatagramSend:
+        this.#hasSuccessfulDriverVehicleControlDatagramSend,
+      lastTransportError: this.#driverVehicleControlDatagramLastError,
+      usingReliableFallback: this.#useReliableDriverVehicleControlFallback
+    });
+  }
+
+  #createDefaultDriverVehicleControlDatagramStatusSnapshot(): RealtimeDatagramTransportStatusSnapshot {
+    if (this.#driverVehicleControlDatagramTransport === null) {
+      return createRealtimeDatagramTransportStatusSnapshot({
+        activeTransport: null,
+        browserWebTransportAvailable: false,
+        enabled: true,
+        lastTransportError: null,
+        preference: "http",
+        state: "unavailable",
+        webTransportConfigured: false,
+        webTransportStatus: "not-requested"
+      });
+    }
+
+    if (this.#useReliableDriverVehicleControlFallback) {
+      return createRealtimeDatagramTransportStatusSnapshot({
+        activeTransport: "reliable-command-fallback",
+        browserWebTransportAvailable: true,
+        enabled: true,
+        lastTransportError: this.#driverVehicleControlDatagramLastError,
+        preference: "webtransport-preferred",
+        state: "degraded-to-reliable",
+        webTransportConfigured: true,
+        webTransportStatus: "runtime-fallback"
+      });
+    }
+
+    return createRealtimeDatagramTransportStatusSnapshot({
+      activeTransport: "webtransport-datagram",
+      browserWebTransportAvailable: true,
+      enabled: true,
+      lastTransportError: this.#driverVehicleControlDatagramLastError,
+      preference: "webtransport-preferred",
+      state: "active",
+      webTransportConfigured: true,
+      webTransportStatus: this.#hasSuccessfulDriverVehicleControlDatagramSend
+        ? "active"
+        : "active"
+    });
   }
 }

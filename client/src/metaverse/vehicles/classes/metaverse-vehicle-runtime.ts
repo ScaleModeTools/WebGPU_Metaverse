@@ -8,6 +8,7 @@ import type {
 import type { SurfaceLocomotionConfig } from "../../traversal/types/traversal";
 import {
   advanceSurfaceLocomotionSnapshot,
+  clamp,
   freezeVector3,
   toFiniteNumber,
   wrapRadians
@@ -22,6 +23,13 @@ import type {
 } from "../types/vehicle-runtime";
 
 interface MetaverseVehicleRuntimeInit {
+  readonly authoritativeCorrection: {
+    readonly grossSnapDistanceThresholdMeters: number;
+    readonly grossSnapYawThresholdRadians: number;
+    readonly routineBlendAlpha: number;
+    readonly routinePositionBlendThresholdMeters: number;
+    readonly routineYawBlendThresholdRadians: number;
+  };
   readonly environmentAssetId: string;
   readonly label: string;
   readonly oceanHeightMeters: number;
@@ -34,6 +42,12 @@ interface MetaverseVehicleRuntimeInit {
   readonly surfaceColliderSnapshots: readonly MetaversePlacedCuboidColliderSnapshot[];
   readonly waterContactProbeRadiusMeters: number;
   readonly waterlineHeightMeters: number;
+}
+
+interface MetaverseVehicleAuthoritativePoseSnapshot {
+  readonly linearVelocity?: PhysicsVector3Snapshot | null;
+  readonly position: PhysicsVector3Snapshot;
+  readonly yawRadians: number;
 }
 
 interface MetaverseVehicleOccupancyRuntime {
@@ -193,7 +207,75 @@ class MetaverseVehicleEntryRuntime {
   }
 }
 
+function lerp(start: number, end: number, alpha: number): number {
+  return start + (end - start) * alpha;
+}
+
+function resolveAuthoritativePlanarVelocitySnapshot(
+  linearVelocity: PhysicsVector3Snapshot,
+  yawRadians: number
+): {
+  readonly forwardSpeedUnitsPerSecond: number;
+  readonly planarSpeedUnitsPerSecond: number;
+  readonly strafeSpeedUnitsPerSecond: number;
+} {
+  const forwardX = Math.sin(yawRadians);
+  const forwardZ = -Math.cos(yawRadians);
+  const rightX = Math.cos(yawRadians);
+  const rightZ = Math.sin(yawRadians);
+  const forwardSpeedUnitsPerSecond =
+    linearVelocity.x * forwardX + linearVelocity.z * forwardZ;
+  const strafeSpeedUnitsPerSecond =
+    linearVelocity.x * rightX + linearVelocity.z * rightZ;
+
+  return Object.freeze({
+    forwardSpeedUnitsPerSecond,
+    planarSpeedUnitsPerSecond: Math.hypot(linearVelocity.x, linearVelocity.z),
+    strafeSpeedUnitsPerSecond
+  });
+}
+
+function resolveCorrectionBlendAlpha(
+  errorMagnitude: number,
+  routineThreshold: number,
+  grossThreshold: number,
+  routineBlendAlpha: number
+): number {
+  const normalizedRoutineBlendAlpha = clamp(
+    toFiniteNumber(routineBlendAlpha, 0.35),
+    0,
+    1
+  );
+  const normalizedRoutineThreshold = Math.max(
+    0,
+    toFiniteNumber(routineThreshold, 0)
+  );
+  const normalizedGrossThreshold = Math.max(
+    normalizedRoutineThreshold,
+    toFiniteNumber(grossThreshold, normalizedRoutineThreshold)
+  );
+  const normalizedErrorMagnitude = Math.max(0, toFiniteNumber(errorMagnitude, 0));
+
+  if (
+    normalizedErrorMagnitude <= normalizedRoutineThreshold ||
+    normalizedGrossThreshold <= normalizedRoutineThreshold
+  ) {
+    return normalizedRoutineBlendAlpha;
+  }
+
+  return lerp(
+    normalizedRoutineBlendAlpha,
+    1,
+    (normalizedErrorMagnitude - normalizedRoutineThreshold) /
+      Math.max(
+        0.000001,
+        normalizedGrossThreshold - normalizedRoutineThreshold
+      )
+  );
+}
+
 export class MetaverseVehicleRuntime {
+  readonly #authoritativeCorrection: MetaverseVehicleRuntimeInit["authoritativeCorrection"];
   readonly #environmentAssetId: string;
   readonly #entryRuntimes: readonly MetaverseVehicleEntryRuntime[];
   readonly #label: string;
@@ -211,6 +293,7 @@ export class MetaverseVehicleRuntime {
   #yawRadians: number;
 
   constructor({
+    authoritativeCorrection,
     environmentAssetId,
     entries,
     label,
@@ -221,6 +304,7 @@ export class MetaverseVehicleRuntime {
     waterContactProbeRadiusMeters,
     waterlineHeightMeters
   }: MetaverseVehicleRuntimeInit) {
+    this.#authoritativeCorrection = authoritativeCorrection;
     this.#environmentAssetId = environmentAssetId;
     this.#label = label;
     this.#oceanHeightMeters = oceanHeightMeters;
@@ -292,20 +376,72 @@ export class MetaverseVehicleRuntime {
     this.#occupancyRuntime = null;
   }
 
-  syncAuthoritativePose(poseSnapshot: {
-    readonly position: PhysicsVector3Snapshot;
-    readonly yawRadians: number;
-  }): MountedVehicleRuntimeSnapshot {
-    this.#position = freezeVector3(
+  syncAuthoritativePose(
+    poseSnapshot: MetaverseVehicleAuthoritativePoseSnapshot
+  ): MountedVehicleRuntimeSnapshot {
+    const authoritativePosition = freezeVector3(
       poseSnapshot.position.x,
       poseSnapshot.position.y,
       poseSnapshot.position.z
     );
-    this.#yawRadians = wrapRadians(poseSnapshot.yawRadians);
-    this.#planarSpeedUnitsPerSecond = 0;
-    this.#forwardSpeedUnitsPerSecond = 0;
-    this.#strafeSpeedUnitsPerSecond = 0;
+    const authoritativeYawRadians = wrapRadians(poseSnapshot.yawRadians);
+    const positionErrorMeters = Math.hypot(
+      authoritativePosition.x - this.#position.x,
+      authoritativePosition.y - this.#position.y,
+      authoritativePosition.z - this.#position.z
+    );
+    const yawErrorRadians = Math.abs(
+      wrapRadians(authoritativeYawRadians - this.#yawRadians)
+    );
+    const shouldSnapCorrection =
+      positionErrorMeters >=
+        this.#authoritativeCorrection.grossSnapDistanceThresholdMeters ||
+      yawErrorRadians >=
+        this.#authoritativeCorrection.grossSnapYawThresholdRadians;
+    const positionBlendAlpha = shouldSnapCorrection
+      ? 1
+      : resolveCorrectionBlendAlpha(
+          positionErrorMeters,
+          this.#authoritativeCorrection.routinePositionBlendThresholdMeters,
+          this.#authoritativeCorrection.grossSnapDistanceThresholdMeters,
+          this.#authoritativeCorrection.routineBlendAlpha
+        );
+    const yawBlendAlpha = shouldSnapCorrection
+      ? 1
+      : resolveCorrectionBlendAlpha(
+          yawErrorRadians,
+          this.#authoritativeCorrection.routineYawBlendThresholdRadians,
+          this.#authoritativeCorrection.grossSnapYawThresholdRadians,
+          this.#authoritativeCorrection.routineBlendAlpha
+        );
+
+    this.#position = freezeVector3(
+      lerp(this.#position.x, authoritativePosition.x, positionBlendAlpha),
+      lerp(this.#position.y, authoritativePosition.y, positionBlendAlpha),
+      lerp(this.#position.z, authoritativePosition.z, positionBlendAlpha)
+    );
+    this.#yawRadians = wrapRadians(
+      this.#yawRadians +
+        wrapRadians(authoritativeYawRadians - this.#yawRadians) * yawBlendAlpha
+    );
     this.#syncWaterborneState();
+
+    if (poseSnapshot.linearVelocity !== undefined && poseSnapshot.linearVelocity !== null) {
+      const authoritativePlanarVelocitySnapshot =
+        resolveAuthoritativePlanarVelocitySnapshot(
+          poseSnapshot.linearVelocity,
+          authoritativeYawRadians
+        );
+
+      this.#planarSpeedUnitsPerSecond =
+        authoritativePlanarVelocitySnapshot.planarSpeedUnitsPerSecond;
+      this.#forwardSpeedUnitsPerSecond = this.#waterborne
+        ? authoritativePlanarVelocitySnapshot.forwardSpeedUnitsPerSecond
+        : 0;
+      this.#strafeSpeedUnitsPerSecond = this.#waterborne
+        ? authoritativePlanarVelocitySnapshot.strafeSpeedUnitsPerSecond
+        : 0;
+    }
 
     return this.snapshot;
   }

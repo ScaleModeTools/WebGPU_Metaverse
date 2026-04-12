@@ -5,6 +5,9 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 local_dev_dir="$repo_root/.local-dev"
 client_pid_file="$local_dev_dir/webgpu-metaverse-dev-client.pid"
+server_pid_file="$local_dev_dir/webgpu-metaverse-dev-server.pid"
+server_ready_file="$local_dev_dir/webgpu-metaverse-dev-server.ready"
+client_env_file="$local_dev_dir/webgpu-metaverse-dev-client.env"
 
 cd "$repo_root"
 mkdir -p "$local_dev_dir"
@@ -26,6 +29,75 @@ cleanup() {
 }
 
 trap cleanup EXIT INT TERM
+
+resolve_running_dev_server_pid() {
+  if [[ ! -f "$server_pid_file" ]]; then
+    return 1
+  fi
+
+  local existing_pid
+  existing_pid="$(<"$server_pid_file")"
+
+  if [[ ! "$existing_pid" =~ ^[0-9]+$ ]]; then
+    return 1
+  fi
+
+  if ! kill -0 "$existing_pid" 2>/dev/null; then
+    return 1
+  fi
+
+  local existing_args
+  existing_args="$(ps -p "$existing_pid" -o args= 2>/dev/null || true)"
+
+  if [[ "$existing_args" != *"tools/dev-server"* ]]; then
+    return 1
+  fi
+
+  printf '%s\n' "$existing_pid"
+}
+
+wait_for_dev_server_ready() {
+  local running_server_pid="$1"
+
+  for _ in {1..150}; do
+    if [[ -f "$server_ready_file" ]]; then
+      return 0
+    fi
+
+    if ! kill -0 "$running_server_pid" 2>/dev/null; then
+      return 1
+    fi
+
+    sleep 0.1
+  done
+
+  return 1
+}
+
+load_optional_client_env_file() {
+  if [[ ! -f "$client_env_file" ]]; then
+    return 0
+  fi
+
+  while IFS= read -r env_line || [[ -n "$env_line" ]]; do
+    if [[ -z "$env_line" ]] || [[ "$env_line" == \#* ]]; then
+      continue
+    fi
+
+    local env_name="${env_line%%=*}"
+    local env_value="${env_line#*=}"
+
+    if [[ -z "$env_name" ]]; then
+      continue
+    fi
+
+    if [[ -n "${!env_name+x}" ]]; then
+      continue
+    fi
+
+    export "$env_name=$env_value"
+  done < "$client_env_file"
+}
 
 resolve_existing_dev_client_pid() {
   if [[ ! -f "$client_pid_file" ]]; then
@@ -116,6 +188,18 @@ if (( ${#existing_repo_vite_pids[@]} > 0 )); then
 fi
 
 printf '%s\n' "$$" > "$client_pid_file"
+
+running_dev_server_pid="$(resolve_running_dev_server_pid || true)"
+
+if [[ -n "$running_dev_server_pid" ]]; then
+  echo "Waiting for WebGPU Metaverse dev server readiness."
+
+  if wait_for_dev_server_ready "$running_dev_server_pid"; then
+    load_optional_client_env_file
+  else
+    echo "WebGPU Metaverse dev server readiness did not arrive before timeout. Starting Vite without localdev WebTransport env injection."
+  fi
+fi
 
 npm --workspace client run dev -- --strictPort &
 pids+=($!)

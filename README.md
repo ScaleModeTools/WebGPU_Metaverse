@@ -19,6 +19,10 @@ single-player and server-authoritative co-op.
   available where camera setup is unnecessary
 - shared and server metaverse presence now replicate mounted occupancy so
   remote avatars can occupy the correct vehicle seat or boarding state
+- localhost development now supports WebTransport-preferred metaverse boot with
+  HTTP bootstrap and fallback still intact
+- metaverse networking now exposes separate reliable and latest-wins datagram
+  lanes instead of hiding all realtime traffic behind polling-only seams
 - shared browser services such as `audio`, `network`, `tracking`, and `ui`
   stay top-level reusable domains
 
@@ -33,6 +37,11 @@ single-player and server-authoritative co-op.
 - dynamic skiff hull, deck, and seat-support collision in local physics
 - remote metaverse presence that keeps mounted occupants attached to the
   correct vehicle seat
+- WebTransport-preferred metaverse presence and authoritative world transport
+  with HTTP fallback
+- latest-wins WebTransport datagrams for metaverse driver vehicle control and
+  Duck Hunt player presence, with reliable fallback when datagrams are
+  unavailable
 - explicit forward/up grip alignment for handheld socket attachments
 - Duck Hunt launch flow from the shell into gameplay and back out again
 - Duck Hunt mouse input and camera thumb-trigger input
@@ -120,7 +129,24 @@ npm install
 npm run dev
 ```
 
-This starts the client and the server together.
+This starts the client and the server together. In localdev it also boots the
+localhost WebTransport host when the transport preference is enabled and the
+local certificate flow is available.
+
+### Prefer WebTransport In Localdev
+
+Use these env vars to prefer WebTransport for the metaverse shell and Duck Hunt
+co-op:
+
+```bash
+VITE_METAVERSE_REALTIME_TRANSPORT=webtransport-preferred \
+VITE_DUCK_HUNT_COOP_TRANSPORT=webtransport-preferred \
+npm run dev
+```
+
+When `npm run dev` boots the localdev WebTransport host successfully, it
+generates the localhost WebTransport URLs and certificate hashes automatically.
+You do not need to hand-write those values for the standard localhost flow.
 
 ### Run Separately
 
@@ -134,6 +160,7 @@ Default local ports:
 - client dev server: `http://localhost:5173`
 - client preview: `http://localhost:4173`
 - server: `http://127.0.0.1:3210`
+- localdev WebTransport host: `https://127.0.0.1:3211`
 
 ### Build And Verify
 
@@ -153,11 +180,23 @@ Default local ports:
   `localhost` does.
 - The client proxies `/metaverse/*` and `/experiences/*` requests to the local
   server during development.
+- The localdev WebTransport host is separate from the HTTP server and runs on
+  `https://127.0.0.1:3211` when enabled by `npm run dev`.
+- Reliable metaverse traffic and latest-wins datagram traffic are now distinct
+  lanes:
+  - presence and authoritative world snapshots or commands use reliable
+    transport
+  - metaverse driver vehicle control and Duck Hunt player presence can use
+    WebTransport datagrams
+- If WebTransport is unavailable in localdev, reliable traffic falls back to
+  HTTP and datagram traffic falls back to the existing reliable command path.
 - Metaverse presence traffic lives under `/metaverse/presence` and now carries
   mounted occupancy as well as pose.
 - Duck Hunt co-op traffic lives under `/experiences/duck-hunt/coop/rooms`.
 - If needed, the client can target a different server origin through
   `VITE_SERVER_ORIGIN`.
+- For the current localhost validation matrix, see
+  `docs/localdev/metaverse-smooth-motion-validation.md`.
 
 ## Contributor Orientation
 

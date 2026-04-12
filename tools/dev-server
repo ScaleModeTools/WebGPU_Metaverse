@@ -5,10 +5,18 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 server_host="127.0.0.1"
 server_port="3210"
+webtransport_host="127.0.0.1"
+webtransport_port="3211"
 local_dev_dir="$repo_root/.local-dev"
 server_pid_file="$local_dev_dir/webgpu-metaverse-dev-server.pid"
+server_ready_file="$local_dev_dir/webgpu-metaverse-dev-server.ready"
+client_env_file="$local_dev_dir/webgpu-metaverse-dev-client.env"
+webtransport_cert_file="$local_dev_dir/webgpu-metaverse-localdev-webtransport-cert.pem"
+webtransport_key_file="$local_dev_dir/webgpu-metaverse-localdev-webtransport-key.pem"
 shared_watch_log="$local_dev_dir/webgpu-metaverse-dev-shared-watch.log"
 server_watch_log="$local_dev_dir/webgpu-metaverse-dev-server-watch.log"
+webtransport_required_dns_sans=("localhost")
+webtransport_required_ip_sans=("127.0.0.1")
 
 cd "$repo_root"
 mkdir -p "$local_dev_dir"
@@ -22,6 +30,8 @@ cleanup() {
     rm -f "$server_pid_file"
   fi
 
+  rm -f "$server_ready_file" "$client_env_file"
+
   for pid in "${pids[@]:-}"; do
     kill "$pid" 2>/dev/null || true
   done
@@ -30,6 +40,309 @@ cleanup() {
 }
 
 trap cleanup EXIT INT TERM
+
+resolve_localdev_webtransport_cert_sha256() {
+  openssl x509 \
+    -in "$webtransport_cert_file" \
+    -outform der |
+    openssl dgst -sha256 -r |
+    awk '{ print $1 }'
+}
+
+resolve_localdev_webtransport_cert_public_key_algorithm() {
+  openssl x509 \
+    -in "$webtransport_cert_file" \
+    -text \
+    -noout 2>/dev/null |
+    awk -F': ' '/Public Key Algorithm:/{ print $2; exit }'
+}
+
+resolve_localdev_webtransport_cert_validity_seconds() {
+  local not_before
+  local not_after
+  local not_before_seconds
+  local not_after_seconds
+
+  not_before="$(
+    openssl x509 -in "$webtransport_cert_file" -noout -startdate 2>/dev/null |
+      sed 's/^notBefore=//'
+  )"
+  not_after="$(
+    openssl x509 -in "$webtransport_cert_file" -noout -enddate 2>/dev/null |
+      sed 's/^notAfter=//'
+  )"
+
+  if [[ -z "$not_before" ]] || [[ -z "$not_after" ]]; then
+    return 1
+  fi
+
+  not_before_seconds="$(date -u -d "$not_before" +%s 2>/dev/null || true)"
+  not_after_seconds="$(date -u -d "$not_after" +%s 2>/dev/null || true)"
+
+  if [[ -z "$not_before_seconds" ]] || [[ -z "$not_after_seconds" ]]; then
+    return 1
+  fi
+
+  if (( not_after_seconds <= not_before_seconds )); then
+    return 1
+  fi
+
+  printf '%s\n' "$((not_after_seconds - not_before_seconds))"
+}
+
+is_ipv4_address() {
+  local candidate="$1"
+
+  [[ "$candidate" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
+}
+
+add_localdev_webtransport_required_subject_alt_name() {
+  local host="$1"
+  local existing_value
+
+  if [[ -z "$host" ]]; then
+    return 0
+  fi
+
+  if is_ipv4_address "$host"; then
+    for existing_value in "${webtransport_required_ip_sans[@]}"; do
+      if [[ "$existing_value" == "$host" ]]; then
+        return 0
+      fi
+    done
+
+    webtransport_required_ip_sans+=("$host")
+    return 0
+  fi
+
+  for existing_value in "${webtransport_required_dns_sans[@]}"; do
+    if [[ "$existing_value" == "$host" ]]; then
+      return 0
+    fi
+  done
+
+  webtransport_required_dns_sans+=("$host")
+}
+
+localdev_webtransport_cert_has_required_subject_alt_names() {
+  local certificate_text
+  local required_dns_san
+  local required_ip_san
+
+  certificate_text="$(
+    openssl x509 -in "$webtransport_cert_file" -text -noout 2>/dev/null
+  )"
+
+  for required_dns_san in "${webtransport_required_dns_sans[@]}"; do
+    if [[ "$certificate_text" != *"DNS:$required_dns_san"* ]]; then
+      return 1
+    fi
+  done
+
+  for required_ip_san in "${webtransport_required_ip_sans[@]}"; do
+    if [[ "$certificate_text" != *"IP Address:$required_ip_san"* ]]; then
+      return 1
+    fi
+  done
+
+  return 0
+}
+
+localdev_webtransport_cert_has_required_server_extensions() {
+  local certificate_text
+  certificate_text="$(
+    openssl x509 -in "$webtransport_cert_file" -text -noout 2>/dev/null
+  )"
+
+  if [[ "$certificate_text" != *"CA:FALSE"* ]]; then
+    return 1
+  fi
+
+  if [[ "$certificate_text" != *"Digital Signature"* ]]; then
+    return 1
+  fi
+
+  if [[ "$certificate_text" != *"Key Agreement"* ]]; then
+    return 1
+  fi
+
+  if [[ "$certificate_text" != *"TLS Web Server Authentication"* ]]; then
+    return 1
+  fi
+
+  return 0
+}
+
+resolve_localdev_webtransport_certificate_rotation_reason() {
+  local public_key_algorithm
+  local validity_seconds
+  local max_validity_seconds
+
+  if [[ ! -f "$webtransport_cert_file" ]] || [[ ! -f "$webtransport_key_file" ]]; then
+    return 1
+  fi
+
+  public_key_algorithm="$(
+    resolve_localdev_webtransport_cert_public_key_algorithm
+  )"
+
+  if [[ "$public_key_algorithm" != "id-ecPublicKey" ]]; then
+    printf '%s\n' \
+      "existing certificate uses unsupported key algorithm '$public_key_algorithm'; localdev WebTransport requires ECDSA"
+    return 0
+  fi
+
+  validity_seconds="$(
+    resolve_localdev_webtransport_cert_validity_seconds || true
+  )"
+  max_validity_seconds="$((14 * 24 * 60 * 60))"
+
+  if [[ -z "$validity_seconds" ]]; then
+    printf '%s\n' \
+      "existing certificate validity window could not be inspected"
+    return 0
+  fi
+
+  if (( validity_seconds > max_validity_seconds )); then
+    printf '%s\n' \
+      "existing certificate is valid for longer than 14 days; browser WebTransport custom certificates must stay short-lived"
+    return 0
+  fi
+
+  if ! localdev_webtransport_cert_has_required_subject_alt_names; then
+    printf '%s\n' \
+      "existing certificate is missing required subjectAltName entries for the current localdev hosts"
+    return 0
+  fi
+
+  if ! localdev_webtransport_cert_has_required_server_extensions; then
+    printf '%s\n' \
+      "existing certificate is missing required server-auth certificate extensions"
+    return 0
+  fi
+
+  return 1
+}
+
+ensure_localdev_webtransport_certificate() {
+  local rotation_reason=""
+
+  if ! command -v openssl >/dev/null 2>&1; then
+    echo "OpenSSL is unavailable. Continuing with HTTP-only localdev because the WebTransport certificate cannot be generated."
+    return 1
+  fi
+
+  if [[ -f "$webtransport_cert_file" ]] && [[ -f "$webtransport_key_file" ]]; then
+    rotation_reason="$(
+      resolve_localdev_webtransport_certificate_rotation_reason || true
+    )"
+
+    if [[ -z "$rotation_reason" ]]; then
+      return 0
+    fi
+
+    echo "Regenerating WebGPU Metaverse localdev WebTransport certificate because $rotation_reason."
+    rm -f "$webtransport_cert_file" "$webtransport_key_file"
+  fi
+
+  echo "Generating WebGPU Metaverse localdev WebTransport certificate."
+
+  local openssl_config_file="$local_dev_dir/webgpu-metaverse-localdev-webtransport-cert.cnf"
+  local dns_index=1
+  local dns_san
+  local ip_index=1
+  local ip_san
+
+  {
+    printf '%s\n' \
+'[req]
+distinguished_name = req_distinguished_name
+prompt = no
+x509_extensions = v3_req
+
+[req_distinguished_name]
+CN = localhost
+
+[v3_req]
+basicConstraints = critical, CA:FALSE
+keyUsage = critical, digitalSignature, keyAgreement
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]'
+
+    for dns_san in "${webtransport_required_dns_sans[@]}"; do
+      printf 'DNS.%s = %s\n' "$dns_index" "$dns_san"
+      dns_index=$((dns_index + 1))
+    done
+
+    for ip_san in "${webtransport_required_ip_sans[@]}"; do
+      printf 'IP.%s = %s\n' "$ip_index" "$ip_san"
+      ip_index=$((ip_index + 1))
+    done
+  } > "$openssl_config_file"
+
+  if ! openssl req \
+    -x509 \
+    -newkey ec \
+    -pkeyopt ec_paramgen_curve:P-256 \
+    -nodes \
+    -keyout "$webtransport_key_file" \
+    -out "$webtransport_cert_file" \
+    -sha256 \
+    -days 13 \
+    -config "$openssl_config_file" >/dev/null 2>&1; then
+    rm -f \
+      "$openssl_config_file" \
+      "$webtransport_cert_file" \
+      "$webtransport_key_file"
+    echo "OpenSSL could not generate the localdev WebTransport certificate. Continuing with HTTP-only localdev."
+    return 1
+  fi
+
+  rm -f "$openssl_config_file"
+  return 0
+}
+
+resolve_localdev_wsl_networking_mode() {
+  if ! command -v wslinfo >/dev/null 2>&1; then
+    return 1
+  fi
+
+  wslinfo --networking-mode 2>/dev/null
+}
+
+resolve_localdev_wsl_guest_ipv4_address() {
+  local resolved_ip=""
+
+  if command -v ip >/dev/null 2>&1; then
+    resolved_ip="$(
+      ip -4 route get 1.1.1.1 2>/dev/null |
+        awk '{
+          for (field_index = 1; field_index <= NF; field_index += 1) {
+            if ($field_index == "src") {
+              print $(field_index + 1)
+              exit
+            }
+          }
+        }'
+    )"
+  fi
+
+  if [[ -n "$resolved_ip" ]] && is_ipv4_address "$resolved_ip"; then
+    printf '%s\n' "$resolved_ip"
+    return 0
+  fi
+
+  resolved_ip="$(hostname -I 2>/dev/null | awk '{ print $1 }')"
+
+  if [[ -n "$resolved_ip" ]] && is_ipv4_address "$resolved_ip"; then
+    printf '%s\n' "$resolved_ip"
+    return 0
+  fi
+
+  return 1
+}
 
 terminate_existing_processes() {
   local label="$1"
@@ -244,6 +557,7 @@ terminate_existing_processes \
   "${existing_repo_watch_log_pids[@]}"
 
 printf '%s\n' "$$" > "$server_pid_file"
+rm -f "$server_ready_file" "$client_env_file"
 
 # Fail fast when another process already owns the locked local co-op port.
 node \
@@ -275,6 +589,57 @@ node \
   ' \
   "$server_host" \
   "$server_port"
+
+export WEBGPU_METAVERSE_LOCALDEV_READY_FILE="$server_ready_file"
+export WEBGPU_METAVERSE_LOCALDEV_CLIENT_ENV_FILE="$client_env_file"
+
+localdev_webtransport_boot_status=""
+localdev_webtransport_boot_error=""
+webtransport_bind_host="$webtransport_host"
+wsl_networking_mode="$(resolve_localdev_wsl_networking_mode || true)"
+wsl_guest_ipv4=""
+
+if [[ -n "${WSL_DISTRO_NAME:-}" ]] && [[ "$wsl_networking_mode" == "nat" ]]; then
+  wsl_guest_ipv4="$(resolve_localdev_wsl_guest_ipv4_address || true)"
+
+  if [[ -n "$wsl_guest_ipv4" ]]; then
+    webtransport_host="$wsl_guest_ipv4"
+    webtransport_bind_host="0.0.0.0"
+    echo "Using WSL guest IPv4 $webtransport_host for localdev WebTransport because WSL is in nat networking mode."
+  else
+    localdev_webtransport_boot_status="self-check-failed"
+    localdev_webtransport_boot_error="WebGPU Metaverse localdev WebTransport could not resolve the WSL guest IPv4 address while WSL is in nat networking mode."
+  fi
+fi
+
+add_localdev_webtransport_required_subject_alt_name "$webtransport_host"
+
+if ensure_localdev_webtransport_certificate; then
+  webtransport_cert_sha256="$(resolve_localdev_webtransport_cert_sha256)"
+
+  if [[ -n "$localdev_webtransport_boot_status" ]]; then
+    echo "$localdev_webtransport_boot_error Continuing with HTTP-only localdev."
+  elif [[ "$webtransport_cert_sha256" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    export WEBGPU_METAVERSE_LOCALDEV_WEBTRANSPORT_ENABLED="1"
+    export WEBGPU_METAVERSE_LOCALDEV_WEBTRANSPORT_CERT_FILE="$webtransport_cert_file"
+    export WEBGPU_METAVERSE_LOCALDEV_WEBTRANSPORT_KEY_FILE="$webtransport_key_file"
+    export WEBGPU_METAVERSE_LOCALDEV_WEBTRANSPORT_CERT_SHA256="${webtransport_cert_sha256,,}"
+    export WEBGPU_METAVERSE_LOCALDEV_WEBTRANSPORT_CLIENT_HOST="$webtransport_host"
+    export WEBGPU_METAVERSE_LOCALDEV_WEBTRANSPORT_HOST="$webtransport_bind_host"
+    export WEBGPU_METAVERSE_LOCALDEV_WEBTRANSPORT_PORT="$webtransport_port"
+    export WEBGPU_METAVERSE_LOCALDEV_WEBTRANSPORT_SELF_CHECK_HOST="$webtransport_host"
+    export WEBGPU_METAVERSE_LOCALDEV_WEBTRANSPORT_SECRET="$(
+      node --input-type=module --eval "import { randomBytes } from 'node:crypto'; console.log(randomBytes(16).toString('hex'));"
+    )"
+  else
+    echo "OpenSSL returned an invalid WebTransport certificate hash. Continuing with HTTP-only localdev."
+  fi
+fi
+
+if [[ -n "$localdev_webtransport_boot_status" ]]; then
+  export WEBGPU_METAVERSE_LOCALDEV_WEBTRANSPORT_BOOT_STATUS="$localdev_webtransport_boot_status"
+  export WEBGPU_METAVERSE_LOCALDEV_WEBTRANSPORT_BOOT_ERROR="$localdev_webtransport_boot_error"
+fi
 
 # Avoid the workspace build scripts here because they aggressively clean `dist/`
 # trees. Cleaning during dev startup can race an already-running watcher and

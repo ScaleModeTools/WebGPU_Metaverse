@@ -15,6 +15,10 @@ import type {
   MountedVehicleOccupancyAnimationId,
   MountedVehicleSeatRoleId
 } from "../vehicles";
+import type {
+  RealtimeDatagramTransportStatusSnapshot,
+  RealtimeReliableTransportStatusSnapshot
+} from "@/network";
 
 export const metaverseRuntimeLifecycleStates = [
   "idle",
@@ -36,6 +40,19 @@ export type MetaverseRuntimeLifecycleState =
   (typeof metaverseRuntimeLifecycleStates)[number];
 export type MetaversePresenceHudState =
   (typeof metaversePresenceHudStates)[number];
+
+export const metaverseBootPhaseStates = [
+  "idle",
+  "renderer-init",
+  "scene-prewarm",
+  "presence-joining",
+  "world-connecting",
+  "ready",
+  "failed"
+] as const;
+
+export type MetaverseBootPhaseState =
+  (typeof metaverseBootPhaseStates)[number];
 
 export const metaverseCharacterAnimationVocabularyIds = [
   "idle",
@@ -88,6 +105,28 @@ export interface MetaverseRemoteVehiclePresentationSnapshot {
   readonly environmentAssetId: string;
   readonly position: MetaverseVector3Snapshot;
   readonly yawRadians: number;
+}
+
+export interface MetaverseRendererTelemetrySnapshot {
+  readonly active: boolean;
+  readonly devicePixelRatio: number;
+  readonly drawCallCount: number;
+  readonly label: string;
+  readonly triangleCount: number;
+}
+
+export interface MetaverseTelemetrySnapshot {
+  readonly frameDeltaMs: number;
+  readonly frameRate: number;
+  readonly renderedFrameCount: number;
+  readonly renderer: MetaverseRendererTelemetrySnapshot;
+  readonly worldCadence: {
+    readonly authoritativeTickIntervalMs: number | null;
+    readonly localAuthoritativeFreshnessMaxAgeMs: number;
+    readonly maxExtrapolationMs: number;
+    readonly remoteInterpolationDelayMs: number;
+    readonly worldPollIntervalMs: number;
+  };
 }
 
 export interface MetaverseCharacterAnimationClipProofConfig {
@@ -254,6 +293,13 @@ export interface MountedEnvironmentSnapshot {
 }
 
 export interface MetaverseHudSnapshot {
+  readonly boot: {
+    readonly authoritativeWorldConnected: boolean;
+    readonly phase: MetaverseBootPhaseState;
+    readonly presenceJoined: boolean;
+    readonly rendererInitialized: boolean;
+    readonly scenePrewarmed: boolean;
+  };
   readonly camera: MetaverseCameraSnapshot;
   readonly controlMode: MetaverseControlModeId;
   readonly failureReason: string | null;
@@ -267,6 +313,12 @@ export interface MetaverseHudSnapshot {
     readonly lastError: string | null;
     readonly remotePlayerCount: number;
     readonly state: MetaversePresenceHudState;
+  };
+  readonly telemetry: MetaverseTelemetrySnapshot;
+  readonly transport: {
+    readonly presenceReliable: RealtimeReliableTransportStatusSnapshot;
+    readonly worldDriverDatagram: RealtimeDatagramTransportStatusSnapshot;
+    readonly worldReliable: RealtimeReliableTransportStatusSnapshot;
   };
 }
 
@@ -358,6 +410,13 @@ export interface MetaverseRuntimeConfig {
   readonly skiff: {
     readonly accelerationCurveExponent: number;
     readonly accelerationUnitsPerSecondSquared: number;
+    readonly authoritativeCorrection: {
+      readonly grossSnapDistanceThresholdMeters: number;
+      readonly grossSnapYawThresholdRadians: number;
+      readonly routineBlendAlpha: number;
+      readonly routinePositionBlendThresholdMeters: number;
+      readonly routineYawBlendThresholdRadians: number;
+    };
     readonly baseSpeedUnitsPerSecond: number;
     readonly boostCurveExponent: number;
     readonly boostMultiplier: number;

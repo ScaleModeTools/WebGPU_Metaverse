@@ -360,6 +360,7 @@ export class MetaverseTraversalRuntime {
   syncAuthoritativeVehiclePose(
     environmentAssetId: string,
     poseSnapshot: {
+      readonly linearVelocity?: PhysicsVector3Snapshot | null;
       readonly position: PhysicsVector3Snapshot;
       readonly yawRadians: number;
     }
@@ -502,6 +503,7 @@ export class MetaverseTraversalRuntime {
     this.#setLocomotionMode("mounted");
     this.#traversalCameraPitchRadians = this.#cameraSnapshot.pitchRadians;
     this.#mountedVehicleRuntime = new MetaverseVehicleRuntime({
+      authoritativeCorrection: this.#config.skiff.authoritativeCorrection,
       entries: mountableEnvironmentConfig.entries,
       environmentAssetId: mountableEnvironmentConfig.environmentAssetId,
       label: mountableEnvironmentConfig.label,

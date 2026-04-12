@@ -46,6 +46,8 @@ test("createWebTransportHttpFallbackInvoker retries on HTTP after a WebTransport
 
   assert.equal(firstResult, "one:ok");
   assert.equal(secondResult, "two:ok");
+  assert.equal(invoker.hasPrimaryTransportSucceeded, false);
+  assert.equal(invoker.lastFallbackError, "WebTransport stream failed.");
   assert.equal(invoker.usingFallback, true);
   assert.deepEqual(requests, [
     "primary:one",
@@ -79,6 +81,33 @@ test("createWebTransportHttpFallbackInvoker preserves domain errors without swit
     /Unknown metaverse player/
   );
 
+  assert.equal(invoker.hasPrimaryTransportSucceeded, false);
+  assert.equal(invoker.lastFallbackError, null);
   assert.equal(invoker.usingFallback, false);
   assert.deepEqual(requests, ["primary:one"]);
+});
+
+test("createWebTransportHttpFallbackInvoker records successful primary transport use before any fallback", async () => {
+  const { createWebTransportHttpFallbackInvoker } = await clientLoader.load(
+    "/src/network/adapters/webtransport-http-fallback.ts"
+  );
+  const invoker = createWebTransportHttpFallbackInvoker(
+    {
+      async request(label) {
+        return `${label}:primary`;
+      }
+    },
+    {
+      async request(label) {
+        return `${label}:fallback`;
+      }
+    }
+  );
+
+  const result = await invoker.invoke((transport) => transport.request("one"));
+
+  assert.equal(result, "one:primary");
+  assert.equal(invoker.hasPrimaryTransportSucceeded, true);
+  assert.equal(invoker.lastFallbackError, null);
+  assert.equal(invoker.usingFallback, false);
 });

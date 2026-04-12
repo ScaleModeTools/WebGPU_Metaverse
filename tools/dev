@@ -3,8 +3,11 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+local_dev_dir="$repo_root/.local-dev"
+server_pid_file="$local_dev_dir/webgpu-metaverse-dev-server.pid"
 
 cd "$repo_root"
+mkdir -p "$local_dev_dir"
 
 pids=()
 
@@ -20,8 +23,32 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
+wait_for_dev_server_pid() {
+  local server_launcher_pid="$1"
+
+  for _ in {1..100}; do
+    if [[ -f "$server_pid_file" ]]; then
+      return 0
+    fi
+
+    if ! kill -0 "$server_launcher_pid" 2>/dev/null; then
+      return 1
+    fi
+
+    sleep 0.1
+  done
+
+  return 1
+}
+
 npm run dev:server &
-pids+=($!)
+server_launcher_pid="$!"
+pids+=("$server_launcher_pid")
+
+if ! wait_for_dev_server_pid "$server_launcher_pid"; then
+  echo "WebGPU Metaverse dev server did not publish its localdev pid file before client startup."
+  exit 1
+fi
 
 npm run dev:client &
 pids+=($!)
