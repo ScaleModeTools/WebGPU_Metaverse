@@ -7,7 +7,9 @@ import {
   createCoopRoomId,
   createCoopRoomSnapshotEvent,
   createCoopSessionId,
+  createCoopSyncPlayerPresenceCommand,
   createDuckHuntCoopRoomWebTransportCommandRequest,
+  createDuckHuntCoopRoomWebTransportPlayerPresenceDatagram,
   createDuckHuntCoopRoomWebTransportServerEventMessage,
   createDuckHuntCoopRoomWebTransportSnapshotRequest,
   createMetaverseDriverVehicleControlIntentSnapshot,
@@ -21,6 +23,7 @@ import {
   createMetaverseRealtimeWorldSnapshot,
   createMetaverseRealtimeWorldEvent,
   createMetaverseRealtimeWorldWebTransportCommandRequest,
+  createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram,
   createMetaverseRealtimeWorldWebTransportServerEventMessage,
   createMetaverseRealtimeWorldWebTransportSnapshotRequest,
   createMetaverseSessionSnapshot,
@@ -518,4 +521,83 @@ test("webtransport shared contracts wrap presence, world, and Duck Hunt room mes
   assert.equal(coopCommandRequest.type, "coop-room-command-request");
   assert.equal(coopCommandRequest.command.type, "join-room");
   assert.equal(coopSnapshotRequest.type, "coop-room-snapshot-request");
+});
+
+test("webtransport datagram shared contracts wrap latest-wins channels with explicit domain names", () => {
+  const metaversePlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const coopPlayerId = createCoopPlayerId("coop-pilot-1");
+  const coopRoomId = createCoopRoomId("co-op-harbor");
+
+  assert.notEqual(metaversePlayerId, null);
+  assert.notEqual(coopPlayerId, null);
+  assert.notEqual(coopRoomId, null);
+
+  const driverVehicleControlDatagram =
+    createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram({
+      command: createMetaverseSyncDriverVehicleControlCommand({
+        controlIntent: {
+          boost: true,
+          environmentAssetId: " metaverse-hub-skiff-v1 ",
+          moveAxis: 2.5,
+          strafeAxis: -3,
+          yawAxis: 0.75
+        },
+        controlSequence: 8.2,
+        playerId: metaversePlayerId
+      })
+    });
+  const playerPresenceDatagram =
+    createDuckHuntCoopRoomWebTransportPlayerPresenceDatagram({
+      command: createCoopSyncPlayerPresenceCommand({
+        aimDirection: {
+          x: 0,
+          y: 0.2,
+          z: -1
+        },
+        pitchRadians: 0.4,
+        playerId: coopPlayerId,
+        position: {
+          x: 1,
+          y: 1.35,
+          z: 2
+        },
+        roomId: coopRoomId,
+        stateSequence: 5.7,
+        weaponId: " semiautomatic-pistol ",
+        yawRadians: 0.8
+      })
+    });
+
+  assert.equal(
+    driverVehicleControlDatagram.type,
+    "world-driver-vehicle-control-datagram"
+  );
+  assert.equal(
+    driverVehicleControlDatagram.command.type,
+    "sync-driver-vehicle-control"
+  );
+  assert.equal(
+    driverVehicleControlDatagram.command.controlSequence,
+    8
+  );
+  assert.equal(
+    driverVehicleControlDatagram.command.controlIntent.environmentAssetId,
+    "metaverse-hub-skiff-v1"
+  );
+  assert.ok(Object.isFrozen(driverVehicleControlDatagram));
+
+  assert.equal(
+    playerPresenceDatagram.type,
+    "coop-room-player-presence-datagram"
+  );
+  assert.equal(
+    playerPresenceDatagram.command.type,
+    "sync-player-presence"
+  );
+  assert.equal(playerPresenceDatagram.command.stateSequence, 5);
+  assert.equal(
+    playerPresenceDatagram.command.weaponId,
+    "semiautomatic-pistol"
+  );
+  assert.ok(Object.isFrozen(playerPresenceDatagram));
 });

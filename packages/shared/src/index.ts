@@ -165,6 +165,16 @@ export {
   metaverseRealtimeWorldWebTransportClientMessageTypes,
   metaverseRealtimeWorldWebTransportServerMessageTypes
 } from "./metaverse/metaverse-realtime-world-webtransport-contract.js";
+export {
+  createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram,
+  metaverseRealtimeWorldWebTransportClientDatagramTypes
+} from "./metaverse/metaverse-realtime-world-webtransport-datagram-contract.js";
+export type {
+  MetaverseRealtimeWorldWebTransportClientDatagram,
+  MetaverseRealtimeWorldWebTransportClientDatagramType,
+  MetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram,
+  MetaverseRealtimeWorldWebTransportDriverVehicleControlDatagramInput
+} from "./metaverse/metaverse-realtime-world-webtransport-datagram-contract.js";
 export type {
   MetaverseRealtimeWorldWebTransportClientMessage,
   MetaverseRealtimeWorldWebTransportClientMessageType,
@@ -294,6 +304,10 @@ export {
   duckHuntCoopRoomWebTransportClientMessageTypes,
   duckHuntCoopRoomWebTransportServerMessageTypes
 } from "./experiences/duck-hunt/duck-hunt-room-webtransport-contract.js";
+export {
+  createDuckHuntCoopRoomWebTransportPlayerPresenceDatagram,
+  duckHuntCoopRoomWebTransportClientDatagramTypes
+} from "./experiences/duck-hunt/duck-hunt-room-webtransport-datagram-contract.js";
 export type {
   CoopBirdBehaviorState,
   CoopBirdId,
@@ -345,6 +359,12 @@ export type {
   GameplaySessionMode,
   GameplayTickOwner
 } from "./experiences/duck-hunt/duck-hunt-room-contract.js";
+export type {
+  DuckHuntCoopRoomWebTransportClientDatagram,
+  DuckHuntCoopRoomWebTransportClientDatagramType,
+  DuckHuntCoopRoomWebTransportPlayerPresenceDatagram,
+  DuckHuntCoopRoomWebTransportPlayerPresenceDatagramInput
+} from "./experiences/duck-hunt/duck-hunt-room-webtransport-datagram-contract.js";
 export type {
   DuckHuntCoopRoomWebTransportClientMessage,
   DuckHuntCoopRoomWebTransportClientMessageType,

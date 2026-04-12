@@ -1676,6 +1676,78 @@ test("MetaverseRemoteWorldRuntime samples buffered authoritative world snapshots
   assert.equal(fakeWorldClient.disposeCalls, 1);
 });
 
+test("MetaverseRemoteWorldRuntime extrapolates from the latest authoritative snapshot when a newer snapshot is missing", async () => {
+  const { MetaverseRemoteWorldRuntime } = await clientLoader.load(
+    "/src/metaverse/classes/metaverse-remote-world-runtime.ts"
+  );
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const fakeWorldClient = new FakeMetaverseWorldClient([
+    createRealtimeWorldSnapshot({
+      currentTick: 10,
+      localPlayerId,
+      localUsername,
+      remotePlayerId,
+      remotePlayerX: 8,
+      remoteUsername,
+      serverTimeMs: 1_000,
+      snapshotSequence: 1,
+      vehicleX: 8,
+      yawRadians: 0
+    })
+  ]);
+  let currentWallClockMs = 1_000;
+  const remoteWorldRuntime = new MetaverseRemoteWorldRuntime({
+    createMetaverseWorldClient: () => fakeWorldClient,
+    localPlayerIdentity: {
+      characterId: "metaverse-mannequin-v1",
+      playerId: localPlayerId,
+      username: localUsername
+    },
+    onRemoteWorldUpdate() {},
+    readWallClockMs: () => currentWallClockMs,
+    samplingConfig: {
+      clockOffsetCorrectionAlpha: 1,
+      clockOffsetMaxStepMs: 1_000,
+      interpolationDelayMs: 0,
+      maxExtrapolationMs: 120
+    }
+  });
+
+  remoteWorldRuntime.boot();
+  remoteWorldRuntime.sampleRemoteWorld();
+
+  currentWallClockMs = 1_060;
+  remoteWorldRuntime.sampleRemoteWorld();
+
+  assert.equal(remoteWorldRuntime.remoteCharacterPresentations.length, 1);
+  assert.ok(
+    Math.abs(
+      remoteWorldRuntime.remoteCharacterPresentations[0]?.presentation.position.x -
+        9.2
+    ) < 0.000001
+  );
+  assert.equal(remoteWorldRuntime.remoteVehiclePresentations.length, 1);
+  assert.ok(
+    Math.abs(remoteWorldRuntime.remoteVehiclePresentations[0]?.position.x - 9.2) <
+      0.000001
+  );
+  assert.ok(
+    Math.abs(remoteWorldRuntime.remoteVehiclePresentations[0]?.yawRadians - 0.08) <
+      0.000001
+  );
+
+  remoteWorldRuntime.dispose();
+});
+
 test("WebGpuMetaverseRuntime starts authoritative world polling after local presence joins", async () => {
   const [{ WebGpuMetaverseRuntime }, { RapierPhysicsRuntime }] = await Promise.all([
     clientLoader.load("/src/metaverse/classes/webgpu-metaverse-runtime.ts"),

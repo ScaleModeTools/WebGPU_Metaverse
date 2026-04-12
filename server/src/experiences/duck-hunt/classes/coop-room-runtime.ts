@@ -87,6 +87,7 @@ interface CoopPlayerRuntimeState {
   connected: boolean;
   hitsLanded: number;
   lastAcknowledgedShotSequence: number;
+  lastAcceptedPresenceSequence: number;
   lastHitBirdId: CoopBirdId | null;
   lastOutcome: CoopPlayerShotOutcomeState | null;
   lastPresenceTick: number | null;
@@ -107,6 +108,20 @@ interface CoopPlayerRuntimeState {
   aimDirectionX: number;
   aimDirectionY: number;
   aimDirectionZ: number;
+  pendingPresence: PendingCoopPlayerPresenceRuntimeState | null;
+}
+
+interface PendingCoopPlayerPresenceRuntimeState {
+  readonly aimDirectionX: number;
+  readonly aimDirectionY: number;
+  readonly aimDirectionZ: number;
+  readonly pitchRadians: number;
+  readonly positionX: number;
+  readonly positionY: number;
+  readonly positionZ: number;
+  readonly stateSequence: number;
+  readonly weaponId: string;
+  readonly yawRadians: number;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -662,6 +677,7 @@ export class CoopRoomRuntime {
       connected: true,
       hitsLanded: 0,
       lastAcknowledgedShotSequence: 0,
+      lastAcceptedPresenceSequence: 0,
       lastHitBirdId: null,
       lastOutcome: null,
       lastPresenceSequence: 0,
@@ -679,7 +695,8 @@ export class CoopRoomRuntime {
       shotsFired: 0,
       username: command.username,
       weaponId: "semiautomatic-pistol",
-      yawRadians: 0
+      yawRadians: 0,
+      pendingPresence: null
     });
 
     if (this.#leaderPlayerId === null) {
@@ -812,21 +829,23 @@ export class CoopRoomRuntime {
       throw new Error(`Unknown co-op player: ${command.playerId}`);
     }
 
-    if (command.stateSequence <= playerState.lastPresenceSequence) {
+    if (command.stateSequence <= playerState.lastAcceptedPresenceSequence) {
       return;
     }
 
-    playerState.aimDirectionX = command.aimDirection.x;
-    playerState.aimDirectionY = command.aimDirection.y;
-    playerState.aimDirectionZ = command.aimDirection.z;
-    playerState.lastPresenceSequence = command.stateSequence;
-    playerState.lastPresenceTick = this.#tick;
-    playerState.pitchRadians = command.pitchRadians;
-    playerState.positionX = command.position.x;
-    playerState.positionY = command.position.y;
-    playerState.positionZ = command.position.z;
-    playerState.weaponId = command.weaponId;
-    playerState.yawRadians = command.yawRadians;
+    playerState.lastAcceptedPresenceSequence = command.stateSequence;
+    playerState.pendingPresence = Object.freeze({
+      aimDirectionX: command.aimDirection.x,
+      aimDirectionY: command.aimDirection.y,
+      aimDirectionZ: command.aimDirection.z,
+      pitchRadians: command.pitchRadians,
+      positionX: command.position.x,
+      positionY: command.position.y,
+      positionZ: command.position.z,
+      stateSequence: command.stateSequence,
+      weaponId: command.weaponId,
+      yawRadians: command.yawRadians
+    });
   }
 
   #dropPendingShotsForPlayer(playerId: CoopPlayerId): void {
@@ -847,6 +866,7 @@ export class CoopRoomRuntime {
 
   #advanceOneTick(): void {
     this.#tick += 1;
+    this.#applyPendingPlayerPresenceUpdates();
 
     if (this.#phase !== "active") {
       return;
@@ -968,6 +988,29 @@ export class CoopRoomRuntime {
         this.#roundPlan.reticleScatterRadius,
         false
       );
+    }
+  }
+
+  #applyPendingPlayerPresenceUpdates(): void {
+    for (const playerState of this.#playerStates.values()) {
+      const pendingPresence = playerState.pendingPresence;
+
+      if (pendingPresence === null) {
+        continue;
+      }
+
+      playerState.aimDirectionX = pendingPresence.aimDirectionX;
+      playerState.aimDirectionY = pendingPresence.aimDirectionY;
+      playerState.aimDirectionZ = pendingPresence.aimDirectionZ;
+      playerState.lastPresenceSequence = pendingPresence.stateSequence;
+      playerState.lastPresenceTick = this.#tick;
+      playerState.pitchRadians = pendingPresence.pitchRadians;
+      playerState.positionX = pendingPresence.positionX;
+      playerState.positionY = pendingPresence.positionY;
+      playerState.positionZ = pendingPresence.positionZ;
+      playerState.weaponId = pendingPresence.weaponId;
+      playerState.yawRadians = pendingPresence.yawRadians;
+      playerState.pendingPresence = null;
     }
   }
 

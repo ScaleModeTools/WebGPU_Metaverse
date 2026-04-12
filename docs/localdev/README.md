@@ -23,7 +23,10 @@ Use one document role at a time:
 
 ## Plan
 
-- `metaverse-next-push-plan.md`
+- `metaverse-smooth-motion-plan.md`
+- `metaverse-webtransport-networking-plan.md`
+- `metaverse-webtransport-datagram-plan.md`
+- `metaverse-vehicle-seat-foundation-plan.md`
 
 ## Completed Slice Records
 

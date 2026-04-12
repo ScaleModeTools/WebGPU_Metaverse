@@ -1,9 +1,12 @@
 export { createCoopRoomHttpTransport } from "./adapters/coop-room-http-transport";
 export { createCoopRoomWebTransportTransport } from "./adapters/coop-room-webtransport-transport";
+export { createDuckHuntCoopRoomPlayerPresenceWebTransportDatagramTransport } from "./adapters/duck-hunt-coop-room-player-presence-webtransport-datagram-transport";
 export { createMetaversePresenceHttpTransport } from "./adapters/metaverse-presence-http-transport";
 export { createMetaversePresenceWebTransportTransport } from "./adapters/metaverse-presence-webtransport-transport";
+export { createMetaverseRealtimeWorldDriverVehicleControlWebTransportDatagramTransport } from "./adapters/metaverse-realtime-world-driver-vehicle-control-webtransport-datagram-transport";
 export { createMetaverseWorldHttpTransport } from "./adapters/metaverse-world-http-transport";
 export { createMetaverseWorldWebTransportTransport } from "./adapters/metaverse-world-webtransport-transport";
+export { LatestWinsWebTransportJsonDatagramChannel } from "./adapters/latest-wins-webtransport-json-datagram-channel";
 export { ReliableWebTransportJsonRequestChannel } from "./adapters/reliable-webtransport-json-request-channel";
 export { AuthoritativeServerClock } from "./classes/authoritative-server-clock";
 export { CoopRoomClient } from "./classes/coop-room-client";
@@ -29,6 +32,9 @@ export type {
 } from "./types/coop-room-client";
 export type { CoopRoomTransport } from "./types/coop-room-transport";
 export type {
+  DuckHuntCoopRoomPlayerPresenceDatagramTransport
+} from "./types/duck-hunt-coop-room-player-presence-datagram-transport";
+export type {
   AuthoritativeServerClockConfig
 } from "./types/authoritative-server-clock";
 export type {
@@ -39,6 +45,9 @@ export type {
   MetaversePresenceSnapshotStore
 } from "./types/metaverse-presence-client";
 export type { MetaversePresenceTransport } from "./types/metaverse-presence-transport";
+export type {
+  MetaverseRealtimeWorldDriverVehicleControlDatagramTransport
+} from "./types/metaverse-realtime-world-driver-vehicle-control-datagram-transport";
 export type {
   MetaverseWorldClientConfig,
   MetaverseWorldClientState,

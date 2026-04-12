@@ -182,6 +182,24 @@
       ]
     },
     {
+      "ownerPath": "client/src/network/adapters/latest-wins-webtransport-json-datagram-channel.ts",
+      "testPaths": [
+        "tests/runtime/client/latest-wins-webtransport-json-datagram-channel.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/network/adapters/metaverse-realtime-world-driver-vehicle-control-webtransport-datagram-transport.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse-realtime-world-driver-vehicle-control-webtransport-datagram-transport.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/network/adapters/duck-hunt-coop-room-player-presence-webtransport-datagram-transport.ts",
+      "testPaths": [
+        "tests/runtime/client/duck-hunt-coop-room-player-presence-webtransport-datagram-transport.runtime.test.mjs"
+      ]
+    },
+    {
       "ownerPath": "client/src/network/classes/coop-room-directory-client.ts",
       "testPaths": [
         "tests/runtime/client/coop-room-directory-client.runtime.test.mjs"
@@ -209,6 +227,12 @@
       "ownerPath": "server/src/experiences/duck-hunt/adapters/duck-hunt-coop-room-webtransport-adapter.ts",
       "testPaths": [
         "tests/runtime/server/duck-hunt-coop-room-webtransport-adapter.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/experiences/duck-hunt/adapters/duck-hunt-coop-room-webtransport-datagram-adapter.ts",
+      "testPaths": [
+        "tests/runtime/server/duck-hunt-coop-room-webtransport-datagram-adapter.test.mjs"
       ]
     },
     {
@@ -251,6 +275,12 @@
       "ownerPath": "server/src/metaverse/adapters/metaverse-world-webtransport-adapter.ts",
       "testPaths": [
         "tests/runtime/server/metaverse-world-webtransport-adapter.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/adapters/metaverse-realtime-world-webtransport-datagram-adapter.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse-realtime-world-webtransport-datagram-adapter.test.mjs"
       ]
     },
     {

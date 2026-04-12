@@ -465,6 +465,174 @@ test("CoopRoomRuntime keeps tracked-reticle scatter moving in one direction unti
   );
 });
 
+test("CoopRoomRuntime applies accepted player presence only on ticks and coalesces the newest update per tick", () => {
+  const runtime = new CoopRoomRuntime(createRuntimeConfig());
+  const roomId = runtime.roomId;
+  const playerId = requireValue(createCoopPlayerId("player-presence"), "playerId");
+
+  runtime.acceptCommand(
+    createCoopJoinRoomCommand({
+      playerId,
+      ready: true,
+      roomId,
+      username: requireValue(createUsername("foxtrot"), "username")
+    }),
+    0
+  );
+
+  const firstPresenceEvent = runtime.acceptCommand(
+    createCoopSyncPlayerPresenceCommand({
+      aimDirection: {
+        x: 0.1,
+        y: 0,
+        z: -1
+      },
+      pitchRadians: 0.1,
+      playerId,
+      position: {
+        x: 1,
+        y: 1.4,
+        z: -1
+      },
+      roomId,
+      stateSequence: 1,
+      weaponId: "semiautomatic-pistol",
+      yawRadians: 0.2
+    }),
+    20
+  );
+  const secondPresenceEvent = runtime.acceptCommand(
+    createCoopSyncPlayerPresenceCommand({
+      aimDirection: {
+        x: 0.2,
+        y: 0.1,
+        z: -1
+      },
+      pitchRadians: 0.2,
+      playerId,
+      position: {
+        x: 2,
+        y: 1.5,
+        z: -2
+      },
+      roomId,
+      stateSequence: 2,
+      weaponId: "semiautomatic-pistol",
+      yawRadians: 0.4
+    }),
+    30
+  );
+
+  assert.equal(firstPresenceEvent.room.players[0]?.presence.position.x, 0);
+  assert.equal(firstPresenceEvent.room.players[0]?.presence.stateSequence, 0);
+  assert.equal(secondPresenceEvent.room.players[0]?.presence.position.x, 0);
+  assert.equal(secondPresenceEvent.room.players[0]?.presence.stateSequence, 0);
+
+  const tickSnapshot = runtime.advanceTo(50);
+
+  assert.equal(tickSnapshot.tick.currentTick, 1);
+  assert.equal(tickSnapshot.players[0]?.presence.position.x, 2);
+  assert.equal(tickSnapshot.players[0]?.presence.position.y, 1.5);
+  assert.equal(tickSnapshot.players[0]?.presence.position.z, -2);
+  assert.equal(tickSnapshot.players[0]?.presence.stateSequence, 2);
+  assert.equal(tickSnapshot.players[0]?.presence.lastUpdatedTick, 1);
+});
+
+test("CoopRoomRuntime rejects duplicate and stale player presence updates after a newer sequence is accepted", () => {
+  const runtime = new CoopRoomRuntime(createRuntimeConfig());
+  const roomId = runtime.roomId;
+  const playerId = requireValue(
+    createCoopPlayerId("player-presence-stale"),
+    "playerId"
+  );
+
+  runtime.acceptCommand(
+    createCoopJoinRoomCommand({
+      playerId,
+      ready: true,
+      roomId,
+      username: requireValue(createUsername("golf"), "username")
+    }),
+    0
+  );
+  runtime.acceptCommand(
+    createCoopSyncPlayerPresenceCommand({
+      aimDirection: {
+        x: 0.2,
+        y: 0.1,
+        z: -1
+      },
+      pitchRadians: 0.2,
+      playerId,
+      position: {
+        x: 2,
+        y: 1.5,
+        z: -2
+      },
+      roomId,
+      stateSequence: 2,
+      weaponId: "semiautomatic-pistol",
+      yawRadians: 0.4
+    }),
+    20
+  );
+
+  const firstAppliedSnapshot = runtime.advanceTo(50);
+
+  runtime.acceptCommand(
+    createCoopSyncPlayerPresenceCommand({
+      aimDirection: {
+        x: -0.2,
+        y: -0.1,
+        z: -1
+      },
+      pitchRadians: -0.2,
+      playerId,
+      position: {
+        x: -2,
+        y: 0.9,
+        z: 2
+      },
+      roomId,
+      stateSequence: 2,
+      weaponId: "semiautomatic-pistol",
+      yawRadians: -0.4
+    }),
+    60
+  );
+  runtime.acceptCommand(
+    createCoopSyncPlayerPresenceCommand({
+      aimDirection: {
+        x: -0.1,
+        y: 0,
+        z: -1
+      },
+      pitchRadians: -0.1,
+      playerId,
+      position: {
+        x: -1,
+        y: 1.1,
+        z: 1
+      },
+      roomId,
+      stateSequence: 1,
+      weaponId: "semiautomatic-pistol",
+      yawRadians: -0.2
+    }),
+    70
+  );
+
+  const staleRejectedSnapshot = runtime.advanceTo(100);
+
+  assert.equal(firstAppliedSnapshot.players[0]?.presence.position.x, 2);
+  assert.equal(firstAppliedSnapshot.players[0]?.presence.stateSequence, 2);
+  assert.equal(staleRejectedSnapshot.players[0]?.presence.position.x, 2);
+  assert.equal(staleRejectedSnapshot.players[0]?.presence.position.y, 1.5);
+  assert.equal(staleRejectedSnapshot.players[0]?.presence.position.z, -2);
+  assert.equal(staleRejectedSnapshot.players[0]?.presence.stateSequence, 2);
+  assert.equal(staleRejectedSnapshot.players[0]?.presence.lastUpdatedTick, 1);
+});
+
 test("CoopRoomRuntime blocks non-ready observers from affecting an active session", () => {
   const runtime = new CoopRoomRuntime(
     createRuntimeConfig({

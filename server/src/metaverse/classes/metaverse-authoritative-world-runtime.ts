@@ -608,7 +608,7 @@ export class MetaverseAuthoritativeWorldRuntime {
 
     if (
       existingControlState !== undefined &&
-      normalizedCommand.controlSequence < existingControlState.controlSequence
+      normalizedCommand.controlSequence <= existingControlState.controlSequence
     ) {
       return;
     }

@@ -15,6 +15,8 @@ import type {
   CalibrationAnchorId,
   CoopBirdBehaviorState,
   CoopRoomClientCommand,
+  DuckHuntCoopRoomWebTransportClientDatagram,
+  DuckHuntCoopRoomWebTransportClientDatagramType,
   DuckHuntCoopRoomWebTransportClientMessage,
   DuckHuntCoopRoomWebTransportServerMessage,
   CoopRoomDirectorySnapshot,
@@ -36,6 +38,8 @@ import type {
   MetaverseDriverVehicleControlIntentSnapshot,
   MetaverseRealtimeMountedOccupancySnapshot,
   MetaverseRealtimeWorldClientCommand,
+  MetaverseRealtimeWorldWebTransportClientDatagram,
+  MetaverseRealtimeWorldWebTransportClientDatagramType,
   MetaverseRealtimeWorldWebTransportClientMessage,
   MetaverseRealtimeWorldWebTransportServerMessage,
   MetaverseRealtimeVehicleSeatSnapshot,
@@ -247,6 +251,18 @@ type MetaverseRealtimeWorldWebTransportServerMessageWrapsWorldEvent = AssertTrue
     "world-snapshot"
   >
 >;
+type MetaverseRealtimeWorldWebTransportDatagramTypeMatches = AssertTrue<
+  IsEqual<
+    MetaverseRealtimeWorldWebTransportClientDatagramType,
+    "world-driver-vehicle-control-datagram"
+  >
+>;
+type MetaverseRealtimeWorldWebTransportDatagramWrapsDriverControl = AssertTrue<
+  IsEqual<
+    MetaverseRealtimeWorldWebTransportClientDatagram["command"]["type"],
+    "sync-driver-vehicle-control"
+  >
+>;
 type MetaverseSessionUsesExperienceId = AssertTrue<
   IsEqual<MetaverseSessionSnapshot["activeExperienceId"], ExperienceId | null>
 >;
@@ -321,6 +337,18 @@ type DuckHuntCoopRoomWebTransportServerMessageWrapsRoomEvent = AssertTrue<
       }
     >["event"]["type"],
     "room-snapshot"
+  >
+>;
+type DuckHuntCoopRoomWebTransportDatagramTypeMatches = AssertTrue<
+  IsEqual<
+    DuckHuntCoopRoomWebTransportClientDatagramType,
+    "coop-room-player-presence-datagram"
+  >
+>;
+type DuckHuntCoopRoomWebTransportDatagramWrapsPlayerPresence = AssertTrue<
+  IsEqual<
+    DuckHuntCoopRoomWebTransportClientDatagram["command"]["type"],
+    "sync-player-presence"
   >
 >;
 type CoopRoomDirectoryServiceMatches = AssertTrue<

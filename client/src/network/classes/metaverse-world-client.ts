@@ -11,6 +11,7 @@ import {
 } from "@webgpu-metaverse/shared";
 
 import { createMetaverseWorldHttpTransport } from "../adapters/metaverse-world-http-transport";
+import type { MetaverseRealtimeWorldDriverVehicleControlDatagramTransport } from "../types/metaverse-realtime-world-driver-vehicle-control-datagram-transport";
 import type {
   MetaverseWorldClientConfig,
   MetaverseWorldClientStatusSnapshot
@@ -19,6 +20,7 @@ import type { MetaverseWorldTransport } from "../types/metaverse-world-transport
 
 interface MetaverseWorldClientDependencies {
   readonly clearTimeout?: typeof globalThis.clearTimeout;
+  readonly driverVehicleControlDatagramTransport?: MetaverseRealtimeWorldDriverVehicleControlDatagramTransport;
   readonly fetch?: typeof globalThis.fetch;
   readonly setTimeout?: typeof globalThis.setTimeout;
   readonly transport?: MetaverseWorldTransport;
@@ -84,6 +86,7 @@ function clampBufferedSnapshotCount(rawValue: number): number {
 export class MetaverseWorldClient {
   readonly #clearTimeout: typeof globalThis.clearTimeout;
   readonly #config: MetaverseWorldClientConfig;
+  readonly #driverVehicleControlDatagramTransport: MetaverseRealtimeWorldDriverVehicleControlDatagramTransport | null;
   readonly #maxBufferedSnapshots: number;
   readonly #setTimeout: typeof globalThis.setTimeout;
   readonly #transport: MetaverseWorldTransport;
@@ -100,6 +103,7 @@ export class MetaverseWorldClient {
   #playerId: MetaversePlayerId | null = null;
   #pollHandle: TimeoutHandle | null = null;
   #statusSnapshot: MetaverseWorldClientStatusSnapshot;
+  #useReliableDriverVehicleControlFallback = false;
   #worldSnapshotBuffer: readonly MetaverseRealtimeWorldSnapshot[] =
     Object.freeze([]);
 
@@ -108,6 +112,8 @@ export class MetaverseWorldClient {
     dependencies: MetaverseWorldClientDependencies = {}
   ) {
     this.#config = config;
+    this.#driverVehicleControlDatagramTransport =
+      dependencies.driverVehicleControlDatagramTransport ?? null;
     this.#maxBufferedSnapshots = clampBufferedSnapshotCount(
       config.maxBufferedSnapshots
     );
@@ -141,6 +147,13 @@ export class MetaverseWorldClient {
 
   get worldSnapshotBuffer(): readonly MetaverseRealtimeWorldSnapshot[] {
     return this.#worldSnapshotBuffer;
+  }
+
+  get supportsDriverVehicleControlDatagrams(): boolean {
+    return (
+      this.#driverVehicleControlDatagramTransport !== null &&
+      !this.#useReliableDriverVehicleControlFallback
+    );
   }
 
   subscribeUpdates(listener: () => void): () => void {
@@ -260,6 +273,7 @@ export class MetaverseWorldClient {
       null
     );
     this.#notifyUpdates();
+    this.#driverVehicleControlDatagramTransport?.dispose?.();
     this.#transport.dispose?.();
   }
 
@@ -430,7 +444,12 @@ export class MetaverseWorldClient {
     this.#commandSyncInFlight = true;
 
     try {
-      this.#applyWorldEvent(await this.#transport.sendCommand(pendingCommand));
+      const worldEvent =
+        await this.#sendDriverVehicleControlCommand(pendingCommand);
+
+      if (worldEvent !== null) {
+        this.#applyWorldEvent(worldEvent);
+      }
     } catch (error) {
       this.#applyWorldAccessError(error, "Metaverse world command failed.");
     } finally {
@@ -443,6 +462,27 @@ export class MetaverseWorldClient {
       ) {
         this.#scheduleCommandSync(0);
       }
+    }
+  }
+
+  async #sendDriverVehicleControlCommand(
+    command: PendingDriverVehicleControlCommand
+  ): Promise<MetaverseRealtimeWorldEvent | null> {
+    if (
+      this.#driverVehicleControlDatagramTransport === null ||
+      this.#useReliableDriverVehicleControlFallback
+    ) {
+      return this.#transport.sendCommand(command);
+    }
+
+    try {
+      await this.#driverVehicleControlDatagramTransport.sendDriverVehicleControlDatagram(
+        command
+      );
+      return null;
+    } catch {
+      this.#useReliableDriverVehicleControlFallback = true;
+      return this.#transport.sendCommand(command);
     }
   }
 

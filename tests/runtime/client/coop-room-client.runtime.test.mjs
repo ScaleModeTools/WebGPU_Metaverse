@@ -6,6 +6,7 @@ import {
   createCoopRoomId,
   createCoopRoomSnapshotEvent,
   createCoopSessionId,
+  createCoopSyncPlayerPresenceCommand,
   createMilliseconds,
   createUsername
 } from "@webgpu-metaverse/shared";
@@ -279,6 +280,302 @@ test("CoopRoomClient joins, polls shared snapshots, and posts fire-shot commands
   assert.equal(requests[5]?.type, "command");
   assert.equal(requests[5]?.command?.type, "leave-room");
   assert.equal(requests[5]?.options?.deliveryHint, "best-effort-disconnect");
+});
+
+test("CoopRoomClient exposes Duck Hunt player-presence datagram support as a separate seam", async () => {
+  const { CoopRoomClient } = await clientLoader.load("/src/network/index.ts");
+  const roomId = createCoopRoomId("co-op-harbor");
+  const sessionId = createCoopSessionId("co-op-harbor-session-1");
+  const playerId = createCoopPlayerId("coop-player-1");
+
+  assert.notEqual(roomId, null);
+  assert.notEqual(sessionId, null);
+  assert.notEqual(playerId, null);
+
+  let datagramTransportDisposed = false;
+  const roomClient = new CoopRoomClient(
+    {
+      defaultPollIntervalMs: createMilliseconds(75),
+      roomCollectionPath: "/experiences/duck-hunt/coop/rooms",
+      roomId,
+      serverOrigin: "http://127.0.0.1:3210"
+    },
+    {
+      playerPresenceDatagramTransport: {
+        async sendPlayerPresenceDatagram() {},
+        dispose() {
+          datagramTransportDisposed = true;
+        }
+      },
+      transport: {
+        async pollRoomSnapshot() {
+          return createRoomSnapshotEvent({
+            playerId,
+            roomId,
+            sessionId,
+            tick: 0
+          });
+        },
+        async sendCommand() {
+          return createRoomSnapshotEvent({
+            playerId,
+            roomId,
+            sessionId,
+            tick: 0
+          });
+        }
+      }
+    }
+  );
+
+  assert.equal(roomClient.supportsCoopPlayerPresenceDatagrams, true);
+
+  roomClient.dispose();
+  await flushAsyncWork();
+
+  assert.equal(datagramTransportDisposed, true);
+});
+
+test("CoopRoomClient prefers player-presence datagrams over reliable command transport when available", async () => {
+  const { CoopRoomClient } = await clientLoader.load("/src/network/index.ts");
+  const roomId = createCoopRoomId("co-op-harbor");
+  const sessionId = createCoopSessionId("co-op-harbor-session-1");
+  const playerId = createCoopPlayerId("coop-player-1");
+  const username = createUsername("coop-user");
+
+  assert.notEqual(roomId, null);
+  assert.notEqual(sessionId, null);
+  assert.notEqual(playerId, null);
+  assert.notEqual(username, null);
+
+  const scheduledTasks = [];
+  const sentCommands = [];
+  const sentDatagrams = [];
+  const roomClient = new CoopRoomClient(
+    {
+      defaultPollIntervalMs: createMilliseconds(75),
+      roomCollectionPath: "/experiences/duck-hunt/coop/rooms",
+      roomId,
+      serverOrigin: "http://127.0.0.1:3210"
+    },
+    {
+      playerPresenceDatagramTransport: {
+        async sendPlayerPresenceDatagram(command) {
+          sentDatagrams.push(command);
+        }
+      },
+      transport: {
+        async pollRoomSnapshot() {
+          return createRoomSnapshotEvent({
+            playerId,
+            roomId,
+            sessionId,
+            tick: 0
+          });
+        },
+        async sendCommand(command) {
+          sentCommands.push(command);
+          return createRoomSnapshotEvent({
+            playerId,
+            roomId,
+            sessionId,
+            tick: 0
+          });
+        }
+      },
+      setTimeout(callback, delay) {
+        scheduledTasks.push({
+          callback,
+          delay
+        });
+        return scheduledTasks.length;
+      },
+      clearTimeout() {}
+    }
+  );
+
+  await roomClient.ensureJoined({
+    playerId,
+    ready: true,
+    username
+  });
+
+  roomClient.syncPlayerPresence({
+    aimDirection: {
+      x: 0,
+      y: 0,
+      z: -1
+    },
+    pitchRadians: 0,
+    position: {
+      x: 0,
+      y: 1.35,
+      z: 0
+    },
+    weaponId: "semiautomatic-pistol",
+    yawRadians: 0
+  });
+  roomClient.syncPlayerPresence({
+    aimDirection: {
+      x: 0.1,
+      y: 0.2,
+      z: -1
+    },
+    pitchRadians: 0.2,
+    position: {
+      x: 1,
+      y: 1.5,
+      z: -2
+    },
+    weaponId: "semiautomatic-pistol",
+    yawRadians: 0.4
+  });
+
+  assert.equal(scheduledTasks.at(-1)?.delay, 50);
+
+  scheduledTasks.pop()?.callback();
+  await flushAsyncWork();
+
+  assert.equal(sentDatagrams.length, 1);
+  assert.equal(sentCommands.length, 1);
+  assert.equal(sentCommands[0]?.type, "join-room");
+  assert.equal(roomClient.roomSnapshot?.tick.currentTick, 0);
+  assert.equal(roomClient.roomSnapshot?.players[0]?.presence.position.x, 0);
+  assert.equal(roomClient.roomSnapshot?.players[0]?.presence.stateSequence, 0);
+  assert.deepEqual(
+    sentDatagrams[0],
+    createCoopSyncPlayerPresenceCommand({
+      aimDirection: {
+        x: 0.1,
+        y: 0.2,
+        z: -1
+      },
+      pitchRadians: 0.2,
+      playerId,
+      position: {
+        x: 1,
+        y: 1.5,
+        z: -2
+      },
+      roomId,
+      stateSequence: 2,
+      weaponId: "semiautomatic-pistol",
+      yawRadians: 0.4
+    })
+  );
+});
+
+test("CoopRoomClient falls back to reliable commands after a player-presence datagram send failure", async () => {
+  const { CoopRoomClient } = await clientLoader.load("/src/network/index.ts");
+  const roomId = createCoopRoomId("co-op-harbor");
+  const sessionId = createCoopSessionId("co-op-harbor-session-1");
+  const playerId = createCoopPlayerId("coop-player-1");
+  const username = createUsername("coop-user");
+
+  assert.notEqual(roomId, null);
+  assert.notEqual(sessionId, null);
+  assert.notEqual(playerId, null);
+  assert.notEqual(username, null);
+
+  const scheduledTasks = [];
+  const sentCommands = [];
+  const sentDatagrams = [];
+  const roomClient = new CoopRoomClient(
+    {
+      defaultPollIntervalMs: createMilliseconds(75),
+      roomCollectionPath: "/experiences/duck-hunt/coop/rooms",
+      roomId,
+      serverOrigin: "http://127.0.0.1:3210"
+    },
+    {
+      playerPresenceDatagramTransport: {
+        async sendPlayerPresenceDatagram(command) {
+          sentDatagrams.push(command);
+          throw new Error("Datagram transport unavailable.");
+        }
+      },
+      transport: {
+        async pollRoomSnapshot() {
+          return createRoomSnapshotEvent({
+            playerId,
+            roomId,
+            sessionId,
+            tick: 0
+          });
+        },
+        async sendCommand(command) {
+          sentCommands.push(command);
+          return createRoomSnapshotEvent({
+            playerId,
+            roomId,
+            sessionId,
+            tick: 0
+          });
+        }
+      },
+      setTimeout(callback, delay) {
+        scheduledTasks.push({
+          callback,
+          delay
+        });
+        return scheduledTasks.length;
+      },
+      clearTimeout() {}
+    }
+  );
+
+  await roomClient.ensureJoined({
+    playerId,
+    ready: true,
+    username
+  });
+
+  roomClient.syncPlayerPresence({
+    aimDirection: {
+      x: 0.1,
+      y: 0.2,
+      z: -1
+    },
+    pitchRadians: 0.2,
+    position: {
+      x: 1,
+      y: 1.5,
+      z: -2
+    },
+    weaponId: "semiautomatic-pistol",
+    yawRadians: 0.4
+  });
+
+  scheduledTasks.pop()?.callback();
+  await flushAsyncWork();
+
+  roomClient.syncPlayerPresence({
+    aimDirection: {
+      x: 0,
+      y: 0,
+      z: -1
+    },
+    pitchRadians: 0,
+    position: {
+      x: 0,
+      y: 1.35,
+      z: 0
+    },
+    weaponId: "semiautomatic-pistol",
+    yawRadians: 0
+  });
+
+  scheduledTasks.pop()?.callback();
+  await flushAsyncWork();
+
+  assert.equal(sentDatagrams.length, 1);
+  assert.equal(sentCommands.length, 3);
+  assert.equal(sentCommands[1]?.type, "sync-player-presence");
+  assert.equal(sentCommands[2]?.type, "sync-player-presence");
+  assert.equal(roomClient.supportsCoopPlayerPresenceDatagrams, false);
+  assert.equal(roomClient.roomSnapshot?.tick.currentTick, 0);
+  assert.equal(roomClient.roomSnapshot?.players[0]?.presence.position.x, 0);
+  assert.equal(roomClient.roomSnapshot?.players[0]?.presence.stateSequence, 0);
 });
 
 test("CoopRoomClient posts leader kick-player commands", async () => {

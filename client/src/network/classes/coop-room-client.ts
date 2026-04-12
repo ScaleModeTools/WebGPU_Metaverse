@@ -22,12 +22,14 @@ import type {
   CoopRoomClientStatusSnapshot,
   CoopRoomJoinRequest
 } from "../types/coop-room-client";
+import type { DuckHuntCoopRoomPlayerPresenceDatagramTransport } from "../types/duck-hunt-coop-room-player-presence-datagram-transport";
 import type { CoopRoomTransport } from "../types/coop-room-transport";
 import type { NetworkCommandTransportOptions } from "../types/transport-command-options";
 
 interface CoopRoomClientDependencies {
   readonly clearTimeout?: typeof globalThis.clearTimeout;
   readonly fetch?: typeof globalThis.fetch;
+  readonly playerPresenceDatagramTransport?: DuckHuntCoopRoomPlayerPresenceDatagramTransport;
   readonly setTimeout?: typeof globalThis.setTimeout;
   readonly transport?: CoopRoomTransport;
 }
@@ -157,6 +159,7 @@ function isNewerRoomSession(
 export class CoopRoomClient {
   readonly #clearTimeout: typeof globalThis.clearTimeout;
   readonly #config: CoopRoomClientConfig;
+  readonly #playerPresenceDatagramTransport: DuckHuntCoopRoomPlayerPresenceDatagramTransport | null;
   readonly #setTimeout: typeof globalThis.setTimeout;
   readonly #transport: CoopRoomTransport;
   readonly #updateListeners = new Set<() => void>();
@@ -171,12 +174,15 @@ export class CoopRoomClient {
   #pollHandle: TimeoutHandle | null = null;
   #roomSnapshot: CoopRoomSnapshot | null = null;
   #statusSnapshot: CoopRoomClientStatusSnapshot;
+  #useReliablePlayerPresenceFallback = false;
 
   constructor(
     config: CoopRoomClientConfig,
     dependencies: CoopRoomClientDependencies = {}
   ) {
     this.#config = config;
+    this.#playerPresenceDatagramTransport =
+      dependencies.playerPresenceDatagramTransport ?? null;
     this.#setTimeout = dependencies.setTimeout ?? globalThis.setTimeout.bind(globalThis);
     this.#clearTimeout =
       dependencies.clearTimeout ?? globalThis.clearTimeout.bind(globalThis);
@@ -210,6 +216,13 @@ export class CoopRoomClient {
 
   get statusSnapshot(): CoopRoomClientStatusSnapshot {
     return this.#statusSnapshot;
+  }
+
+  get supportsCoopPlayerPresenceDatagrams(): boolean {
+    return (
+      this.#playerPresenceDatagramTransport !== null &&
+      !this.#useReliablePlayerPresenceFallback
+    );
   }
 
   subscribeUpdates(listener: () => void): () => void {
@@ -406,6 +419,7 @@ export class CoopRoomClient {
       null
     );
     this.#notifyUpdates();
+    this.#playerPresenceDatagramTransport?.dispose?.();
 
     if (playerIdToLeave !== null) {
       void this.#postLeaveRoomDuringDispose(playerIdToLeave);
@@ -565,7 +579,7 @@ export class CoopRoomClient {
     this.#playerPresenceSyncInFlight = true;
 
     try {
-      const serverEvent = await this.#postCommand(
+      const serverEvent = await this.#sendPlayerPresenceUpdate(
         createCoopSyncPlayerPresenceCommand({
           ...pendingUpdate,
           weaponId: pendingUpdate.weaponId ?? "semiautomatic-pistol",
@@ -574,7 +588,9 @@ export class CoopRoomClient {
         })
       );
 
-      this.#applyServerEvent(serverEvent);
+      if (serverEvent !== null) {
+        this.#applyServerEvent(serverEvent);
+      }
     } catch (error) {
       this.#setError(
         error instanceof Error
@@ -587,6 +603,27 @@ export class CoopRoomClient {
       if (this.#pendingPlayerPresenceUpdate !== null && !this.#isDisposed()) {
         this.#schedulePlayerPresenceSync(this.#resolvePollDelayMs());
       }
+    }
+  }
+
+  async #sendPlayerPresenceUpdate(
+    command: ReturnType<typeof createCoopSyncPlayerPresenceCommand>
+  ): Promise<CoopRoomServerEvent | null> {
+    if (
+      this.#playerPresenceDatagramTransport === null ||
+      this.#useReliablePlayerPresenceFallback
+    ) {
+      return this.#postCommand(command);
+    }
+
+    try {
+      await this.#playerPresenceDatagramTransport.sendPlayerPresenceDatagram(
+        command
+      );
+      return null;
+    } catch {
+      this.#useReliablePlayerPresenceFallback = true;
+      return this.#postCommand(command);
     }
   }
 

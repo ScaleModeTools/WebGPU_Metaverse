@@ -7,6 +7,7 @@ import {
 import {
   CoopRoomClient,
   CoopRoomDirectoryClient,
+  createDuckHuntCoopRoomPlayerPresenceWebTransportDatagramTransport,
   createCoopRoomHttpTransport,
   createCoopRoomWebTransportTransport,
   type CoopRoomClientConfig,
@@ -97,11 +98,21 @@ export function createDuckHuntCoopRoomClient(
     ...duckHuntCoopRoomClientConfig,
     roomId
   });
+  const playerPresenceDatagramTransport = shouldUseWebTransport
+    ? createDuckHuntCoopRoomPlayerPresenceWebTransportDatagramTransport({
+        webTransportUrl
+      })
+    : null;
 
   return new CoopRoomClient({
     ...duckHuntCoopRoomClientConfig,
     roomId
   }, {
+    ...(playerPresenceDatagramTransport === null
+      ? {}
+      : {
+          playerPresenceDatagramTransport
+        }),
     transport: shouldUseWebTransport
       ? (() => {
           const transportFailover = createWebTransportHttpFallbackInvoker(

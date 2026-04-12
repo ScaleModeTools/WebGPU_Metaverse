@@ -3,6 +3,7 @@ import { createMilliseconds } from "@webgpu-metaverse/shared";
 import {
   MetaverseWorldClient,
   createMetaverseWorldHttpTransport,
+  createMetaverseRealtimeWorldDriverVehicleControlWebTransportDatagramTransport,
   createMetaverseWorldWebTransportTransport,
   type MetaverseWorldClientConfig
 } from "@/network";
@@ -79,8 +80,20 @@ export function createMetaverseWorldClient(): MetaverseWorldClient {
   const httpTransport = createMetaverseWorldHttpTransport(
     metaverseWorldClientConfig
   );
+  const driverVehicleControlDatagramTransport = shouldUseWebTransport
+    ? createMetaverseRealtimeWorldDriverVehicleControlWebTransportDatagramTransport(
+        {
+          webTransportUrl
+        }
+      )
+    : null;
 
   return new MetaverseWorldClient(metaverseWorldClientConfig, {
+    ...(driverVehicleControlDatagramTransport === null
+      ? {}
+      : {
+          driverVehicleControlDatagramTransport
+        }),
     transport: shouldUseWebTransport
       ? (() => {
           const transportFailover = createWebTransportHttpFallbackInvoker(
