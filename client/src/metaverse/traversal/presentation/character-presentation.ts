@@ -8,6 +8,7 @@ import type {
   MetaverseCharacterPresentationSnapshot,
   MetaverseRuntimeConfig
 } from "../../types/metaverse-runtime";
+import { shouldConstrainMountedOccupancyToAnchor } from "../../states/mounted-occupancy";
 import { freezeVector3, wrapRadians } from "../policies/surface-locomotion";
 import type {
   SurfaceLocomotionSnapshot,
@@ -119,7 +120,10 @@ export function createTraversalCharacterPresentationSnapshot({
   mountedVehicleSnapshot,
   swimSnapshot
 }: TraversalCharacterPresentationInput): MetaverseCharacterPresentationSnapshot | null {
-  if (mountedVehicleSnapshot !== null) {
+  if (
+    mountedVehicleSnapshot !== null &&
+    shouldConstrainMountedOccupancyToAnchor(mountedVehicleSnapshot.occupancy)
+  ) {
     const mountedAnimationVocabulary =
       mountedVehicleSnapshot.occupancy?.occupancyAnimationId === "standing"
         ? "idle"

@@ -3,6 +3,7 @@ import {
   AnimationClip,
   AnimationMixer,
   BackSide,
+  Bone,
   Box3,
   BundleGroup,
   type Camera,
@@ -73,6 +74,10 @@ import type {
   MetaverseRuntimeConfig
 } from "../types/metaverse-runtime";
 import {
+  shouldConstrainMountedOccupancyToAnchor,
+  shouldHolsterHeldAttachmentWhileMounted
+} from "../states/mounted-occupancy";
+import {
   createMountedCharacterSeatTransformSnapshot,
   resolveEnvironmentRenderYawFromSimulationYaw,
   resolveEnvironmentSimulationYawFromRenderYaw,
@@ -139,6 +144,21 @@ interface MetaverseCharacterProofRuntime {
   readonly mixer: AnimationMixer;
   readonly seatSocketNode: Object3D;
   readonly scene: Group;
+}
+
+interface MetaverseAttachmentMountRuntime {
+  readonly gripMarkerTranslation: Vector3 | null;
+  readonly localQuaternion: Quaternion;
+  readonly socketName: MetaverseAttachmentProofConfig["heldMount"]["socketName"];
+  readonly socketOffset: Vector3;
+}
+
+interface MetaverseAttachmentProofRuntime {
+  activeMountKind: "held" | "mounted-holster" | null;
+  readonly attachmentRoot: Group;
+  readonly heldMount: MetaverseAttachmentMountRuntime;
+  readonly mountedHolsterMount: MetaverseAttachmentMountRuntime | null;
+  readonly presentationGroup: Group;
 }
 
 interface MetaverseRemoteCharacterPresentationRuntime {
@@ -241,6 +261,7 @@ interface MountedEnvironmentSelectionReference {
   readonly environmentAssetId: string;
   readonly entryId: string | null;
   readonly occupancyKind: MountedEnvironmentSnapshot["occupancyKind"];
+  readonly occupantRole: MountedEnvironmentSnapshot["occupantRole"];
   readonly seatId: string | null;
 }
 
@@ -264,10 +285,13 @@ interface DynamicEnvironmentPoseSnapshot {
 }
 
 const socketDebugMarkerColors = {
+  back_socket: [1, 0.72, 0.26],
   hand_l_socket: [0.28, 0.72, 1],
   hand_r_socket: [1, 0.42, 0.34],
   head_socket: [1, 0.92, 0.34],
   hip_socket: [0.45, 1, 0.56],
+  palm_l_socket: [0.28, 0.9, 1],
+  palm_r_socket: [1, 0.6, 0.48],
   seat_socket: [0.62, 0.96, 0.96]
 } as const satisfies Readonly<Record<string, readonly [number, number, number]>>;
 
@@ -297,6 +321,10 @@ const dynamicEnvironmentSeatSocketScaleScratch = new Vector3();
 const mountedEnvironmentAnchorForwardScratch = new Vector3();
 const mountedEnvironmentAnchorPositionScratch = new Vector3();
 const mountedEnvironmentAnchorQuaternionScratch = new Quaternion();
+const humanoidV2PalmSocketBlendAlpha = 0.45;
+const humanoidV2BackSocketLowerOffsetMeters = 0.02;
+const humanoidV2BackSocketRearwardScale = 0.7;
+const humanoidV1BackSocketLocalPosition = new Vector3(0, 0.14, -0.08);
 
 function createDefaultSceneAssetLoader(): SceneAssetLoader {
   return new GLTFLoader() as SceneAssetLoader;
@@ -381,33 +409,284 @@ function createSeatDebugMarker(seatId: string): Mesh {
   return marker;
 }
 
+function ensureSocketDebugMarker(socketNode: Object3D, socketName: string): void {
+  if (socketNode.getObjectByName(`socket_debug/${socketName}`) !== undefined) {
+    return;
+  }
+
+  socketNode.add(createSocketDebugMarker(socketName));
+}
+
+function isBoneNode(node: Object3D | undefined): node is Bone {
+  return node !== undefined && "isBone" in node && node.isBone === true;
+}
+
+function findBoneNode(characterScene: Group, boneName: string, label: string): Bone {
+  const boneNode = characterScene.getObjectByName(boneName);
+
+  if (!isBoneNode(boneNode)) {
+    throw new Error(`${label} is missing required bone ${boneName}.`);
+  }
+
+  return boneNode;
+}
+
 function findSocketNode(characterScene: Group, socketName: string): Object3D {
   const socketNode = characterScene.getObjectByName(socketName);
 
-  if (
-    socketNode === undefined ||
-    !("isBone" in socketNode) ||
-    socketNode.isBone !== true
-  ) {
+  if (!isBoneNode(socketNode)) {
     throw new Error(`Metaverse character is missing required socket bone: ${socketName}`);
   }
 
   return socketNode;
 }
 
+function upsertSyntheticSocketNode(
+  characterScene: Group,
+  parentBone: Bone,
+  socketName: string,
+  localPosition: Vector3,
+  showSocketDebug: boolean,
+  localQuaternion?: Quaternion
+): Bone {
+  const existingSocketNode = characterScene.getObjectByName(socketName);
+  const socketNode = (() => {
+    if (existingSocketNode === undefined) {
+      const syntheticSocketNode = new Bone();
+
+      syntheticSocketNode.name = socketName;
+      parentBone.add(syntheticSocketNode);
+
+      return syntheticSocketNode;
+    }
+
+    if (!isBoneNode(existingSocketNode)) {
+      throw new Error(`Metaverse character socket ${socketName} must stay a bone.`);
+    }
+
+    if (existingSocketNode.parent !== parentBone) {
+      throw new Error(
+        `Metaverse character socket ${socketName} must stay parented to ${parentBone.name}.`
+      );
+    }
+
+    return existingSocketNode;
+  })();
+
+  socketNode.position.copy(localPosition);
+  if (localQuaternion === undefined) {
+    socketNode.quaternion.identity();
+  } else {
+    socketNode.quaternion.copy(localQuaternion);
+  }
+  socketNode.scale.setScalar(1);
+
+  if (showSocketDebug) {
+    ensureSocketDebugMarker(socketNode, socketName);
+  }
+
+  return socketNode;
+}
+
+function synthesizeHumanoidV2PalmSockets(
+  characterScene: Group,
+  showSocketDebug: boolean
+): void {
+  const palmSocketDescriptors = [
+    {
+      fingerBaseBoneNames: [
+        "thumb_01_l",
+        "index_01_l",
+        "middle_01_l",
+        "ring_01_l",
+        "pinky_01_l"
+      ] as const,
+      parentBoneName: "hand_l",
+      sourceSocketName: "hand_l_socket",
+      synthesizedSocketName: "palm_l_socket"
+    },
+    {
+      fingerBaseBoneNames: [
+        "thumb_01_r",
+        "index_01_r",
+        "middle_01_r",
+        "ring_01_r",
+        "pinky_01_r"
+      ] as const,
+      parentBoneName: "hand_r",
+      sourceSocketName: "hand_r_socket",
+      synthesizedSocketName: "palm_r_socket"
+    }
+  ] as const;
+
+  for (const palmSocketDescriptor of palmSocketDescriptors) {
+    const parentBone = findBoneNode(
+      characterScene,
+      palmSocketDescriptor.parentBoneName,
+      "Metaverse humanoid_v2 palm socket synthesis"
+    );
+    const sourceSocketNode = findSocketNode(
+      characterScene,
+      palmSocketDescriptor.sourceSocketName
+    );
+    const fingerBaseCentroid = new Vector3();
+
+    for (const fingerBaseBoneName of palmSocketDescriptor.fingerBaseBoneNames) {
+      const fingerBaseBone = findBoneNode(
+        characterScene,
+        fingerBaseBoneName,
+        "Metaverse humanoid_v2 palm socket synthesis"
+      );
+
+      fingerBaseCentroid.add(
+        parentBone.worldToLocal(fingerBaseBone.getWorldPosition(new Vector3()))
+      );
+    }
+
+    fingerBaseCentroid.multiplyScalar(
+      1 / palmSocketDescriptor.fingerBaseBoneNames.length
+    );
+
+    // Bias the authored hand socket toward the knuckle line so the palm seam
+    // inherits the rig's mirrored finger spread without drifting onto the
+    // fingers. Keep the authored hand socket rotation so attachment grip basis
+    // follows the rig-specific socket orientation.
+    const palmLocalPosition = sourceSocketNode.position
+      .clone()
+      .lerp(fingerBaseCentroid, humanoidV2PalmSocketBlendAlpha);
+
+    upsertSyntheticSocketNode(
+      characterScene,
+      parentBone,
+      palmSocketDescriptor.synthesizedSocketName,
+      palmLocalPosition,
+      showSocketDebug,
+      sourceSocketNode.quaternion
+    );
+  }
+}
+
+function synthesizeHumanoidV2BackSocket(
+  characterScene: Group,
+  showSocketDebug: boolean
+): void {
+  const spineBone = findBoneNode(
+    characterScene,
+    "spine_03",
+    "Metaverse humanoid_v2 back socket synthesis"
+  );
+  const clavicleLBone = findBoneNode(
+    characterScene,
+    "clavicle_l",
+    "Metaverse humanoid_v2 back socket synthesis"
+  );
+  const clavicleRBone = findBoneNode(
+    characterScene,
+    "clavicle_r",
+    "Metaverse humanoid_v2 back socket synthesis"
+  );
+  const clavicleMidpointLocal = spineBone.worldToLocal(
+    clavicleLBone
+      .getWorldPosition(new Vector3())
+      .add(clavicleRBone.getWorldPosition(new Vector3()))
+      .multiplyScalar(0.5)
+  );
+
+  clavicleMidpointLocal.x = 0;
+  clavicleMidpointLocal.y = Math.max(
+    0.08,
+    clavicleMidpointLocal.y - humanoidV2BackSocketLowerOffsetMeters
+  );
+  clavicleMidpointLocal.z =
+    -Math.max(0.06, Math.abs(clavicleMidpointLocal.z) * humanoidV2BackSocketRearwardScale);
+
+  upsertSyntheticSocketNode(
+    characterScene,
+    spineBone,
+    "back_socket",
+    clavicleMidpointLocal,
+    showSocketDebug
+  );
+}
+
+function synthesizeHumanoidV1BackSocket(
+  characterScene: Group,
+  showSocketDebug: boolean
+): void {
+  upsertSyntheticSocketNode(
+    characterScene,
+    findBoneNode(
+      characterScene,
+      "chest",
+      "Metaverse humanoid_v1 back socket synthesis"
+    ),
+    "back_socket",
+    humanoidV1BackSocketLocalPosition,
+    showSocketDebug
+  );
+}
+
+function synthesizeRuntimeSocketNodes(
+  characterProofConfig: MetaverseCharacterProofConfig,
+  characterScene: Group,
+  showSocketDebug: boolean
+): void {
+  characterScene.updateMatrixWorld(true);
+
+  switch (characterProofConfig.skeletonId) {
+    case "humanoid_v1":
+      synthesizeHumanoidV1BackSocket(characterScene, showSocketDebug);
+      break;
+    case "humanoid_v2":
+      synthesizeHumanoidV2PalmSockets(characterScene, showSocketDebug);
+      synthesizeHumanoidV2BackSocket(characterScene, showSocketDebug);
+      break;
+  }
+
+  characterScene.updateMatrixWorld(true);
+}
+
 function resolveAttachmentAlignmentQuaternion(
-  gripAlignment: MetaverseAttachmentProofConfig["gripAlignment"]
+  gripAlignment: MetaverseAttachmentProofConfig["heldMount"]["gripAlignment"],
+  attachmentScene: Group
 ): Quaternion {
-  const createBasisQuaternion = (
-    forwardAxis: MetaverseVector3Snapshot,
-    upAxis: MetaverseVector3Snapshot
+  const resolveAlignmentAxisVector = (axis: MetaverseVector3Snapshot) =>
+    new Vector3(axis.x, axis.y, axis.z).normalize();
+  const resolveAttachmentMarkerOffset = (
+    markerNodeName: string,
+    label: string
   ) => {
-    const forward = new Vector3(
-      forwardAxis.x,
-      forwardAxis.y,
-      forwardAxis.z
+    const markerNode = findNamedNode(
+      attachmentScene,
+      markerNodeName,
+      "Metaverse attachment grip alignment"
+    );
+    const markerOffset = attachmentScene.worldToLocal(
+      markerNode.getWorldPosition(new Vector3())
+    );
+
+    if (markerOffset.lengthSq() <= 0.000001) {
+      throw new Error(
+        `Metaverse attachment grip alignment requires ${label} to stay offset from the attachment root.`
+      );
+    }
+
+    return markerOffset;
+  };
+  const resolveAttachmentMarkerAxis = (
+    markerNodeName: string,
+    label: string
+  ) =>
+    resolveAttachmentMarkerOffset(
+      markerNodeName,
+      label
     ).normalize();
-    const provisionalUp = new Vector3(upAxis.x, upAxis.y, upAxis.z).normalize();
+  const createBasisQuaternion = (
+    forwardAxis: Vector3,
+    upAxis: Vector3
+  ) => {
+    const forward = forwardAxis.clone().normalize();
+    const provisionalUp = upAxis.clone().normalize();
     const right = new Vector3().crossVectors(provisionalUp, forward);
 
     if (right.lengthSq() <= 0.000001) {
@@ -424,16 +703,134 @@ function resolveAttachmentAlignmentQuaternion(
       new Matrix4().makeBasis(right, correctedUp, forward)
     );
   };
+  attachmentScene.updateMatrixWorld(true);
+
+  const attachmentForwardAxis =
+    "attachmentForwardAxis" in gripAlignment
+      ? resolveAlignmentAxisVector(gripAlignment.attachmentForwardAxis)
+      : resolveAttachmentMarkerAxis(
+          gripAlignment.attachmentForwardMarkerNodeName,
+          "attachment forward marker"
+        );
+  const attachmentUpAxis =
+    "attachmentForwardAxis" in gripAlignment
+      ? resolveAlignmentAxisVector(gripAlignment.attachmentUpAxis)
+      : resolveAttachmentMarkerAxis(
+          gripAlignment.attachmentUpMarkerNodeName,
+          "attachment up marker"
+        );
   const attachmentBasisQuaternion = createBasisQuaternion(
-    gripAlignment.attachmentForwardAxis,
-    gripAlignment.attachmentUpAxis
+    attachmentForwardAxis,
+    attachmentUpAxis
   );
   const socketBasisQuaternion = createBasisQuaternion(
-    gripAlignment.socketForwardAxis,
-    gripAlignment.socketUpAxis
+    resolveAlignmentAxisVector(gripAlignment.socketForwardAxis),
+    resolveAlignmentAxisVector(gripAlignment.socketUpAxis)
   );
 
   return socketBasisQuaternion.multiply(attachmentBasisQuaternion.invert());
+}
+
+function resolveAttachmentGripMarkerTranslation(
+  gripAlignment: MetaverseAttachmentProofConfig["heldMount"]["gripAlignment"],
+  attachmentScene: Group
+): Vector3 | null {
+  const gripMarkerNodeName =
+    gripAlignment.attachmentGripMarkerNodeName ?? null;
+
+  if (gripMarkerNodeName === null) {
+    return null;
+  }
+
+  attachmentScene.updateMatrixWorld(true);
+
+  const gripMarkerNode = findNamedNode(
+    attachmentScene,
+    gripMarkerNodeName,
+    "Metaverse attachment grip alignment"
+  );
+  const gripMarkerOffset = attachmentScene.worldToLocal(
+    gripMarkerNode.getWorldPosition(new Vector3())
+  );
+
+  if (gripMarkerOffset.lengthSq() <= 0.000001) {
+    throw new Error(
+      "Metaverse attachment grip alignment requires attachment grip marker to stay offset from the attachment root."
+    );
+  }
+
+  return gripMarkerOffset.multiplyScalar(-1);
+}
+
+function createAttachmentMountRuntime(
+  mountConfig: MetaverseAttachmentProofConfig["heldMount"],
+  attachmentScene: Group
+): MetaverseAttachmentMountRuntime {
+  return {
+    gripMarkerTranslation: resolveAttachmentGripMarkerTranslation(
+      mountConfig.gripAlignment,
+      attachmentScene
+    ),
+    localQuaternion: resolveAttachmentAlignmentQuaternion(
+      mountConfig.gripAlignment,
+      attachmentScene
+    ),
+    socketName: mountConfig.socketName,
+    socketOffset: new Vector3(
+      mountConfig.gripAlignment.socketOffset.x,
+      mountConfig.gripAlignment.socketOffset.y,
+      mountConfig.gripAlignment.socketOffset.z
+    )
+  };
+}
+
+function applyAttachmentMountRuntime(
+  attachmentRuntime: MetaverseAttachmentProofRuntime,
+  characterProofRuntime: MetaverseCharacterProofRuntime,
+  mountRuntime: MetaverseAttachmentMountRuntime
+): void {
+  const socketNode = findSocketNode(characterProofRuntime.scene, mountRuntime.socketName);
+
+  if (attachmentRuntime.attachmentRoot.parent !== socketNode) {
+    attachmentRuntime.attachmentRoot.parent?.remove(attachmentRuntime.attachmentRoot);
+    socketNode.add(attachmentRuntime.attachmentRoot);
+  }
+
+  attachmentRuntime.attachmentRoot.position.copy(mountRuntime.socketOffset);
+  attachmentRuntime.attachmentRoot.quaternion.copy(mountRuntime.localQuaternion);
+  if (mountRuntime.gripMarkerTranslation === null) {
+    attachmentRuntime.presentationGroup.position.set(0, 0, 0);
+  } else {
+    attachmentRuntime.presentationGroup.position.copy(
+      mountRuntime.gripMarkerTranslation
+    );
+  }
+  attachmentRuntime.attachmentRoot.updateMatrixWorld(true);
+}
+
+function syncAttachmentProofRuntimeMount(
+  attachmentRuntime: MetaverseAttachmentProofRuntime,
+  characterProofRuntime: MetaverseCharacterProofRuntime,
+  mountedEnvironment: MountedEnvironmentSnapshot | null
+): void {
+  const nextMountKind =
+    shouldHolsterHeldAttachmentWhileMounted(mountedEnvironment) &&
+    attachmentRuntime.mountedHolsterMount !== null
+      ? "mounted-holster"
+      : "held";
+
+  if (attachmentRuntime.activeMountKind === nextMountKind) {
+    return;
+  }
+
+  applyAttachmentMountRuntime(
+    attachmentRuntime,
+    characterProofRuntime,
+    nextMountKind === "mounted-holster"
+      ? attachmentRuntime.mountedHolsterMount ?? attachmentRuntime.heldMount
+      : attachmentRuntime.heldMount
+  );
+  attachmentRuntime.activeMountKind = nextMountKind;
 }
 
 function findNamedNode(scene: Group, nodeName: string, label: string): Object3D {
@@ -760,6 +1157,20 @@ function resolveDirectSeatTargetSnapshots(
   );
 }
 
+function resolveSeatTargetSnapshots(
+  environmentAsset: MetaverseMountableEnvironmentDynamicAssetRuntime
+): readonly MountableSeatSelectionSnapshot[] {
+  return Object.freeze(
+    environmentAsset.seats.map((seat) =>
+      Object.freeze({
+        label: seat.seat.label,
+        seatId: seat.seat.seatId,
+        seatRole: seat.seat.seatRole
+      })
+    )
+  );
+}
+
 function resolveBoardingEntrySnapshots(
   environmentAsset: MetaverseMountableEnvironmentDynamicAssetRuntime
 ): readonly MountableBoardingEntrySnapshot[] {
@@ -789,6 +1200,7 @@ function createMountedEnvironmentSnapshot(
     occupancyKind: occupiedSelection.occupancyKind,
     occupantLabel: occupiedSelection.occupantLabel,
     occupantRole: occupiedSelection.occupantRole,
+    seatTargets: resolveSeatTargetSnapshots(environmentAsset),
     seatId: occupiedSelection.seatId
   });
 }
@@ -1078,6 +1490,17 @@ function syncMountedCharacterRuntimeFromSelectionReference(
     environmentAssetId: string
   ) => MetaverseMountableEnvironmentDynamicAssetRuntime | null
 ): MountedCharacterRuntime | null {
+  if (!shouldConstrainMountedOccupancyToAnchor(mountedEnvironment)) {
+    if (mountedCharacterRuntime !== null) {
+      dismountCharacterFromEnvironmentAsset(
+        characterProofRuntime,
+        mountedCharacterRuntime
+      );
+    }
+
+    return null;
+  }
+
   if (mountedEnvironment === null || mountedEnvironment === undefined) {
     if (mountedCharacterRuntime !== null) {
       dismountCharacterFromEnvironmentAsset(
@@ -1640,9 +2063,15 @@ async function loadMetaverseCharacterProofRuntime(
     const socketNode = findSocketNode(characterAsset.scene, socketName);
 
     if (showSocketDebug) {
-      socketNode.add(createSocketDebugMarker(socketName));
+      ensureSocketDebugMarker(socketNode, socketName);
     }
   }
+
+  synthesizeRuntimeSocketNodes(
+    characterProofConfig,
+    characterAsset.scene,
+    showSocketDebug
+  );
 
   validateCharacterScale(characterAsset.scene, characterProofConfig.label, warn);
 
@@ -1689,25 +2118,26 @@ async function loadMetaverseAttachmentProofRuntime(
   attachmentProofConfig: MetaverseAttachmentProofConfig,
   characterProofRuntime: MetaverseCharacterProofRuntime,
   createSceneAssetLoader: () => SceneAssetLoader
-): Promise<void> {
+): Promise<MetaverseAttachmentProofRuntime> {
   const sceneAssetLoader = createSceneAssetLoader();
   const attachmentAsset = await sceneAssetLoader.loadAsync(attachmentProofConfig.modelPath);
-  const socketNode = findSocketNode(
-    characterProofRuntime.scene,
-    attachmentProofConfig.socketName
-  );
   const attachmentRoot = new Group();
+  const attachmentPresentationGroup = new Group();
+  const heldMount = createAttachmentMountRuntime(
+    attachmentProofConfig.heldMount,
+    attachmentAsset.scene
+  );
+  const mountedHolsterMount =
+    attachmentProofConfig.mountedHolsterMount === null
+      ? null
+      : createAttachmentMountRuntime(
+          attachmentProofConfig.mountedHolsterMount,
+          attachmentAsset.scene
+        );
 
   attachmentRoot.name = `metaverse_attachment/${attachmentProofConfig.attachmentId}`;
-  attachmentRoot.position.set(
-    attachmentProofConfig.gripAlignment.socketOffset.x,
-    attachmentProofConfig.gripAlignment.socketOffset.y,
-    attachmentProofConfig.gripAlignment.socketOffset.z
-  );
-  attachmentRoot.quaternion.copy(
-    resolveAttachmentAlignmentQuaternion(attachmentProofConfig.gripAlignment)
-  );
-  attachmentRoot.add(attachmentAsset.scene);
+  attachmentPresentationGroup.name = `${attachmentRoot.name}/presentation`;
+  attachmentPresentationGroup.add(attachmentAsset.scene);
   for (const supportPoint of attachmentProofConfig.supportPoints ?? []) {
     const supportPointAnchor = new Group();
 
@@ -1721,9 +2151,25 @@ async function loadMetaverseAttachmentProofRuntime(
       supportPoint.localPosition.y,
       supportPoint.localPosition.z
     );
-    attachmentRoot.add(supportPointAnchor);
+    attachmentPresentationGroup.add(supportPointAnchor);
   }
-  socketNode.add(attachmentRoot);
+  attachmentRoot.add(attachmentPresentationGroup);
+
+  const attachmentRuntime: MetaverseAttachmentProofRuntime = {
+    activeMountKind: null,
+    attachmentRoot,
+    heldMount,
+    mountedHolsterMount,
+    presentationGroup: attachmentPresentationGroup
+  };
+
+  syncAttachmentProofRuntimeMount(
+    attachmentRuntime,
+    characterProofRuntime,
+    null
+  );
+
+  return attachmentRuntime;
 }
 
 async function loadEnvironmentLodObjects(
@@ -2337,6 +2783,8 @@ export function createMetaverseScene(
   readonly camera: PerspectiveCamera;
   readonly scene: Scene;
   boot(): Promise<void>;
+  bootInteractivePresentation(): Promise<void>;
+  bootScenicEnvironment(): Promise<void>;
   resetPresentation(): void;
   prewarm(renderer: MetaverseSceneRendererHost): Promise<void>;
   syncPresentation(
@@ -2385,13 +2833,16 @@ export function createMetaverseScene(
   const portalMeshes = config.portals.map((portalConfig) =>
     createPortalMeshRuntime(portalConfig, portalSharedRenderResources)
   );
+  let attachmentProofRuntime: MetaverseAttachmentProofRuntime | null = null;
   let characterProofRuntime: MetaverseCharacterProofRuntime | null = null;
   let environmentProofRuntime: MetaverseEnvironmentProofRuntime | null = null;
   let mountedCharacterRuntime: MountedCharacterRuntime | null = null;
   let previousViewportHeight: number | null = null;
   let previousViewportWidth: number | null = null;
-  let proofSliceBootPromise: Promise<void> | null = null;
-  let proofSliceBooted = false;
+  let interactivePresentationBootPromise: Promise<void> | null = null;
+  let interactivePresentationBooted = false;
+  let scenicEnvironmentBootPromise: Promise<void> | null = null;
+  let scenicEnvironmentBooted = false;
   let sceneInteractionSnapshot = createSceneInteractionSnapshot(null, null);
   const dynamicEnvironmentPoseOverrides = new Map<
     string,
@@ -2542,117 +2993,153 @@ export function createMetaverseScene(
     scene.add(portalMesh.anchorGroup);
   }
 
+  function createCurrentCameraSnapshot(): MetaverseCameraSnapshot {
+    return Object.freeze({
+      lookDirection: {
+        x: -camera.position.x,
+        y: 0,
+        z: -camera.position.z
+      },
+      pitchRadians: 0,
+      position: {
+        x: camera.position.x,
+        y: camera.position.y,
+        z: camera.position.z
+      },
+      yawRadians: 0
+    });
+  }
+
+  async function bootScenicEnvironment(): Promise<void> {
+    if (scenicEnvironmentBooted) {
+      return;
+    }
+
+    if (scenicEnvironmentBootPromise !== null) {
+      await scenicEnvironmentBootPromise;
+      return;
+    }
+
+    scenicEnvironmentBootPromise = (async () => {
+      const createSceneAssetLoader =
+        dependencies.createSceneAssetLoader ?? createDefaultSceneAssetLoader;
+
+      if (
+        dependencies.environmentProofConfig !== null &&
+        dependencies.environmentProofConfig !== undefined &&
+        environmentProofRuntime === null
+      ) {
+        environmentProofRuntime = await loadMetaverseEnvironmentProofRuntime(
+          dependencies.environmentProofConfig,
+          createSceneAssetLoader,
+          dependencies.showSocketDebug ?? false
+        );
+        scene.add(environmentProofRuntime.anchorGroup);
+      }
+
+      if (environmentProofRuntime !== null) {
+        syncEnvironmentProofRuntime(
+          environmentProofRuntime,
+          createCurrentCameraSnapshot(),
+          0,
+          dynamicEnvironmentPoseOverrides
+        );
+      }
+
+      syncSceneInteractionSnapshot(createCurrentCameraSnapshot(), null);
+      scenicEnvironmentBooted = true;
+    })();
+
+    try {
+      await scenicEnvironmentBootPromise;
+    } finally {
+      if (scenicEnvironmentBootPromise !== null) {
+        scenicEnvironmentBootPromise = null;
+      }
+    }
+  }
+
+  async function bootInteractivePresentation(): Promise<void> {
+    await bootScenicEnvironment();
+
+    if (interactivePresentationBooted) {
+      return;
+    }
+
+    if (interactivePresentationBootPromise !== null) {
+      await interactivePresentationBootPromise;
+      return;
+    }
+
+    interactivePresentationBootPromise = (async () => {
+      const createSceneAssetLoader =
+        dependencies.createSceneAssetLoader ?? createDefaultSceneAssetLoader;
+
+      if (
+        dependencies.attachmentProofConfig !== null &&
+        dependencies.attachmentProofConfig !== undefined &&
+        dependencies.characterProofConfig !== undefined &&
+        dependencies.characterProofConfig !== null
+      ) {
+        const loadedCharacterProofRuntime =
+          await loadMetaverseCharacterProofRuntime(
+            dependencies.characterProofConfig,
+            createSceneAssetLoader,
+            dependencies.showSocketDebug ?? false,
+            dependencies.warn ?? ((message) => globalThis.console?.warn(message))
+          );
+
+        characterProofRuntime = loadedCharacterProofRuntime;
+        scene.add(loadedCharacterProofRuntime.anchorGroup);
+        attachmentProofRuntime = await loadMetaverseAttachmentProofRuntime(
+          dependencies.attachmentProofConfig,
+          loadedCharacterProofRuntime,
+          createSceneAssetLoader
+        );
+      } else if (
+        dependencies.characterProofConfig !== null &&
+        dependencies.characterProofConfig !== undefined
+      ) {
+        const loadedCharacterProofRuntime =
+          await loadMetaverseCharacterProofRuntime(
+            dependencies.characterProofConfig,
+            createSceneAssetLoader,
+            dependencies.showSocketDebug ?? false,
+            dependencies.warn ?? ((message) => globalThis.console?.warn(message))
+          );
+
+        characterProofRuntime = loadedCharacterProofRuntime;
+        scene.add(loadedCharacterProofRuntime.anchorGroup);
+      } else if (
+        dependencies.attachmentProofConfig !== null &&
+        dependencies.attachmentProofConfig !== undefined
+      ) {
+        throw new Error(
+          "Metaverse scene cannot boot an attachment proof slice without a character proof slice."
+        );
+      }
+
+      interactivePresentationBooted = true;
+    })();
+
+    try {
+      await interactivePresentationBootPromise;
+    } finally {
+      if (interactivePresentationBootPromise !== null) {
+        interactivePresentationBootPromise = null;
+      }
+    }
+  }
+
   return {
     camera,
     scene,
     async boot() {
-      if (proofSliceBooted) {
-        return;
-      }
-
-      if (proofSliceBootPromise !== null) {
-        await proofSliceBootPromise;
-        return;
-      }
-
-      proofSliceBootPromise = (async () => {
-        const createSceneAssetLoader =
-          dependencies.createSceneAssetLoader ?? createDefaultSceneAssetLoader;
-
-        if (
-          dependencies.attachmentProofConfig !== null &&
-          dependencies.attachmentProofConfig !== undefined &&
-          dependencies.characterProofConfig !== undefined &&
-          dependencies.characterProofConfig !== null
-        ) {
-          const loadedCharacterProofRuntime = await loadMetaverseCharacterProofRuntime(
-            dependencies.characterProofConfig,
-            createSceneAssetLoader,
-            dependencies.showSocketDebug ?? false,
-            dependencies.warn ?? ((message) => globalThis.console?.warn(message))
-          );
-
-          characterProofRuntime = loadedCharacterProofRuntime;
-          scene.add(loadedCharacterProofRuntime.anchorGroup);
-          await loadMetaverseAttachmentProofRuntime(
-            dependencies.attachmentProofConfig,
-            loadedCharacterProofRuntime,
-            createSceneAssetLoader
-          );
-        } else if (
-          dependencies.characterProofConfig !== null &&
-          dependencies.characterProofConfig !== undefined
-        ) {
-          const loadedCharacterProofRuntime = await loadMetaverseCharacterProofRuntime(
-            dependencies.characterProofConfig,
-            createSceneAssetLoader,
-            dependencies.showSocketDebug ?? false,
-            dependencies.warn ?? ((message) => globalThis.console?.warn(message))
-          );
-
-          characterProofRuntime = loadedCharacterProofRuntime;
-          scene.add(loadedCharacterProofRuntime.anchorGroup);
-        } else if (
-          dependencies.attachmentProofConfig !== null &&
-          dependencies.attachmentProofConfig !== undefined
-        ) {
-          throw new Error(
-            "Metaverse scene cannot boot an attachment proof slice without a character proof slice."
-          );
-        }
-
-        if (
-          dependencies.environmentProofConfig !== null &&
-          dependencies.environmentProofConfig !== undefined
-        ) {
-          environmentProofRuntime = await loadMetaverseEnvironmentProofRuntime(
-            dependencies.environmentProofConfig,
-            createSceneAssetLoader,
-            dependencies.showSocketDebug ?? false
-          );
-          scene.add(environmentProofRuntime.anchorGroup);
-          syncEnvironmentProofRuntime(environmentProofRuntime, {
-            lookDirection: {
-              x: -camera.position.x,
-              y: 0,
-              z: -camera.position.z
-            },
-            pitchRadians: 0,
-            position: {
-              x: camera.position.x,
-              y: camera.position.y,
-              z: camera.position.z
-            },
-            yawRadians: 0
-          }, 0, dynamicEnvironmentPoseOverrides);
-        }
-
-        syncSceneInteractionSnapshot({
-          lookDirection: {
-            x: -camera.position.x,
-            y: 0,
-            z: -camera.position.z
-          },
-          pitchRadians: 0,
-          position: {
-            x: camera.position.x,
-            y: camera.position.y,
-            z: camera.position.z
-          },
-          yawRadians: 0
-        }, null);
-
-        proofSliceBooted = true;
-      })();
-
-      try {
-        await proofSliceBootPromise;
-      } finally {
-        if (proofSliceBootPromise !== null) {
-          proofSliceBootPromise = null;
-        }
-      }
+      await bootScenicEnvironment();
+      await bootInteractivePresentation();
     },
+    bootInteractivePresentation,
+    bootScenicEnvironment,
     resetPresentation() {
       if (characterProofRuntime !== null && mountedCharacterRuntime !== null) {
         dismountCharacterFromEnvironmentAsset(
@@ -2660,6 +3147,16 @@ export function createMetaverseScene(
           mountedCharacterRuntime
         );
         mountedCharacterRuntime = null;
+      }
+      if (
+        characterProofRuntime !== null &&
+        attachmentProofRuntime !== null
+      ) {
+        syncAttachmentProofRuntimeMount(
+          attachmentProofRuntime,
+          characterProofRuntime,
+          null
+        );
       }
 
       for (const portalMesh of portalMeshes) {
@@ -2709,6 +3206,16 @@ export function createMetaverseScene(
         );
       }
       syncMountedCharacterRuntimeFromSnapshot(mountedEnvironment);
+      if (
+        attachmentProofRuntime !== null &&
+        characterProofRuntime !== null
+      ) {
+        syncAttachmentProofRuntimeMount(
+          attachmentProofRuntime,
+          characterProofRuntime,
+          mountedEnvironment
+        );
+      }
       if (characterProofRuntime !== null) {
         syncCharacterPresentation(
           characterProofRuntime,

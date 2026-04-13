@@ -597,8 +597,21 @@ export class MetaverseAuthoritativeWorldRuntime {
       mountedOccupancy === null ||
       mountedOccupancy.occupancyKind !== "seat" ||
       mountedOccupancy.occupantRole !== "driver" ||
+      mountedOccupancy.seatId === null ||
       mountedOccupancy.environmentAssetId !==
         normalizedCommand.controlIntent.environmentAssetId
+    ) {
+      return;
+    }
+
+    const vehicleRuntime = this.#vehiclesById.get(mountedOccupancy.vehicleId);
+    const seatRuntime =
+      vehicleRuntime?.seatsById.get(mountedOccupancy.seatId) ?? null;
+
+    if (
+      seatRuntime === null ||
+      seatRuntime.occupantPlayerId !== command.playerId ||
+      seatRuntime.occupantRole !== "driver"
     ) {
       return;
     }
@@ -655,14 +668,24 @@ export class MetaverseAuthoritativeWorldRuntime {
     nextPose: MetaversePresencePoseSnapshot,
     nowMs: number
   ): void {
+    const requestedMountedOccupancy = this.#resolveMountedOccupancyRuntimeState(
+      nextPose.mountedOccupancy
+    );
+    const acceptedMountedOccupancy = this.#resolveAcceptedMountedOccupancy(
+      playerRuntime.playerId,
+      requestedMountedOccupancy,
+      playerRuntime.mountedOccupancy
+    );
+
     this.#clearPlayerVehicleOccupancy(playerRuntime.playerId);
 
     playerRuntime.animationVocabulary = nextPose.animationVocabulary;
-    playerRuntime.locomotionMode = nextPose.locomotionMode;
+    playerRuntime.locomotionMode =
+      acceptedMountedOccupancy === null && requestedMountedOccupancy !== null
+        ? "grounded"
+        : nextPose.locomotionMode;
     playerRuntime.stateSequence = nextPose.stateSequence;
-    playerRuntime.mountedOccupancy = this.#resolveMountedOccupancyRuntimeState(
-      nextPose.mountedOccupancy
-    );
+    playerRuntime.mountedOccupancy = acceptedMountedOccupancy;
 
     if (playerRuntime.mountedOccupancy === null) {
       this.#clearDriverVehicleControl(playerRuntime.playerId);
@@ -698,6 +721,54 @@ export class MetaverseAuthoritativeWorldRuntime {
     return createMountedOccupancyRuntimeState(
       mountedOccupancy,
       this.#resolveVehicleId(mountedOccupancy.environmentAssetId)
+    );
+  }
+
+  #resolveAcceptedMountedOccupancy(
+    playerId: MetaversePlayerId,
+    requestedMountedOccupancy: MetaverseMountedOccupancyRuntimeState | null,
+    previousMountedOccupancy: MetaverseMountedOccupancyRuntimeState | null
+  ): MetaverseMountedOccupancyRuntimeState | null {
+    if (
+      requestedMountedOccupancy !== null &&
+      this.#canPlayerOccupyMountedSeat(playerId, requestedMountedOccupancy)
+    ) {
+      return requestedMountedOccupancy;
+    }
+
+    if (
+      previousMountedOccupancy !== null &&
+      this.#canPlayerOccupyMountedSeat(playerId, previousMountedOccupancy)
+    ) {
+      return previousMountedOccupancy;
+    }
+
+    return null;
+  }
+
+  #canPlayerOccupyMountedSeat(
+    playerId: MetaversePlayerId,
+    mountedOccupancy: MetaverseMountedOccupancyRuntimeState
+  ): boolean {
+    if (
+      mountedOccupancy.occupancyKind !== "seat" ||
+      mountedOccupancy.seatId === null
+    ) {
+      return true;
+    }
+
+    const vehicleRuntime = this.#ensureVehicleRuntime(
+      mountedOccupancy.environmentAssetId,
+      mountedOccupancy.vehicleId
+    );
+    const existingSeatRuntime = vehicleRuntime.seatsById.get(
+      mountedOccupancy.seatId
+    );
+
+    return (
+      existingSeatRuntime === undefined ||
+      existingSeatRuntime.occupantPlayerId === null ||
+      existingSeatRuntime.occupantPlayerId === playerId
     );
   }
 

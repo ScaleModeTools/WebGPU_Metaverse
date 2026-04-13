@@ -135,6 +135,25 @@ export interface MetaverseCharacterAnimationClipProofConfig {
   readonly vocabulary: MetaverseCharacterAnimationVocabularyId;
 }
 
+export const metaverseCharacterSkeletonIds = [
+  "humanoid_v1",
+  "humanoid_v2"
+] as const;
+
+export type MetaverseCharacterSkeletonId =
+  (typeof metaverseCharacterSkeletonIds)[number];
+
+export const metaverseCanonicalSocketNames = [
+  "hand_r_socket",
+  "hand_l_socket",
+  "head_socket",
+  "hip_socket",
+  "seat_socket"
+] as const;
+
+export type MetaverseCanonicalSocketName =
+  (typeof metaverseCanonicalSocketNames)[number];
+
 export interface MetaversePortalConfig {
   readonly beamColor: readonly [number, number, number];
   readonly experienceId: ExperienceId;
@@ -150,21 +169,57 @@ export interface MetaverseCharacterProofConfig {
   readonly characterId: string;
   readonly label: string;
   readonly modelPath: string;
-  readonly socketNames: readonly string[];
+  readonly skeletonId: MetaverseCharacterSkeletonId;
+  readonly socketNames: readonly MetaverseCanonicalSocketName[];
+}
+
+interface MetaverseAttachmentSocketGripAlignmentConfig {
+  readonly attachmentGripMarkerNodeName: string | null;
+  readonly socketForwardAxis: MetaverseVector3Snapshot;
+  readonly socketOffset: MetaverseVector3Snapshot;
+  readonly socketUpAxis: MetaverseVector3Snapshot;
+}
+
+export interface MetaverseAttachmentGripAlignmentAxisConfig
+  extends MetaverseAttachmentSocketGripAlignmentConfig {
+  readonly attachmentForwardAxis: MetaverseVector3Snapshot;
+  readonly attachmentUpAxis: MetaverseVector3Snapshot;
+}
+
+export interface MetaverseAttachmentGripAlignmentMarkerConfig
+  extends MetaverseAttachmentSocketGripAlignmentConfig {
+  readonly attachmentForwardMarkerNodeName: string;
+  readonly attachmentUpMarkerNodeName: string;
+}
+
+export type MetaverseAttachmentGripAlignmentConfig =
+  | MetaverseAttachmentGripAlignmentAxisConfig
+  | MetaverseAttachmentGripAlignmentMarkerConfig;
+
+export const metaverseSyntheticSocketNames = [
+  "back_socket",
+  "palm_l_socket",
+  "palm_r_socket"
+] as const;
+
+export type MetaverseSyntheticSocketName =
+  (typeof metaverseSyntheticSocketNames)[number];
+
+export type MetaverseAttachmentSocketName =
+  | MetaverseCanonicalSocketName
+  | MetaverseSyntheticSocketName;
+
+export interface MetaverseAttachmentMountProofConfig {
+  readonly gripAlignment: MetaverseAttachmentGripAlignmentConfig;
+  readonly socketName: MetaverseAttachmentSocketName;
 }
 
 export interface MetaverseAttachmentProofConfig {
   readonly attachmentId: string;
-  readonly gripAlignment: {
-    readonly attachmentForwardAxis: MetaverseVector3Snapshot;
-    readonly attachmentUpAxis: MetaverseVector3Snapshot;
-    readonly socketForwardAxis: MetaverseVector3Snapshot;
-    readonly socketOffset: MetaverseVector3Snapshot;
-    readonly socketUpAxis: MetaverseVector3Snapshot;
-  };
+  readonly heldMount: MetaverseAttachmentMountProofConfig;
   readonly label: string;
   readonly modelPath: string;
-  readonly socketName: string;
+  readonly mountedHolsterMount: MetaverseAttachmentMountProofConfig | null;
   readonly supportPoints: readonly {
     readonly localPosition: MetaverseVector3Snapshot;
     readonly supportPointId: string;
@@ -289,6 +344,7 @@ export interface MountedEnvironmentSnapshot {
   readonly occupancyKind: MountedEnvironmentOccupancyKind;
   readonly occupantLabel: string;
   readonly occupantRole: MountedVehicleSeatRoleId;
+  readonly seatTargets: readonly MountableSeatSelectionSnapshot[];
   readonly seatId: string | null;
 }
 

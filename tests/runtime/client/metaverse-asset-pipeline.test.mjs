@@ -459,11 +459,26 @@ test("attachment manifests keep explicit grip alignment metadata for socketed to
   assert.ok(pistolAttachment);
   assert.equal(pistolAttachment.defaultSocketId, "hand_r_socket");
   assert.deepEqual(pistolAttachment.gripAlignment, {
-    attachmentForwardAxis: { x: 1, y: 0, z: 0 },
-    attachmentUpAxis: { x: 0, y: 1, z: 0 },
+    attachmentForwardMarkerNodeName: "metaverse_service_pistol_forward_marker",
+    attachmentGripMarkerNodeNameBySocketId: {
+      hand_l_socket: "metaverse_service_pistol_grip_left_marker",
+      hand_r_socket: "metaverse_service_pistol_grip_right_marker"
+    },
+    attachmentUpMarkerNodeName: "metaverse_service_pistol_up_marker",
     socketForwardAxis: { x: 1, y: 0, z: 0 },
     socketOffset: { x: 0, y: 0, z: 0 },
     socketUpAxis: { x: 0, y: -1, z: 0 }
+  });
+  assert.deepEqual(pistolAttachment.mountedHolster, {
+    gripAlignment: {
+      attachmentForwardMarkerNodeName: "metaverse_service_pistol_forward_marker",
+      attachmentGripMarkerNodeName: "metaverse_service_pistol_holster_marker",
+      attachmentUpMarkerNodeName: "metaverse_service_pistol_up_marker",
+      socketForwardAxis: { x: 0, y: -1, z: 0 },
+      socketOffset: { x: 0.16, y: -0.02, z: -0.04 },
+      socketUpAxis: { x: 0, y: 0, z: -1 }
+    },
+    socketName: "back_socket"
   });
   assert.equal(pistolAttachment.supportPoints, null);
 });
@@ -568,7 +583,11 @@ test("proof delivery assets keep canonical character sockets, animation vocabula
     { characterModelManifest },
     { animationClipManifest },
     { animationVocabularyIds, canonicalAnimationClipNamesByVocabulary },
-    { environmentPropManifest, metaverseHubSkiffEnvironmentAssetId }
+    {
+      environmentPropManifest,
+      metaverseHubDiveBoatEnvironmentAssetId,
+      metaverseHubSkiffEnvironmentAssetId
+    }
   ] = await Promise.all([
     clientLoader.load("/src/assets/types/asset-socket.ts"),
     clientLoader.load("/src/assets/config/character-model-manifest.ts"),
@@ -578,8 +597,13 @@ test("proof delivery assets keep canonical character sockets, animation vocabula
   ]);
 
   const skiffAsset = environmentPropManifest.byId[metaverseHubSkiffEnvironmentAssetId];
+  const diveBoatAsset =
+    environmentPropManifest.byId[metaverseHubDiveBoatEnvironmentAssetId];
   const skiffDocument = await loadMetaverseAssetDocument(
     skiffAsset.renderModel.lods[0].modelPath
+  );
+  const diveBoatDocument = await loadMetaverseAssetDocument(
+    diveBoatAsset.renderModel.lods[0].modelPath
   );
   const skiffNodeNames = new Set(
     (skiffDocument.nodes ?? [])
@@ -587,6 +611,13 @@ test("proof delivery assets keep canonical character sockets, animation vocabula
       .filter((name) => typeof name === "string")
   );
   const skiffReachableNodeNames = collectReachableNamedNodeNames(skiffDocument);
+  const diveBoatNodeNames = new Set(
+    (diveBoatDocument.nodes ?? [])
+      .map((node) => node.name)
+      .filter((name) => typeof name === "string")
+  );
+  const diveBoatReachableNodeNames =
+    collectReachableNamedNodeNames(diveBoatDocument);
 
   for (const character of characterModelManifest.characters) {
     const characterDocument = await loadMetaverseAssetDocument(
@@ -662,10 +693,34 @@ test("proof delivery assets keep canonical character sockets, animation vocabula
 
   assert.ok(skiffNodeNames.has("driver_seat"));
   assert.ok(skiffNodeNames.has("port_bench_seat"));
+  assert.ok(skiffNodeNames.has("port_bench_rear_seat"));
+  assert.ok(skiffNodeNames.has("starboard_bench_seat"));
+  assert.ok(skiffNodeNames.has("starboard_bench_rear_seat"));
   assert.ok(skiffNodeNames.has("deck_entry"));
   assert.ok(skiffReachableNodeNames.has("driver_seat"));
   assert.ok(skiffReachableNodeNames.has("port_bench_seat"));
+  assert.ok(skiffReachableNodeNames.has("port_bench_rear_seat"));
+  assert.ok(skiffReachableNodeNames.has("starboard_bench_seat"));
+  assert.ok(skiffReachableNodeNames.has("starboard_bench_rear_seat"));
   assert.ok(skiffReachableNodeNames.has("deck_entry"));
+  assert.ok(diveBoatNodeNames.has("helm_seat"));
+  assert.ok(diveBoatNodeNames.has("port_bench_seat_a"));
+  assert.ok(diveBoatNodeNames.has("port_bench_seat_b"));
+  assert.ok(diveBoatNodeNames.has("port_bench_seat_c"));
+  assert.ok(diveBoatNodeNames.has("starboard_bench_seat_a"));
+  assert.ok(diveBoatNodeNames.has("starboard_bench_seat_b"));
+  assert.ok(diveBoatNodeNames.has("starboard_bench_seat_c"));
+  assert.ok(diveBoatNodeNames.has("stern_port_entry"));
+  assert.ok(diveBoatNodeNames.has("stern_starboard_entry"));
+  assert.ok(diveBoatReachableNodeNames.has("helm_seat"));
+  assert.ok(diveBoatReachableNodeNames.has("port_bench_seat_a"));
+  assert.ok(diveBoatReachableNodeNames.has("port_bench_seat_b"));
+  assert.ok(diveBoatReachableNodeNames.has("port_bench_seat_c"));
+  assert.ok(diveBoatReachableNodeNames.has("starboard_bench_seat_a"));
+  assert.ok(diveBoatReachableNodeNames.has("starboard_bench_seat_b"));
+  assert.ok(diveBoatReachableNodeNames.has("starboard_bench_seat_c"));
+  assert.ok(diveBoatReachableNodeNames.has("stern_port_entry"));
+  assert.ok(diveBoatReachableNodeNames.has("stern_starboard_entry"));
 });
 
 test("active full-body character render asset stays compatible with the canonical animation pack rig", async () => {

@@ -129,6 +129,18 @@
   --game-danger: oklch(0.6368 0.2078 25.3313 / 0.14);
   --game-danger-border: oklch(0.786 0.109 24.9 / 0.32);
   --game-danger-foreground: oklch(0.961 0.019 17.4);
+  --shell-surface: oklch(0.985 0.004 247.8575 / 0.68);
+  --shell-surface-strong: oklch(0.992 0.003 247.8575 / 0.82);
+  --shell-surface-overlay: oklch(0.991 0.003 247.8575 / 0.9);
+  --shell-surface-inset: oklch(1 0 0 / 0.56);
+  --shell-border: oklch(0.3717 0.0392 257.287 / 0.14);
+  --shell-foreground: oklch(0.2077 0.0398 265.7549);
+  --shell-muted: oklch(0.3717 0.0392 257.287 / 0.92);
+  --shell-kicker: oklch(0.4617 0.0502 250.287 / 0.88);
+  --shell-danger: oklch(0.962 0.01 25.3313 / 0.88);
+  --shell-danger-border: oklch(0.701 0.083 24.9 / 0.32);
+  --shell-danger-foreground: oklch(0.482 0.162 23.7);
+  --game-ui-scale: 1;
   --ui-font-sans: "Geist Variable", sans-serif;
   --ui-font-heading:
     "National Park Variable", "Geist Variable", "Trebuchet MS", sans-serif;
@@ -211,6 +223,17 @@
   --game-danger: oklch(0.3958 0.1331 25.723 / 0.24);
   --game-danger-border: oklch(0.727 0.108 25.3 / 0.38);
   --game-danger-foreground: oklch(0.948 0.026 18.6);
+  --shell-surface: oklch(0.985 0.004 247.8575 / 0.68);
+  --shell-surface-strong: oklch(0.992 0.003 247.8575 / 0.82);
+  --shell-surface-overlay: oklch(0.991 0.003 247.8575 / 0.9);
+  --shell-surface-inset: oklch(1 0 0 / 0.56);
+  --shell-border: oklch(0.3717 0.0392 257.287 / 0.14);
+  --shell-foreground: oklch(0.2077 0.0398 265.7549);
+  --shell-muted: oklch(0.3717 0.0392 257.287 / 0.92);
+  --shell-kicker: oklch(0.4617 0.0502 250.287 / 0.88);
+  --shell-danger: oklch(0.962 0.01 25.3313 / 0.88);
+  --shell-danger-border: oklch(0.701 0.083 24.9 / 0.32);
+  --shell-danger-foreground: oklch(0.482 0.162 23.7);
   --ui-font-sans: "Geist Variable", sans-serif;
   --ui-font-heading:
     "National Park Variable", "Geist Variable", "Trebuchet MS", sans-serif;
@@ -308,22 +331,22 @@
 
   .type-game-title {
     color: var(--game-foreground);
-    font-size: 0.875rem;
+    font-size: calc(0.875rem * var(--game-ui-scale));
     font-weight: 500;
-    line-height: 1.25rem;
+    line-height: calc(1.25rem * var(--game-ui-scale));
   }
 
   .type-game-body {
     color: var(--game-muted);
     font-variant-numeric: tabular-nums;
-    font-size: 0.875rem;
+    font-size: calc(0.875rem * var(--game-ui-scale));
     line-height: 1.625;
   }
 
   .type-game-detail {
     color: var(--game-muted);
     font-variant-numeric: tabular-nums;
-    font-size: 0.75rem;
+    font-size: calc(0.75rem * var(--game-ui-scale));
     line-height: 1.5;
   }
 
@@ -427,7 +450,7 @@
     color: var(--game-foreground);
     font-family: var(--font-heading);
     font-optical-sizing: auto;
-    font-size: 1.125rem;
+    font-size: calc(1.125rem * var(--game-ui-scale));
     font-weight: 600;
     letter-spacing: var(--tracking-tight);
     line-height: 1.35;
@@ -437,10 +460,10 @@
     color: var(--game-kicker);
     font-family: var(--font-heading);
     font-optical-sizing: auto;
-    font-size: 0.875rem;
+    font-size: calc(0.875rem * var(--game-ui-scale));
     font-weight: 500;
     letter-spacing: 0.2em;
-    line-height: 1.25rem;
+    line-height: calc(1.25rem * var(--game-ui-scale));
     text-transform: uppercase;
   }
 
@@ -449,9 +472,9 @@
     font-family: var(--font-heading);
     font-optical-sizing: auto;
     font-variant-numeric: tabular-nums;
-    font-size: 0.75rem;
+    font-size: calc(0.75rem * var(--game-ui-scale));
     letter-spacing: 0.22em;
-    line-height: 1.25rem;
+    line-height: calc(1.25rem * var(--game-ui-scale));
     text-transform: uppercase;
   }
 
@@ -460,7 +483,71 @@
     font-family: var(--font-heading);
     font-optical-sizing: auto;
     font-variant-numeric: tabular-nums;
-    font-size: 1.5rem;
+    font-size: calc(1.5rem * var(--game-ui-scale));
+    font-weight: 600;
+    letter-spacing: var(--tracking-tight);
+    line-height: 1.15;
+  }
+
+  .type-shell-title {
+    color: var(--shell-foreground);
+    font-size: calc(0.875rem * var(--game-ui-scale));
+    font-weight: 500;
+    line-height: calc(1.25rem * var(--game-ui-scale));
+  }
+
+  .type-shell-body {
+    color: var(--shell-muted);
+    font-variant-numeric: tabular-nums;
+    font-size: calc(0.875rem * var(--game-ui-scale));
+    line-height: 1.625;
+  }
+
+  .type-shell-detail {
+    color: var(--shell-muted);
+    font-variant-numeric: tabular-nums;
+    font-size: calc(0.75rem * var(--game-ui-scale));
+    line-height: 1.5;
+  }
+
+  .type-shell-heading {
+    color: var(--shell-foreground);
+    font-family: var(--font-heading);
+    font-optical-sizing: auto;
+    font-size: calc(1.125rem * var(--game-ui-scale));
+    font-weight: 600;
+    letter-spacing: var(--tracking-tight);
+    line-height: 1.35;
+  }
+
+  .type-shell-banner {
+    color: var(--shell-kicker);
+    font-family: var(--font-heading);
+    font-optical-sizing: auto;
+    font-size: calc(0.875rem * var(--game-ui-scale));
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    line-height: calc(1.25rem * var(--game-ui-scale));
+    text-transform: uppercase;
+  }
+
+  .type-shell-caption {
+    color: var(--shell-kicker);
+    font-family: var(--font-heading);
+    font-optical-sizing: auto;
+    font-variant-numeric: tabular-nums;
+    font-size: calc(0.75rem * var(--game-ui-scale));
+    letter-spacing: 0.22em;
+    line-height: calc(1.25rem * var(--game-ui-scale));
+    text-transform: uppercase;
+  }
+
+  .type-shell-value {
+    color: var(--shell-foreground);
+    font-family: var(--font-heading);
+    font-optical-sizing: auto;
+    font-variant-numeric: tabular-nums;
+    font-size: calc(1.5rem * var(--game-ui-scale));
     font-weight: 600;
     letter-spacing: var(--tracking-tight);
     line-height: 1.15;
@@ -500,6 +587,42 @@
     background-color: var(--game-danger);
     border: 1px solid var(--game-danger-border);
     color: var(--game-danger-foreground);
+  }
+
+  .surface-shell-panel {
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    background-color: var(--shell-surface);
+    border: 1px solid var(--shell-border);
+  }
+
+  .surface-shell-panel-strong {
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+    background-color: var(--shell-surface-strong);
+    border: 1px solid var(--shell-border);
+  }
+
+  .surface-shell-overlay {
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+    background-color: var(--shell-surface-overlay);
+    border: 1px solid var(--shell-border);
+  }
+
+  .surface-shell-inset {
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    background-color: var(--shell-surface-inset);
+    border: 1px solid var(--shell-border);
+  }
+
+  .surface-shell-danger {
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    background-color: var(--shell-danger);
+    border: 1px solid var(--shell-danger-border);
+    color: var(--shell-danger-foreground);
   }
 
   @media (min-width: 640px) {

@@ -96,6 +96,22 @@ function freezeVector3(x: number, y: number, z: number) {
   });
 }
 
+const remoteVehiclePresentationInterpolationRatePerSecond = 16;
+const remoteVehiclePresentationTeleportSnapDistanceMeters = 3.5;
+const remoteVehiclePresentationYawSnapRadians = 0.75;
+
+function resolveRemoteVehiclePresentationInterpolationAlpha(
+  deltaSeconds: number
+): number {
+  if (!Number.isFinite(deltaSeconds) || deltaSeconds <= 0) {
+    return 0;
+  }
+
+  return (
+    1 - Math.exp(-remoteVehiclePresentationInterpolationRatePerSecond * deltaSeconds)
+  );
+}
+
 function sampleRemotePlayerPosition(
   basePlayer: MetaverseRealtimePlayerSnapshot,
   nextPlayer: MetaverseRealtimePlayerSnapshot | null,
@@ -280,6 +296,7 @@ export class MetaverseRemoteWorldRuntime {
   readonly #authoritativeServerClock: AuthoritativeServerClock;
 
   #connectionPromise: Promise<MetaverseRealtimeWorldSnapshot> | null = null;
+  #lastSampledAtMs: number | null = null;
   #remoteCharacterPresentations: readonly MetaverseRemoteCharacterPresentationSnapshot[] =
     Object.freeze([]);
   #remoteVehiclePresentations: readonly MetaverseRemoteVehiclePresentationSnapshot[] =
@@ -353,36 +370,34 @@ export class MetaverseRemoteWorldRuntime {
     return this.#remoteVehiclePresentations;
   }
 
+  readFreshAuthoritativeLocalPlayerSnapshot(
+    maxAuthoritativeSnapshotAgeMs: number
+  ): MetaverseRealtimePlayerSnapshot | null {
+    const latestWorldSnapshot = this.#readFreshLatestWorldSnapshot(
+      maxAuthoritativeSnapshotAgeMs
+    );
+
+    if (latestWorldSnapshot === null || this.#localPlayerIdentity === null) {
+      return null;
+    }
+
+    return (
+      latestWorldSnapshot.players.find(
+        (playerSnapshot) =>
+          playerSnapshot.playerId === this.#localPlayerIdentity?.playerId
+      ) ?? null
+    );
+  }
+
   readFreshAuthoritativeVehicleSnapshot(
     environmentAssetId: string,
     maxAuthoritativeSnapshotAgeMs: number
   ): MetaverseRealtimeVehicleSnapshot | null {
-    const latestWorldSnapshot =
-      this.#metaverseWorldClient?.worldSnapshotBuffer[
-        (this.#metaverseWorldClient?.worldSnapshotBuffer.length ?? 0) - 1
-      ] ?? null;
+    const latestWorldSnapshot = this.#readFreshLatestWorldSnapshot(
+      maxAuthoritativeSnapshotAgeMs
+    );
 
     if (latestWorldSnapshot === null) {
-      return null;
-    }
-
-    const localWallClockMs = this.#readWallClockMs();
-
-    this.#authoritativeServerClock.observeServerTime(
-      Number(latestWorldSnapshot.tick.serverTimeMs),
-      localWallClockMs
-    );
-
-    const authoritativeSnapshotAgeMs = Math.max(
-      0,
-      this.#authoritativeServerClock.readEstimatedServerTimeMs(localWallClockMs) -
-        Number(latestWorldSnapshot.tick.serverTimeMs)
-    );
-
-    if (
-      authoritativeSnapshotAgeMs >
-      Math.max(0, maxAuthoritativeSnapshotAgeMs)
-    ) {
       return null;
     }
 
@@ -423,6 +438,7 @@ export class MetaverseRemoteWorldRuntime {
     this.#metaverseWorldClient = null;
     this.#connectionPromise = null;
     this.#authoritativeServerClock.reset();
+    this.#lastSampledAtMs = null;
     this.#remoteCharacterPresentations = Object.freeze([]);
     this.#remoteVehiclePresentations = Object.freeze([]);
   }
@@ -461,6 +477,12 @@ export class MetaverseRemoteWorldRuntime {
   sampleRemoteWorld(): void {
     const metaverseWorldClient = this.#metaverseWorldClient;
     const localPlayerIdentity = this.#localPlayerIdentity;
+    const sampleWallClockMs = this.#readWallClockMs();
+    const deltaSeconds =
+      this.#lastSampledAtMs === null
+        ? 0
+        : Math.min(0.1, Math.max(0, (sampleWallClockMs - this.#lastSampledAtMs) / 1000));
+    this.#lastSampledAtMs = sampleWallClockMs;
     const sampledWorldFrame =
       metaverseWorldClient === null || localPlayerIdentity === null
         ? null
@@ -525,23 +547,86 @@ export class MetaverseRemoteWorldRuntime {
         nextSnapshot?.vehicles.find(
           (candidate) => candidate.vehicleId === baseVehicle.vehicleId
         ) ?? null;
+      const sampledVehiclePresentation = Object.freeze({
+        environmentAssetId: baseVehicle.environmentAssetId,
+        position: sampleRemoteVehiclePosition(
+          baseVehicle,
+          nextVehicle,
+          alpha,
+          extrapolationSeconds
+        ),
+        yawRadians: sampleRemoteVehicleYawRadians(
+          baseVehicle,
+          nextVehicle,
+          alpha,
+          extrapolationSeconds
+        )
+      });
+      const previousVehiclePresentation =
+        this.#remoteVehiclePresentations.find(
+          (candidate) =>
+            candidate.environmentAssetId ===
+            sampledVehiclePresentation.environmentAssetId
+        ) ?? null;
+      const vehiclePositionDeltaX =
+        sampledVehiclePresentation.position.x -
+        (previousVehiclePresentation?.position.x ??
+          sampledVehiclePresentation.position.x);
+      const vehiclePositionDeltaY =
+        sampledVehiclePresentation.position.y -
+        (previousVehiclePresentation?.position.y ??
+          sampledVehiclePresentation.position.y);
+      const vehiclePositionDeltaZ =
+        sampledVehiclePresentation.position.z -
+        (previousVehiclePresentation?.position.z ??
+          sampledVehiclePresentation.position.z);
+      const vehiclePositionDistance = Math.hypot(
+        vehiclePositionDeltaX,
+        vehiclePositionDeltaY,
+        vehiclePositionDeltaZ
+      );
+      const vehicleYawDistance = Math.abs(
+        wrapRadians(
+          sampledVehiclePresentation.yawRadians -
+            (previousVehiclePresentation?.yawRadians ??
+              sampledVehiclePresentation.yawRadians)
+        )
+      );
+      const vehicleInterpolationAlpha =
+        resolveRemoteVehiclePresentationInterpolationAlpha(deltaSeconds);
 
       remoteVehiclePresentations.push(
-        Object.freeze({
-          environmentAssetId: baseVehicle.environmentAssetId,
-          position: sampleRemoteVehiclePosition(
-            baseVehicle,
-            nextVehicle,
-            alpha,
-            extrapolationSeconds
-          ),
-          yawRadians: sampleRemoteVehicleYawRadians(
-            baseVehicle,
-            nextVehicle,
-            alpha,
-            extrapolationSeconds
-          )
-        })
+        previousVehiclePresentation === null ||
+          vehicleInterpolationAlpha <= 0 ||
+          vehiclePositionDistance >=
+            remoteVehiclePresentationTeleportSnapDistanceMeters ||
+          vehicleYawDistance >= remoteVehiclePresentationYawSnapRadians
+          ? sampledVehiclePresentation
+          : Object.freeze({
+              environmentAssetId: sampledVehiclePresentation.environmentAssetId,
+              position: freezeVector3(
+                lerp(
+                  previousVehiclePresentation.position.x,
+                  sampledVehiclePresentation.position.x,
+                  vehicleInterpolationAlpha
+                ),
+                lerp(
+                  previousVehiclePresentation.position.y,
+                  sampledVehiclePresentation.position.y,
+                  vehicleInterpolationAlpha
+                ),
+                lerp(
+                  previousVehiclePresentation.position.z,
+                  sampledVehiclePresentation.position.z,
+                  vehicleInterpolationAlpha
+                )
+              ),
+              yawRadians: lerpWrappedRadians(
+                previousVehiclePresentation.yawRadians,
+                sampledVehiclePresentation.yawRadians,
+                vehicleInterpolationAlpha
+              )
+            })
       );
     }
 
@@ -598,5 +683,36 @@ export class MetaverseRemoteWorldRuntime {
       localWallClockMs,
       this.#samplingConfig.interpolationDelayMs
     );
+  }
+
+  #readFreshLatestWorldSnapshot(
+    maxAuthoritativeSnapshotAgeMs: number
+  ): MetaverseRealtimeWorldSnapshot | null {
+    const latestWorldSnapshot =
+      this.#metaverseWorldClient?.worldSnapshotBuffer[
+        (this.#metaverseWorldClient?.worldSnapshotBuffer.length ?? 0) - 1
+      ] ?? null;
+
+    if (latestWorldSnapshot === null) {
+      return null;
+    }
+
+    const localWallClockMs = this.#readWallClockMs();
+
+    this.#authoritativeServerClock.observeServerTime(
+      Number(latestWorldSnapshot.tick.serverTimeMs),
+      localWallClockMs
+    );
+
+    const authoritativeSnapshotAgeMs = Math.max(
+      0,
+      this.#authoritativeServerClock.readEstimatedServerTimeMs(localWallClockMs) -
+        Number(latestWorldSnapshot.tick.serverTimeMs)
+    );
+
+    return authoritativeSnapshotAgeMs >
+      Math.max(0, maxAuthoritativeSnapshotAgeMs)
+      ? null
+      : latestWorldSnapshot;
   }
 }

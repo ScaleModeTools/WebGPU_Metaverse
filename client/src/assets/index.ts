@@ -27,6 +27,7 @@ export {
   environmentPropManifest,
   metaverseHubDockEnvironmentAssetId,
   metaverseHubCrateEnvironmentAssetId,
+  metaverseHubDiveBoatEnvironmentAssetId,
   metaverseHubSkiffEnvironmentAssetId
 } from "./config/environment-prop-manifest";
 export { reticleManifest } from "./config/reticle-manifest";

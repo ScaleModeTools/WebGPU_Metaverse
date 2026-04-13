@@ -261,3 +261,108 @@ test("MetaverseAuthoritativeWorldRuntime coalesces driver control per tick and r
   assert.ok((worldSnapshot.players[0]?.position.z ?? 0) > 24);
   assert.ok((worldSnapshot.players[0]?.linearVelocity.z ?? 0) > 0);
 });
+
+test("MetaverseAuthoritativeWorldRuntime keeps a claimed driver seat exclusive and ignores conflicting driver control", () => {
+  const runtime = new MetaverseAuthoritativeWorldRuntime({
+    playerInactivityTimeoutMs: createMilliseconds(5_000),
+    tickIntervalMs: createMilliseconds(100)
+  });
+  const firstDriverPlayerId = requireValue(
+    createMetaversePlayerId("first-harbor-pilot"),
+    "first driver playerId"
+  );
+  const conflictingDriverPlayerId = requireValue(
+    createMetaversePlayerId("conflicting-harbor-pilot"),
+    "conflicting driver playerId"
+  );
+  const firstDriverUsername = requireValue(
+    createUsername("First Harbor Pilot"),
+    "first driver username"
+  );
+  const conflictingDriverUsername = requireValue(
+    createUsername("Conflicting Harbor Pilot"),
+    "conflicting driver username"
+  );
+
+  runtime.acceptPresenceCommand(
+    createMetaverseJoinPresenceCommand({
+      characterId: "metaverse-mannequin-v1",
+      playerId: firstDriverPlayerId,
+      pose: {
+        animationVocabulary: "idle",
+        locomotionMode: "mounted",
+        mountedOccupancy: {
+          environmentAssetId: "metaverse-hub-skiff-v1",
+          entryId: null,
+          occupancyKind: "seat",
+          occupantRole: "driver",
+          seatId: "driver-seat"
+        },
+        position: {
+          x: 0,
+          y: 0.4,
+          z: 24
+        },
+        stateSequence: 1,
+        yawRadians: 0
+      },
+      username: firstDriverUsername
+    }),
+    0
+  );
+  runtime.acceptPresenceCommand(
+    createMetaverseJoinPresenceCommand({
+      characterId: "metaverse-mannequin-v1",
+      playerId: conflictingDriverPlayerId,
+      pose: {
+        animationVocabulary: "idle",
+        locomotionMode: "mounted",
+        mountedOccupancy: {
+          environmentAssetId: "metaverse-hub-skiff-v1",
+          entryId: null,
+          occupancyKind: "seat",
+          occupantRole: "driver",
+          seatId: "driver-seat"
+        },
+        position: {
+          x: 1,
+          y: 0.4,
+          z: 24
+        },
+        stateSequence: 1,
+        yawRadians: 0
+      },
+      username: conflictingDriverUsername
+    }),
+    10
+  );
+  runtime.acceptWorldCommand(
+    createMetaverseSyncDriverVehicleControlCommand({
+      controlIntent: {
+        boost: false,
+        environmentAssetId: "metaverse-hub-skiff-v1",
+        moveAxis: 1,
+        strafeAxis: 0,
+        yawAxis: 0
+      },
+      controlSequence: 1,
+      playerId: conflictingDriverPlayerId
+    }),
+    20
+  );
+
+  const worldSnapshot = runtime.readWorldSnapshot(200, firstDriverPlayerId);
+  const firstDriverSnapshot = worldSnapshot.players.find(
+    (playerSnapshot) => playerSnapshot.playerId === firstDriverPlayerId
+  );
+  const conflictingDriverSnapshot = worldSnapshot.players.find(
+    (playerSnapshot) => playerSnapshot.playerId === conflictingDriverPlayerId
+  );
+
+  assert.equal(worldSnapshot.vehicles[0]?.seats[0]?.occupantPlayerId, firstDriverPlayerId);
+  assert.equal(worldSnapshot.vehicles[0]?.position.z, 24);
+  assert.equal(worldSnapshot.vehicles[0]?.linearVelocity.z, 0);
+  assert.equal(firstDriverSnapshot?.mountedOccupancy?.seatId, "driver-seat");
+  assert.equal(conflictingDriverSnapshot?.mountedOccupancy, null);
+  assert.equal(conflictingDriverSnapshot?.locomotionMode, "grounded");
+});

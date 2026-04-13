@@ -8,6 +8,7 @@ import {
   type RapierColliderHandle
 } from "@/physics";
 import type { SceneAssetLoader } from "../render/webgpu-metaverse-scene";
+import { shouldKeepMountedOccupancyFreeRoam } from "../states/mounted-occupancy";
 import {
   resolvePlacedCollisionTriMeshes,
   resolveDynamicEnvironmentCuboidColliders,
@@ -17,6 +18,7 @@ import {
 import type {
   MetaverseEnvironmentAssetProofConfig,
   MetaverseEnvironmentProofConfig,
+  MetaverseRemoteCharacterPresentationSnapshot,
   MetaverseRuntimeConfig,
   MetaverseVector3Snapshot
 } from "../types/metaverse-runtime";
@@ -50,6 +52,12 @@ const metaversePushableBodyAdditionalMass = 12;
 const metaversePushableBodyAngularDamping = 10;
 const metaversePushableBodyGravityScale = 1;
 const metaversePushableBodyLinearDamping = 4.5;
+const identityQuaternion = Object.freeze({
+  x: 0,
+  y: 0,
+  z: 0,
+  w: 1
+});
 
 function toFiniteNumber(value: number, fallback = 0): number {
   return Number.isFinite(value) ? value : fallback;
@@ -193,6 +201,14 @@ export class MetaverseEnvironmentPhysicsRuntime {
     string,
     MetaverseDynamicCuboidBodyRuntime
   >();
+  #remoteCharacterBlockerCollidersByPlayerId = new Map<
+    string,
+    RapierColliderHandle
+  >();
+  #remoteCharacterBlockerSnapshotsByPlayerId = new Map<
+    string,
+    MetaversePlacedCuboidColliderSnapshot
+  >();
 
   constructor(
     config: MetaverseRuntimeConfig,
@@ -320,6 +336,13 @@ export class MetaverseEnvironmentPhysicsRuntime {
     }
 
     this.#dynamicEnvironmentColliderRuntimesByEnvironmentAssetId.clear();
+    for (const remoteCharacterBlockerCollider of this
+      .#remoteCharacterBlockerCollidersByPlayerId.values()) {
+      this.#physicsRuntime.removeCollider(remoteCharacterBlockerCollider);
+    }
+
+    this.#remoteCharacterBlockerCollidersByPlayerId.clear();
+    this.#remoteCharacterBlockerSnapshotsByPlayerId.clear();
     this.#surfaceColliderSnapshots.length = 0;
 
     for (const [
@@ -352,6 +375,63 @@ export class MetaverseEnvironmentPhysicsRuntime {
         dynamicEnvironmentPose
       );
     }
+  }
+
+  syncRemoteCharacterBlockers(
+    remoteCharacterPresentations: readonly MetaverseRemoteCharacterPresentationSnapshot[]
+  ): void {
+    if (!this.#physicsRuntime.isInitialized) {
+      return;
+    }
+
+    const activePlayerIds = new Set<string>();
+
+    for (const remoteCharacterPresentation of remoteCharacterPresentations) {
+      const blockerSnapshot = this.#createRemoteCharacterBlockerSnapshot(
+        remoteCharacterPresentation
+      );
+
+      if (blockerSnapshot === null) {
+        continue;
+      }
+
+      activePlayerIds.add(remoteCharacterPresentation.playerId);
+      const existingCollider =
+        this.#remoteCharacterBlockerCollidersByPlayerId.get(
+          remoteCharacterPresentation.playerId
+        );
+
+      if (existingCollider === undefined) {
+        this.#remoteCharacterBlockerCollidersByPlayerId.set(
+          remoteCharacterPresentation.playerId,
+          this.#physicsRuntime.createFixedCuboidCollider(
+            blockerSnapshot.halfExtents,
+            blockerSnapshot.translation,
+            blockerSnapshot.rotation
+          )
+        );
+      } else {
+        existingCollider.setTranslation(blockerSnapshot.translation);
+        existingCollider.setRotation(blockerSnapshot.rotation);
+      }
+
+      this.#remoteCharacterBlockerSnapshotsByPlayerId.set(
+        remoteCharacterPresentation.playerId,
+        blockerSnapshot
+      );
+    }
+
+    for (const [playerId, collider] of this.#remoteCharacterBlockerCollidersByPlayerId) {
+      if (activePlayerIds.has(playerId)) {
+        continue;
+      }
+
+      this.#physicsRuntime.removeCollider(collider);
+      this.#remoteCharacterBlockerCollidersByPlayerId.delete(playerId);
+      this.#remoteCharacterBlockerSnapshotsByPlayerId.delete(playerId);
+    }
+
+    this.#syncSurfaceColliderSnapshots();
   }
 
   syncDebugPresentation(): void {
@@ -534,5 +614,49 @@ export class MetaverseEnvironmentPhysicsRuntime {
         ...dynamicEnvironmentColliderRuntime.surfaceColliderSnapshots
       );
     }
+
+    this.#surfaceColliderSnapshots.push(
+      ...this.#remoteCharacterBlockerSnapshotsByPlayerId.values()
+    );
+  }
+
+  #createRemoteCharacterBlockerSnapshot(
+    remoteCharacterPresentation: MetaverseRemoteCharacterPresentationSnapshot
+  ): MetaversePlacedCuboidColliderSnapshot | null {
+    const mountedOccupancy = remoteCharacterPresentation.mountedOccupancy;
+    const animationVocabulary =
+      remoteCharacterPresentation.presentation.animationVocabulary;
+
+    if (
+      animationVocabulary === "swim" ||
+      animationVocabulary === "swim-idle" ||
+      (mountedOccupancy !== null &&
+        !shouldKeepMountedOccupancyFreeRoam(mountedOccupancy))
+    ) {
+      return null;
+    }
+
+    const halfHeightMeters =
+      this.#config.groundedBody.capsuleHalfHeightMeters +
+      this.#config.groundedBody.capsuleRadiusMeters;
+    const planarHalfExtentMeters =
+      this.#config.groundedBody.capsuleRadiusMeters * 0.92;
+    const presentationPosition = remoteCharacterPresentation.presentation.position;
+
+    return Object.freeze({
+      halfExtents: freezeVector3(
+        planarHalfExtentMeters,
+        halfHeightMeters,
+        planarHalfExtentMeters
+      ),
+      ownerEnvironmentAssetId: null,
+      rotation: identityQuaternion,
+      translation: freezeVector3(
+        presentationPosition.x,
+        presentationPosition.y + halfHeightMeters,
+        presentationPosition.z
+      ),
+      traversalAffordance: "blocker"
+    });
   }
 }

@@ -12,6 +12,8 @@ export function MetaverseShell() {
     activeStep === "calibration" ||
     activeStep === "metaverse" ||
     activeStep === "gameplay";
+  const isMinimalEntryStage =
+    activeStep === "login" || activeStep === "main-menu";
   const showDeveloperUi = import.meta.env.DEV;
   const stageRouter = (
     <ShellStageRouter
@@ -59,11 +61,13 @@ export function MetaverseShell() {
   );
 
   return (
-    <div className="min-h-dvh overflow-hidden">
+    <div className="relative min-h-dvh overflow-hidden">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgb(14_165_233/0.12),transparent_30%),radial-gradient(circle_at_bottom_right,rgb(251_146_60/0.14),transparent_32%)]" />
 
       {isImmersiveStage ? (
         <main className="relative min-h-dvh">{stageRouter}</main>
+      ) : isMinimalEntryStage ? (
+        <main className="relative min-h-dvh overflow-y-auto">{stageRouter}</main>
       ) : (
         <div className="relative mx-auto flex min-h-dvh max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
           <ShellProgressHeader

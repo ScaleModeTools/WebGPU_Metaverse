@@ -15,11 +15,12 @@ import {
   environmentPropManifest,
   metaverseHubCrateEnvironmentAssetId,
   metaverseHubDockEnvironmentAssetId,
+  metaverseHubDiveBoatEnvironmentAssetId,
   metaverseHubPushableCrateEnvironmentAssetId,
   metaverseHubSkiffEnvironmentAssetId
 } from "@/assets/config/environment-prop-manifest";
 import type { AssetLodGroup } from "@/assets/types/asset-lod";
-import type { SkeletonId } from "@/assets/types/asset-socket";
+import type { SkeletonId, SocketId } from "@/assets/types/asset-socket";
 import type {
   EnvironmentAssetDescriptor,
   EnvironmentBoxColliderDescriptor,
@@ -67,6 +68,24 @@ function isSupportedFullBodySkeleton(skeleton: SkeletonId): boolean {
   }
 
   return false;
+}
+
+function resolveHeldAttachmentSocketName(
+  skeletonId: SkeletonId,
+  socketId: SocketId
+): MetaverseAttachmentProofConfig["heldMount"]["socketName"] {
+  if (skeletonId === "humanoid_v2") {
+    switch (socketId) {
+      case "hand_l_socket":
+        return "palm_l_socket";
+      case "hand_r_socket":
+        return "palm_r_socket";
+      default:
+        return socketId;
+    }
+  }
+
+  return socketId;
 }
 
 function resolveMetaverseCharacterProofConfig(): MetaverseCharacterProofConfig {
@@ -162,6 +181,7 @@ function resolveMetaverseCharacterProofConfig(): MetaverseCharacterProofConfig {
     characterId: characterDescriptor.id,
     label: characterDescriptor.label,
     modelPath: resolveLodModelPath(characterDescriptor.renderModel),
+    skeletonId: characterDescriptor.skeleton,
     socketNames: characterDescriptor.socketIds
   });
 }
@@ -250,17 +270,39 @@ function resolveMetaverseAttachmentProofConfig(
       z: resolvedVector.z / magnitude
     });
   };
-  const resolveAttachmentGripAlignment = (
-    gripAlignment: AttachmentGripAlignmentDescriptor
+  const resolveAttachmentMarkerNodeName = (nodeName: string, label: string) => {
+    const trimmedNodeName = nodeName.trim();
+
+    if (trimmedNodeName.length === 0) {
+      throw new Error(
+        `Metaverse attachment ${attachmentDescriptor.label} requires ${label}.`
+      );
+    }
+
+    return trimmedNodeName;
+  };
+  const resolveOptionalAttachmentMarkerNodeName = (
+    nodeName: string | null | undefined,
+    label: string
   ) => {
-    const attachmentForwardAxis = resolveNormalizedAttachmentAxis(
-      gripAlignment.attachmentForwardAxis,
-      "attachment forward axis"
-    );
-    const attachmentUpAxis = resolveNormalizedAttachmentAxis(
-      gripAlignment.attachmentUpAxis,
-      "attachment up axis"
-    );
+    if (nodeName === null || nodeName === undefined) {
+      return null;
+    }
+
+    return resolveAttachmentMarkerNodeName(nodeName, label);
+  };
+  const resolveAttachmentGripAlignment = (
+    gripAlignment: AttachmentGripAlignmentDescriptor,
+    socketName: string
+  ) => {
+    const attachmentGripMarkerNodeNameBySocketName =
+      gripAlignment.attachmentGripMarkerNodeNameBySocketId as
+        | Readonly<Record<string, string | null | undefined>>
+        | undefined;
+    const attachmentGripMarkerNodeName =
+      attachmentGripMarkerNodeNameBySocketName?.[socketName] ??
+      gripAlignment.attachmentGripMarkerNodeName ??
+      null;
     const socketForwardAxis = resolveNormalizedAttachmentAxis(
       gripAlignment.socketForwardAxis,
       "socket forward axis"
@@ -269,17 +311,56 @@ function resolveMetaverseAttachmentProofConfig(
       gripAlignment.socketUpAxis,
       "socket up axis"
     );
+    const socketOffset = resolveAttachmentVector3(
+      gripAlignment.socketOffset,
+      "socket offset"
+    );
 
-    if (
-      Math.abs(
-        attachmentForwardAxis.x * attachmentUpAxis.x +
-          attachmentForwardAxis.y * attachmentUpAxis.y +
-          attachmentForwardAxis.z * attachmentUpAxis.z
-      ) > 0.999
-    ) {
-      throw new Error(
-        `Metaverse attachment ${attachmentDescriptor.label} requires attachment forward and up axes to stay non-collinear.`
+    if ("attachmentForwardAxis" in gripAlignment) {
+      const attachmentForwardAxis = resolveNormalizedAttachmentAxis(
+        gripAlignment.attachmentForwardAxis,
+        "attachment forward axis"
       );
+      const attachmentUpAxis = resolveNormalizedAttachmentAxis(
+        gripAlignment.attachmentUpAxis,
+        "attachment up axis"
+      );
+
+      if (
+        Math.abs(
+          attachmentForwardAxis.x * attachmentUpAxis.x +
+            attachmentForwardAxis.y * attachmentUpAxis.y +
+            attachmentForwardAxis.z * attachmentUpAxis.z
+        ) > 0.999
+      ) {
+        throw new Error(
+          `Metaverse attachment ${attachmentDescriptor.label} requires attachment forward and up axes to stay non-collinear.`
+        );
+      }
+
+      if (
+        Math.abs(
+          socketForwardAxis.x * socketUpAxis.x +
+            socketForwardAxis.y * socketUpAxis.y +
+            socketForwardAxis.z * socketUpAxis.z
+        ) > 0.999
+      ) {
+        throw new Error(
+          `Metaverse attachment ${attachmentDescriptor.label} requires socket forward and up axes to stay non-collinear.`
+        );
+      }
+
+      return Object.freeze({
+        attachmentForwardAxis,
+        attachmentUpAxis,
+        attachmentGripMarkerNodeName: resolveOptionalAttachmentMarkerNodeName(
+          attachmentGripMarkerNodeName,
+          `attachment grip marker node name for ${socketName}`
+        ),
+        socketForwardAxis,
+        socketOffset,
+        socketUpAxis
+      });
     }
 
     if (
@@ -295,13 +376,20 @@ function resolveMetaverseAttachmentProofConfig(
     }
 
     return Object.freeze({
-      attachmentForwardAxis,
-      attachmentUpAxis,
-      socketForwardAxis,
-      socketOffset: resolveAttachmentVector3(
-        gripAlignment.socketOffset,
-        "socket offset"
+      attachmentForwardMarkerNodeName: resolveAttachmentMarkerNodeName(
+        gripAlignment.attachmentForwardMarkerNodeName,
+        "attachment forward marker node name"
       ),
+      attachmentGripMarkerNodeName: resolveOptionalAttachmentMarkerNodeName(
+        attachmentGripMarkerNodeName,
+        `attachment grip marker node name for ${socketName}`
+      ),
+      attachmentUpMarkerNodeName: resolveAttachmentMarkerNodeName(
+        gripAlignment.attachmentUpMarkerNodeName,
+        "attachment up marker node name"
+      ),
+      socketForwardAxis,
+      socketOffset,
       socketUpAxis
     });
   };
@@ -337,12 +425,28 @@ function resolveMetaverseAttachmentProofConfig(
 
   return Object.freeze({
     attachmentId: attachmentDescriptor.id,
-    gripAlignment: resolveAttachmentGripAlignment(
-      attachmentDescriptor.gripAlignment
-    ),
+    heldMount: Object.freeze({
+      gripAlignment: resolveAttachmentGripAlignment(
+        attachmentDescriptor.gripAlignment,
+        attachmentDescriptor.defaultSocketId
+      ),
+      socketName: resolveHeldAttachmentSocketName(
+        characterDescriptor.skeleton,
+        attachmentDescriptor.defaultSocketId
+      )
+    }),
     label: attachmentDescriptor.label,
     modelPath: resolveLodModelPath(attachmentDescriptor.renderModel),
-    socketName: attachmentDescriptor.defaultSocketId,
+    mountedHolsterMount:
+      attachmentDescriptor.mountedHolster === null
+        ? null
+        : Object.freeze({
+            gripAlignment: resolveAttachmentGripAlignment(
+              attachmentDescriptor.mountedHolster.gripAlignment,
+              attachmentDescriptor.mountedHolster.socketName
+            ),
+            socketName: attachmentDescriptor.mountedHolster.socketName
+          }),
     supportPoints: resolveAttachmentSupportPoints(
       attachmentDescriptor.supportPoints
     )
@@ -410,6 +514,14 @@ const metaverseHubSkiffPlacements = Object.freeze([
   Object.freeze({
     position: Object.freeze({ x: 12.2, y: 0.12, z: -13.8 }),
     rotationYRadians: Math.PI * 0.86,
+    scale: 1
+  })
+] satisfies readonly MetaverseEnvironmentPlacementProofConfig[]);
+
+const metaverseHubDiveBoatPlacements = Object.freeze([
+  Object.freeze({
+    position: Object.freeze({ x: 22.4, y: 0.16, z: -16.2 }),
+    rotationYRadians: Math.PI * 0.88,
     scale: 1
   })
 ] satisfies readonly MetaverseEnvironmentPlacementProofConfig[]);
@@ -716,6 +828,10 @@ function resolveMetaverseEnvironmentProofConfig(
     {
       assetId: metaverseHubSkiffEnvironmentAssetId,
       placements: metaverseHubSkiffPlacements
+    },
+    {
+      assetId: metaverseHubDiveBoatEnvironmentAssetId,
+      placements: metaverseHubDiveBoatPlacements
     }
   ] as const;
   const assets = environmentAssets.map(({ assetId, placements }) => {

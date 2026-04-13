@@ -30,9 +30,8 @@ import {
 import { resolveDuckHuntGameplayCoopRoomId } from "../../experiences/duck-hunt/network";
 
 import { ImmersiveStageFrame } from "../../ui/components/immersive-stage-frame";
-import { LoginStageScreen } from "./login-stage-screen";
-import { MainMenuStageScreen } from "./main-menu-stage-screen";
 import { PermissionStageScreen } from "./permission-stage-screen";
+import { ShellEntryStageScreen } from "./shell-entry-stage-screen";
 import { TrackedHandCalibrationStageScreen } from "./tracked-hand-calibration-stage-screen";
 import { UnsupportedStageScreen } from "./unsupported-stage-screen";
 import {
@@ -167,11 +166,19 @@ export function ShellStageRouter({
 
   return (
     <section>
-      {activeStep === "login" ? (
-        <LoginStageScreen
+      {activeStep === "login" || activeStep === "main-menu" ? (
+        <ShellEntryStageScreen
+          capabilityStatus={capabilityStatus}
+          hasConfirmedProfile={activeStep === "main-menu" && profile !== null}
           hasStoredProfile={hasStoredProfile}
+          inputMode={inputMode}
           loginError={loginError}
           onClearProfile={onClearProfile}
+          onEditProfile={onEditProfile}
+          onEnterMetaverse={onEnterMetaverseRequest}
+          onRequestPermission={onRequestPermission}
+          onRecalibrationRequest={onRecalibrationRequest}
+          nextMetaverseStep={nextMetaverseStep}
           onSubmit={onLoginSubmit}
           setUsernameDraft={setUsernameDraft}
           usernameDraft={usernameDraft}
@@ -193,22 +200,6 @@ export function ShellStageRouter({
           handTrackingRuntime={handTrackingRuntime}
           onCalibrationProgress={onCalibrationProgress}
           profile={profile}
-        />
-      ) : null}
-
-      {activeStep === "main-menu" ? (
-        <MainMenuStageScreen
-          audioStatusLabel={audioStatusLabel}
-          calibrationQualityLabel={calibrationQualityLabel}
-          capabilityReasonLabel={capabilityReasonLabel}
-          capabilityStatus={capabilityStatus}
-          inputMode={inputMode}
-          metaverseControlMode={metaverseControlMode}
-          nextMetaverseStep={nextMetaverseStep}
-          onEnterMetaverse={onEnterMetaverseRequest}
-          onInputModeChange={onInputModeChange}
-          onMetaverseControlModeChange={onMetaverseControlModeChange}
-          onRecalibrationRequest={onRecalibrationRequest}
         />
       ) : null}
 

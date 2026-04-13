@@ -1,21 +1,12 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle
-} from "@/components/ui/card";
-import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
@@ -39,7 +30,13 @@ interface MetricRowProps {
   readonly value: string;
 }
 
-interface StatCardProps {
+interface MetaverseDeveloperOverlayProps {
+  readonly className?: string;
+  readonly hudScaleStyle?: CSSProperties;
+  readonly hudSnapshot: MetaverseHudSnapshot;
+}
+
+interface StatPanelProps {
   readonly description?: string;
   readonly label: string;
   readonly value: string;
@@ -290,25 +287,23 @@ function formatTopLevelHandshakeDebugLine(hudSnapshot: MetaverseHudSnapshot): st
 function MetricRow({ label, value }: MetricRowProps) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <span className="type-detail-muted">{label}</span>
-      <span className="type-detail font-medium text-right">{value}</span>
+      <span className="type-shell-caption">{label}</span>
+      <span className="type-shell-body text-right text-[color:var(--shell-foreground)]">
+        {value}
+      </span>
     </div>
   );
 }
 
-function StatCard({ description, label, value }: StatCardProps) {
+function StatPanel({ description, label, value }: StatPanelProps) {
   return (
-    <Card className="border-border/70 bg-muted/30" size="sm">
-      <CardHeader className="border-b border-border/60">
-        <CardTitle className="type-caption">{label}</CardTitle>
-        {description !== undefined ? (
-          <CardDescription>{description}</CardDescription>
-        ) : null}
-      </CardHeader>
-      <CardContent className="pt-3">
-        <p className="type-label">{value}</p>
-      </CardContent>
-    </Card>
+    <div className="surface-shell-inset rounded-[calc(1rem*var(--game-ui-scale))] p-[calc(1rem*var(--game-ui-scale))]">
+      <p className="type-shell-banner">{label}</p>
+      {description !== undefined ? (
+        <p className="type-shell-detail mt-2">{description}</p>
+      ) : null}
+      <p className="type-shell-heading mt-3">{value}</p>
+    </div>
   );
 }
 
@@ -320,35 +315,38 @@ function TransportDetailCard({
   title
 }: TransportDetailCardProps) {
   return (
-    <Card className="border-border/70 bg-card/90" size="sm">
-      <CardHeader className="border-b border-border/60">
-        <CardTitle className="type-caption">{title}</CardTitle>
-        <CardDescription>{summary}</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3 pt-3 text-xs">
-        <div className="rounded-xl border border-border/70 bg-muted/35 px-3 py-3">
-          <p className="type-label">Debug line</p>
-          <p className="type-body-muted mt-1">{debugLine}</p>
+    <div className="surface-shell-panel rounded-[calc(1.25rem*var(--game-ui-scale))] p-[calc(1rem*var(--game-ui-scale))]">
+      <div className="flex flex-col gap-1">
+        <p className="type-shell-banner">{title}</p>
+        <p className="type-shell-body">{summary}</p>
+      </div>
+
+      <div className="mt-4 flex flex-col gap-3">
+        <div className="surface-shell-inset rounded-[calc(1rem*var(--game-ui-scale))] px-[calc(1rem*var(--game-ui-scale))] py-[calc(0.9rem*var(--game-ui-scale))]">
+          <p className="type-shell-caption">Debug line</p>
+          <p className="type-shell-body mt-2">{debugLine}</p>
         </div>
+
         <div className="flex flex-col gap-2">
           {details.map((detail) => (
             <MetricRow key={detail.label} label={detail.label} value={detail.value} />
           ))}
         </div>
-        <div className="rounded-xl border border-border/70 bg-muted/20 px-3 py-3">
-          <p className="type-label">Last error</p>
-          <p className="type-body-muted mt-1">{errorLine}</p>
+
+        <div className="surface-shell-inset rounded-[calc(1rem*var(--game-ui-scale))] px-[calc(1rem*var(--game-ui-scale))] py-[calc(0.9rem*var(--game-ui-scale))]">
+          <p className="type-shell-caption">Last error</p>
+          <p className="type-shell-body mt-2">{errorLine}</p>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
 export function MetaverseDeveloperOverlay({
+  className,
+  hudScaleStyle,
   hudSnapshot
-}: {
-  readonly hudSnapshot: MetaverseHudSnapshot;
-}) {
+}: MetaverseDeveloperOverlayProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const compactMetrics = [
     {
@@ -472,52 +470,56 @@ export function MetaverseDeveloperOverlay({
   ] as const;
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-20">
-      <div className="pointer-events-auto absolute top-4 right-4 w-[min(18rem,calc(100%-2rem))]">
-        <Card
-          className="border-border/70 bg-card/90 shadow-lg backdrop-blur-md"
-          size="sm"
-        >
-          <CardHeader className="border-b border-border/60">
-            <CardTitle className="type-caption">Developer</CardTitle>
-            <CardDescription>Metaverse runtime</CardDescription>
-            <CardAction>
-              <Button
-                onClick={() => {
-                  setDialogOpen(true);
-                }}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                Debug details
-              </Button>
-            </CardAction>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2 pt-3 text-xs">
-            {compactMetrics.map((metric) => (
-              <MetricRow key={metric.label} label={metric.label} value={metric.value} />
-            ))}
-          </CardContent>
-          <CardFooter className="flex flex-col items-start gap-2">
-            <div className="flex flex-wrap gap-2">
-              <Badge>Boot {hudSnapshot.boot.phase.replaceAll("-", " ")}</Badge>
-              <Badge variant="secondary">
-                {formatReliableTransportSummary(hudSnapshot.transport.worldReliable)}
-              </Badge>
-              <Badge variant="outline">
-                {formatDatagramTransportSummary(
-                  hudSnapshot.transport.worldDriverDatagram
-                )}
-              </Badge>
+    <div
+      className={["pointer-events-auto min-w-0 w-full", className]
+        .filter(Boolean)
+        .join(" ")}
+      style={hudScaleStyle}
+    >
+      <div className="surface-shell-overlay rounded-[calc(1.4rem*var(--game-ui-scale))] p-[calc(1rem*var(--game-ui-scale))] shadow-[0_16px_48px_rgb(15_23_42/_0.32)]">
+        <div className="flex flex-wrap gap-2">
+          <Badge>Developer</Badge>
+          <Badge variant="secondary">
+            Boot {hudSnapshot.boot.phase.replaceAll("-", " ")}
+          </Badge>
+          <Badge variant="outline">
+            {formatReliableTransportSummary(hudSnapshot.transport.worldReliable)}
+          </Badge>
+        </div>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          {compactMetrics.map((metric) => (
+            <div
+              className="surface-shell-inset type-shell-detail rounded-[calc(0.8rem*var(--game-ui-scale))] px-[calc(0.85rem*var(--game-ui-scale))] py-[calc(0.65rem*var(--game-ui-scale))]"
+              key={metric.label}
+            >
+              {metric.label} {metric.value}
             </div>
-            <p className="type-body-muted">{formatTopLevelHandshakeDebugLine(hudSnapshot)}</p>
-          </CardFooter>
-        </Card>
+          ))}
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
+          <p className="type-shell-body max-w-[18rem]">
+            {formatTopLevelHandshakeDebugLine(hudSnapshot)}
+          </p>
+          <Button
+            onClick={() => {
+              setDialogOpen(true);
+            }}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            Debug details
+          </Button>
+        </div>
       </div>
 
       <Dialog onOpenChange={setDialogOpen} open={dialogOpen}>
-        <DialogContent className="max-h-[min(85vh,52rem)] gap-5 overflow-y-auto sm:max-w-5xl">
+        <DialogContent
+          className="surface-shell-overlay gap-5 p-[calc(1.25rem*var(--game-ui-scale))] text-[color:var(--shell-foreground)] ring-[color:var(--shell-border)] shadow-[0_28px_90px_rgb(15_23_42/_0.32)] sm:max-w-[min(72rem,calc(100vw-2rem))]"
+          style={hudScaleStyle}
+        >
           <DialogHeader className="gap-3">
             <div className="flex flex-wrap gap-2">
               <Badge>Metaverse Dev</Badge>
@@ -532,8 +534,10 @@ export function MetaverseDeveloperOverlay({
                 Lifecycle {hudSnapshot.lifecycle.replaceAll("-", " ")}
               </Badge>
             </div>
-            <DialogTitle>Metaverse developer</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="type-shell-heading">
+              Metaverse developer
+            </DialogTitle>
+            <DialogDescription className="type-shell-body">
               Inspect renderer cadence, authority boot, and WebTransport lanes
               without digging through the inline HUD.
             </DialogDescription>
@@ -541,49 +545,49 @@ export function MetaverseDeveloperOverlay({
 
           <div className="flex flex-col gap-5">
             <section className="grid gap-3 md:grid-cols-3">
-              <StatCard
+              <StatPanel
                 description="Rendered frames since boot"
                 label="Frame"
                 value={`${formatCount(hudSnapshot.telemetry.renderedFrameCount)} · ${hudSnapshot.telemetry.frameRate.toFixed(1)} fps`}
               />
-              <StatCard
+              <StatPanel
                 description="Current frame delta"
                 label="Frame delta"
                 value={`${hudSnapshot.telemetry.frameDeltaMs.toFixed(1)} ms`}
               />
-              <StatCard
+              <StatPanel
                 description="Renderer device pixel ratio"
                 label="DPR"
                 value={hudSnapshot.telemetry.renderer.devicePixelRatio.toFixed(2)}
               />
-              <StatCard
+              <StatPanel
                 description="WebGPU renderer draw calls"
                 label="Draw calls"
                 value={formatCount(hudSnapshot.telemetry.renderer.drawCallCount)}
               />
-              <StatCard
+              <StatPanel
                 description="Submitted triangles"
                 label="Triangles"
                 value={formatCount(hudSnapshot.telemetry.renderer.triangleCount)}
               />
-              <StatCard
+              <StatPanel
                 description="Remote roster visibility"
                 label="Presence"
                 value={`${hudSnapshot.presence.state} · ${hudSnapshot.presence.remotePlayerCount} remote`}
               />
             </section>
 
-            <Separator />
+            <Separator className="bg-[color:var(--shell-border)]" />
 
             <section className="grid gap-3 md:grid-cols-2">
-              <Card className="border-border/70 bg-card/90" size="sm">
-                <CardHeader className="border-b border-border/60">
-                  <CardTitle className="type-caption">Renderer boot</CardTitle>
-                  <CardDescription>
+              <div className="surface-shell-panel rounded-[calc(1.25rem*var(--game-ui-scale))] p-[calc(1rem*var(--game-ui-scale))]">
+                <div className="flex flex-col gap-1">
+                  <p className="type-shell-banner">Renderer boot</p>
+                  <p className="type-shell-body">
                     Boot truth for the local WebGPU pipeline.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-2 pt-3 text-xs">
+                  </p>
+                </div>
+                <div className="mt-4 flex flex-col gap-2">
                   {rendererBootDetails.map((detail) => (
                     <MetricRow
                       key={detail.label}
@@ -591,17 +595,17 @@ export function MetaverseDeveloperOverlay({
                       value={detail.value}
                     />
                   ))}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
-              <Card className="border-border/70 bg-card/90" size="sm">
-                <CardHeader className="border-b border-border/60">
-                  <CardTitle className="type-caption">Authority boot</CardTitle>
-                  <CardDescription>
+              <div className="surface-shell-panel rounded-[calc(1.25rem*var(--game-ui-scale))] p-[calc(1rem*var(--game-ui-scale))]">
+                <div className="flex flex-col gap-1">
+                  <p className="type-shell-banner">Authority boot</p>
+                  <p className="type-shell-body">
                     Presence join and authoritative world readiness.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-2 pt-3 text-xs">
+                  </p>
+                </div>
+                <div className="mt-4 flex flex-col gap-2">
                   {authorityBootDetails.map((detail) => (
                     <MetricRow
                       key={detail.label}
@@ -609,14 +613,14 @@ export function MetaverseDeveloperOverlay({
                       value={detail.value}
                     />
                   ))}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </section>
 
-            <Separator />
+            <Separator className="bg-[color:var(--shell-border)]" />
 
             <section className="grid gap-3 md:grid-cols-3">
-              <StatCard
+              <StatPanel
                 description="Authoritative world cadence"
                 label="Tick / poll"
                 value={`Tick ${formatOptionalMilliseconds(
@@ -625,7 +629,7 @@ export function MetaverseDeveloperOverlay({
                   hudSnapshot.telemetry.worldCadence.worldPollIntervalMs
                 )}`}
               />
-              <StatCard
+              <StatPanel
                 description="Remote world presentation window"
                 label="Interpolation / extrapolation"
                 value={`Interpolation ${formatOptionalMilliseconds(
@@ -634,7 +638,7 @@ export function MetaverseDeveloperOverlay({
                   hudSnapshot.telemetry.worldCadence.maxExtrapolationMs
                 )}`}
               />
-              <StatCard
+              <StatPanel
                 description="Freshness guard for local authority"
                 label="Local freshness"
                 value={formatOptionalMilliseconds(
@@ -643,12 +647,12 @@ export function MetaverseDeveloperOverlay({
               />
             </section>
 
-            <Separator />
+            <Separator className="bg-[color:var(--shell-border)]" />
 
             <section className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
-                <p className="type-label">Transport lanes</p>
-                <p className="type-body-muted">
+                <p className="type-shell-banner">Transport lanes</p>
+                <p className="type-shell-body">
                   Includes explicit endpoint debug lines so successful
                   WebTransport handshakes are visible without reading the raw
                   environment file.
@@ -700,9 +704,15 @@ export function MetaverseDeveloperOverlay({
                 />
               </div>
             </section>
-          </div>
 
-          <DialogFooter showCloseButton />
+            <div className="surface-shell-inset flex justify-end rounded-[calc(1rem*var(--game-ui-scale))] p-[calc(0.9rem*var(--game-ui-scale))]">
+              <DialogClose asChild>
+                <Button type="button" variant="outline">
+                  Close
+                </Button>
+              </DialogClose>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

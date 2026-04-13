@@ -18,17 +18,40 @@ export interface AttachmentVector3Descriptor {
   readonly z: number;
 }
 
-export interface AttachmentGripAlignmentDescriptor {
-  readonly attachmentForwardAxis: AttachmentVector3Descriptor;
-  readonly attachmentUpAxis: AttachmentVector3Descriptor;
+interface AttachmentSocketGripAlignmentDescriptor {
+  readonly attachmentGripMarkerNodeName?: string | null;
+  readonly attachmentGripMarkerNodeNameBySocketId?: Partial<
+    Record<SocketId, string | null>
+  >;
   readonly socketForwardAxis: AttachmentVector3Descriptor;
   readonly socketOffset: AttachmentVector3Descriptor;
   readonly socketUpAxis: AttachmentVector3Descriptor;
 }
 
+export interface AttachmentGripAlignmentAxisDescriptor
+  extends AttachmentSocketGripAlignmentDescriptor {
+  readonly attachmentForwardAxis: AttachmentVector3Descriptor;
+  readonly attachmentUpAxis: AttachmentVector3Descriptor;
+}
+
+export interface AttachmentGripAlignmentMarkerDescriptor
+  extends AttachmentSocketGripAlignmentDescriptor {
+  readonly attachmentForwardMarkerNodeName: string;
+  readonly attachmentUpMarkerNodeName: string;
+}
+
+export type AttachmentGripAlignmentDescriptor =
+  | AttachmentGripAlignmentAxisDescriptor
+  | AttachmentGripAlignmentMarkerDescriptor;
+
 export interface AttachmentSupportPointDescriptor {
   readonly localPosition: AttachmentVector3Descriptor;
   readonly supportPointId: string;
+}
+
+export interface AttachmentMountedHolsterDescriptor {
+  readonly gripAlignment: AttachmentGripAlignmentDescriptor;
+  readonly socketName: string;
 }
 
 export interface AttachmentAssetDescriptor<
@@ -42,6 +65,7 @@ export interface AttachmentAssetDescriptor<
   readonly allowedSocketIds: readonly SocketId[];
   readonly compatibleSkeletons: readonly SkeletonId[];
   readonly gripAlignment: AttachmentGripAlignmentDescriptor;
+  readonly mountedHolster: AttachmentMountedHolsterDescriptor | null;
   readonly supportPoints: readonly AttachmentSupportPointDescriptor[] | null;
 }
 

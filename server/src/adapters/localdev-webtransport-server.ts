@@ -218,6 +218,22 @@ function resolveErrorMessage(error: unknown, fallbackMessage: string): string {
   return fallbackMessage;
 }
 
+function isExpectedWebTransportSessionCloseError(error: unknown): boolean {
+  if (!(error instanceof Error) || error.name !== "WebTransportError") {
+    return false;
+  }
+
+  if (error.message === "Session closed") {
+    return true;
+  }
+
+  const gracefulCloseMatch = /^Session closed \(on process \d+\) with code (\d+) and reason(?: .*)?$/.exec(
+    error.message
+  );
+
+  return gracefulCloseMatch?.[1] === "0";
+}
+
 function resolveOptionalPathHeader(
   header: Record<string, unknown>
 ): string | null {
@@ -938,6 +954,10 @@ export class LocaldevWebTransportServer {
         void this.#serveReliableStream(stream, reliableRoute, reliableSession);
       }
     } catch (error) {
+      if (isExpectedWebTransportSessionCloseError(error)) {
+        return;
+      }
+
       this.#logError(
         `Localdev WebTransport reliable stream pump failed for ${reliableRoute.path}.`,
         error
@@ -1007,6 +1027,10 @@ export class LocaldevWebTransportServer {
         });
       }
     } catch (error) {
+      if (isExpectedWebTransportSessionCloseError(error)) {
+        return;
+      }
+
       this.#logError(
         `Localdev WebTransport reliable request handling failed for ${reliableRoute.path}.`,
         error
@@ -1084,6 +1108,10 @@ export class LocaldevWebTransportServer {
         datagramSession.receiveClientDatagram(datagram, this.#readWallClockMs());
       }
     } catch (error) {
+      if (isExpectedWebTransportSessionCloseError(error)) {
+        return;
+      }
+
       this.#logError(
         `Localdev WebTransport datagram handling failed for ${datagramRoute.path}.`,
         error

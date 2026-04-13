@@ -137,6 +137,38 @@ The browser factory already supports both modes. It only sends
 - Verify the in-app developer overlay reports the expected handshake target and
   active datagram lane before load testing gameplay.
 
+## Expected Work To Become AWS Or Bare Metal Compatible
+
+This is the concrete work still expected before the current localdev hookup is
+ready to ship on AWS or a bare metal host:
+
+- Promote the current QUIC host out of the localdev-only boot path. Today
+  `server/src/index.ts` only starts WebTransport through
+  `resolveLocaldevWebTransportServerConfigFromEnvironment(process.env)` and
+  `LocaldevWebTransportServer`.
+- Split localdev concerns from deployable runtime concerns. Short-lived cert
+  generation, self-check files, and generated Vite env files should stay in the
+  localdev wrapper; the deployable server owner should only need runtime host,
+  port, certificate, key, and secret config.
+- Externalize normal server runtime config. The plain HTTP server is still
+  hardcoded to `127.0.0.1:3210`, so AWS and bare metal rollout need real envs
+  for HTTP bind host or port and for the QUIC or HTTP/3 listener.
+- Keep the current route contract unchanged. Production work should reuse the
+  existing `/metaverse/presence`, `/metaverse/world`, and
+  `/experiences/duck-hunt/coop/rooms` paths and the same adapter owners instead
+  of inventing a second transport shape.
+- Decide the edge topology early. The realtime host must either run directly on
+  the machine or sit behind a QUIC-preserving edge; HTTP-only termination is
+  not enough for WebTransport.
+- Define certificate strategy per environment. Public production hosts should
+  prefer normal Web PKI; private or self-signed deployments need a rotation
+  process for the `*_SERVER_CERT_SHA256` envs already supported by the browser
+  factory.
+- Add production smoke checks and observability. At minimum, log handshake
+  open or failure, confirm the datagram lane is active, expose a readiness
+  signal for the realtime host, and verify HTTP fallback still works when
+  WebTransport is unavailable.
+
 ## AWS And Bare Metal Notes
 
 ### AWS

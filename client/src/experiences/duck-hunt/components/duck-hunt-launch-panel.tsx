@@ -95,6 +95,9 @@ export function DuckHuntLaunchPanel({
 }: DuckHuntLaunchPanelProps) {
   const duckHuntCatalogEntry = readExperienceCatalogEntry("duck-hunt");
   const selectedInputMode = resolveGameplayInputMode(inputMode);
+  const launchPanelFrameClassName =
+    "surface-shell-inset rounded-[var(--metaverse-hud-inset-radius)] px-[var(--metaverse-hud-inset-padding)] py-[var(--metaverse-hud-inset-padding)]";
+  const launchPanelSeparatorClassName = "bg-[color:var(--shell-border)]";
   const [coopRoomDirectoryClient] = useState(
     createDuckHuntCoopRoomDirectoryClient
   );
@@ -196,8 +199,8 @@ export function DuckHuntLaunchPanel({
   }, [coopRoomDirectoryClient, sessionMode]);
 
   return (
-    <div className="w-full max-w-2xl rounded-[1.6rem] border border-border/70 bg-card/88 p-5 shadow-[0_28px_90px_rgb(15_23_42/0.28)] backdrop-blur-xl">
-      <div className="flex flex-col gap-4">
+    <div className="surface-shell-panel-strong w-full max-w-2xl rounded-[var(--metaverse-hud-panel-radius)] p-[var(--metaverse-hud-panel-padding)] shadow-[0_28px_90px_rgb(15_23_42/0.28)]">
+      <div className="flex max-h-full flex-col gap-4 overflow-y-auto overscroll-contain">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap gap-2">
@@ -208,10 +211,10 @@ export function DuckHuntLaunchPanel({
               </Badge>
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-foreground">
+              <h2 className="type-shell-heading text-[calc(1.35rem*var(--game-ui-scale))]">
                 {duckHuntCatalogEntry.label}
               </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="type-shell-body mt-1">
                 {duckHuntCatalogEntry.shortDescription}
               </p>
             </div>
@@ -224,36 +227,36 @@ export function DuckHuntLaunchPanel({
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-xl border border-border/70 bg-background/72 px-4 py-3">
-            <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
+          <div className={launchPanelFrameClassName}>
+            <p className="type-shell-banner">
               Input
             </p>
-            <p className="mt-2 text-sm font-medium text-foreground">
+            <p className="type-shell-heading mt-2">
               {selectedInputMode.label}
             </p>
-            <p className="mt-2 text-sm text-muted-foreground">
+            <p className="type-shell-body mt-2">
               {selectedInputMode.description}
             </p>
           </div>
-          <div className="rounded-xl border border-border/70 bg-background/72 px-4 py-3">
-            <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
+          <div className={launchPanelFrameClassName}>
+            <p className="type-shell-banner">
               Portal
             </p>
-            <p className="mt-2 text-sm font-medium text-foreground">
+            <p className="type-shell-heading mt-2">
               Ocean launch
             </p>
-            <p className="mt-2 text-sm text-muted-foreground">
+            <p className="type-shell-body mt-2">
               {duckHuntCatalogEntry.portalSummary}
             </p>
           </div>
-          <div className="rounded-xl border border-border/70 bg-background/72 px-4 py-3">
-            <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground">
+          <div className={launchPanelFrameClassName}>
+            <p className="type-shell-banner">
               Calibration
             </p>
-            <p className="mt-2 text-sm font-medium text-foreground">
+            <p className="type-shell-heading mt-2">
               {selectedInputMode.requiresCalibration ? "Worker tracking live" : "Not required"}
             </p>
-            <p className="mt-2 text-sm text-muted-foreground">
+            <p className="type-shell-body mt-2">
               {selectedInputMode.requiresCalibration
                 ? calibrationQualityLabel
                 : "Mouse mode skips webcam permission and nine-point aiming setup."}
@@ -261,13 +264,13 @@ export function DuckHuntLaunchPanel({
           </div>
         </div>
 
-        <Separator />
+        <Separator className={launchPanelSeparatorClassName} />
 
         <section className="flex flex-col gap-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-medium text-foreground">Session mode</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="type-shell-title">Session mode</p>
+              <p className="type-shell-body">
                 Single-player keeps the round on the local client. Co-op joins a
                 server-owned room tick for shared birds and team state.
               </p>
@@ -304,16 +307,21 @@ export function DuckHuntLaunchPanel({
             <Button onClick={onLaunchRequest} type="button">
               Launch Duck Hunt
             </Button>
-            <p className="self-center text-sm text-muted-foreground">
+            <p className="type-shell-body self-center">
               Local round state and best-score tracking resume inside the experience.
             </p>
           </div>
         ) : (
           <div className="grid gap-4">
-            <div className="rounded-xl border border-border/70 bg-background/72 px-4 py-4">
+            <div className={launchPanelFrameClassName}>
               <div className="flex flex-col gap-1">
-                <Label htmlFor="duck-hunt-coop-room-id">Room code</Label>
-                <p className="text-sm text-muted-foreground">
+                <Label
+                  className="type-shell-title text-[color:var(--shell-foreground)]"
+                  htmlFor="duck-hunt-coop-room-id"
+                >
+                  Room code
+                </Label>
+                <p className="type-shell-body">
                   Join an active room or create a fresh code for a new lobby.
                 </p>
               </div>
@@ -330,9 +338,9 @@ export function DuckHuntLaunchPanel({
               />
 
               <p
-                className={`mt-3 text-sm ${
+                className={`mt-3 type-shell-body ${
                   coopRoomIdValid && selectedExistingRoom === null
-                    ? "text-muted-foreground"
+                    ? ""
                     : "text-destructive"
                 }`}
               >
@@ -367,13 +375,15 @@ export function DuckHuntLaunchPanel({
 
             <div className="grid gap-3">
               {coopRoomDirectoryError !== null ? (
-                <div className="rounded-xl border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                  {coopRoomDirectoryError}
+                <div className="surface-shell-danger rounded-[var(--metaverse-hud-inset-radius)] px-[var(--metaverse-hud-inset-padding)] py-[var(--metaverse-hud-inset-padding)]">
+                  <p className="type-shell-body text-[color:var(--shell-danger-foreground)]">
+                    {coopRoomDirectoryError}
+                  </p>
                 </div>
               ) : null}
 
               {sortedCoopRoomEntries.length === 0 ? (
-                <div className="rounded-xl border border-border/70 bg-background/72 px-4 py-4 text-sm text-muted-foreground">
+                <div className={`${launchPanelFrameClassName} type-shell-body`}>
                   No live Duck Hunt co-op rooms yet. Create one with the code above.
                 </div>
               ) : (
@@ -384,19 +394,19 @@ export function DuckHuntLaunchPanel({
 
                   return (
                     <div
-                      className="flex flex-col gap-3 rounded-xl border border-border/70 bg-background/72 px-4 py-4 md:flex-row md:items-center md:justify-between"
+                      className={`${launchPanelFrameClassName} flex flex-col gap-3 md:flex-row md:items-center md:justify-between`}
                       key={roomEntry.roomId}
                     >
                       <div className="flex flex-col gap-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-medium text-foreground">
+                          <p className="type-shell-title">
                             {roomEntry.roomId}
                           </p>
                           <Badge variant={selectedRoom ? "secondary" : "outline"}>
                             {resolveCoopRoomPhaseLabel(roomEntry)}
                           </Badge>
                         </div>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="type-shell-body">
                           {formatCoopRoomStatus(roomEntry)}
                         </p>
                       </div>

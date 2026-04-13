@@ -25,7 +25,7 @@ Use one document role at a time:
 ## Plan
 
 - `metaverse-smooth-motion-plan.md`
-- `metaverse-webtransport-networking-plan.md`
+- `metaverse-multiplayer-battle-readiness-plan.md`
 - `metaverse-webtransport-datagram-plan.md`
 - `metaverse-vehicle-seat-foundation-plan.md`
 

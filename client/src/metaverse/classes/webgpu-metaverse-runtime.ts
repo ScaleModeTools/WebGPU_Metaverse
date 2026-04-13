@@ -11,6 +11,7 @@ import {
   MetaverseGroundedBodyRuntime,
   RapierPhysicsRuntime
 } from "@/physics";
+import { metaverseBootCinematicConfig } from "../config/metaverse-boot-cinematic";
 import { defaultMetaverseControlMode } from "../config/metaverse-control-modes";
 import {
   metaverseWorldClientConfig,
@@ -29,7 +30,11 @@ import {
   createMetaverseCameraSnapshot,
   resolveFocusedPortalSnapshot
 } from "../states/metaverse-flight";
+import {
+  resolveMetaverseBootCinematicPresentationSnapshot
+} from "../states/metaverse-boot-cinematic";
 import type { MetaverseControlModeId } from "../types/metaverse-control-mode";
+import type { MetaverseBootCinematicConfig } from "../types/metaverse-boot-cinematic";
 import type {
   FocusedExperiencePortalSnapshot,
   FocusedMountableSnapshot,
@@ -78,6 +83,7 @@ interface MetaverseRendererTuningHandle {
 
 interface MetaverseRuntimeDependencies {
   readonly attachmentProofConfig?: MetaverseAttachmentProofConfig | null;
+  readonly bootCinematicConfig?: MetaverseBootCinematicConfig;
   readonly cancelAnimationFrame?: typeof globalThis.cancelAnimationFrame;
   readonly characterProofConfig?: MetaverseCharacterProofConfig | null;
   readonly createMetaversePresenceClient?: (() => MetaversePresenceClientRuntime) | null;
@@ -98,6 +104,21 @@ interface MetaverseRuntimeDependencies {
 }
 
 const metaverseUiUpdateIntervalMs = 120;
+const neutralMetaverseFlightInputSnapshot = Object.freeze({
+  boost: false,
+  jump: false,
+  moveAxis: 0,
+  pitchAxis: 0,
+  primaryAction: false,
+  secondaryAction: false,
+  strafeAxis: 0,
+  yawAxis: 0
+});
+
+type MountedOccupancyAuthoritySnapshot = Pick<
+  MountedEnvironmentSnapshot,
+  "entryId" | "environmentAssetId" | "occupancyKind" | "seatId"
+>;
 
 function createDefaultRenderer(canvas: HTMLCanvasElement): MetaverseRendererHost {
   const renderer = new WebGPURenderer({
@@ -137,6 +158,16 @@ function cancelBrowserAnimationFrame(frameHandle: number): void {
 
 function readNowMs(): number {
   return globalThis.performance?.now() ?? Date.now();
+}
+
+function createMountedOccupancyAuthorityKey(
+  mountedOccupancy: MountedOccupancyAuthoritySnapshot | null | undefined
+): string | null {
+  if (mountedOccupancy === null || mountedOccupancy === undefined) {
+    return null;
+  }
+
+  return `${mountedOccupancy.environmentAssetId}:${mountedOccupancy.occupancyKind}:${mountedOccupancy.seatId ?? ""}:${mountedOccupancy.entryId ?? ""}`;
 }
 
 function freezeHudSnapshot(
@@ -214,6 +245,7 @@ function resolveRuntimeFailureReason(error: unknown): string {
 }
 
 export class WebGpuMetaverseRuntime {
+  readonly #bootCinematicConfig: MetaverseBootCinematicConfig;
   readonly #config: MetaverseRuntimeConfig;
   readonly #createRenderer: (canvas: HTMLCanvasElement) => MetaverseRendererHost;
   readonly #createSceneAssetLoader: () => SceneAssetLoader;
@@ -230,6 +262,8 @@ export class WebGpuMetaverseRuntime {
   readonly #uiUpdateListeners = new Set<() => void>();
 
   #animationFrameHandle = 0;
+  #bootCinematicLiveReadyAtMs: number | null = null;
+  #bootCinematicStartedAtMs: number | null = null;
   #bootRendererInitialized = false;
   #bootScenePrewarmed = false;
   #canvas: HTMLCanvasElement | null = null;
@@ -242,7 +276,10 @@ export class WebGpuMetaverseRuntime {
   #lastFrameAtMs: number | null = null;
   #lastUiUpdateAtMs = Number.NEGATIVE_INFINITY;
   #mountedEnvironment: MountedEnvironmentSnapshot | null = null;
+  #mountedEnvironmentAuthorityMismatchKey: string | null = null;
+  #mountedEnvironmentAuthorityMismatchSinceMs: number | null = null;
   #renderer: MetaverseRendererHost | null = null;
+  #runtimeInputInstalled = false;
   #runtimeEpoch = 0;
   #requestAnimationFrame: typeof globalThis.requestAnimationFrame;
   #cancelAnimationFrame: typeof globalThis.cancelAnimationFrame;
@@ -255,6 +292,8 @@ export class WebGpuMetaverseRuntime {
     config: MetaverseRuntimeConfig = metaverseRuntimeConfig,
     dependencies: MetaverseRuntimeDependencies = {}
   ) {
+    this.#bootCinematicConfig =
+      dependencies.bootCinematicConfig ?? metaverseBootCinematicConfig;
     this.#config = config;
     this.#createRenderer = dependencies.createRenderer ?? createDefaultRenderer;
     this.#createSceneAssetLoader =
@@ -386,6 +425,7 @@ export class WebGpuMetaverseRuntime {
       return;
     }
 
+    this.#resetMountedEnvironmentAuthorityMismatch();
     this.#traversalRuntime.boardEnvironment(
       this.#focusedMountable.environmentAssetId,
       entryId
@@ -403,11 +443,13 @@ export class WebGpuMetaverseRuntime {
       return;
     }
 
+    this.#resetMountedEnvironmentAuthorityMismatch();
     this.#traversalRuntime.occupySeat(environmentAssetId, seatId);
     this.#syncOrPublishRuntimeState(true);
   }
 
   leaveMountedEnvironment(): void {
+    this.#resetMountedEnvironmentAuthorityMismatch();
     this.#traversalRuntime.leaveMountedEnvironment();
     this.#syncOrPublishRuntimeState(true);
   }
@@ -471,7 +513,9 @@ export class WebGpuMetaverseRuntime {
     this.#presenceRuntime.dispose();
     this.#remoteWorldRuntime.dispose();
     this.#setHudSnapshot("booting", null, true);
-    this.#flightInputRuntime.install(canvas);
+    if (!this.#bootCinematicConfig.enabled) {
+      this.#installRuntimeInput();
+    }
     const renderer = this.#createRenderer(canvas);
 
     this.#renderer = renderer;
@@ -480,14 +524,38 @@ export class WebGpuMetaverseRuntime {
       await renderer.init();
       this.#bootRendererInitialized = true;
       this.#setHudSnapshot("booting", null, true);
-      await this.#sceneRuntime.boot();
-      await this.#bootGroundedRuntime();
-      this.#sceneRuntime.syncViewport(
-        renderer,
-        canvas as MetaverseSceneCanvasHost,
-        this.#devicePixelRatio
-      );
-      await this.#sceneRuntime.prewarm(renderer);
+      if (this.#bootCinematicConfig.enabled) {
+        this.#bootCinematicStartedAtMs = this.#readNowMs();
+        this.#renderBootCinematicFrame(this.#bootCinematicStartedAtMs, false);
+        await this.#sceneRuntime.bootScenicEnvironment();
+        this.#sceneRuntime.syncViewport(
+          renderer,
+          canvas as MetaverseSceneCanvasHost,
+          this.#devicePixelRatio
+        );
+        this.#renderBootCinematicFrame(this.#readNowMs(), true);
+        await this.#sceneRuntime.prewarm(renderer);
+        this.#renderBootCinematicFrame(this.#readNowMs(), true);
+        await this.#bootGroundedRuntime();
+        await this.#sceneRuntime.bootInteractivePresentation();
+        this.#sceneRuntime.syncViewport(
+          renderer,
+          canvas as MetaverseSceneCanvasHost,
+          this.#devicePixelRatio
+        );
+        await this.#sceneRuntime.prewarm(renderer);
+        this.#renderBootCinematicFrame(this.#readNowMs(), true);
+        this.#bootCinematicLiveReadyAtMs = this.#readNowMs();
+      } else {
+        await this.#sceneRuntime.boot();
+        await this.#bootGroundedRuntime();
+        this.#sceneRuntime.syncViewport(
+          renderer,
+          canvas as MetaverseSceneCanvasHost,
+          this.#devicePixelRatio
+        );
+        await this.#sceneRuntime.prewarm(renderer);
+      }
       this.#bootScenePrewarmed = true;
       this.#setHudSnapshot("booting", null, true);
     } catch (error) {
@@ -538,6 +606,9 @@ export class WebGpuMetaverseRuntime {
     this.#frameDeltaMs = 0;
     this.#frameRate = 0;
     this.#renderedFrameCount = 0;
+    if (!this.#isBootCinematicActive(this.#lastFrameAtMs)) {
+      this.#installRuntimeInput();
+    }
     this.#presenceRuntime.boot(
       this.#readCharacterPresentationSnapshot(),
       this.#traversalRuntime.locomotionMode,
@@ -570,8 +641,12 @@ export class WebGpuMetaverseRuntime {
     this.#focusedPortal = null;
     this.#bootRendererInitialized = false;
     this.#bootScenePrewarmed = false;
+    this.#bootCinematicLiveReadyAtMs = null;
+    this.#bootCinematicStartedAtMs = null;
     this.#mountedEnvironment = null;
+    this.#resetMountedEnvironmentAuthorityMismatch();
     this.#renderedFrameCount = 0;
+    this.#runtimeInputInstalled = false;
     this.#environmentPhysicsRuntime.dispose();
     this.#presenceRuntime.dispose();
     this.#remoteWorldRuntime.dispose();
@@ -609,6 +684,12 @@ export class WebGpuMetaverseRuntime {
       return;
     }
 
+    const bootCinematicActive = this.#isBootCinematicActive(nowMs);
+
+    if (!bootCinematicActive) {
+      this.#installRuntimeInput();
+    }
+
     const deltaSeconds =
       this.#lastFrameAtMs === null
         ? 0
@@ -619,8 +700,20 @@ export class WebGpuMetaverseRuntime {
     this.#lastFrameAtMs = nowMs;
     this.#remoteWorldRuntime.syncConnection(this.#presenceRuntime.isJoined);
     this.#remoteWorldRuntime.sampleRemoteWorld();
+    this.#presenceRuntime.syncRemoteCharacterPresentations();
+    this.#syncMountedOccupancyAuthorityFromWorldSnapshots();
     this.#syncVehicleAuthorityFromWorldSnapshots();
-    const movementInput = this.#flightInputRuntime.readSnapshot();
+    const remoteCharacterPresentations =
+      this.#remoteWorldRuntime.hasWorldSnapshot
+        ? this.#remoteWorldRuntime.remoteCharacterPresentations
+        : this.#presenceRuntime.remoteCharacterPresentations;
+
+    this.#environmentPhysicsRuntime.syncRemoteCharacterBlockers(
+      remoteCharacterPresentations
+    );
+    const movementInput = bootCinematicActive
+      ? neutralMetaverseFlightInputSnapshot
+      : this.#flightInputRuntime.readSnapshot();
     const cameraSnapshot = this.#traversalRuntime.advance(
       movementInput,
       deltaSeconds
@@ -635,37 +728,127 @@ export class WebGpuMetaverseRuntime {
       this.#traversalRuntime.locomotionMode,
       this.#mountedEnvironment
     );
-    this.#presenceRuntime.syncRemoteCharacterPresentations();
-    const remoteCharacterPresentations =
-      this.#remoteWorldRuntime.hasWorldSnapshot
-        ? this.#remoteWorldRuntime.remoteCharacterPresentations
-        : this.#presenceRuntime.remoteCharacterPresentations;
-
-    this.#focusedPortal = resolveFocusedPortalSnapshot(
+    const liveFocusedPortal = resolveFocusedPortalSnapshot(
       cameraSnapshot,
       this.#config.portals
     );
+    const bootCinematicSnapshot =
+      bootCinematicActive && this.#bootCinematicStartedAtMs !== null
+        ? resolveMetaverseBootCinematicPresentationSnapshot(
+            this.#bootCinematicConfig,
+            nowMs - this.#bootCinematicStartedAtMs,
+            {
+              environmentReady: this.#bootScenePrewarmed
+            },
+            this.#config.portals
+          )
+        : null;
+    const presentationCameraSnapshot =
+      bootCinematicSnapshot?.cameraSnapshot ?? cameraSnapshot;
+    const presentationFocusedPortal =
+      bootCinematicSnapshot?.focusedPortal ?? liveFocusedPortal;
+
     this.#sceneRuntime.syncViewport(
       this.#renderer,
       this.#canvas as MetaverseSceneCanvasHost,
       this.#devicePixelRatio
     );
     const sceneInteractionSnapshot = this.#sceneRuntime.syncPresentation(
-      cameraSnapshot,
-      this.#focusedPortal,
+      presentationCameraSnapshot,
+      presentationFocusedPortal,
       nowMs,
       deltaSeconds,
-      this.#traversalRuntime.characterPresentationSnapshot,
+      bootCinematicActive
+        ? null
+        : this.#traversalRuntime.characterPresentationSnapshot,
       remoteCharacterPresentations,
       this.#mountedEnvironment
     );
 
     this.#environmentPhysicsRuntime.syncDebugPresentation();
-    this.#focusedMountable = sceneInteractionSnapshot.focusedMountable;
+    this.#focusedPortal = bootCinematicActive ? null : liveFocusedPortal;
+    this.#focusedMountable = bootCinematicActive
+      ? null
+      : sceneInteractionSnapshot.focusedMountable;
     this.#mountedEnvironment = this.#traversalRuntime.mountedEnvironmentSnapshot;
     this.#renderer.render(this.#sceneRuntime.scene, this.#sceneRuntime.camera);
     this.#renderedFrameCount += 1;
     this.#setHudSnapshot("running", null, forceUiUpdate);
+  }
+
+  #installRuntimeInput(): void {
+    if (this.#runtimeInputInstalled || this.#canvas === null) {
+      return;
+    }
+
+    this.#flightInputRuntime.install(this.#canvas);
+    this.#runtimeInputInstalled = true;
+  }
+
+  #isBootCinematicActive(nowMs: number): boolean {
+    if (
+      !this.#bootCinematicConfig.enabled ||
+      this.#bootCinematicStartedAtMs === null
+    ) {
+      return false;
+    }
+
+    if (this.#bootCinematicLiveReadyAtMs === null) {
+      return true;
+    }
+
+    return (
+      nowMs - this.#bootCinematicLiveReadyAtMs <
+      this.#bootCinematicConfig.minimumDwellMs
+    );
+  }
+
+  #renderBootCinematicFrame(
+    nowMs: number,
+    environmentReady: boolean
+  ): void {
+    if (
+      this.#renderer === null ||
+      this.#canvas === null ||
+      this.#bootCinematicStartedAtMs === null
+    ) {
+      return;
+    }
+
+    const bootCinematicSnapshot =
+      resolveMetaverseBootCinematicPresentationSnapshot(
+        this.#bootCinematicConfig,
+        nowMs - this.#bootCinematicStartedAtMs,
+        {
+          environmentReady
+        },
+        this.#config.portals
+      );
+
+    if (bootCinematicSnapshot === null) {
+      return;
+    }
+
+    this.#sceneRuntime.syncViewport(
+      this.#renderer,
+      this.#canvas as MetaverseSceneCanvasHost,
+      this.#devicePixelRatio
+    );
+    this.#sceneRuntime.syncPresentation(
+      bootCinematicSnapshot.cameraSnapshot,
+      bootCinematicSnapshot.focusedPortal,
+      nowMs,
+      0,
+      null,
+      Object.freeze([]),
+      null
+    );
+    this.#renderer.render(this.#sceneRuntime.scene, this.#sceneRuntime.camera);
+  }
+
+  #resetMountedEnvironmentAuthorityMismatch(): void {
+    this.#mountedEnvironmentAuthorityMismatchKey = null;
+    this.#mountedEnvironmentAuthorityMismatchSinceMs = null;
   }
 
   #syncVehicleAuthorityFromWorldSnapshots(): void {
@@ -714,6 +897,74 @@ export class WebGpuMetaverseRuntime {
         yawRadians: localMountedVehicleAuthority.yawRadians
       }
     );
+  }
+
+  #syncMountedOccupancyAuthorityFromWorldSnapshots(): void {
+    const authoritativeLocalPlayerSnapshot =
+      this.#remoteWorldRuntime.readFreshAuthoritativeLocalPlayerSnapshot(
+        metaverseLocalMountedVehicleReconciliationConfig.maxAuthoritativeSnapshotAgeMs
+      );
+
+    if (authoritativeLocalPlayerSnapshot === null) {
+      this.#resetMountedEnvironmentAuthorityMismatch();
+      return;
+    }
+
+    const localMountedOccupancyKey = createMountedOccupancyAuthorityKey(
+      this.#traversalRuntime.mountedEnvironmentSnapshot
+    );
+    const authoritativeMountedOccupancyKey =
+      createMountedOccupancyAuthorityKey(
+        authoritativeLocalPlayerSnapshot.mountedOccupancy
+      );
+
+    if (localMountedOccupancyKey === authoritativeMountedOccupancyKey) {
+      this.#resetMountedEnvironmentAuthorityMismatch();
+      return;
+    }
+
+    const mismatchKey = `${localMountedOccupancyKey ?? "unmounted"}=>${authoritativeMountedOccupancyKey ?? "unmounted"}`;
+    const wallClockMs = this.#readWallClockMs();
+
+    if (this.#mountedEnvironmentAuthorityMismatchKey !== mismatchKey) {
+      this.#mountedEnvironmentAuthorityMismatchKey = mismatchKey;
+      this.#mountedEnvironmentAuthorityMismatchSinceMs = wallClockMs;
+      return;
+    }
+
+    if (
+      this.#mountedEnvironmentAuthorityMismatchSinceMs === null ||
+      wallClockMs - this.#mountedEnvironmentAuthorityMismatchSinceMs <
+        metaverseLocalMountedVehicleReconciliationConfig.mountedOccupancyMismatchHoldMs
+    ) {
+      return;
+    }
+
+    const authoritativeMountedOccupancy =
+      authoritativeLocalPlayerSnapshot.mountedOccupancy;
+
+    if (authoritativeMountedOccupancy === null) {
+      this.#traversalRuntime.leaveMountedEnvironment();
+    } else if (
+      authoritativeMountedOccupancy.occupancyKind === "seat" &&
+      authoritativeMountedOccupancy.seatId !== null
+    ) {
+      this.#traversalRuntime.occupySeat(
+        authoritativeMountedOccupancy.environmentAssetId,
+        authoritativeMountedOccupancy.seatId
+      );
+    } else if (
+      authoritativeMountedOccupancy.occupancyKind === "entry" &&
+      authoritativeMountedOccupancy.entryId !== null
+    ) {
+      this.#traversalRuntime.boardEnvironment(
+        authoritativeMountedOccupancy.environmentAssetId,
+        authoritativeMountedOccupancy.entryId
+      );
+    }
+
+    this.#mountedEnvironment = this.#traversalRuntime.mountedEnvironmentSnapshot;
+    this.#resetMountedEnvironmentAuthorityMismatch();
   }
 
   #syncOrPublishRuntimeState(forceUiUpdate: boolean): void {

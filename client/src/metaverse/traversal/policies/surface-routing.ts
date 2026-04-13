@@ -116,6 +116,69 @@ function resolveSurfaceSupportHeightMeters(
   return highestSurfaceY;
 }
 
+function isPlanarPositionInsideCollider(
+  collider: MetaversePlacedCuboidColliderSnapshot,
+  x: number,
+  z: number,
+  paddingMeters: number
+): boolean {
+  const localOffset = rotateVectorByQuaternion(
+    x - collider.translation.x,
+    0,
+    z - collider.translation.z,
+    -collider.rotation.x,
+    -collider.rotation.y,
+    -collider.rotation.z,
+    collider.rotation.w
+  );
+
+  return (
+    Math.abs(localOffset.x) <= collider.halfExtents.x + paddingMeters &&
+    Math.abs(localOffset.z) <= collider.halfExtents.z + paddingMeters
+  );
+}
+
+function isPlanarPositionBlocked(
+  surfaceColliderSnapshots: readonly MetaversePlacedCuboidColliderSnapshot[],
+  x: number,
+  z: number,
+  paddingMeters: number,
+  minHeightMeters: number,
+  maxHeightMeters: number,
+  excludedOwnerEnvironmentAssetId: string | null = null
+): boolean {
+  for (const collider of surfaceColliderSnapshots) {
+    if (collider.traversalAffordance !== "blocker") {
+      continue;
+    }
+
+    if (
+      excludedOwnerEnvironmentAssetId !== null &&
+      collider.ownerEnvironmentAssetId === excludedOwnerEnvironmentAssetId
+    ) {
+      continue;
+    }
+
+    const blockerMinHeightMeters =
+      collider.translation.y - collider.halfExtents.y;
+    const blockerMaxHeightMeters =
+      collider.translation.y + collider.halfExtents.y;
+
+    if (
+      blockerMaxHeightMeters < minHeightMeters ||
+      blockerMinHeightMeters > maxHeightMeters
+    ) {
+      continue;
+    }
+
+    if (isPlanarPositionInsideCollider(collider, x, z, paddingMeters)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export function resolveSurfaceHeightMeters(
   config: MetaverseRuntimeConfig,
   surfaceColliderSnapshots: readonly MetaversePlacedCuboidColliderSnapshot[],
@@ -133,20 +196,83 @@ export function resolveSurfaceHeightMeters(
   );
 }
 
-export function shouldEnableGroundedAutostep(
+export function constrainPlanarPositionAgainstBlockers(
+  surfaceColliderSnapshots: readonly MetaversePlacedCuboidColliderSnapshot[],
+  currentPosition: PhysicsVector3Snapshot,
+  nextPosition: PhysicsVector3Snapshot,
+  paddingMeters: number,
+  minHeightMeters: number,
+  maxHeightMeters: number,
+  excludedOwnerEnvironmentAssetId: string | null = null
+): PhysicsVector3Snapshot {
+  if (
+    !isPlanarPositionBlocked(
+      surfaceColliderSnapshots,
+      nextPosition.x,
+      nextPosition.z,
+      paddingMeters,
+      minHeightMeters,
+      maxHeightMeters,
+      excludedOwnerEnvironmentAssetId
+    )
+  ) {
+    return freezeVector3(nextPosition.x, nextPosition.y, nextPosition.z);
+  }
+
+  const deltaX = nextPosition.x - currentPosition.x;
+  const deltaZ = nextPosition.z - currentPosition.z;
+  const axisOrder =
+    Math.abs(deltaX) >= Math.abs(deltaZ)
+      ? (["x", "z"] as const)
+      : (["z", "x"] as const);
+  let constrainedPosition = freezeVector3(
+    currentPosition.x,
+    nextPosition.y,
+    currentPosition.z
+  );
+
+  for (const axis of axisOrder) {
+    const candidate =
+      axis === "x"
+        ? freezeVector3(nextPosition.x, nextPosition.y, constrainedPosition.z)
+        : freezeVector3(constrainedPosition.x, nextPosition.y, nextPosition.z);
+
+    if (
+      isPlanarPositionBlocked(
+        surfaceColliderSnapshots,
+        candidate.x,
+        candidate.z,
+        paddingMeters,
+        minHeightMeters,
+        maxHeightMeters,
+        excludedOwnerEnvironmentAssetId
+      )
+    ) {
+      continue;
+    }
+
+    constrainedPosition = candidate;
+  }
+
+  return constrainedPosition;
+}
+
+export function resolveGroundedAutostepHeightMeters(
   config: MetaverseRuntimeConfig,
   surfaceColliderSnapshots: readonly MetaversePlacedCuboidColliderSnapshot[],
   position: PhysicsVector3Snapshot,
   yawRadians: number,
   moveAxis: number,
-  strafeAxis: number
-): boolean {
+  strafeAxis: number,
+  verticalSpeedUnitsPerSecond = 0,
+  jumpRequested = false
+): number | null {
   const clampedMoveAxis = clamp(toFiniteNumber(moveAxis, 0), -1, 1);
   const clampedStrafeAxis = clamp(toFiniteNumber(strafeAxis, 0), -1, 1);
   const inputMagnitude = Math.hypot(clampedMoveAxis, clampedStrafeAxis);
 
   if (inputMagnitude <= 0.0001) {
-    return false;
+    return null;
   }
 
   const normalizedMoveAxis = clampedMoveAxis / inputMagnitude;
@@ -161,14 +287,28 @@ export function shouldEnableGroundedAutostep(
     forwardZ * normalizedMoveAxis + rightZ * normalizedStrafeAxis;
   const movementYawRadians = Math.atan2(movementDirectionX, -movementDirectionZ);
   const currentSupportHeightMeters = position.y;
-  const maxEligibleStepRiseMeters =
-    config.groundedBody.stepHeightMeters + automaticSurfaceStepHeightLeewayMeters;
+  const effectiveUpwardSpeedUnitsPerSecond = Math.max(
+    0,
+    toFiniteNumber(verticalSpeedUnitsPerSecond, 0),
+    jumpRequested ? config.groundedBody.jumpImpulseUnitsPerSecond : 0
+  );
+  const maxJumpRiseMeters =
+    effectiveUpwardSpeedUnitsPerSecond <= 0
+      ? 0
+      : (effectiveUpwardSpeedUnitsPerSecond *
+          effectiveUpwardSpeedUnitsPerSecond) /
+        Math.max(0.001, config.groundedBody.gravityUnitsPerSecond * 2);
+  const maxEligibleStepRiseMeters = Math.max(
+    config.groundedBody.stepHeightMeters + automaticSurfaceStepHeightLeewayMeters,
+    maxJumpRiseMeters + automaticSurfaceStepHeightLeewayMeters
+  );
   const probeForwardDistanceMeters =
     config.groundedBody.capsuleRadiusMeters *
     automaticSurfaceProbeForwardDistanceFactor;
   const probeLateralDistanceMeters =
     config.groundedBody.capsuleRadiusMeters *
     automaticSurfaceProbeLateralDistanceFactor;
+  let highestEligibleStepRiseMeters: number | null = null;
 
   for (const probeOffset of [
     resolvePlanarProbeOffset(probeForwardDistanceMeters, 0, movementYawRadians),
@@ -197,13 +337,44 @@ export function shouldEnableGroundedAutostep(
 
     if (
       supportRiseMeters > automaticSurfaceBlockingHeightToleranceMeters &&
-      supportRiseMeters <= maxEligibleStepRiseMeters
+      supportRiseMeters <= maxEligibleStepRiseMeters &&
+      (highestEligibleStepRiseMeters === null ||
+        supportRiseMeters > highestEligibleStepRiseMeters)
     ) {
-      return true;
+      highestEligibleStepRiseMeters = supportRiseMeters;
     }
   }
 
-  return false;
+  return highestEligibleStepRiseMeters === null
+    ? null
+    : Math.max(
+        config.groundedBody.stepHeightMeters,
+        highestEligibleStepRiseMeters
+      );
+}
+
+export function shouldEnableGroundedAutostep(
+  config: MetaverseRuntimeConfig,
+  surfaceColliderSnapshots: readonly MetaversePlacedCuboidColliderSnapshot[],
+  position: PhysicsVector3Snapshot,
+  yawRadians: number,
+  moveAxis: number,
+  strafeAxis: number,
+  verticalSpeedUnitsPerSecond = 0,
+  jumpRequested = false
+): boolean {
+  return (
+    resolveGroundedAutostepHeightMeters(
+      config,
+      surfaceColliderSnapshots,
+      position,
+      yawRadians,
+      moveAxis,
+      strafeAxis,
+      verticalSpeedUnitsPerSecond,
+      jumpRequested
+    ) !== null
+  );
 }
 
 function sampleAutomaticSurfaceSupport(

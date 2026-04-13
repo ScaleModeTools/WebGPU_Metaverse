@@ -230,6 +230,7 @@ export class MetaverseGroundedBodyRuntime {
   readonly #physicsRuntime: RapierPhysicsRuntime;
 
   #autostepEnabled = true;
+  #autostepHeightMeters: number;
   #characterController: RapierCharacterControllerHandle | null = null;
   #collider: RapierColliderHandle | null = null;
   #forwardSpeedUnitsPerSecond = 0;
@@ -244,6 +245,7 @@ export class MetaverseGroundedBodyRuntime {
   ) {
     this.#config = sanitizeConfig(config);
     this.#physicsRuntime = physicsRuntime;
+    this.#autostepHeightMeters = this.#config.stepHeightMeters;
     this.#snapshot = freezeGroundedBodySnapshot(
       this.#config,
       this.#config.spawnPosition,
@@ -307,8 +309,15 @@ export class MetaverseGroundedBodyRuntime {
     this.#characterController?.setApplyImpulsesToDynamicBodies(enabled);
   }
 
-  setAutostepEnabled(enabled: boolean): void {
+  setAutostepEnabled(
+    enabled: boolean,
+    maxHeightMeters = this.#config.stepHeightMeters
+  ): void {
     this.#autostepEnabled = enabled;
+    this.#autostepHeightMeters = Math.max(
+      this.#config.stepHeightMeters,
+      toFiniteNumber(maxHeightMeters, this.#config.stepHeightMeters)
+    );
     const controller = this.#characterController;
 
     if (controller === null) {
@@ -468,10 +477,8 @@ export class MetaverseGroundedBodyRuntime {
       (appliedDeltaX * forwardX + appliedDeltaZ * forwardZ) / deltaSeconds;
     this.#strafeSpeedUnitsPerSecond =
       (appliedDeltaX * rightX + appliedDeltaZ * rightZ) / deltaSeconds;
-    if (!grounded) {
-      this.#forwardSpeedUnitsPerSecond *= this.#config.airborneMovementDampingFactor;
-      this.#strafeSpeedUnitsPerSecond *= this.#config.airborneMovementDampingFactor;
-    }
+    // Air control already reduces acceleration/deceleration above, so keep the
+    // carried horizontal velocity intact when the body leaves the ground.
     this.#verticalSpeedUnitsPerSecond = grounded
       ? 0
       : appliedDeltaY / deltaSeconds;
@@ -498,6 +505,7 @@ export class MetaverseGroundedBodyRuntime {
     this.#characterController = null;
     this.#applyImpulsesToDynamicBodies = false;
     this.#autostepEnabled = true;
+    this.#autostepHeightMeters = this.#config.stepHeightMeters;
     this.#forwardSpeedUnitsPerSecond = 0;
     this.#strafeSpeedUnitsPerSecond = 0;
     this.#verticalSpeedUnitsPerSecond = 0;
@@ -556,7 +564,7 @@ export class MetaverseGroundedBodyRuntime {
   ): void {
     if (this.#autostepEnabled) {
       controller.enableAutostep(
-        this.#config.stepHeightMeters,
+        this.#autostepHeightMeters,
         this.#config.stepWidthMeters,
         false
       );

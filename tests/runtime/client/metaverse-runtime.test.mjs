@@ -462,6 +462,12 @@ class FakeMetaverseRenderer {
   }
 }
 
+const disabledBootCinematicConfig = Object.freeze({
+  enabled: false,
+  minimumDwellMs: 0,
+  shots: Object.freeze([])
+});
+
 class FakeMetaversePresenceClient {
   constructor(localPlayerId, localUsername, remotePlayerId) {
     this.disposeCalls = 0;
@@ -958,23 +964,42 @@ async function createSkiffMountProofSlice() {
   const walkClip = new AnimationClip("walk", -1, []);
   const skiffScene = new Group();
   const skiffHull = new Mesh(
-    new BoxGeometry(4.2, 0.6, 1.8),
+    new BoxGeometry(5.8, 0.6, 2.4),
     new MeshStandardMaterial({ color: 0x475569 })
   );
   const deckEntry = new Group();
   const driverSeat = new Group();
   const portBenchSeat = new Group();
+  const portBenchRearSeat = new Group();
+  const starboardBenchSeat = new Group();
+  const starboardBenchRearSeat = new Group();
 
   skiffHull.position.y = 0.3;
   deckEntry.name = "deck_entry";
-  deckEntry.position.set(0.42, 1, 0.58);
+  deckEntry.position.set(-2.12, 1, 0);
   driverSeat.name = "driver_seat";
-  driverSeat.position.set(0, 1, 0);
+  driverSeat.position.set(1.32, 1, 0);
   driverSeat.rotation.y = Math.PI * 0.5;
   portBenchSeat.name = "port_bench_seat";
-  portBenchSeat.position.set(-0.25, 1, -0.48);
+  portBenchSeat.position.set(0.65, 1, -0.72);
+  portBenchRearSeat.name = "port_bench_rear_seat";
+  portBenchRearSeat.position.set(-0.65, 1, -0.72);
+  starboardBenchSeat.name = "starboard_bench_seat";
+  starboardBenchSeat.position.set(0.65, 1, 0.72);
+  starboardBenchSeat.rotation.y = Math.PI;
+  starboardBenchRearSeat.name = "starboard_bench_rear_seat";
+  starboardBenchRearSeat.position.set(-0.65, 1, 0.72);
+  starboardBenchRearSeat.rotation.y = Math.PI;
   skiffScene.name = "metaverse_hub_skiff_root";
-  skiffScene.add(skiffHull, deckEntry, driverSeat, portBenchSeat);
+  skiffScene.add(
+    skiffHull,
+    deckEntry,
+    driverSeat,
+    portBenchSeat,
+    portBenchRearSeat,
+    starboardBenchSeat,
+    starboardBenchRearSeat
+  );
 
   return {
     characterProofConfig: {
@@ -993,6 +1018,7 @@ async function createSkiffMountProofSlice() {
       characterId: "metaverse-mannequin-v1",
       label: "Metaverse mannequin",
       modelPath: "/models/metaverse/characters/metaverse-mannequin.gltf",
+      skeletonId: "humanoid_v1",
       socketNames
     },
     createSceneAssetLoader: () => ({
@@ -1017,7 +1043,7 @@ async function createSkiffMountProofSlice() {
           collider: {
             center: { x: 0, y: 1.05, z: 0 },
             shape: "box",
-            size: { x: 5.2, y: 2.4, z: 2.8 }
+            size: { x: 6.2, y: 2.4, z: 3.2 }
           },
           environmentAssetId: "metaverse-hub-skiff-v1",
           label: "Metaverse hub skiff",
@@ -1043,26 +1069,50 @@ async function createSkiffMountProofSlice() {
             {
               center: { x: 0, y: 0.28, z: 0 },
               shape: "box",
-              size: { x: 4.6, y: 0.56, z: 2 },
+              size: { x: 5.8, y: 0.56, z: 2.6 },
               traversalAffordance: "blocker"
             },
             {
               center: { x: 0, y: 0.62, z: 0 },
               shape: "box",
-              size: { x: 4.2, y: 0.12, z: 1.8 },
+              size: { x: 5.2, y: 0.12, z: 2 },
               traversalAffordance: "support"
             },
             {
-              center: { x: 0, y: 0.95, z: 0 },
+              center: { x: 1.35, y: 0.94, z: 0 },
               shape: "box",
               size: { x: 0.9, y: 0.18, z: 0.8 },
               traversalAffordance: "support"
             },
             {
-              center: { x: -0.25, y: 0.92, z: -0.48 },
+              center: { x: 1.72, y: 1.18, z: 0 },
               shape: "box",
-              size: { x: 1, y: 0.16, z: 0.52 },
+              size: { x: 0.62, y: 0.58, z: 0.84 },
+              traversalAffordance: "blocker"
+            },
+            {
+              center: { x: 0, y: 0.92, z: -0.74 },
+              shape: "box",
+              size: { x: 2.6, y: 0.16, z: 0.52 },
               traversalAffordance: "support"
+            },
+            {
+              center: { x: 0, y: 1.12, z: -0.88 },
+              shape: "box",
+              size: { x: 2.6, y: 0.42, z: 0.24 },
+              traversalAffordance: "blocker"
+            },
+            {
+              center: { x: 0, y: 0.92, z: 0.74 },
+              shape: "box",
+              size: { x: 2.6, y: 0.16, z: 0.52 },
+              traversalAffordance: "support"
+            },
+            {
+              center: { x: 0, y: 1.12, z: 0.88 },
+              shape: "box",
+              size: { x: 2.6, y: 0.42, z: 0.24 },
+              traversalAffordance: "blocker"
             }
           ],
           entries: [
@@ -1094,13 +1144,49 @@ async function createSkiffMountProofSlice() {
             {
               cameraPolicyId: "seat-follow",
               controlRoutingPolicyId: "look-only",
-              directEntryEnabled: true,
+              directEntryEnabled: false,
               dismountOffset: { x: 0, y: 0, z: 0.8 },
-              label: "Port bench",
+              label: "Port bench front",
               lookLimitPolicyId: "passenger-bench",
               occupancyAnimationId: "seated",
               seatId: "port-bench-seat",
               seatNodeName: "port_bench_seat",
+              seatRole: "passenger"
+            },
+            {
+              cameraPolicyId: "seat-follow",
+              controlRoutingPolicyId: "look-only",
+              directEntryEnabled: false,
+              dismountOffset: { x: 0, y: 0, z: 0.8 },
+              label: "Port bench rear",
+              lookLimitPolicyId: "passenger-bench",
+              occupancyAnimationId: "seated",
+              seatId: "port-bench-seat-rear",
+              seatNodeName: "port_bench_rear_seat",
+              seatRole: "passenger"
+            },
+            {
+              cameraPolicyId: "seat-follow",
+              controlRoutingPolicyId: "look-only",
+              directEntryEnabled: false,
+              dismountOffset: { x: 0, y: 0, z: 0.8 },
+              label: "Starboard bench front",
+              lookLimitPolicyId: "passenger-bench",
+              occupancyAnimationId: "seated",
+              seatId: "starboard-bench-seat",
+              seatNodeName: "starboard_bench_seat",
+              seatRole: "passenger"
+            },
+            {
+              cameraPolicyId: "seat-follow",
+              controlRoutingPolicyId: "look-only",
+              directEntryEnabled: false,
+              dismountOffset: { x: 0, y: 0, z: 0.8 },
+              label: "Starboard bench rear",
+              lookLimitPolicyId: "passenger-bench",
+              occupancyAnimationId: "seated",
+              seatId: "starboard-bench-seat-rear",
+              seatNodeName: "starboard_bench_rear_seat",
               seatRole: "passenger"
             }
           ],
@@ -1632,8 +1718,8 @@ test("WebGpuMetaverseRuntime prewarms the booted scene before the first render w
     assert.equal(startSnapshot.telemetry.renderer.label, "WebGPU");
     assert.equal(startSnapshot.telemetry.renderedFrameCount, 1);
     assert.equal(renderer.initCalls, 1);
-    assert.equal(renderer.compileAsyncCalls.length, 1);
-    assert.equal(renderer.renderCalls, 1);
+    assert.equal(renderer.compileAsyncCalls.length, 2);
+    assert.equal(renderer.renderCalls, 5);
     assert.equal(renderer.pixelRatio, 1.5);
     assert.deepEqual(renderer.sizes.at(0), [1280, 720]);
     assert.equal(renderer.compileAsyncCalls[0]?.scene?.isScene, true);
@@ -1951,6 +2037,7 @@ test("MetaversePresenceRuntime syncs canonical mounted occupancy through the pre
       occupancyKind: "seat",
       occupantLabel: "Take helm",
       occupantRole: "driver",
+      seatTargets: Object.freeze([]),
       seatId: "driver-seat"
     })
   );
@@ -2119,12 +2206,16 @@ test("MetaverseRemoteWorldRuntime extrapolates from the latest authoritative sna
   );
   assert.equal(remoteWorldRuntime.remoteVehiclePresentations.length, 1);
   assert.ok(
-    Math.abs(remoteWorldRuntime.remoteVehiclePresentations[0]?.position.x - 9.2) <
-      0.000001
+    (remoteWorldRuntime.remoteVehiclePresentations[0]?.position.x ?? 0) > 8
   );
   assert.ok(
-    Math.abs(remoteWorldRuntime.remoteVehiclePresentations[0]?.yawRadians - 0.08) <
-      0.000001
+    (remoteWorldRuntime.remoteVehiclePresentations[0]?.position.x ?? 0) < 9.2
+  );
+  assert.ok(
+    (remoteWorldRuntime.remoteVehiclePresentations[0]?.yawRadians ?? 0) > 0
+  );
+  assert.ok(
+    (remoteWorldRuntime.remoteVehiclePresentations[0]?.yawRadians ?? 0) < 0.08
   );
 
   remoteWorldRuntime.dispose();
@@ -2382,6 +2473,7 @@ test("WebGpuMetaverseRuntime starts in swim locomotion over open water and advan
 
   try {
     const runtime = new WebGpuMetaverseRuntime(undefined, {
+      bootCinematicConfig: disabledBootCinematicConfig,
       cancelAnimationFrame: globalThis.window.cancelAnimationFrame.bind(globalThis.window),
       createRenderer: () => renderer,
       physicsRuntime: createFakePhysicsRuntime(RapierPhysicsRuntime),
@@ -2475,6 +2567,7 @@ test("WebGpuMetaverseRuntime routes mounted hub input through skiff locomotion a
         portals: []
       },
       {
+        bootCinematicConfig: disabledBootCinematicConfig,
         cancelAnimationFrame: globalThis.window.cancelAnimationFrame.bind(globalThis.window),
         characterProofConfig,
         createRenderer: () => renderer,
@@ -2495,7 +2588,7 @@ test("WebGpuMetaverseRuntime routes mounted hub input through skiff locomotion a
       "metaverse-hub-skiff-v1"
     );
     assert.equal(runtime.hudSnapshot.focusedMountable?.boardingEntries.length, 1);
-    assert.equal(runtime.hudSnapshot.focusedMountable?.directSeatTargets.length, 2);
+    assert.equal(runtime.hudSnapshot.focusedMountable?.directSeatTargets.length, 1);
 
     runtime.boardMountable();
 
@@ -2506,7 +2599,8 @@ test("WebGpuMetaverseRuntime routes mounted hub input through skiff locomotion a
     assert.equal(runtime.hudSnapshot.mountedEnvironment?.occupancyKind, "entry");
     assert.equal(runtime.hudSnapshot.mountedEnvironment?.entryId, "deck-entry");
     assert.equal(runtime.hudSnapshot.mountedEnvironment?.seatId, null);
-    assert.equal(runtime.hudSnapshot.locomotionMode, "mounted");
+    assert.equal(runtime.hudSnapshot.mountedEnvironment?.seatTargets.length, 5);
+    assert.equal(runtime.hudSnapshot.locomotionMode, "grounded");
 
     const mountedCamera = runtime.hudSnapshot.camera;
 
@@ -2523,8 +2617,15 @@ test("WebGpuMetaverseRuntime routes mounted hub input through skiff locomotion a
       Math.abs(runtime.hudSnapshot.camera.yawRadians - mountedCamera.yawRadians) >
         0.01
     );
+    assert.ok(
+      Math.hypot(
+        runtime.hudSnapshot.camera.position.x - mountedCamera.position.x,
+        runtime.hudSnapshot.camera.position.z - mountedCamera.position.z
+      ) > 0.001
+    );
     assert.equal(runtime.hudSnapshot.mountedEnvironment?.occupancyKind, "entry");
     assert.equal(runtime.hudSnapshot.mountedEnvironment?.entryId, "deck-entry");
+    assert.equal(runtime.hudSnapshot.locomotionMode, "grounded");
 
     runtime.occupySeat("driver-seat");
     assert.equal(runtime.hudSnapshot.mountedEnvironment?.occupancyKind, "seat");
@@ -2597,6 +2698,7 @@ test("WebGpuMetaverseRuntime publishes routed driver vehicle control intent thro
     );
     const fakeWorldClient = new FakeMetaverseWorldClient();
     const runtime = new WebGpuMetaverseRuntime(undefined, {
+      bootCinematicConfig: disabledBootCinematicConfig,
       cancelAnimationFrame:
         globalThis.window.cancelAnimationFrame.bind(globalThis.window),
       characterProofConfig,
@@ -2694,6 +2796,7 @@ test("WebGpuMetaverseRuntime reconciles a local mounted skiff from fresh authori
     );
     const fakeWorldClient = new FakeMetaverseWorldClient();
     const runtime = new WebGpuMetaverseRuntime(undefined, {
+      bootCinematicConfig: disabledBootCinematicConfig,
       cancelAnimationFrame:
         globalThis.window.cancelAnimationFrame.bind(globalThis.window),
       characterProofConfig,
@@ -2789,6 +2892,115 @@ test("WebGpuMetaverseRuntime reconciles a local mounted skiff from fresh authori
       Math.abs(runtime.hudSnapshot.camera.position.x - 3) <
         Math.abs(runtime.hudSnapshot.camera.position.x - 1)
     );
+
+    runtime.dispose();
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.HTMLElement = originalHTMLElement;
+  }
+});
+
+test("WebGpuMetaverseRuntime clears a local driver seat claim after authoritative world rejects it", async () => {
+  const [
+    { WebGpuMetaverseRuntime },
+    { RapierPhysicsRuntime }
+  ] = await Promise.all([
+    clientLoader.load("/src/metaverse/classes/webgpu-metaverse-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
+  const { characterProofConfig, createSceneAssetLoader, environmentProofConfig } =
+    await createSkiffMountProofSlice();
+  const renderer = new FakeMetaverseRenderer();
+  const originalWindow = globalThis.window;
+  const originalHTMLElement = globalThis.HTMLElement;
+  const windowHarness = createInteractiveWindowHarness();
+  const fakeCanvas = {
+    addEventListener() {},
+    clientHeight: 720,
+    clientWidth: 1280,
+    removeEventListener() {}
+  };
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const username = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let nowMs = 0;
+  let wallClockMs = 1_100;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(username, null);
+  assert.notEqual(remoteUsername, null);
+
+  globalThis.window = windowHarness.window;
+  globalThis.HTMLElement = class FakeHTMLElement {};
+
+  try {
+    const fakePresenceClient = new FakeMetaversePresenceClient(
+      localPlayerId,
+      username,
+      remotePlayerId
+    );
+    const fakeWorldClient = new FakeMetaverseWorldClient();
+    const runtime = new WebGpuMetaverseRuntime(undefined, {
+      bootCinematicConfig: disabledBootCinematicConfig,
+      cancelAnimationFrame:
+        globalThis.window.cancelAnimationFrame.bind(globalThis.window),
+      characterProofConfig,
+      createMetaversePresenceClient: () => fakePresenceClient,
+      createMetaverseWorldClient: () => fakeWorldClient,
+      createRenderer: () => renderer,
+      createSceneAssetLoader,
+      environmentProofConfig,
+      localPlayerIdentity: {
+        characterId: "metaverse-mannequin-v1",
+        playerId: localPlayerId,
+        username
+      },
+      physicsRuntime: createFakePhysicsRuntime(RapierPhysicsRuntime),
+      readNowMs: () => nowMs,
+      readWallClockMs: () => wallClockMs,
+      requestAnimationFrame:
+        globalThis.window.requestAnimationFrame.bind(globalThis.window)
+    });
+
+    await runtime.start(fakeCanvas, {
+      gpu: {}
+    });
+
+    runtime.boardMountable();
+    runtime.occupySeat("driver-seat");
+
+    assert.equal(runtime.hudSnapshot.mountedEnvironment?.seatId, "driver-seat");
+    fakeWorldClient.publishWorldSnapshotBuffer([
+      createRealtimeWorldSnapshot({
+        currentTick: 12,
+        localPlayerId,
+        localUsername: username,
+        remotePlayerId,
+        remotePlayerX: 2,
+        remoteUsername,
+        serverTimeMs: 1_100,
+        snapshotSequence: 3,
+        vehicleLinearVelocity: {
+          x: 0,
+          y: 0,
+          z: 0
+        },
+        vehicleSeatOccupantPlayerId: remotePlayerId,
+        vehicleX: 2,
+        yawRadians: 0
+      })
+    ]);
+
+    assert.equal(runtime.hudSnapshot.mountedEnvironment?.seatId, "driver-seat");
+
+    wallClockMs = 1_180;
+    nowMs += 1000 / 60;
+    windowHarness.advanceFrame(nowMs);
+
+    assert.equal(runtime.hudSnapshot.mountedEnvironment, null);
+    assert.equal(runtime.hudSnapshot.locomotionMode, "swim");
 
     runtime.dispose();
   } finally {
@@ -3100,20 +3312,28 @@ test("metaverse asset proof resolves a socket-compatible attachment config from 
     metaverseAttachmentProofConfig.attachmentId,
     "metaverse-service-pistol-v1"
   );
-  assert.equal(metaverseAttachmentProofConfig.socketName, "hand_r_socket");
-  assert.deepEqual(metaverseAttachmentProofConfig.gripAlignment, {
-    attachmentForwardAxis: { x: 1, y: 0, z: 0 },
-    attachmentUpAxis: { x: 0, y: 1, z: 0 },
+  assert.equal(metaverseAttachmentProofConfig.heldMount.socketName, "palm_r_socket");
+  assert.deepEqual(metaverseAttachmentProofConfig.heldMount.gripAlignment, {
+    attachmentForwardMarkerNodeName: "metaverse_service_pistol_forward_marker",
+    attachmentGripMarkerNodeName: "metaverse_service_pistol_grip_right_marker",
+    attachmentUpMarkerNodeName: "metaverse_service_pistol_up_marker",
     socketForwardAxis: { x: 1, y: 0, z: 0 },
     socketOffset: { x: 0, y: 0, z: 0 },
     socketUpAxis: { x: 0, y: -1, z: 0 }
   });
+  assert.deepEqual(metaverseAttachmentProofConfig.mountedHolsterMount, {
+    gripAlignment: {
+      attachmentForwardMarkerNodeName: "metaverse_service_pistol_forward_marker",
+      attachmentGripMarkerNodeName: "metaverse_service_pistol_holster_marker",
+      attachmentUpMarkerNodeName: "metaverse_service_pistol_up_marker",
+      socketForwardAxis: { x: 0, y: -1, z: 0 },
+      socketOffset: { x: 0.16, y: -0.02, z: -0.04 },
+      socketUpAxis: { x: 0, y: 0, z: -1 }
+    },
+    socketName: "back_socket"
+  });
   assert.equal(metaverseAttachmentProofConfig.supportPoints, null);
-  assert.ok(
-    metaverseCharacterProofConfig.socketNames.includes(
-      metaverseAttachmentProofConfig.socketName
-    )
-  );
+  assert.equal(metaverseCharacterProofConfig.skeletonId, "humanoid_v2");
 });
 
 test("metaverse asset proof resolves the active full-body humanoid character from manifests", async () => {
@@ -3173,7 +3393,7 @@ test("metaverse asset proof resolves static, instanced, and dynamic environment 
     "/src/app/states/metaverse-asset-proof.ts"
   );
 
-  assert.equal(metaverseEnvironmentProofConfig.assets.length, 4);
+  assert.equal(metaverseEnvironmentProofConfig.assets.length, 5);
 
   const crateAsset = metaverseEnvironmentProofConfig.assets.find(
     (asset) => asset.environmentAssetId === "metaverse-hub-crate-v1"
@@ -3186,6 +3406,9 @@ test("metaverse asset proof resolves static, instanced, and dynamic environment 
   );
   const skiffAsset = metaverseEnvironmentProofConfig.assets.find(
     (asset) => asset.environmentAssetId === "metaverse-hub-skiff-v1"
+  );
+  const diveBoatAsset = metaverseEnvironmentProofConfig.assets.find(
+    (asset) => asset.environmentAssetId === "metaverse-hub-dive-boat-v1"
   );
 
   assert.ok(crateAsset);
@@ -3222,18 +3445,50 @@ test("metaverse asset proof resolves static, instanced, and dynamic environment 
   assert.equal(skiffAsset.placements.length, 1);
   assert.equal(skiffAsset.entries?.length, 1);
   assert.equal(skiffAsset.entries?.[0]?.entryNodeName, "deck_entry");
-  assert.equal(skiffAsset.physicsColliders?.length, 4);
+  assert.equal(skiffAsset.physicsColliders?.length, 8);
   assert.equal(
     skiffAsset.physicsColliders?.filter(
       (collider) => collider.traversalAffordance === "support"
     ).length,
-    3
+    4
   );
-  assert.equal(skiffAsset.seats?.length, 2);
+  assert.equal(
+    skiffAsset.physicsColliders?.filter(
+      (collider) => collider.traversalAffordance === "blocker"
+    ).length,
+    4
+  );
+  assert.equal(skiffAsset.seats?.length, 5);
   assert.equal(skiffAsset.seats?.[0]?.seatNodeName, "driver_seat");
   assert.equal(skiffAsset.seats?.[1]?.seatNodeName, "port_bench_seat");
   assert.equal(skiffAsset.orientation?.forwardModelYawRadians, Math.PI * 0.5);
   assert.equal(skiffAsset.collider?.shape, "box");
+
+  assert.ok(diveBoatAsset);
+  assert.equal(diveBoatAsset.placement, "dynamic");
+  assert.equal(diveBoatAsset.traversalAffordance, "mount");
+  assert.equal(diveBoatAsset.lods.length, 1);
+  assert.equal(diveBoatAsset.placements.length, 1);
+  assert.equal(diveBoatAsset.entries?.length, 2);
+  assert.equal(diveBoatAsset.entries?.[0]?.entryNodeName, "stern_port_entry");
+  assert.equal(diveBoatAsset.entries?.[1]?.entryNodeName, "stern_starboard_entry");
+  assert.equal(diveBoatAsset.physicsColliders?.length, 9);
+  assert.equal(
+    diveBoatAsset.physicsColliders?.filter(
+      (collider) => collider.traversalAffordance === "support"
+    ).length,
+    5
+  );
+  assert.equal(
+    diveBoatAsset.physicsColliders?.filter(
+      (collider) => collider.traversalAffordance === "blocker"
+    ).length,
+    4
+  );
+  assert.equal(diveBoatAsset.seats?.length, 7);
+  assert.equal(diveBoatAsset.seats?.[0]?.seatNodeName, "helm_seat");
+  assert.equal(diveBoatAsset.orientation?.forwardModelYawRadians, Math.PI * 0.5);
+  assert.equal(diveBoatAsset.collider?.shape, "box");
 });
 
 test("createMetaverseScene syncs pushable dynamic assets from exact pose overrides without exposing mount focus", async () => {
@@ -3382,11 +3637,11 @@ test("MetaverseEnvironmentPhysicsRuntime keeps mountable skiff colliders and sup
 
   await environmentPhysicsRuntime.boot(0);
 
-  assert.equal(world.colliders.length, 5);
+  assert.equal(world.colliders.length, 9);
   const portBenchSupportCollider = world.colliders.find(
     (candidate) =>
       candidate.shape === "cuboid" &&
-      Math.abs((candidate.payload.halfExtentX ?? 0) - 0.5) < 0.0001 &&
+      Math.abs((candidate.payload.halfExtentX ?? 0) - 1.3) < 0.0001 &&
       Math.abs((candidate.payload.halfExtentZ ?? 0) - 0.26) < 0.0001
   );
 
@@ -3398,9 +3653,9 @@ test("MetaverseEnvironmentPhysicsRuntime keeps mountable skiff colliders and sup
 
   const syncedPortBenchColliderTranslation = portBenchSupportCollider.translation();
   const expectedPortBenchOffsetX =
-    -0.25 * Math.cos(Math.PI * 0.25) + -0.48 * Math.sin(Math.PI * 0.25);
+    0 * Math.cos(Math.PI * 0.25) + -0.74 * Math.sin(Math.PI * 0.25);
   const expectedPortBenchOffsetZ =
-    -(-0.25) * Math.sin(Math.PI * 0.25) + -0.48 * Math.cos(Math.PI * 0.25);
+    -(0) * Math.sin(Math.PI * 0.25) + -0.74 * Math.cos(Math.PI * 0.25);
 
   assert.ok(
     Math.abs(
@@ -3421,7 +3676,7 @@ test("MetaverseEnvironmentPhysicsRuntime keeps mountable skiff colliders and sup
     environmentPhysicsRuntime.surfaceColliderSnapshots.find(
       (collider) =>
         collider.traversalAffordance === "support" &&
-        Math.abs(collider.halfExtents.x - 0.5) < 0.0001 &&
+        Math.abs(collider.halfExtents.x - 1.3) < 0.0001 &&
         Math.abs(collider.halfExtents.z - 0.26) < 0.0001
     );
 
@@ -3440,6 +3695,121 @@ test("MetaverseEnvironmentPhysicsRuntime keeps mountable skiff colliders and sup
     Math.abs(
       syncedPortBenchSupportSnapshot.translation.z -
         syncedPortBenchColliderTranslation.z
+    ) < 0.0001
+  );
+
+  environmentPhysicsRuntime.dispose();
+});
+
+test("MetaverseEnvironmentPhysicsRuntime syncs remote standing players into blocker colliders without turning swimmers or seated occupants into land", async () => {
+  const [
+    { Group },
+    { metaverseRuntimeConfig },
+    { MetaverseEnvironmentPhysicsRuntime },
+    { RapierPhysicsRuntime }
+  ] = await Promise.all([
+    import("three/webgpu"),
+    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
+    clientLoader.load("/src/metaverse/classes/metaverse-environment-physics-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
+  const { physicsRuntime, world } =
+    createFakePhysicsRuntimeWithWorld(RapierPhysicsRuntime);
+  const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
+    metaverseRuntimeConfig,
+    {
+      createSceneAssetLoader: () => ({
+        async loadAsync() {
+          return {
+            animations: [],
+            scene: new Group()
+          };
+        }
+      }),
+      environmentProofConfig: null,
+      groundedBodyRuntime: {
+        async init() {},
+        dispose() {},
+        setApplyImpulsesToDynamicBodies() {}
+      },
+      physicsRuntime,
+      sceneRuntime: {
+        scene: new Group(),
+        setDynamicEnvironmentPose() {}
+      },
+      showPhysicsDebug: false
+    }
+  );
+
+  await environmentPhysicsRuntime.boot(0);
+  assert.equal(world.colliders.length, 1);
+
+  environmentPhysicsRuntime.syncRemoteCharacterBlockers([
+    Object.freeze({
+      characterId: "metaverse-mannequin-v1",
+      mountedOccupancy: null,
+      playerId: "remote-deckhand-1",
+      poseSyncMode: "runtime-server-sampled",
+      presentation: Object.freeze({
+        animationVocabulary: "idle",
+        position: Object.freeze({ x: 2.4, y: 0.68, z: -5.2 }),
+        yawRadians: 0
+      })
+    }),
+    Object.freeze({
+      characterId: "metaverse-mannequin-v1",
+      mountedOccupancy: null,
+      playerId: "remote-swimmer-2",
+      poseSyncMode: "runtime-server-sampled",
+      presentation: Object.freeze({
+        animationVocabulary: "swim",
+        position: Object.freeze({ x: 4.4, y: 0, z: -8 }),
+        yawRadians: 0
+      })
+    }),
+    Object.freeze({
+      characterId: "metaverse-mannequin-v1",
+      mountedOccupancy: Object.freeze({
+        environmentAssetId: "metaverse-hub-skiff-v1",
+        entryId: null,
+        occupancyKind: "seat",
+        occupantRole: "passenger",
+        seatId: "port-bench-seat"
+      }),
+      playerId: "remote-passenger-3",
+      poseSyncMode: "runtime-server-sampled",
+      presentation: Object.freeze({
+        animationVocabulary: "seated",
+        position: Object.freeze({ x: 1.8, y: 0.8, z: -5.6 }),
+        yawRadians: 0
+      })
+    })
+  ]);
+
+  assert.equal(world.colliders.length, 2);
+  assert.equal(
+    environmentPhysicsRuntime.surfaceColliderSnapshots.filter(
+      (collider) => collider.traversalAffordance === "blocker"
+    ).length,
+    1
+  );
+  const remoteBlockerSnapshot =
+    environmentPhysicsRuntime.surfaceColliderSnapshots.find(
+      (collider) =>
+        collider.traversalAffordance === "blocker" &&
+        collider.ownerEnvironmentAssetId === null
+    );
+
+  assert.ok(remoteBlockerSnapshot);
+  assert.ok(
+    Math.abs((remoteBlockerSnapshot?.translation.x ?? 0) - 2.4) < 0.0001
+  );
+  assert.ok(
+    Math.abs(
+      (remoteBlockerSnapshot?.translation.y ?? 0) -
+        (0.68 +
+          metaverseRuntimeConfig.groundedBody.capsuleHalfHeightMeters +
+          metaverseRuntimeConfig.groundedBody.capsuleRadiusMeters)
     ) < 0.0001
   );
 
@@ -3561,16 +3931,28 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
   const sceneRuntime = createMetaverseScene(metaverseRuntimeConfig, {
     attachmentProofConfig: {
       attachmentId: "metaverse-service-pistol-v1",
-      gripAlignment: {
-        attachmentForwardAxis: { x: 1, y: 0, z: 0 },
-        attachmentUpAxis: { x: 0, y: 1, z: 0 },
-        socketForwardAxis: { x: 1, y: 0, z: 0 },
-        socketOffset: { x: 0.01, y: -0.02, z: 0.03 },
-        socketUpAxis: { x: 0, y: -1, z: 0 }
+      heldMount: {
+        gripAlignment: {
+          attachmentForwardAxis: { x: 1, y: 0, z: 0 },
+          attachmentUpAxis: { x: 0, y: 1, z: 0 },
+          socketForwardAxis: { x: 1, y: 0, z: 0 },
+          socketOffset: { x: 0.01, y: -0.02, z: 0.03 },
+          socketUpAxis: { x: 0, y: -1, z: 0 }
+        },
+        socketName: "hand_r_socket"
       },
       label: "Metaverse service pistol",
       modelPath: "/models/metaverse/attachments/metaverse-service-pistol.gltf",
-      socketName: "hand_r_socket",
+      mountedHolsterMount: {
+        gripAlignment: {
+          attachmentForwardAxis: { x: 1, y: 0, z: 0 },
+          attachmentUpAxis: { x: 0, y: 1, z: 0 },
+          socketForwardAxis: { x: 0, y: -1, z: 0 },
+          socketOffset: { x: 0.12, y: 0.03, z: -0.04 },
+          socketUpAxis: { x: 0, y: 0, z: -1 }
+        },
+        socketName: "back_socket"
+      },
       supportPoints: [
         {
           localPosition: { x: 0.02, y: -0.08, z: 0.01 },
@@ -3609,6 +3991,7 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
       characterId: "metaverse-mannequin-v1",
       label: "Metaverse mannequin",
       modelPath: "/models/metaverse/characters/metaverse-mannequin.gltf",
+      skeletonId: "humanoid_v1",
       socketNames
     },
     createSceneAssetLoader: () => ({
@@ -3722,6 +4105,136 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
     attachmentSupportPoint.position.distanceTo(new Vector3(0.02, -0.08, 0.01)) <
       0.000001
   );
+
+  sceneRuntime.syncPresentation(
+    {
+      lookDirection: { x: 0, y: 0, z: -1 },
+      pitchRadians: 0,
+      position: { x: 3.2, y: 1.62, z: -5.4 },
+      yawRadians: 0.7
+    },
+    null,
+    8,
+    0,
+    {
+      animationVocabulary: "seated",
+      position: { x: 3.2, y: 0, z: -5.4 },
+      yawRadians: 0.7
+    },
+    [
+      {
+        characterId: "metaverse-mannequin-v1",
+        playerId: "remote-pilot-2",
+        presentation: {
+          animationVocabulary: "walk",
+          position: { x: -1.5, y: 0, z: -6.2 },
+          yawRadians: -0.4
+        }
+      }
+    ],
+    {
+      cameraPolicyId: "vehicle-follow",
+      controlRoutingPolicyId: "vehicle-surface-drive",
+      directSeatTargets: [],
+      entryId: null,
+      environmentAssetId: "metaverse-hub-skiff-v1",
+      label: "Skiff",
+      lookLimitPolicyId: "driver-forward",
+      occupancyAnimationId: "seated",
+      occupancyKind: "seat",
+      occupantLabel: "Driver seat",
+      occupantRole: "driver",
+      seatTargets: [],
+      seatId: "driver"
+    }
+  );
+
+  assert.equal(attachmentRoot.parent?.name, "back_socket");
+  assert.ok(
+    attachmentRoot.position.distanceTo(new Vector3(0.12, 0.03, -0.04)) < 0.000001
+  );
+
+  sceneRuntime.syncPresentation(
+    {
+      lookDirection: { x: 0, y: 0, z: -1 },
+      pitchRadians: 0,
+      position: { x: 3.2, y: 1.62, z: -5.4 },
+      yawRadians: 0.7
+    },
+    null,
+    10,
+    0,
+    {
+      animationVocabulary: "walk",
+      position: { x: 3.2, y: 0, z: -5.4 },
+      yawRadians: 0.7
+    },
+    [
+      {
+        characterId: "metaverse-mannequin-v1",
+        playerId: "remote-pilot-2",
+        presentation: {
+          animationVocabulary: "walk",
+          position: { x: -1.5, y: 0, z: -6.2 },
+          yawRadians: -0.4
+        }
+      }
+    ],
+    {
+      cameraPolicyId: "seat-follow",
+      controlRoutingPolicyId: "look-only",
+      directSeatTargets: [],
+      entryId: "deck-entry",
+      environmentAssetId: "metaverse-hub-skiff-v1",
+      label: "Skiff",
+      lookLimitPolicyId: "passenger-bench",
+      occupancyAnimationId: "standing",
+      occupancyKind: "entry",
+      occupantLabel: "Board deck",
+      occupantRole: "passenger",
+      seatTargets: [],
+      seatId: null
+    }
+  );
+
+  assert.equal(attachmentRoot.parent?.name, "hand_r_socket");
+  assert.ok(
+    attachmentRoot.position.distanceTo(new Vector3(0.01, -0.02, 0.03)) < 0.000001
+  );
+
+  sceneRuntime.syncPresentation(
+    {
+      lookDirection: { x: 0, y: 0, z: -1 },
+      pitchRadians: 0,
+      position: { x: 3.2, y: 1.62, z: -5.4 },
+      yawRadians: 0.7
+    },
+    null,
+    12,
+    0,
+    {
+      animationVocabulary: "walk",
+      position: { x: 3.2, y: 0, z: -5.4 },
+      yawRadians: 0.7
+    },
+    [
+      {
+        characterId: "metaverse-mannequin-v1",
+        playerId: "remote-pilot-2",
+        presentation: {
+          animationVocabulary: "walk",
+          position: { x: -1.5, y: 0, z: -6.2 },
+          yawRadians: -0.4
+        }
+      }
+    ]
+  );
+
+  assert.equal(attachmentRoot.parent?.name, "hand_r_socket");
+  assert.ok(
+    attachmentRoot.position.distanceTo(new Vector3(0.01, -0.02, 0.03)) < 0.000001
+  );
+
   const remoteCharacterRoot = sceneRuntime.scene.getObjectByName(
     "metaverse_character/metaverse-mannequin-v1/remote-pilot-2"
   );
@@ -3869,6 +4382,267 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
   );
 });
 
+test("createMetaverseScene preserves authored humanoid_v2 hand socket rotation on synthesized palm sockets", async () => {
+  const [
+    {
+      AnimationClip,
+      Bone,
+      BoxGeometry,
+      Float32BufferAttribute,
+      Group,
+      Mesh,
+      MeshStandardMaterial,
+      Quaternion,
+      Skeleton,
+      SkinnedMesh,
+      Uint16BufferAttribute,
+      Vector3
+    },
+    { createMetaverseScene },
+    { metaverseRuntimeConfig }
+  ] = await Promise.all([
+    import("three/webgpu"),
+    clientLoader.load("/src/metaverse/render/webgpu-metaverse-scene.ts"),
+    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts")
+  ]);
+
+  const bodyGeometry = new BoxGeometry(0.42, 1.86, 0.28);
+  const vertexCount = bodyGeometry.attributes.position.count;
+  const skinIndices = new Uint16Array(vertexCount * 4);
+  const skinWeights = new Float32Array(vertexCount * 4);
+
+  for (let index = 0; index < vertexCount; index += 1) {
+    skinIndices[index * 4] = 0;
+    skinWeights[index * 4] = 1;
+  }
+
+  bodyGeometry.setAttribute("skinIndex", new Uint16BufferAttribute(skinIndices, 4));
+  bodyGeometry.setAttribute("skinWeight", new Float32BufferAttribute(skinWeights, 4));
+
+  const bonesByName = new Map();
+  const addBone = (boneName, parentBone = null, position = null) => {
+    const bone = new Bone();
+
+    bone.name = boneName;
+    if (position !== null) {
+      bone.position.copy(position);
+    }
+
+    bonesByName.set(boneName, bone);
+    parentBone?.add(bone);
+
+    return bone;
+  };
+
+  const rootBone = addBone("root");
+  const pelvisBone = addBone("pelvis", rootBone, new Vector3(0, 0.92, 0));
+  const spine01Bone = addBone("spine_01", pelvisBone, new Vector3(0, 0.18, 0));
+  const spine02Bone = addBone("spine_02", spine01Bone, new Vector3(0, 0.18, 0));
+  const spine03Bone = addBone("spine_03", spine02Bone, new Vector3(0, 0.18, 0));
+  const neckBone = addBone("neck_01", spine03Bone, new Vector3(0, 0.16, 0));
+  const headBone = addBone("head", neckBone, new Vector3(0, 0.14, 0));
+  const clavicleLBone = addBone("clavicle_l", spine03Bone, new Vector3(-0.12, 0.1, 0));
+  const upperarmLBone = addBone("upperarm_l", clavicleLBone, new Vector3(-0.18, 0, 0));
+  const lowerarmLBone = addBone("lowerarm_l", upperarmLBone, new Vector3(-0.22, 0, 0));
+  const handLBone = addBone("hand_l", lowerarmLBone, new Vector3(-0.18, 0, 0));
+  const clavicleRBone = addBone("clavicle_r", spine03Bone, new Vector3(0.12, 0.1, 0));
+  const upperarmRBone = addBone("upperarm_r", clavicleRBone, new Vector3(0.18, 0, 0));
+  const lowerarmRBone = addBone("lowerarm_r", upperarmRBone, new Vector3(0.22, 0, 0));
+  const handRBone = addBone("hand_r", lowerarmRBone, new Vector3(0.18, 0, 0));
+  const thighLBone = addBone("thigh_l", pelvisBone, new Vector3(-0.1, -0.26, 0));
+  const calfLBone = addBone("calf_l", thighLBone, new Vector3(0, -0.42, 0));
+  const footLBone = addBone("foot_l", calfLBone, new Vector3(0, -0.4, 0.06));
+  const ballLBone = addBone("ball_l", footLBone, new Vector3(0, 0, 0.12));
+  const thighRBone = addBone("thigh_r", pelvisBone, new Vector3(0.1, -0.26, 0));
+  const calfRBone = addBone("calf_r", thighRBone, new Vector3(0, -0.42, 0));
+  const footRBone = addBone("foot_r", calfRBone, new Vector3(0, -0.4, 0.06));
+  const ballRBone = addBone("ball_r", footRBone, new Vector3(0, 0, 0.12));
+
+  addBone("thumb_01_l", handLBone, new Vector3(-0.04, -0.02, 0.06));
+  addBone("index_01_l", handLBone, new Vector3(-0.1, 0, 0.03));
+  addBone("middle_01_l", handLBone, new Vector3(-0.11, 0, 0));
+  addBone("ring_01_l", handLBone, new Vector3(-0.1, 0, -0.03));
+  addBone("pinky_01_l", handLBone, new Vector3(-0.08, 0, -0.05));
+  addBone("thumb_01_r", handRBone, new Vector3(0.04, -0.02, 0.06));
+  addBone("index_01_r", handRBone, new Vector3(0.1, 0, 0.03));
+  addBone("middle_01_r", handRBone, new Vector3(0.11, 0, 0));
+  addBone("ring_01_r", handRBone, new Vector3(0.1, 0, -0.03));
+  addBone("pinky_01_r", handRBone, new Vector3(0.08, 0, -0.05));
+
+  const headSocketBone = addBone("head_socket", headBone, new Vector3(0, 0.12, 0));
+  const handLSocketBone = addBone("hand_l_socket", handLBone, new Vector3(-0.05, 0, 0));
+  const handRSocketBone = addBone("hand_r_socket", handRBone, new Vector3(0.05, 0, 0));
+  const hipSocketBone = addBone("hip_socket", pelvisBone, new Vector3(0.16, -0.08, -0.06));
+  const seatSocketBone = addBone("seat_socket", pelvisBone, new Vector3(0, -0.02, -0.08));
+
+  handRSocketBone.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), Math.PI * 0.5);
+
+  const skinnedMesh = new SkinnedMesh(
+    bodyGeometry,
+    new MeshStandardMaterial({ color: 0x9ca3af })
+  );
+  const characterScene = new Group();
+  const skeleton = new Skeleton([
+    rootBone,
+    pelvisBone,
+    spine01Bone,
+    spine02Bone,
+    spine03Bone,
+    neckBone,
+    headBone,
+    clavicleLBone,
+    upperarmLBone,
+    lowerarmLBone,
+    handLBone,
+    clavicleRBone,
+    upperarmRBone,
+    lowerarmRBone,
+    handRBone,
+    thighLBone,
+    calfLBone,
+    footLBone,
+    ballLBone,
+    thighRBone,
+    calfRBone,
+    footRBone,
+    ballRBone,
+    bonesByName.get("thumb_01_l"),
+    bonesByName.get("index_01_l"),
+    bonesByName.get("middle_01_l"),
+    bonesByName.get("ring_01_l"),
+    bonesByName.get("pinky_01_l"),
+    bonesByName.get("thumb_01_r"),
+    bonesByName.get("index_01_r"),
+    bonesByName.get("middle_01_r"),
+    bonesByName.get("ring_01_r"),
+    bonesByName.get("pinky_01_r"),
+    headSocketBone,
+    handLSocketBone,
+    handRSocketBone,
+    hipSocketBone,
+    seatSocketBone
+  ]);
+
+  skinnedMesh.add(rootBone);
+  skinnedMesh.bind(skeleton);
+  characterScene.add(skinnedMesh);
+
+  const authoredAnimationPackPath =
+    "/models/metaverse/characters/mesh2motion-humanoid-canonical-animations.glb";
+  const idleClip = new AnimationClip("idle", -1, []);
+  const walkClip = new AnimationClip("walk", -1, []);
+  const attachmentScene = new Group();
+  const attachmentMesh = new Mesh(
+    new BoxGeometry(0.28, 0.08, 0.08),
+    new MeshStandardMaterial({ color: 0x4b5563 })
+  );
+
+  attachmentMesh.position.x = 0.14;
+  attachmentScene.name = "metaverse_service_pistol_root";
+  attachmentScene.add(attachmentMesh);
+
+  const sceneRuntime = createMetaverseScene(metaverseRuntimeConfig, {
+    attachmentProofConfig: {
+      attachmentId: "metaverse-service-pistol-v1",
+      heldMount: {
+        gripAlignment: {
+          attachmentForwardAxis: { x: 1, y: 0, z: 0 },
+          attachmentUpAxis: { x: 0, y: 1, z: 0 },
+          socketForwardAxis: { x: 1, y: 0, z: 0 },
+          socketOffset: { x: 0, y: 0, z: 0 },
+          socketUpAxis: { x: 0, y: 1, z: 0 }
+        },
+        socketName: "palm_r_socket"
+      },
+      label: "Metaverse service pistol",
+      modelPath: "/models/metaverse/attachments/metaverse-service-pistol.gltf",
+      mountedHolsterMount: null,
+      supportPoints: null
+    },
+    characterProofConfig: {
+      animationClips: [
+        {
+          clipName: "idle",
+          sourcePath: authoredAnimationPackPath,
+          vocabulary: "idle"
+        },
+        {
+          clipName: "walk",
+          sourcePath: authoredAnimationPackPath,
+          vocabulary: "walk"
+        }
+      ],
+      characterId: "mesh2motion-humanoid-v1",
+      label: "Mesh2Motion humanoid",
+      modelPath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
+      skeletonId: "humanoid_v2",
+      socketNames: [
+        "hand_r_socket",
+        "hand_l_socket",
+        "head_socket",
+        "hip_socket",
+        "seat_socket"
+      ]
+    },
+    createSceneAssetLoader: () => ({
+      async loadAsync(path) {
+        if (path === "/models/metaverse/attachments/metaverse-service-pistol.gltf") {
+          return {
+            animations: [],
+            scene: attachmentScene
+          };
+        }
+
+        if (path === authoredAnimationPackPath) {
+          return {
+            animations: [idleClip, walkClip],
+            scene: new Group()
+          };
+        }
+
+        return {
+          animations: [],
+          scene: characterScene
+        };
+      }
+    }),
+    warn() {}
+  });
+
+  await sceneRuntime.boot();
+  sceneRuntime.scene.updateMatrixWorld(true);
+
+  const handSocket = sceneRuntime.scene.getObjectByName("hand_r_socket");
+  const palmSocket = sceneRuntime.scene.getObjectByName("palm_r_socket");
+  const attachmentRoot = sceneRuntime.scene.getObjectByName(
+    "metaverse_attachment/metaverse-service-pistol-v1"
+  );
+
+  assert.ok(handSocket);
+  assert.ok(palmSocket);
+  assert.ok(attachmentRoot);
+  assert.equal(palmSocket.parent?.name, "hand_r");
+  assert.equal(attachmentRoot.parent?.name, "palm_r_socket");
+  assertQuaternionArraysEquivalent(
+    palmSocket.quaternion.toArray(),
+    handSocket.quaternion.toArray(),
+    0.000001,
+    "Synthesized humanoid_v2 palm socket should preserve the authored hand socket rotation"
+  );
+  assertQuaternionArraysEquivalent(
+    attachmentRoot.quaternion.toArray(),
+    [0, 0, 0, 1],
+    0.000001,
+    "Humanoid_v2 held attachment should keep identity local rotation when socket and attachment axes match"
+  );
+  assertQuaternionArraysEquivalent(
+    attachmentRoot.getWorldQuaternion(new Quaternion()).toArray(),
+    palmSocket.getWorldQuaternion(new Quaternion()).toArray(),
+    0.000001,
+    "Humanoid_v2 held attachment should inherit the synthesized palm socket world rotation"
+  );
+});
+
 test("createMetaverseScene keeps socket debug markers opt-in", async () => {
   const [{ createMetaverseScene }, { metaverseRuntimeConfig }] = await Promise.all([
     clientLoader.load("/src/metaverse/render/webgpu-metaverse-scene.ts"),
@@ -3989,6 +4763,7 @@ test("createMetaverseScene requires an authored walk clip when walk vocabulary i
       characterId: "metaverse-mannequin-v1",
       label: "Metaverse mannequin",
       modelPath: "/models/metaverse/characters/metaverse-mannequin.gltf",
+      skeletonId: "humanoid_v1",
       socketNames
     },
     createSceneAssetLoader: () => ({
@@ -4418,23 +5193,42 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
   const walkClip = new AnimationClip("walk", -1, []);
   const skiffScene = new Group();
   const skiffHull = new Mesh(
-    new BoxGeometry(4.2, 0.6, 1.8),
+    new BoxGeometry(5.8, 0.6, 2.4),
     new MeshStandardMaterial({ color: 0x475569 })
   );
   const deckEntry = new Group();
   const driverSeat = new Group();
   const portBenchSeat = new Group();
+  const portBenchRearSeat = new Group();
+  const starboardBenchSeat = new Group();
+  const starboardBenchRearSeat = new Group();
 
   skiffHull.position.y = 0.3;
   deckEntry.name = "deck_entry";
-  deckEntry.position.set(0.42, 1, 0.58);
+  deckEntry.position.set(-2.12, 1, 0);
   driverSeat.name = "driver_seat";
-  driverSeat.position.set(0, 1, 0);
+  driverSeat.position.set(1.32, 1, 0);
   driverSeat.rotation.y = Math.PI * 0.5;
   portBenchSeat.name = "port_bench_seat";
-  portBenchSeat.position.set(-0.25, 1, -0.48);
+  portBenchSeat.position.set(0.65, 1, -0.72);
+  portBenchRearSeat.name = "port_bench_rear_seat";
+  portBenchRearSeat.position.set(-0.65, 1, -0.72);
+  starboardBenchSeat.name = "starboard_bench_seat";
+  starboardBenchSeat.position.set(0.65, 1, 0.72);
+  starboardBenchSeat.rotation.y = Math.PI;
+  starboardBenchRearSeat.name = "starboard_bench_rear_seat";
+  starboardBenchRearSeat.position.set(-0.65, 1, 0.72);
+  starboardBenchRearSeat.rotation.y = Math.PI;
   skiffScene.name = "metaverse_hub_skiff_root";
-  skiffScene.add(skiffHull, deckEntry, driverSeat, portBenchSeat);
+  skiffScene.add(
+    skiffHull,
+    deckEntry,
+    driverSeat,
+    portBenchSeat,
+    portBenchRearSeat,
+    starboardBenchSeat,
+    starboardBenchRearSeat
+  );
 
   const sceneRuntime = createMetaverseScene(metaverseRuntimeConfig, {
     characterProofConfig: {
@@ -4453,6 +5247,7 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
       characterId: "metaverse-mannequin-v1",
       label: "Metaverse mannequin",
       modelPath: "/models/metaverse/characters/metaverse-mannequin.gltf",
+      skeletonId: "humanoid_v1",
       socketNames
     },
     createSceneAssetLoader: () => ({
@@ -4477,7 +5272,7 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
           collider: {
             center: { x: 0, y: 1, z: 0 },
             shape: "box",
-            size: { x: 5, y: 3, z: 3 }
+            size: { x: 6.2, y: 2.4, z: 3.2 }
           },
           environmentAssetId: "metaverse-hub-skiff-v1",
           label: "Metaverse hub skiff",
@@ -4529,13 +5324,49 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
             {
               cameraPolicyId: "seat-follow",
               controlRoutingPolicyId: "look-only",
-              directEntryEnabled: true,
+              directEntryEnabled: false,
               dismountOffset: { x: 0, y: 0, z: 0.8 },
-              label: "Port bench",
+              label: "Port bench front",
               lookLimitPolicyId: "passenger-bench",
               occupancyAnimationId: "seated",
               seatId: "port-bench-seat",
               seatNodeName: "port_bench_seat",
+              seatRole: "passenger"
+            },
+            {
+              cameraPolicyId: "seat-follow",
+              controlRoutingPolicyId: "look-only",
+              directEntryEnabled: false,
+              dismountOffset: { x: 0, y: 0, z: 0.8 },
+              label: "Port bench rear",
+              lookLimitPolicyId: "passenger-bench",
+              occupancyAnimationId: "seated",
+              seatId: "port-bench-seat-rear",
+              seatNodeName: "port_bench_rear_seat",
+              seatRole: "passenger"
+            },
+            {
+              cameraPolicyId: "seat-follow",
+              controlRoutingPolicyId: "look-only",
+              directEntryEnabled: false,
+              dismountOffset: { x: 0, y: 0, z: 0.8 },
+              label: "Starboard bench front",
+              lookLimitPolicyId: "passenger-bench",
+              occupancyAnimationId: "seated",
+              seatId: "starboard-bench-seat",
+              seatNodeName: "starboard_bench_seat",
+              seatRole: "passenger"
+            },
+            {
+              cameraPolicyId: "seat-follow",
+              controlRoutingPolicyId: "look-only",
+              directEntryEnabled: false,
+              dismountOffset: { x: 0, y: 0, z: 0.8 },
+              label: "Starboard bench rear",
+              lookLimitPolicyId: "passenger-bench",
+              occupancyAnimationId: "seated",
+              seatId: "starboard-bench-seat-rear",
+              seatNodeName: "starboard_bench_rear_seat",
               seatRole: "passenger"
             }
           ],
@@ -4570,7 +5401,7 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
 
   assert.equal(initialInteractionSnapshot.focusedMountable?.environmentAssetId, "metaverse-hub-skiff-v1");
   assert.equal(initialInteractionSnapshot.focusedMountable?.boardingEntries.length, 1);
-  assert.equal(initialInteractionSnapshot.focusedMountable?.directSeatTargets.length, 2);
+  assert.equal(initialInteractionSnapshot.focusedMountable?.directSeatTargets.length, 1);
   assert.equal(initialInteractionSnapshot.mountedEnvironment, null);
 
   const passengerSeatMountedEnvironment = sceneRuntime.resolveSeatOccupancy(
@@ -4646,11 +5477,22 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
   assert.equal(mountedInteractionSnapshot.mountedEnvironment?.seatId, null);
   assert.equal(
     mountedInteractionSnapshot.mountedEnvironment?.directSeatTargets.length,
-    2
+    1
   );
   assert.equal(
-    characterRoot.parent?.name,
-    "metaverse_environment_entry_anchor/metaverse-hub-skiff-v1/deck-entry"
+    mountedInteractionSnapshot.mountedEnvironment?.seatTargets.length,
+    5
+  );
+  assert.equal(characterRoot.parent, originalParent);
+  assert.ok(
+    characterRoot.getWorldPosition(new Vector3()).distanceTo(originalWorldPosition) <
+      0.000001
+  );
+  assertQuaternionArraysEquivalent(
+    characterRoot.getWorldQuaternion(new Quaternion()).toArray(),
+    originalWorldQuaternion.toArray(),
+    0.000001,
+    "Standing deck boarding should keep the character free-roaming instead of seat-mounting it"
   );
 
   const driverSeatMountedEnvironment = sceneRuntime.resolveSeatOccupancy(

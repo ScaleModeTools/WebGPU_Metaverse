@@ -81,11 +81,13 @@ export function DuckHuntGameMenuDialog({
   showDebugControls
 }: DuckHuntGameMenuDialogProps) {
   const selectedInputMode = resolveGameplayInputMode(inputMode);
+  const menuInsetClassName = "surface-game-inset rounded-xl p-3";
+  const menuSeparatorClassName = "bg-[color:var(--game-border)]";
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent
-        className="max-w-[calc(100%-1.5rem)] gap-5 sm:max-w-2xl"
+        className="surface-game-overlay max-w-[calc(100%-1.5rem)] gap-5 p-5 text-[color:var(--game-foreground)] ring-[color:var(--game-border)] shadow-[0_28px_90px_rgb(15_23_42/_0.32)] sm:max-w-2xl"
         onEscapeKeyDown={(event) => event.preventDefault()}
       >
         <DialogHeader className="gap-3">
@@ -103,8 +105,8 @@ export function DuckHuntGameMenuDialog({
               Entry: {gameMenuPlan.entryActions.join(" / ")}
             </Badge>
           </div>
-          <DialogTitle>In-game menu</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="type-game-heading">In-game menu</DialogTitle>
+          <DialogDescription className="type-game-body">
             Adjust the live arena session, return to the metaverse portal, or
             switch to a different control path.
           </DialogDescription>
@@ -114,8 +116,8 @@ export function DuckHuntGameMenuDialog({
           <section className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="type-label">Controls</p>
-                <p className="type-body-muted">
+                <p className="type-game-title">Controls</p>
+                <p className="type-game-body">
                   {selectedInputMode.description}
                 </p>
               </div>
@@ -127,7 +129,7 @@ export function DuckHuntGameMenuDialog({
             <div className="grid gap-2 md:grid-cols-3">
               {selectedInputMode.controlsSummary.map((instruction) => (
                 <div
-                  className="type-body-muted rounded-xl border border-border/70 bg-muted/30 px-3 py-3"
+                  className={`${menuInsetClassName} type-game-body`}
                   key={instruction}
                 >
                   {instruction}
@@ -136,13 +138,13 @@ export function DuckHuntGameMenuDialog({
             </div>
           </section>
 
-          <Separator />
+          <Separator className={menuSeparatorClassName} />
 
           <section className="flex flex-col gap-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="type-label">Session mode</p>
-                <p className="type-body-muted">
+                <p className="type-game-title">Session mode</p>
+                <p className="type-game-body">
                   Changing the authority model returns the session to the metaverse.
                 </p>
               </div>
@@ -170,13 +172,13 @@ export function DuckHuntGameMenuDialog({
             </ToggleGroup>
           </section>
 
-          <Separator />
+          <Separator className={menuSeparatorClassName} />
 
           <section className="flex flex-col gap-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="type-label">Input mode</p>
-                <p className="type-body-muted">
+                <p className="type-game-title">Input mode</p>
+                <p className="type-game-body">
                   Changing the active input returns the session to the metaverse.
                 </p>
               </div>
@@ -206,13 +208,13 @@ export function DuckHuntGameMenuDialog({
             </ToggleGroup>
           </section>
 
-          <Separator />
+          <Separator className={menuSeparatorClassName} />
 
           <section className="flex flex-col gap-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="type-label">Audio mix</p>
-                <p className="type-body-muted">
+                <p className="type-game-title">Audio mix</p>
+                <p className="type-game-body">
                   Shell settings persist to the local player profile immediately.
                 </p>
               </div>
@@ -222,9 +224,14 @@ export function DuckHuntGameMenuDialog({
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="flex flex-col gap-3">
+              <div className={`${menuInsetClassName} flex flex-col gap-3`}>
                 <div className="flex items-center justify-between gap-3">
-                  <Label htmlFor="menu-music-volume">Music volume</Label>
+                  <Label
+                    className="type-game-title text-[color:var(--game-foreground)]"
+                    htmlFor="menu-music-volume"
+                  >
+                    Music volume
+                  </Label>
                   <Badge variant="secondary">
                     <StableInlineText text={`${musicVolume[0]}%`} />
                   </Badge>
@@ -241,9 +248,14 @@ export function DuckHuntGameMenuDialog({
                 />
               </div>
 
-              <div className="flex flex-col gap-3">
+              <div className={`${menuInsetClassName} flex flex-col gap-3`}>
                 <div className="flex items-center justify-between gap-3">
-                  <Label htmlFor="menu-sfx-volume">SFX volume</Label>
+                  <Label
+                    className="type-game-title text-[color:var(--game-foreground)]"
+                    htmlFor="menu-sfx-volume"
+                  >
+                    SFX volume
+                  </Label>
                   <Badge variant="secondary">
                     <StableInlineText text={`${sfxVolume[0]}%`} />
                   </Badge>
@@ -264,13 +276,13 @@ export function DuckHuntGameMenuDialog({
 
           {showDebugControls ? (
             <>
-              <Separator />
+              <Separator className={menuSeparatorClassName} />
 
               <section className="flex flex-col gap-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="type-label">Developer overlays</p>
-                    <p className="type-body-muted">
+                    <p className="type-game-title">Developer overlays</p>
+                    <p className="type-game-body">
                       Development-only telemetry stays separate from the player HUD.
                     </p>
                   </div>
@@ -282,11 +294,11 @@ export function DuckHuntGameMenuDialog({
                 <div className="grid gap-3 md:grid-cols-3">
                   {gameMenuPlan.debugModes.map((mode) => (
                     <div
-                      className="rounded-xl border border-border/70 bg-muted/30 p-3"
+                      className={menuInsetClassName}
                       key={mode.mode}
                     >
-                      <p className="type-label">{mode.label}</p>
-                      <p className="type-body-muted mt-2">
+                      <p className="type-game-title">{mode.label}</p>
+                      <p className="type-game-body mt-2">
                         {mode.description}
                       </p>
                       <Button
@@ -305,17 +317,17 @@ export function DuckHuntGameMenuDialog({
                 </div>
               </section>
 
-              <Separator />
+              <Separator className={menuSeparatorClassName} />
             </>
           ) : (
-            <Separator />
+            <Separator className={menuSeparatorClassName} />
           )}
 
           <section className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex flex-col gap-1">
-                <p className="type-label">Calibration</p>
-                <p className="type-body-muted">
+                <p className="type-game-title">Calibration</p>
+                <p className="type-game-body">
                   {selectedInputMode.requiresCalibration
                     ? `${gameMenuPlan.recalibrationAction.replaceAll("-", " ")} · ${calibrationQualityLabel}`
                     : "Mouse mode bypasses calibration and hand tracking."}

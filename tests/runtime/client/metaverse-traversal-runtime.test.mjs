@@ -22,6 +22,7 @@ function createMountedEnvironmentSnapshot(
     occupancyKind: "seat",
     occupantLabel: "Take helm",
     occupantRole: "driver",
+    seatTargets: Object.freeze([]),
     seatId: "driver-seat",
     ...overrides
   });
@@ -809,6 +810,7 @@ test("MetaverseTraversalRuntime maps mounted driver input onto vehicle-local tra
       label: "forward",
       validate(poseSnapshot) {
         assert.ok(poseSnapshot.position.z < initialPosition.z);
+        assert.equal(poseSnapshot.yawRadians, 0);
       }
     },
     {
@@ -825,6 +827,7 @@ test("MetaverseTraversalRuntime maps mounted driver input onto vehicle-local tra
       label: "backward",
       validate(poseSnapshot) {
         assert.ok(poseSnapshot.position.z > initialPosition.z);
+        assert.equal(poseSnapshot.yawRadians, 0);
       }
     },
     {
@@ -838,9 +841,11 @@ test("MetaverseTraversalRuntime maps mounted driver input onto vehicle-local tra
         strafeAxis: -1,
         yawAxis: 0
       }),
-      label: "left",
+      label: "turn-left",
       validate(poseSnapshot) {
-        assert.ok(poseSnapshot.position.x < initialPosition.x);
+        assert.equal(poseSnapshot.position.x, initialPosition.x);
+        assert.equal(poseSnapshot.position.z, initialPosition.z);
+        assert.ok(poseSnapshot.yawRadians < 0);
       }
     },
     {
@@ -854,9 +859,11 @@ test("MetaverseTraversalRuntime maps mounted driver input onto vehicle-local tra
         strafeAxis: 1,
         yawAxis: 0
       }),
-      label: "right",
+      label: "turn-right",
       validate(poseSnapshot) {
-        assert.ok(poseSnapshot.position.x > initialPosition.x);
+        assert.equal(poseSnapshot.position.x, initialPosition.x);
+        assert.equal(poseSnapshot.position.z, initialPosition.z);
+        assert.ok(poseSnapshot.yawRadians > 0);
       }
     }
   ];
@@ -886,7 +893,6 @@ test("MetaverseTraversalRuntime maps mounted driver input onto vehicle-local tra
 
       assert.ok(poseSnapshot, `Missing mounted driver pose for ${inputCase.label}.`);
       inputCase.validate(poseSnapshot);
-      assert.equal(poseSnapshot.yawRadians, 0);
     } finally {
       groundedBodyRuntime.dispose();
     }
@@ -961,6 +967,116 @@ test("MetaverseTraversalRuntime suppresses vehicle steering for passenger contro
     assert.equal(poseSnapshot.position.y, initialPosition.y);
     assert.equal(poseSnapshot.position.z, initialPosition.z);
     assert.equal(poseSnapshot.yawRadians, 0);
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime keeps standing deck entry occupancy grounded and walkable", async () => {
+  const vehicleAssetId = "metaverse-test-shuttle-v1";
+  const deckEntryAnchor = freezeVector3(0.42, 1.38, 24.58);
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      dynamicEnvironmentPoses: {
+        [vehicleAssetId]: Object.freeze({
+          position: freezeVector3(0, 0.12, 24),
+          yawRadians: 0
+        })
+      },
+      mountedEnvironmentAnchorSnapshots: {
+        [createMountedAnchorKey(vehicleAssetId, null, "deck-entry")]:
+          Object.freeze({
+            position: deckEntryAnchor,
+            yawRadians: 0
+          })
+      },
+      mountableEnvironmentConfigs: {
+        [vehicleAssetId]: {
+          entries: [
+            Object.freeze({
+              cameraPolicyId: "seat-follow",
+              controlRoutingPolicyId: "look-only",
+              dismountOffset: freezeVector3(0, 0, 1),
+              entryId: "deck-entry",
+              entryNodeName: "deck_entry",
+              label: "Board deck",
+              lookLimitPolicyId: "passenger-bench",
+              occupancyAnimationId: "standing",
+              occupantRole: "passenger"
+            })
+          ],
+          label: "Metaverse test shuttle",
+          seats: [
+            Object.freeze({
+              cameraPolicyId: "vehicle-follow",
+              controlRoutingPolicyId: "vehicle-surface-drive",
+              directEntryEnabled: true,
+              dismountOffset: freezeVector3(0, 0, 1),
+              label: "Take helm",
+              lookLimitPolicyId: "driver-forward",
+              occupancyAnimationId: "seated",
+              seatId: "driver-seat",
+              seatNodeName: "driver_seat",
+              seatRole: "driver"
+            })
+          ]
+        }
+      },
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(2.3, 0.06, 1.8),
+          rotation: { x: 0, y: 0, z: 0, w: 1 },
+          translation: freezeVector3(0, 0.94, 24),
+          traversalAffordance: "support"
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    traversalRuntime.boardEnvironment(vehicleAssetId, "deck-entry");
+
+    const boardedPosition = traversalRuntime.characterPresentationSnapshot?.position;
+
+    assert.equal(traversalRuntime.mountedEnvironmentSnapshot?.entryId, "deck-entry");
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+    assert.equal(
+      traversalRuntime.characterPresentationSnapshot?.animationVocabulary,
+      "idle"
+    );
+    assert.ok(boardedPosition);
+    assert.ok(groundedBodyRuntime.snapshot.grounded);
+    assert.ok(Math.abs(groundedBodyRuntime.snapshot.position.y - 1) < 0.05);
+    assert.ok(Math.abs((boardedPosition?.x ?? 0) - deckEntryAnchor.x) < 0.5);
+    assert.ok(Math.abs((boardedPosition?.z ?? 0) - deckEntryAnchor.z) < 0.5);
+
+    traversalRuntime.advance(
+      Object.freeze({
+        boost: false,
+        jump: false,
+        moveAxis: 1,
+        pitchAxis: 0,
+        primaryAction: false,
+        secondaryAction: false,
+        strafeAxis: 0,
+        yawAxis: 0
+      }),
+      0.25
+    );
+
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+    assert.equal(
+      traversalRuntime.characterPresentationSnapshot?.animationVocabulary,
+      "walk"
+    );
+    assert.ok(
+      Math.hypot(
+        (traversalRuntime.characterPresentationSnapshot?.position.x ?? 0) -
+          (boardedPosition?.x ?? 0),
+        (traversalRuntime.characterPresentationSnapshot?.position.z ?? 0) -
+          (boardedPosition?.z ?? 0)
+      ) > 0.001
+    );
   } finally {
     groundedBodyRuntime.dispose();
   }
@@ -1287,7 +1403,7 @@ test("MetaverseTraversalRuntime keeps low authored support walkable while ground
   }
 });
 
-test("MetaverseTraversalRuntime keeps tall support blocked while grounded until a real climb or jump slice exists", async () => {
+test("MetaverseTraversalRuntime keeps tall support blocked while grounded without jump assistance", async () => {
   const { groundedBodyRuntime, traversalRuntime } =
     await createTraversalHarness({
       surfaceColliderSnapshots: [
@@ -1322,7 +1438,61 @@ test("MetaverseTraversalRuntime keeps tall support blocked while grounded until 
   }
 });
 
-test("MetaverseTraversalRuntime ignores a side blocker while exiting swim onto dock support", async () => {
+test("MetaverseTraversalRuntime lands on reachable tall support when jump carry clears the lip", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.1, 3),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.02, 24)
+        }),
+        Object.freeze({
+          halfExtents: freezeVector3(3, 0.46, 2),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, 0, 20)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+    let landedOnTallSupport = false;
+
+    for (let frame = 0; frame < 96; frame += 1) {
+      traversalRuntime.advance(
+        Object.freeze({
+          boost: false,
+          jump: frame === 0,
+          moveAxis: 1,
+          pitchAxis: 0,
+          primaryAction: false,
+          secondaryAction: false,
+          strafeAxis: 0,
+          yawAxis: 0
+        }),
+        1 / 60
+      );
+
+      landedOnTallSupport ||=
+        traversalRuntime.locomotionMode === "grounded" &&
+        groundedBodyRuntime.snapshot.grounded &&
+        groundedBodyRuntime.snapshot.position.y > 0.4 &&
+        groundedBodyRuntime.snapshot.position.z < 22;
+
+      if (landedOnTallSupport) {
+        break;
+      }
+    }
+
+    assert.equal(landedOnTallSupport, true);
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime still exits swim when a blocker sits off the dock entry line", async () => {
   const { groundedBodyRuntime, traversalRuntime } =
     await createTraversalHarness({
       surfaceColliderSnapshots: [
@@ -1367,7 +1537,7 @@ test("MetaverseTraversalRuntime ignores a side blocker while exiting swim onto d
   }
 });
 
-test("MetaverseTraversalRuntime ignores blocker-affordance shoreline overlap while exiting onto dock support", async () => {
+test("MetaverseTraversalRuntime blocks swim exit when blocker-affordance shoreline overlap sits on the path", async () => {
   const dockHarness =
     await createTraversalHarness({
       surfaceColliderSnapshots: [
@@ -1410,14 +1580,19 @@ test("MetaverseTraversalRuntime ignores blocker-affordance shoreline overlap whi
     );
 
     assert.notEqual(dockExitFrame, null);
-    assert.equal(blockedExitFrame, dockExitFrame);
+    assert.equal(blockedExitFrame, null);
+    assert.equal(blockedHarness.traversalRuntime.locomotionMode, "swim");
+    assert.ok(
+      (blockedHarness.traversalRuntime.characterPresentationSnapshot?.position.z ??
+        0) > 22.1
+    );
   } finally {
     dockHarness.groundedBodyRuntime.dispose();
     blockedHarness.groundedBodyRuntime.dispose();
   }
 });
 
-test("MetaverseTraversalRuntime keeps swim mode over low blocker-affordance water objects", async () => {
+test("MetaverseTraversalRuntime keeps swim mode and collides against low blocker-affordance water objects", async () => {
   const { groundedBodyRuntime, traversalRuntime } =
     await createTraversalHarness({
       surfaceColliderSnapshots: [
@@ -1436,6 +1611,9 @@ test("MetaverseTraversalRuntime keeps swim mode over low blocker-affordance wate
     assert.equal(traversalRuntime.locomotionMode, "swim");
     assert.equal(resolveGroundedEntryFrame(traversalRuntime), null);
     assert.equal(traversalRuntime.locomotionMode, "swim");
+    assert.ok(
+      (traversalRuntime.characterPresentationSnapshot?.position.z ?? 0) > 18.75
+    );
   } finally {
     groundedBodyRuntime.dispose();
   }

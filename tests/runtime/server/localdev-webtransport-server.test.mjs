@@ -39,10 +39,36 @@ function createControlledReadableStream() {
     close() {
       controller?.close();
     },
+    error(error) {
+      controller?.error(error);
+    },
     enqueue(value) {
       controller?.enqueue(value);
     },
     stream
+  };
+}
+
+function createWebTransportSessionCloseError(closeCode) {
+  const error = new Error(
+    `Session closed (on process 3211) with code ${closeCode} and reason `
+  );
+
+  error.name = "WebTransportError";
+
+  return error;
+}
+
+function createErroringBidirectionalStream() {
+  const incomingFrames = createControlledReadableStream();
+  const outgoingFrames = new TransformStream();
+
+  return {
+    fail(error) {
+      incomingFrames.error(error);
+    },
+    readable: incomingFrames.stream,
+    writable: outgoingFrames.writable
   };
 }
 
@@ -116,6 +142,9 @@ function createFakeWebTransportSession() {
     closed: closed.promise,
     datagrams: {
       readable: incomingDatagrams.readable
+    },
+    enqueueIncomingBidirectionalStream(stream) {
+      incomingBidirectionalStreams.enqueue(stream);
     },
     incomingBidirectionalStreams: incomingBidirectionalStreams.stream,
     openClientBidirectionalStream() {
@@ -492,6 +521,220 @@ test("LocaldevWebTransportServer routes reliable frames and datagrams through th
   await worldStream.close();
   await presenceSession.close();
   await worldSession.close();
+  localdevServer.stop();
+});
+
+test("LocaldevWebTransportServer suppresses graceful WebTransport close errors for reliable streams", async () => {
+  const fakeHttp3Server = createFakeHttp3Server();
+  const recordedErrors = [];
+  const localdevServer = new LocaldevWebTransportServer(
+    {
+      certificatePem: "CERTIFICATE",
+      host: "127.0.0.1",
+      port: 3211,
+      privateKeyPem: "PRIVATE KEY",
+      secret: "localdev-secret"
+    },
+    {
+      duckHuntDatagramAdapter: {
+        openSession() {
+          return {
+            dispose() {},
+            receiveClientDatagram() {}
+          };
+        }
+      },
+      duckHuntReliableAdapter: {
+        openSession() {
+          return {
+            dispose() {},
+            receiveClientMessage() {
+              return {
+                message: "duck-hunt-ok",
+                type: "coop-room-error"
+              };
+            }
+          };
+        }
+      },
+      metaversePresenceReliableAdapter: {
+        openSession() {
+          return {
+            dispose() {},
+            receiveClientMessage() {
+              return {
+                message: "presence-ok",
+                type: "presence-error"
+              };
+            }
+          };
+        }
+      },
+      metaverseWorldDatagramAdapter: {
+        openSession() {
+          return {
+            dispose() {},
+            receiveClientDatagram() {}
+          };
+        }
+      },
+      metaverseWorldReliableAdapter: {
+        openSession() {
+          return {
+            dispose() {},
+            receiveClientMessage() {
+              return {
+                message: "world-ok",
+                type: "world-error"
+              };
+            }
+          };
+        }
+      }
+    },
+    {
+      createHttp3Server() {
+        return fakeHttp3Server;
+      },
+      logError(message, error) {
+        recordedErrors.push({
+          error,
+          message
+        });
+      }
+    }
+  );
+
+  await localdevServer.start();
+
+  const presenceSession = createFakeWebTransportSession();
+  fakeHttp3Server.enqueueSession(
+    localdevMetaversePresenceWebTransportPath,
+    presenceSession
+  );
+
+  const failingStream = createErroringBidirectionalStream();
+  presenceSession.enqueueIncomingBidirectionalStream(failingStream);
+
+  await flushAsyncWork();
+  await flushAsyncWork();
+
+  failingStream.fail(createWebTransportSessionCloseError(0));
+
+  await flushAsyncWork();
+  await presenceSession.close();
+
+  assert.equal(recordedErrors.length, 0);
+
+  localdevServer.stop();
+});
+
+test("LocaldevWebTransportServer still logs non-zero WebTransport close errors for reliable streams", async () => {
+  const fakeHttp3Server = createFakeHttp3Server();
+  const recordedErrors = [];
+  const localdevServer = new LocaldevWebTransportServer(
+    {
+      certificatePem: "CERTIFICATE",
+      host: "127.0.0.1",
+      port: 3211,
+      privateKeyPem: "PRIVATE KEY",
+      secret: "localdev-secret"
+    },
+    {
+      duckHuntDatagramAdapter: {
+        openSession() {
+          return {
+            dispose() {},
+            receiveClientDatagram() {}
+          };
+        }
+      },
+      duckHuntReliableAdapter: {
+        openSession() {
+          return {
+            dispose() {},
+            receiveClientMessage() {
+              return {
+                message: "duck-hunt-ok",
+                type: "coop-room-error"
+              };
+            }
+          };
+        }
+      },
+      metaversePresenceReliableAdapter: {
+        openSession() {
+          return {
+            dispose() {},
+            receiveClientMessage() {
+              return {
+                message: "presence-ok",
+                type: "presence-error"
+              };
+            }
+          };
+        }
+      },
+      metaverseWorldDatagramAdapter: {
+        openSession() {
+          return {
+            dispose() {},
+            receiveClientDatagram() {}
+          };
+        }
+      },
+      metaverseWorldReliableAdapter: {
+        openSession() {
+          return {
+            dispose() {},
+            receiveClientMessage() {
+              return {
+                message: "world-ok",
+                type: "world-error"
+              };
+            }
+          };
+        }
+      }
+    },
+    {
+      createHttp3Server() {
+        return fakeHttp3Server;
+      },
+      logError(message, error) {
+        recordedErrors.push({
+          error,
+          message
+        });
+      }
+    }
+  );
+
+  await localdevServer.start();
+
+  const presenceSession = createFakeWebTransportSession();
+  fakeHttp3Server.enqueueSession(
+    localdevMetaversePresenceWebTransportPath,
+    presenceSession
+  );
+
+  const failingStream = createErroringBidirectionalStream();
+  presenceSession.enqueueIncomingBidirectionalStream(failingStream);
+
+  await flushAsyncWork();
+  await flushAsyncWork();
+
+  failingStream.fail(createWebTransportSessionCloseError(32));
+
+  await flushAsyncWork();
+  await presenceSession.close();
+
+  assert.equal(recordedErrors.length, 1);
+  assert.match(
+    recordedErrors[0]?.message ?? "",
+    /Localdev WebTransport reliable request handling failed/
+  );
+
   localdevServer.stop();
 });
 

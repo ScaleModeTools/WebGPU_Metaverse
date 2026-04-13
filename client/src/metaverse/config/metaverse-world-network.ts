@@ -128,7 +128,8 @@ export const metaverseRemoteWorldSamplingConfig = Object.freeze({
 });
 
 export const metaverseLocalMountedVehicleReconciliationConfig = Object.freeze({
-  maxAuthoritativeSnapshotAgeMs: 90
+  maxAuthoritativeSnapshotAgeMs: 90,
+  mountedOccupancyMismatchHoldMs: 75
 });
 
 export function createMetaverseWorldClient(): MetaverseWorldClient {

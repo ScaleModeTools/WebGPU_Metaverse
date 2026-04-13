@@ -47,7 +47,7 @@ export const metaverseLocomotionModes = [
     description:
       "Mounted locomotion is runtime-owned. The current hub mount drives yaw, camera, and propulsion until you dismount.",
     controlsSummary: [
-      "W/S forward and backward, A/D strafe",
+      "W/S forward and backward, A/D turn",
       "Move mouse to steer mount yaw and camera pitch",
       "Dismount returns control to the current surface state"
     ]

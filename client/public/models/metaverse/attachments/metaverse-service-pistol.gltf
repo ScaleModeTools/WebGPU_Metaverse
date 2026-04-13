@@ -19,7 +19,12 @@
         2,
         3,
         4,
-        5
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
       ]
     },
     {
@@ -131,6 +136,46 @@
       ],
       "name": "metaverse_service_pistol_trigger_guard",
       "mesh": 4
+    },
+    {
+      "translation": [
+        1,
+        0,
+        0
+      ],
+      "name": "metaverse_service_pistol_forward_marker"
+    },
+    {
+      "translation": [
+        0,
+        0,
+        1
+      ],
+      "name": "metaverse_service_pistol_up_marker"
+    },
+    {
+      "translation": [
+        0.015,
+        -0.11,
+        0.025
+      ],
+      "name": "metaverse_service_pistol_grip_right_marker"
+    },
+    {
+      "translation": [
+        0.015,
+        -0.11,
+        -0.025
+      ],
+      "name": "metaverse_service_pistol_grip_left_marker"
+    },
+    {
+      "translation": [
+        0.015,
+        -0.082,
+        0
+      ],
+      "name": "metaverse_service_pistol_holster_marker"
     }
   ],
   "bufferViews": [
