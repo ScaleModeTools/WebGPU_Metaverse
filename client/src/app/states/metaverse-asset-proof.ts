@@ -1,5 +1,9 @@
 import { animationClipManifest } from "@/assets/config/animation-clip-manifest";
 import {
+  humanoidV2PistolAimClipNamesByPoseId,
+  humanoidV2PistolAnimationSourcePath
+} from "@/assets/config/humanoid-v2-pistol-animation-source";
+import {
   animationVocabularyIds,
   canonicalAnimationClipNamesByVocabulary
 } from "@/assets/types/animation-clip-manifest";
@@ -182,6 +186,13 @@ function resolveMetaverseCharacterProofConfig(): MetaverseCharacterProofConfig {
       })
     ),
     characterId: characterDescriptor.id,
+    humanoidV2PistolPoseProofConfig:
+      characterDescriptor.skeleton === "humanoid_v2"
+        ? Object.freeze({
+            clipNamesByPoseId: humanoidV2PistolAimClipNamesByPoseId,
+            sourcePath: humanoidV2PistolAnimationSourcePath
+          })
+        : null,
     label: characterDescriptor.label,
     modelPath: resolveLodModelPath(characterDescriptor.renderModel),
     skeletonId: characterDescriptor.skeleton,

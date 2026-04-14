@@ -1,4 +1,10 @@
-import type { PhysicsVector3Snapshot } from "@/physics";
+import {
+  MetaverseSurfaceDriveBodyRuntime,
+  type PhysicsVector3Snapshot,
+  type RapierColliderHandle,
+  type RapierPhysicsRuntime,
+  type RapierQueryFilterPredicate
+} from "@/physics";
 
 import type { MetaversePlacedCuboidColliderSnapshot } from "../../states/metaverse-environment-collision";
 import type {
@@ -7,7 +13,6 @@ import type {
 } from "../../types/metaverse-runtime";
 import type { SurfaceLocomotionConfig } from "../../traversal/types/traversal";
 import {
-  advanceSurfaceLocomotionSnapshot,
   clamp,
   freezeVector3,
   toFiniteNumber,
@@ -30,18 +35,28 @@ interface MetaverseVehicleRuntimeInit {
     readonly routinePositionBlendThresholdMeters: number;
     readonly routineYawBlendThresholdRadians: number;
   };
+  readonly driveCollider: {
+    readonly center: PhysicsVector3Snapshot;
+    readonly size: PhysicsVector3Snapshot;
+  } | null;
   readonly environmentAssetId: string;
   readonly label: string;
   readonly oceanHeightMeters: number;
+  readonly physicsRuntime: RapierPhysicsRuntime;
   readonly poseSnapshot: {
     readonly position: PhysicsVector3Snapshot;
     readonly yawRadians: number;
   };
+  readonly resolveWaterborneTraversalFilterPredicate: (
+    excludedOwnerEnvironmentAssetId?: string | null,
+    excludedColliders?: readonly RapierColliderHandle[]
+  ) => RapierQueryFilterPredicate;
   readonly entries: readonly MetaverseEnvironmentEntryProofConfig[] | null;
   readonly seats: readonly MetaverseEnvironmentSeatProofConfig[];
   readonly surfaceColliderSnapshots: readonly MetaversePlacedCuboidColliderSnapshot[];
   readonly waterContactProbeRadiusMeters: number;
   readonly waterlineHeightMeters: number;
+  readonly worldRadius: number;
 }
 
 interface MetaverseVehicleAuthoritativePoseSnapshot {
@@ -54,6 +69,43 @@ interface MetaverseVehicleOccupancyRuntime {
   occupy(): void;
   occupancySnapshot(): MountedVehicleOccupancyRuntimeSnapshot;
   vacate(): void;
+}
+
+function resolveDriveColliderShape(
+  driveCollider: MetaverseVehicleRuntimeInit["driveCollider"],
+  waterContactProbeRadiusMeters: number
+): {
+  readonly halfExtents: PhysicsVector3Snapshot;
+  readonly localCenter: PhysicsVector3Snapshot;
+} {
+  if (driveCollider === null) {
+    const fallbackRadiusMeters = Math.max(
+      0.5,
+      toFiniteNumber(waterContactProbeRadiusMeters, 1.75) * 0.75
+    );
+
+    return Object.freeze({
+      halfExtents: freezeVector3(
+        fallbackRadiusMeters,
+        0.7,
+        fallbackRadiusMeters
+      ),
+      localCenter: freezeVector3(0, 0.7, 0)
+    });
+  }
+
+  return Object.freeze({
+    halfExtents: freezeVector3(
+      Math.abs(driveCollider.size.x) * 0.5,
+      Math.abs(driveCollider.size.y) * 0.5,
+      Math.abs(driveCollider.size.z) * 0.5
+    ),
+    localCenter: freezeVector3(
+      driveCollider.center.x,
+      driveCollider.center.y,
+      driveCollider.center.z
+    )
+  });
 }
 
 class MetaverseVehicleSeatRuntime {
@@ -211,30 +263,6 @@ function lerp(start: number, end: number, alpha: number): number {
   return start + (end - start) * alpha;
 }
 
-function resolveAuthoritativePlanarVelocitySnapshot(
-  linearVelocity: PhysicsVector3Snapshot,
-  yawRadians: number
-): {
-  readonly forwardSpeedUnitsPerSecond: number;
-  readonly planarSpeedUnitsPerSecond: number;
-  readonly strafeSpeedUnitsPerSecond: number;
-} {
-  const forwardX = Math.sin(yawRadians);
-  const forwardZ = -Math.cos(yawRadians);
-  const rightX = Math.cos(yawRadians);
-  const rightZ = Math.sin(yawRadians);
-  const forwardSpeedUnitsPerSecond =
-    linearVelocity.x * forwardX + linearVelocity.z * forwardZ;
-  const strafeSpeedUnitsPerSecond =
-    linearVelocity.x * rightX + linearVelocity.z * rightZ;
-
-  return Object.freeze({
-    forwardSpeedUnitsPerSecond,
-    planarSpeedUnitsPerSecond: Math.hypot(linearVelocity.x, linearVelocity.z),
-    strafeSpeedUnitsPerSecond
-  });
-}
-
 function resolveCorrectionBlendAlpha(
   errorMagnitude: number,
   routineThreshold: number,
@@ -276,38 +304,43 @@ function resolveCorrectionBlendAlpha(
 
 export class MetaverseVehicleRuntime {
   readonly #authoritativeCorrection: MetaverseVehicleRuntimeInit["authoritativeCorrection"];
+  readonly #driveBodyRuntime: MetaverseSurfaceDriveBodyRuntime;
   readonly #environmentAssetId: string;
   readonly #entryRuntimes: readonly MetaverseVehicleEntryRuntime[];
   readonly #label: string;
   readonly #oceanHeightMeters: number;
+  readonly #resolveWaterborneTraversalFilterPredicate:
+    MetaverseVehicleRuntimeInit["resolveWaterborneTraversalFilterPredicate"];
   readonly #seatRuntimes: readonly MetaverseVehicleSeatRuntime[];
   readonly #surfaceColliderSnapshots: readonly MetaversePlacedCuboidColliderSnapshot[];
   readonly #waterContactProbeRadiusMeters: number;
+  readonly #waterlineHeightMeters: number;
 
-  #forwardSpeedUnitsPerSecond = 0;
   #occupancyRuntime: MetaverseVehicleOccupancyRuntime | null = null;
-  #planarSpeedUnitsPerSecond = 0;
-  #position: PhysicsVector3Snapshot;
-  #strafeSpeedUnitsPerSecond = 0;
   #waterborne: boolean;
-  #yawRadians: number;
 
   constructor({
     authoritativeCorrection,
+    driveCollider,
     environmentAssetId,
     entries,
     label,
     oceanHeightMeters,
+    physicsRuntime,
     poseSnapshot,
+    resolveWaterborneTraversalFilterPredicate,
     seats,
     surfaceColliderSnapshots,
     waterContactProbeRadiusMeters,
-    waterlineHeightMeters
+    waterlineHeightMeters,
+    worldRadius
   }: MetaverseVehicleRuntimeInit) {
     this.#authoritativeCorrection = authoritativeCorrection;
     this.#environmentAssetId = environmentAssetId;
     this.#label = label;
     this.#oceanHeightMeters = oceanHeightMeters;
+    this.#resolveWaterborneTraversalFilterPredicate =
+      resolveWaterborneTraversalFilterPredicate;
     this.#entryRuntimes = Object.freeze(
       (entries ?? []).map((entry) => new MetaverseVehicleEntryRuntime(entry))
     );
@@ -316,17 +349,44 @@ export class MetaverseVehicleRuntime {
     );
     this.#surfaceColliderSnapshots = surfaceColliderSnapshots;
     this.#waterContactProbeRadiusMeters = waterContactProbeRadiusMeters;
-    this.#position = freezeVector3(
-      poseSnapshot.position.x,
-      toFiniteNumber(poseSnapshot.position.y, waterlineHeightMeters),
-      poseSnapshot.position.z
+    this.#waterlineHeightMeters = toFiniteNumber(
+      waterlineHeightMeters,
+      poseSnapshot.position.y
     );
-    this.#yawRadians = wrapRadians(poseSnapshot.yawRadians);
+    const driveColliderShape = resolveDriveColliderShape(
+      driveCollider,
+      waterContactProbeRadiusMeters
+    );
+
+    this.#driveBodyRuntime = new MetaverseSurfaceDriveBodyRuntime(
+      {
+        controllerOffsetMeters: 0.02,
+        shape: Object.freeze({
+          halfExtents: driveColliderShape.halfExtents,
+          kind: "cuboid",
+          localCenter: driveColliderShape.localCenter
+        }),
+        spawnPosition: freezeVector3(
+          poseSnapshot.position.x,
+          toFiniteNumber(poseSnapshot.position.y, this.#waterlineHeightMeters),
+          poseSnapshot.position.z
+        ),
+        spawnYawRadians: poseSnapshot.yawRadians,
+        worldRadius
+      },
+      physicsRuntime
+    );
     this.#waterborne = false;
     this.#syncWaterborneState();
   }
 
+  get colliderHandle(): RapierColliderHandle {
+    return this.#driveBodyRuntime.colliderHandle;
+  }
+
   get snapshot(): MountedVehicleRuntimeSnapshot {
+    const driveSnapshot = this.#driveBodyRuntime.snapshot;
+
     return Object.freeze({
       environmentAssetId: this.#environmentAssetId,
       label: this.#label,
@@ -334,10 +394,10 @@ export class MetaverseVehicleRuntime {
         this.#occupancyRuntime === null
           ? null
           : this.#occupancyRuntime.occupancySnapshot(),
-      planarSpeedUnitsPerSecond: this.#planarSpeedUnitsPerSecond,
-      position: this.#position,
+      planarSpeedUnitsPerSecond: driveSnapshot.planarSpeedUnitsPerSecond,
+      position: driveSnapshot.position,
       waterborne: this.#waterborne,
-      yawRadians: this.#yawRadians
+      yawRadians: driveSnapshot.yawRadians
     });
   }
 
@@ -379,6 +439,7 @@ export class MetaverseVehicleRuntime {
   syncAuthoritativePose(
     poseSnapshot: MetaverseVehicleAuthoritativePoseSnapshot
   ): MountedVehicleRuntimeSnapshot {
+    const currentDriveSnapshot = this.#driveBodyRuntime.snapshot;
     const authoritativePosition = freezeVector3(
       poseSnapshot.position.x,
       poseSnapshot.position.y,
@@ -386,12 +447,12 @@ export class MetaverseVehicleRuntime {
     );
     const authoritativeYawRadians = wrapRadians(poseSnapshot.yawRadians);
     const positionErrorMeters = Math.hypot(
-      authoritativePosition.x - this.#position.x,
-      authoritativePosition.y - this.#position.y,
-      authoritativePosition.z - this.#position.z
+      authoritativePosition.x - currentDriveSnapshot.position.x,
+      authoritativePosition.y - currentDriveSnapshot.position.y,
+      authoritativePosition.z - currentDriveSnapshot.position.z
     );
     const yawErrorRadians = Math.abs(
-      wrapRadians(authoritativeYawRadians - this.#yawRadians)
+      wrapRadians(authoritativeYawRadians - currentDriveSnapshot.yawRadians)
     );
     const shouldSnapCorrection =
       positionErrorMeters >=
@@ -415,33 +476,34 @@ export class MetaverseVehicleRuntime {
           this.#authoritativeCorrection.routineBlendAlpha
         );
 
-    this.#position = freezeVector3(
-      lerp(this.#position.x, authoritativePosition.x, positionBlendAlpha),
-      lerp(this.#position.y, authoritativePosition.y, positionBlendAlpha),
-      lerp(this.#position.z, authoritativePosition.z, positionBlendAlpha)
+    const blendedPosition = freezeVector3(
+      lerp(
+        currentDriveSnapshot.position.x,
+        authoritativePosition.x,
+        positionBlendAlpha
+      ),
+      lerp(
+        currentDriveSnapshot.position.y,
+        authoritativePosition.y,
+        positionBlendAlpha
+      ),
+      lerp(
+        currentDriveSnapshot.position.z,
+        authoritativePosition.z,
+        positionBlendAlpha
+      )
     );
-    this.#yawRadians = wrapRadians(
-      this.#yawRadians +
-        wrapRadians(authoritativeYawRadians - this.#yawRadians) * yawBlendAlpha
+    const blendedYawRadians = wrapRadians(
+      currentDriveSnapshot.yawRadians +
+        wrapRadians(authoritativeYawRadians - currentDriveSnapshot.yawRadians) *
+          yawBlendAlpha
     );
+    this.#driveBodyRuntime.syncAuthoritativeState({
+      linearVelocity: poseSnapshot.linearVelocity ?? currentDriveSnapshot.linearVelocity,
+      position: blendedPosition,
+      yawRadians: blendedYawRadians
+    });
     this.#syncWaterborneState();
-
-    if (poseSnapshot.linearVelocity !== undefined && poseSnapshot.linearVelocity !== null) {
-      const authoritativePlanarVelocitySnapshot =
-        resolveAuthoritativePlanarVelocitySnapshot(
-          poseSnapshot.linearVelocity,
-          authoritativeYawRadians
-        );
-
-      this.#planarSpeedUnitsPerSecond =
-        authoritativePlanarVelocitySnapshot.planarSpeedUnitsPerSecond;
-      this.#forwardSpeedUnitsPerSecond = this.#waterborne
-        ? authoritativePlanarVelocitySnapshot.forwardSpeedUnitsPerSecond
-        : 0;
-      this.#strafeSpeedUnitsPerSecond = this.#waterborne
-        ? authoritativePlanarVelocitySnapshot.strafeSpeedUnitsPerSecond
-        : 0;
-    }
 
     return this.snapshot;
   }
@@ -452,39 +514,30 @@ export class MetaverseVehicleRuntime {
     deltaSeconds: number,
     worldRadius: number
   ): MountedVehicleRuntimeSnapshot {
-    const nextMountedVehicleState = advanceSurfaceLocomotionSnapshot(
-      {
-        planarSpeedUnitsPerSecond: this.#planarSpeedUnitsPerSecond,
-        position: this.#position,
-        yawRadians: this.#yawRadians
-      },
-      {
-        forwardSpeedUnitsPerSecond: this.#forwardSpeedUnitsPerSecond,
-        strafeSpeedUnitsPerSecond: this.#strafeSpeedUnitsPerSecond
-      },
+    void worldRadius;
+    this.#driveBodyRuntime.advance(
       controlIntent,
       locomotionConfig,
       deltaSeconds,
-      worldRadius,
-      this.#position.y
+      this.#waterlineHeightMeters,
+      null,
+      this.#resolveWaterborneTraversalFilterPredicate(
+        this.#environmentAssetId,
+        Object.freeze([this.#driveBodyRuntime.colliderHandle])
+      )
     );
-
-    this.#position = nextMountedVehicleState.snapshot.position;
-    this.#yawRadians = nextMountedVehicleState.snapshot.yawRadians;
-    this.#planarSpeedUnitsPerSecond =
-      nextMountedVehicleState.snapshot.planarSpeedUnitsPerSecond;
     this.#syncWaterborneState();
-    this.#forwardSpeedUnitsPerSecond = this.#waterborne
-      ? nextMountedVehicleState.speedSnapshot.forwardSpeedUnitsPerSecond
-      : 0;
-    this.#strafeSpeedUnitsPerSecond = this.#waterborne
-      ? nextMountedVehicleState.speedSnapshot.strafeSpeedUnitsPerSecond
-      : 0;
 
     return this.snapshot;
   }
 
+  dispose(): void {
+    this.#driveBodyRuntime.dispose();
+  }
+
   #syncWaterborneState(): void {
+    const driveSnapshot = this.#driveBodyRuntime.snapshot;
+
     this.#waterborne = isWaterbornePosition(
       {
         groundedBody: {
@@ -499,7 +552,7 @@ export class MetaverseVehicleRuntime {
         }
       } as never,
       this.#surfaceColliderSnapshots,
-      this.#position,
+      driveSnapshot.position,
       this.#waterContactProbeRadiusMeters,
       this.#environmentAssetId
     );

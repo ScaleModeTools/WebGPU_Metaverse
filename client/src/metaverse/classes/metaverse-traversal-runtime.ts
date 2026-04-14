@@ -1,6 +1,9 @@
 import {
   MetaverseGroundedBodyRuntime,
-  type PhysicsVector3Snapshot
+  MetaverseSurfaceDriveBodyRuntime,
+  type PhysicsVector3Snapshot,
+  type RapierColliderHandle,
+  type RapierPhysicsRuntime
 } from "@/physics";
 import {
   MetaverseMovementAnimationPolicyRuntime,
@@ -36,7 +39,6 @@ import {
 } from "../states/mounted-occupancy";
 import { createTraversalCharacterPresentationSnapshot } from "../traversal/presentation/character-presentation";
 import {
-  advanceSurfaceLocomotionSnapshot,
   clamp,
   createSurfaceLocomotionSnapshot,
   freezeVector3,
@@ -44,17 +46,14 @@ import {
   wrapRadians
 } from "../traversal/policies/surface-locomotion";
 import {
-  constrainPlanarPositionAgainstBlockers,
-  isWaterbornePosition,
   resolveAutomaticSurfaceLocomotionSnapshot,
   resolveGroundedAutostepHeightMeters,
   resolveSurfaceHeightMeters,
-  resolveWaterSurfaceHeightMeters,
+  resolveWaterSurfaceHeightMeters
 } from "../traversal/policies/surface-routing";
 import type {
   MetaverseTraversalRuntimeDependencies,
   RoutedDriverVehicleControlIntentSnapshot,
-  SurfaceLocomotionSnapshot,
   TraversalMountedVehicleSnapshot
 } from "../traversal/types/traversal";
 import {
@@ -233,9 +232,12 @@ function resolveMountedEnvironmentSeatTargets(
 export class MetaverseTraversalRuntime {
   readonly #config: MetaverseRuntimeConfig;
   readonly #groundedBodyRuntime: MetaverseGroundedBodyRuntime;
+  readonly #physicsRuntime: RapierPhysicsRuntime;
   readonly #readDynamicEnvironmentPose: MetaverseTraversalRuntimeDependencies["readDynamicEnvironmentPose"];
   readonly #readMountedEnvironmentAnchorSnapshot: MetaverseTraversalRuntimeDependencies["readMountedEnvironmentAnchorSnapshot"];
   readonly #readMountableEnvironmentConfig: MetaverseTraversalRuntimeDependencies["readMountableEnvironmentConfig"];
+  readonly #resolveGroundedTraversalFilterPredicate: MetaverseTraversalRuntimeDependencies["resolveGroundedTraversalFilterPredicate"];
+  readonly #resolveWaterborneTraversalFilterPredicate: MetaverseTraversalRuntimeDependencies["resolveWaterborneTraversalFilterPredicate"];
   readonly #setDynamicEnvironmentPose: MetaverseTraversalRuntimeDependencies["setDynamicEnvironmentPose"];
   readonly #surfaceColliderSnapshots: MetaverseTraversalRuntimeDependencies["surfaceColliderSnapshots"];
 
@@ -256,16 +258,14 @@ export class MetaverseTraversalRuntime {
   #locomotionMode = defaultMetaverseLocomotionMode;
   #mountedEnvironmentConfig: Pick<
     MetaverseEnvironmentAssetProofConfig,
-    "entries" | "environmentAssetId" | "label" | "seats"
+    "collider" | "entries" | "environmentAssetId" | "label" | "seats"
   > | null = null;
   #mountedOccupancyLookYawRadians = 0;
   #localReconciliationCorrectionCount = 0;
   #routedDriverVehicleControlIntentSnapshot: RoutedDriverVehicleControlIntentSnapshot | null =
     null;
   #mountedVehicleRuntime: MetaverseVehicleRuntime | null = null;
-  #swimForwardSpeedUnitsPerSecond = 0;
-  #swimStrafeSpeedUnitsPerSecond = 0;
-  #swimSnapshot: SurfaceLocomotionSnapshot;
+  #swimBodyRuntime: MetaverseSurfaceDriveBodyRuntime | null = null;
   #traversalCameraPitchRadians: number;
   #unmountedLookYawRadians: number;
 
@@ -275,25 +275,22 @@ export class MetaverseTraversalRuntime {
   ) {
     this.#config = config;
     this.#groundedBodyRuntime = dependencies.groundedBodyRuntime;
+    this.#physicsRuntime = dependencies.physicsRuntime;
     this.#readDynamicEnvironmentPose = dependencies.readDynamicEnvironmentPose;
     this.#readMountedEnvironmentAnchorSnapshot =
       dependencies.readMountedEnvironmentAnchorSnapshot;
     this.#readMountableEnvironmentConfig =
       dependencies.readMountableEnvironmentConfig;
+    this.#resolveGroundedTraversalFilterPredicate =
+      dependencies.resolveGroundedTraversalFilterPredicate;
+    this.#resolveWaterborneTraversalFilterPredicate =
+      dependencies.resolveWaterborneTraversalFilterPredicate;
     this.#setDynamicEnvironmentPose = dependencies.setDynamicEnvironmentPose;
     this.#surfaceColliderSnapshots = dependencies.surfaceColliderSnapshots;
     this.#cameraSnapshot = createMetaverseCameraSnapshot(config.camera);
     this.#traversalCameraPitchRadians = config.camera.initialPitchRadians;
-    const spawnWaterSurfaceHeightMeters =
-      resolveWaterSurfaceHeightMeters(config, config.camera.spawnPosition) ??
-      config.camera.spawnPosition.y;
-    this.#swimSnapshot = createSurfaceLocomotionSnapshot(
-      freezeVector3(
-        config.camera.spawnPosition.x,
-        spawnWaterSurfaceHeightMeters,
-        config.camera.spawnPosition.z
-      ),
-      config.camera.initialYawRadians
+    const spawnWaterSurfaceHeightMeters = this.#resolveWaterSurfaceHeightMeters(
+      config.camera.spawnPosition
     );
     this.#latestResolvedSupportHeightMeters = spawnWaterSurfaceHeightMeters;
     this.#unmountedLookYawRadians = config.camera.initialYawRadians;
@@ -383,6 +380,8 @@ export class MetaverseTraversalRuntime {
     this.#cameraSnapshot = createMetaverseCameraSnapshot(this.#config.camera);
     this.#characterPresentationSnapshot = null;
     this.#locomotionMode = defaultMetaverseLocomotionMode;
+    this.#swimBodyRuntime?.dispose();
+    this.#swimBodyRuntime = null;
     this.#clearMountedVehicleState();
     this.#latestAuthoritativeCorrectionTelemetrySnapshot =
       createDefaultAuthoritativeCorrectionTelemetrySnapshot();
@@ -402,16 +401,6 @@ export class MetaverseTraversalRuntime {
     this.#movementAnimationRuntime.reset();
     this.#mountedOccupancyLookYawRadians = 0;
     this.#routedDriverVehicleControlIntentSnapshot = null;
-    this.#swimForwardSpeedUnitsPerSecond = 0;
-    this.#swimStrafeSpeedUnitsPerSecond = 0;
-    this.#swimSnapshot = createSurfaceLocomotionSnapshot(
-      freezeVector3(
-        this.#config.camera.spawnPosition.x,
-        spawnWaterSurfaceHeightMeters,
-        this.#config.camera.spawnPosition.z
-      ),
-      this.#config.camera.initialYawRadians
-    );
     this.#traversalCameraPitchRadians = this.#config.camera.initialPitchRadians;
     this.#unmountedLookYawRadians = this.#config.camera.initialYawRadians;
   }
@@ -869,6 +858,68 @@ export class MetaverseTraversalRuntime {
     );
   }
 
+  #ensureSwimBodyRuntime(): MetaverseSurfaceDriveBodyRuntime {
+    if (this.#swimBodyRuntime !== null) {
+      return this.#swimBodyRuntime;
+    }
+
+    const spawnPosition = freezeVector3(
+      this.#config.camera.spawnPosition.x,
+      this.#resolveWaterSurfaceHeightMeters(this.#config.camera.spawnPosition),
+      this.#config.camera.spawnPosition.z
+    );
+
+    this.#swimBodyRuntime = new MetaverseSurfaceDriveBodyRuntime(
+      {
+        controllerOffsetMeters: this.#config.groundedBody.controllerOffsetMeters,
+        shape: Object.freeze({
+          halfHeightMeters: this.#config.groundedBody.capsuleHalfHeightMeters,
+          kind: "capsule",
+          radiusMeters: this.#config.groundedBody.capsuleRadiusMeters
+        }),
+        spawnPosition,
+        spawnYawRadians: this.#config.camera.initialYawRadians,
+        worldRadius: this.#config.movement.worldRadius
+      },
+      this.#physicsRuntime
+    );
+
+    return this.#swimBodyRuntime;
+  }
+
+  #readSwimSnapshot() {
+    return this.#swimBodyRuntime?.snapshot ?? null;
+  }
+
+  #readGroundedTraversalExcludedColliders(): readonly RapierColliderHandle[] {
+    const excludedColliders: RapierColliderHandle[] = [];
+    const groundedColliderHandle = this.#groundedBodyRuntime.colliderHandle;
+
+    if (groundedColliderHandle !== null) {
+      excludedColliders.push(groundedColliderHandle);
+    }
+
+    if (this.#swimBodyRuntime !== null) {
+      excludedColliders.push(this.#swimBodyRuntime.colliderHandle);
+    }
+
+    if (this.#mountedVehicleRuntime !== null) {
+      excludedColliders.push(this.#mountedVehicleRuntime.colliderHandle);
+    }
+
+    return excludedColliders;
+  }
+
+  #readWaterborneTraversalExcludedColliders(
+    colliderHandle: RapierColliderHandle
+  ): readonly RapierColliderHandle[] {
+    const excludedColliders = [...this.#readGroundedTraversalExcludedColliders()];
+
+    excludedColliders.push(colliderHandle);
+
+    return excludedColliders;
+  }
+
   #enterGroundedLocomotion(
     position: PhysicsVector3Snapshot,
     yawRadians: number,
@@ -881,6 +932,8 @@ export class MetaverseTraversalRuntime {
 
     this.#syncUnmountedLookYawRadians(lookYawRadians);
     this.#groundedBodyRuntime.setAutostepEnabled(false);
+    this.#swimBodyRuntime?.dispose();
+    this.#swimBodyRuntime = null;
     this.#groundedBodyRuntime.teleport(
       freezeVector3(
         position.x,
@@ -891,7 +944,10 @@ export class MetaverseTraversalRuntime {
     );
     this.#groundedBodyRuntime.advance(
       createIdleGroundedBodyIntentSnapshot(),
-      1 / 60
+      1 / 60,
+      this.#resolveGroundedTraversalFilterPredicate(
+        this.#readGroundedTraversalExcludedColliders()
+      )
     );
     this.#setLocomotionMode("grounded");
     this.#cameraSnapshot = createTraversalGroundedCameraPresentationSnapshot(
@@ -907,11 +963,11 @@ export class MetaverseTraversalRuntime {
     yawRadians: number,
     lookYawRadians: number = this.#unmountedLookYawRadians
   ): void {
+    const swimBodyRuntime = this.#ensureSwimBodyRuntime();
+
     this.#syncUnmountedLookYawRadians(lookYawRadians);
     this.#groundedBodyRuntime.setAutostepEnabled(false);
-    this.#swimForwardSpeedUnitsPerSecond = 0;
-    this.#swimStrafeSpeedUnitsPerSecond = 0;
-    this.#swimSnapshot = createSurfaceLocomotionSnapshot(
+    swimBodyRuntime.teleport(
       freezeVector3(
         position.x,
         this.#resolveWaterSurfaceHeightMeters(position),
@@ -919,9 +975,11 @@ export class MetaverseTraversalRuntime {
       ),
       yawRadians
     );
+    const swimSnapshot = swimBodyRuntime.snapshot;
+
     this.#setLocomotionMode("swim");
     this.#cameraSnapshot = createTraversalSwimCameraPresentationSnapshot(
-      this.#swimSnapshot,
+      swimSnapshot,
       this.#traversalCameraPitchRadians,
       this.#config,
       this.#unmountedLookYawRadians
@@ -969,25 +1027,16 @@ export class MetaverseTraversalRuntime {
     positionBlendAlpha = 1,
     yawBlendAlpha = 1
   ): void {
-    const currentSwimSnapshot = this.#swimSnapshot;
+    const swimBodyRuntime = this.#ensureSwimBodyRuntime();
+    const currentSwimSnapshot = swimBodyRuntime.snapshot;
     const wrappedYawRadians = wrapRadians(
       currentSwimSnapshot.yawRadians +
         wrapRadians(yawRadians - currentSwimSnapshot.yawRadians) * yawBlendAlpha
     );
-    const forwardX = Math.sin(wrappedYawRadians);
-    const forwardZ = -Math.cos(wrappedYawRadians);
-    const rightX = Math.cos(wrappedYawRadians);
-    const rightZ = Math.sin(wrappedYawRadians);
-    const linearVelocityX = toFiniteNumber(linearVelocity.x, 0);
-    const linearVelocityZ = toFiniteNumber(linearVelocity.z, 0);
 
     this.#groundedBodyRuntime.setAutostepEnabled(false);
-    this.#swimForwardSpeedUnitsPerSecond =
-      linearVelocityX * forwardX + linearVelocityZ * forwardZ;
-    this.#swimStrafeSpeedUnitsPerSecond =
-      linearVelocityX * rightX + linearVelocityZ * rightZ;
-    this.#swimSnapshot = Object.freeze({
-      planarSpeedUnitsPerSecond: Math.hypot(linearVelocityX, linearVelocityZ),
+    swimBodyRuntime.syncAuthoritativeState({
+      linearVelocity,
       position: freezeVector3(
         lerp(currentSwimSnapshot.position.x, position.x, positionBlendAlpha),
         this.#resolveWaterSurfaceHeightMeters(position),
@@ -997,7 +1046,7 @@ export class MetaverseTraversalRuntime {
     });
     this.#setLocomotionMode("swim");
     this.#cameraSnapshot = createTraversalSwimCameraPresentationSnapshot(
-      this.#swimSnapshot,
+      swimBodyRuntime.snapshot,
       this.#traversalCameraPitchRadians,
       this.#config,
       this.#unmountedLookYawRadians
@@ -1138,10 +1187,16 @@ export class MetaverseTraversalRuntime {
     }
 
     if (this.#locomotionMode === "swim") {
+      const swimSnapshot = this.#readSwimSnapshot();
+
+      if (swimSnapshot === null) {
+        return null;
+      }
+
       return {
         locomotionMode: "swim",
-        position: this.#swimSnapshot.position,
-        yawRadians: this.#swimSnapshot.yawRadians
+        position: swimSnapshot.position,
+        yawRadians: swimSnapshot.yawRadians
       };
     }
 
@@ -1190,7 +1245,13 @@ export class MetaverseTraversalRuntime {
       ),
       wrapRadians(groundedBodySnapshot.yawRadians + deltaYawRadians)
     );
-    this.#groundedBodyRuntime.advance(createIdleGroundedBodyIntentSnapshot(), 1 / 60);
+    this.#groundedBodyRuntime.advance(
+      createIdleGroundedBodyIntentSnapshot(),
+      1 / 60,
+      this.#resolveGroundedTraversalFilterPredicate(
+        this.#readGroundedTraversalExcludedColliders()
+      )
+    );
     this.#syncGroundedCameraPresentation();
   }
 
@@ -1230,7 +1291,7 @@ export class MetaverseTraversalRuntime {
   ): {
     readonly mountableEnvironmentConfig: Pick<
       MetaverseEnvironmentAssetProofConfig,
-      "entries" | "environmentAssetId" | "label" | "seats"
+      "collider" | "entries" | "environmentAssetId" | "label" | "seats"
     >;
     readonly mountedVehicleRuntime: MetaverseVehicleRuntime;
   } | null {
@@ -1264,16 +1325,44 @@ export class MetaverseTraversalRuntime {
     this.#traversalCameraPitchRadians = this.#cameraSnapshot.pitchRadians;
     this.#mountedVehicleRuntime = new MetaverseVehicleRuntime({
       authoritativeCorrection: this.#config.skiff.authoritativeCorrection,
+      driveCollider:
+        mountableEnvironmentConfig.collider === null
+          ? null
+          : Object.freeze({
+              center: freezeVector3(
+                mountableEnvironmentConfig.collider.center.x,
+                mountableEnvironmentConfig.collider.center.y,
+                mountableEnvironmentConfig.collider.center.z
+              ),
+              size: freezeVector3(
+                mountableEnvironmentConfig.collider.size.x,
+                mountableEnvironmentConfig.collider.size.y,
+                mountableEnvironmentConfig.collider.size.z
+              )
+            }),
       entries: mountableEnvironmentConfig.entries,
       environmentAssetId: mountableEnvironmentConfig.environmentAssetId,
       label: mountableEnvironmentConfig.label,
       oceanHeightMeters: this.#config.ocean.height,
+      physicsRuntime: this.#physicsRuntime,
       poseSnapshot: dynamicEnvironmentPose,
+      resolveWaterborneTraversalFilterPredicate: (
+        excludedOwnerEnvironmentAssetId,
+        excludedColliders = []
+      ) =>
+        this.#resolveWaterborneTraversalFilterPredicate(
+          excludedOwnerEnvironmentAssetId,
+          Object.freeze([
+            ...this.#readGroundedTraversalExcludedColliders(),
+            ...excludedColliders
+          ])
+        ),
       seats: mountableEnvironmentConfig.seats,
       surfaceColliderSnapshots: this.#surfaceColliderSnapshots,
       waterContactProbeRadiusMeters:
         this.#config.skiff.waterContactProbeRadiusMeters,
-      waterlineHeightMeters: this.#config.skiff.waterlineHeightMeters
+      waterlineHeightMeters: this.#config.skiff.waterlineHeightMeters,
+      worldRadius: this.#config.movement.worldRadius
     });
     this.#mountedEnvironmentConfig = mountableEnvironmentConfig;
 
@@ -1285,6 +1374,7 @@ export class MetaverseTraversalRuntime {
 
   #clearMountedVehicleState(): void {
     this.#mountedVehicleRuntime?.clearOccupancy();
+    this.#mountedVehicleRuntime?.dispose();
     this.#mountedEnvironmentConfig = null;
     this.#mountedOccupancyLookYawRadians = 0;
     this.#routedDriverVehicleControlIntentSnapshot = null;
@@ -1370,7 +1460,10 @@ export class MetaverseTraversalRuntime {
         strafeAxis: movementInput.strafeAxis,
         turnAxis: toFiniteNumber(movementInput.yawAxis, 0)
       }),
-      deltaSeconds
+      deltaSeconds,
+      this.#resolveGroundedTraversalFilterPredicate(
+        this.#readGroundedTraversalExcludedColliders()
+      )
     );
 
     const locomotionSnapshot = resolveAutomaticSurfaceLocomotionSnapshot(
@@ -1427,6 +1520,8 @@ export class MetaverseTraversalRuntime {
     movementInput: MetaverseFlightInputSnapshot,
     deltaSeconds: number
   ): MetaverseCameraSnapshot {
+    const swimBodyRuntime = this.#ensureSwimBodyRuntime();
+
     this.#advanceUnmountedLookYawRadians(
       movementInput,
       deltaSeconds,
@@ -1440,65 +1535,30 @@ export class MetaverseTraversalRuntime {
         deltaSeconds
       );
 
-    const nextSwimState = advanceSurfaceLocomotionSnapshot(
-      this.#swimSnapshot,
-      {
-        forwardSpeedUnitsPerSecond: this.#swimForwardSpeedUnitsPerSecond,
-        strafeSpeedUnitsPerSecond: this.#swimStrafeSpeedUnitsPerSecond
-      },
-      movementInput,
+    const nextSwimSnapshot = swimBodyRuntime.advance(
+      Object.freeze({
+        boost: movementInput.boost,
+        moveAxis: movementInput.moveAxis,
+        strafeAxis: movementInput.strafeAxis,
+        yawAxis: movementInput.yawAxis
+      }),
       this.#config.swim,
       deltaSeconds,
-      this.#config.movement.worldRadius,
-      this.#resolveWaterSurfaceHeightMeters(this.#swimSnapshot.position)
+      this.#resolveWaterSurfaceHeightMeters(swimBodyRuntime.snapshot.position),
+      null,
+      this.#resolveWaterborneTraversalFilterPredicate(
+        null,
+        this.#readWaterborneTraversalExcludedColliders(
+          swimBodyRuntime.colliderHandle
+        )
+      )
     );
-    const constrainedSwimPosition = constrainPlanarPositionAgainstBlockers(
-      this.#surfaceColliderSnapshots,
-      this.#swimSnapshot.position,
-      nextSwimState.snapshot.position,
-      this.#config.groundedBody.capsuleRadiusMeters,
-      this.#swimSnapshot.position.y - this.#config.groundedBody.capsuleRadiusMeters,
-      this.#swimSnapshot.position.y +
-        this.#config.groundedBody.capsuleHalfHeightMeters +
-        this.#config.groundedBody.capsuleRadiusMeters
-    );
-    const constrainedWaterSurfaceHeightMeters =
-      this.#resolveWaterSurfaceHeightMeters(constrainedSwimPosition);
-    const forwardX = Math.sin(nextSwimState.snapshot.yawRadians);
-    const forwardZ = -Math.cos(nextSwimState.snapshot.yawRadians);
-    const rightX = Math.cos(nextSwimState.snapshot.yawRadians);
-    const rightZ = Math.sin(nextSwimState.snapshot.yawRadians);
-    const appliedDeltaX =
-      constrainedSwimPosition.x - this.#swimSnapshot.position.x;
-    const appliedDeltaZ =
-      constrainedSwimPosition.z - this.#swimSnapshot.position.z;
-
-    this.#swimForwardSpeedUnitsPerSecond =
-      deltaSeconds > 0
-        ? (appliedDeltaX * forwardX + appliedDeltaZ * forwardZ) / deltaSeconds
-        : 0;
-    this.#swimStrafeSpeedUnitsPerSecond =
-      deltaSeconds > 0
-        ? (appliedDeltaX * rightX + appliedDeltaZ * rightZ) / deltaSeconds
-        : 0;
-    this.#swimSnapshot = Object.freeze({
-      planarSpeedUnitsPerSecond:
-        deltaSeconds > 0
-          ? Math.hypot(appliedDeltaX, appliedDeltaZ) / deltaSeconds
-          : 0,
-      position: freezeVector3(
-        constrainedSwimPosition.x,
-        constrainedWaterSurfaceHeightMeters,
-        constrainedSwimPosition.z
-      ),
-      yawRadians: nextSwimState.snapshot.yawRadians
-    });
 
     const locomotionSnapshot = resolveAutomaticSurfaceLocomotionSnapshot(
       this.#config,
       this.#surfaceColliderSnapshots,
-      this.#swimSnapshot.position,
-      this.#swimSnapshot.yawRadians,
+      nextSwimSnapshot.position,
+      nextSwimSnapshot.yawRadians,
       "swim"
     );
     const locomotionDecision = locomotionSnapshot.decision;
@@ -1507,8 +1567,8 @@ export class MetaverseTraversalRuntime {
 
     if (locomotionDecision.locomotionMode === "grounded") {
       this.#enterGroundedLocomotion(
-        this.#swimSnapshot.position,
-        this.#swimSnapshot.yawRadians,
+        nextSwimSnapshot.position,
+        nextSwimSnapshot.yawRadians,
         locomotionDecision.supportHeightMeters,
         this.#unmountedLookYawRadians
       );
@@ -1517,7 +1577,7 @@ export class MetaverseTraversalRuntime {
     }
 
     return createTraversalSwimCameraPresentationSnapshot(
-      this.#swimSnapshot,
+      nextSwimSnapshot,
       this.#traversalCameraPitchRadians,
       this.#config,
       this.#unmountedLookYawRadians
@@ -1677,12 +1737,19 @@ export class MetaverseTraversalRuntime {
     }
 
     if (this.#locomotionMode === "swim") {
+      const swimSnapshot = this.#readSwimSnapshot();
+
+      if (swimSnapshot === null) {
+        this.#movementAnimationRuntime.reset("idle");
+        return this.#movementAnimationRuntime.animationVocabulary;
+      }
+
       return this.#movementAnimationRuntime.advance(
         {
           grounded: false,
           inputMagnitude: this.#latestMovementInputMagnitude,
           locomotionMode: "swim",
-          planarSpeedUnitsPerSecond: this.#swimSnapshot.planarSpeedUnitsPerSecond,
+          planarSpeedUnitsPerSecond: swimSnapshot.planarSpeedUnitsPerSecond,
           verticalSpeedUnitsPerSecond: 0
         },
         deltaSeconds
@@ -1694,6 +1761,17 @@ export class MetaverseTraversalRuntime {
   }
 
   #syncCharacterPresentationSnapshot(deltaSeconds = 0): void {
+    const swimSnapshot =
+      this.#readSwimSnapshot() ??
+      createSurfaceLocomotionSnapshot(
+        freezeVector3(
+          this.#config.camera.spawnPosition.x,
+          this.#resolveWaterSurfaceHeightMeters(this.#config.camera.spawnPosition),
+          this.#config.camera.spawnPosition.z
+        ),
+        this.#config.camera.initialYawRadians
+      );
+
     this.#characterPresentationSnapshot = createTraversalCharacterPresentationSnapshot({
       animationVocabulary: this.#resolveLocalAnimationVocabulary(deltaSeconds),
       config: this.#config,
@@ -1703,7 +1781,7 @@ export class MetaverseTraversalRuntime {
       locomotionMode: this.#locomotionMode,
       mountedVehicleSnapshot:
         this.#mountedVehicleRuntime?.snapshot ?? null,
-      swimSnapshot: this.#swimSnapshot
+      swimSnapshot
     });
   }
 }

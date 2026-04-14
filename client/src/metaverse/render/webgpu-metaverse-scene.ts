@@ -69,6 +69,7 @@ import type {
   MetaverseEnvironmentPlacementProofConfig,
   MetaverseEnvironmentProofConfig,
   MetaverseEnvironmentSeatProofConfig,
+  MetaverseHumanoidV2PistolPoseId,
   FocusedExperiencePortalSnapshot,
   FocusedMountableSnapshot,
   MountableBoardingEntrySnapshot,
@@ -80,6 +81,7 @@ import type {
   MetaversePortalConfig,
   MetaverseRuntimeConfig
 } from "../types/metaverse-runtime";
+import { metaverseHumanoidV2PistolPoseIds } from "../types/metaverse-runtime";
 import {
   shouldConstrainMountedOccupancyToAnchor,
   shouldHolsterHeldAttachmentWhileMounted
@@ -137,6 +139,7 @@ export interface SceneAssetLoader {
 }
 
 interface MetaverseCharacterProofRuntime {
+  activeAnimationActionSetId: "full-body" | "humanoid_v2_pistol_lower_body";
   activeAnimationVocabulary: MetaverseCharacterAnimationVocabularyId;
   readonly actionsByVocabulary: ReadonlyMap<
     MetaverseCharacterAnimationVocabularyId,
@@ -149,6 +152,11 @@ interface MetaverseCharacterProofRuntime {
     AnimationClip
   >;
   readonly heldWeaponPoseRuntime: HumanoidV2HeldWeaponPoseRuntime | null;
+  readonly humanoidV2PistolLowerBodyActionsByVocabulary: ReadonlyMap<
+    MetaverseCharacterAnimationVocabularyId,
+    AnimationAction
+  > | null;
+  readonly humanoidV2PistolPoseRuntime: HumanoidV2PistolPoseRuntime | null;
   readonly mixer: AnimationMixer;
   readonly seatSocketNode: Object3D;
   readonly scene: Group;
@@ -167,6 +175,8 @@ interface MetaverseAttachmentProofRuntime {
   readonly attachmentRoot: Group;
   readonly heldForwardReferenceNode: Object3D | null;
   readonly heldMount: MetaverseAttachmentMountRuntime;
+  implicitOffHandGripLocalPosition: Vector3 | null;
+  implicitOffHandGripLocalQuaternion: Quaternion | null;
   readonly mountedHolsterMount: MetaverseAttachmentMountRuntime | null;
   readonly offHandSupportNode: Object3D | null;
   readonly presentationGroup: Group;
@@ -190,9 +200,26 @@ interface HumanoidV2HeldWeaponPoseRuntime {
   readonly rightUpperarmBone: Bone;
 }
 
+interface HumanoidV2PistolPoseRuntime {
+  readonly actionsByPoseId: ReadonlyMap<
+    MetaverseHumanoidV2PistolPoseId,
+    AnimationAction
+  >;
+  readonly clipsByPoseId: ReadonlyMap<
+    MetaverseHumanoidV2PistolPoseId,
+    AnimationClip
+  >;
+}
+
 interface HeldWeaponSolveChainLink {
   readonly bone: Bone;
   readonly solveWeight: number;
+}
+
+interface HeldWeaponFirstPersonCameraRuntime {
+  readonly settledLookDirection: Vector3;
+  readonly settledPosition: Vector3;
+  settled: boolean;
 }
 
 interface MetaverseRemoteCharacterPresentationRuntime {
@@ -355,6 +382,12 @@ const remoteCharacterTeleportSnapDistanceMeters = 3.5;
 const heldWeaponAimSolveIterations = 10;
 const heldWeaponCoupledSolvePasses = 5;
 const heldWeaponAimTargetDistanceMeters = 16;
+const heldWeaponFirstPersonCameraBackOffsetMeters = 0.24;
+const heldWeaponFirstPersonCameraLookBlendRatePerSecond = 20;
+const heldWeaponFirstPersonCameraLookDistanceMeters = 1;
+const heldWeaponFirstPersonCameraPositionBlendRatePerSecond = 16;
+const heldWeaponFirstPersonCameraSideOffsetMeters = 0.055;
+const heldWeaponFirstPersonCameraUpOffsetMeters = 0.09;
 const heldWeaponClavicleSolveWeight = 0.28;
 const heldWeaponElbowPoleAcrossBias = 0.42;
 const heldWeaponElbowPoleBiasWeight = 0.92;
@@ -379,6 +412,19 @@ const mountedEnvironmentAnchorQuaternionScratch = new Quaternion();
 const humanoidV2PalmSocketBlendAlpha = 0.45;
 const humanoidV2BackSocketLowerOffsetMeters = 0.02;
 const humanoidV2BackSocketRearwardScale = 0.7;
+const humanoidV2PistolOverlayExcludedTrackPrefixes = Object.freeze([
+  "root",
+  "pelvis",
+  "thigh_",
+  "calf_",
+  "foot_",
+  "ball_"
+] as const);
+const humanoidV2PistolLowerBodyVocabularyIds = Object.freeze([
+  "idle",
+  "walk"
+] as const satisfies readonly MetaverseCharacterAnimationVocabularyId[]);
+const humanoidV2PistolPoseWeightEpsilon = 0.000001;
 const humanoidV1BackSocketLocalPosition = new Vector3(0, 0.14, -0.08);
 const heldWeaponAttachmentGripWorldPositionScratch = new Vector3();
 const heldWeaponClampedHandTargetWorldPositionScratch = new Vector3();
@@ -412,8 +458,16 @@ const heldWeaponLocalDeltaQuaternionScratch = new Quaternion();
 const heldWeaponSupportHandPitchWorldQuaternionScratch = new Quaternion();
 const heldWeaponSupportHandTargetWorldQuaternionScratch = new Quaternion();
 const heldWeaponSupportHandWorldRollQuaternionScratch = new Quaternion();
+const heldWeaponImplicitOffHandTargetWorldQuaternionScratch = new Quaternion();
+const heldWeaponAttachmentWorldQuaternionScratch = new Quaternion();
+const heldWeaponAttachmentWorldQuaternionInverseScratch = new Quaternion();
 const heldWeaponWeightedLocalDeltaQuaternionScratch = new Quaternion();
 const heldWeaponTargetWorldQuaternionScratch = new Quaternion();
+const heldWeaponFirstPersonCameraTargetPositionScratch = new Vector3();
+const heldWeaponFirstPersonCameraTargetLookDirectionScratch = new Vector3();
+const heldWeaponFirstPersonCameraTargetUpDirectionScratch = new Vector3();
+const heldWeaponFirstPersonCameraTargetAcrossDirectionScratch = new Vector3();
+const heldWeaponFirstPersonCameraForwardReferenceWorldPositionScratch = new Vector3();
 const heldWeaponCurrentWorldQuaternionScratch = new Quaternion();
 const heldWeaponWorldDeltaQuaternionScratch = new Quaternion();
 const heldWeaponParentLocalDeltaQuaternionScratch = new Quaternion();
@@ -1458,11 +1512,14 @@ function syncHumanoidV2HeldWeaponPose(
     heldWeaponElbowPolePreferenceWeight
   );
   heldWeaponLeftElbowPoleTargetScratch.normalize();
-  attachmentRuntime.attachmentRoot.getWorldPosition(
-    heldWeaponAttachmentGripWorldPositionScratch
-  );
+  // Keep the traversal camera authoritative by aiming the weapon toward a
+  // point on the camera ray instead of a weapon-relative forward proxy.
   heldWeaponTargetWorldPositionScratch
-    .copy(heldWeaponAttachmentGripWorldPositionScratch)
+    .set(
+      cameraSnapshot.position.x,
+      cameraSnapshot.position.y,
+      cameraSnapshot.position.z
+    )
     .addScaledVector(
       heldWeaponLookDirectionScratch,
       heldWeaponAimTargetDistanceMeters
@@ -1503,17 +1560,69 @@ function syncHumanoidV2HeldWeaponPose(
   characterProofRuntime.anchorGroup.updateMatrixWorld(true);
 
   if (attachmentRuntime.offHandSupportNode === null) {
-    return;
+    if (
+      attachmentRuntime.implicitOffHandGripLocalPosition === null ||
+      attachmentRuntime.implicitOffHandGripLocalQuaternion === null
+    ) {
+      attachmentRuntime.attachmentRoot.updateMatrixWorld(true);
+      heldWeaponPoseRuntime.leftGripSocketNode.updateMatrixWorld(true);
+      attachmentRuntime.implicitOffHandGripLocalPosition =
+        attachmentRuntime.attachmentRoot.worldToLocal(
+          heldWeaponPoseRuntime.leftGripSocketNode.getWorldPosition(
+            heldWeaponGripSocketWorldPositionScratch
+          )
+        ).clone();
+      attachmentRuntime.implicitOffHandGripLocalQuaternion =
+        heldWeaponAttachmentWorldQuaternionInverseScratch
+          .copy(
+            attachmentRuntime.attachmentRoot.getWorldQuaternion(
+              heldWeaponAttachmentWorldQuaternionScratch
+            )
+          )
+          .invert()
+          .multiply(
+            heldWeaponPoseRuntime.leftGripSocketNode.getWorldQuaternion(
+              heldWeaponImplicitOffHandTargetWorldQuaternionScratch
+            )
+          )
+          .normalize()
+          .clone();
+    }
+
+    if (
+      attachmentRuntime.implicitOffHandGripLocalPosition === null ||
+      attachmentRuntime.implicitOffHandGripLocalQuaternion === null
+    ) {
+      return;
+    }
   }
+  const implicitOffHandGripLocalPosition =
+    attachmentRuntime.implicitOffHandGripLocalPosition!;
+  const implicitOffHandGripLocalQuaternion =
+    attachmentRuntime.implicitOffHandGripLocalQuaternion!;
 
   for (
     let solvePass = 0;
     solvePass < heldWeaponCoupledSolvePasses;
     solvePass += 1
   ) {
-    attachmentRuntime.offHandSupportNode.getWorldPosition(
-      heldWeaponGripSocketWorldPositionScratch
-    );
+    if (attachmentRuntime.offHandSupportNode !== null) {
+      attachmentRuntime.offHandSupportNode.getWorldPosition(
+        heldWeaponGripSocketWorldPositionScratch
+      );
+    } else {
+      attachmentRuntime.attachmentRoot.localToWorld(
+        heldWeaponGripSocketWorldPositionScratch.copy(implicitOffHandGripLocalPosition)
+      );
+      heldWeaponSupportHandTargetWorldQuaternionScratch
+        .copy(
+          attachmentRuntime.attachmentRoot.getWorldQuaternion(
+            heldWeaponAttachmentWorldQuaternionScratch
+          )
+        )
+        .multiply(implicitOffHandGripLocalQuaternion)
+        .normalize();
+    }
     solveBoneChainTowardWorldTarget(
       heldWeaponPoseRuntime.leftSupportChain,
       heldWeaponPoseRuntime.leftGripSocketNode,
@@ -1543,11 +1652,12 @@ function syncHumanoidV2HeldWeaponPose(
       heldWeaponPoseRuntime.leftGripSocketNode,
       heldWeaponSupportHandTargetWorldQuaternionScratch
     );
-    attachmentRuntime.attachmentRoot.getWorldPosition(
-      heldWeaponAttachmentGripWorldPositionScratch
-    );
     heldWeaponTargetWorldPositionScratch
-      .copy(heldWeaponAttachmentGripWorldPositionScratch)
+      .set(
+        cameraSnapshot.position.x,
+        cameraSnapshot.position.y,
+        cameraSnapshot.position.z
+      )
       .addScaledVector(
         heldWeaponLookDirectionScratch,
         heldWeaponAimTargetDistanceMeters
@@ -2637,12 +2747,15 @@ function resolveHeldCharacterAnimationVocabulary(
     return targetVocabulary;
   }
 
-  return "aim";
+  return characterProofRuntime.humanoidV2PistolPoseRuntime === null
+    ? "aim"
+    : targetVocabulary;
 }
 
 function syncCharacterAnimation(
   characterProofRuntime: MetaverseCharacterProofRuntime,
-  targetVocabulary: MetaverseCharacterAnimationVocabularyId
+  targetVocabulary: MetaverseCharacterAnimationVocabularyId,
+  useHumanoidV2PistolLayering: boolean = false
 ): void {
   const resolveNextVocabulary = (): MetaverseCharacterAnimationVocabularyId => {
     const fallbackCandidates: readonly MetaverseCharacterAnimationVocabularyId[] =
@@ -2665,20 +2778,60 @@ function syncCharacterAnimation(
     return "idle";
   };
   const nextVocabulary = resolveNextVocabulary();
+  const resolveActionByVocabulary = (
+    vocabulary: MetaverseCharacterAnimationVocabularyId,
+    preferHumanoidV2PistolLayering: boolean
+  ): {
+    readonly action: AnimationAction;
+    readonly actionSetId: MetaverseCharacterProofRuntime["activeAnimationActionSetId"];
+  } | null => {
+    if (preferHumanoidV2PistolLayering) {
+      const lowerBodyAction =
+        characterProofRuntime.humanoidV2PistolLowerBodyActionsByVocabulary?.get(
+          vocabulary
+        );
 
-  if (nextVocabulary === characterProofRuntime.activeAnimationVocabulary) {
-    return;
-  }
+      if (lowerBodyAction !== undefined) {
+        return {
+          action: lowerBodyAction,
+          actionSetId: "humanoid_v2_pistol_lower_body"
+        };
+      }
+    }
 
-  const nextAction = characterProofRuntime.actionsByVocabulary.get(nextVocabulary);
-  const previousAction = characterProofRuntime.actionsByVocabulary.get(
-    characterProofRuntime.activeAnimationVocabulary
+    const fullBodyAction = characterProofRuntime.actionsByVocabulary.get(vocabulary);
+
+    return fullBodyAction === undefined
+      ? null
+      : {
+          action: fullBodyAction,
+          actionSetId: "full-body"
+        };
+  };
+  const nextActionSelection = resolveActionByVocabulary(
+    nextVocabulary,
+    useHumanoidV2PistolLayering
   );
 
-  if (nextAction === undefined) {
+  if (nextActionSelection === null) {
     return;
   }
 
+  if (
+    nextVocabulary === characterProofRuntime.activeAnimationVocabulary &&
+    nextActionSelection.actionSetId ===
+      characterProofRuntime.activeAnimationActionSetId
+  ) {
+    return;
+  }
+
+  const previousActionSelection = resolveActionByVocabulary(
+    characterProofRuntime.activeAnimationVocabulary,
+    characterProofRuntime.activeAnimationActionSetId ===
+      "humanoid_v2_pistol_lower_body"
+  );
+  const nextAction = nextActionSelection.action;
+  const previousAction = previousActionSelection?.action;
   const previousVocabulary = characterProofRuntime.activeAnimationVocabulary;
 
   nextAction.enabled = true;
@@ -2708,7 +2861,191 @@ function syncCharacterAnimation(
     }
   }
 
+  characterProofRuntime.activeAnimationActionSetId = nextActionSelection.actionSetId;
   characterProofRuntime.activeAnimationVocabulary = nextVocabulary;
+}
+
+function matchesAnimationTrackPrefix(
+  trackName: string,
+  prefix: string
+): boolean {
+  return (
+    trackName === prefix ||
+    trackName.startsWith(prefix) ||
+    trackName.includes(`[${prefix}`)
+  );
+}
+
+function isHumanoidV2PistolOverlayTrack(trackName: string): boolean {
+  return !humanoidV2PistolOverlayExcludedTrackPrefixes.some((prefix) =>
+    matchesAnimationTrackPrefix(trackName, prefix)
+  );
+}
+
+function createHumanoidV2LowerBodyLocomotionClip(
+  clip: AnimationClip
+): AnimationClip {
+  const lowerBodyTracks = clip.tracks.filter(
+    (track) => !isHumanoidV2PistolOverlayTrack(track.name)
+  );
+
+  if (lowerBodyTracks.length === 0) {
+    throw new Error(
+      `Metaverse humanoid_v2 lower-body locomotion clip ${clip.name} did not retain any lower-body tracks.`
+    );
+  }
+
+  return new AnimationClip(
+    `${clip.name}__metaverse_lower_body`,
+    clip.duration,
+    lowerBodyTracks,
+    clip.blendMode
+  );
+}
+
+function createHumanoidV2UpperBodyPistolPoseClip(
+  clip: AnimationClip
+): AnimationClip {
+  const upperBodyTracks = clip.tracks.filter((track) =>
+    isHumanoidV2PistolOverlayTrack(track.name)
+  );
+
+  if (upperBodyTracks.length === 0) {
+    throw new Error(
+      `Metaverse humanoid_v2 pistol pose clip ${clip.name} did not retain any upper-body tracks.`
+    );
+  }
+
+  return new AnimationClip(
+    `${clip.name}__metaverse_upper_body`,
+    clip.duration,
+    upperBodyTracks,
+    clip.blendMode
+  );
+}
+
+function createHumanoidV2PistolLowerBodyActionsByVocabulary(
+  mixer: AnimationMixer,
+  clipsByVocabulary: ReadonlyMap<
+    MetaverseCharacterAnimationVocabularyId,
+    AnimationClip
+  >
+): ReadonlyMap<MetaverseCharacterAnimationVocabularyId, AnimationAction> {
+  const actionsByVocabulary = new Map<
+    MetaverseCharacterAnimationVocabularyId,
+    AnimationAction
+  >();
+
+  for (const vocabulary of humanoidV2PistolLowerBodyVocabularyIds) {
+    const clip = clipsByVocabulary.get(vocabulary);
+
+    if (clip === undefined) {
+      continue;
+    }
+
+    actionsByVocabulary.set(
+      vocabulary,
+      mixer.clipAction(createHumanoidV2LowerBodyLocomotionClip(clip))
+    );
+  }
+
+  return actionsByVocabulary;
+}
+
+function createHumanoidV2PistolPoseRuntime(
+  mixer: AnimationMixer,
+  clipsByPoseId: ReadonlyMap<MetaverseHumanoidV2PistolPoseId, AnimationClip>
+): HumanoidV2PistolPoseRuntime {
+  const actionsByPoseId = new Map<
+    MetaverseHumanoidV2PistolPoseId,
+    AnimationAction
+  >();
+
+  for (const poseId of metaverseHumanoidV2PistolPoseIds) {
+    const clip = clipsByPoseId.get(poseId);
+
+    if (clip === undefined) {
+      throw new Error(
+        `Metaverse humanoid_v2 pistol pose runtime is missing ${poseId}.`
+      );
+    }
+
+    const action = mixer.clipAction(clip);
+    action.enabled = true;
+    action.setEffectiveTimeScale(1);
+    action.setEffectiveWeight(0);
+    action.play();
+    actionsByPoseId.set(poseId, action);
+  }
+
+  return {
+    actionsByPoseId,
+    clipsByPoseId
+  };
+}
+
+function setHumanoidV2PistolPoseWeights(
+  pistolPoseRuntime: HumanoidV2PistolPoseRuntime,
+  weights: Readonly<Record<MetaverseHumanoidV2PistolPoseId, number>>
+): void {
+  for (const poseId of metaverseHumanoidV2PistolPoseIds) {
+    const action = pistolPoseRuntime.actionsByPoseId.get(poseId);
+
+    if (action === undefined) {
+      continue;
+    }
+
+    const weight = clamp(weights[poseId], 0, 1);
+    action.enabled = weight > humanoidV2PistolPoseWeightEpsilon;
+    action.setEffectiveWeight(weight);
+  }
+}
+
+function clearHumanoidV2PistolPoseWeights(
+  pistolPoseRuntime: HumanoidV2PistolPoseRuntime
+): void {
+  setHumanoidV2PistolPoseWeights(pistolPoseRuntime, {
+    down: 0,
+    neutral: 0,
+    up: 0
+  });
+}
+
+function syncHumanoidV2PistolPoseWeights(
+  pistolPoseRuntime: HumanoidV2PistolPoseRuntime,
+  pitchRadians: number,
+  orientation: Pick<
+    MetaverseRuntimeConfig["orientation"],
+    "maxPitchRadians" | "minPitchRadians"
+  >
+): void {
+  const downRangeRadians = Math.max(
+    Math.abs(orientation.minPitchRadians),
+    humanoidV2PistolPoseWeightEpsilon
+  );
+  const upRangeRadians = Math.max(
+    orientation.maxPitchRadians,
+    humanoidV2PistolPoseWeightEpsilon
+  );
+  const clampedPitchRadians = clamp(
+    pitchRadians,
+    orientation.minPitchRadians,
+    orientation.maxPitchRadians
+  );
+  const downWeight =
+    clampedPitchRadians < 0
+      ? clamp(Math.abs(clampedPitchRadians) / downRangeRadians, 0, 1)
+      : 0;
+  const upWeight =
+    clampedPitchRadians > 0
+      ? clamp(clampedPitchRadians / upRangeRadians, 0, 1)
+      : 0;
+
+  setHumanoidV2PistolPoseWeights(pistolPoseRuntime, {
+    down: downWeight,
+    neutral: clamp(1 - Math.max(downWeight, upWeight), 0, 1),
+    up: upWeight
+  });
 }
 
 function createCharacterProofRuntime(
@@ -2718,7 +3055,10 @@ function createCharacterProofRuntime(
   clipsByVocabulary: ReadonlyMap<
     MetaverseCharacterAnimationVocabularyId,
     AnimationClip
-  >
+  >,
+  humanoidV2PistolPoseClipsByPoseId:
+    | ReadonlyMap<MetaverseHumanoidV2PistolPoseId, AnimationClip>
+    | null
 ): MetaverseCharacterProofRuntime {
   const anchorGroup = new Group();
   const seatSocketNode = findSocketNode(characterScene, "seat_socket");
@@ -2743,6 +3083,13 @@ function createCharacterProofRuntime(
   }
 
   const idleAction = actionsByVocabulary.get("idle");
+  const humanoidV2PistolLowerBodyActionsByVocabulary =
+    skeletonId === "humanoid_v2" && humanoidV2PistolPoseClipsByPoseId !== null
+      ? createHumanoidV2PistolLowerBodyActionsByVocabulary(
+          mixer,
+          clipsByVocabulary
+        )
+      : null;
 
   if (idleAction === undefined) {
     throw new Error(
@@ -2753,12 +3100,21 @@ function createCharacterProofRuntime(
   idleAction.play();
 
   return {
+    activeAnimationActionSetId: "full-body",
     activeAnimationVocabulary: "idle",
     actionsByVocabulary,
     anchorGroup,
     characterId,
     clipsByVocabulary,
     heldWeaponPoseRuntime: createHeldWeaponPoseRuntime(skeletonId, characterScene),
+    humanoidV2PistolLowerBodyActionsByVocabulary,
+    humanoidV2PistolPoseRuntime:
+      skeletonId === "humanoid_v2" && humanoidV2PistolPoseClipsByPoseId !== null
+        ? createHumanoidV2PistolPoseRuntime(
+            mixer,
+            humanoidV2PistolPoseClipsByPoseId
+          )
+        : null,
     mixer,
     seatSocketNode,
     scene: characterScene,
@@ -2774,7 +3130,8 @@ function cloneMetaverseCharacterProofRuntime(
     sourceRuntime.characterId,
     sourceRuntime.skeletonId,
     cloneCharacterScene(sourceRuntime.scene),
-    sourceRuntime.clipsByVocabulary
+    sourceRuntime.clipsByVocabulary,
+    sourceRuntime.humanoidV2PistolPoseRuntime?.clipsByPoseId ?? null
   );
 
   clonedRuntime.anchorGroup.name = `metaverse_character/${sourceRuntime.characterId}/${playerId}`;
@@ -2850,6 +3207,10 @@ function syncInterpolatedRemoteCharacterPresentation(
 function syncRemoteCharacterPresentations(
   scene: Scene,
   sourceCharacterRuntime: MetaverseCharacterProofRuntime | null,
+  orientation: Pick<
+    MetaverseRuntimeConfig["orientation"],
+    "maxPitchRadians" | "minPitchRadians"
+  >,
   resolveMountedEnvironmentRuntime: (
     environmentAssetId: string
   ) => MetaverseMountableEnvironmentDynamicAssetRuntime | null,
@@ -2921,11 +3282,28 @@ function syncRemoteCharacterPresentations(
         remoteCharacterRuntime.targetMountedOccupancy,
         resolveMountedEnvironmentRuntime
       );
+    const useHumanoidV2PistolLayering =
+      remoteCharacterRuntime.mountedCharacterRuntime === null &&
+      remoteCharacterRuntime.characterRuntime.humanoidV2PistolPoseRuntime !== null;
 
     syncCharacterAnimation(
       remoteCharacterRuntime.characterRuntime,
-      remoteCharacterPresentation.presentation.animationVocabulary
+      remoteCharacterPresentation.presentation.animationVocabulary,
+      useHumanoidV2PistolLayering
     );
+    if (remoteCharacterRuntime.characterRuntime.humanoidV2PistolPoseRuntime !== null) {
+      if (useHumanoidV2PistolLayering) {
+        syncHumanoidV2PistolPoseWeights(
+          remoteCharacterRuntime.characterRuntime.humanoidV2PistolPoseRuntime,
+          remoteCharacterPresentation.look.pitchRadians,
+          orientation
+        );
+      } else {
+        clearHumanoidV2PistolPoseWeights(
+          remoteCharacterRuntime.characterRuntime.humanoidV2PistolPoseRuntime
+        );
+      }
+    }
     remoteCharacterRuntime.characterRuntime.mixer.update(deltaSeconds);
 
     if (remoteCharacterRuntime.mountedCharacterRuntime !== null) {
@@ -3121,11 +3499,72 @@ async function loadMetaverseCharacterProofRuntime(
     clipsByVocabulary.set(animationClipConfig.vocabulary, clip);
   }
 
+  let humanoidV2PistolPoseClipsByPoseId:
+    | ReadonlyMap<MetaverseHumanoidV2PistolPoseId, AnimationClip>
+    | null = null;
+
+  if (
+    characterProofConfig.skeletonId === "humanoid_v2" &&
+    characterProofConfig.humanoidV2PistolPoseProofConfig !== null &&
+    characterProofConfig.humanoidV2PistolPoseProofConfig !== undefined
+  ) {
+    const pistolPoseProofConfig = characterProofConfig.humanoidV2PistolPoseProofConfig;
+
+    try {
+      let pistolAnimationAsset = animationAssetsByPath.get(
+        pistolPoseProofConfig.sourcePath
+      );
+
+      if (pistolAnimationAsset === undefined) {
+        pistolAnimationAsset = await sceneAssetLoader.loadAsync(
+          pistolPoseProofConfig.sourcePath
+        );
+        animationAssetsByPath.set(
+          pistolPoseProofConfig.sourcePath,
+          pistolAnimationAsset
+        );
+      }
+
+      const clipsByPoseId = new Map<
+        MetaverseHumanoidV2PistolPoseId,
+        AnimationClip
+      >();
+      let missingClipName: string | null = null;
+
+      for (const poseId of metaverseHumanoidV2PistolPoseIds) {
+        const clipName = pistolPoseProofConfig.clipNamesByPoseId[poseId];
+        const clip = pistolAnimationAsset.animations.find(
+          (animation) => animation.name === clipName
+        );
+
+        if (clip === undefined) {
+          missingClipName = clipName;
+          break;
+        }
+
+        clipsByPoseId.set(poseId, createHumanoidV2UpperBodyPistolPoseClip(clip));
+      }
+
+      if (missingClipName === null) {
+        humanoidV2PistolPoseClipsByPoseId = clipsByPoseId;
+      } else {
+        warn(
+          `Metaverse humanoid_v2 pistol pose overlay disabled because ${pistolPoseProofConfig.sourcePath} is missing ${missingClipName}.`
+        );
+      }
+    } catch (error) {
+      warn(
+        `Metaverse humanoid_v2 pistol pose overlay disabled because ${pistolPoseProofConfig.sourcePath} could not load.`
+      );
+    }
+  }
+
   return createCharacterProofRuntime(
     characterProofConfig.characterId,
     characterProofConfig.skeletonId,
     characterAsset.scene,
-    clipsByVocabulary
+    clipsByVocabulary,
+    humanoidV2PistolPoseClipsByPoseId
   );
 }
 
@@ -3192,6 +3631,8 @@ async function loadMetaverseAttachmentProofRuntime(
     attachmentRoot,
     heldForwardReferenceNode,
     heldMount,
+    implicitOffHandGripLocalPosition: null,
+    implicitOffHandGripLocalQuaternion: null,
     mountedHolsterMount,
     offHandSupportNode,
     presentationGroup: attachmentPresentationGroup
@@ -3586,6 +4027,162 @@ function syncCamera(
   camera.updateMatrixWorld(true);
 }
 
+function createHeldWeaponFirstPersonCameraRuntime(): HeldWeaponFirstPersonCameraRuntime {
+  return {
+    settled: false,
+    settledLookDirection: new Vector3(0, 0, -1),
+    settledPosition: new Vector3()
+  };
+}
+
+function resetHeldWeaponFirstPersonCameraRuntime(
+  cameraRuntime: HeldWeaponFirstPersonCameraRuntime
+): void {
+  cameraRuntime.settled = false;
+}
+
+function syncHeldWeaponFirstPersonCamera(
+  camera: PerspectiveCamera,
+  cameraRuntime: HeldWeaponFirstPersonCameraRuntime,
+  attachmentRuntime: MetaverseAttachmentProofRuntime,
+  cameraSnapshot: MetaverseCameraSnapshot,
+  deltaSeconds: number
+): void {
+  attachmentRuntime.attachmentRoot.getWorldPosition(
+    heldWeaponAttachmentGripWorldPositionScratch
+  );
+
+  if (attachmentRuntime.heldForwardReferenceNode !== null) {
+    attachmentRuntime.heldForwardReferenceNode.getWorldPosition(
+      heldWeaponFirstPersonCameraForwardReferenceWorldPositionScratch
+    );
+    heldWeaponFirstPersonCameraTargetLookDirectionScratch
+      .copy(heldWeaponFirstPersonCameraForwardReferenceWorldPositionScratch)
+      .sub(heldWeaponAttachmentGripWorldPositionScratch);
+  } else {
+    heldWeaponFirstPersonCameraTargetLookDirectionScratch.set(
+      cameraSnapshot.lookDirection.x,
+      cameraSnapshot.lookDirection.y,
+      cameraSnapshot.lookDirection.z
+    );
+  }
+
+  if (
+    heldWeaponFirstPersonCameraTargetLookDirectionScratch.lengthSq() <=
+    heldWeaponSolveDirectionEpsilon
+  ) {
+    syncCamera(camera, cameraSnapshot);
+    resetHeldWeaponFirstPersonCameraRuntime(cameraRuntime);
+    return;
+  }
+
+  heldWeaponFirstPersonCameraTargetLookDirectionScratch.normalize();
+  heldWeaponFirstPersonCameraTargetUpDirectionScratch.set(0, 1, 0);
+  heldWeaponFirstPersonCameraTargetUpDirectionScratch.addScaledVector(
+    heldWeaponFirstPersonCameraTargetLookDirectionScratch,
+    -heldWeaponFirstPersonCameraTargetUpDirectionScratch.dot(
+      heldWeaponFirstPersonCameraTargetLookDirectionScratch
+    )
+  );
+
+  if (
+    heldWeaponFirstPersonCameraTargetUpDirectionScratch.lengthSq() <=
+    heldWeaponSolveDirectionEpsilon
+  ) {
+    heldWeaponFirstPersonCameraTargetUpDirectionScratch.set(0, 0, 1);
+    heldWeaponFirstPersonCameraTargetUpDirectionScratch.addScaledVector(
+      heldWeaponFirstPersonCameraTargetLookDirectionScratch,
+      -heldWeaponFirstPersonCameraTargetUpDirectionScratch.dot(
+        heldWeaponFirstPersonCameraTargetLookDirectionScratch
+      )
+    );
+  }
+
+  if (
+    heldWeaponFirstPersonCameraTargetUpDirectionScratch.lengthSq() <=
+    heldWeaponSolveDirectionEpsilon
+  ) {
+    syncCamera(camera, cameraSnapshot);
+    resetHeldWeaponFirstPersonCameraRuntime(cameraRuntime);
+    return;
+  }
+
+  heldWeaponFirstPersonCameraTargetUpDirectionScratch.normalize();
+  heldWeaponFirstPersonCameraTargetAcrossDirectionScratch
+    .copy(heldWeaponFirstPersonCameraTargetLookDirectionScratch)
+    .cross(heldWeaponFirstPersonCameraTargetUpDirectionScratch);
+
+  if (
+    heldWeaponFirstPersonCameraTargetAcrossDirectionScratch.lengthSq() <=
+    heldWeaponSolveDirectionEpsilon
+  ) {
+    syncCamera(camera, cameraSnapshot);
+    resetHeldWeaponFirstPersonCameraRuntime(cameraRuntime);
+    return;
+  }
+
+  heldWeaponFirstPersonCameraTargetAcrossDirectionScratch.normalize();
+  heldWeaponFirstPersonCameraTargetUpDirectionScratch
+    .copy(heldWeaponFirstPersonCameraTargetAcrossDirectionScratch)
+    .cross(heldWeaponFirstPersonCameraTargetLookDirectionScratch)
+    .normalize();
+  heldWeaponFirstPersonCameraTargetPositionScratch
+    .copy(heldWeaponAttachmentGripWorldPositionScratch)
+    .addScaledVector(
+      heldWeaponFirstPersonCameraTargetLookDirectionScratch,
+      -heldWeaponFirstPersonCameraBackOffsetMeters
+    )
+    .addScaledVector(
+      heldWeaponFirstPersonCameraTargetUpDirectionScratch,
+      heldWeaponFirstPersonCameraUpOffsetMeters
+    )
+    .addScaledVector(
+      heldWeaponFirstPersonCameraTargetAcrossDirectionScratch,
+      -heldWeaponFirstPersonCameraSideOffsetMeters
+    );
+
+  if (!cameraRuntime.settled || deltaSeconds <= 0) {
+    cameraRuntime.settledPosition.copy(
+      heldWeaponFirstPersonCameraTargetPositionScratch
+    );
+    cameraRuntime.settledLookDirection.copy(
+      heldWeaponFirstPersonCameraTargetLookDirectionScratch
+    );
+    cameraRuntime.settled = true;
+  } else {
+    const positionBlendAlpha =
+      1 -
+      Math.exp(
+        -heldWeaponFirstPersonCameraPositionBlendRatePerSecond * deltaSeconds
+      );
+    const lookBlendAlpha =
+      1 -
+      Math.exp(-heldWeaponFirstPersonCameraLookBlendRatePerSecond * deltaSeconds);
+
+    cameraRuntime.settledPosition.lerp(
+      heldWeaponFirstPersonCameraTargetPositionScratch,
+      positionBlendAlpha
+    );
+    cameraRuntime.settledLookDirection.lerp(
+      heldWeaponFirstPersonCameraTargetLookDirectionScratch,
+      lookBlendAlpha
+    );
+
+    if (
+      cameraRuntime.settledLookDirection.lengthSq() <=
+      heldWeaponSolveDirectionEpsilon
+    ) {
+      cameraRuntime.settledLookDirection.copy(
+        heldWeaponFirstPersonCameraTargetLookDirectionScratch
+      );
+    } else {
+      cameraRuntime.settledLookDirection.normalize();
+    }
+  }
+
+  syncCamera(camera, cameraSnapshot);
+}
+
 function createHemisphereLight(
   config: MetaverseRuntimeConfig
 ): HemisphereLight {
@@ -3954,6 +4551,8 @@ export function createMetaverseScene(
     string,
     DynamicEnvironmentPoseSnapshot
   >();
+  const heldWeaponFirstPersonCameraRuntime =
+    createHeldWeaponFirstPersonCameraRuntime();
   const remoteCharacterRuntimesByPlayerId = new Map<
     string,
     MetaverseRemoteCharacterPresentationRuntime
@@ -4270,6 +4869,7 @@ export function createMetaverseScene(
       }
 
       dynamicEnvironmentPoseOverrides.clear();
+      resetHeldWeaponFirstPersonCameraRuntime(heldWeaponFirstPersonCameraRuntime);
       for (const remoteCharacterRuntime of remoteCharacterRuntimesByPlayerId.values()) {
         remoteCharacterRuntime.characterRuntime.anchorGroup.parent?.remove(
           remoteCharacterRuntime.characterRuntime.anchorGroup
@@ -4297,11 +4897,13 @@ export function createMetaverseScene(
     ) {
       syncCamera(camera, cameraSnapshot);
       if (characterProofRuntime !== null) {
-        if (characterProofRuntime.heldWeaponPoseRuntime !== null) {
-          restoreHumanoidV2HeldWeaponPoseRuntime(
-            characterProofRuntime.heldWeaponPoseRuntime
-          );
-        }
+        const useHumanoidV2PistolLayering =
+          attachmentProofRuntime !== null &&
+          attachmentProofRuntime.activeMountKind === "held" &&
+          characterPresentation !== null &&
+          mountedCharacterRuntime === null &&
+          characterProofRuntime.humanoidV2PistolPoseRuntime !== null;
+
         syncCharacterAnimation(
           characterProofRuntime,
           resolveHeldCharacterAnimationVocabulary(
@@ -4309,8 +4911,22 @@ export function createMetaverseScene(
             attachmentProofRuntime,
             characterPresentation?.animationVocabulary ?? "idle",
             mountedCharacterRuntime
-          )
+          ),
+          useHumanoidV2PistolLayering
         );
+        if (characterProofRuntime.humanoidV2PistolPoseRuntime !== null) {
+          if (useHumanoidV2PistolLayering) {
+            syncHumanoidV2PistolPoseWeights(
+              characterProofRuntime.humanoidV2PistolPoseRuntime,
+              cameraSnapshot.pitchRadians,
+              config.orientation
+            );
+          } else {
+            clearHumanoidV2PistolPoseWeights(
+              characterProofRuntime.humanoidV2PistolPoseRuntime
+            );
+          }
+        }
         characterProofRuntime.mixer.update(deltaSeconds);
       }
       if (environmentProofRuntime !== null) {
@@ -4353,16 +4969,32 @@ export function createMetaverseScene(
         characterPresentation !== null &&
         mountedCharacterRuntime === null
       ) {
+        restoreHumanoidV2HeldWeaponPoseRuntime(
+          characterProofRuntime.heldWeaponPoseRuntime
+        );
+        characterProofRuntime.anchorGroup.updateMatrixWorld(true);
         syncHumanoidV2HeldWeaponPose(
           characterProofRuntime,
           characterProofRuntime.heldWeaponPoseRuntime,
           attachmentProofRuntime,
           cameraSnapshot
         );
+        syncHeldWeaponFirstPersonCamera(
+          camera,
+          heldWeaponFirstPersonCameraRuntime,
+          attachmentProofRuntime,
+          cameraSnapshot,
+          deltaSeconds
+        );
+      } else {
+        resetHeldWeaponFirstPersonCameraRuntime(
+          heldWeaponFirstPersonCameraRuntime
+        );
       }
       syncRemoteCharacterPresentations(
         scene,
         characterProofRuntime,
+        config.orientation,
         resolveMountedEnvironmentRuntime,
         remoteCharacterRuntimesByPlayerId,
         remoteCharacterPresentations,

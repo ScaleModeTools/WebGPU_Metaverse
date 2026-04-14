@@ -441,6 +441,7 @@ export class WebGpuMetaverseRuntime {
     );
     this.#traversalRuntime = new MetaverseTraversalRuntime(config, {
       groundedBodyRuntime: this.#groundedBodyRuntime,
+      physicsRuntime: this.#physicsRuntime,
       readDynamicEnvironmentPose: (environmentAssetId) =>
         this.#sceneRuntime.readDynamicEnvironmentPose(environmentAssetId),
       readMountedEnvironmentAnchorSnapshot: (mountedEnvironment) =>
@@ -454,6 +455,18 @@ export class WebGpuMetaverseRuntime {
             environmentAsset.traversalAffordance === "mount" &&
             environmentAsset.seats !== null
         ) ?? null,
+      resolveGroundedTraversalFilterPredicate: (excludedColliders = []) =>
+        this.#environmentPhysicsRuntime.resolveGroundedTraversalFilterPredicate(
+          excludedColliders
+        ),
+      resolveWaterborneTraversalFilterPredicate: (
+        excludedOwnerEnvironmentAssetId = null,
+        excludedColliders = []
+      ) =>
+        this.#environmentPhysicsRuntime.resolveWaterborneTraversalFilterPredicate(
+          excludedOwnerEnvironmentAssetId,
+          excludedColliders
+        ),
       setDynamicEnvironmentPose: (environmentAssetId, poseSnapshot) => {
         this.#environmentPhysicsRuntime.setDynamicEnvironmentPose(
           environmentAssetId,
@@ -1021,7 +1034,7 @@ export class WebGpuMetaverseRuntime {
     }
 
     const authoritativeLocalPlayerSnapshot =
-      this.#remoteWorldRuntime.readFreshAckedAuthoritativeLocalPlayerSnapshot(
+      this.#remoteWorldRuntime.readFreshAckedAuthoritativeLocalPlayerPoseForReconciliation(
         metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
       );
 

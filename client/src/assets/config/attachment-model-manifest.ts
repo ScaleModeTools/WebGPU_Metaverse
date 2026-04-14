@@ -37,7 +37,7 @@ export const attachmentModelManifest = defineAttachmentAssetManifest([
       },
       socketOffset: {
         x: 0,
-        y: 0,
+        y: 0.03,
         z: 0
       },
       socketUpAxis: {
@@ -46,7 +46,9 @@ export const attachmentModelManifest = defineAttachmentAssetManifest([
         z: 0
       }
     },
-    offHandSupportPointIdBySocketId: null,
+    offHandSupportPointIdBySocketId: {
+      hand_r_socket: "grip-support-right"
+    },
     mountedHolster: {
       socketName: "back_socket",
       gripAlignment: {
@@ -72,6 +74,15 @@ export const attachmentModelManifest = defineAttachmentAssetManifest([
         }
       }
     },
-    supportPoints: null
+    supportPoints: [
+      {
+        supportPointId: "grip-support-right",
+        localPosition: {
+          x: 0.04,
+          y: 0,
+          z: -0.025
+        }
+      }
+    ]
   }
 ] as const);

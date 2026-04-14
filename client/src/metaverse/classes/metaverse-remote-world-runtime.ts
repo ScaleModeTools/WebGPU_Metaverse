@@ -10,6 +10,7 @@ import type {
   MetaverseSyncPlayerTraversalIntentCommandInput,
   MetaverseVehicleId
 } from "@webgpu-metaverse/shared";
+import { createRadians } from "@webgpu-metaverse/shared";
 
 import type {
   AuthoritativeServerClockConfig,
@@ -644,40 +645,69 @@ export class MetaverseRemoteWorldRuntime {
   readFreshAuthoritativeLocalPlayerSnapshot(
     maxAuthoritativeSnapshotAgeMs: number
   ): MetaverseRealtimePlayerSnapshot | null {
-    const latestWorldSnapshot = this.#readFreshLatestWorldSnapshot(
-      maxAuthoritativeSnapshotAgeMs
-    );
-
-    if (latestWorldSnapshot === null || this.#localPlayerIdentity === null) {
-      return null;
-    }
-
-    this.#syncLatestWorldSnapshotIndexes(latestWorldSnapshot);
-
-    return this.#latestPlayerSnapshotsByPlayerId.get(
-      this.#localPlayerIdentity.playerId
-    ) ?? null;
+    return this.#readFreshLocalPlayerSnapshot(maxAuthoritativeSnapshotAgeMs)
+      ?.playerSnapshot ?? null;
   }
 
   readFreshAckedAuthoritativeLocalPlayerSnapshot(
     maxAuthoritativeSnapshotAgeMs: number
   ): MetaverseRealtimePlayerSnapshot | null {
-    const authoritativeLocalPlayerSnapshot =
-      this.readFreshAuthoritativeLocalPlayerSnapshot(
-        maxAuthoritativeSnapshotAgeMs
-      );
-    const latestPlayerInputSequence =
-      this.#metaverseWorldClient?.latestPlayerInputSequence ?? 0;
+    return this.#readFreshAckedLocalPlayerSnapshot(maxAuthoritativeSnapshotAgeMs)
+      ?.playerSnapshot ?? null;
+  }
 
-    if (
-      authoritativeLocalPlayerSnapshot === null ||
-      authoritativeLocalPlayerSnapshot.lastProcessedInputSequence <
-        latestPlayerInputSequence
-    ) {
+  readFreshAckedAuthoritativeLocalPlayerPoseForReconciliation(
+    maxAuthoritativeSnapshotAgeMs: number
+  ): Pick<
+    MetaverseRealtimePlayerSnapshot,
+    | "linearVelocity"
+    | "locomotionMode"
+    | "mountedOccupancy"
+    | "position"
+    | "yawRadians"
+  > | null {
+    const freshAckedLocalPlayerSnapshot = this.#readFreshAckedLocalPlayerSnapshot(
+      maxAuthoritativeSnapshotAgeMs
+    );
+
+    if (freshAckedLocalPlayerSnapshot === null) {
       return null;
     }
 
-    return authoritativeLocalPlayerSnapshot;
+    const { latestWorldSnapshot, playerSnapshot } = freshAckedLocalPlayerSnapshot;
+    const extrapolationSeconds =
+      this.#readLatestWorldSnapshotExtrapolationSeconds(latestWorldSnapshot);
+
+    if (extrapolationSeconds <= 0) {
+      return {
+        linearVelocity: playerSnapshot.linearVelocity,
+        locomotionMode: playerSnapshot.locomotionMode,
+        mountedOccupancy: playerSnapshot.mountedOccupancy,
+        position: playerSnapshot.position,
+        yawRadians: playerSnapshot.yawRadians
+      };
+    }
+
+    return {
+      linearVelocity: playerSnapshot.linearVelocity,
+      locomotionMode: playerSnapshot.locomotionMode,
+      mountedOccupancy: playerSnapshot.mountedOccupancy,
+      position: sampleRemotePlayerPositionInto(
+        createMutableVector3(),
+        playerSnapshot,
+        null,
+        0,
+        extrapolationSeconds
+      ),
+      yawRadians: createRadians(
+        sampleRemotePlayerYawRadians(
+          playerSnapshot,
+          null,
+          0,
+          extrapolationSeconds
+        )
+      )
+    };
   }
 
   readFreshAuthoritativeVehicleSnapshot(
@@ -1184,6 +1214,79 @@ export class MetaverseRemoteWorldRuntime {
       Math.max(0, maxAuthoritativeSnapshotAgeMs)
       ? null
       : latestWorldSnapshot;
+  }
+
+  #readFreshLocalPlayerSnapshot(
+    maxAuthoritativeSnapshotAgeMs: number
+  ): {
+    readonly latestWorldSnapshot: MetaverseRealtimeWorldSnapshot;
+    readonly playerSnapshot: MetaverseRealtimePlayerSnapshot;
+  } | null {
+    const latestWorldSnapshot = this.#readFreshLatestWorldSnapshot(
+      maxAuthoritativeSnapshotAgeMs
+    );
+
+    if (latestWorldSnapshot === null || this.#localPlayerIdentity === null) {
+      return null;
+    }
+
+    this.#syncLatestWorldSnapshotIndexes(latestWorldSnapshot);
+    const playerSnapshot =
+      this.#latestPlayerSnapshotsByPlayerId.get(
+        this.#localPlayerIdentity.playerId
+      ) ?? null;
+
+    if (playerSnapshot === null) {
+      return null;
+    }
+
+    return {
+      latestWorldSnapshot,
+      playerSnapshot
+    };
+  }
+
+  #readFreshAckedLocalPlayerSnapshot(
+    maxAuthoritativeSnapshotAgeMs: number
+  ): {
+    readonly latestWorldSnapshot: MetaverseRealtimeWorldSnapshot;
+    readonly playerSnapshot: MetaverseRealtimePlayerSnapshot;
+  } | null {
+    const freshLocalPlayerSnapshot = this.#readFreshLocalPlayerSnapshot(
+      maxAuthoritativeSnapshotAgeMs
+    );
+    const latestPlayerInputSequence =
+      this.#metaverseWorldClient?.latestPlayerInputSequence ?? 0;
+
+    if (
+      freshLocalPlayerSnapshot === null ||
+      freshLocalPlayerSnapshot.playerSnapshot.lastProcessedInputSequence <
+        latestPlayerInputSequence
+    ) {
+      return null;
+    }
+
+    return freshLocalPlayerSnapshot;
+  }
+
+  #readLatestWorldSnapshotExtrapolationSeconds(
+    latestWorldSnapshot: MetaverseRealtimeWorldSnapshot
+  ): number {
+    const localWallClockMs = this.#readWallClockMs();
+
+    this.#authoritativeServerClock.observeServerTime(
+      Number(latestWorldSnapshot.tick.emittedAtServerTimeMs),
+      localWallClockMs
+    );
+
+    const extrapolationMs = clamp(
+      this.#authoritativeServerClock.readEstimatedServerTimeMs(localWallClockMs) -
+        Number(latestWorldSnapshot.tick.simulationTimeMs),
+      0,
+      this.#samplingConfig.maxExtrapolationMs
+    );
+
+    return extrapolationMs / 1000;
   }
 
   #syncLatestWorldSnapshotIndexes(

@@ -58,8 +58,9 @@ class FakeColliderDesc {
 }
 
 class FakeCollider {
-  constructor(shape, payload, translation) {
+  constructor(shape, payload, translation, rotation = { x: 0, y: 0, z: 0, w: 1 }) {
     this.payload = payload;
+    this.rotationQuaternion = rotation;
     this.shape = shape;
     this.translationVector = translation;
   }
@@ -68,6 +69,22 @@ class FakeCollider {
     return this.shape === "capsule"
       ? this.payload.halfHeight + this.payload.radius
       : 0;
+  }
+
+  get bottomOffset() {
+    return this.shape === "capsule"
+      ? this.standingOffset
+      : (this.payload.halfExtentY ?? 0);
+  }
+
+  get topOffset() {
+    return this.shape === "capsule"
+      ? this.standingOffset
+      : (this.payload.halfExtentY ?? 0);
+  }
+
+  setRotation(rotation) {
+    this.rotationQuaternion = rotation;
   }
 
   setTranslation(translation) {
@@ -93,16 +110,25 @@ class FakeCharacterController {
     this.world = world;
   }
 
-  computeColliderMovement(collider, desiredTranslationDelta) {
+  computeColliderMovement(
+    collider,
+    desiredTranslationDelta,
+    _filterFlags,
+    _filterGroups,
+    filterPredicate
+  ) {
     const currentTranslation = collider.translation();
-    const currentFootY = currentTranslation.y - collider.standingOffset;
-    const capsuleRadius = collider.payload.radius ?? 0;
+    const currentFootY = currentTranslation.y - collider.bottomOffset;
+    const capsuleRadius =
+      collider.payload.radius ??
+      Math.max(collider.payload.halfExtentX ?? 0, collider.payload.halfExtentZ ?? 0);
     let nextCenterX = currentTranslation.x + desiredTranslationDelta.x;
     let nextCenterZ = currentTranslation.z + desiredTranslationDelta.z;
     const proposedSurfaceY = this.findSurfaceY(
       nextCenterX,
       nextCenterZ,
-      capsuleRadius
+      capsuleRadius,
+      filterPredicate
     );
 
     if (
@@ -118,7 +144,8 @@ class FakeCharacterController {
     const supportingSurfaceY = this.findSurfaceY(
       nextCenterX,
       nextCenterZ,
-      capsuleRadius
+      capsuleRadius,
+      filterPredicate
     );
     const desiredFootY = currentFootY + desiredTranslationDelta.y;
     let nextFootY = desiredFootY;
@@ -140,12 +167,22 @@ class FakeCharacterController {
       }
     }
 
-    const nextCenterY = nextFootY + collider.standingOffset;
+    const nextCenterY = nextFootY + collider.bottomOffset;
+    const blockedPlanarPosition = this.resolveBlockedPlanarPosition(
+      collider,
+      currentTranslation,
+      {
+        x: nextCenterX,
+        y: nextCenterY,
+        z: nextCenterZ
+      },
+      filterPredicate
+    );
 
     this.lastMovement = new FakeRapierVector3(
-      nextCenterX - currentTranslation.x,
+      blockedPlanarPosition.x - currentTranslation.x,
       nextCenterY - currentTranslation.y,
-      nextCenterZ - currentTranslation.z
+      blockedPlanarPosition.z - currentTranslation.z
     );
     this.grounded =
       supportingSurfaceY !== null &&
@@ -183,10 +220,17 @@ class FakeCharacterController {
 
   setMinSlopeSlideAngle() {}
 
-  findSurfaceY(centerX, centerZ, capsuleRadius) {
+  findSurfaceY(centerX, centerZ, capsuleRadius, filterPredicate = undefined) {
     let highestSurfaceY = null;
 
     for (const candidate of this.world.queryColliders) {
+      if (
+        candidate === undefined ||
+        (filterPredicate !== undefined && !filterPredicate(candidate))
+      ) {
+        continue;
+      }
+
       if (candidate.shape !== "cuboid") {
         continue;
       }
@@ -212,6 +256,66 @@ class FakeCharacterController {
 
     return highestSurfaceY;
   }
+
+  resolveBlockedPlanarPosition(
+    collider,
+    currentTranslation,
+    proposedTranslation,
+    filterPredicate = undefined
+  ) {
+    const colliderHalfExtentX =
+      collider.payload.radius ?? (collider.payload.halfExtentX ?? 0);
+    const colliderHalfExtentY = collider.bottomOffset;
+    const colliderHalfExtentZ =
+      collider.payload.radius ?? (collider.payload.halfExtentZ ?? 0);
+    const currentBottomY = proposedTranslation.y - colliderHalfExtentY;
+    const currentTopY = proposedTranslation.y + collider.topOffset;
+
+    for (const candidate of this.world.queryColliders) {
+      if (
+        candidate === collider ||
+        candidate.shape !== "cuboid" ||
+        (filterPredicate !== undefined && !filterPredicate(candidate))
+      ) {
+        continue;
+      }
+
+      const candidateTranslation = candidate.translation();
+      const candidateHalfExtentX = candidate.payload.halfExtentX ?? 0;
+      const candidateHalfExtentY = candidate.payload.halfExtentY ?? 0;
+      const candidateHalfExtentZ = candidate.payload.halfExtentZ ?? 0;
+      const candidateBottomY = candidateTranslation.y - candidateHalfExtentY;
+      const candidateTopY = candidateTranslation.y + candidateHalfExtentY;
+
+      if (
+        currentTopY <= candidateBottomY ||
+        currentBottomY >= candidateTopY ||
+        candidateTopY <= currentBottomY + this.snapDistance
+      ) {
+        continue;
+      }
+
+      const intersectsProposedPosition =
+        Math.abs(proposedTranslation.x - candidateTranslation.x) <=
+          candidateHalfExtentX + colliderHalfExtentX &&
+        Math.abs(proposedTranslation.z - candidateTranslation.z) <=
+          candidateHalfExtentZ + colliderHalfExtentZ;
+
+      if (!intersectsProposedPosition) {
+        continue;
+      }
+
+      return Object.freeze({
+        x: currentTranslation.x,
+        z: currentTranslation.z
+      });
+    }
+
+    return Object.freeze({
+      x: proposedTranslation.x,
+      z: proposedTranslation.z
+    });
+  }
 }
 
 class FakeRapierWorld {
@@ -229,7 +333,8 @@ class FakeRapierWorld {
     const collider = new FakeCollider(
       colliderDesc.shape,
       colliderDesc.payload,
-      colliderDesc.translation
+      colliderDesc.translation,
+      colliderDesc.rotation
     );
 
     this.colliders.push(collider);
@@ -363,6 +468,7 @@ async function createTraversalHarness(options = {}) {
   const surfaceColliderSnapshots = (options.surfaceColliderSnapshots ?? []).map(
     (collider) =>
       Object.freeze({
+        ownerEnvironmentAssetId: collider.ownerEnvironmentAssetId ?? null,
         traversalAffordance: collider.traversalAffordance ?? "support",
         halfExtents: collider.halfExtents,
         rotationYRadians: collider.rotationYRadians ?? 0,
@@ -371,22 +477,32 @@ async function createTraversalHarness(options = {}) {
       })
   );
   const physicsRuntime = createFakePhysicsRuntime(RapierPhysicsRuntime);
+  const colliderMetadataByHandle = new Map();
 
   await physicsRuntime.init();
 
   const groundCollider = createGroundColliderConfig(config);
 
-  physicsRuntime.createFixedCuboidCollider(
+  const groundColliderHandle = physicsRuntime.createFixedCuboidCollider(
     groundCollider.halfExtents,
     groundCollider.translation
   );
+  colliderMetadataByHandle.set(
+    groundColliderHandle,
+    Object.freeze({
+      ownerEnvironmentAssetId: null,
+      traversalAffordance: "support"
+    })
+  );
 
   for (const collider of surfaceColliderSnapshots) {
-    physicsRuntime.createFixedCuboidCollider(
+    const colliderHandle = physicsRuntime.createFixedCuboidCollider(
       collider.halfExtents,
       collider.translation,
       collider.rotation
     );
+
+    colliderMetadataByHandle.set(colliderHandle, collider);
   }
 
   const groundedBodyRuntime = new MetaverseGroundedBodyRuntime(
@@ -410,6 +526,11 @@ async function createTraversalHarness(options = {}) {
     Object.keys(options.dynamicEnvironmentPoses ?? {}).map((environmentAssetId) => [
       environmentAssetId,
       Object.freeze({
+        collider: Object.freeze({
+          center: freezeVector3(0, 0.72, 0),
+          shape: "box",
+          size: freezeVector3(3, 1.44, 2)
+        }),
         entries: null,
         environmentAssetId,
         label: "Mounted vehicle",
@@ -437,6 +558,13 @@ async function createTraversalHarness(options = {}) {
     mountableEnvironmentConfigById.set(
       environmentAssetId,
       Object.freeze({
+        collider:
+          seatConfig.collider ??
+          Object.freeze({
+            center: freezeVector3(0, 0.72, 0),
+            shape: "box",
+            size: freezeVector3(3, 1.44, 2)
+          }),
         entries: Object.freeze(seatConfig.entries ?? []),
         environmentAssetId,
         label: seatConfig.label ?? "Mounted vehicle",
@@ -446,6 +574,7 @@ async function createTraversalHarness(options = {}) {
   }
   const traversalRuntime = new MetaverseTraversalRuntime(config, {
     groundedBodyRuntime,
+    physicsRuntime,
     readDynamicEnvironmentPose(environmentAssetId) {
       return dynamicPoseMap.get(environmentAssetId) ?? null;
     },
@@ -474,6 +603,39 @@ async function createTraversalHarness(options = {}) {
     },
     readMountableEnvironmentConfig(environmentAssetId) {
       return mountableEnvironmentConfigById.get(environmentAssetId) ?? null;
+    },
+    resolveGroundedTraversalFilterPredicate(excludedColliders = []) {
+      const excludedColliderSet = new Set(excludedColliders);
+
+      return (collider) => !excludedColliderSet.has(collider);
+    },
+    resolveWaterborneTraversalFilterPredicate(
+      excludedOwnerEnvironmentAssetId = null,
+      excludedColliders = []
+    ) {
+      const excludedColliderSet = new Set(excludedColliders);
+
+      return (collider) => {
+        if (excludedColliderSet.has(collider)) {
+          return false;
+        }
+
+        const colliderMetadata = colliderMetadataByHandle.get(collider);
+
+        if (colliderMetadata === undefined) {
+          return true;
+        }
+
+        if (colliderMetadata.traversalAffordance === "support") {
+          return false;
+        }
+
+        return (
+          excludedOwnerEnvironmentAssetId === null ||
+          colliderMetadata.ownerEnvironmentAssetId !==
+            excludedOwnerEnvironmentAssetId
+        );
+      };
     },
     setDynamicEnvironmentPose(environmentAssetId, poseSnapshot) {
       dynamicPoseWrites.push({

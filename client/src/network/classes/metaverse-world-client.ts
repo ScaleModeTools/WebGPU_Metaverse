@@ -251,6 +251,7 @@ export class MetaverseWorldClient {
   #playerTraversalInputSyncInFlight = false;
   #pollHandle: TimeoutHandle | null = null;
   #latestWinsDatagramFallbackRecoveryHandle: TimeoutHandle | null = null;
+  #snapshotStreamDeliveredAcceptedWorldEvent = false;
   #snapshotStreamLastError: string | null = null;
   #snapshotStreamReconnectCount = 0;
   #snapshotStreamReconnectHandle: TimeoutHandle | null = null;
@@ -621,6 +622,7 @@ export class MetaverseWorldClient {
     this.#cancelScheduledLatestWinsDatagramFallbackRecovery();
     this.#cancelScheduledSnapshotStreamReconnect();
     this.#closeSnapshotStreamSubscription();
+    this.#snapshotStreamDeliveredAcceptedWorldEvent = false;
     this.#statusSnapshot = freezeStatusSnapshot(
       this.#playerId,
       "disposed",
@@ -657,6 +659,8 @@ export class MetaverseWorldClient {
 
         if (this.#snapshotStreamTransport === null) {
           this.#schedulePoll(0);
+        } else if (this.#shouldUsePollingHappyPath()) {
+          this.#schedulePoll(this.#resolvePollDelayMs());
         }
       }
 
@@ -810,8 +814,8 @@ export class MetaverseWorldClient {
       this.#snapshotStreamLastError !== null ||
       this.#snapshotStreamReconnectHandle !== null;
 
+    this.#snapshotStreamDeliveredAcceptedWorldEvent = false;
     this.#usingSnapshotStreamFallback = false;
-    this.#cancelScheduledPoll();
     this.#cancelScheduledSnapshotStreamReconnect();
     this.#snapshotStreamSubscription =
       this.#snapshotStreamTransport.subscribeWorldSnapshots(playerId, {
@@ -834,12 +838,18 @@ export class MetaverseWorldClient {
           const transportStatusChangedOnEvent =
             this.#usingSnapshotStreamFallback ||
             this.#snapshotStreamLastError !== null ||
-            this.#snapshotStreamReconnectHandle !== null;
+            this.#snapshotStreamReconnectHandle !== null ||
+            !this.#snapshotStreamDeliveredAcceptedWorldEvent;
 
           this.#usingSnapshotStreamFallback = false;
           this.#snapshotStreamLastError = null;
           const acceptedWorldEvent = this.#applyWorldEvent(worldEvent);
-          this.#cancelScheduledPoll();
+
+          if (acceptedWorldEvent) {
+            this.#snapshotStreamDeliveredAcceptedWorldEvent = true;
+            this.#cancelScheduledPoll();
+          }
+
           this.#cancelScheduledSnapshotStreamReconnect();
 
           if (transportStatusChangedOnEvent && !acceptedWorldEvent) {
@@ -1289,6 +1299,7 @@ export class MetaverseWorldClient {
     }
 
     this.#snapshotStreamSubscription = null;
+    this.#snapshotStreamDeliveredAcceptedWorldEvent = false;
     this.#snapshotStreamLastError = message.trim().length > 0 ? message : null;
     this.#usingSnapshotStreamFallback = true;
     this.#schedulePoll(0);
@@ -1370,7 +1381,9 @@ export class MetaverseWorldClient {
 
   #shouldUsePollingHappyPath(): boolean {
     return (
-      this.#snapshotStreamTransport === null || this.#usingSnapshotStreamFallback
+      this.#snapshotStreamTransport === null ||
+      this.#usingSnapshotStreamFallback ||
+      !this.#snapshotStreamDeliveredAcceptedWorldEvent
     );
   }
 

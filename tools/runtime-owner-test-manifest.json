@@ -79,6 +79,13 @@
       ]
     },
     {
+      "ownerPath": "client/src/physics/classes/metaverse-surface-drive-body-runtime.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse-traversal-runtime.test.mjs",
+        "tests/runtime/client/metaverse-runtime.test.mjs"
+      ]
+    },
+    {
       "ownerPath": "client/src/physics/classes/metaverse-dynamic-cuboid-body-runtime.ts",
       "testPaths": [
         "tests/runtime/client/metaverse-grounded-body-runtime.test.mjs"
@@ -279,6 +286,24 @@
     },
     {
       "ownerPath": "server/src/metaverse/classes/metaverse-authoritative-world-runtime.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse-authoritative-world-runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/classes/metaverse-authoritative-rapier-physics-runtime.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse-authoritative-world-runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/classes/metaverse-authoritative-grounded-body-runtime.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse-authoritative-world-runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/classes/metaverse-authoritative-surface-drive-runtime.ts",
       "testPaths": [
         "tests/runtime/server/metaverse-authoritative-world-runtime.test.mjs"
       ]

@@ -1,8 +1,5 @@
 import {
-  advanceMetaverseSurfaceTraversalMotion,
-  advanceMetaverseSurfaceTraversalSnapshot,
   clamp,
-  constrainMetaverseSurfaceTraversalPositionToWorldRadius,
   wrapRadians,
   MetaverseMovementAnimationPolicyRuntime,
   createMetaverseSyncDriverVehicleControlCommand,
@@ -17,6 +14,7 @@ import {
   createMetaverseRealtimeWorldEvent,
   createMetaverseRealtimeWorldSnapshot,
   createMetaverseVehicleId,
+  metaverseWorldLayout,
   type MetaverseRealtimeWorldClientCommand,
   type MetaverseJoinPresenceCommand,
   type MetaverseLeavePresenceCommand,
@@ -48,12 +46,19 @@ import {
 } from "../config/metaverse-authoritative-world-surface.js";
 import { metaverseAuthoritativeWorldRuntimeConfig } from "../config/metaverse-authoritative-world-runtime.js";
 import {
-  constrainAuthoritativePlanarPositionAgainstBlockers,
   resolveAuthoritativeAutomaticSurfaceLocomotionMode,
   resolveAuthoritativeGroundedAutostepHeightMeters,
   resolveAuthoritativeWaterSurfaceHeightMeters,
   type MetaverseAuthoritativeSurfaceConfig
 } from "../states/metaverse-authoritative-surface.js";
+import {
+  MetaverseAuthoritativeGroundedBodyRuntime,
+  type MetaverseAuthoritativeGroundedBodyConfig,
+  type MetaverseAuthoritativeGroundedBodySnapshot
+} from "./metaverse-authoritative-grounded-body-runtime.js";
+import { MetaverseAuthoritativeRapierPhysicsRuntime } from "./metaverse-authoritative-rapier-physics-runtime.js";
+import { MetaverseAuthoritativeSurfaceDriveRuntime } from "./metaverse-authoritative-surface-drive-runtime.js";
+import type { PhysicsVector3Snapshot, RapierColliderHandle } from "../types/metaverse-authoritative-rapier.js";
 import type { MetaverseAuthoritativeWorldRuntimeConfig } from "../types/metaverse-authoritative-world-runtime.js";
 
 interface MetaversePlayerWorldRuntimeState {
@@ -61,6 +66,7 @@ interface MetaversePlayerWorldRuntimeState {
   readonly animationRuntime: MetaverseMovementAnimationPolicyRuntime;
   readonly characterId: string;
   forwardSpeedUnitsPerSecond: number;
+  readonly groundedBodyRuntime: MetaverseAuthoritativeGroundedBodyRuntime;
   lastProcessedLookSequence: number;
   lastProcessedInputSequence: number;
   lastProcessedJumpActionSequence: number;
@@ -83,6 +89,7 @@ interface MetaversePlayerWorldRuntimeState {
   realtimeWorldAuthorityActive: boolean;
   stateSequence: number;
   strafeSpeedUnitsPerSecond: number;
+  readonly swimBodyRuntime: MetaverseAuthoritativeSurfaceDriveRuntime;
   yawRadians: number;
 }
 
@@ -102,6 +109,7 @@ interface MetaverseVehicleSeatRuntimeState {
 }
 
 interface MetaverseVehicleWorldRuntimeState {
+  readonly driveRuntime: MetaverseAuthoritativeSurfaceDriveRuntime;
   readonly environmentAssetId: string;
   readonly seatsById: Map<string, MetaverseVehicleSeatRuntimeState>;
   readonly vehicleId: NonNullable<ReturnType<typeof createMetaverseVehicleId>>;
@@ -159,7 +167,7 @@ const metaverseAuthoritativeVehicleSurfaceDriveConfig = Object.freeze({
   dragCurveExponent: 1.3,
   maxTurnSpeedRadiansPerSecond: 0.95,
   worldRadius: 110
-});
+} satisfies MetaverseAuthoritativeSurfaceTraversalConfig);
 
 const metaverseAuthoritativeGroundedTraversalConfig = Object.freeze({
   accelerationCurveExponent: 1.22,
@@ -194,8 +202,34 @@ const metaverseAuthoritativeGroundedBodyConfig = Object.freeze({
   oceanHeightMeters: metaverseAuthoritativeOceanHeightMeters,
   stepHeightMeters: 0.28
 } satisfies MetaverseAuthoritativeSurfaceConfig);
-const metaverseAuthoritativeGroundedGravityUnitsPerSecond = 18;
-const metaverseAuthoritativeGroundedJumpImpulseUnitsPerSecond = 6.8;
+const metaverseAuthoritativeGroundedBodyRuntimeConfig = Object.freeze({
+  accelerationCurveExponent: 1.22,
+  accelerationUnitsPerSecondSquared: 22,
+  airborneMovementDampingFactor: 0.42,
+  baseSpeedUnitsPerSecond: 8.5,
+  boostCurveExponent: 1.08,
+  boostMultiplier: 1.75,
+  capsuleHalfHeightMeters: 0.48,
+  capsuleRadiusMeters: 0.34,
+  controllerOffsetMeters: 0.02,
+  decelerationUnitsPerSecondSquared: 30,
+  dragCurveExponent: 1.5,
+  gravityUnitsPerSecond: 18,
+  jumpImpulseUnitsPerSecond: 6.8,
+  maxSlopeClimbAngleRadians: Math.PI * 0.26,
+  maxTurnSpeedRadiansPerSecond: 3.6,
+  minSlopeSlideAngleRadians: Math.PI * 0.34,
+  snapToGroundDistanceMeters: 0.22,
+  spawnPosition: Object.freeze({
+    x: 0,
+    y: 0,
+    z: 0
+  }),
+  stepHeightMeters: 0.28,
+  stepWidthMeters: 0.24,
+  worldRadius: 110
+} satisfies MetaverseAuthoritativeGroundedBodyConfig);
+const metaverseAuthoritativeCapsuleControllerOffsetMeters = 0.02;
 const metaverseAuthoritativeGroundedSnapToleranceMeters = 0.0001;
 const metaverseAuthoritativeUnmountedPlayerLookConstraintBounds = Object.freeze({
   maxPitchRadians: 0.6,
@@ -359,16 +393,79 @@ function createMountedOccupancyRuntimeState(
   });
 }
 
+function createPhysicsVector3Snapshot(
+  x: number,
+  y: number,
+  z: number
+): PhysicsVector3Snapshot {
+  return Object.freeze({
+    x,
+    y,
+    z
+  });
+}
+
+function createPlayerLinearVelocitySnapshot(
+  playerRuntime: Pick<
+    MetaversePlayerWorldRuntimeState,
+    "linearVelocityX" | "linearVelocityY" | "linearVelocityZ"
+  >
+): PhysicsVector3Snapshot {
+  return createPhysicsVector3Snapshot(
+    playerRuntime.linearVelocityX,
+    playerRuntime.linearVelocityY,
+    playerRuntime.linearVelocityZ
+  );
+}
+
+function resolveVehicleDriveColliderShape(
+  environmentAssetId: string
+): {
+  readonly halfExtents: PhysicsVector3Snapshot;
+  readonly localCenter: PhysicsVector3Snapshot;
+} {
+  const surfaceAsset = metaverseWorldLayout.readSurfaceAsset(environmentAssetId);
+  const blockerCollider =
+    surfaceAsset?.surfaceColliders.find(
+      (surfaceCollider) => surfaceCollider.traversalAffordance === "blocker"
+    ) ?? null;
+
+  if (surfaceAsset === null || blockerCollider === null) {
+    throw new Error(
+      `Metaverse authoritative world requires blocker collider authoring for ${environmentAssetId}.`
+    );
+  }
+
+  return Object.freeze({
+    halfExtents: createPhysicsVector3Snapshot(
+      Math.abs(blockerCollider.size.x) * 0.5,
+      Math.abs(blockerCollider.size.y) * 0.5,
+      Math.abs(blockerCollider.size.z) * 0.5
+    ),
+    localCenter: createPhysicsVector3Snapshot(
+      blockerCollider.center.x,
+      blockerCollider.center.y,
+      blockerCollider.center.z
+    )
+  });
+}
+
 export class MetaverseAuthoritativeWorldRuntime {
+  readonly #colliderTraversalAffordancesByHandle = new Map<
+    RapierColliderHandle,
+    MetaverseAuthoritativeSurfaceColliderSnapshot["traversalAffordance"]
+  >();
   readonly #config: MetaverseAuthoritativeWorldRuntimeConfig;
   readonly #driverVehicleControlsByPlayerId = new Map<
     MetaversePlayerId,
     MetaverseDriverVehicleControlRuntimeState
   >();
+  readonly #physicsRuntime = new MetaverseAuthoritativeRapierPhysicsRuntime();
   readonly #playerTraversalIntentsByPlayerId = new Map<
     MetaversePlayerId,
     MetaversePlayerTraversalIntentRuntimeState
   >();
+  readonly #playerTraversalColliderHandles = new Set<RapierColliderHandle>();
   readonly #playersById = new Map<MetaversePlayerId, MetaversePlayerWorldRuntimeState>();
   readonly #vehicleIdsByEnvironmentAssetId = new Map<
     string,
@@ -393,6 +490,23 @@ export class MetaverseAuthoritativeWorldRuntime {
         config.tickIntervalMs ??
         metaverseAuthoritativeWorldRuntimeConfig.tickIntervalMs
     };
+
+    for (const staticSurfaceCollider of metaverseAuthoritativeStaticSurfaceColliders) {
+      const collider = this.#physicsRuntime.createCuboidCollider(
+        staticSurfaceCollider.halfExtents,
+        staticSurfaceCollider.translation,
+        staticSurfaceCollider.rotation
+      );
+
+      this.#colliderTraversalAffordancesByHandle.set(
+        collider,
+        staticSurfaceCollider.traversalAffordance
+      );
+    }
+
+    this.#physicsRuntime.stepSimulation(
+      Number(this.#config.tickIntervalMs) / 1_000
+    );
   }
 
   #resolveAuthoritativeSurfaceColliders():
@@ -423,6 +537,16 @@ export class MetaverseAuthoritativeWorldRuntime {
 
     return surfaceColliders;
   }
+
+  #shouldConsiderTraversalCollider = (
+    collider: RapierColliderHandle
+  ): boolean => !this.#playerTraversalColliderHandles.has(collider);
+
+  #shouldConsiderWaterborneTraversalCollider = (
+    collider: RapierColliderHandle
+  ): boolean =>
+    !this.#playerTraversalColliderHandles.has(collider) &&
+    this.#colliderTraversalAffordancesByHandle.get(collider) !== "support";
 
   #syncUnmountedPlayerToAuthoritativeSurface(
     playerRuntime: MetaversePlayerWorldRuntimeState,
@@ -465,6 +589,7 @@ export class MetaverseAuthoritativeWorldRuntime {
       playerRuntime.animationRuntime.reset("idle");
       playerRuntime.animationVocabulary =
         playerRuntime.animationRuntime.animationVocabulary;
+      this.#syncPlayerTraversalBodyRuntimes(playerRuntime);
       return;
     }
 
@@ -473,6 +598,7 @@ export class MetaverseAuthoritativeWorldRuntime {
     playerRuntime.animationRuntime.reset("swim-idle");
     playerRuntime.animationVocabulary =
       playerRuntime.animationRuntime.animationVocabulary;
+    this.#syncPlayerTraversalBodyRuntimes(playerRuntime);
   }
 
   get tickIntervalMs(): number {
@@ -764,6 +890,7 @@ export class MetaverseAuthoritativeWorldRuntime {
     this.#clearDriverVehicleControl(command.playerId);
     this.#clearPlayerTraversalIntent(command.playerId);
     this.#clearPlayerVehicleOccupancy(command.playerId);
+    this.#disposePlayerTraversalRuntimes(playerRuntime);
     this.#playersById.delete(command.playerId);
     this.#snapshotSequence += 1;
   }
@@ -1065,12 +1192,35 @@ export class MetaverseAuthoritativeWorldRuntime {
     username: MetaversePresencePlayerSnapshot["username"],
     nowMs: number
   ): MetaversePlayerWorldRuntimeState {
+    const groundedBodyRuntime = new MetaverseAuthoritativeGroundedBodyRuntime(
+      metaverseAuthoritativeGroundedBodyRuntimeConfig,
+      this.#physicsRuntime
+    );
+    const swimBodyRuntime = new MetaverseAuthoritativeSurfaceDriveRuntime(
+      {
+        controllerOffsetMeters: metaverseAuthoritativeCapsuleControllerOffsetMeters,
+        shape: {
+          halfHeightMeters: metaverseAuthoritativeGroundedBodyConfig.capsuleHalfHeightMeters,
+          kind: "capsule",
+          radiusMeters: metaverseAuthoritativeGroundedBodyConfig.capsuleRadiusMeters
+        },
+        spawnPosition: createPhysicsVector3Snapshot(0, 0, 0),
+        spawnYawRadians: 0,
+        worldRadius: metaverseAuthoritativeSwimTraversalConfig.worldRadius
+      },
+      this.#physicsRuntime
+    );
+
+    this.#playerTraversalColliderHandles.add(groundedBodyRuntime.colliderHandle);
+    this.#playerTraversalColliderHandles.add(swimBodyRuntime.colliderHandle);
+
     return {
       angularVelocityRadiansPerSecond: 0,
       animationRuntime: new MetaverseMovementAnimationPolicyRuntime(),
       animationVocabulary: "idle",
       characterId,
       forwardSpeedUnitsPerSecond: 0,
+      groundedBodyRuntime,
       lastProcessedLookSequence: 0,
       lastProcessedInputSequence: 0,
       lastProcessedJumpActionSequence: 0,
@@ -1091,6 +1241,7 @@ export class MetaverseAuthoritativeWorldRuntime {
       realtimeWorldAuthorityActive: false,
       stateSequence: 0,
       strafeSpeedUnitsPerSecond: 0,
+      swimBodyRuntime,
       username,
       yawRadians: 0
     };
@@ -1284,6 +1435,33 @@ export class MetaverseAuthoritativeWorldRuntime {
     }
 
     playerRuntime.lastPoseAtMs = nowMs;
+    this.#syncPlayerTraversalBodyRuntimes(playerRuntime);
+  }
+
+  #syncPlayerTraversalBodyRuntimes(
+    playerRuntime: MetaversePlayerWorldRuntimeState
+  ): void {
+    const grounded =
+      playerRuntime.locomotionMode === "grounded" &&
+      isGroundedUnmountedPlayerRuntime(playerRuntime);
+    const position = createPhysicsVector3Snapshot(
+      playerRuntime.positionX,
+      playerRuntime.positionY,
+      playerRuntime.positionZ
+    );
+    const linearVelocity = createPlayerLinearVelocitySnapshot(playerRuntime);
+
+    playerRuntime.groundedBodyRuntime.syncAuthoritativeState({
+      grounded,
+      linearVelocity,
+      position,
+      yawRadians: playerRuntime.yawRadians
+    });
+    playerRuntime.swimBodyRuntime.syncAuthoritativeState({
+      linearVelocity,
+      position,
+      yawRadians: playerRuntime.yawRadians
+    });
   }
 
   #syncPlayerLookFromPresence(
@@ -1343,7 +1521,27 @@ export class MetaverseAuthoritativeWorldRuntime {
       vehicleRuntime.lastPoseAtMs = nowMs;
     }
 
+    this.#syncVehicleDriveRuntime(vehicleRuntime);
+
     return vehicleRuntime;
+  }
+
+  #syncVehicleDriveRuntime(
+    vehicleRuntime: MetaverseVehicleWorldRuntimeState
+  ): void {
+    vehicleRuntime.driveRuntime.syncAuthoritativeState({
+      linearVelocity: createPhysicsVector3Snapshot(
+        vehicleRuntime.linearVelocityX,
+        vehicleRuntime.linearVelocityY,
+        vehicleRuntime.linearVelocityZ
+      ),
+      position: createPhysicsVector3Snapshot(
+        vehicleRuntime.positionX,
+        vehicleRuntime.positionY,
+        vehicleRuntime.positionZ
+      ),
+      yawRadians: vehicleRuntime.yawRadians
+    });
   }
 
   #syncMountedPlayerPoseFromVehicle(
@@ -1392,6 +1590,75 @@ export class MetaverseAuthoritativeWorldRuntime {
               : (nowMs - vehicleRuntime.lastPoseAtMs) / 1_000
           );
     playerRuntime.lastPoseAtMs = nowMs;
+    this.#syncPlayerTraversalBodyRuntimes(playerRuntime);
+  }
+
+  #applyGroundedBodySnapshotToPlayerRuntime(
+    playerRuntime: MetaversePlayerWorldRuntimeState,
+    groundedBodySnapshot: MetaverseAuthoritativeGroundedBodySnapshot,
+    deltaSeconds: number
+  ): void {
+    const previousYawRadians = playerRuntime.yawRadians;
+    const nextPosition = groundedBodySnapshot.position;
+    const deltaX = nextPosition.x - playerRuntime.positionX;
+    const deltaY = nextPosition.y - playerRuntime.positionY;
+    const deltaZ = nextPosition.z - playerRuntime.positionZ;
+    const forwardX = Math.sin(groundedBodySnapshot.yawRadians);
+    const forwardZ = -Math.cos(groundedBodySnapshot.yawRadians);
+    const rightX = Math.cos(groundedBodySnapshot.yawRadians);
+    const rightZ = Math.sin(groundedBodySnapshot.yawRadians);
+
+    playerRuntime.positionX = nextPosition.x;
+    playerRuntime.positionY = nextPosition.y;
+    playerRuntime.positionZ = nextPosition.z;
+    playerRuntime.yawRadians = groundedBodySnapshot.yawRadians;
+    playerRuntime.angularVelocityRadiansPerSecond =
+      normalizeAngularDeltaRadians(
+        groundedBodySnapshot.yawRadians - previousYawRadians
+      ) / deltaSeconds;
+    playerRuntime.forwardSpeedUnitsPerSecond =
+      deltaSeconds > 0 ? (deltaX * forwardX + deltaZ * forwardZ) / deltaSeconds : 0;
+    playerRuntime.linearVelocityX = deltaSeconds > 0 ? deltaX / deltaSeconds : 0;
+    playerRuntime.linearVelocityY = deltaSeconds > 0 ? deltaY / deltaSeconds : 0;
+    playerRuntime.linearVelocityZ = deltaSeconds > 0 ? deltaZ / deltaSeconds : 0;
+    playerRuntime.strafeSpeedUnitsPerSecond =
+      deltaSeconds > 0 ? (deltaX * rightX + deltaZ * rightZ) / deltaSeconds : 0;
+  }
+
+  #applySurfaceDriveSnapshotToPlayerRuntime(
+    playerRuntime: MetaversePlayerWorldRuntimeState,
+    surfaceDriveSnapshot: {
+      readonly linearVelocity: PhysicsVector3Snapshot;
+      readonly position: PhysicsVector3Snapshot;
+      readonly yawRadians: number;
+    },
+    deltaSeconds: number
+  ): void {
+    const previousYawRadians = playerRuntime.yawRadians;
+    const nextPosition = surfaceDriveSnapshot.position;
+    const deltaX = nextPosition.x - playerRuntime.positionX;
+    const deltaY = nextPosition.y - playerRuntime.positionY;
+    const deltaZ = nextPosition.z - playerRuntime.positionZ;
+    const forwardX = Math.sin(surfaceDriveSnapshot.yawRadians);
+    const forwardZ = -Math.cos(surfaceDriveSnapshot.yawRadians);
+    const rightX = Math.cos(surfaceDriveSnapshot.yawRadians);
+    const rightZ = Math.sin(surfaceDriveSnapshot.yawRadians);
+
+    playerRuntime.positionX = nextPosition.x;
+    playerRuntime.positionY = nextPosition.y;
+    playerRuntime.positionZ = nextPosition.z;
+    playerRuntime.yawRadians = surfaceDriveSnapshot.yawRadians;
+    playerRuntime.angularVelocityRadiansPerSecond =
+      normalizeAngularDeltaRadians(
+        surfaceDriveSnapshot.yawRadians - previousYawRadians
+      ) / deltaSeconds;
+    playerRuntime.forwardSpeedUnitsPerSecond =
+      deltaSeconds > 0 ? (deltaX * forwardX + deltaZ * forwardZ) / deltaSeconds : 0;
+    playerRuntime.linearVelocityX = surfaceDriveSnapshot.linearVelocity.x;
+    playerRuntime.linearVelocityY = surfaceDriveSnapshot.linearVelocity.y;
+    playerRuntime.linearVelocityZ = surfaceDriveSnapshot.linearVelocity.z;
+    playerRuntime.strafeSpeedUnitsPerSecond =
+      deltaSeconds > 0 ? (deltaX * rightX + deltaZ * rightZ) / deltaSeconds : 0;
   }
 
   #syncImplicitPlayerLookFromBodyYaw(
@@ -1497,8 +1764,26 @@ export class MetaverseAuthoritativeWorldRuntime {
       return existingVehicleRuntime;
     }
 
+    const driveColliderShape = resolveVehicleDriveColliderShape(
+      environmentAssetId
+    );
+
     const vehicleRuntime: MetaverseVehicleWorldRuntimeState = {
       angularVelocityRadiansPerSecond: 0,
+      driveRuntime: new MetaverseAuthoritativeSurfaceDriveRuntime(
+        {
+          controllerOffsetMeters: metaverseAuthoritativeCapsuleControllerOffsetMeters,
+          shape: {
+            halfExtents: driveColliderShape.halfExtents,
+            kind: "cuboid",
+            localCenter: driveColliderShape.localCenter
+          },
+          spawnPosition: createPhysicsVector3Snapshot(0, 0, 0),
+          spawnYawRadians: 0,
+          worldRadius: metaverseAuthoritativeVehicleSurfaceDriveConfig.worldRadius
+        },
+        this.#physicsRuntime
+      ),
       environmentAssetId,
       forwardSpeedUnitsPerSecond: 0,
       lastPoseAtMs: null,
@@ -1513,6 +1798,11 @@ export class MetaverseAuthoritativeWorldRuntime {
       vehicleId,
       yawRadians: 0
     };
+
+    this.#colliderTraversalAffordancesByHandle.set(
+      vehicleRuntime.driveRuntime.colliderHandle,
+      "blocker"
+    );
 
     this.#vehiclesById.set(vehicleId, vehicleRuntime);
 
@@ -1585,6 +1875,19 @@ export class MetaverseAuthoritativeWorldRuntime {
     this.#playerTraversalIntentsByPlayerId.delete(playerId);
   }
 
+  #disposePlayerTraversalRuntimes(
+    playerRuntime: MetaversePlayerWorldRuntimeState
+  ): void {
+    this.#playerTraversalColliderHandles.delete(
+      playerRuntime.groundedBodyRuntime.colliderHandle
+    );
+    this.#playerTraversalColliderHandles.delete(
+      playerRuntime.swimBodyRuntime.colliderHandle
+    );
+    playerRuntime.groundedBodyRuntime.dispose();
+    playerRuntime.swimBodyRuntime.dispose();
+  }
+
   #recordObserverHeartbeat(
     observerPlayerId: MetaversePlayerId,
     nowMs: number
@@ -1610,6 +1913,7 @@ export class MetaverseAuthoritativeWorldRuntime {
       this.#clearDriverVehicleControl(playerId);
       this.#clearPlayerTraversalIntent(playerId);
       this.#clearPlayerVehicleOccupancy(playerId);
+      this.#disposePlayerTraversalRuntimes(playerRuntime);
       this.#playersById.delete(playerId);
       prunedPlayer = true;
     }
@@ -1636,11 +1940,13 @@ export class MetaverseAuthoritativeWorldRuntime {
 
     while (this.#lastAdvancedAtMs + tickIntervalMs <= nowMs) {
       this.#lastAdvancedAtMs += tickIntervalMs;
+      this.#physicsRuntime.stepSimulation(tickIntervalSeconds);
+      this.#advanceVehicleRuntimes(tickIntervalSeconds, this.#lastAdvancedAtMs);
+      this.#physicsRuntime.stepSimulation(tickIntervalSeconds);
       this.#advanceUnmountedPlayerRuntimes(
         tickIntervalSeconds,
         this.#lastAdvancedAtMs
       );
-      this.#advanceVehicleRuntimes(tickIntervalSeconds, this.#lastAdvancedAtMs);
       this.#syncMountedPlayerWorldStateFromVehicles(this.#lastAdvancedAtMs);
       this.#currentTick += 1;
       advancedTick = true;
@@ -1695,9 +2001,8 @@ export class MetaverseAuthoritativeWorldRuntime {
 
     const traversalIntent =
       this.#playerTraversalIntentsByPlayerId.get(playerRuntime.playerId) ?? null;
-    const currentSurfaceLocomotionMode = (
-      playerRuntime.locomotionMode === "swim" ? "swim" : "grounded"
-    );
+    const currentSurfaceLocomotionMode =
+      playerRuntime.locomotionMode === "swim" ? "swim" : "grounded";
     const locomotionDecision = resolveAuthoritativeAutomaticSurfaceLocomotionMode(
       metaverseAuthoritativeGroundedBodyConfig,
       authoritativeSurfaceColliders,
@@ -1710,57 +2015,12 @@ export class MetaverseAuthoritativeWorldRuntime {
       currentSurfaceLocomotionMode
     );
     const locomotionMode = locomotionDecision.locomotionMode;
-    const traversalConfig =
-      locomotionMode === "swim"
-        ? metaverseAuthoritativeSwimTraversalConfig
-        : metaverseAuthoritativeGroundedTraversalConfig;
-    const groundedAtStartOfTick =
-      locomotionMode === "grounded" &&
-      isGroundedUnmountedPlayerRuntime(playerRuntime);
     const moveAxis = clampAxis(traversalIntent?.moveAxis ?? 0);
     const strafeAxis = clampAxis(traversalIntent?.strafeAxis ?? 0);
-    const motionSnapshot = advanceMetaverseSurfaceTraversalMotion(
-      playerRuntime.yawRadians,
-      {
-        forwardSpeedUnitsPerSecond: playerRuntime.forwardSpeedUnitsPerSecond,
-        strafeSpeedUnitsPerSecond: playerRuntime.strafeSpeedUnitsPerSecond
-      },
-      {
-        boost: traversalIntent?.boost === true,
-        moveAxis,
-        strafeAxis,
-        yawAxis: traversalIntent?.yawAxis ?? 0
-      },
-      traversalConfig,
-      deltaSeconds,
-      true,
-      1,
+    const preferredLookYawRadians =
       playerRuntime.lastProcessedLookSequence > 0
         ? playerRuntime.lookYawRadians
-        : null
-    );
-    const nextYawRadians = motionSnapshot.yawRadians;
-    const forwardX = Math.sin(nextYawRadians);
-    const forwardZ = -Math.cos(nextYawRadians);
-    const rightX = Math.cos(nextYawRadians);
-    const rightZ = Math.sin(nextYawRadians);
-    const radialClampedPlanarPosition =
-      constrainMetaverseSurfaceTraversalPositionToWorldRadius(
-        {
-          x: playerRuntime.positionX + motionSnapshot.velocityX * deltaSeconds,
-          y: playerRuntime.positionY,
-          z: playerRuntime.positionZ + motionSnapshot.velocityZ * deltaSeconds
-        },
-        traversalConfig.worldRadius
-      );
-    const previousPositionY = playerRuntime.positionY;
-    let nextPositionX = radialClampedPlanarPosition.x;
-    let nextPositionY = resolveAuthoritativeWaterlineHeightMeters({
-      x: radialClampedPlanarPosition.x,
-      z: radialClampedPlanarPosition.z
-    });
-    let nextPositionZ = radialClampedPlanarPosition.z;
-    let nextLinearVelocityY = 0;
+        : null;
     let grounded = false;
     let resolvedLocomotionMode: "grounded" | "swim" = locomotionMode;
 
@@ -1769,79 +2029,63 @@ export class MetaverseAuthoritativeWorldRuntime {
         x: playerRuntime.positionX,
         z: playerRuntime.positionZ
       });
-      const constrainedPlanarPosition =
-        constrainAuthoritativePlanarPositionAgainstBlockers(
-          authoritativeSurfaceColliders,
-          {
-            x: playerRuntime.positionX,
-            y: currentWaterlineHeightMeters,
-            z: playerRuntime.positionZ
-          },
-          {
-            x: radialClampedPlanarPosition.x,
-            y: currentWaterlineHeightMeters,
-            z: radialClampedPlanarPosition.z
-          },
-          metaverseAuthoritativeGroundedBodyConfig.capsuleRadiusMeters,
-          currentWaterlineHeightMeters -
-            metaverseAuthoritativeGroundedBodyConfig.capsuleRadiusMeters,
-          currentWaterlineHeightMeters +
-            metaverseAuthoritativeGroundedBodyConfig.capsuleHalfHeightMeters +
-            metaverseAuthoritativeGroundedBodyConfig.capsuleRadiusMeters
-        );
+      const swimSnapshot = playerRuntime.swimBodyRuntime.advance(
+        {
+          boost: traversalIntent?.boost === true,
+          moveAxis,
+          strafeAxis,
+          yawAxis: traversalIntent?.yawAxis ?? 0
+        },
+        metaverseAuthoritativeSwimTraversalConfig,
+        deltaSeconds,
+        currentWaterlineHeightMeters,
+        preferredLookYawRadians,
+        this.#shouldConsiderWaterborneTraversalCollider
+      );
       const nextSwimLocomotionDecision =
         resolveAuthoritativeAutomaticSurfaceLocomotionMode(
           metaverseAuthoritativeGroundedBodyConfig,
           authoritativeSurfaceColliders,
-          constrainedPlanarPosition,
-          nextYawRadians,
+          createPhysicsVector3Snapshot(
+            swimSnapshot.position.x,
+            currentWaterlineHeightMeters,
+            swimSnapshot.position.z
+          ),
+          swimSnapshot.yawRadians,
           "swim"
         );
-
-      nextPositionX = constrainedPlanarPosition.x;
-      nextPositionZ = constrainedPlanarPosition.z;
-      nextPositionY = resolveAuthoritativeWaterlineHeightMeters({
-        x: constrainedPlanarPosition.x,
-        z: constrainedPlanarPosition.z
-      });
+      this.#applySurfaceDriveSnapshotToPlayerRuntime(
+        playerRuntime,
+        {
+          linearVelocity: swimSnapshot.linearVelocity,
+          position: createPhysicsVector3Snapshot(
+            swimSnapshot.position.x,
+            resolveAuthoritativeWaterlineHeightMeters({
+              x: swimSnapshot.position.x,
+              z: swimSnapshot.position.z
+            }),
+            swimSnapshot.position.z
+          ),
+          yawRadians: swimSnapshot.yawRadians
+        },
+        deltaSeconds
+      );
 
       if (
         nextSwimLocomotionDecision.locomotionMode === "grounded" &&
         nextSwimLocomotionDecision.supportHeightMeters !== null
       ) {
-        nextPositionY = nextSwimLocomotionDecision.supportHeightMeters;
+        playerRuntime.positionY = nextSwimLocomotionDecision.supportHeightMeters;
+        playerRuntime.linearVelocityY = 0;
         grounded = true;
         resolvedLocomotionMode = "grounded";
       }
     } else {
-      const groundedPlanarPosition =
-        constrainAuthoritativePlanarPositionAgainstBlockers(
-          authoritativeSurfaceColliders,
-          {
-            x: playerRuntime.positionX,
-            y: playerRuntime.positionY,
-            z: playerRuntime.positionZ
-          },
-          radialClampedPlanarPosition,
-          metaverseAuthoritativeGroundedBodyConfig.capsuleRadiusMeters,
-          Math.min(playerRuntime.lastGroundedPositionY, playerRuntime.positionY),
-          Math.max(
-            playerRuntime.lastGroundedPositionY,
-            playerRuntime.positionY
-          ) +
-            metaverseAuthoritativeGroundedBodyConfig.capsuleHalfHeightMeters * 2 +
-            metaverseAuthoritativeGroundedBodyConfig.capsuleRadiusMeters * 2
-        );
       const jumpRequested =
         traversalIntent !== null &&
         traversalIntent.jumpActionSequence >
           playerRuntime.lastProcessedJumpActionSequence &&
-        groundedAtStartOfTick;
-
-      if (playerRuntime.locomotionMode !== "grounded") {
-        playerRuntime.lastGroundedPositionY = playerRuntime.positionY;
-        playerRuntime.linearVelocityY = 0;
-      }
+        playerRuntime.groundedBodyRuntime.snapshot.jumpReady;
 
       const autostepHeightMeters =
         resolveAuthoritativeGroundedAutostepHeightMeters(
@@ -1852,102 +2096,66 @@ export class MetaverseAuthoritativeWorldRuntime {
             y: playerRuntime.lastGroundedPositionY,
             z: playerRuntime.positionZ
           },
-          nextYawRadians,
+          playerRuntime.yawRadians,
           moveAxis,
           strafeAxis,
           playerRuntime.linearVelocityY,
           jumpRequested
         );
+      playerRuntime.groundedBodyRuntime.setAutostepEnabled(
+        autostepHeightMeters !== null,
+        autostepHeightMeters ?? metaverseAuthoritativeGroundedBodyConfig.stepHeightMeters
+      );
+      const groundedBodySnapshot = playerRuntime.groundedBodyRuntime.advance(
+        {
+          boost: traversalIntent?.boost === true,
+          jump: jumpRequested,
+          moveAxis,
+          strafeAxis,
+          turnAxis: traversalIntent?.yawAxis ?? 0
+        },
+        deltaSeconds,
+        preferredLookYawRadians,
+        this.#shouldConsiderTraversalCollider
+      );
+      this.#applyGroundedBodySnapshotToPlayerRuntime(
+        playerRuntime,
+        groundedBodySnapshot,
+        deltaSeconds
+      );
       const nextGroundedLocomotionDecision =
         resolveAuthoritativeAutomaticSurfaceLocomotionMode(
           metaverseAuthoritativeGroundedBodyConfig,
           authoritativeSurfaceColliders,
-          groundedPlanarPosition,
-          nextYawRadians,
+          groundedBodySnapshot.position,
+          groundedBodySnapshot.yawRadians,
           "grounded"
         );
-      const nextVerticalSpeedUnitsPerSecond =
-        (jumpRequested
-          ? Math.max(
-              playerRuntime.linearVelocityY,
-              metaverseAuthoritativeGroundedJumpImpulseUnitsPerSecond
-            )
-          : playerRuntime.linearVelocityY) -
-        metaverseAuthoritativeGroundedGravityUnitsPerSecond * deltaSeconds;
-      const unclampedPositionY =
-        previousPositionY + nextVerticalSpeedUnitsPerSecond * deltaSeconds;
-      const nextGroundSupportHeightMeters =
-        nextGroundedLocomotionDecision.supportHeightMeters ??
-        locomotionDecision.supportHeightMeters ??
-        playerRuntime.lastGroundedPositionY;
       const nextGroundWaterlineHeightMeters = resolveAuthoritativeWaterlineHeightMeters(
         {
-          x: groundedPlanarPosition.x,
-          z: groundedPlanarPosition.z
+          x: groundedBodySnapshot.position.x,
+          z: groundedBodySnapshot.position.z
         }
       );
-
-      nextPositionX = groundedPlanarPosition.x;
-      nextPositionZ = groundedPlanarPosition.z;
-
       const shouldEnterSwim =
         nextGroundedLocomotionDecision.locomotionMode === "swim" &&
-        unclampedPositionY <=
+        groundedBodySnapshot.position.y <=
           nextGroundWaterlineHeightMeters +
             metaverseWorldAutomaticSurfaceWaterlineThresholdMeters;
 
-      if (
-        shouldEnterSwim ||
-        (autostepHeightMeters === null &&
-          nextGroundSupportHeightMeters >
-            playerRuntime.lastGroundedPositionY +
-              metaverseAuthoritativeGroundedBodyConfig.stepHeightMeters +
-              metaverseAuthoritativeGroundedSnapToleranceMeters &&
-          !jumpRequested)
-      ) {
-        nextPositionY = nextGroundWaterlineHeightMeters;
+      if (shouldEnterSwim) {
+        playerRuntime.positionY = nextGroundWaterlineHeightMeters;
+        playerRuntime.linearVelocityY = 0;
         grounded = false;
         resolvedLocomotionMode = "swim";
       } else {
         resolvedLocomotionMode = "grounded";
-
-        if (
-          unclampedPositionY <=
-          nextGroundSupportHeightMeters +
-            metaverseAuthoritativeGroundedSnapToleranceMeters
-        ) {
-          nextPositionY = nextGroundSupportHeightMeters;
-          nextLinearVelocityY = 0;
-          grounded = true;
-        } else {
-          nextPositionY = unclampedPositionY;
-          nextLinearVelocityY =
-            (nextPositionY - previousPositionY) / deltaSeconds;
-          grounded = false;
-        }
+        grounded = groundedBodySnapshot.grounded;
       }
     }
 
-    const deltaX = nextPositionX - playerRuntime.positionX;
-    const deltaZ = nextPositionZ - playerRuntime.positionZ;
-    const previousYawRadians = playerRuntime.yawRadians;
-
-    playerRuntime.positionX = nextPositionX;
-    playerRuntime.positionY = nextPositionY;
-    playerRuntime.positionZ = nextPositionZ;
-    playerRuntime.yawRadians = nextYawRadians;
     this.#syncImplicitPlayerLookFromBodyYaw(playerRuntime);
-    playerRuntime.angularVelocityRadiansPerSecond =
-      normalizeAngularDeltaRadians(nextYawRadians - previousYawRadians) /
-      deltaSeconds;
-    playerRuntime.forwardSpeedUnitsPerSecond =
-      (deltaX * forwardX + deltaZ * forwardZ) / deltaSeconds;
-    playerRuntime.linearVelocityX = deltaX / deltaSeconds;
-    playerRuntime.linearVelocityY = nextLinearVelocityY;
-    playerRuntime.linearVelocityZ = deltaZ / deltaSeconds;
     playerRuntime.locomotionMode = resolvedLocomotionMode;
-    playerRuntime.strafeSpeedUnitsPerSecond =
-      (deltaX * rightX + deltaZ * rightZ) / deltaSeconds;
     playerRuntime.animationVocabulary = playerRuntime.animationRuntime.advance(
       {
         grounded,
@@ -1970,8 +2178,10 @@ export class MetaverseAuthoritativeWorldRuntime {
     playerRuntime.lastPoseAtMs = nowMs;
 
     if (resolvedLocomotionMode === "grounded" && grounded) {
-      playerRuntime.lastGroundedPositionY = nextPositionY;
+      playerRuntime.lastGroundedPositionY = playerRuntime.positionY;
     }
+
+    this.#syncPlayerTraversalBodyRuntimes(playerRuntime);
 
     if (
       traversalIntent !== null &&
@@ -2039,23 +2249,7 @@ export class MetaverseAuthoritativeWorldRuntime {
       return;
     }
 
-    const nextVehicleState = advanceMetaverseSurfaceTraversalSnapshot(
-      {
-        planarSpeedUnitsPerSecond: Math.hypot(
-          vehicleRuntime.linearVelocityX,
-          vehicleRuntime.linearVelocityZ
-        ),
-        position: {
-          x: vehicleRuntime.positionX,
-          y: vehicleRuntime.positionY,
-          z: vehicleRuntime.positionZ
-        },
-        yawRadians: vehicleRuntime.yawRadians
-      },
-      {
-        forwardSpeedUnitsPerSecond: vehicleRuntime.forwardSpeedUnitsPerSecond,
-        strafeSpeedUnitsPerSecond: vehicleRuntime.strafeSpeedUnitsPerSecond
-      },
+    const nextVehicleState = vehicleRuntime.driveRuntime.advance(
       {
         boost: driverControlState?.boost === true,
         moveAxis: driverControlState?.moveAxis ?? 0,
@@ -2064,28 +2258,34 @@ export class MetaverseAuthoritativeWorldRuntime {
       },
       metaverseAuthoritativeVehicleSurfaceDriveConfig,
       deltaSeconds,
-      metaverseAuthoritativeVehicleSurfaceDriveConfig.worldRadius,
-      vehicleRuntime.positionY
+      vehicleRuntime.positionY,
+      null,
+      this.#shouldConsiderWaterborneTraversalCollider
     );
-    const nextYawRadians = nextVehicleState.snapshot.yawRadians;
-    const nextPositionX = nextVehicleState.snapshot.position.x;
-    const nextPositionZ = nextVehicleState.snapshot.position.z;
+    const nextYawRadians = nextVehicleState.yawRadians;
+    const nextPositionX = nextVehicleState.position.x;
+    const nextPositionZ = nextVehicleState.position.z;
     const deltaX = nextPositionX - vehicleRuntime.positionX;
     const deltaZ = nextPositionZ - vehicleRuntime.positionZ;
     const previousYawRadians = vehicleRuntime.yawRadians;
     vehicleRuntime.positionX = nextPositionX;
+    vehicleRuntime.positionY = nextVehicleState.position.y;
     vehicleRuntime.positionZ = nextPositionZ;
     vehicleRuntime.yawRadians = nextYawRadians;
-    vehicleRuntime.linearVelocityX = deltaX / deltaSeconds;
-    vehicleRuntime.linearVelocityY = 0;
-    vehicleRuntime.linearVelocityZ = deltaZ / deltaSeconds;
+    vehicleRuntime.linearVelocityX = nextVehicleState.linearVelocity.x;
+    vehicleRuntime.linearVelocityY = nextVehicleState.linearVelocity.y;
+    vehicleRuntime.linearVelocityZ = nextVehicleState.linearVelocity.z;
     vehicleRuntime.angularVelocityRadiansPerSecond =
       normalizeAngularDeltaRadians(nextYawRadians - previousYawRadians) /
       deltaSeconds;
+    const forwardX = Math.sin(nextYawRadians);
+    const forwardZ = -Math.cos(nextYawRadians);
+    const rightX = Math.cos(nextYawRadians);
+    const rightZ = Math.sin(nextYawRadians);
     vehicleRuntime.forwardSpeedUnitsPerSecond =
-      nextVehicleState.speedSnapshot.forwardSpeedUnitsPerSecond;
+      deltaSeconds > 0 ? (deltaX * forwardX + deltaZ * forwardZ) / deltaSeconds : 0;
     vehicleRuntime.strafeSpeedUnitsPerSecond =
-      nextVehicleState.speedSnapshot.strafeSpeedUnitsPerSecond;
+      deltaSeconds > 0 ? (deltaX * rightX + deltaZ * rightZ) / deltaSeconds : 0;
   }
 
   #syncMountedPlayerWorldStateFromVehicles(nowMs: number): void {

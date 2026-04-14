@@ -183,6 +183,14 @@ export class RapierPhysicsRuntime {
     return addon.world.createCollider(colliderDesc);
   }
 
+  createCuboidCollider(
+    halfExtents: PhysicsVector3Snapshot,
+    translation: PhysicsVector3Snapshot,
+    rotation?: PhysicsQuaternionSnapshot
+  ): RapierColliderHandle {
+    return this.createFixedCuboidCollider(halfExtents, translation, rotation);
+  }
+
   createFixedTriMeshCollider(
     vertices: Float32Array,
     indices: Uint32Array

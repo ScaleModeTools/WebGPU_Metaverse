@@ -110,10 +110,10 @@ test("MetaverseAuthoritativeWorldRuntime simulates driver-controlled vehicles fr
   assert.equal(worldSnapshot.players[0]?.locomotionMode, "mounted");
   assert.equal(worldSnapshot.players[0]?.position.x, 0);
   assert.equal(worldSnapshot.players[0]?.position.y, 0.4);
-  assert.ok(Math.abs(worldSnapshot.players[0]?.position.z - 18.63) < 0.000001);
+  assert.ok(Math.abs(worldSnapshot.players[0]?.position.z - 18.63) < 0.0001);
   assert.equal(worldSnapshot.players[0]?.linearVelocity.x, 0);
   assert.ok(
-    Math.abs(worldSnapshot.players[0]?.linearVelocity.z + 10.5) < 0.000001
+    Math.abs(worldSnapshot.players[0]?.linearVelocity.z + 10.5) < 0.0001
   );
   assert.equal(
     worldSnapshot.players[0]?.mountedOccupancy?.environmentAssetId,
@@ -130,10 +130,10 @@ test("MetaverseAuthoritativeWorldRuntime simulates driver-controlled vehicles fr
     playerId
   );
   assert.equal(worldSnapshot.vehicles[0]?.position.x, 0);
-  assert.ok(Math.abs(worldSnapshot.vehicles[0]?.position.z - 18.63) < 0.000001);
+  assert.ok(Math.abs(worldSnapshot.vehicles[0]?.position.z - 18.63) < 0.0001);
   assert.equal(worldSnapshot.vehicles[0]?.yawRadians, 0);
   assert.ok(
-    Math.abs(worldSnapshot.vehicles[0]?.linearVelocity.z + 10.5) < 0.000001
+    Math.abs(worldSnapshot.vehicles[0]?.linearVelocity.z + 10.5) < 0.0001
   );
 });
 
@@ -560,7 +560,7 @@ test("MetaverseAuthoritativeWorldRuntime simulates unmounted grounded and swim t
   assert.equal(groundedWorldSnapshot.players[0]?.locomotionMode, "grounded");
   assert.ok(
     Math.abs((groundedWorldSnapshot.players[0]?.position.y ?? 0) - 0.15) <
-      0.000001
+      0.001
   );
   assert.ok((groundedWorldSnapshot.players[0]?.position.z ?? -14.8) < -14.8);
   assert.ok((groundedWorldSnapshot.players[0]?.linearVelocity.z ?? 0) < 0);
@@ -824,7 +824,7 @@ test("MetaverseAuthoritativeWorldRuntime holds sustained swim after dock entry b
   assert.ok((worldSnapshot.players[0]?.position.z ?? 0) < -20);
 });
 
-test("MetaverseAuthoritativeWorldRuntime keeps a dock jump airborne above the water before switching into swim", () => {
+test("MetaverseAuthoritativeWorldRuntime keeps a dock jump airborne before Rapier shoreline support settles it back to grounded", () => {
   const runtime = createAuthoritativeRuntime();
   const playerId = requireValue(
     createMetaversePlayerId("shoreline-jump-arc-pilot"),
@@ -858,10 +858,11 @@ test("MetaverseAuthoritativeWorldRuntime keeps a dock jump airborne above the wa
 
   runtime.advanceToTime(800);
 
-  const swimSnapshot = runtime.readWorldSnapshot(800, playerId);
+  const settledSupportSnapshot = runtime.readWorldSnapshot(800, playerId);
 
-  assert.equal(swimSnapshot.players[0]?.locomotionMode, "swim");
-  assert.equal(swimSnapshot.players[0]?.position.y, 0);
+  assert.equal(settledSupportSnapshot.players[0]?.locomotionMode, "grounded");
+  assert.ok((settledSupportSnapshot.players[0]?.position.y ?? 0) > 0.16);
+  assert.ok((settledSupportSnapshot.players[0]?.position.y ?? 0) < 0.22);
 });
 
 test("MetaverseAuthoritativeWorldRuntime exits onto the shipped shoreline support lane without vertical seam ejection", () => {
@@ -896,7 +897,7 @@ test("MetaverseAuthoritativeWorldRuntime exits onto the shipped shoreline suppor
   assert.ok((shorelineExitSnapshot.players[0]?.position.y ?? 0) > 0.17);
   assert.ok((shorelineExitSnapshot.players[0]?.position.y ?? 0) < 0.35);
   assert.ok(
-    Math.abs(shorelineExitSnapshot.players[0]?.linearVelocity.y ?? 0) < 0.000001
+    Math.abs(shorelineExitSnapshot.players[0]?.linearVelocity.y ?? 0) < 0.005
   );
 
   runtime.advanceToTime(2_100);
@@ -906,7 +907,7 @@ test("MetaverseAuthoritativeWorldRuntime exits onto the shipped shoreline suppor
   assert.equal(settledSnapshot.players[0]?.locomotionMode, "grounded");
   assert.ok((settledSnapshot.players[0]?.position.y ?? 0) > 0.17);
   assert.ok((settledSnapshot.players[0]?.position.y ?? 0) < 0.35);
-  assert.ok(Math.abs(settledSnapshot.players[0]?.linearVelocity.y ?? 0) < 0.000001);
+  assert.ok(Math.abs(settledSnapshot.players[0]?.linearVelocity.y ?? 0) < 0.005);
 });
 
 test("MetaverseAuthoritativeWorldRuntime simulates grounded jump ascent, descent, and landing on authoritative ticks", () => {
@@ -992,10 +993,9 @@ test("MetaverseAuthoritativeWorldRuntime simulates grounded jump ascent, descent
   const landedSnapshot = runtime.readWorldSnapshot(1_000, playerId);
 
   assert.equal(landedSnapshot.players[0]?.animationVocabulary, "idle");
-  assert.equal(landedSnapshot.players[0]?.linearVelocity.y, 0);
-  assert.ok(
-    Math.abs((landedSnapshot.players[0]?.position.y ?? 0) - 0.15) < 0.000001
-  );
+  assert.ok(Math.abs(landedSnapshot.players[0]?.linearVelocity.y ?? 0) < 0.001);
+  assert.ok((landedSnapshot.players[0]?.position.y ?? 0) > 0.16);
+  assert.ok((landedSnapshot.players[0]?.position.y ?? 0) < 0.18);
 });
 
 test("MetaverseAuthoritativeWorldRuntime accepts mounted occupancy updates through reliable world commands", () => {

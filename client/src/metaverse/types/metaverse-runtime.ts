@@ -186,6 +186,22 @@ export interface MetaverseCharacterAnimationClipProofConfig {
   readonly vocabulary: MetaverseCharacterAnimationVocabularyId;
 }
 
+export const metaverseHumanoidV2PistolPoseIds = [
+  "down",
+  "neutral",
+  "up"
+] as const;
+
+export type MetaverseHumanoidV2PistolPoseId =
+  (typeof metaverseHumanoidV2PistolPoseIds)[number];
+
+export interface MetaverseHumanoidV2PistolPoseProofConfig {
+  readonly clipNamesByPoseId: Readonly<
+    Record<MetaverseHumanoidV2PistolPoseId, string>
+  >;
+  readonly sourcePath: string;
+}
+
 export const metaverseCharacterSkeletonIds = [
   "humanoid_v1",
   "humanoid_v2"
@@ -218,6 +234,9 @@ export interface MetaversePortalConfig {
 export interface MetaverseCharacterProofConfig {
   readonly animationClips: readonly MetaverseCharacterAnimationClipProofConfig[];
   readonly characterId: string;
+  readonly humanoidV2PistolPoseProofConfig?:
+    | MetaverseHumanoidV2PistolPoseProofConfig
+    | null;
   readonly label: string;
   readonly modelPath: string;
   readonly skeletonId: MetaverseCharacterSkeletonId;

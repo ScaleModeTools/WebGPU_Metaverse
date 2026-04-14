@@ -1,6 +1,9 @@
 import {
   type MetaverseGroundedBodyRuntime,
-  type PhysicsVector3Snapshot
+  type PhysicsVector3Snapshot,
+  type RapierColliderHandle,
+  type RapierPhysicsRuntime,
+  type RapierQueryFilterPredicate
 } from "@/physics";
 import type {
   MetaverseSurfaceTraversalConfig as SharedMetaverseSurfaceTraversalConfig,
@@ -39,6 +42,7 @@ export interface MountedEnvironmentAnchorSnapshot {
 
 export interface MetaverseTraversalRuntimeDependencies {
   readonly groundedBodyRuntime: MetaverseGroundedBodyRuntime;
+  readonly physicsRuntime: RapierPhysicsRuntime;
   readonly readDynamicEnvironmentPose: (
     environmentAssetId: string
   ) => DynamicEnvironmentPoseSnapshot | null;
@@ -49,8 +53,15 @@ export interface MetaverseTraversalRuntimeDependencies {
     environmentAssetId: string
   ) => Pick<
     MetaverseEnvironmentAssetProofConfig,
-    "entries" | "environmentAssetId" | "label" | "seats"
+    "collider" | "entries" | "environmentAssetId" | "label" | "seats"
   > | null;
+  readonly resolveGroundedTraversalFilterPredicate: (
+    excludedColliders?: readonly RapierColliderHandle[]
+  ) => RapierQueryFilterPredicate;
+  readonly resolveWaterborneTraversalFilterPredicate: (
+    excludedOwnerEnvironmentAssetId?: string | null,
+    excludedColliders?: readonly RapierColliderHandle[]
+  ) => RapierQueryFilterPredicate;
   readonly setDynamicEnvironmentPose: (
     environmentAssetId: string,
     poseSnapshot: DynamicEnvironmentPoseSnapshot | null

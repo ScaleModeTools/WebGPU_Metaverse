@@ -1,5 +1,6 @@
 export { MetaverseDynamicCuboidBodyRuntime } from "./classes/metaverse-dynamic-cuboid-body-runtime";
 export { MetaverseGroundedBodyRuntime } from "./classes/metaverse-grounded-body-runtime";
+export { MetaverseSurfaceDriveBodyRuntime } from "./classes/metaverse-surface-drive-body-runtime";
 export { RapierPhysicsRuntime } from "./classes/rapier-physics-runtime";
 export type {
   MetaverseDynamicCuboidBodyConfig,
@@ -14,6 +15,12 @@ export type {
   RapierCharacterControllerHandle,
   RapierColliderHandle,
   RapierPhysicsAddon,
+  RapierQueryFilterPredicate,
   RapierRigidBodyHandle,
   RapierWorldHandle
 } from "./types/metaverse-grounded-body";
+export type {
+  MetaverseSurfaceDriveBodyIntentSnapshot,
+  MetaverseSurfaceDriveBodyRuntimeConfig,
+  MetaverseSurfaceDriveBodySnapshot
+} from "./classes/metaverse-surface-drive-body-runtime";

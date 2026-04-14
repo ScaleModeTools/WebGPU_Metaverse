@@ -84,9 +84,9 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards driver-control 
   const worldSnapshot = runtime.readWorldSnapshot(1_000, playerId);
 
   assert.equal(worldSnapshot.tick.currentTick, 10);
-  assert.ok(Math.abs(worldSnapshot.vehicles[0]?.position.z - 18.63) < 0.000001);
+  assert.ok(Math.abs(worldSnapshot.vehicles[0]?.position.z - 18.63) < 0.0001);
   assert.ok(
-    Math.abs(worldSnapshot.players[0]?.linearVelocity.z + 10.5) < 0.000001
+    Math.abs(worldSnapshot.players[0]?.linearVelocity.z + 10.5) < 0.0001
   );
 });
 

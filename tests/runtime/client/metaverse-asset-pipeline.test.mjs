@@ -466,10 +466,12 @@ test("attachment manifests keep explicit trigger-hand grip alignment metadata fo
     },
     attachmentUpMarkerNodeName: "metaverse_service_pistol_up_marker",
     socketForwardAxis: { x: 1, y: 0, z: 0 },
-    socketOffset: { x: 0, y: 0, z: 0 },
+    socketOffset: { x: 0, y: 0.03, z: 0 },
     socketUpAxis: { x: 0, y: 1, z: 0 }
   });
-  assert.equal(pistolAttachment.offHandSupportPointIdBySocketId, null);
+  assert.deepEqual(pistolAttachment.offHandSupportPointIdBySocketId, {
+    hand_r_socket: "grip-support-right"
+  });
   assert.deepEqual(pistolAttachment.mountedHolster, {
     gripAlignment: {
       attachmentForwardMarkerNodeName: "metaverse_service_pistol_forward_marker",
@@ -481,7 +483,12 @@ test("attachment manifests keep explicit trigger-hand grip alignment metadata fo
     },
     socketName: "back_socket"
   });
-  assert.equal(pistolAttachment.supportPoints, null);
+  assert.deepEqual(pistolAttachment.supportPoints, [
+    {
+      localPosition: { x: 0.04, y: 0, z: -0.025 },
+      supportPointId: "grip-support-right"
+    }
+  ]);
 });
 
 test("pistol proof asset keeps standardized forward, up, and grip-side markers", async () => {
@@ -609,6 +616,10 @@ test("proof delivery assets keep canonical character sockets, animation vocabula
     { animationClipManifest },
     { animationVocabularyIds, canonicalAnimationClipNamesByVocabulary },
     {
+      humanoidV2PistolAimClipNamesByPoseId,
+      humanoidV2PistolAnimationSourcePath
+    },
+    {
       environmentPropManifest,
       metaverseHubDiveBoatEnvironmentAssetId,
       metaverseHubSkiffEnvironmentAssetId
@@ -618,6 +629,9 @@ test("proof delivery assets keep canonical character sockets, animation vocabula
     clientLoader.load("/src/assets/config/character-model-manifest.ts"),
     clientLoader.load("/src/assets/config/animation-clip-manifest.ts"),
     clientLoader.load("/src/assets/types/animation-clip-manifest.ts"),
+    clientLoader.load(
+      "/src/assets/config/humanoid-v2-pistol-animation-source.ts"
+    ),
     clientLoader.load("/src/assets/config/environment-prop-manifest.ts")
   ]);
 
@@ -709,11 +723,29 @@ test("proof delivery assets keep canonical character sockets, animation vocabula
         );
       }
 
-      assert.deepEqual(
-        [...animationPackClipNames].sort(),
-        [...animationVocabularyIds].sort()
-      );
+      for (const vocabularyId of animationVocabularyIds) {
+        assert.ok(
+          animationPackClipNames.has(canonicalAnimationClipNamesByVocabulary[vocabularyId]),
+          `${clipSourcePath} is missing canonical animation clip ${canonicalAnimationClipNamesByVocabulary[vocabularyId]}.`
+        );
+      }
     }
+  }
+
+  const pistolAnimationPackDocument = await loadMetaverseAssetDocument(
+    humanoidV2PistolAnimationSourcePath
+  );
+  const pistolAnimationClipNames = new Set(
+    (pistolAnimationPackDocument.animations ?? [])
+      .map((animation) => animation.name)
+      .filter((name) => typeof name === "string")
+  );
+
+  for (const clipName of Object.values(humanoidV2PistolAimClipNamesByPoseId)) {
+    assert.ok(
+      pistolAnimationClipNames.has(clipName),
+      `${humanoidV2PistolAnimationSourcePath} is missing pistol aim clip ${clipName}.`
+    );
   }
 
   assert.ok(skiffNodeNames.has("driver_seat"));

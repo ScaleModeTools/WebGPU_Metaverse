@@ -1328,7 +1328,7 @@ test("MetaverseWorldClient resyncs after an unknown-player poll failure when aut
   assert.equal(client.worldSnapshotBuffer[0]?.snapshotSequence, 2);
 });
 
-test("MetaverseWorldClient prefers snapshot streams, falls back to polling on stream failure, and reconnects without accepting stale stream frames", async () => {
+test("MetaverseWorldClient keeps polling until the snapshot stream proves live, falls back on stream failure, and reconnects without accepting stale stream frames", async () => {
   const { MetaverseWorldClient } = await clientLoader.load("/src/network/index.ts");
   const playerId = createMetaversePlayerId("stream-harbor-pilot");
 
@@ -1346,11 +1346,18 @@ test("MetaverseWorldClient prefers snapshot streams, falls back to polling on st
       vehicleX: 8
     }),
     createWorldEvent({
-      currentTick: 12,
+      currentTick: 11,
       playerId,
-      serverTimeMs: 10_100,
-      snapshotSequence: 3,
-      vehicleX: 9
+      serverTimeMs: 10_050,
+      snapshotSequence: 2,
+      vehicleX: 8.5
+    }),
+    createWorldEvent({
+      currentTick: 13,
+      playerId,
+      serverTimeMs: 10_150,
+      snapshotSequence: 4,
+      vehicleX: 9.5
     })
   ];
   const client = new MetaverseWorldClient(
@@ -1411,7 +1418,7 @@ test("MetaverseWorldClient prefers snapshot streams, falls back to polling on st
   assert.deepEqual(polledPlayerIds, [playerId]);
   assert.equal(streamSubscriptions.length, 1);
   assert.equal(streamSubscriptions[0]?.playerId, playerId);
-  assert.equal(scheduler.pendingTasks.length, 0);
+  assert.equal(scheduler.pendingTasks.filter((task) => task.delay === 50).length, 1);
   assert.equal(
     client.telemetrySnapshot.snapshotStream.path,
     "reliable-snapshot-stream"
@@ -1430,18 +1437,30 @@ test("MetaverseWorldClient prefers snapshot streams, falls back to polling on st
   );
 
   assert.equal(client.worldSnapshotBuffer[0]?.snapshotSequence, 1);
+  assert.equal(scheduler.pendingTasks.filter((task) => task.delay === 50).length, 1);
+
+  scheduler.runNext(50);
+  await flushAsyncWork();
+
+  assert.deepEqual(polledPlayerIds, [playerId, playerId]);
+  assert.equal(client.worldSnapshotBuffer[1]?.snapshotSequence, 2);
+  assert.equal(scheduler.pendingTasks.filter((task) => task.delay === 50).length, 1);
 
   streamSubscriptions[0]?.handlers.onWorldEvent(
     createWorldEvent({
-      currentTick: 11,
+      currentTick: 12,
       playerId,
-      serverTimeMs: 10_050,
-      snapshotSequence: 2,
-      vehicleX: 8.5
+      serverTimeMs: 10_100,
+      snapshotSequence: 3,
+      vehicleX: 9
     })
   );
 
-  assert.equal(client.worldSnapshotBuffer[1]?.snapshotSequence, 2);
+  assert.equal(client.worldSnapshotBuffer[2]?.snapshotSequence, 3);
+  assert.equal(
+    scheduler.pendingTasks.filter((task) => task.delay === 50).length,
+    0
+  );
 
   streamSubscriptions[0]?.handlers.onError(
     new Error("Metaverse world snapshot stream failed.")
@@ -1465,9 +1484,9 @@ test("MetaverseWorldClient prefers snapshot streams, falls back to polling on st
   scheduler.runNext(0);
   await flushAsyncWork();
 
-  assert.deepEqual(polledPlayerIds, [playerId, playerId]);
+  assert.deepEqual(polledPlayerIds, [playerId, playerId, playerId]);
   assert.equal(client.statusSnapshot.state, "connected");
-  assert.equal(client.worldSnapshotBuffer[2]?.snapshotSequence, 3);
+  assert.equal(client.worldSnapshotBuffer[2]?.snapshotSequence, 4);
   assert.equal(
     scheduler.pendingTasks.filter((task) => task.delay === 50).length,
     1
@@ -1478,7 +1497,7 @@ test("MetaverseWorldClient prefers snapshot streams, falls back to polling on st
   assert.equal(streamSubscriptions.length, 2);
   assert.equal(
     scheduler.pendingTasks.filter((task) => task.delay === 50).length,
-    0
+    1
   );
   assert.equal(
     client.telemetrySnapshot.snapshotStream.path,
@@ -1488,17 +1507,21 @@ test("MetaverseWorldClient prefers snapshot streams, falls back to polling on st
 
   streamSubscriptions[1]?.handlers.onWorldEvent(
     createWorldEvent({
-      currentTick: 13,
+      currentTick: 14,
       playerId,
-      serverTimeMs: 10_150,
-      snapshotSequence: 4,
-      vehicleX: 9.5
+      serverTimeMs: 10_200,
+      snapshotSequence: 5,
+      vehicleX: 10
     })
   );
 
   assert.equal(client.statusSnapshot.state, "connected");
-  assert.equal(client.statusSnapshot.lastSnapshotSequence, 4);
-  assert.equal(client.worldSnapshotBuffer[2]?.snapshotSequence, 4);
+  assert.equal(client.statusSnapshot.lastSnapshotSequence, 5);
+  assert.equal(client.worldSnapshotBuffer[2]?.snapshotSequence, 5);
+  assert.equal(
+    scheduler.pendingTasks.filter((task) => task.delay === 50).length,
+    0
+  );
   assert.equal(client.telemetrySnapshot.snapshotStream.lastTransportError, null);
 
   client.dispose();

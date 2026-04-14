@@ -126,6 +126,18 @@ class FakeCollider {
       : 0;
   }
 
+  get bottomOffset() {
+    return this.shape === "capsule"
+      ? this.standingOffset
+      : (this.payload.halfExtentY ?? 0);
+  }
+
+  get topOffset() {
+    return this.shape === "capsule"
+      ? this.standingOffset
+      : (this.payload.halfExtentY ?? 0);
+  }
+
   setRotation(rotation) {
     this.rotationQuaternion = rotation;
   }
@@ -215,14 +227,23 @@ class FakeCharacterController {
     this.world = world;
   }
 
-  computeColliderMovement(collider, desiredTranslationDelta) {
+  computeColliderMovement(
+    collider,
+    desiredTranslationDelta,
+    _filterFlags,
+    _filterGroups,
+    filterPredicate
+  ) {
     const currentTranslation = collider.translation();
-    const currentFootY = currentTranslation.y - collider.standingOffset;
-    const capsuleRadius = collider.payload.radius ?? 0;
+    const currentFootY = currentTranslation.y - collider.bottomOffset;
+    const capsuleRadius =
+      collider.payload.radius ??
+      Math.max(collider.payload.halfExtentX ?? 0, collider.payload.halfExtentZ ?? 0);
     const supportingSurfaceY = this.findSurfaceY(
       currentTranslation.x,
       currentTranslation.z,
-      capsuleRadius
+      capsuleRadius,
+      filterPredicate
     );
     const desiredFootY = currentFootY + desiredTranslationDelta.y;
     const nextFootY =
@@ -230,12 +251,22 @@ class FakeCharacterController {
       desiredFootY <= supportingSurfaceY + this.snapDistance
         ? supportingSurfaceY
         : desiredFootY;
-    const nextCenterY = nextFootY + collider.standingOffset;
+    const nextCenterY = nextFootY + collider.bottomOffset;
+    const blockedPlanarPosition = this.resolveBlockedPlanarPosition(
+      collider,
+      currentTranslation,
+      {
+        x: currentTranslation.x + desiredTranslationDelta.x,
+        y: nextCenterY,
+        z: currentTranslation.z + desiredTranslationDelta.z
+      },
+      filterPredicate
+    );
 
     this.lastMovement = new FakeRapierVector3(
-      desiredTranslationDelta.x,
+      blockedPlanarPosition.x - currentTranslation.x,
       nextCenterY - currentTranslation.y,
-      desiredTranslationDelta.z
+      blockedPlanarPosition.z - currentTranslation.z
     );
     this.grounded =
       supportingSurfaceY !== null &&
@@ -264,10 +295,17 @@ class FakeCharacterController {
 
   setCharacterMass() {}
 
-  findSurfaceY(centerX, centerZ, capsuleRadius) {
+  findSurfaceY(centerX, centerZ, capsuleRadius, filterPredicate = undefined) {
     let highestSurfaceY = null;
 
     for (const candidate of this.world.queryColliders) {
+      if (
+        candidate === undefined ||
+        (filterPredicate !== undefined && !filterPredicate(candidate))
+      ) {
+        continue;
+      }
+
       if (candidate.shape !== "cuboid") {
         continue;
       }
@@ -309,10 +347,71 @@ class FakeCharacterController {
 
     return highestSurfaceY;
   }
+
+  resolveBlockedPlanarPosition(
+    collider,
+    currentTranslation,
+    proposedTranslation,
+    filterPredicate = undefined
+  ) {
+    const colliderHalfExtentX =
+      collider.payload.radius ?? (collider.payload.halfExtentX ?? 0);
+    const colliderHalfExtentY = collider.bottomOffset;
+    const colliderHalfExtentZ =
+      collider.payload.radius ?? (collider.payload.halfExtentZ ?? 0);
+    const proposedBottomY = proposedTranslation.y - colliderHalfExtentY;
+    const proposedTopY = proposedTranslation.y + collider.topOffset;
+
+    for (const candidate of this.world.queryColliders) {
+      if (
+        candidate === collider ||
+        candidate.shape !== "cuboid" ||
+        (filterPredicate !== undefined && !filterPredicate(candidate))
+      ) {
+        continue;
+      }
+
+      const candidateTranslation = candidate.translation();
+      const candidateHalfExtentX = candidate.payload.halfExtentX ?? 0;
+      const candidateHalfExtentY = candidate.payload.halfExtentY ?? 0;
+      const candidateHalfExtentZ = candidate.payload.halfExtentZ ?? 0;
+      const candidateBottomY = candidateTranslation.y - candidateHalfExtentY;
+      const candidateTopY = candidateTranslation.y + candidateHalfExtentY;
+
+      if (
+        proposedTopY <= candidateBottomY ||
+        proposedBottomY >= candidateTopY ||
+        candidateTopY <= proposedBottomY + this.snapDistance
+      ) {
+        continue;
+      }
+
+      const intersectsProposedPosition =
+        Math.abs(proposedTranslation.x - candidateTranslation.x) <=
+          candidateHalfExtentX + colliderHalfExtentX &&
+        Math.abs(proposedTranslation.z - candidateTranslation.z) <=
+          candidateHalfExtentZ + colliderHalfExtentZ;
+
+      if (!intersectsProposedPosition) {
+        continue;
+      }
+
+      return Object.freeze({
+        x: currentTranslation.x,
+        z: currentTranslation.z
+      });
+    }
+
+    return Object.freeze({
+      x: proposedTranslation.x,
+      z: proposedTranslation.z
+    });
+  }
 }
 
 class FakeRapierWorld {
   constructor() {
+    this.characterControllers = [];
     this.colliders = [];
     this.lastCharacterController = null;
     this.queryColliders = [];
@@ -323,6 +422,7 @@ class FakeRapierWorld {
   createCharacterController() {
     const controller = new FakeCharacterController(this);
 
+    this.characterControllers.push(controller);
     this.lastCharacterController = controller;
 
     return controller;
@@ -3223,6 +3323,106 @@ test("MetaverseRemoteWorldRuntime keeps acked authoritative local player snapsho
   remoteWorldRuntime.dispose();
 });
 
+test("MetaverseRemoteWorldRuntime projects acked authoritative local player poses forward for local reconciliation", async () => {
+  const { MetaverseRemoteWorldRuntime } = await clientLoader.load(
+    "/src/metaverse/classes/metaverse-remote-world-runtime.ts"
+  );
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let currentWallClockMs = 1_050;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const fakeWorldClient = new FakeMetaverseWorldClient([
+    createRealtimeWorldSnapshot({
+      currentTick: 10,
+      localAnimationVocabulary: "swim",
+      localLastProcessedInputSequence: 6,
+      localLinearVelocity: {
+        x: 0,
+        y: 0,
+        z: -6
+      },
+      localLocomotionMode: "swim",
+      localPlayerId,
+      localPlayerY: 0,
+      localPlayerZ: 24,
+      localUsername,
+      remotePlayerId,
+      remotePlayerX: 10,
+      remoteUsername,
+      serverTimeMs: 1_000,
+      snapshotSequence: 1,
+      vehicleX: 10
+    }),
+    createRealtimeWorldSnapshot({
+      currentTick: 11,
+      localAnimationVocabulary: "swim",
+      localLastProcessedInputSequence: 6,
+      localLinearVelocity: {
+        x: 0,
+        y: 0,
+        z: -6
+      },
+      localLocomotionMode: "swim",
+      localPlayerId,
+      localPlayerY: 0,
+      localPlayerZ: 23.7,
+      localUsername,
+      remotePlayerId,
+      remotePlayerX: 12,
+      remoteUsername,
+      serverTimeMs: 1_050,
+      snapshotSequence: 2,
+      vehicleX: 12
+    })
+  ]);
+  fakeWorldClient.latestPlayerInputSequence = 6;
+  const remoteWorldRuntime = new MetaverseRemoteWorldRuntime({
+    createMetaverseWorldClient: () => fakeWorldClient,
+    localPlayerIdentity: {
+      characterId: "metaverse-mannequin-v1",
+      playerId: localPlayerId,
+      username: localUsername
+    },
+    onRemoteWorldUpdate() {},
+    readWallClockMs: () => currentWallClockMs,
+    samplingConfig: {
+      clockOffsetCorrectionAlpha: 1,
+      clockOffsetMaxStepMs: 1_000,
+      interpolationDelayMs: 225,
+      maxExtrapolationMs: 120
+    }
+  });
+
+  remoteWorldRuntime.boot();
+  assert.equal(
+    remoteWorldRuntime.readFreshAckedAuthoritativeLocalPlayerPoseForReconciliation(
+      120
+    )?.position.z,
+    23.7
+  );
+  currentWallClockMs = 1_080;
+
+  const projectedLocalPlayerPose =
+    remoteWorldRuntime.readFreshAckedAuthoritativeLocalPlayerPoseForReconciliation(
+      120
+    );
+
+  assert.notEqual(projectedLocalPlayerPose, null);
+  assert.ok(
+    Math.abs(projectedLocalPlayerPose.position.z - 23.52) < 0.000001,
+    `expected projected reconciliation z to be 23.52, received ${projectedLocalPlayerPose.position.z}`
+  );
+
+  remoteWorldRuntime.dispose();
+});
+
 test("MetaverseRemoteWorldRuntime adds and removes remote entity presentations from authoritative world snapshots", async () => {
   const { MetaverseRemoteWorldRuntime } = await clientLoader.load(
     "/src/metaverse/classes/metaverse-remote-world-runtime.ts"
@@ -4563,17 +4763,27 @@ test("WebGpuMetaverseRuntime clears a local driver seat claim after authoritativ
 test("MetaverseVehicleRuntime ignores self-owned support colliders when resolving waterborne motion", async () => {
   const [
     { MetaverseVehicleRuntime },
+    { RapierPhysicsRuntime },
     { metaverseRuntimeConfig }
   ] = await Promise.all([
     clientLoader.load("/src/metaverse/vehicles/classes/metaverse-vehicle-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts"),
     clientLoader.load("/src/metaverse/config/metaverse-runtime.ts")
   ]);
+  const physicsRuntime = createFakePhysicsRuntime(RapierPhysicsRuntime);
+
+  await physicsRuntime.init();
   const vehicleRuntime = new MetaverseVehicleRuntime({
     authoritativeCorrection: metaverseRuntimeConfig.skiff.authoritativeCorrection,
+    driveCollider: Object.freeze({
+      center: Object.freeze({ x: 0, y: 0.72, z: 0 }),
+      size: Object.freeze({ x: 4.2, y: 1.44, z: 1.8 })
+    }),
     environmentAssetId: "metaverse-hub-skiff-v1",
     entries: null,
     label: "Metaverse hub skiff",
     oceanHeightMeters: metaverseRuntimeConfig.ocean.height,
+    physicsRuntime,
     poseSnapshot: {
       position: {
         x: 0,
@@ -4581,6 +4791,14 @@ test("MetaverseVehicleRuntime ignores self-owned support colliders when resolvin
         z: 24
       },
       yawRadians: Math.PI
+    },
+    resolveWaterborneTraversalFilterPredicate(
+      _excludedOwnerEnvironmentAssetId = null,
+      excludedColliders = []
+    ) {
+      const excludedColliderSet = new Set(excludedColliders);
+
+      return (collider) => !excludedColliderSet.has(collider);
     },
     seats: [
       {
@@ -4620,7 +4838,8 @@ test("MetaverseVehicleRuntime ignores self-owned support colliders when resolvin
     ],
     waterContactProbeRadiusMeters:
       metaverseRuntimeConfig.skiff.waterContactProbeRadiusMeters,
-    waterlineHeightMeters: metaverseRuntimeConfig.skiff.waterlineHeightMeters
+    waterlineHeightMeters: metaverseRuntimeConfig.skiff.waterlineHeightMeters,
+    worldRadius: metaverseRuntimeConfig.movement.worldRadius
   });
   const startingSnapshot = vehicleRuntime.snapshot;
 
@@ -4650,17 +4869,27 @@ test("MetaverseVehicleRuntime ignores self-owned support colliders when resolvin
 test("MetaverseVehicleRuntime blends routine authoritative correction and preserves authoritative motion continuity", async () => {
   const [
     { MetaverseVehicleRuntime },
+    { RapierPhysicsRuntime },
     { metaverseRuntimeConfig }
   ] = await Promise.all([
     clientLoader.load("/src/metaverse/vehicles/classes/metaverse-vehicle-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts"),
     clientLoader.load("/src/metaverse/config/metaverse-runtime.ts")
   ]);
+  const physicsRuntime = createFakePhysicsRuntime(RapierPhysicsRuntime);
+
+  await physicsRuntime.init();
   const vehicleRuntime = new MetaverseVehicleRuntime({
     authoritativeCorrection: metaverseRuntimeConfig.skiff.authoritativeCorrection,
+    driveCollider: Object.freeze({
+      center: Object.freeze({ x: 0, y: 0.72, z: 0 }),
+      size: Object.freeze({ x: 4.2, y: 1.44, z: 1.8 })
+    }),
     environmentAssetId: "metaverse-hub-skiff-v1",
     entries: null,
     label: "Metaverse hub skiff",
     oceanHeightMeters: metaverseRuntimeConfig.ocean.height,
+    physicsRuntime,
     poseSnapshot: {
       position: {
         x: 0,
@@ -4668,6 +4897,14 @@ test("MetaverseVehicleRuntime blends routine authoritative correction and preser
         z: 24
       },
       yawRadians: 0
+    },
+    resolveWaterborneTraversalFilterPredicate(
+      _excludedOwnerEnvironmentAssetId = null,
+      excludedColliders = []
+    ) {
+      const excludedColliderSet = new Set(excludedColliders);
+
+      return (collider) => !excludedColliderSet.has(collider);
     },
     seats: [
       {
@@ -4686,7 +4923,8 @@ test("MetaverseVehicleRuntime blends routine authoritative correction and preser
     surfaceColliderSnapshots: [],
     waterContactProbeRadiusMeters:
       metaverseRuntimeConfig.skiff.waterContactProbeRadiusMeters,
-    waterlineHeightMeters: metaverseRuntimeConfig.skiff.waterlineHeightMeters
+    waterlineHeightMeters: metaverseRuntimeConfig.skiff.waterlineHeightMeters,
+    worldRadius: metaverseRuntimeConfig.movement.worldRadius
   });
 
   const correctedSnapshot = vehicleRuntime.syncAuthoritativePose({
@@ -4728,17 +4966,27 @@ test("MetaverseVehicleRuntime blends routine authoritative correction and preser
 test("MetaverseVehicleRuntime snaps gross authoritative divergence instead of blending it", async () => {
   const [
     { MetaverseVehicleRuntime },
+    { RapierPhysicsRuntime },
     { metaverseRuntimeConfig }
   ] = await Promise.all([
     clientLoader.load("/src/metaverse/vehicles/classes/metaverse-vehicle-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts"),
     clientLoader.load("/src/metaverse/config/metaverse-runtime.ts")
   ]);
+  const physicsRuntime = createFakePhysicsRuntime(RapierPhysicsRuntime);
+
+  await physicsRuntime.init();
   const vehicleRuntime = new MetaverseVehicleRuntime({
     authoritativeCorrection: metaverseRuntimeConfig.skiff.authoritativeCorrection,
+    driveCollider: Object.freeze({
+      center: Object.freeze({ x: 0, y: 0.72, z: 0 }),
+      size: Object.freeze({ x: 4.2, y: 1.44, z: 1.8 })
+    }),
     environmentAssetId: "metaverse-hub-skiff-v1",
     entries: null,
     label: "Metaverse hub skiff",
     oceanHeightMeters: metaverseRuntimeConfig.ocean.height,
+    physicsRuntime,
     poseSnapshot: {
       position: {
         x: 0,
@@ -4746,6 +4994,14 @@ test("MetaverseVehicleRuntime snaps gross authoritative divergence instead of bl
         z: 24
       },
       yawRadians: 0
+    },
+    resolveWaterborneTraversalFilterPredicate(
+      _excludedOwnerEnvironmentAssetId = null,
+      excludedColliders = []
+    ) {
+      const excludedColliderSet = new Set(excludedColliders);
+
+      return (collider) => !excludedColliderSet.has(collider);
     },
     seats: [
       {
@@ -4764,7 +5020,8 @@ test("MetaverseVehicleRuntime snaps gross authoritative divergence instead of bl
     surfaceColliderSnapshots: [],
     waterContactProbeRadiusMeters:
       metaverseRuntimeConfig.skiff.waterContactProbeRadiusMeters,
-    waterlineHeightMeters: metaverseRuntimeConfig.skiff.waterlineHeightMeters
+    waterlineHeightMeters: metaverseRuntimeConfig.skiff.waterlineHeightMeters,
+    worldRadius: metaverseRuntimeConfig.movement.worldRadius
   });
 
   const correctedSnapshot = vehicleRuntime.syncAuthoritativePose({
@@ -4866,14 +5123,14 @@ test("metaverse asset proof resolves a socket-compatible attachment config from 
   assert.equal(metaverseAttachmentProofConfig.heldMount.socketName, "grip_r_socket");
   assert.equal(
     metaverseAttachmentProofConfig.heldMount.offHandSupportPointId,
-    null
+    "grip-support-right"
   );
   assert.deepEqual(metaverseAttachmentProofConfig.heldMount.gripAlignment, {
     attachmentForwardMarkerNodeName: "metaverse_service_pistol_forward_marker",
     attachmentGripMarkerNodeName: "metaverse_service_pistol_grip_left_marker",
     attachmentUpMarkerNodeName: "metaverse_service_pistol_up_marker",
     socketForwardAxis: { x: 1, y: 0, z: 0 },
-    socketOffset: { x: 0, y: 0, z: 0 },
+    socketOffset: { x: 0, y: 0.03, z: 0 },
     socketUpAxis: { x: 0, y: 1, z: 0 }
   });
   assert.deepEqual(metaverseAttachmentProofConfig.mountedHolsterMount, {
@@ -4887,7 +5144,12 @@ test("metaverse asset proof resolves a socket-compatible attachment config from 
     },
     socketName: "back_socket"
   });
-  assert.equal(metaverseAttachmentProofConfig.supportPoints, null);
+  assert.deepEqual(metaverseAttachmentProofConfig.supportPoints, [
+    {
+      localPosition: { x: 0.04, y: 0, z: -0.025 },
+      supportPointId: "grip-support-right"
+    }
+  ]);
   assert.equal(metaverseCharacterProofConfig.skeletonId, "humanoid_v2");
 });
 
@@ -5159,7 +5421,12 @@ test("WebGpuMetaverseRuntime boots pushable rigid bodies and enables dynamic-bod
     });
 
     assert.equal(world.rigidBodies.length, 1);
-    assert.equal(world.lastCharacterController?.applyImpulsesToDynamicBodies, true);
+    assert.equal(
+      world.characterControllers.some(
+        (controller) => controller.applyImpulsesToDynamicBodies === true
+      ),
+      true
+    );
     assert.equal(runtime.hudSnapshot.focusedMountable, null);
 
     runtime.dispose();
@@ -6436,7 +6703,7 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
   );
 });
 
-test("createMetaverseScene aligns humanoid_v2 held weapon aim to the camera look direction with trigger-hand grip only", async () => {
+test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and remotely", async () => {
   const [
     {
       AnimationClip,
@@ -6447,6 +6714,7 @@ test("createMetaverseScene aligns humanoid_v2 held weapon aim to the camera look
       Mesh,
       MeshStandardMaterial,
       Quaternion,
+      QuaternionKeyframeTrack,
       Skeleton,
       SkinnedMesh,
       Uint16BufferAttribute,
@@ -6598,8 +6866,41 @@ test("createMetaverseScene aligns humanoid_v2 held weapon aim to the camera look
 
   const authoredAnimationPackPath =
     "/models/metaverse/characters/mesh2motion-humanoid-canonical-animations.glb";
-  const idleClip = new AnimationClip("idle", -1, []);
-  const aimClip = new AnimationClip("aim", -1, []);
+  const pistolPoseAnimationPackPath =
+    "/models/metaverse/characters/all_pistol_animations.glb";
+  const createStaticQuaternionTrack = (trackName, quaternion) =>
+    new QuaternionKeyframeTrack(trackName, [0, 1], [
+      ...quaternion.toArray(),
+      ...quaternion.toArray()
+    ]);
+  const idleClip = new AnimationClip("idle", 1, [
+    createStaticQuaternionTrack("thigh_r.quaternion", new Quaternion())
+  ]);
+  const walkClip = new AnimationClip("walk", 1, [
+    createStaticQuaternionTrack(
+      "upperarm_r.quaternion",
+      new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), -0.55)
+    ),
+    createStaticQuaternionTrack(
+      "thigh_r.quaternion",
+      new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), 0.22)
+    )
+  ]);
+  const pistolAimDownClip = new AnimationClip("Pistol_Aim_Down", 1, [
+    createStaticQuaternionTrack(
+      "head.quaternion",
+      new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), -0.18)
+    )
+  ]);
+  const pistolAimNeutralClip = new AnimationClip("Pistol_Aim_Neutral", 1, [
+    createStaticQuaternionTrack("head.quaternion", new Quaternion())
+  ]);
+  const pistolAimUpClip = new AnimationClip("Pistol_Aim_Up", 1, [
+    createStaticQuaternionTrack(
+      "head.quaternion",
+      new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), 0.18)
+    )
+  ]);
   const attachmentScene = new Group();
   const attachmentMesh = new Mesh(
     new BoxGeometry(0.28, 0.08, 0.08),
@@ -6656,12 +6957,20 @@ test("createMetaverseScene aligns humanoid_v2 held weapon aim to the camera look
           vocabulary: "idle"
         },
         {
-          clipName: "aim",
+          clipName: "walk",
           sourcePath: authoredAnimationPackPath,
-          vocabulary: "aim"
+          vocabulary: "walk"
         }
       ],
       characterId: "mesh2motion-humanoid-v1",
+      humanoidV2PistolPoseProofConfig: {
+        clipNamesByPoseId: {
+          down: "Pistol_Aim_Down",
+          neutral: "Pistol_Aim_Neutral",
+          up: "Pistol_Aim_Up"
+        },
+        sourcePath: pistolPoseAnimationPackPath
+      },
       label: "Mesh2Motion humanoid",
       modelPath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
       skeletonId: "humanoid_v2",
@@ -6684,7 +6993,18 @@ test("createMetaverseScene aligns humanoid_v2 held weapon aim to the camera look
 
         if (path === authoredAnimationPackPath) {
           return {
-            animations: [idleClip, aimClip],
+            animations: [idleClip, walkClip],
+            scene: new Group()
+          };
+        }
+
+        if (path === pistolPoseAnimationPackPath) {
+          return {
+            animations: [
+              pistolAimDownClip,
+              pistolAimNeutralClip,
+              pistolAimUpClip
+            ],
             scene: new Group()
           };
         }
@@ -6726,7 +7046,7 @@ test("createMetaverseScene aligns humanoid_v2 held weapon aim to the camera look
     yawRadians: 0
   };
   const characterPresentation = {
-    animationVocabulary: "idle",
+    animationVocabulary: "walk",
     position: { x: 0, y: 0, z: 0 },
     yawRadians: 0
   };
@@ -6751,6 +7071,7 @@ test("createMetaverseScene aligns humanoid_v2 held weapon aim to the camera look
   const leftSupportPointNode = sceneRuntime.scene.getObjectByName(
     "metaverse_attachment_support_point/metaverse-service-pistol-v1/hand_l_support"
   );
+  const leftGripSocketNode = sceneRuntime.scene.getObjectByName("grip_l_socket");
   const rightSupportPointNode = sceneRuntime.scene.getObjectByName(
     "metaverse_attachment_support_point/metaverse-service-pistol-v1/hand_r_support"
   );
@@ -6766,6 +7087,7 @@ test("createMetaverseScene aligns humanoid_v2 held weapon aim to the camera look
   assert.ok(forwardMarkerNode);
   assert.equal(leftSupportPointNode, undefined);
   assert.equal(rightSupportPointNode, undefined);
+  assert.ok(leftGripSocketNode);
   assert.ok(rightGripSocketNode);
   for (const knuckleNode of rightKnuckleNodes) {
     assert.ok(knuckleNode);
@@ -6802,6 +7124,9 @@ test("createMetaverseScene aligns humanoid_v2 held weapon aim to the camera look
       .multiplyScalar(1 / nodes.length);
   const rightKnuckleCentroid = resolveKnuckleCentroid(rightKnuckleNodes);
   const expectedRightGripEdge = new Vector3(0.04, 0, 0.025);
+  const initialLeftGripLocalPosition = attachmentRoot.worldToLocal(
+    leftGripSocketNode.getWorldPosition(new Vector3())
+  );
 
   assert.ok(
     initialWeaponForward.angleTo(normalizedLookDirection) < 0.28,
@@ -6857,6 +7182,101 @@ test("createMetaverseScene aligns humanoid_v2 held weapon aim to the camera look
   assert.ok(
     repeatedWeaponForward.angleTo(initialWeaponForward) < 0.02,
     `Expected held weapon forward to stay stable across repeated standing frames, but delta was ${repeatedWeaponForward.angleTo(initialWeaponForward).toFixed(4)} radians.`
+  );
+
+  const pitchedLookDirection = new Vector3(0.1, -0.42, -0.9).normalize();
+
+  sceneRuntime.syncPresentation(
+    {
+      lookDirection: {
+        x: pitchedLookDirection.x,
+        y: pitchedLookDirection.y,
+        z: pitchedLookDirection.z
+      },
+      pitchRadians: -0.4,
+      position: { x: 0.25, y: 1.62, z: 0.4 },
+      yawRadians: 0
+    },
+    null,
+    176,
+    1 / 60,
+    characterPresentation,
+    []
+  );
+  sceneRuntime.scene.updateMatrixWorld(true);
+
+  const pitchedLeftGripLocalPosition = attachmentRoot.worldToLocal(
+    leftGripSocketNode.getWorldPosition(new Vector3())
+  );
+
+  assert.ok(
+    pitchedLeftGripLocalPosition.distanceTo(initialLeftGripLocalPosition) < 0.03,
+    `Expected left-hand grip ${pitchedLeftGripLocalPosition.toArray()} to stay locked near ${initialLeftGripLocalPosition.toArray()} across pitch changes.`
+  );
+
+  const remotePitchUpPresentation = Object.freeze({
+    characterId: "mesh2motion-humanoid-v1",
+    look: Object.freeze({
+      pitchRadians: 0.45,
+      yawRadians: 0
+    }),
+    mountedOccupancy: null,
+    playerId: "remote-aimer",
+    poseSyncMode: "runtime-server-sampled",
+    presentation: Object.freeze({
+      animationVocabulary: "walk",
+      position: Object.freeze({
+        x: 1.5,
+        y: 0,
+        z: -1
+      }),
+      yawRadians: 0
+    })
+  });
+
+  sceneRuntime.syncPresentation(
+    cameraSnapshot,
+    null,
+    160,
+    1 / 60,
+    characterPresentation,
+    [remotePitchUpPresentation]
+  );
+  sceneRuntime.scene.updateMatrixWorld(true);
+
+  const remoteCharacterRoot = sceneRuntime.scene.getObjectByName(
+    "metaverse_character/mesh2motion-humanoid-v1/remote-aimer"
+  );
+  const remoteHeadBone = remoteCharacterRoot?.getObjectByName("head") ?? null;
+
+  assert.ok(remoteCharacterRoot);
+  assert.ok(remoteHeadBone);
+
+  const remotePitchUpQuaternion = remoteHeadBone.quaternion.clone();
+
+  sceneRuntime.syncPresentation(
+    cameraSnapshot,
+    null,
+    176,
+    1 / 60,
+    characterPresentation,
+    [
+      Object.freeze({
+        ...remotePitchUpPresentation,
+        look: Object.freeze({
+          pitchRadians: -0.45,
+          yawRadians: 0
+        })
+      })
+    ]
+  );
+  sceneRuntime.scene.updateMatrixWorld(true);
+
+  const remotePitchDownQuaternion = remoteHeadBone.quaternion.clone();
+
+  assert.ok(
+    remotePitchUpQuaternion.angleTo(remotePitchDownQuaternion) > 0.08,
+    `Expected remote humanoid_v2 head pitch to respond to replicated look pitch, but delta was ${remotePitchUpQuaternion.angleTo(remotePitchDownQuaternion).toFixed(4)} radians.`
   );
 });
 

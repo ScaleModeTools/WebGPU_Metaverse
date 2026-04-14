@@ -9,7 +9,8 @@ import {
   MetaverseGroundedBodyRuntime,
   RapierPhysicsRuntime,
   type PhysicsVector3Snapshot,
-  type RapierColliderHandle
+  type RapierColliderHandle,
+  type RapierQueryFilterPredicate
 } from "@/physics";
 import type { SceneAssetLoader } from "../render/webgpu-metaverse-scene";
 import { shouldKeepMountedOccupancyFreeRoam } from "../states/mounted-occupancy";
@@ -56,6 +57,7 @@ const identityQuaternion = Object.freeze({
   z: 0,
   w: 1
 });
+const emptyColliderHandleList = Object.freeze([]) as readonly RapierColliderHandle[];
 
 function toFiniteNumber(value: number, fallback = 0): number {
   return Number.isFinite(value) ? value : fallback;
@@ -103,6 +105,10 @@ class MetaverseDynamicEnvironmentColliderRuntime {
   get surfaceColliderSnapshots():
     readonly MetaverseWorldPlacedSurfaceColliderSnapshot[] {
     return this.#surfaceColliderSnapshots;
+  }
+
+  get colliders(): readonly RapierColliderHandle[] {
+    return this.#colliders;
   }
 
   async init(): Promise<void> {
@@ -196,6 +202,13 @@ export class MetaverseEnvironmentPhysicsRuntime {
     MetaverseWorldPlacedSurfaceColliderSnapshot[];
 
   #environmentColliders: RapierColliderHandle[] = [];
+  #surfaceColliderMetadataByHandle = new Map<
+    RapierColliderHandle,
+    Pick<
+      MetaverseWorldPlacedSurfaceColliderSnapshot,
+      "ownerEnvironmentAssetId" | "traversalAffordance"
+    >
+  >();
   #dynamicEnvironmentColliderRuntimesByEnvironmentAssetId = new Map<
     string,
     MetaverseDynamicEnvironmentColliderRuntime
@@ -213,6 +226,7 @@ export class MetaverseEnvironmentPhysicsRuntime {
     string,
     MetaverseWorldPlacedSurfaceColliderSnapshot
   >();
+  #remoteCharacterBlockerHandles = new Set<RapierColliderHandle>();
 
   constructor(
     config: MetaverseRuntimeConfig,
@@ -248,6 +262,47 @@ export class MetaverseEnvironmentPhysicsRuntime {
     return this.#surfaceColliderSnapshots;
   }
 
+  resolveGroundedTraversalFilterPredicate(
+    excludedColliders: readonly RapierColliderHandle[] = emptyColliderHandleList
+  ): RapierQueryFilterPredicate {
+    const excludedColliderSet = new Set(excludedColliders);
+
+    return (collider) =>
+      !excludedColliderSet.has(collider) &&
+      !this.#remoteCharacterBlockerHandles.has(collider);
+  }
+
+  resolveWaterborneTraversalFilterPredicate(
+    excludedOwnerEnvironmentAssetId: string | null = null,
+    excludedColliders: readonly RapierColliderHandle[] = emptyColliderHandleList
+  ): RapierQueryFilterPredicate {
+    const excludedColliderSet = new Set(excludedColliders);
+
+    return (collider) => {
+      if (
+        excludedColliderSet.has(collider) ||
+        this.#remoteCharacterBlockerHandles.has(collider)
+      ) {
+        return false;
+      }
+
+      const colliderMetadata = this.#surfaceColliderMetadataByHandle.get(collider);
+
+      if (colliderMetadata === undefined) {
+        return true;
+      }
+
+      if (colliderMetadata.traversalAffordance === "support") {
+        return false;
+      }
+
+      return (
+        excludedOwnerEnvironmentAssetId === null ||
+        colliderMetadata.ownerEnvironmentAssetId !== excludedOwnerEnvironmentAssetId
+      );
+    };
+  }
+
   setDynamicEnvironmentPose(
     environmentAssetId: string,
     poseSnapshot: {
@@ -278,6 +333,7 @@ export class MetaverseEnvironmentPhysicsRuntime {
         yawRadians: poseSnapshot.yawRadians
       })
     );
+    this.#syncDynamicEnvironmentColliderMetadata(dynamicEnvironmentColliderRuntime);
     this.#syncSurfaceColliderSnapshots();
   }
 
@@ -310,12 +366,17 @@ export class MetaverseEnvironmentPhysicsRuntime {
 
     for (const environmentCollider of this.#environmentColliders) {
       this.#physicsRuntime.removeCollider(environmentCollider);
+      this.#surfaceColliderMetadataByHandle.delete(environmentCollider);
     }
 
     this.#environmentColliders = [];
 
     for (const dynamicEnvironmentColliderRuntime of this
       .#dynamicEnvironmentColliderRuntimesByEnvironmentAssetId.values()) {
+      for (const collider of dynamicEnvironmentColliderRuntime.colliders) {
+        this.#surfaceColliderMetadataByHandle.delete(collider);
+      }
+
       dynamicEnvironmentColliderRuntime.dispose();
     }
 
@@ -323,11 +384,14 @@ export class MetaverseEnvironmentPhysicsRuntime {
     for (const remoteCharacterBlockerCollider of this
       .#remoteCharacterBlockerCollidersByPlayerId.values()) {
       this.#physicsRuntime.removeCollider(remoteCharacterBlockerCollider);
+      this.#surfaceColliderMetadataByHandle.delete(remoteCharacterBlockerCollider);
     }
 
     this.#remoteCharacterBlockerCollidersByPlayerId.clear();
     this.#remoteCharacterBlockerSnapshotsByPlayerId.clear();
+    this.#remoteCharacterBlockerHandles.clear();
     this.#surfaceColliderSnapshots.length = 0;
+    this.#surfaceColliderMetadataByHandle.clear();
 
     for (const [
       environmentAssetId,
@@ -386,13 +450,23 @@ export class MetaverseEnvironmentPhysicsRuntime {
         );
 
       if (existingCollider === undefined) {
+        const blockerCollider = this.#physicsRuntime.createFixedCuboidCollider(
+          blockerSnapshot.halfExtents,
+          blockerSnapshot.translation,
+          blockerSnapshot.rotation
+        );
+
         this.#remoteCharacterBlockerCollidersByPlayerId.set(
           remoteCharacterPresentation.playerId,
-          this.#physicsRuntime.createFixedCuboidCollider(
-            blockerSnapshot.halfExtents,
-            blockerSnapshot.translation,
-            blockerSnapshot.rotation
-          )
+          blockerCollider
+        );
+        this.#remoteCharacterBlockerHandles.add(blockerCollider);
+        this.#surfaceColliderMetadataByHandle.set(
+          blockerCollider,
+          Object.freeze({
+            ownerEnvironmentAssetId: blockerSnapshot.ownerEnvironmentAssetId,
+            traversalAffordance: blockerSnapshot.traversalAffordance
+          })
         );
       } else {
         existingCollider.setTranslation(blockerSnapshot.translation);
@@ -411,6 +485,8 @@ export class MetaverseEnvironmentPhysicsRuntime {
       }
 
       this.#physicsRuntime.removeCollider(collider);
+      this.#remoteCharacterBlockerHandles.delete(collider);
+      this.#surfaceColliderMetadataByHandle.delete(collider);
       this.#remoteCharacterBlockerCollidersByPlayerId.delete(playerId);
       this.#remoteCharacterBlockerSnapshotsByPlayerId.delete(playerId);
     }
@@ -431,12 +507,19 @@ export class MetaverseEnvironmentPhysicsRuntime {
       for (const collider of metaverseWorldLayout.resolveSurfaceColliderSnapshots(
         environmentAsset.environmentAssetId
       )) {
-        this.#environmentColliders.push(
-          this.#physicsRuntime.createFixedCuboidCollider(
-            collider.halfExtents,
-            collider.translation,
-            collider.rotation
-          )
+        const environmentCollider = this.#physicsRuntime.createFixedCuboidCollider(
+          collider.halfExtents,
+          collider.translation,
+          collider.rotation
+        );
+
+        this.#environmentColliders.push(environmentCollider);
+        this.#surfaceColliderMetadataByHandle.set(
+          environmentCollider,
+          Object.freeze({
+            ownerEnvironmentAssetId: collider.ownerEnvironmentAssetId,
+            traversalAffordance: collider.traversalAffordance
+          })
         );
       }
     }
@@ -470,6 +553,7 @@ export class MetaverseEnvironmentPhysicsRuntime {
         dynamicEnvironmentColliderRuntime.environmentAssetId,
         dynamicEnvironmentColliderRuntime
       );
+      this.#syncDynamicEnvironmentColliderMetadata(dynamicEnvironmentColliderRuntime);
     }
 
     this.#syncSurfaceColliderSnapshots();
@@ -549,6 +633,30 @@ export class MetaverseEnvironmentPhysicsRuntime {
       this.#sceneRuntime.setDynamicEnvironmentPose(
         environmentAsset.environmentAssetId,
         dynamicEnvironmentPose
+      );
+    }
+  }
+
+  #syncDynamicEnvironmentColliderMetadata(
+    dynamicEnvironmentColliderRuntime: MetaverseDynamicEnvironmentColliderRuntime
+  ): void {
+    const colliders = dynamicEnvironmentColliderRuntime.colliders;
+    const snapshots = dynamicEnvironmentColliderRuntime.surfaceColliderSnapshots;
+
+    for (const [colliderIndex, collider] of colliders.entries()) {
+      const colliderSnapshot = snapshots[colliderIndex];
+
+      if (colliderSnapshot === undefined) {
+        this.#surfaceColliderMetadataByHandle.delete(collider);
+        continue;
+      }
+
+      this.#surfaceColliderMetadataByHandle.set(
+        collider,
+        Object.freeze({
+          ownerEnvironmentAssetId: colliderSnapshot.ownerEnvironmentAssetId,
+          traversalAffordance: colliderSnapshot.traversalAffordance
+        })
       );
     }
   }

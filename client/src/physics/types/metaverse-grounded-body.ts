@@ -109,6 +109,10 @@ export interface RapierColliderHandle {
   translation(): RapierVectorLike;
 }
 
+export type RapierQueryFilterPredicate = (
+  collider: RapierColliderHandle
+) => boolean;
+
 export interface RapierRigidBodyHandle {
   linvel(): RapierVectorLike;
   setLinvel(velocity: RapierVectorLike, wakeUp: boolean): void;
@@ -121,7 +125,10 @@ export interface RapierCharacterControllerHandle {
   computedMovement(): RapierVectorLike;
   computeColliderMovement(
     collider: RapierColliderHandle,
-    desiredTranslationDelta: RapierVectorLike
+    desiredTranslationDelta: RapierVectorLike,
+    filterFlags?: number,
+    filterGroups?: number,
+    filterPredicate?: RapierQueryFilterPredicate
   ): void;
   disableAutostep?(): void;
   enableAutostep(
