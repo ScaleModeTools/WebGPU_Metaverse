@@ -94,7 +94,10 @@ test("MetaverseFlightInputRuntime owns browser flight input listeners and transi
   };
   const fakeCanvas = new FakeCanvas(documentObject);
   const fakeWindow = new FakeEventTarget();
-  const flightInputRuntime = new MetaverseFlightInputRuntime();
+  let nowMs = 0;
+  const flightInputRuntime = new MetaverseFlightInputRuntime({
+    readWallClockMs: () => nowMs
+  });
 
   globalThis.document = documentObject;
   globalThis.HTMLElement = FakeHTMLElement;
@@ -116,6 +119,7 @@ test("MetaverseFlightInputRuntime owns browser flight input listeners and transi
       movementX: 480,
       movementY: -120
     });
+    nowMs = 1000 / 60;
 
     assert.equal(fakeCanvas.pointerLockRequests, 1);
     assert.deepEqual(normalizeSnapshotSignedZeros(flightInputRuntime.readSnapshot()), {
@@ -128,6 +132,7 @@ test("MetaverseFlightInputRuntime owns browser flight input listeners and transi
       strafeAxis: 1,
       yawAxis: 1
     });
+    nowMs += 1000 / 60;
     assert.deepEqual(normalizeSnapshotSignedZeros(flightInputRuntime.readSnapshot()), {
       boost: false,
       jump: false,
@@ -205,6 +210,87 @@ test("MetaverseFlightInputRuntime owns browser flight input listeners and transi
       strafeAxis: 0,
       yawAxis: 0
     });
+  } finally {
+    globalThis.document = originalDocument;
+    globalThis.HTMLElement = originalHTMLElement;
+    globalThis.window = originalWindow;
+  }
+});
+
+test("MetaverseFlightInputRuntime keeps pointer-lock mouse look travel frame-rate independent", async () => {
+  const [
+    { MetaverseFlightInputRuntime },
+    { advanceMetaversePitchRadians, advanceMetaverseYawRadians },
+    { metaverseRuntimeConfig }
+  ] = await Promise.all([
+    clientLoader.load("/src/metaverse/classes/metaverse-flight-input-runtime.ts"),
+    clientLoader.load("/src/metaverse/states/metaverse-flight.ts"),
+    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts")
+  ]);
+  const originalDocument = globalThis.document;
+  const originalHTMLElement = globalThis.HTMLElement;
+  const originalWindow = globalThis.window;
+  const documentObject = {
+    exitPointerLock() {},
+    pointerLockElement: null
+  };
+  const fakeCanvas = new FakeCanvas(documentObject);
+  const fakeWindow = new FakeEventTarget();
+  let nowMs = 0;
+  const flightInputRuntime = new MetaverseFlightInputRuntime({
+    readWallClockMs: () => nowMs
+  });
+
+  globalThis.document = documentObject;
+  globalThis.HTMLElement = FakeHTMLElement;
+  globalThis.window = fakeWindow;
+
+  try {
+    flightInputRuntime.install(fakeCanvas);
+    fakeCanvas.dispatch("mousedown", {
+      button: 0
+    });
+
+    fakeWindow.dispatch("mousemove", {
+      movementX: 12,
+      movementY: -6
+    });
+    nowMs = 1000 / 60;
+    const sixtyFpsSnapshot = flightInputRuntime.readSnapshot();
+    const sixtyFpsYawRadians = advanceMetaverseYawRadians(
+      0,
+      sixtyFpsSnapshot.yawAxis,
+      metaverseRuntimeConfig.orientation,
+      1 / 60
+    );
+    const sixtyFpsPitchRadians = advanceMetaversePitchRadians(
+      0,
+      sixtyFpsSnapshot.pitchAxis,
+      metaverseRuntimeConfig.orientation,
+      1 / 60
+    );
+
+    fakeWindow.dispatch("mousemove", {
+      movementX: 12,
+      movementY: -6
+    });
+    nowMs += 1000 / 30;
+    const thirtyFpsSnapshot = flightInputRuntime.readSnapshot();
+    const thirtyFpsYawRadians = advanceMetaverseYawRadians(
+      0,
+      thirtyFpsSnapshot.yawAxis,
+      metaverseRuntimeConfig.orientation,
+      1 / 30
+    );
+    const thirtyFpsPitchRadians = advanceMetaversePitchRadians(
+      0,
+      thirtyFpsSnapshot.pitchAxis,
+      metaverseRuntimeConfig.orientation,
+      1 / 30
+    );
+
+    assert.ok(Math.abs(sixtyFpsYawRadians - thirtyFpsYawRadians) < 0.000001);
+    assert.ok(Math.abs(sixtyFpsPitchRadians - thirtyFpsPitchRadians) < 0.000001);
   } finally {
     globalThis.document = originalDocument;
     globalThis.HTMLElement = originalHTMLElement;

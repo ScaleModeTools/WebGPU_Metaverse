@@ -1,4 +1,13 @@
+import {
+  metaverseGroundedBodyTraversalCoreConfig,
+  metaverseGroundedSurfaceTraversalConfig,
+  metaverseSwimSurfaceTraversalConfig,
+  metaverseTraversalWorldRadius,
+  metaverseVehicleSurfaceTraversalConfig
+} from "@webgpu-metaverse/shared";
 import type { MetaverseRuntimeConfig } from "../types/metaverse-runtime";
+
+const metaverseSpawnDockSupportHeightMeters = 0.6;
 
 export const metaverseRuntimeConfig = {
   camera: {
@@ -9,12 +18,12 @@ export const metaverseRuntimeConfig = {
     near: 0.1,
     spawnPosition: {
       x: -8.2,
-      y: 1.77,
+      y: metaverseSpawnDockSupportHeightMeters + 1.62,
       z: -15.04
     }
   },
   bodyPresentation: {
-    groundedFirstPersonForwardOffsetMeters: 0.24,
+    groundedFirstPersonForwardOffsetMeters: 0,
     swimIdleBodySubmersionDepthMeters: 1.02,
     swimMovingBodySubmersionDepthMeters: 0.94,
     swimThirdPersonFollowDistanceMeters: 2.8,
@@ -38,32 +47,14 @@ export const metaverseRuntimeConfig = {
     boostMultiplier: 2.15,
     maxAltitude: 22,
     minAltitude: 2.25,
-    worldRadius: 110
+    worldRadius: metaverseTraversalWorldRadius
   },
   groundedBody: {
-    accelerationCurveExponent: 1.22,
-    accelerationUnitsPerSecondSquared: 22,
-    airborneMovementDampingFactor: 0.42,
-    baseSpeedUnitsPerSecond: 8.5,
-    boostCurveExponent: 1.08,
-    boostMultiplier: 1.75,
-    capsuleHalfHeightMeters: 0.48,
-    capsuleRadiusMeters: 0.34,
-    controllerOffsetMeters: 0.02,
-    decelerationUnitsPerSecondSquared: 30,
-    dragCurveExponent: 1.5,
+    ...metaverseGroundedBodyTraversalCoreConfig,
     eyeHeightMeters: 1.62,
-    gravityUnitsPerSecond: 18,
-    jumpImpulseUnitsPerSecond: 6.8,
-    maxSlopeClimbAngleRadians: Math.PI * 0.26,
-    minSlopeSlideAngleRadians: Math.PI * 0.34,
-    maxTurnSpeedRadiansPerSecond: 3.6,
-    snapToGroundDistanceMeters: 0.22,
-    stepHeightMeters: 0.28,
-    stepWidthMeters: 0.24,
     spawnPosition: {
       x: -8.2,
-      y: 0.15,
+      y: metaverseSpawnDockSupportHeightMeters,
       z: -14.8
     }
   },
@@ -98,8 +89,7 @@ export const metaverseRuntimeConfig = {
     }
   },
   skiff: {
-    accelerationCurveExponent: 1.08,
-    accelerationUnitsPerSecondSquared: 12,
+    ...metaverseVehicleSurfaceTraversalConfig,
     authoritativeCorrection: {
       grossSnapDistanceThresholdMeters: 3.5,
       grossSnapYawThresholdRadians: 0.75,
@@ -107,28 +97,15 @@ export const metaverseRuntimeConfig = {
       routinePositionBlendThresholdMeters: 0.9,
       routineYawBlendThresholdRadians: 0.18
     },
-    baseSpeedUnitsPerSecond: 10.5,
-    boostCurveExponent: 1.02,
-    boostMultiplier: 1.55,
     cameraFollowDistanceMeters: 3.2,
     cameraHeightOffsetMeters: 0.92,
     cameraEyeHeightMeters: 1.74,
-    decelerationUnitsPerSecondSquared: 14,
-    dragCurveExponent: 1.3,
-    maxTurnSpeedRadiansPerSecond: 0.95,
     waterContactProbeRadiusMeters: 1.75,
     waterlineHeightMeters: 0.12
   },
   swim: {
-    accelerationCurveExponent: 1.15,
-    accelerationUnitsPerSecondSquared: 13,
-    baseSpeedUnitsPerSecond: 6.4,
-    boostCurveExponent: 1.1,
-    boostMultiplier: 1.45,
+    ...metaverseSwimSurfaceTraversalConfig,
     cameraEyeHeightMeters: 1.38,
-    decelerationUnitsPerSecondSquared: 12,
-    dragCurveExponent: 1.35,
-    maxTurnSpeedRadiansPerSecond: 3.2
   },
   portals: [
     {

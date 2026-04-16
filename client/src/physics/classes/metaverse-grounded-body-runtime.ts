@@ -1,10 +1,13 @@
 import {
-  advanceMetaverseSurfaceTraversalMotion,
   clamp,
-  constrainMetaverseSurfaceTraversalPositionToWorldRadius,
+  createMetaverseGroundedBodyStepStateSnapshot,
   createMetaverseSurfaceTraversalVector3Snapshot as freezeVector3,
+  prepareMetaverseGroundedBodyStep,
+  resolveMetaverseGroundedBodyStep,
+  syncMetaverseGroundedBodyStepState,
   toFiniteNumber,
-  wrapRadians
+  wrapRadians,
+  type MetaverseGroundedBodyStepStateSnapshot
 } from "@webgpu-metaverse/shared";
 
 import { RapierPhysicsRuntime } from "./rapier-physics-runtime";
@@ -69,6 +72,10 @@ function sanitizeConfig(
       0,
       toFiniteNumber(config.gravityUnitsPerSecond, 18)
     ),
+    jumpGroundContactGraceSeconds: Math.max(
+      0,
+      toFiniteNumber(config.jumpGroundContactGraceSeconds ?? 0.2, 0.2)
+    ),
     jumpImpulseUnitsPerSecond: Math.max(
       0,
       toFiniteNumber(config.jumpImpulseUnitsPerSecond, 6.8)
@@ -110,22 +117,21 @@ function sanitizeConfig(
 
 function freezeGroundedBodySnapshot(
   config: MetaverseGroundedBodyConfig,
-  position: PhysicsVector3Snapshot,
+  stepState: MetaverseGroundedBodyStepStateSnapshot,
   planarSpeedUnitsPerSecond: number,
-  verticalSpeedUnitsPerSecond: number,
-  yawRadians: number,
-  grounded: boolean
 ): MetaverseGroundedBodySnapshot {
   return Object.freeze({
     capsuleHalfHeightMeters: config.capsuleHalfHeightMeters,
     capsuleRadiusMeters: config.capsuleRadiusMeters,
     eyeHeightMeters: config.eyeHeightMeters,
-    grounded,
-    jumpReady: grounded,
+    grounded: stepState.grounded,
+    jumpReady: stepState.jumpReady,
     planarSpeedUnitsPerSecond: Math.max(0, toFiniteNumber(planarSpeedUnitsPerSecond)),
-    position,
-    verticalSpeedUnitsPerSecond: toFiniteNumber(verticalSpeedUnitsPerSecond),
-    yawRadians: wrapRadians(yawRadians)
+    position: stepState.position,
+    verticalSpeedUnitsPerSecond: toFiniteNumber(
+      stepState.verticalSpeedUnitsPerSecond
+    ),
+    yawRadians: wrapRadians(stepState.yawRadians)
   });
 }
 
@@ -137,10 +143,8 @@ export class MetaverseGroundedBodyRuntime {
   #autostepHeightMeters: number;
   #characterController: RapierCharacterControllerHandle | null = null;
   #collider: RapierColliderHandle | null = null;
-  #forwardSpeedUnitsPerSecond = 0;
-  #strafeSpeedUnitsPerSecond = 0;
-  #verticalSpeedUnitsPerSecond = 0;
   #applyImpulsesToDynamicBodies = false;
+  #stepState: MetaverseGroundedBodyStepStateSnapshot;
   #snapshot: MetaverseGroundedBodySnapshot;
 
   constructor(
@@ -150,13 +154,13 @@ export class MetaverseGroundedBodyRuntime {
     this.#config = sanitizeConfig(config);
     this.#physicsRuntime = physicsRuntime;
     this.#autostepHeightMeters = this.#config.stepHeightMeters;
+    this.#stepState = createMetaverseGroundedBodyStepStateSnapshot({
+      position: this.#config.spawnPosition
+    });
     this.#snapshot = freezeGroundedBodySnapshot(
       this.#config,
-      this.#config.spawnPosition,
-      0,
-      0,
-      0,
-      false
+      this.#stepState,
+      0
     );
   }
 
@@ -168,8 +172,59 @@ export class MetaverseGroundedBodyRuntime {
     return this.#snapshot;
   }
 
+  get linearVelocitySnapshot(): PhysicsVector3Snapshot {
+    const yawRadians = this.#stepState.yawRadians;
+    const forwardX = Math.sin(yawRadians);
+    const forwardZ = -Math.cos(yawRadians);
+    const rightX = Math.cos(yawRadians);
+    const rightZ = Math.sin(yawRadians);
+
+    return freezeVector3(
+      this.#stepState.forwardSpeedUnitsPerSecond * forwardX +
+        this.#stepState.strafeSpeedUnitsPerSecond * rightX,
+      this.#stepState.verticalSpeedUnitsPerSecond,
+      this.#stepState.forwardSpeedUnitsPerSecond * forwardZ +
+        this.#stepState.strafeSpeedUnitsPerSecond * rightZ
+    );
+  }
+
   get colliderHandle(): RapierColliderHandle | null {
     return this.#collider;
+  }
+
+  captureStateSnapshot(): {
+    readonly autostepEnabled: boolean;
+    readonly autostepHeightMeters: number;
+    readonly stepState: MetaverseGroundedBodyStepStateSnapshot;
+  } {
+    return Object.freeze({
+      autostepEnabled: this.#autostepEnabled,
+      autostepHeightMeters: this.#autostepHeightMeters,
+      stepState: this.#stepState
+    });
+  }
+
+  restoreStateSnapshot(snapshot: {
+    readonly autostepEnabled: boolean;
+    readonly autostepHeightMeters: number;
+    readonly stepState: MetaverseGroundedBodyStepStateSnapshot;
+  }): void {
+    const collider = this.#requireCollider();
+
+    this.#stepState = snapshot.stepState;
+    collider.setTranslation(
+      this.#rootToColliderCenter(snapshot.stepState.position)
+    );
+    this.#syncSnapshotFromStepState(
+      Math.hypot(
+        snapshot.stepState.forwardSpeedUnitsPerSecond,
+        snapshot.stepState.strafeSpeedUnitsPerSecond
+      )
+    );
+    this.setAutostepEnabled(
+      snapshot.autostepEnabled,
+      snapshot.autostepHeightMeters
+    );
   }
 
   async init(initialYawRadians = 0): Promise<void> {
@@ -189,7 +244,7 @@ export class MetaverseGroundedBodyRuntime {
     );
     controller.setCharacterMass(1);
     this.#syncAutostepConfiguration(controller);
-    controller.enableSnapToGround(this.#config.snapToGroundDistanceMeters);
+    this.#syncSnapToGroundConfiguration(controller, true);
     controller.setMaxSlopeClimbAngle?.(this.#config.maxSlopeClimbAngleRadians);
     controller.setMinSlopeSlideAngle?.(this.#config.minSlopeSlideAngleRadians);
 
@@ -201,15 +256,11 @@ export class MetaverseGroundedBodyRuntime {
 
     this.#characterController = controller;
     this.#collider = collider;
-    this.#forwardSpeedUnitsPerSecond = 0;
-    this.#snapshot = freezeGroundedBodySnapshot(
-      this.#config,
-      this.#config.spawnPosition,
-      0,
-      0,
-      initialYawRadians,
-      false
-    );
+    this.#stepState = createMetaverseGroundedBodyStepStateSnapshot({
+      position: this.#config.spawnPosition,
+      yawRadians: initialYawRadians
+    });
+    this.#syncSnapshotFromStepState(0);
   }
 
   setApplyImpulsesToDynamicBodies(enabled: boolean): void {
@@ -247,36 +298,25 @@ export class MetaverseGroundedBodyRuntime {
       snapshot.position.y,
       snapshot.position.z
     );
-    const yawRadians = wrapRadians(snapshot.yawRadians);
-    const linearVelocityX = toFiniteNumber(snapshot.linearVelocity.x);
-    const linearVelocityY = toFiniteNumber(snapshot.linearVelocity.y);
-    const linearVelocityZ = toFiniteNumber(snapshot.linearVelocity.z);
-    const forwardX = Math.sin(yawRadians);
-    const forwardZ = -Math.cos(yawRadians);
-    const rightX = Math.cos(yawRadians);
-    const rightZ = Math.sin(yawRadians);
-
     collider.setTranslation(this.#rootToColliderCenter(sanitizedPosition));
-    this.#forwardSpeedUnitsPerSecond =
-      linearVelocityX * forwardX + linearVelocityZ * forwardZ;
-    this.#strafeSpeedUnitsPerSecond =
-      linearVelocityX * rightX + linearVelocityZ * rightZ;
-    this.#verticalSpeedUnitsPerSecond =
-      snapshot.grounded === true ? 0 : linearVelocityY;
-    this.#snapshot = freezeGroundedBodySnapshot(
-      this.#config,
-      sanitizedPosition,
-      Math.hypot(linearVelocityX, linearVelocityZ),
-      this.#verticalSpeedUnitsPerSecond,
-      yawRadians,
-      snapshot.grounded === true
+    this.#stepState = syncMetaverseGroundedBodyStepState(
+      this.#stepState,
+      {
+        grounded: snapshot.grounded,
+        linearVelocity: snapshot.linearVelocity,
+        position: sanitizedPosition,
+        yawRadians: snapshot.yawRadians
+      },
+      this.#config
     );
+    this.#syncSnapshotFromStepState(Math.hypot(snapshot.linearVelocity.x, snapshot.linearVelocity.z));
   }
 
   advance(
     intentSnapshot: MetaverseGroundedBodyIntentSnapshot,
     deltaSeconds: number,
-    filterPredicate?: RapierQueryFilterPredicate
+    filterPredicate?: RapierQueryFilterPredicate,
+    preferredLookYawRadians: number | null = null
   ): MetaverseGroundedBodySnapshot {
     const collider = this.#requireCollider();
     const controller = this.#requireCharacterController();
@@ -285,45 +325,21 @@ export class MetaverseGroundedBodyRuntime {
       return this.#snapshot;
     }
 
-    this.#physicsRuntime.stepSimulation(deltaSeconds);
-
-    const movementDampingFactor =
-      this.#snapshot.grounded ? 1 : this.#config.airborneMovementDampingFactor;
-    const motionSnapshot = advanceMetaverseSurfaceTraversalMotion(
-      this.#snapshot.yawRadians,
-      {
-        forwardSpeedUnitsPerSecond: this.#forwardSpeedUnitsPerSecond,
-        strafeSpeedUnitsPerSecond: this.#strafeSpeedUnitsPerSecond
-      },
-      {
-        boost: intentSnapshot.boost,
-        moveAxis: intentSnapshot.moveAxis,
-        strafeAxis: intentSnapshot.strafeAxis,
-        yawAxis: intentSnapshot.turnAxis
-      },
+    const preparedStep = prepareMetaverseGroundedBodyStep(
+      this.#stepState,
+      intentSnapshot,
       this.#config,
       deltaSeconds,
-      true,
-      movementDampingFactor
+      preferredLookYawRadians
     );
-    const yawRadians = motionSnapshot.yawRadians;
-    const jumpRequested = intentSnapshot.jump === true && this.#snapshot.jumpReady;
-    const verticalSpeedUnitsPerSecond =
-      (jumpRequested
-        ? Math.max(
-            this.#verticalSpeedUnitsPerSecond,
-            this.#config.jumpImpulseUnitsPerSecond
-          )
-        : this.#verticalSpeedUnitsPerSecond) -
-      this.#config.gravityUnitsPerSecond * deltaSeconds;
-    const forwardX = Math.sin(yawRadians);
-    const forwardZ = -Math.cos(yawRadians);
-    const rightX = Math.cos(yawRadians);
-    const rightZ = Math.sin(yawRadians);
     const desiredMovement = this.#physicsRuntime.createVector3(
-      motionSnapshot.velocityX * deltaSeconds,
-      verticalSpeedUnitsPerSecond * deltaSeconds,
-      motionSnapshot.velocityZ * deltaSeconds
+      preparedStep.desiredMovementDelta.x,
+      preparedStep.desiredMovementDelta.y,
+      preparedStep.desiredMovementDelta.z
+    );
+    this.#syncSnapToGroundConfiguration(
+      controller,
+      preparedStep.snapToGroundEnabled
     );
 
     controller.computeColliderMovement(
@@ -336,42 +352,22 @@ export class MetaverseGroundedBodyRuntime {
 
     const currentTranslation = collider.translation();
     const computedMovement = controller.computedMovement();
-    const unclampedRootPosition = freezeVector3(
-      currentTranslation.x + computedMovement.x,
-      currentTranslation.y + computedMovement.y - this.#standingOffsetMeters,
-      currentTranslation.z + computedMovement.z
-    );
-    const clampedRootPosition =
-      constrainMetaverseSurfaceTraversalPositionToWorldRadius(
-        unclampedRootPosition,
-        this.#config.worldRadius
-      );
-    const appliedDeltaX = clampedRootPosition.x - this.#snapshot.position.x;
-    const appliedDeltaY = clampedRootPosition.y - this.#snapshot.position.y;
-    const appliedDeltaZ = clampedRootPosition.z - this.#snapshot.position.z;
-    const planarSpeedUnitsPerSecond = Math.hypot(appliedDeltaX, appliedDeltaZ) /
-      deltaSeconds;
-    const grounded = controller.computedGrounded();
-
-    collider.setTranslation(this.#rootToColliderCenter(clampedRootPosition));
-    this.#forwardSpeedUnitsPerSecond =
-      (appliedDeltaX * forwardX + appliedDeltaZ * forwardZ) / deltaSeconds;
-    this.#strafeSpeedUnitsPerSecond =
-      (appliedDeltaX * rightX + appliedDeltaZ * rightZ) / deltaSeconds;
-    // Air control already reduces acceleration/deceleration above, so keep the
-    // carried horizontal velocity intact when the body leaves the ground.
-    this.#verticalSpeedUnitsPerSecond = grounded
-      ? 0
-      : appliedDeltaY / deltaSeconds;
-
-    this.#snapshot = freezeGroundedBodySnapshot(
+    const resolvedStep = resolveMetaverseGroundedBodyStep(
+      this.#stepState,
+      preparedStep,
+      freezeVector3(
+        currentTranslation.x + computedMovement.x,
+        currentTranslation.y + computedMovement.y - this.#standingOffsetMeters,
+        currentTranslation.z + computedMovement.z
+      ),
+      controller.computedGrounded(),
       this.#config,
-      clampedRootPosition,
-      planarSpeedUnitsPerSecond,
-      this.#verticalSpeedUnitsPerSecond,
-      yawRadians,
-      grounded
+      deltaSeconds
     );
+
+    this.#stepState = resolvedStep.state;
+    collider.setTranslation(this.#rootToColliderCenter(this.#stepState.position));
+    this.#syncSnapshotFromStepState(resolvedStep.planarSpeedUnitsPerSecond);
 
     return this.#snapshot;
   }
@@ -387,17 +383,11 @@ export class MetaverseGroundedBodyRuntime {
     this.#applyImpulsesToDynamicBodies = false;
     this.#autostepEnabled = true;
     this.#autostepHeightMeters = this.#config.stepHeightMeters;
-    this.#forwardSpeedUnitsPerSecond = 0;
-    this.#strafeSpeedUnitsPerSecond = 0;
-    this.#verticalSpeedUnitsPerSecond = 0;
-    this.#snapshot = freezeGroundedBodySnapshot(
-      this.#config,
-      this.#config.spawnPosition,
-      0,
-      0,
-      this.#snapshot.yawRadians,
-      false
-    );
+    this.#stepState = createMetaverseGroundedBodyStepStateSnapshot({
+      position: this.#config.spawnPosition,
+      yawRadians: this.#stepState.yawRadians
+    });
+    this.#syncSnapshotFromStepState(0);
   }
 
   teleport(position: PhysicsVector3Snapshot, yawRadians: number): void {
@@ -405,17 +395,11 @@ export class MetaverseGroundedBodyRuntime {
     const sanitizedPosition = freezeVector3(position.x, position.y, position.z);
 
     collider.setTranslation(this.#rootToColliderCenter(sanitizedPosition));
-    this.#forwardSpeedUnitsPerSecond = 0;
-    this.#strafeSpeedUnitsPerSecond = 0;
-    this.#verticalSpeedUnitsPerSecond = 0;
-    this.#snapshot = freezeGroundedBodySnapshot(
-      this.#config,
-      sanitizedPosition,
-      0,
-      0,
-      yawRadians,
-      false
-    );
+    this.#stepState = createMetaverseGroundedBodyStepStateSnapshot({
+      position: sanitizedPosition,
+      yawRadians
+    });
+    this.#syncSnapshotFromStepState(0);
   }
 
   get #standingOffsetMeters(): number {
@@ -453,6 +437,23 @@ export class MetaverseGroundedBodyRuntime {
     }
 
     controller.disableAutostep?.();
+  }
+
+  #syncSnapToGroundConfiguration(
+    controller: RapierCharacterControllerHandle,
+    enabled: boolean
+  ): void {
+    controller.enableSnapToGround(
+      enabled ? this.#config.snapToGroundDistanceMeters : 0
+    );
+  }
+
+  #syncSnapshotFromStepState(planarSpeedUnitsPerSecond: number): void {
+    this.#snapshot = freezeGroundedBodySnapshot(
+      this.#config,
+      this.#stepState,
+      planarSpeedUnitsPerSecond
+    );
   }
 
   #rootToColliderCenter(

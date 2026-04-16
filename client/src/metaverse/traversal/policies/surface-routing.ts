@@ -2,7 +2,7 @@ import type { PhysicsVector3Snapshot } from "@/physics";
 import {
   constrainMetaverseWorldPlanarPositionAgainstBlockers,
   isMetaverseWorldWaterbornePosition,
-  metaverseWorldLayout,
+  metaverseWorldPlacedWaterRegions,
   resolveMetaverseWorldAutomaticSurfaceLocomotion,
   resolveMetaverseWorldGroundedAutostepHeightMeters,
   resolveMetaverseWorldSurfaceHeightMeters,
@@ -23,9 +23,9 @@ const surfacePolicyConfigByRuntimeConfig = new WeakMap<
   MetaverseRuntimeConfig,
   MetaverseWorldSurfacePolicyConfig
 >();
-const metaverseWaterRegionSnapshots = metaverseWorldLayout.waterRegionSnapshots;
+const metaverseWaterRegionSnapshots = metaverseWorldPlacedWaterRegions;
 
-function readSurfacePolicyConfig(
+export function readMetaverseSurfacePolicyConfig(
   config: MetaverseRuntimeConfig
 ): MetaverseWorldSurfacePolicyConfig {
   const cachedConfig = surfacePolicyConfigByRuntimeConfig.get(config);
@@ -61,7 +61,7 @@ export function resolveSurfaceHeightMeters(
   excludedOwnerEnvironmentAssetId: string | null = null
 ): number | null {
   return resolveMetaverseWorldSurfaceHeightMeters(
-    readSurfacePolicyConfig(config),
+    readMetaverseSurfacePolicyConfig(config),
     surfaceColliderSnapshots,
     metaverseWaterRegionSnapshots,
     x,
@@ -117,7 +117,7 @@ export function resolveGroundedAutostepHeightMeters(
   excludedOwnerEnvironmentAssetId: string | null = null
 ): number | null {
   return resolveMetaverseWorldGroundedAutostepHeightMeters(
-    readSurfacePolicyConfig(config),
+    readMetaverseSurfacePolicyConfig(config),
     surfaceColliderSnapshots,
     position,
     yawRadians,
@@ -164,7 +164,7 @@ export function resolveAutomaticSurfaceLocomotionSnapshot(
   excludedOwnerEnvironmentAssetId: string | null = null
 ): AutomaticSurfaceLocomotionSnapshot {
   return resolveMetaverseWorldAutomaticSurfaceLocomotion(
-    readSurfacePolicyConfig(config),
+    readMetaverseSurfacePolicyConfig(config),
     surfaceColliderSnapshots,
     metaverseWaterRegionSnapshots,
     position,
@@ -200,7 +200,7 @@ export function isWaterbornePosition(
   excludedOwnerEnvironmentAssetId: string | null = null
 ): boolean {
   return isMetaverseWorldWaterbornePosition(
-    readSurfacePolicyConfig(config),
+    readMetaverseSurfacePolicyConfig(config),
     surfaceColliderSnapshots,
     metaverseWaterRegionSnapshots,
     position,

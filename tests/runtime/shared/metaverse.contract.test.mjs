@@ -22,7 +22,7 @@ import {
   createMetaverseSyncPlayerLookIntentCommand,
   createMetaverseSyncDriverVehicleControlCommand,
   createMetaverseSyncMountedOccupancyCommand,
-  createMetaverseSyncPlayerTraversalIntentCommand,
+  createMetaverseSyncPlayerTraversalIntentCommand as createRawMetaverseSyncPlayerTraversalIntentCommand,
   createMetaverseRealtimeWorldSnapshot,
   createMetaverseRealtimeWorldEvent,
   createMetaverseRealtimeWorldWebTransportCommandRequest,
@@ -39,6 +39,51 @@ import {
   readExperienceCatalogEntry,
   readExperienceTickOwner
 } from "@webgpu-metaverse/shared";
+
+function createMetaverseSyncPlayerTraversalIntentCommand(input) {
+  const nextIntent = input.intent;
+  const normalizedFacing =
+    nextIntent.facing ?? {
+      pitchRadians: nextIntent.pitchRadians ?? 0,
+      yawRadians:
+        nextIntent.bodyYawRadians ??
+        nextIntent.lookYawRadians ??
+        nextIntent.yawRadians ??
+        0
+    };
+
+  if ("bodyControl" in nextIntent || "actionIntent" in nextIntent) {
+    return createRawMetaverseSyncPlayerTraversalIntentCommand({
+      ...input,
+      intent: {
+        ...nextIntent,
+        facing: normalizedFacing
+      }
+    });
+  }
+
+  return createRawMetaverseSyncPlayerTraversalIntentCommand({
+    ...input,
+    intent: {
+      actionIntent: {
+        kind: nextIntent.jump === true ? "jump" : "none",
+        pressed: nextIntent.jump === true,
+        ...(nextIntent.jumpActionSequence === undefined
+          ? {}
+          : { sequence: nextIntent.jumpActionSequence })
+      },
+      bodyControl: {
+        boost: nextIntent.boost,
+        moveAxis: nextIntent.moveAxis,
+        strafeAxis: nextIntent.strafeAxis,
+        turnAxis: nextIntent.yawAxis
+      },
+      facing: normalizedFacing,
+      inputSequence: nextIntent.inputSequence,
+      locomotionMode: nextIntent.locomotionMode
+    }
+  });
+}
 
 test("experienceCatalog exposes Duck Hunt as the first metaverse-ready experience", () => {
   assert.equal(experienceCatalog.length, 1);
@@ -263,7 +308,24 @@ test("metaverse realtime world contracts freeze snapshots and derive seated occu
     worldSnapshot.players[0]?.mountedOccupancy?.occupantRole,
     "driver"
   );
+  assert.equal(worldSnapshot.players[0]?.jumpAuthorityState, "none");
   assert.equal(worldSnapshot.players[0]?.lastProcessedInputSequence, 7);
+  assert.equal(
+    worldSnapshot.players[0]?.traversalAuthority.currentActionKind,
+    "none"
+  );
+  assert.equal(
+    worldSnapshot.players[0]?.traversalAuthority.currentActionPhase,
+    "idle"
+  );
+  assert.equal(
+    worldSnapshot.players[0]?.traversalAuthority.lastConsumedActionKind,
+    "none"
+  );
+  assert.equal(
+    worldSnapshot.players[0]?.traversalAuthority.lastRejectedActionKind,
+    "none"
+  );
   assert.equal(worldSnapshot.players[0]?.look.pitchRadians, 0);
   assert.equal(worldSnapshot.players[0]?.look.yawRadians, Math.PI * 3);
   assert.equal(
@@ -273,6 +335,128 @@ test("metaverse realtime world contracts freeze snapshots and derive seated occu
   assert.ok(Object.isFrozen(worldSnapshot.players));
   assert.ok(Object.isFrozen(worldSnapshot.vehicles));
   assert.ok(Object.isFrozen(worldSnapshot.players[0]?.mountedOccupancy));
+});
+
+test("metaverse realtime world contracts derive traversal authority from accepted jump resolution", () => {
+  const playerId = createMetaversePlayerId("jump-authority-pilot");
+  const username = createUsername("Jump Authority Pilot");
+
+  assert.notEqual(playerId, null);
+  assert.notEqual(username, null);
+
+  const worldSnapshot = createMetaverseRealtimeWorldSnapshot({
+    players: [
+      {
+        characterId: "metaverse-mannequin-v1",
+        jumpDebug: {
+          resolvedJumpActionSequence: 7,
+          resolvedJumpActionState: "accepted"
+        },
+        jumpAuthorityState: "rising",
+        linearVelocity: {
+          x: 0,
+          y: 3.2,
+          z: 0
+        },
+        locomotionMode: "grounded",
+        playerId,
+        position: {
+          x: 0,
+          y: 1.4,
+          z: 0
+        },
+        username,
+        yawRadians: 0
+      }
+    ],
+    tick: {
+      currentTick: 3,
+      emittedAtServerTimeMs: 360,
+      simulationTimeMs: 300,
+      tickIntervalMs: 100
+    },
+    vehicles: []
+  });
+
+  assert.equal(worldSnapshot.players[0]?.jumpAuthorityState, "rising");
+  assert.equal(
+    worldSnapshot.players[0]?.traversalAuthority.currentActionKind,
+    "jump"
+  );
+  assert.equal(
+    worldSnapshot.players[0]?.traversalAuthority.currentActionPhase,
+    "rising"
+  );
+  assert.equal(
+    worldSnapshot.players[0]?.traversalAuthority.currentActionSequence,
+    7
+  );
+  assert.equal(
+    worldSnapshot.players[0]?.traversalAuthority.lastConsumedActionKind,
+    "jump"
+  );
+  assert.equal(
+    worldSnapshot.players[0]?.traversalAuthority.lastConsumedActionSequence,
+    7
+  );
+});
+
+test("metaverse realtime world contracts derive traversal startup from buffered jump state", () => {
+  const playerId = createMetaversePlayerId("jump-startup-pilot");
+  const username = createUsername("Jump Startup Pilot");
+
+  assert.notEqual(playerId, null);
+  assert.notEqual(username, null);
+
+  const worldSnapshot = createMetaverseRealtimeWorldSnapshot({
+    players: [
+      {
+        characterId: "metaverse-mannequin-v1",
+        jumpDebug: {
+          pendingJumpActionSequence: 4
+        },
+        jumpAuthorityState: "grounded",
+        linearVelocity: {
+          x: 0,
+          y: 0,
+          z: 0
+        },
+        locomotionMode: "grounded",
+        playerId,
+        position: {
+          x: 0,
+          y: 0.6,
+          z: 0
+        },
+        username,
+        yawRadians: 0
+      }
+    ],
+    tick: {
+      currentTick: 11,
+      emittedAtServerTimeMs: 1_100,
+      simulationTimeMs: 1_100,
+      tickIntervalMs: 100
+    },
+    vehicles: []
+  });
+
+  assert.equal(
+    worldSnapshot.players[0]?.traversalAuthority.currentActionKind,
+    "jump"
+  );
+  assert.equal(
+    worldSnapshot.players[0]?.traversalAuthority.currentActionPhase,
+    "startup"
+  );
+  assert.equal(
+    worldSnapshot.players[0]?.traversalAuthority.currentActionSequence,
+    4
+  );
+  assert.equal(
+    worldSnapshot.players[0]?.traversalAuthority.phaseStartedAtTick,
+    11
+  );
 });
 
 test("metaverse realtime world contracts reject seat occupancy that disagrees with the vehicle tick", () => {
@@ -407,8 +591,9 @@ test("metaverse realtime world traversal intent commands normalize explicit tran
   assert.equal(command.type, "sync-player-traversal-intent");
   assert.equal(command.intent.inputSequence, 4);
   assert.equal(command.intent.locomotionMode, "swim");
-  assert.equal(command.intent.moveAxis, 1);
-  assert.equal(command.intent.strafeAxis, -1);
+  assert.equal(command.intent.bodyControl.moveAxis, 1);
+  assert.equal(command.intent.bodyControl.strafeAxis, -1);
+  assert.equal(command.intent.actionIntent.kind, "jump");
   assert.equal(webTransportRequest.type, "world-command-request");
   assert.equal(
     webTransportRequest.command.type,
@@ -743,7 +928,10 @@ test("webtransport datagram shared contracts wrap latest-wins channels with expl
     playerTraversalIntentDatagram.command.intent.locomotionMode,
     "grounded"
   );
-  assert.equal(playerTraversalIntentDatagram.command.intent.moveAxis, 1);
+  assert.equal(
+    playerTraversalIntentDatagram.command.intent.bodyControl.moveAxis,
+    1
+  );
   assert.ok(Object.isFrozen(playerTraversalIntentDatagram));
   assert.equal(
     playerLookIntentDatagram.type,

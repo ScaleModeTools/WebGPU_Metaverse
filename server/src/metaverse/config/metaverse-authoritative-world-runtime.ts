@@ -1,9 +1,12 @@
-import { createMilliseconds } from "@webgpu-metaverse/shared";
+import {
+  createMilliseconds,
+  metaverseRealtimeWorldCadenceConfig
+} from "@webgpu-metaverse/shared";
 
 import type { MetaverseAuthoritativeWorldRuntimeConfig } from "../types/metaverse-authoritative-world-runtime.js";
 
 export const metaverseAuthoritativeWorldCadenceConfig = Object.freeze({
-  tickIntervalMs: createMilliseconds(33)
+  tickIntervalMs: metaverseRealtimeWorldCadenceConfig.authoritativeTickIntervalMs
 });
 
 export const metaverseAuthoritativeWorldRuntimeConfig = {

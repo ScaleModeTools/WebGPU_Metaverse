@@ -3,7 +3,7 @@ import type {
   MetaverseWorldSurfaceColliderAuthoring,
   MetaverseWorldWaterRegionAuthoring,
   MetaverseWorldSurfaceVector3Snapshot
-} from "./metaverse-world-surface-authoring.js";
+} from "./metaverse-world-surface-query.js";
 
 function freezeVector3(
   x: number,
@@ -26,6 +26,10 @@ export const metaverseHubShorelineEnvironmentAssetId =
 export const metaverseHubSkiffEnvironmentAssetId = "metaverse-hub-skiff-v1";
 export const metaverseHubDiveBoatEnvironmentAssetId =
   "metaverse-hub-dive-boat-v1";
+
+const metaverseHubSpawnDockLiftMeters = 0.45;
+const metaverseHubDockPlacementHeightMeters =
+  -0.02 + metaverseHubSpawnDockLiftMeters;
 
 const metaverseHubCrateSurfaceColliders = Object.freeze([
   Object.freeze({
@@ -177,22 +181,38 @@ export const metaverseWorldSurfaceAssets = Object.freeze([
     placement: "static",
     placements: Object.freeze([
       Object.freeze({
-        position: freezeVector3(-12.719107213690513, -0.02, -16.075801705270205),
+        position: freezeVector3(
+          -12.719107213690513,
+          metaverseHubDockPlacementHeightMeters,
+          -16.075801705270205
+        ),
         rotationYRadians: Math.PI * 0.06,
         scale: 1
       }),
       Object.freeze({
-        position: freezeVector3(-4.467894307569528, -0.02, -17.64980474779029),
+        position: freezeVector3(
+          -4.467894307569528,
+          metaverseHubDockPlacementHeightMeters,
+          -17.64980474779029
+        ),
         rotationYRadians: Math.PI * 0.06,
         scale: 1
       }),
       Object.freeze({
-        position: freezeVector3(-11.932105692430468, -0.02, -11.950195252209712),
+        position: freezeVector3(
+          -11.932105692430468,
+          metaverseHubDockPlacementHeightMeters,
+          -11.950195252209712
+        ),
         rotationYRadians: Math.PI * 0.06,
         scale: 1
       }),
       Object.freeze({
-        position: freezeVector3(-3.680892786309485, -0.02, -13.524198294729798),
+        position: freezeVector3(
+          -3.680892786309485,
+          metaverseHubDockPlacementHeightMeters,
+          -13.524198294729798
+        ),
         rotationYRadians: Math.PI * 0.06,
         scale: 1
       })

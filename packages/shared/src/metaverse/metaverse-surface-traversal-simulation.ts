@@ -1,4 +1,4 @@
-import type { MetaverseWorldSurfaceVector3Snapshot } from "./metaverse-world-surface-authoring.js";
+import type { MetaverseWorldSurfaceVector3Snapshot } from "./metaverse-world-surface-query.js";
 
 export interface MetaverseSurfaceTraversalConfig {
   readonly accelerationCurveExponent: number;
@@ -222,12 +222,7 @@ export function advanceMetaverseSurfaceTraversalMotion(
               config.maxTurnSpeedRadiansPerSecond *
               clampedDeltaSeconds
         )
-      : advanceMetaverseYawRadiansTowardTarget(
-          currentYawRadians,
-          yawTargetRadians,
-          config.maxTurnSpeedRadiansPerSecond,
-          clampedDeltaSeconds
-        );
+      : wrapRadians(yawTargetRadians);
   const moveAxis = movementEnabled
     ? clamp(toFiniteNumber(movementInput.moveAxis, 0), -1, 1)
     : 0;

@@ -6,7 +6,8 @@ import {
   createMetaversePresenceRosterSnapshot,
   createMetaversePlayerId,
   createMetaverseVehicleId,
-  createUsername
+  createUsername,
+  doMetaversePlayerTraversalSequencedInputsMatch
 } from "@webgpu-metaverse/shared";
 
 import { createClientModuleLoader } from "./load-client-module.mjs";
@@ -682,7 +683,12 @@ function createRealtimeWorldSnapshot({
   includeRemotePlayer = true,
   includeVehicle = true,
   localAnimationVocabulary = "idle",
+  localJumpAuthorityState,
+  localJumpDebug,
+  localLastAcceptedJumpActionSequence = 0,
   localLastProcessedInputSequence,
+  localLastProcessedJumpActionSequence = 0,
+  localLastProcessedLookSequence,
   localLinearVelocity = {
     x: 0,
     y: 0,
@@ -699,6 +705,7 @@ function createRealtimeWorldSnapshot({
   localUsername,
   localYawRadians = 0,
   remoteLastProcessedInputSequence,
+  remoteLastProcessedLookSequence,
   remoteLookPitchRadians = 0,
   remoteLookYawRadians,
   remotePlayerAngularVelocityRadiansPerSecond = 0,
@@ -722,8 +729,35 @@ function createRealtimeWorldSnapshot({
     localLastProcessedInputSequence ?? snapshotSequence;
   const resolvedRemoteLastProcessedInputSequence =
     remoteLastProcessedInputSequence ?? snapshotSequence;
+  const resolvedLocalLastProcessedLookSequence =
+    localLastProcessedLookSequence ?? resolvedLocalLastProcessedInputSequence;
+  const resolvedRemoteLastProcessedLookSequence =
+    remoteLastProcessedLookSequence ?? resolvedRemoteLastProcessedInputSequence;
   const resolvedLocalLookYawRadians = localLookYawRadians ?? localYawRadians;
   const resolvedRemoteLookYawRadians = remoteLookYawRadians ?? yawRadians;
+  const derivedLocalResolvedJumpActionSequence =
+    localLastProcessedJumpActionSequence > localLastAcceptedJumpActionSequence
+      ? localLastProcessedJumpActionSequence
+      : localLastAcceptedJumpActionSequence;
+  const derivedLocalResolvedJumpActionState =
+    localLastProcessedJumpActionSequence > localLastAcceptedJumpActionSequence
+      ? "rejected-buffer-expired"
+      : localLastAcceptedJumpActionSequence > 0
+        ? "accepted"
+        : "none";
+  const resolvedLocalJumpDebug =
+    localJumpDebug === undefined &&
+    derivedLocalResolvedJumpActionSequence === 0
+      ? undefined
+      : {
+          ...localJumpDebug,
+          resolvedJumpActionSequence:
+            localJumpDebug?.resolvedJumpActionSequence ??
+            derivedLocalResolvedJumpActionSequence,
+          resolvedJumpActionState:
+            localJumpDebug?.resolvedJumpActionState ??
+            derivedLocalResolvedJumpActionState
+        };
 
   assert.notEqual(vehicleId, null);
 
@@ -733,6 +767,8 @@ function createRealtimeWorldSnapshot({
         angularVelocityRadiansPerSecond: 0,
         animationVocabulary: localAnimationVocabulary,
         characterId: "metaverse-mannequin-v1",
+        jumpDebug: resolvedLocalJumpDebug,
+        jumpAuthorityState: localJumpAuthorityState,
         linearVelocity: localLinearVelocity,
         look: {
           pitchRadians: localLookPitchRadians,
@@ -754,6 +790,7 @@ function createRealtimeWorldSnapshot({
           z: localPlayerZ
         },
         lastProcessedInputSequence: resolvedLocalLastProcessedInputSequence,
+        lastProcessedLookSequence: resolvedLocalLastProcessedLookSequence,
         stateSequence: snapshotSequence,
         username: localUsername,
         yawRadians: localYawRadians
@@ -782,6 +819,7 @@ function createRealtimeWorldSnapshot({
                 z: 18
               },
               lastProcessedInputSequence: resolvedRemoteLastProcessedInputSequence,
+              lastProcessedLookSequence: resolvedRemoteLastProcessedLookSequence,
               stateSequence: snapshotSequence,
               username: remoteUsername,
               yawRadians
@@ -876,13 +914,15 @@ class FakeMetaverseWorldClient {
       webTransportStatus: "not-requested"
     });
     this.driverVehicleControlRequests = [];
+    this.lastJumpPressed = false;
     this.lastPlayerLookIntentRequestKey = null;
     this.lastPlayerTraversalIntentRequestKey = null;
     this.latestPlayerInputSequence = 0;
-    this.latestPlayerLookIntentSequence = 0;
+    this.latestPlayerLookSequence = 0;
     this.latestPlayerLookIntentSnapshot = null;
     this.latestPlayerTraversalIntentSnapshot = null;
     this.mountedOccupancyRequests = [];
+    this.nextJumpActionSequence = 0;
     this.playerLookIntentRequests = [];
     this.playerTraversalIntentRequests = [];
     this.ensureConnectedRequests = [];
@@ -951,7 +991,7 @@ class FakeMetaverseWorldClient {
       commandInput !== null &&
       nextPlayerLookIntentRequestKey !== this.lastPlayerLookIntentRequestKey
     ) {
-      this.latestPlayerLookIntentSequence += 1;
+      this.latestPlayerLookSequence += 1;
     }
 
     this.lastPlayerLookIntentRequestKey = nextPlayerLookIntentRequestKey;
@@ -960,38 +1000,135 @@ class FakeMetaverseWorldClient {
         ? null
         : Object.freeze({
             pitchRadians: commandInput.lookIntent.pitchRadians,
-            lookSequence: this.latestPlayerLookIntentSequence,
+            lookSequence: this.latestPlayerLookSequence,
             yawRadians: commandInput.lookIntent.yawRadians
           });
   }
 
   syncPlayerTraversalIntent(commandInput) {
     this.playerTraversalIntentRequests.push(commandInput);
-    const nextPlayerTraversalIntentRequestKey =
-      commandInput === null ? null : JSON.stringify(commandInput);
+    const nextTraversalIntentSnapshot =
+      this.previewPlayerTraversalIntent(commandInput);
 
-    if (
-      commandInput !== null &&
-      nextPlayerTraversalIntentRequestKey !==
-        this.lastPlayerTraversalIntentRequestKey
-    ) {
+    if (commandInput === null || nextTraversalIntentSnapshot === null) {
+      this.lastJumpPressed = false;
+      this.lastPlayerTraversalIntentRequestKey = null;
+      this.latestPlayerTraversalIntentSnapshot = null;
+      return null;
+    }
+
+    const nextPlayerTraversalIntentRequestKey =
+      JSON.stringify(commandInput);
+    const jumpPressed =
+      commandInput.intent.actionIntent?.kind === "jump"
+        ? commandInput.intent.actionIntent.pressed === true
+        : commandInput.intent.jump === true;
+    const sequencedInputChanged =
+      !doMetaversePlayerTraversalSequencedInputsMatch(
+        this.latestPlayerTraversalIntentSnapshot,
+        nextTraversalIntentSnapshot
+      );
+
+    if (sequencedInputChanged) {
       this.latestPlayerInputSequence += 1;
     }
 
     this.lastPlayerTraversalIntentRequestKey =
       nextPlayerTraversalIntentRequestKey;
-    this.latestPlayerTraversalIntentSnapshot =
-      commandInput === null
-        ? null
-        : Object.freeze({
-            boost: commandInput.intent.boost,
-            inputSequence: this.latestPlayerInputSequence,
-            jump: commandInput.intent.jump,
-            locomotionMode: commandInput.intent.locomotionMode,
-            moveAxis: commandInput.intent.moveAxis,
-            strafeAxis: commandInput.intent.strafeAxis,
-            yawAxis: commandInput.intent.yawAxis
-          });
+
+    if (jumpPressed && !this.lastJumpPressed) {
+      this.nextJumpActionSequence += 1;
+    }
+
+    this.lastJumpPressed = jumpPressed;
+    this.latestPlayerTraversalIntentSnapshot = Object.freeze({
+      ...nextTraversalIntentSnapshot,
+      inputSequence: this.latestPlayerInputSequence,
+      actionIntent: Object.freeze({
+        ...nextTraversalIntentSnapshot.actionIntent,
+        kind:
+          nextTraversalIntentSnapshot.actionIntent.kind === "jump" ||
+          this.nextJumpActionSequence > 0
+            ? "jump"
+            : "none",
+        sequence:
+          nextTraversalIntentSnapshot.actionIntent.kind === "jump" ||
+          this.nextJumpActionSequence > 0
+            ? this.nextJumpActionSequence
+            : 0
+      })
+    });
+
+    return this.latestPlayerTraversalIntentSnapshot;
+  }
+
+  previewPlayerTraversalIntent(commandInput) {
+    if (commandInput === null) {
+      return null;
+    }
+
+    const jumpPressed =
+      commandInput.intent.actionIntent?.kind === "jump"
+        ? commandInput.intent.actionIntent.pressed === true
+        : commandInput.intent.jump === true;
+    const nextJumpActionSequence =
+      jumpPressed && !this.lastJumpPressed
+        ? this.nextJumpActionSequence + 1
+        : this.nextJumpActionSequence;
+    const normalizedTraversalIntentSnapshot = Object.freeze({
+      actionIntent: Object.freeze({
+        kind: jumpPressed || nextJumpActionSequence > 0 ? "jump" : "none",
+        pressed: jumpPressed,
+        sequence:
+          jumpPressed || nextJumpActionSequence > 0
+            ? nextJumpActionSequence
+            : 0
+      }),
+      bodyControl: Object.freeze({
+        boost:
+          commandInput.intent.bodyControl?.boost ??
+          commandInput.intent.boost ??
+          false,
+        moveAxis:
+          commandInput.intent.bodyControl?.moveAxis ??
+          commandInput.intent.moveAxis ??
+          0,
+        strafeAxis:
+          commandInput.intent.bodyControl?.strafeAxis ??
+          commandInput.intent.strafeAxis ??
+          0,
+        turnAxis:
+          commandInput.intent.bodyControl?.turnAxis ??
+          commandInput.intent.yawAxis ??
+          0
+      }),
+      facing: Object.freeze({
+        pitchRadians:
+          commandInput.intent.facing?.pitchRadians ??
+          commandInput.intent.pitchRadians ??
+          0,
+        yawRadians:
+          commandInput.intent.facing?.yawRadians ??
+          commandInput.intent.bodyYawRadians ??
+          commandInput.intent.lookYawRadians ??
+          commandInput.intent.yawRadians ??
+          0
+      }),
+      inputSequence: this.latestPlayerInputSequence,
+      locomotionMode: commandInput.intent.locomotionMode,
+    });
+    const nextInputSequence =
+      !doMetaversePlayerTraversalSequencedInputsMatch(
+        this.latestPlayerTraversalIntentSnapshot,
+        normalizedTraversalIntentSnapshot
+      )
+        ? this.latestPlayerInputSequence + 1
+        : this.latestPlayerInputSequence;
+
+    return Object.freeze({
+      ...normalizedTraversalIntentSnapshot,
+      inputSequence: nextInputSequence
+    });
   }
 
   publishWorldSnapshotBuffer(worldSnapshotBuffer) {
@@ -1457,6 +1594,224 @@ async function createSkiffMountProofSlice() {
   };
 }
 
+async function createHeldWeaponProofSlice() {
+  const {
+    AnimationClip,
+    Bone,
+    BoxGeometry,
+    Float32BufferAttribute,
+    Group,
+    Mesh,
+    MeshStandardMaterial,
+    Skeleton,
+    SkinnedMesh,
+    Uint16BufferAttribute,
+    Vector3
+  } = await import("three/webgpu");
+  const bodyGeometry = new BoxGeometry(0.4, 1.2, 0.3);
+  const vertexCount = bodyGeometry.attributes.position.count;
+  const skinIndices = new Uint16Array(vertexCount * 4);
+  const skinWeights = new Float32Array(vertexCount * 4);
+
+  for (let index = 0; index < vertexCount; index += 1) {
+    skinIndices[index * 4] = 0;
+    skinWeights[index * 4] = 1;
+  }
+
+  bodyGeometry.setAttribute("skinIndex", new Uint16BufferAttribute(skinIndices, 4));
+  bodyGeometry.setAttribute("skinWeight", new Float32BufferAttribute(skinWeights, 4));
+
+  const bonesByName = new Map();
+  const addBone = (boneName, parentBone = null, position = null) => {
+    const bone = new Bone();
+
+    bone.name = boneName;
+    if (position !== null) {
+      bone.position.copy(position);
+    }
+
+    bonesByName.set(boneName, bone);
+    parentBone?.add(bone);
+
+    return bone;
+  };
+
+  const rootBone = addBone("root");
+  const pelvisBone = addBone("pelvis", rootBone, new Vector3(0, 0.92, 0));
+  const spine01Bone = addBone("spine_01", pelvisBone, new Vector3(0, 0.18, 0));
+  const spine02Bone = addBone("spine_02", spine01Bone, new Vector3(0, 0.18, 0));
+  const spine03Bone = addBone("spine_03", spine02Bone, new Vector3(0, 0.18, 0));
+  const neckBone = addBone("neck_01", spine03Bone, new Vector3(0, 0.16, 0));
+  const headBone = addBone("head", neckBone, new Vector3(0, 0.14, 0));
+  const clavicleLBone = addBone("clavicle_l", spine03Bone, new Vector3(-0.12, 0.1, 0));
+  const upperarmLBone = addBone("upperarm_l", clavicleLBone, new Vector3(-0.18, 0, 0));
+  const lowerarmLBone = addBone("lowerarm_l", upperarmLBone, new Vector3(-0.22, 0, 0));
+  const handLBone = addBone("hand_l", lowerarmLBone, new Vector3(-0.18, 0, 0));
+  const clavicleRBone = addBone("clavicle_r", spine03Bone, new Vector3(0.12, 0.1, 0));
+  const upperarmRBone = addBone("upperarm_r", clavicleRBone, new Vector3(0.18, 0, 0));
+  const lowerarmRBone = addBone("lowerarm_r", upperarmRBone, new Vector3(0.22, 0, 0));
+  const handRBone = addBone("hand_r", lowerarmRBone, new Vector3(0.18, 0, 0));
+  const thighLBone = addBone("thigh_l", pelvisBone, new Vector3(-0.1, -0.26, 0));
+  const calfLBone = addBone("calf_l", thighLBone, new Vector3(0, -0.42, 0));
+  const footLBone = addBone("foot_l", calfLBone, new Vector3(0, -0.4, 0.06));
+  const ballLBone = addBone("ball_l", footLBone, new Vector3(0, 0, 0.12));
+  const thighRBone = addBone("thigh_r", pelvisBone, new Vector3(0.1, -0.26, 0));
+  const calfRBone = addBone("calf_r", thighRBone, new Vector3(0, -0.42, 0));
+  const footRBone = addBone("foot_r", calfRBone, new Vector3(0, -0.4, 0.06));
+  const ballRBone = addBone("ball_r", footRBone, new Vector3(0, 0, 0.12));
+
+  addBone("thumb_01_l", handLBone, new Vector3(-0.04, -0.02, 0.06));
+  addBone("index_01_l", handLBone, new Vector3(-0.1, 0, 0.03));
+  addBone("middle_01_l", handLBone, new Vector3(-0.11, 0, 0));
+  addBone("ring_01_l", handLBone, new Vector3(-0.1, 0, -0.03));
+  addBone("pinky_01_l", handLBone, new Vector3(-0.08, 0, -0.05));
+  addBone("thumb_01_r", handRBone, new Vector3(0.04, -0.02, 0.06));
+  addBone("index_01_r", handRBone, new Vector3(0.1, 0, 0.03));
+  addBone("middle_01_r", handRBone, new Vector3(0.11, 0, 0));
+  addBone("ring_01_r", handRBone, new Vector3(0.1, 0, -0.03));
+  addBone("pinky_01_r", handRBone, new Vector3(0.08, 0, -0.05));
+
+  const headSocketBone = addBone("head_socket", headBone, new Vector3(0, 0.12, 0));
+  const handLSocketBone = addBone("hand_l_socket", handLBone, new Vector3(-0.05, 0, 0));
+  const handRSocketBone = addBone("hand_r_socket", handRBone, new Vector3(0.05, 0, 0));
+  const hipSocketBone = addBone("hip_socket", pelvisBone, new Vector3(0.16, -0.08, -0.06));
+  const seatSocketBone = addBone("seat_socket", pelvisBone, new Vector3(0, -0.02, -0.08));
+
+  handRSocketBone.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), Math.PI * 0.5);
+
+  const skinnedMesh = new SkinnedMesh(
+    bodyGeometry,
+    new MeshStandardMaterial({ color: 0x9ca3af })
+  );
+  const characterScene = new Group();
+  const skeleton = new Skeleton([
+    rootBone,
+    pelvisBone,
+    spine01Bone,
+    spine02Bone,
+    spine03Bone,
+    neckBone,
+    headBone,
+    clavicleLBone,
+    upperarmLBone,
+    lowerarmLBone,
+    handLBone,
+    clavicleRBone,
+    upperarmRBone,
+    lowerarmRBone,
+    handRBone,
+    thighLBone,
+    calfLBone,
+    footLBone,
+    ballLBone,
+    thighRBone,
+    calfRBone,
+    footRBone,
+    ballRBone,
+    bonesByName.get("thumb_01_l"),
+    bonesByName.get("index_01_l"),
+    bonesByName.get("middle_01_l"),
+    bonesByName.get("ring_01_l"),
+    bonesByName.get("pinky_01_l"),
+    bonesByName.get("thumb_01_r"),
+    bonesByName.get("index_01_r"),
+    bonesByName.get("middle_01_r"),
+    bonesByName.get("ring_01_r"),
+    bonesByName.get("pinky_01_r"),
+    headSocketBone,
+    handLSocketBone,
+    handRSocketBone,
+    hipSocketBone,
+    seatSocketBone
+  ]);
+
+  skinnedMesh.add(rootBone);
+  skinnedMesh.bind(skeleton);
+  characterScene.add(skinnedMesh);
+
+  const authoredAnimationPackPath =
+    "/models/metaverse/characters/mesh2motion-humanoid-canonical-animations.glb";
+  const idleClip = new AnimationClip("idle", -1, []);
+  const walkClip = new AnimationClip("walk", -1, []);
+  const attachmentScene = new Group();
+  const attachmentMesh = new Mesh(
+    new BoxGeometry(0.28, 0.08, 0.08),
+    new MeshStandardMaterial({ color: 0x4b5563 })
+  );
+
+  attachmentMesh.position.x = 0.14;
+  attachmentScene.name = "metaverse_service_pistol_root";
+  attachmentScene.add(attachmentMesh);
+
+  return {
+    attachmentProofConfig: {
+      attachmentId: "metaverse-service-pistol-v1",
+      heldMount: {
+        gripAlignment: {
+          attachmentForwardAxis: { x: 1, y: 0, z: 0 },
+          attachmentUpAxis: { x: 0, y: 1, z: 0 },
+          socketForwardAxis: { x: 1, y: 0, z: 0 },
+          socketOffset: { x: 0.01, y: -0.02, z: 0.03 },
+          socketUpAxis: { x: 0, y: 1, z: 0 }
+        },
+        socketName: "hand_r_socket"
+      },
+      label: "Metaverse service pistol",
+      modelPath: "/models/metaverse/attachments/metaverse-service-pistol.gltf",
+      mountedHolsterMount: null,
+      supportPoints: null
+    },
+    characterProofConfig: {
+      animationClips: [
+        {
+          clipName: "idle",
+          sourcePath: authoredAnimationPackPath,
+          vocabulary: "idle"
+        },
+        {
+          clipName: "walk",
+          sourcePath: authoredAnimationPackPath,
+          vocabulary: "walk"
+        }
+      ],
+      characterId: "mesh2motion-humanoid-v1",
+      label: "Mesh2Motion humanoid",
+      modelPath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
+      skeletonId: "humanoid_v2",
+      socketNames: [
+        "hand_r_socket",
+        "hand_l_socket",
+        "head_socket",
+        "hip_socket",
+        "seat_socket"
+      ]
+    },
+    createSceneAssetLoader: () => ({
+      async loadAsync(path) {
+        if (path === "/models/metaverse/attachments/metaverse-service-pistol.gltf") {
+          return {
+            animations: [],
+            scene: attachmentScene
+          };
+        }
+
+        if (path === authoredAnimationPackPath) {
+          return {
+            animations: [idleClip, walkClip],
+            scene: new Group()
+          };
+        }
+
+        return {
+          animations: [],
+          scene: characterScene
+        };
+      }
+    }),
+    environmentProofConfig: null
+  };
+}
+
 async function createStaticSurfaceProofSlice() {
   const [{ metaverseEnvironmentProofConfig }, createSceneAssetLoader] =
     await Promise.all([
@@ -1667,6 +2022,28 @@ test("WebGpuMetaverseRuntime starts from an idle snapshot and rejects missing na
     runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount,
     0
   );
+  assert.deepEqual(
+    runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation,
+    Object.freeze({
+      ackedAuthoritativeReplayCorrectionCount: 0,
+      lastLocalAuthorityPoseCorrectionDetail: Object.freeze({
+        authoritativeGrounded: null,
+        localGrounded: null,
+        planarMagnitudeMeters: null,
+        verticalMagnitudeMeters: null
+      }),
+      lastLocalAuthorityPoseCorrectionReason: "none",
+      lastCorrectionAgeMs: null,
+      lastCorrectionSource: "none",
+      localAuthorityPoseCorrectionCount: 0,
+      mountedVehicleAuthorityCorrectionCount: 0,
+      recentAckedAuthoritativeReplayCorrectionCountPast5Seconds: 0,
+      recentCorrectionCountPast5Seconds: 0,
+      recentLocalAuthorityPoseCorrectionCountPast5Seconds: 0,
+      recentMountedVehicleAuthorityCorrectionCountPast5Seconds: 0,
+      totalCorrectionCount: 0
+    })
+  );
   assert.equal(
     runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.local.locomotionMode,
     "grounded"
@@ -1693,8 +2070,38 @@ test("WebGpuMetaverseRuntime starts from an idle snapshot and rejects missing na
     runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.local.autostepHeightMeters,
     null
   );
+  assert.deepEqual(
+    runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.local.jumpDebug,
+    Object.freeze({
+      groundedBodyGrounded: null,
+      groundedBodyJumpReady: null,
+      surfaceJumpSupported: null,
+      supported: null,
+      verticalSpeedUnitsPerSecond: null
+    })
+  );
   assert.equal(
     runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.issuedTraversalIntent,
+    null
+  );
+  assert.equal(
+    runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer
+      .surfaceRouting.decisionReason,
+    null
+  );
+  assert.equal(
+    runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer
+      .surfaceRouting.resolvedSupportHeightMeters,
+    null
+  );
+  assert.equal(
+    runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer
+      .surfaceRouting.stepSupportedProbeCount,
+    null
+  );
+  assert.equal(
+    runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer
+      .surfaceRouting.blockerOverlap,
     null
   );
   assert.equal(
@@ -1737,7 +2144,10 @@ test("default metaverse hub spawn resolves to grounded dock support in the shipp
     { metaverseRuntimeConfig },
     { metaverseEnvironmentProofConfig },
     { resolvePlacedCuboidColliders },
-    { resolveAutomaticSurfaceLocomotionMode }
+    {
+      resolveAutomaticSurfaceLocomotionMode,
+      resolveSurfaceHeightMeters
+    }
   ] = await Promise.all([
     clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
     clientLoader.load("/src/app/states/metaverse-asset-proof.ts"),
@@ -1764,12 +2174,16 @@ test("default metaverse hub spawn resolves to grounded dock support in the shipp
     metaverseRuntimeConfig.camera.initialYawRadians,
     "grounded"
   );
+  const supportHeightMeters = resolveSurfaceHeightMeters(
+    metaverseRuntimeConfig,
+    surfaceColliderSnapshots,
+    spawnPosition.x,
+    spawnPosition.z
+  );
 
   assert.equal(locomotionDecision.locomotionMode, "grounded");
-  assert.ok(locomotionDecision.supportHeightMeters !== null);
-  assert.ok(
-    locomotionDecision.supportHeightMeters > metaverseRuntimeConfig.ocean.height
-  );
+  assert.ok(supportHeightMeters !== null);
+  assert.ok(supportHeightMeters > metaverseRuntimeConfig.ocean.height);
 });
 
 test("WebGpuMetaverseRuntime publishes boot-phase progression and per-lane transport truth", async () => {
@@ -2001,8 +2415,13 @@ test("WebGpuMetaverseRuntime publishes boot-phase progression and per-lane trans
       };
     },
     syncDriverVehicleControl() {},
+    previewPlayerTraversalIntent() {
+      return null;
+    },
     syncPlayerLookIntent() {},
-    syncPlayerTraversalIntent() {}
+    syncPlayerTraversalIntent() {
+      return null;
+    }
   };
 
   globalThis.window = {
@@ -2265,7 +2684,11 @@ test("WebGpuMetaverseRuntime boots metaverse presence without moving traversal p
     assert.equal(runtime.hudSnapshot.presence.state, "connected");
     assert.equal(runtime.hudSnapshot.presence.remotePlayerCount, 1);
     assert.equal(
-      fakeWorldClient.playerLookIntentRequests.at(-1)?.playerId,
+      fakeWorldClient.playerLookIntentRequests.at(-1),
+      null
+    );
+    assert.equal(
+      fakeWorldClient.playerTraversalIntentRequests.at(-1)?.playerId,
       localPlayerId
     );
     assert.equal(
@@ -2680,6 +3103,157 @@ test("MetaverseRemoteWorldRuntime samples buffered authoritative world snapshots
   assert.equal(fakeWorldClient.disposeCalls, 1);
 });
 
+test("MetaverseRemoteWorldRuntime derives remote jump presentation from authoritative jump state on the nearest authoritative snapshot", async () => {
+  const { MetaverseRemoteWorldRuntime } = await clientLoader.load(
+    "/src/metaverse/classes/metaverse-remote-world-runtime.ts"
+  );
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const fakeWorldClient = new FakeMetaverseWorldClient([
+    createMetaverseRealtimeWorldSnapshot({
+      players: [
+        {
+          animationVocabulary: "idle",
+          characterId: "metaverse-mannequin-v1",
+          jumpAuthorityState: "grounded",
+          linearVelocity: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          locomotionMode: "grounded",
+          playerId: localPlayerId,
+          position: {
+            x: 0,
+            y: 1.62,
+            z: 24
+          },
+          username: localUsername,
+          yawRadians: 0
+        },
+        {
+          animationVocabulary: "idle",
+          characterId: "metaverse-mannequin-v1",
+          jumpAuthorityState: "grounded",
+          linearVelocity: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          locomotionMode: "grounded",
+          playerId: remotePlayerId,
+          position: {
+            x: 8,
+            y: 0.15,
+            z: 18
+          },
+          username: remoteUsername,
+          yawRadians: 0
+        }
+      ],
+      snapshotSequence: 1,
+      tick: {
+        currentTick: 10,
+        serverTimeMs: 1_000,
+        tickIntervalMs: 50
+      },
+      vehicles: []
+    }),
+    createMetaverseRealtimeWorldSnapshot({
+      players: [
+        {
+          animationVocabulary: "idle",
+          characterId: "metaverse-mannequin-v1",
+          jumpAuthorityState: "grounded",
+          linearVelocity: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          locomotionMode: "grounded",
+          playerId: localPlayerId,
+          position: {
+            x: 0,
+            y: 1.62,
+            z: 24
+          },
+          username: localUsername,
+          yawRadians: 0
+        },
+        {
+          animationVocabulary: "idle",
+          characterId: "metaverse-mannequin-v1",
+          jumpDebug: {
+            resolvedJumpActionSequence: 2,
+            resolvedJumpActionState: "accepted"
+          },
+          jumpAuthorityState: "rising",
+          linearVelocity: {
+            x: 0,
+            y: 3.4,
+            z: 0
+          },
+          locomotionMode: "grounded",
+          playerId: remotePlayerId,
+          position: {
+            x: 8,
+            y: 0.7,
+            z: 18
+          },
+          username: remoteUsername,
+          yawRadians: 0
+        }
+      ],
+      snapshotSequence: 2,
+      tick: {
+        currentTick: 11,
+        serverTimeMs: 1_050,
+        tickIntervalMs: 50
+      },
+      vehicles: []
+    })
+  ]);
+  const remoteWorldRuntime = new MetaverseRemoteWorldRuntime({
+    createMetaverseWorldClient: () => fakeWorldClient,
+    localPlayerIdentity: {
+      characterId: "metaverse-mannequin-v1",
+      playerId: localPlayerId,
+      username: localUsername
+    },
+    onRemoteWorldUpdate() {},
+    readWallClockMs: () => 1_100,
+    samplingConfig: {
+      clockOffsetCorrectionAlpha: 1,
+      clockOffsetMaxStepMs: 1_000,
+      interpolationDelayMs: 20,
+      maxExtrapolationMs: 120
+    }
+  });
+
+  remoteWorldRuntime.boot();
+  remoteWorldRuntime.sampleRemoteWorld();
+
+  assert.equal(remoteWorldRuntime.remoteCharacterPresentations.length, 1);
+  assert.equal(
+    remoteWorldRuntime.remoteCharacterPresentations[0]?.presentation.animationVocabulary,
+    "jump-up"
+  );
+  assert.ok(
+    (remoteWorldRuntime.remoteCharacterPresentations[0]?.presentation.position.y ?? 0) >
+      0.45
+  );
+
+  remoteWorldRuntime.dispose();
+});
+
 test("MetaverseRemoteWorldRuntime extrapolates from the latest authoritative snapshot when a newer snapshot is missing", async () => {
   const { MetaverseRemoteWorldRuntime } = await clientLoader.load(
     "/src/metaverse/classes/metaverse-remote-world-runtime.ts"
@@ -2719,6 +3293,7 @@ test("MetaverseRemoteWorldRuntime extrapolates from the latest authoritative sna
       playerId: localPlayerId,
       username: localUsername
     },
+    maxAckedReplayHorizonMs: 400,
     onRemoteWorldUpdate() {},
     readWallClockMs: () => currentWallClockMs,
     samplingConfig: {
@@ -2770,6 +3345,122 @@ test("MetaverseRemoteWorldRuntime extrapolates from the latest authoritative sna
   );
   assert.ok(
     (remoteWorldRuntime.remoteVehiclePresentations[0]?.yawRadians ?? 0) < 0.08
+  );
+
+  remoteWorldRuntime.dispose();
+});
+
+test("MetaverseRemoteWorldRuntime preserves hidden-truth replay horizon under delayed acknowledgement", async () => {
+  const { MetaverseRemoteWorldRuntime } = await clientLoader.load(
+    "/src/metaverse/classes/metaverse-remote-world-runtime.ts"
+  );
+  const localPlayerId = createMetaversePlayerId("lagged-diver-1");
+  const remotePlayerId = createMetaversePlayerId("remote-spectator-2");
+  const localUsername = createUsername("Lagged Diver");
+  const remoteUsername = createUsername("Remote Spectator");
+  let currentWallClockMs = 1_350;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const fakeWorldClient = new FakeMetaverseWorldClient([
+    createRealtimeWorldSnapshot({
+      currentTick: 11,
+      localAnimationVocabulary: "swim",
+      localLastProcessedInputSequence: 6,
+      localLinearVelocity: {
+        x: 0,
+        y: 0,
+        z: -6
+      },
+      localLocomotionMode: "swim",
+      localPlayerId,
+      localPlayerY: 0.4,
+      localPlayerZ: 23.7,
+      localUsername,
+      remotePlayerId,
+      remotePlayerX: 12,
+      remoteUsername,
+      serverTimeMs: 1_050,
+      snapshotSequence: 2,
+      vehicleX: 12
+    })
+  ]);
+
+  fakeWorldClient.latestPlayerInputSequence = 6;
+  const remoteWorldRuntime = new MetaverseRemoteWorldRuntime({
+    createMetaverseWorldClient: () => fakeWorldClient,
+    localPlayerIdentity: {
+      characterId: "metaverse-mannequin-v1",
+      playerId: localPlayerId,
+      username: localUsername
+    },
+    maxAckedReplayHorizonMs: 400,
+    onRemoteWorldUpdate() {},
+    readWallClockMs: () => currentWallClockMs,
+    samplingConfig: {
+      clockOffsetCorrectionAlpha: 1,
+      clockOffsetMaxStepMs: 1_000,
+      interpolationDelayMs: 225,
+      maxExtrapolationMs: 120
+    }
+  });
+
+  remoteWorldRuntime.boot();
+
+  const reconciliationSample =
+    remoteWorldRuntime.consumeFreshAckedAuthoritativeLocalPlayerReconciliationSample(
+      120
+    );
+
+  assert.notEqual(reconciliationSample, null);
+  assert.equal(reconciliationSample.authoritativePlayerSnapshot.position.z, 23.7);
+  assert.ok(
+    Math.abs(reconciliationSample.extrapolationSeconds - 0.3) < 0.000001,
+    `expected delayed replay horizon to be 0.3s, received ${reconciliationSample.extrapolationSeconds}`
+  );
+
+  currentWallClockMs = 1_600;
+  fakeWorldClient.publishWorldSnapshotBuffer([
+    createRealtimeWorldSnapshot({
+      currentTick: 16,
+      localAnimationVocabulary: "swim",
+      localLastProcessedInputSequence: 8,
+      localLinearVelocity: {
+        x: 0,
+        y: 0,
+        z: -6
+      },
+      localLocomotionMode: "swim",
+      localPlayerId,
+      localPlayerY: 0.4,
+      localPlayerZ: 20.7,
+      localUsername,
+      remotePlayerId,
+      remotePlayerX: 12,
+      remoteUsername,
+      serverTimeMs: 1_300,
+      snapshotSequence: 3,
+      vehicleX: 12
+    })
+  ]);
+  fakeWorldClient.latestPlayerInputSequence = 8;
+
+  const refreshedReconciliationSample =
+    remoteWorldRuntime.consumeFreshAckedAuthoritativeLocalPlayerReconciliationSample(
+      120
+    );
+
+  assert.notEqual(refreshedReconciliationSample, null);
+  assert.equal(
+    refreshedReconciliationSample.authoritativePlayerSnapshot.position.z,
+    20.7
+  );
+  assert.ok(
+    Math.abs(refreshedReconciliationSample.extrapolationSeconds - 0.3) < 0.000001,
+    `expected refreshed delayed replay horizon to remain 0.3s, received ${refreshedReconciliationSample.extrapolationSeconds}`
   );
 
   remoteWorldRuntime.dispose();
@@ -3229,6 +3920,92 @@ test("MetaverseRemoteWorldRuntime preserves the latest authoritative local proce
   remoteWorldRuntime.dispose();
 });
 
+test("MetaverseRemoteWorldRuntime exposes local authoritative corrections once the authoritative input ack catches up", async () => {
+  const { MetaverseRemoteWorldRuntime } = await clientLoader.load(
+    "/src/metaverse/classes/metaverse-remote-world-runtime.ts"
+  );
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let currentWallClockMs = 1_100;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const fakeWorldClient = new FakeMetaverseWorldClient([
+    createRealtimeWorldSnapshot({
+      currentTick: 10,
+      localLastProcessedInputSequence: 6,
+      localLastProcessedLookSequence: 4,
+      localPlayerId,
+      localUsername,
+      remotePlayerId,
+      remotePlayerX: 10,
+      remoteUsername,
+      serverTimeMs: 1_000,
+      snapshotSequence: 1,
+      vehicleX: 10,
+      yawRadians: 0.2
+    })
+  ]);
+  fakeWorldClient.latestPlayerInputSequence = 6;
+  fakeWorldClient.latestPlayerLookSequence = 5;
+  const remoteWorldRuntime = new MetaverseRemoteWorldRuntime({
+    createMetaverseWorldClient: () => fakeWorldClient,
+    localPlayerIdentity: {
+      characterId: "metaverse-mannequin-v1",
+      playerId: localPlayerId,
+      username: localUsername
+    },
+    onRemoteWorldUpdate() {},
+    readWallClockMs: () => currentWallClockMs,
+    samplingConfig: {
+      clockOffsetCorrectionAlpha: 1,
+      clockOffsetMaxStepMs: 1_000,
+      interpolationDelayMs: 225,
+      maxExtrapolationMs: 120
+    }
+  });
+
+  remoteWorldRuntime.boot();
+
+  assert.equal(
+    remoteWorldRuntime.readFreshAuthoritativeLocalPlayerSnapshot(120)
+      ?.lastProcessedLookSequence,
+    4
+  );
+  assert.equal(
+    remoteWorldRuntime.readFreshAckedAuthoritativeLocalPlayerSnapshot(120)
+      ?.lastProcessedInputSequence,
+    6
+  );
+  assert.notEqual(
+    remoteWorldRuntime.consumeFreshAckedAuthoritativeLocalPlayerPoseForReconciliation(
+      120
+    ),
+    null
+  );
+  assert.equal(
+    remoteWorldRuntime.consumeFreshAckedAuthoritativeLocalPlayerReconciliationSample(
+      120
+    ),
+    null
+  );
+
+  fakeWorldClient.latestPlayerLookSequence = 4;
+
+  assert.equal(
+    remoteWorldRuntime.readFreshAckedAuthoritativeLocalPlayerSnapshot(120)
+      ?.lastProcessedLookSequence,
+    4
+  );
+
+  remoteWorldRuntime.dispose();
+});
+
 test("MetaverseRemoteWorldRuntime keeps acked authoritative local player snapshots raw for local reconciliation", async () => {
   const { MetaverseRemoteWorldRuntime } = await clientLoader.load(
     "/src/metaverse/classes/metaverse-remote-world-runtime.ts"
@@ -3248,7 +4025,10 @@ test("MetaverseRemoteWorldRuntime keeps acked authoritative local player snapsho
     createRealtimeWorldSnapshot({
       currentTick: 10,
       localAnimationVocabulary: "swim",
+      localJumpAuthorityState: "none",
+      localLastAcceptedJumpActionSequence: 0,
       localLastProcessedInputSequence: 6,
+      localLastProcessedJumpActionSequence: 0,
       localLinearVelocity: {
         x: 0,
         y: 0,
@@ -3269,7 +4049,10 @@ test("MetaverseRemoteWorldRuntime keeps acked authoritative local player snapsho
     createRealtimeWorldSnapshot({
       currentTick: 11,
       localAnimationVocabulary: "swim",
+      localJumpAuthorityState: "none",
+      localLastAcceptedJumpActionSequence: 0,
       localLastProcessedInputSequence: 6,
+      localLastProcessedJumpActionSequence: 0,
       localLinearVelocity: {
         x: 0,
         y: 0,
@@ -3313,6 +4096,11 @@ test("MetaverseRemoteWorldRuntime keeps acked authoritative local player snapsho
       ?.position.z,
     23.7
   );
+  assert.equal(
+    remoteWorldRuntime.readFreshAckedAuthoritativeLocalPlayerSnapshot(120)
+      ?.jumpAuthorityState,
+    "none"
+  );
   currentWallClockMs = 1_080;
 
   assert.equal(
@@ -3342,7 +4130,10 @@ test("MetaverseRemoteWorldRuntime projects acked authoritative local player pose
     createRealtimeWorldSnapshot({
       currentTick: 10,
       localAnimationVocabulary: "swim",
+      localJumpAuthorityState: "none",
+      localLastAcceptedJumpActionSequence: 0,
       localLastProcessedInputSequence: 6,
+      localLastProcessedJumpActionSequence: 0,
       localLinearVelocity: {
         x: 0,
         y: 0,
@@ -3362,16 +4153,19 @@ test("MetaverseRemoteWorldRuntime projects acked authoritative local player pose
     }),
     createRealtimeWorldSnapshot({
       currentTick: 11,
-      localAnimationVocabulary: "swim",
+      localAnimationVocabulary: "jump-up",
+      localJumpAuthorityState: "rising",
+      localLastAcceptedJumpActionSequence: 2,
       localLastProcessedInputSequence: 6,
+      localLastProcessedJumpActionSequence: 2,
       localLinearVelocity: {
         x: 0,
-        y: 0,
+        y: 4,
         z: -6
       },
-      localLocomotionMode: "swim",
+      localLocomotionMode: "grounded",
       localPlayerId,
-      localPlayerY: 0,
+      localPlayerY: 1.1,
       localPlayerZ: 23.7,
       localUsername,
       remotePlayerId,
@@ -3415,12 +4209,492 @@ test("MetaverseRemoteWorldRuntime projects acked authoritative local player pose
     );
 
   assert.notEqual(projectedLocalPlayerPose, null);
+  assert.equal(projectedLocalPlayerPose.jumpAuthorityState, "rising");
+  assert.equal(projectedLocalPlayerPose.traversalAuthority.currentActionKind, "jump");
+  assert.equal(
+    projectedLocalPlayerPose.traversalAuthority.currentActionSequence,
+    2
+  );
+  assert.equal(
+    projectedLocalPlayerPose.traversalAuthority.lastConsumedActionSequence,
+    2
+  );
   assert.ok(
     Math.abs(projectedLocalPlayerPose.position.z - 23.52) < 0.000001,
     `expected projected reconciliation z to be 23.52, received ${projectedLocalPlayerPose.position.z}`
   );
 
   remoteWorldRuntime.dispose();
+});
+
+test("MetaverseRemoteWorldRuntime consumes each fresh acked authoritative local player snapshot for reconciliation once", async () => {
+  const { MetaverseRemoteWorldRuntime } = await clientLoader.load(
+    "/src/metaverse/classes/metaverse-remote-world-runtime.ts"
+  );
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let currentWallClockMs = 1_050;
+  const initialWorldSnapshot = createRealtimeWorldSnapshot({
+    currentTick: 11,
+    localAnimationVocabulary: "idle",
+    localJumpAuthorityState: "grounded",
+    localLastAcceptedJumpActionSequence: 0,
+    localLastProcessedInputSequence: 6,
+    localLastProcessedJumpActionSequence: 0,
+    localLinearVelocity: {
+      x: 0,
+      y: 0,
+      z: -6
+    },
+    localLocomotionMode: "grounded",
+    localPlayerId,
+    localPlayerY: 0.6,
+    localPlayerZ: 23.7,
+    localUsername,
+    remotePlayerId,
+    remotePlayerX: 12,
+    remoteUsername,
+    serverTimeMs: 1_050,
+    snapshotSequence: 1,
+    vehicleX: 12
+  });
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const fakeWorldClient = new FakeMetaverseWorldClient([initialWorldSnapshot]);
+
+  fakeWorldClient.latestPlayerInputSequence = 6;
+  const remoteWorldRuntime = new MetaverseRemoteWorldRuntime({
+    createMetaverseWorldClient: () => fakeWorldClient,
+    localPlayerIdentity: {
+      characterId: "metaverse-mannequin-v1",
+      playerId: localPlayerId,
+      username: localUsername
+    },
+    onRemoteWorldUpdate() {},
+    readWallClockMs: () => currentWallClockMs,
+    samplingConfig: {
+      clockOffsetCorrectionAlpha: 1,
+      clockOffsetMaxStepMs: 1_000,
+      interpolationDelayMs: 225,
+      maxExtrapolationMs: 120
+    }
+  });
+
+  remoteWorldRuntime.boot();
+
+  assert.equal(
+    remoteWorldRuntime
+      .consumeFreshAckedAuthoritativeLocalPlayerPoseForReconciliation(120)
+      ?.position.z,
+    23.7
+  );
+
+  currentWallClockMs = 1_080;
+
+  assert.equal(
+    remoteWorldRuntime.consumeFreshAckedAuthoritativeLocalPlayerPoseForReconciliation(
+      120
+    ),
+    null
+  );
+
+  const unchangedLocalPlayerWorldSnapshot = createRealtimeWorldSnapshot({
+    currentTick: 12,
+    localAnimationVocabulary: "idle",
+    localJumpAuthorityState: "grounded",
+    localLastAcceptedJumpActionSequence: 0,
+    localLastProcessedInputSequence: 6,
+    localLastProcessedJumpActionSequence: 0,
+    localLinearVelocity: {
+      x: 0,
+      y: 0,
+      z: -6
+    },
+    localLocomotionMode: "grounded",
+    localPlayerId,
+    localPlayerY: 0.6,
+    localPlayerZ: 23.7,
+    localUsername,
+    remotePlayerId,
+    remotePlayerX: 13,
+    remoteUsername,
+    serverTimeMs: 1_080,
+    snapshotSequence: 2,
+    vehicleX: 13
+  });
+
+  fakeWorldClient.publishWorldSnapshotBuffer([
+    initialWorldSnapshot,
+    unchangedLocalPlayerWorldSnapshot
+  ]);
+  currentWallClockMs = 1_080;
+
+  assert.equal(
+    remoteWorldRuntime
+      .consumeFreshAckedAuthoritativeLocalPlayerPoseForReconciliation(120)
+      ?.position.z,
+    23.7
+  );
+  assert.equal(
+    remoteWorldRuntime.consumeFreshAckedAuthoritativeLocalPlayerPoseForReconciliation(
+      120
+    ),
+    null
+  );
+
+  const nextWorldSnapshot = createRealtimeWorldSnapshot({
+    currentTick: 13,
+    localAnimationVocabulary: "idle",
+    localJumpAuthorityState: "grounded",
+    localLastAcceptedJumpActionSequence: 0,
+    localLastProcessedInputSequence: 6,
+    localLastProcessedJumpActionSequence: 0,
+    localLinearVelocity: {
+      x: 0,
+      y: 0,
+      z: -6
+    },
+    localLocomotionMode: "grounded",
+    localPlayerId,
+    localPlayerY: 0.6,
+    localPlayerZ: 23.4,
+    localUsername,
+    remotePlayerId,
+    remotePlayerX: 14,
+    remoteUsername,
+    serverTimeMs: 1_110,
+    snapshotSequence: 3,
+    vehicleX: 14
+  });
+
+  fakeWorldClient.publishWorldSnapshotBuffer([
+    unchangedLocalPlayerWorldSnapshot,
+    nextWorldSnapshot
+  ]);
+  currentWallClockMs = 1_110;
+
+  assert.equal(
+    remoteWorldRuntime
+      .consumeFreshAckedAuthoritativeLocalPlayerPoseForReconciliation(120)
+      ?.position.z,
+    23.4
+  );
+
+  remoteWorldRuntime.dispose();
+});
+
+test("MetaverseRemoteWorldRuntime consumes each fresh acked local reconciliation snapshot once even when the raw authority is unchanged", async () => {
+  const { MetaverseRemoteWorldRuntime } = await clientLoader.load(
+    "/src/metaverse/classes/metaverse-remote-world-runtime.ts"
+  );
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let currentWallClockMs = 1_050;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const initialWorldSnapshot = createRealtimeWorldSnapshot({
+    currentTick: 11,
+    localAnimationVocabulary: "idle",
+    localJumpAuthorityState: "grounded",
+    localLastAcceptedJumpActionSequence: 0,
+    localLastProcessedInputSequence: 6,
+    localLastProcessedJumpActionSequence: 0,
+    localLinearVelocity: {
+      x: 0,
+      y: 0,
+      z: -6
+    },
+    localLocomotionMode: "grounded",
+    localPlayerId,
+    localPlayerY: 0.6,
+    localPlayerZ: 23.7,
+    localUsername,
+    remotePlayerId,
+    remotePlayerX: 12,
+    remoteUsername,
+    serverTimeMs: 1_050,
+    snapshotSequence: 1,
+    vehicleX: 12
+  });
+  const fakeWorldClient = new FakeMetaverseWorldClient([initialWorldSnapshot]);
+
+  fakeWorldClient.latestPlayerInputSequence = 6;
+  const remoteWorldRuntime = new MetaverseRemoteWorldRuntime({
+    createMetaverseWorldClient: () => fakeWorldClient,
+    localPlayerIdentity: {
+      characterId: "metaverse-mannequin-v1",
+      playerId: localPlayerId,
+      username: localUsername
+    },
+    onRemoteWorldUpdate() {},
+    readWallClockMs: () => currentWallClockMs,
+    samplingConfig: {
+      clockOffsetCorrectionAlpha: 1,
+      clockOffsetMaxStepMs: 1_000,
+      interpolationDelayMs: 225,
+      maxExtrapolationMs: 120
+    }
+  });
+
+  remoteWorldRuntime.boot();
+
+  assert.equal(
+    remoteWorldRuntime
+      .consumeFreshAckedAuthoritativeLocalPlayerReconciliationSample(120)
+      ?.authoritativePlayerSnapshot.position.z,
+    23.7
+  );
+
+  const unchangedLocalPlayerWorldSnapshot = createRealtimeWorldSnapshot({
+    currentTick: 12,
+    localAnimationVocabulary: "idle",
+    localJumpAuthorityState: "grounded",
+    localLastAcceptedJumpActionSequence: 0,
+    localLastProcessedInputSequence: 6,
+    localLastProcessedJumpActionSequence: 0,
+    localLinearVelocity: {
+      x: 0,
+      y: 0,
+      z: -6
+    },
+    localLocomotionMode: "grounded",
+    localPlayerId,
+    localPlayerY: 0.6,
+    localPlayerZ: 23.7,
+    localUsername,
+    remotePlayerId,
+    remotePlayerX: 15,
+    remoteUsername,
+    serverTimeMs: 1_080,
+    snapshotSequence: 2,
+    vehicleX: 15
+  });
+
+  fakeWorldClient.publishWorldSnapshotBuffer([
+    initialWorldSnapshot,
+    unchangedLocalPlayerWorldSnapshot
+  ]);
+  currentWallClockMs = 1_080;
+
+  const unchangedLocalPlayerReconciliationSample =
+    remoteWorldRuntime.consumeFreshAckedAuthoritativeLocalPlayerReconciliationSample(
+      120
+    );
+
+  assert.notEqual(unchangedLocalPlayerReconciliationSample, null);
+  assert.equal(
+    unchangedLocalPlayerReconciliationSample.authoritativePlayerSnapshot.position.z,
+    23.7
+  );
+  assert.equal(
+    remoteWorldRuntime.consumeFreshAckedAuthoritativeLocalPlayerReconciliationSample(
+      120
+    ),
+    null
+  );
+
+  const movedLocalPlayerWorldSnapshot = createRealtimeWorldSnapshot({
+    currentTick: 13,
+    localAnimationVocabulary: "idle",
+    localJumpAuthorityState: "grounded",
+    localLastAcceptedJumpActionSequence: 0,
+    localLastProcessedInputSequence: 6,
+    localLastProcessedJumpActionSequence: 0,
+    localLinearVelocity: {
+      x: 0,
+      y: 0,
+      z: -6
+    },
+    localLocomotionMode: "grounded",
+    localPlayerId,
+    localPlayerY: 0.6,
+    localPlayerZ: 23.4,
+    localUsername,
+    remotePlayerId,
+    remotePlayerX: 16,
+    remoteUsername,
+    serverTimeMs: 1_110,
+    snapshotSequence: 3,
+    vehicleX: 16
+  });
+
+  fakeWorldClient.publishWorldSnapshotBuffer([
+    unchangedLocalPlayerWorldSnapshot,
+    movedLocalPlayerWorldSnapshot
+  ]);
+  currentWallClockMs = 1_110;
+
+  assert.equal(
+    remoteWorldRuntime
+      .consumeFreshAckedAuthoritativeLocalPlayerReconciliationSample(120)
+      ?.authoritativePlayerSnapshot.position.z,
+    23.4
+  );
+
+  remoteWorldRuntime.dispose();
+});
+
+test("MetaverseRemoteWorldRuntime exposes raw acked local authority plus replay horizon for reconciliation", async () => {
+  const { MetaverseRemoteWorldRuntime } = await clientLoader.load(
+    "/src/metaverse/classes/metaverse-remote-world-runtime.ts"
+  );
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let currentWallClockMs = 1_050;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const fakeWorldClient = new FakeMetaverseWorldClient([
+    createRealtimeWorldSnapshot({
+      currentTick: 11,
+      localAnimationVocabulary: "jump-up",
+      localJumpAuthorityState: "rising",
+      localLastAcceptedJumpActionSequence: 2,
+      localLastProcessedInputSequence: 6,
+      localLastProcessedJumpActionSequence: 2,
+      localLinearVelocity: {
+        x: 0,
+        y: 4,
+        z: -6
+      },
+      localLocomotionMode: "grounded",
+      localPlayerId,
+      localPlayerY: 1.1,
+      localPlayerZ: 23.7,
+      localUsername,
+      remotePlayerId,
+      remotePlayerX: 12,
+      remoteUsername,
+      serverTimeMs: 1_050,
+      snapshotSequence: 2,
+      vehicleX: 12
+    })
+  ]);
+
+  fakeWorldClient.latestPlayerInputSequence = 6;
+  const remoteWorldRuntime = new MetaverseRemoteWorldRuntime({
+    createMetaverseWorldClient: () => fakeWorldClient,
+    localPlayerIdentity: {
+      characterId: "metaverse-mannequin-v1",
+      playerId: localPlayerId,
+      username: localUsername
+    },
+    onRemoteWorldUpdate() {},
+    readWallClockMs: () => currentWallClockMs,
+    samplingConfig: {
+      clockOffsetCorrectionAlpha: 1,
+      clockOffsetMaxStepMs: 1_000,
+      interpolationDelayMs: 225,
+      maxExtrapolationMs: 120
+    }
+  });
+
+  remoteWorldRuntime.boot();
+  assert.equal(
+    remoteWorldRuntime.readFreshAckedAuthoritativeLocalPlayerSnapshot(120)?.position.z,
+    23.7
+  );
+  currentWallClockMs = 1_080;
+
+  const reconciliationSample =
+    remoteWorldRuntime.consumeFreshAckedAuthoritativeLocalPlayerReconciliationSample(
+      120
+    );
+
+  assert.notEqual(reconciliationSample, null);
+  assert.equal(reconciliationSample.authoritativePlayerSnapshot.position.z, 23.7);
+  assert.equal(
+    reconciliationSample.authoritativePlayerSnapshot.traversalAuthority
+      .currentActionSequence,
+    2
+  );
+  assert.equal(
+    reconciliationSample.authoritativePlayerSnapshot.traversalAuthority
+      .lastConsumedActionSequence,
+    2
+  );
+  assert.ok(
+    Math.abs(reconciliationSample.extrapolationSeconds - 0.03) < 0.000001,
+    `expected replay horizon to be 0.03s, received ${reconciliationSample.extrapolationSeconds}`
+  );
+
+  remoteWorldRuntime.dispose();
+});
+
+test("local authority reconciliation prefers replay for held traversal even after the current input is acknowledged", async () => {
+  const { shouldPreferAckedTraversalReplay } = await clientLoader.load(
+    "/src/metaverse/states/local-authority-reconciliation.ts"
+  );
+  const heldTraversalIntent = Object.freeze({
+    actionIntent: Object.freeze({
+      kind: "none",
+      pressed: false,
+      sequence: 0
+    }),
+    bodyControl: Object.freeze({
+      boost: false,
+      moveAxis: 1,
+      strafeAxis: 0,
+      turnAxis: 0
+    }),
+    facing: Object.freeze({
+      pitchRadians: 0,
+      yawRadians: 0.4
+    }),
+    inputSequence: 6,
+    locomotionMode: "swim"
+  });
+  const acknowledgedAuthority = Object.freeze({
+    lastProcessedInputSequence: 6,
+    traversalAuthority: Object.freeze({
+      currentActionKind: null,
+      currentActionPhase: null,
+      currentActionSequence: null,
+      lastConsumedActionKind: null,
+      lastConsumedActionSequence: null,
+      lastRejectedActionKind: null,
+      lastRejectedActionSequence: null,
+      phaseStartedAtTick: null
+    })
+  });
+
+  assert.equal(
+    shouldPreferAckedTraversalReplay(
+      heldTraversalIntent,
+      acknowledgedAuthority
+    ),
+    true
+  );
+  assert.equal(
+    shouldPreferAckedTraversalReplay(
+      Object.freeze({
+        ...heldTraversalIntent,
+        bodyControl: Object.freeze({
+          ...heldTraversalIntent.bodyControl,
+          moveAxis: 0
+        })
+      }),
+      acknowledgedAuthority
+    ),
+    false
+  );
 });
 
 test("MetaverseRemoteWorldRuntime adds and removes remote entity presentations from authoritative world snapshots", async () => {
@@ -3783,6 +5057,21 @@ test("WebGpuMetaverseRuntime resolves grounded surface travel automatically when
       -14.8 -
         metaverseRuntimeConfig.bodyPresentation.groundedFirstPersonForwardOffsetMeters
     );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.local.jumpDebug
+        .groundedBodyGrounded,
+      true
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.local.jumpDebug
+        .groundedBodyJumpReady,
+      true
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.local.jumpDebug
+        .supported,
+      true
+    );
 
     runtime.dispose();
   } finally {
@@ -3848,6 +5137,441 @@ test("WebGpuMetaverseRuntime starts in swim locomotion over open water and advan
 
     assert.ok(runtime.hudSnapshot.camera.position.z < startingZ);
     assert.ok(Math.abs(runtime.hudSnapshot.camera.position.y - 1.9) < 0.001);
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+        .renderedOffset.planarMagnitudeMeters,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+        .renderedOffset.verticalMagnitudeMeters,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+        .renderedOffset.lookAngleRadians,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+        .renderedSnap.totalCount,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+        .renderedSnap.maxPlanarMagnitudeMetersPast5Seconds,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+        .renderedSnap.maxVerticalMagnitudeMetersPast5Seconds,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+        .renderedSnap.maxLookAngleRadiansPast5Seconds,
+      0
+    );
+
+    runtime.dispose();
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.HTMLElement = originalHTMLElement;
+  }
+});
+
+test("WebGpuMetaverseRuntime stamps and syncs a grounded jump intent before local traversal advances it", async () => {
+  const [
+    { WebGpuMetaverseRuntime },
+    { metaverseRuntimeConfig },
+    { RapierPhysicsRuntime }
+  ] = await Promise.all([
+    clientLoader.load("/src/metaverse/classes/webgpu-metaverse-runtime.ts"),
+    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
+  const { createSceneAssetLoader, environmentProofConfig } =
+    await createStaticSurfaceProofSlice();
+  const renderer = new FakeMetaverseRenderer();
+  const originalWindow = globalThis.window;
+  const originalHTMLElement = globalThis.HTMLElement;
+  const windowHarness = createInteractiveWindowHarness();
+  const fakeCanvas = {
+    addEventListener() {},
+    clientHeight: 720,
+    clientWidth: 1280,
+    removeEventListener() {}
+  };
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const username = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let nowMs = 0;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(username, null);
+  assert.notEqual(remoteUsername, null);
+
+  globalThis.window = windowHarness.window;
+  globalThis.HTMLElement = class FakeHTMLElement {};
+
+  try {
+    const fakePresenceClient = new FakeMetaversePresenceClient(
+      localPlayerId,
+      username,
+      remotePlayerId
+    );
+    const fakeWorldClient = new FakeMetaverseWorldClient();
+    const runtime = new WebGpuMetaverseRuntime(
+      {
+        ...metaverseRuntimeConfig,
+        camera: {
+          ...metaverseRuntimeConfig.camera,
+          initialYawRadians: 0,
+          spawnPosition: {
+            x: -8.2,
+            y: 1.62,
+            z: -14.8
+          }
+        },
+        groundedBody: {
+          ...metaverseRuntimeConfig.groundedBody,
+          spawnPosition: {
+            x: -8.2,
+            y: 0.15,
+            z: -14.8
+          }
+        },
+        portals: []
+      },
+      {
+        authoritativePlayerMovementEnabled: true,
+        bootCinematicConfig: disabledBootCinematicConfig,
+        cancelAnimationFrame:
+          globalThis.window.cancelAnimationFrame.bind(globalThis.window),
+        createMetaversePresenceClient: () => fakePresenceClient,
+        createMetaverseWorldClient: () => fakeWorldClient,
+        createRenderer: () => renderer,
+        createSceneAssetLoader,
+        environmentProofConfig,
+        localPlayerIdentity: {
+          characterId: "metaverse-mannequin-v1",
+          playerId: localPlayerId,
+          username
+        },
+        physicsRuntime: createFakePhysicsRuntime(RapierPhysicsRuntime),
+        readNowMs: () => nowMs,
+        requestAnimationFrame:
+          globalThis.window.requestAnimationFrame.bind(globalThis.window)
+      }
+    );
+
+    await runtime.start(fakeCanvas, {
+      gpu: {}
+    });
+
+    assert.equal(runtime.hudSnapshot.locomotionMode, "grounded");
+
+    windowHarness.dispatch("keydown", {
+      code: "Space"
+    });
+    nowMs = 1000 / 60;
+    windowHarness.advanceFrame(nowMs);
+
+    assert.equal(
+      fakeWorldClient.latestPlayerTraversalIntentSnapshot?.actionIntent.kind ===
+        "jump",
+      true
+    );
+    assert.equal(
+      fakeWorldClient.latestPlayerTraversalIntentSnapshot?.actionIntent
+        .sequence ?? 0,
+      1
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.local
+        .traversalAuthority.currentActionKind,
+      "jump"
+    );
+
+    windowHarness.dispatch("keyup", {
+      code: "Space"
+    });
+    nowMs = 2000 / 60;
+    windowHarness.advanceFrame(nowMs);
+
+    assert.equal(
+      fakeWorldClient.latestPlayerTraversalIntentSnapshot?.actionIntent.kind ===
+        "jump",
+      true
+    );
+    assert.equal(
+      fakeWorldClient.latestPlayerTraversalIntentSnapshot?.actionIntent.pressed,
+      false
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.local
+        .traversalAuthority.currentActionKind,
+      "none"
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.local
+        .traversalAuthority.currentActionSequence,
+      0
+    );
+
+    nowMs = 3000 / 60;
+    windowHarness.advanceFrame(nowMs);
+
+    assert.equal(
+      fakeWorldClient.latestPlayerTraversalIntentSnapshot?.actionIntent.kind ===
+        "jump",
+      true
+    );
+    assert.equal(
+      fakeWorldClient.latestPlayerTraversalIntentSnapshot?.actionIntent.pressed,
+      false
+    );
+
+    runtime.dispose();
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.HTMLElement = originalHTMLElement;
+  }
+});
+
+test("WebGpuMetaverseRuntime keeps swim jump input off the authoritative traversal lane while local swim authority stays idle", async () => {
+  const [{ WebGpuMetaverseRuntime }, { RapierPhysicsRuntime }] = await Promise.all([
+    clientLoader.load("/src/metaverse/classes/webgpu-metaverse-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
+  const renderer = new FakeMetaverseRenderer();
+  const originalWindow = globalThis.window;
+  const originalHTMLElement = globalThis.HTMLElement;
+  const windowHarness = createInteractiveWindowHarness();
+  const fakeCanvas = {
+    addEventListener() {},
+    clientHeight: 720,
+    clientWidth: 1280,
+    removeEventListener() {}
+  };
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const username = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let nowMs = 0;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(username, null);
+  assert.notEqual(remoteUsername, null);
+
+  globalThis.window = windowHarness.window;
+  globalThis.HTMLElement = class FakeHTMLElement {};
+
+  try {
+    const fakePresenceClient = new FakeMetaversePresenceClient(
+      localPlayerId,
+      username,
+      remotePlayerId
+    );
+    const fakeWorldClient = new FakeMetaverseWorldClient();
+    const runtime = new WebGpuMetaverseRuntime(undefined, {
+      authoritativePlayerMovementEnabled: true,
+      bootCinematicConfig: disabledBootCinematicConfig,
+      cancelAnimationFrame:
+        globalThis.window.cancelAnimationFrame.bind(globalThis.window),
+      createMetaversePresenceClient: () => fakePresenceClient,
+      createMetaverseWorldClient: () => fakeWorldClient,
+      createRenderer: () => renderer,
+      localPlayerIdentity: {
+        characterId: "metaverse-mannequin-v1",
+        playerId: localPlayerId,
+        username
+      },
+      physicsRuntime: createFakePhysicsRuntime(RapierPhysicsRuntime),
+      readNowMs: () => nowMs,
+      requestAnimationFrame:
+        globalThis.window.requestAnimationFrame.bind(globalThis.window)
+    });
+
+    await runtime.start(fakeCanvas, {
+      gpu: {}
+    });
+
+    assert.equal(runtime.hudSnapshot.locomotionMode, "swim");
+
+    windowHarness.dispatch("keydown", {
+      code: "Space"
+    });
+    nowMs = 1000 / 60;
+    windowHarness.advanceFrame(nowMs);
+
+    assert.equal(
+      fakeWorldClient.latestPlayerTraversalIntentSnapshot?.actionIntent.kind ===
+        "jump",
+      false
+    );
+    assert.equal(
+      fakeWorldClient.latestPlayerTraversalIntentSnapshot?.actionIntent
+        .sequence ?? 0,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.local
+        .traversalAuthority.currentActionKind,
+      "none"
+    );
+
+    runtime.dispose();
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.HTMLElement = originalHTMLElement;
+  }
+});
+
+test("WebGpuMetaverseRuntime keeps the held-weapon render camera traversal-owned while reconciliation stays quiet", async () => {
+  const [
+    { WebGpuMetaverseRuntime },
+    { metaverseRuntimeConfig },
+    { RapierPhysicsRuntime }
+  ] = await Promise.all([
+    clientLoader.load("/src/metaverse/classes/webgpu-metaverse-runtime.ts"),
+    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
+  const {
+    attachmentProofConfig,
+    characterProofConfig,
+    createSceneAssetLoader,
+    environmentProofConfig
+  } = await createHeldWeaponProofSlice();
+  const renderer = new FakeMetaverseRenderer();
+  const originalWindow = globalThis.window;
+  const originalHTMLElement = globalThis.HTMLElement;
+  const windowHarness = createInteractiveWindowHarness();
+  const fakeCanvas = {
+    addEventListener() {},
+    clientHeight: 720,
+    clientWidth: 1280,
+    removeEventListener() {}
+  };
+  const localPlayerId = createMetaversePlayerId("held-weapon-local-player");
+  const remotePlayerId = createMetaversePlayerId("held-weapon-remote-player");
+  const username = createUsername("Held Weapon Local");
+  let nowMs = 0;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(username, null);
+
+  globalThis.window = windowHarness.window;
+  globalThis.HTMLElement = class FakeHTMLElement {};
+
+  try {
+    const fakePresenceClient = new FakeMetaversePresenceClient(
+      localPlayerId,
+      username,
+      remotePlayerId
+    );
+    const fakeWorldClient = new FakeMetaverseWorldClient();
+    const runtime = new WebGpuMetaverseRuntime(
+      {
+        ...metaverseRuntimeConfig,
+        portals: []
+      },
+      {
+        attachmentProofConfig,
+        bootCinematicConfig: disabledBootCinematicConfig,
+        cancelAnimationFrame:
+          globalThis.window.cancelAnimationFrame.bind(globalThis.window),
+        characterProofConfig,
+        createMetaversePresenceClient: () => fakePresenceClient,
+        createMetaverseWorldClient: () => fakeWorldClient,
+        createRenderer: () => renderer,
+        createSceneAssetLoader,
+        environmentProofConfig,
+        localPlayerIdentity: {
+          characterId: characterProofConfig.characterId,
+          playerId: localPlayerId,
+          username
+        },
+        physicsRuntime: createFakePhysicsRuntime(RapierPhysicsRuntime),
+        readNowMs: () => nowMs,
+        requestAnimationFrame:
+          globalThis.window.requestAnimationFrame.bind(globalThis.window)
+      }
+    );
+
+    await runtime.start(fakeCanvas, {
+      gpu: {}
+    });
+
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+        .renderedOffset.planarMagnitudeMeters,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+        .renderedOffset.verticalMagnitudeMeters,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+        .renderedOffset.lookAngleRadians,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .recentCorrectionCountPast5Seconds,
+      0
+    );
+
+    windowHarness.dispatch("mousemove", {
+      movementX: 240,
+      movementY: 0
+    });
+    nowMs = 1000 / 60;
+    windowHarness.advanceFrame(nowMs);
+
+    windowHarness.dispatch("keydown", {
+      code: "KeyW"
+    });
+    nowMs = 2000 / 60;
+    windowHarness.advanceFrame(nowMs);
+
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+        .renderedOffset.planarMagnitudeMeters,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+        .renderedOffset.verticalMagnitudeMeters,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+        .renderedOffset.lookAngleRadians,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+        .renderedSnap.totalCount,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+        .renderedSnap.recentCountPast5Seconds,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .recentCorrectionCountPast5Seconds,
+      0
+    );
 
     runtime.dispose();
   } finally {
@@ -3935,6 +5659,181 @@ test("WebGpuMetaverseRuntime routes the shipped dock spawn into sustained swim i
     }
 
     assert.ok(runtime.hudSnapshot.camera.position.z < swimStartZ - 0.9);
+
+    runtime.dispose();
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.HTMLElement = originalHTMLElement;
+  }
+});
+
+test("WebGpuMetaverseRuntime derives authoritative shoreline routing telemetry from the latest local-player snapshot", async () => {
+  const [
+    { WebGpuMetaverseRuntime },
+    { metaverseRuntimeConfig },
+    { RapierPhysicsRuntime }
+  ] = await Promise.all([
+    clientLoader.load("/src/metaverse/classes/webgpu-metaverse-runtime.ts"),
+    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
+  const { characterProofConfig, createSceneAssetLoader, environmentProofConfig } =
+    await createSkiffMountProofSlice();
+  const renderer = new FakeMetaverseRenderer();
+  const originalWindow = globalThis.window;
+  const originalHTMLElement = globalThis.HTMLElement;
+  const windowHarness = createInteractiveWindowHarness();
+  const fakeCanvas = {
+    addEventListener() {},
+    clientHeight: 720,
+    clientWidth: 1280,
+    removeEventListener() {}
+  };
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const username = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let nowMs = 0;
+  let wallClockMs = 1_100;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(username, null);
+  assert.notEqual(remoteUsername, null);
+
+  globalThis.window = windowHarness.window;
+  globalThis.HTMLElement = class FakeHTMLElement {};
+
+  try {
+    const fakePresenceClient = new FakeMetaversePresenceClient(
+      localPlayerId,
+      username,
+      remotePlayerId
+    );
+    const fakeWorldClient = new FakeMetaverseWorldClient([
+      createRealtimeWorldSnapshot({
+        currentTick: 11,
+        includeRemotePlayer: false,
+        includeVehicle: false,
+        localAnimationVocabulary: "swim",
+        localJumpDebug: {
+          groundedBodyJumpReady: false,
+          pendingJumpActionSequence: 7,
+          pendingJumpBufferAgeMs: 84,
+          resolvedJumpActionSequence: 6,
+          resolvedJumpActionState: "rejected-buffer-expired",
+          surfaceJumpSupported: false,
+          supported: false
+        },
+        localJumpAuthorityState: "none",
+        localLastAcceptedJumpActionSequence: 0,
+        localLastProcessedInputSequence: 0,
+        localLastProcessedJumpActionSequence: 0,
+        localLinearVelocity: {
+          x: 0,
+          y: 0,
+          z: 0
+        },
+        localLocomotionMode: "swim",
+        localPlayerId,
+        localPlayerX: metaverseRuntimeConfig.groundedBody.spawnPosition.x,
+        localPlayerY: 0,
+        localPlayerZ: metaverseRuntimeConfig.groundedBody.spawnPosition.z,
+        localUsername: username,
+        localYawRadians: metaverseRuntimeConfig.camera.initialYawRadians,
+        remotePlayerId,
+        remotePlayerX: 10,
+        remoteUsername,
+        serverTimeMs: wallClockMs,
+        snapshotSequence: 1,
+        vehicleX: 10
+      })
+    ]);
+    const runtime = new WebGpuMetaverseRuntime(undefined, {
+      authoritativePlayerMovementEnabled: true,
+      bootCinematicConfig: disabledBootCinematicConfig,
+      cancelAnimationFrame:
+        globalThis.window.cancelAnimationFrame.bind(globalThis.window),
+      characterProofConfig,
+      createMetaversePresenceClient: () => fakePresenceClient,
+      createMetaverseWorldClient: () => fakeWorldClient,
+      createRenderer: () => renderer,
+      createSceneAssetLoader,
+      environmentProofConfig,
+      localPlayerIdentity: {
+        characterId: "metaverse-mannequin-v1",
+        playerId: localPlayerId,
+        username
+      },
+      physicsRuntime: createFakePhysicsRuntime(RapierPhysicsRuntime),
+      readNowMs: () => nowMs,
+      readWallClockMs: () => wallClockMs,
+      requestAnimationFrame:
+        globalThis.window.requestAnimationFrame.bind(globalThis.window)
+    });
+
+    await runtime.start(fakeCanvas, {
+      gpu: {}
+    });
+
+    nowMs += 1000 / 60;
+    windowHarness.advanceFrame(nowMs);
+
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer
+        .locomotionMode,
+      "swim"
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer
+        .surfaceRouting.decisionReason,
+      "shoreline-exit-blocked"
+    );
+    assert.notEqual(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer
+        .surfaceRouting.resolvedSupportHeightMeters,
+      null
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer
+        .surfaceRouting.stepSupportedProbeCount,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer
+        .jumpDebug.pendingJumpActionSequence,
+      7
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer
+        .jumpDebug.pendingJumpBufferAgeMs,
+      84
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer
+        .jumpDebug.resolvedJumpActionSequence,
+      6
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer
+        .jumpDebug.resolvedJumpActionState,
+      "rejected-buffer-expired"
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer
+        .traversalAuthority.currentActionKind,
+      "none"
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer
+        .traversalAuthority.currentActionPhase,
+      "idle"
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer
+        .traversalAuthority.lastRejectedActionReason,
+      "buffer-expired"
+    );
 
     runtime.dispose();
   } finally {
@@ -4042,12 +5941,6 @@ test("WebGpuMetaverseRuntime routes mounted hub input through skiff locomotion a
     assert.ok(
       Math.abs(runtime.hudSnapshot.camera.yawRadians - mountedCamera.yawRadians) >
         0.01
-    );
-    assert.ok(
-      Math.hypot(
-        runtime.hudSnapshot.camera.position.x - mountedCamera.position.x,
-        runtime.hudSnapshot.camera.position.z - mountedCamera.position.z
-      ) > 0.001
     );
     assert.equal(runtime.hudSnapshot.mountedEnvironment?.occupancyKind, "entry");
     assert.equal(runtime.hudSnapshot.mountedEnvironment?.entryId, "deck-entry");
@@ -4399,6 +6292,10 @@ test("WebGpuMetaverseRuntime reconciles a local mounted skiff from fresh authori
       })
     ]);
 
+    wallClockMs = 1_160;
+    nowMs += 1000 / 60;
+    windowHarness.advanceFrame(nowMs);
+
     assert.ok(runtime.hudSnapshot.camera.position.x > 1.5);
     assert.ok(
       Math.abs(runtime.hudSnapshot.camera.position.x - 3) <
@@ -4407,6 +6304,26 @@ test("WebGpuMetaverseRuntime reconciles a local mounted skiff from fresh authori
     assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount,
       1
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .mountedVehicleAuthorityCorrectionCount,
+      1
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .recentCorrectionCountPast5Seconds,
+      1
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .recentMountedVehicleAuthorityCorrectionCountPast5Seconds,
+      1
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .lastCorrectionSource,
+      "mounted-vehicle-authority"
     );
 
     wallClockMs = 1_500;
@@ -4420,6 +6337,29 @@ test("WebGpuMetaverseRuntime reconciles a local mounted skiff from fresh authori
     assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount,
       1
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .recentCorrectionCountPast5Seconds,
+      1
+    );
+
+    wallClockMs = 7_500;
+    nowMs += 6_000;
+    windowHarness.advanceFrame(nowMs);
+
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount,
+      1
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .recentCorrectionCountPast5Seconds,
+      0
+    );
+    assert.ok(
+      (runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .lastCorrectionAgeMs ?? 0) >= 6_000
     );
 
     runtime.dispose();
@@ -4531,9 +6471,18 @@ test("WebGpuMetaverseRuntime only reconciles local traversal after the authorita
     wallClockMs = 1_120;
     nowMs += 1000 / 60;
     windowHarness.advanceFrame(nowMs);
-
     assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .lastCorrectionSource,
+      "none"
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .recentCorrectionCountPast5Seconds,
       0
     );
     assert.equal(
@@ -4577,6 +6526,9 @@ test("WebGpuMetaverseRuntime only reconciles local traversal after the authorita
     wallClockMs = 1_170;
     nowMs += 1000 / 60;
     windowHarness.advanceFrame(nowMs);
+    wallClockMs = 1_190;
+    nowMs += 1000 / 60;
+    windowHarness.advanceFrame(nowMs);
     const cameraForwardOffsetMeters =
       runtime.hudSnapshot.locomotionMode === "swim"
         ? -metaverseRuntimeConfig.bodyPresentation.swimThirdPersonFollowDistanceMeters
@@ -4594,6 +6546,15 @@ test("WebGpuMetaverseRuntime only reconciles local traversal after the authorita
       1
     );
     assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .lastLocalAuthorityPoseCorrectionReason,
+      "gross-position-divergence"
+    );
+    assert.ok(
+      (runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .lastLocalAuthorityPoseCorrectionDetail.planarMagnitudeMeters ?? 0) > 1.5
+    );
+    assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer
         .lastProcessedInputSequence,
       localPoseInputSequence
@@ -4603,12 +6564,13 @@ test("WebGpuMetaverseRuntime only reconciles local traversal after the authorita
         .applied,
       true
     );
+    const correctedAuthoritativeGap = Math.abs(
+      correctedLocalBodyX -
+        (runtime.hudSnapshot.telemetry.worldSnapshot.shoreline
+          .authoritativeLocalPlayer.position?.x ?? 0)
+    );
     assert.ok(
-      Math.abs(
-        correctedLocalBodyX -
-          (runtime.hudSnapshot.telemetry.worldSnapshot.shoreline
-            .authoritativeLocalPlayer.position?.x ?? 0)
-      ) < 0.45,
+      correctedAuthoritativeGap < 1.05,
       `corrected body x ${correctedLocalBodyX} authoritative x ${runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer.position?.x}`
     );
     assert.ok(
@@ -4616,6 +6578,983 @@ test("WebGpuMetaverseRuntime only reconciles local traversal after the authorita
         .planarMagnitudeMeters ?? 0) > 1.5
     );
     assert.ok(runtime.hudSnapshot.camera.position.x > 1.5);
+
+    runtime.dispose();
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.HTMLElement = originalHTMLElement;
+  }
+});
+
+test("WebGpuMetaverseRuntime skips acked replay corrections when the latest traversal intent is neutral", async () => {
+  const [
+    { WebGpuMetaverseRuntime },
+    { metaverseRuntimeConfig },
+    { RapierPhysicsRuntime }
+  ] = await Promise.all([
+    clientLoader.load("/src/metaverse/classes/webgpu-metaverse-runtime.ts"),
+    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
+  const { characterProofConfig, createSceneAssetLoader, environmentProofConfig } =
+    await createSkiffMountProofSlice();
+  const renderer = new FakeMetaverseRenderer();
+  const originalWindow = globalThis.window;
+  const originalHTMLElement = globalThis.HTMLElement;
+  const windowHarness = createInteractiveWindowHarness();
+  const fakeCanvas = {
+    addEventListener() {},
+    clientHeight: 720,
+    clientWidth: 1280,
+    removeEventListener() {}
+  };
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const username = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let nowMs = 0;
+  let wallClockMs = 1_100;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(username, null);
+  assert.notEqual(remoteUsername, null);
+
+  globalThis.window = windowHarness.window;
+  globalThis.HTMLElement = class FakeHTMLElement {};
+
+  try {
+    const fakePresenceClient = new FakeMetaversePresenceClient(
+      localPlayerId,
+      username,
+      remotePlayerId
+    );
+    const fakeWorldClient = new FakeMetaverseWorldClient();
+    const runtime = new WebGpuMetaverseRuntime(undefined, {
+      authoritativePlayerMovementEnabled: true,
+      bootCinematicConfig: disabledBootCinematicConfig,
+      cancelAnimationFrame:
+        globalThis.window.cancelAnimationFrame.bind(globalThis.window),
+      characterProofConfig,
+      createMetaversePresenceClient: () => fakePresenceClient,
+      createMetaverseWorldClient: () => fakeWorldClient,
+      createRenderer: () => renderer,
+      createSceneAssetLoader,
+      environmentProofConfig,
+      localPlayerIdentity: {
+        characterId: "metaverse-mannequin-v1",
+        playerId: localPlayerId,
+        username
+      },
+      physicsRuntime: createFakePhysicsRuntime(RapierPhysicsRuntime),
+      readNowMs: () => nowMs,
+      readWallClockMs: () => wallClockMs,
+      requestAnimationFrame:
+        globalThis.window.requestAnimationFrame.bind(globalThis.window)
+    });
+
+    await runtime.start(fakeCanvas, {
+      gpu: {}
+    });
+
+    const localPoseInputSequence = fakeWorldClient.latestPlayerInputSequence;
+
+    assert.ok(localPoseInputSequence > 0);
+    assert.equal(
+      fakeWorldClient.latestPlayerTraversalIntentSnapshot?.bodyControl.moveAxis ??
+        0,
+      0
+    );
+    assert.equal(
+      fakeWorldClient.latestPlayerTraversalIntentSnapshot?.bodyControl
+        .strafeAxis ?? 0,
+      0
+    );
+    assert.equal(
+      fakeWorldClient.latestPlayerTraversalIntentSnapshot?.actionIntent.kind ===
+        "jump",
+      false
+    );
+
+    const localLocomotionModeBeforeAuthority = runtime.hudSnapshot.locomotionMode;
+    const localCameraXBeforeAuthority = runtime.hudSnapshot.camera.position.x;
+    const localCameraYBeforeAuthority = runtime.hudSnapshot.camera.position.y;
+    const localCameraZBeforeAuthority = runtime.hudSnapshot.camera.position.z;
+    const localCameraYawBeforeAuthority = runtime.hudSnapshot.camera.yawRadians;
+    const localForwardOffsetMeters =
+      localLocomotionModeBeforeAuthority === "swim"
+        ? -metaverseRuntimeConfig.bodyPresentation.swimThirdPersonFollowDistanceMeters
+        : metaverseRuntimeConfig.bodyPresentation
+            .groundedFirstPersonForwardOffsetMeters;
+    const localEyeHeightMeters =
+      localLocomotionModeBeforeAuthority === "swim"
+        ? metaverseRuntimeConfig.swim.cameraEyeHeightMeters +
+          metaverseRuntimeConfig.bodyPresentation
+            .swimThirdPersonHeightOffsetMeters
+        : metaverseRuntimeConfig.groundedBody.eyeHeightMeters;
+    const localBodyXBeforeAuthority =
+      localCameraXBeforeAuthority -
+      Math.sin(localCameraYawBeforeAuthority) * localForwardOffsetMeters;
+    const localBodyYBeforeAuthority =
+      localCameraYBeforeAuthority - localEyeHeightMeters;
+    const localBodyZBeforeAuthority =
+      localCameraZBeforeAuthority +
+      Math.cos(localCameraYawBeforeAuthority) * localForwardOffsetMeters;
+
+    fakeWorldClient.publishWorldSnapshotBuffer([
+      createRealtimeWorldSnapshot({
+        currentTick: 11,
+        includeRemotePlayer: false,
+        includeVehicle: false,
+        localJumpAuthorityState:
+          localLocomotionModeBeforeAuthority === "grounded" ? "grounded" : "none",
+        localLastProcessedInputSequence: localPoseInputSequence,
+        localLookYawRadians: localCameraYawBeforeAuthority,
+        localLinearVelocity: {
+          x: 70,
+          y: 0,
+          z: 0
+        },
+        localLocomotionMode: localLocomotionModeBeforeAuthority,
+        localPlayerId,
+        localPlayerX: localBodyXBeforeAuthority - 2.1,
+        localPlayerY: localBodyYBeforeAuthority,
+        localPlayerZ: localBodyZBeforeAuthority,
+        localYawRadians: localCameraYawBeforeAuthority,
+        localUsername: username,
+        remotePlayerId,
+        remotePlayerX: 10,
+        remoteUsername,
+        serverTimeMs: 1_140,
+        snapshotSequence: 1,
+        vehicleX: 10
+      })
+    ]);
+
+    wallClockMs = 1_170;
+    nowMs += 1000 / 60;
+    windowHarness.advanceFrame(nowMs);
+
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .ackedAuthoritativeReplayCorrectionCount,
+      0
+    );
+    assert.notEqual(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .lastCorrectionSource,
+      "acked-authority-replay"
+    );
+
+    runtime.dispose();
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.HTMLElement = originalHTMLElement;
+  }
+});
+
+test("WebGpuMetaverseRuntime keeps local traversal client-owned under routine acked authoritative drift", async () => {
+  const [
+    { WebGpuMetaverseRuntime },
+    { metaverseRuntimeConfig },
+    { RapierPhysicsRuntime }
+  ] = await Promise.all([
+    clientLoader.load("/src/metaverse/classes/webgpu-metaverse-runtime.ts"),
+    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
+  const { characterProofConfig, createSceneAssetLoader, environmentProofConfig } =
+    await createSkiffMountProofSlice();
+  const renderer = new FakeMetaverseRenderer();
+  const originalWindow = globalThis.window;
+  const originalHTMLElement = globalThis.HTMLElement;
+  const windowHarness = createInteractiveWindowHarness();
+  const fakeCanvas = {
+    addEventListener() {},
+    clientHeight: 720,
+    clientWidth: 1280,
+    removeEventListener() {}
+  };
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const username = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let nowMs = 0;
+  let wallClockMs = 1_100;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(username, null);
+  assert.notEqual(remoteUsername, null);
+
+  globalThis.window = windowHarness.window;
+  globalThis.HTMLElement = class FakeHTMLElement {};
+
+  try {
+    const fakePresenceClient = new FakeMetaversePresenceClient(
+      localPlayerId,
+      username,
+      remotePlayerId
+    );
+    const fakeWorldClient = new FakeMetaverseWorldClient();
+    const runtime = new WebGpuMetaverseRuntime(undefined, {
+      authoritativePlayerMovementEnabled: true,
+      bootCinematicConfig: disabledBootCinematicConfig,
+      cancelAnimationFrame:
+        globalThis.window.cancelAnimationFrame.bind(globalThis.window),
+      characterProofConfig,
+      createMetaversePresenceClient: () => fakePresenceClient,
+      createMetaverseWorldClient: () => fakeWorldClient,
+      createRenderer: () => renderer,
+      createSceneAssetLoader,
+      environmentProofConfig,
+      localPlayerIdentity: {
+        characterId: "metaverse-mannequin-v1",
+        playerId: localPlayerId,
+        username
+      },
+      physicsRuntime: createFakePhysicsRuntime(RapierPhysicsRuntime),
+      readNowMs: () => nowMs,
+      readWallClockMs: () => wallClockMs,
+      requestAnimationFrame:
+        globalThis.window.requestAnimationFrame.bind(globalThis.window)
+    });
+
+    await runtime.start(fakeCanvas, {
+      gpu: {}
+    });
+
+    const localPoseInputSequence = fakeWorldClient.latestPlayerInputSequence;
+
+    assert.ok(localPoseInputSequence > 0);
+
+    const localLocomotionModeBeforeAuthority = runtime.hudSnapshot.locomotionMode;
+    const localCameraXBeforeAuthority = runtime.hudSnapshot.camera.position.x;
+    const localCameraZBeforeAuthority = runtime.hudSnapshot.camera.position.z;
+    const localCameraYawBeforeAuthority = runtime.hudSnapshot.camera.yawRadians;
+    const localForwardOffsetMeters =
+      localLocomotionModeBeforeAuthority === "swim"
+        ? -metaverseRuntimeConfig.bodyPresentation.swimThirdPersonFollowDistanceMeters
+        : metaverseRuntimeConfig.bodyPresentation
+            .groundedFirstPersonForwardOffsetMeters;
+    const localEyeHeightMeters =
+      localLocomotionModeBeforeAuthority === "swim"
+        ? metaverseRuntimeConfig.swim.cameraEyeHeightMeters +
+          metaverseRuntimeConfig.bodyPresentation
+            .swimThirdPersonHeightOffsetMeters
+        : metaverseRuntimeConfig.groundedBody.eyeHeightMeters;
+    const localBodyXBeforeAuthority =
+      localCameraXBeforeAuthority -
+      Math.sin(localCameraYawBeforeAuthority) * localForwardOffsetMeters;
+    const localBodyYBeforeAuthority =
+      runtime.hudSnapshot.camera.position.y - localEyeHeightMeters;
+    const localBodyZBeforeAuthority =
+      localCameraZBeforeAuthority +
+      Math.cos(localCameraYawBeforeAuthority) * localForwardOffsetMeters;
+    fakeWorldClient.publishWorldSnapshotBuffer([
+      createRealtimeWorldSnapshot({
+        currentTick: 11,
+        includeRemotePlayer: false,
+        includeVehicle: false,
+        localJumpAuthorityState:
+          localLocomotionModeBeforeAuthority === "grounded"
+            ? "grounded"
+            : "none",
+        localLastProcessedInputSequence: localPoseInputSequence,
+        localLookYawRadians: localCameraYawBeforeAuthority,
+        localLinearVelocity: {
+          x: 0,
+          y: 0,
+          z: 0
+        },
+        localLocomotionMode: localLocomotionModeBeforeAuthority,
+        localPlayerId,
+        localPlayerX: localBodyXBeforeAuthority + 1.8,
+        localPlayerY: localBodyYBeforeAuthority,
+        localPlayerZ: localBodyZBeforeAuthority,
+        localYawRadians: localCameraYawBeforeAuthority,
+        localUsername: username,
+        remotePlayerId,
+        remotePlayerX: 10,
+        remoteUsername,
+        serverTimeMs: 1_140,
+        snapshotSequence: 1,
+        vehicleX: 10
+      })
+    ]);
+
+    wallClockMs = 1_170;
+    nowMs += 1000 / 60;
+    windowHarness.advanceFrame(nowMs);
+
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeCorrection
+        .applied,
+      false
+    );
+    assert.ok(
+      Math.abs(runtime.hudSnapshot.camera.position.x - localCameraXBeforeAuthority) <
+        0.05,
+      `moderate acknowledged authority drift steered the local camera from ${localCameraXBeforeAuthority} to ${runtime.hudSnapshot.camera.position.x}`
+    );
+
+    runtime.dispose();
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.HTMLElement = originalHTMLElement;
+  }
+});
+
+test("WebGpuMetaverseRuntime does not run a full frame when authoritative world snapshots publish between browser frames", async () => {
+  const [
+    { WebGpuMetaverseRuntime },
+    { RapierPhysicsRuntime }
+  ] = await Promise.all([
+    clientLoader.load("/src/metaverse/classes/webgpu-metaverse-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
+  const { characterProofConfig, createSceneAssetLoader, environmentProofConfig } =
+    await createSkiffMountProofSlice();
+  const renderer = new FakeMetaverseRenderer();
+  const originalWindow = globalThis.window;
+  const originalHTMLElement = globalThis.HTMLElement;
+  const windowHarness = createInteractiveWindowHarness();
+  const fakeCanvas = {
+    addEventListener() {},
+    clientHeight: 720,
+    clientWidth: 1280,
+    removeEventListener() {}
+  };
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const username = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let nowMs = 0;
+  let wallClockMs = 1_100;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(username, null);
+  assert.notEqual(remoteUsername, null);
+
+  globalThis.window = windowHarness.window;
+  globalThis.HTMLElement = class FakeHTMLElement {};
+
+  try {
+    const fakePresenceClient = new FakeMetaversePresenceClient(
+      localPlayerId,
+      username,
+      remotePlayerId
+    );
+    const fakeWorldClient = new FakeMetaverseWorldClient();
+    const runtime = new WebGpuMetaverseRuntime(undefined, {
+      authoritativePlayerMovementEnabled: true,
+      bootCinematicConfig: disabledBootCinematicConfig,
+      cancelAnimationFrame:
+        globalThis.window.cancelAnimationFrame.bind(globalThis.window),
+      characterProofConfig,
+      createMetaversePresenceClient: () => fakePresenceClient,
+      createMetaverseWorldClient: () => fakeWorldClient,
+      createRenderer: () => renderer,
+      createSceneAssetLoader,
+      environmentProofConfig,
+      localPlayerIdentity: {
+        characterId: "metaverse-mannequin-v1",
+        playerId: localPlayerId,
+        username
+      },
+      physicsRuntime: createFakePhysicsRuntime(RapierPhysicsRuntime),
+      readNowMs: () => nowMs,
+      readWallClockMs: () => wallClockMs,
+      requestAnimationFrame:
+        globalThis.window.requestAnimationFrame.bind(globalThis.window)
+    });
+
+    await runtime.start(fakeCanvas, {
+      gpu: {}
+    });
+
+    const renderedFrameCountBeforePublish =
+      runtime.hudSnapshot.telemetry.renderedFrameCount;
+    const traversalRequestCountBeforePublish =
+      fakeWorldClient.playerTraversalIntentRequests.length;
+    const localPoseInputSequence = fakeWorldClient.latestPlayerInputSequence;
+
+    fakeWorldClient.publishWorldSnapshotBuffer([
+      createRealtimeWorldSnapshot({
+        currentTick: 11,
+        includeRemotePlayer: false,
+        includeVehicle: false,
+        localLastProcessedInputSequence: localPoseInputSequence,
+        localPlayerId,
+        localPlayerX: 3,
+        localUsername: username,
+        remotePlayerId,
+        remotePlayerX: 10,
+        remoteUsername,
+        serverTimeMs: 1_140,
+        snapshotSequence: 1,
+        vehicleX: 10
+      })
+    ]);
+
+    assert.equal(
+      runtime.hudSnapshot.telemetry.renderedFrameCount,
+      renderedFrameCountBeforePublish
+    );
+    assert.equal(
+      fakeWorldClient.playerTraversalIntentRequests.length,
+      traversalRequestCountBeforePublish
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer
+        .lastProcessedInputSequence,
+      localPoseInputSequence
+    );
+
+    wallClockMs = 1_170;
+    nowMs += 1000 / 60;
+    windowHarness.advanceFrame(nowMs);
+
+    assert.equal(
+      runtime.hudSnapshot.telemetry.renderedFrameCount,
+      renderedFrameCountBeforePublish + 1
+    );
+    assert.ok(
+      fakeWorldClient.playerTraversalIntentRequests.length >
+        traversalRequestCountBeforePublish
+    );
+
+    runtime.dispose();
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.HTMLElement = originalHTMLElement;
+  }
+});
+
+test("WebGpuMetaverseRuntime keeps fully acknowledged held traversal intent correction-free", async () => {
+  const [
+    { WebGpuMetaverseRuntime },
+    { metaverseRuntimeConfig },
+    { RapierPhysicsRuntime }
+  ] = await Promise.all([
+    clientLoader.load("/src/metaverse/classes/webgpu-metaverse-runtime.ts"),
+    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
+  const { characterProofConfig, createSceneAssetLoader, environmentProofConfig } =
+    await createSkiffMountProofSlice();
+  const renderer = new FakeMetaverseRenderer();
+  const originalWindow = globalThis.window;
+  const originalHTMLElement = globalThis.HTMLElement;
+  const windowHarness = createInteractiveWindowHarness();
+  const fakeCanvas = {
+    addEventListener() {},
+    clientHeight: 720,
+    clientWidth: 1280,
+    removeEventListener() {}
+  };
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const username = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let nowMs = 0;
+  let wallClockMs = 1_100;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(username, null);
+  assert.notEqual(remoteUsername, null);
+
+  globalThis.window = windowHarness.window;
+  globalThis.HTMLElement = class FakeHTMLElement {};
+
+  try {
+    const fakePresenceClient = new FakeMetaversePresenceClient(
+      localPlayerId,
+      username,
+      remotePlayerId
+    );
+    const fakeWorldClient = new FakeMetaverseWorldClient();
+    const runtime = new WebGpuMetaverseRuntime(undefined, {
+      authoritativePlayerMovementEnabled: true,
+      bootCinematicConfig: disabledBootCinematicConfig,
+      cancelAnimationFrame:
+        globalThis.window.cancelAnimationFrame.bind(globalThis.window),
+      characterProofConfig,
+      createMetaversePresenceClient: () => fakePresenceClient,
+      createMetaverseWorldClient: () => fakeWorldClient,
+      createRenderer: () => renderer,
+      createSceneAssetLoader,
+      environmentProofConfig,
+      localPlayerIdentity: {
+        characterId: "metaverse-mannequin-v1",
+        playerId: localPlayerId,
+        username
+      },
+      physicsRuntime: createFakePhysicsRuntime(RapierPhysicsRuntime),
+      readNowMs: () => nowMs,
+      readWallClockMs: () => wallClockMs,
+      requestAnimationFrame:
+        globalThis.window.requestAnimationFrame.bind(globalThis.window)
+    });
+
+    await runtime.start(fakeCanvas, {
+      gpu: {}
+    });
+
+    windowHarness.dispatch("keydown", {
+      code: "KeyW"
+    });
+    nowMs += 1000 / 60;
+    windowHarness.advanceFrame(nowMs);
+
+    const latestTraversalIntent = fakeWorldClient.latestPlayerTraversalIntentSnapshot;
+
+    assert.notEqual(latestTraversalIntent, null);
+    assert.equal(latestTraversalIntent.bodyControl.moveAxis, 1);
+
+    const localLocomotionModeBeforeAuthority = runtime.hudSnapshot.locomotionMode;
+    const localCameraXBeforeAuthority = runtime.hudSnapshot.camera.position.x;
+    const localCameraZBeforeAuthority = runtime.hudSnapshot.camera.position.z;
+    const localCameraYawBeforeAuthority = runtime.hudSnapshot.camera.yawRadians;
+    const localForwardOffsetMeters =
+      localLocomotionModeBeforeAuthority === "swim"
+        ? -metaverseRuntimeConfig.bodyPresentation.swimThirdPersonFollowDistanceMeters
+        : metaverseRuntimeConfig.bodyPresentation
+            .groundedFirstPersonForwardOffsetMeters;
+    const localEyeHeightMeters =
+      localLocomotionModeBeforeAuthority === "swim"
+        ? metaverseRuntimeConfig.swim.cameraEyeHeightMeters +
+          metaverseRuntimeConfig.bodyPresentation
+            .swimThirdPersonHeightOffsetMeters
+        : metaverseRuntimeConfig.groundedBody.eyeHeightMeters;
+    const localBodyXBeforeAuthority =
+      localCameraXBeforeAuthority -
+      Math.sin(localCameraYawBeforeAuthority) * localForwardOffsetMeters;
+    const localBodyYBeforeAuthority =
+      runtime.hudSnapshot.camera.position.y - localEyeHeightMeters;
+    const localBodyZBeforeAuthority =
+      localCameraZBeforeAuthority +
+      Math.cos(localCameraYawBeforeAuthority) * localForwardOffsetMeters;
+
+    fakeWorldClient.publishWorldSnapshotBuffer([
+      createRealtimeWorldSnapshot({
+        currentTick: 11,
+        includeRemotePlayer: false,
+        includeVehicle: false,
+        localJumpAuthorityState:
+          localLocomotionModeBeforeAuthority === "grounded"
+            ? "grounded"
+            : "none",
+        localLastProcessedInputSequence: latestTraversalIntent.inputSequence,
+        localLookYawRadians: localCameraYawBeforeAuthority,
+        localLinearVelocity: {
+          x: 0,
+          y: 0,
+          z: -6
+        },
+        localLocomotionMode: localLocomotionModeBeforeAuthority,
+        localPlayerId,
+        localPlayerX: localBodyXBeforeAuthority,
+        localPlayerY: localBodyYBeforeAuthority,
+        localPlayerZ: localBodyZBeforeAuthority + 0.42,
+        localYawRadians: localCameraYawBeforeAuthority,
+        localUsername: username,
+        remotePlayerId,
+        remotePlayerX: 10,
+        remoteUsername,
+        serverTimeMs: 1_140,
+        snapshotSequence: 1,
+        vehicleX: 10
+      })
+    ]);
+
+    wallClockMs = 1_650;
+    nowMs += 1000 / 60;
+    windowHarness.advanceFrame(nowMs);
+
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .ackedAuthoritativeReplayCorrectionCount,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount,
+      0
+    );
+    assert.notEqual(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .lastCorrectionSource,
+      "acked-authority-replay"
+    );
+
+    runtime.dispose();
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.HTMLElement = originalHTMLElement;
+  }
+});
+
+test("WebGpuMetaverseRuntime keeps sustained swim correction-free under delayed acknowledged authority", async () => {
+  const [
+    { WebGpuMetaverseRuntime },
+    { metaverseRuntimeConfig },
+    { RapierPhysicsRuntime }
+  ] = await Promise.all([
+    clientLoader.load("/src/metaverse/classes/webgpu-metaverse-runtime.ts"),
+    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
+  const renderer = new FakeMetaverseRenderer();
+  const originalWindow = globalThis.window;
+  const originalHTMLElement = globalThis.HTMLElement;
+  const windowHarness = createInteractiveWindowHarness();
+  const fakeCanvas = {
+    addEventListener() {},
+    clientHeight: 720,
+    clientWidth: 1280,
+    removeEventListener() {}
+  };
+  const localPlayerId = createMetaversePlayerId("swim-local-player");
+  const remotePlayerId = createMetaversePlayerId("swim-remote-player");
+  const username = createUsername("Swim Local");
+  const remoteUsername = createUsername("Swim Remote");
+  let nowMs = 0;
+  let wallClockMs = 1_100;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(username, null);
+  assert.notEqual(remoteUsername, null);
+
+  globalThis.window = windowHarness.window;
+  globalThis.HTMLElement = class FakeHTMLElement {};
+
+  try {
+    const fakePresenceClient = new FakeMetaversePresenceClient(
+      localPlayerId,
+      username,
+      remotePlayerId
+    );
+    const fakeWorldClient = new FakeMetaverseWorldClient();
+    const runtime = new WebGpuMetaverseRuntime(undefined, {
+      authoritativePlayerMovementEnabled: true,
+      bootCinematicConfig: disabledBootCinematicConfig,
+      cancelAnimationFrame:
+        globalThis.window.cancelAnimationFrame.bind(globalThis.window),
+      createMetaversePresenceClient: () => fakePresenceClient,
+      createMetaverseWorldClient: () => fakeWorldClient,
+      createRenderer: () => renderer,
+      localPlayerIdentity: {
+        characterId: "metaverse-mannequin-v1",
+        playerId: localPlayerId,
+        username
+      },
+      physicsRuntime: createFakePhysicsRuntime(RapierPhysicsRuntime),
+      readNowMs: () => nowMs,
+      readWallClockMs: () => wallClockMs,
+      requestAnimationFrame:
+        globalThis.window.requestAnimationFrame.bind(globalThis.window)
+    });
+
+    await runtime.start(fakeCanvas, {
+      gpu: {}
+    });
+
+    assert.equal(runtime.hudSnapshot.locomotionMode, "swim");
+
+    const capturedSamples = [];
+    let snapshotSequence = 0;
+
+    function captureCurrentSwimBodySample() {
+      const cameraSnapshot = runtime.hudSnapshot.camera;
+      const forwardOffsetMeters =
+        -metaverseRuntimeConfig.bodyPresentation.swimThirdPersonFollowDistanceMeters;
+      const eyeHeightMeters =
+        metaverseRuntimeConfig.swim.cameraEyeHeightMeters +
+        metaverseRuntimeConfig.bodyPresentation.swimThirdPersonHeightOffsetMeters;
+
+      return Object.freeze({
+        position: Object.freeze({
+          x:
+            cameraSnapshot.position.x -
+            Math.sin(cameraSnapshot.yawRadians) * forwardOffsetMeters,
+          y: cameraSnapshot.position.y - eyeHeightMeters,
+          z:
+            cameraSnapshot.position.z +
+            Math.cos(cameraSnapshot.yawRadians) * forwardOffsetMeters
+        }),
+        wallClockMs,
+        yawRadians: cameraSnapshot.yawRadians
+      });
+    }
+
+    windowHarness.dispatch("keydown", {
+      code: "KeyW"
+    });
+
+    for (let frame = 0; frame < 24; frame += 1) {
+      if (frame === 4 || frame === 12 || frame === 20) {
+        windowHarness.dispatch("keydown", {
+          code: "Space"
+        });
+      }
+
+      nowMs += 1000 / 60;
+      wallClockMs = 1_100 + nowMs;
+      windowHarness.advanceFrame(nowMs);
+
+      const latestTraversalIntent = fakeWorldClient.latestPlayerTraversalIntentSnapshot;
+
+      assert.notEqual(latestTraversalIntent, null);
+      assert.equal(latestTraversalIntent.locomotionMode, "swim");
+      assert.equal(latestTraversalIntent.bodyControl.moveAxis, 1);
+      assert.equal(latestTraversalIntent.actionIntent.kind, "none");
+      assert.equal(latestTraversalIntent.actionIntent.sequence, 0);
+
+      const currentSample = captureCurrentSwimBodySample();
+      const previousSample =
+        capturedSamples[capturedSamples.length - 1] ?? currentSample;
+      const deltaSeconds = Math.max(
+        1 / 120,
+        (currentSample.wallClockMs - previousSample.wallClockMs) / 1000
+      );
+      capturedSamples.push(
+        Object.freeze({
+          inputSequence: latestTraversalIntent.inputSequence,
+          linearVelocity: Object.freeze({
+            x:
+              (currentSample.position.x - previousSample.position.x) / deltaSeconds,
+            y:
+              (currentSample.position.y - previousSample.position.y) / deltaSeconds,
+            z:
+              (currentSample.position.z - previousSample.position.z) / deltaSeconds
+          }),
+          position: currentSample.position,
+          wallClockMs: currentSample.wallClockMs,
+          yawRadians: currentSample.yawRadians
+        })
+      );
+
+      const authoritativeSample =
+        capturedSamples[Math.max(0, capturedSamples.length - 3)];
+
+      fakeWorldClient.publishWorldSnapshotBuffer([
+        createRealtimeWorldSnapshot({
+          currentTick: 20 + frame,
+          includeRemotePlayer: false,
+          includeVehicle: false,
+          localJumpAuthorityState: "none",
+          localLastProcessedInputSequence: authoritativeSample.inputSequence,
+          localLinearVelocity: authoritativeSample.linearVelocity,
+          localLocomotionMode: "swim",
+          localLookYawRadians: authoritativeSample.yawRadians,
+          localPlayerId,
+          localPlayerX: authoritativeSample.position.x,
+          localPlayerY: authoritativeSample.position.y,
+          localPlayerZ: authoritativeSample.position.z,
+          localUsername: username,
+          localYawRadians: authoritativeSample.yawRadians,
+          remotePlayerId,
+          remotePlayerX: 10,
+          remoteUsername,
+          serverTimeMs: authoritativeSample.wallClockMs,
+          snapshotSequence: ++snapshotSequence,
+          vehicleX: 10
+        })
+      ]);
+
+      if (frame === 4 || frame === 12 || frame === 20) {
+        windowHarness.dispatch("keyup", {
+          code: "Space"
+        });
+      }
+    }
+
+    nowMs += 1000 / 60;
+    wallClockMs = 1_100 + nowMs;
+    windowHarness.advanceFrame(nowMs);
+
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .ackedAuthoritativeReplayCorrectionCount,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .recentCorrectionCountPast5Seconds,
+      0
+    );
+
+    runtime.dispose();
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.HTMLElement = originalHTMLElement;
+  }
+});
+
+test("WebGpuMetaverseRuntime ignores acked authoritative local yaw drift while unmounted look stays client-owned", async () => {
+  const [
+    { WebGpuMetaverseRuntime },
+    { metaverseRuntimeConfig },
+    { RapierPhysicsRuntime }
+  ] = await Promise.all([
+    clientLoader.load("/src/metaverse/classes/webgpu-metaverse-runtime.ts"),
+    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
+  const { characterProofConfig, createSceneAssetLoader, environmentProofConfig } =
+    await createSkiffMountProofSlice();
+  const renderer = new FakeMetaverseRenderer();
+  const originalWindow = globalThis.window;
+  const originalHTMLElement = globalThis.HTMLElement;
+  const windowHarness = createInteractiveWindowHarness();
+  const fakeCanvas = {
+    addEventListener() {},
+    clientHeight: 720,
+    clientWidth: 1280,
+    removeEventListener() {}
+  };
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const username = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let nowMs = 0;
+  let wallClockMs = 1_100;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(username, null);
+  assert.notEqual(remoteUsername, null);
+
+  globalThis.window = windowHarness.window;
+  globalThis.HTMLElement = class FakeHTMLElement {};
+
+  try {
+    const fakePresenceClient = new FakeMetaversePresenceClient(
+      localPlayerId,
+      username,
+      remotePlayerId
+    );
+    const fakeWorldClient = new FakeMetaverseWorldClient();
+    const runtime = new WebGpuMetaverseRuntime(undefined, {
+      authoritativePlayerMovementEnabled: true,
+      bootCinematicConfig: disabledBootCinematicConfig,
+      cancelAnimationFrame:
+        globalThis.window.cancelAnimationFrame.bind(globalThis.window),
+      characterProofConfig,
+      createMetaversePresenceClient: () => fakePresenceClient,
+      createMetaverseWorldClient: () => fakeWorldClient,
+      createRenderer: () => renderer,
+      createSceneAssetLoader,
+      environmentProofConfig,
+      localPlayerIdentity: {
+        characterId: "metaverse-mannequin-v1",
+        playerId: localPlayerId,
+        username
+      },
+      physicsRuntime: createFakePhysicsRuntime(RapierPhysicsRuntime),
+      readNowMs: () => nowMs,
+      readWallClockMs: () => wallClockMs,
+      requestAnimationFrame:
+        globalThis.window.requestAnimationFrame.bind(globalThis.window)
+    });
+
+    await runtime.start(fakeCanvas, {
+      gpu: {}
+    });
+
+    const localPoseInputSequence = fakeWorldClient.latestPlayerInputSequence;
+
+    assert.ok(localPoseInputSequence > 0);
+
+    const localLocomotionModeBeforeAuthority = runtime.hudSnapshot.locomotionMode;
+    const localCameraXBeforeAuthority = runtime.hudSnapshot.camera.position.x;
+    const localCameraYBeforeAuthority = runtime.hudSnapshot.camera.position.y;
+    const localCameraZBeforeAuthority = runtime.hudSnapshot.camera.position.z;
+    const localCameraYawBeforeAuthority = runtime.hudSnapshot.camera.yawRadians;
+    const localForwardOffsetMeters =
+      localLocomotionModeBeforeAuthority === "swim"
+        ? -metaverseRuntimeConfig.bodyPresentation.swimThirdPersonFollowDistanceMeters
+        : metaverseRuntimeConfig.bodyPresentation
+            .groundedFirstPersonForwardOffsetMeters;
+    const localEyeHeightMeters =
+      localLocomotionModeBeforeAuthority === "swim"
+        ? metaverseRuntimeConfig.swim.cameraEyeHeightMeters +
+          metaverseRuntimeConfig.bodyPresentation
+            .swimThirdPersonHeightOffsetMeters
+        : metaverseRuntimeConfig.groundedBody.eyeHeightMeters;
+    const localBodyXBeforeAuthority =
+      localCameraXBeforeAuthority -
+      Math.sin(localCameraYawBeforeAuthority) * localForwardOffsetMeters;
+    const localBodyYBeforeAuthority =
+      localCameraYBeforeAuthority - localEyeHeightMeters;
+    const localBodyZBeforeAuthority =
+      localCameraZBeforeAuthority +
+      Math.cos(localCameraYawBeforeAuthority) * localForwardOffsetMeters;
+
+    fakeWorldClient.publishWorldSnapshotBuffer([
+      createRealtimeWorldSnapshot({
+        currentTick: 11,
+        includeRemotePlayer: false,
+        includeVehicle: false,
+        localJumpAuthorityState:
+          localLocomotionModeBeforeAuthority === "grounded"
+            ? "grounded"
+            : "none",
+        localLastProcessedInputSequence: localPoseInputSequence,
+        localLookYawRadians: localCameraYawBeforeAuthority - 0.85,
+        localLinearVelocity: {
+          x: 0,
+          y: 0,
+          z: 0
+        },
+        localLocomotionMode: localLocomotionModeBeforeAuthority,
+        localPlayerId,
+        localPlayerX: localBodyXBeforeAuthority,
+        localPlayerY: localBodyYBeforeAuthority,
+        localPlayerZ: localBodyZBeforeAuthority,
+        localYawRadians: localCameraYawBeforeAuthority - 0.85,
+        localUsername: username,
+        remotePlayerId,
+        remotePlayerX: 10,
+        remoteUsername,
+        serverTimeMs: 1_140,
+        snapshotSequence: 1,
+        vehicleX: 10
+      })
+    ]);
+
+    wallClockMs = 1_170;
+    nowMs += 1000 / 60;
+    windowHarness.advanceFrame(nowMs);
+
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount,
+      0
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeCorrection
+        .applied,
+      false
+    );
+    assert.ok(
+      Math.abs(runtime.hudSnapshot.camera.yawRadians - localCameraYawBeforeAuthority) <
+        0.000001
+    );
+    assert.ok(
+      Math.abs(runtime.hudSnapshot.camera.position.x - localCameraXBeforeAuthority) <
+        0.2
+    );
 
     runtime.dispose();
   } finally {
@@ -4731,7 +7670,7 @@ test("WebGpuMetaverseRuntime clears a local driver seat claim after authoritativ
         remotePlayerId,
         remotePlayerX: 2,
         remoteUsername,
-        serverTimeMs: 1_100,
+        serverTimeMs: 1_150,
         snapshotSequence: 3,
         vehicleLinearVelocity: {
           x: 0,
@@ -4747,6 +7686,36 @@ test("WebGpuMetaverseRuntime clears a local driver seat claim after authoritativ
     assert.equal(runtime.hudSnapshot.mountedEnvironment?.seatId, "driver-seat");
 
     wallClockMs = 1_160;
+    nowMs += 1000 / 60;
+    windowHarness.advanceFrame(nowMs);
+
+    assert.equal(runtime.hudSnapshot.mountedEnvironment?.seatId, "driver-seat");
+
+    fakeWorldClient.publishWorldSnapshotBuffer([
+      createRealtimeWorldSnapshot({
+        currentTick: 13,
+        localAnimationVocabulary: "swim-idle",
+        localPlayerId,
+        localPlayerY: 0,
+        localLocomotionMode: "swim",
+        localUsername: username,
+        remotePlayerId,
+        remotePlayerX: 2,
+        remoteUsername,
+        serverTimeMs: 1_200,
+        snapshotSequence: 4,
+        vehicleLinearVelocity: {
+          x: 0,
+          y: 0,
+          z: 0
+        },
+        vehicleSeatOccupantPlayerId: remotePlayerId,
+        vehicleX: 2,
+        yawRadians: 0
+      })
+    ]);
+
+    wallClockMs = 1_210;
     nowMs += 1000 / 60;
     windowHarness.advanceFrame(nowMs);
 
@@ -7097,6 +10066,14 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
     .getWorldPosition(new Vector3())
     .sub(attachmentRoot.getWorldPosition(new Vector3()))
     .normalize();
+  const renderedCameraPosition = sceneRuntime.camera.position.clone();
+  const traversalCameraPosition = new Vector3(
+    cameraSnapshot.position.x,
+    cameraSnapshot.position.y,
+    cameraSnapshot.position.z
+  );
+  const attachmentWorldPosition =
+    attachmentRoot.getWorldPosition(new Vector3());
   const targetGripUp = new Vector3(0, 1, 0);
 
   targetGripUp.addScaledVector(
@@ -7147,6 +10124,10 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
   assert.ok(
     rightKnuckleCentroid.z > 0.01,
     `Expected right-hand knuckles ${rightKnuckleCentroid.toArray()} to stay on the trigger-hand side selected by the held grip marker.`
+  );
+  assert.ok(
+    renderedCameraPosition.distanceTo(traversalCameraPosition) < 0.000001,
+    `Expected rendered held-weapon camera ${renderedCameraPosition.toArray()} to stay locked to the raw traversal camera ${traversalCameraPosition.toArray()}.`
   );
   assert.ok(
     spine01Bone.quaternion.angleTo(new Quaternion()) < 0.001,

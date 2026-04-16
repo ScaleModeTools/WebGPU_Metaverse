@@ -52,12 +52,167 @@ interface TransportDetailCardProps {
   readonly title: string;
 }
 
-function formatBooleanLabel(value: boolean): string {
+function formatBooleanLabel(value: boolean | null): string {
+  if (value === null) {
+    return "n/a";
+  }
+
   return value ? "yes" : "no";
 }
 
 function formatCount(value: number): string {
   return value.toLocaleString();
+}
+
+function formatCorrectionSource(
+  source: MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["localReconciliation"]["lastCorrectionSource"]
+): string {
+  switch (source) {
+    case "mounted-vehicle-authority":
+      return "mounted";
+    case "local-authority-snap":
+      return "pose";
+    case "acked-authority-replay":
+      return "replay";
+    default:
+      return "none";
+  }
+}
+
+function formatCorrectionStatusValue(hudSnapshot: MetaverseHudSnapshot): string {
+  const authoritativeCorrection =
+    hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeCorrection;
+
+  if (!authoritativeCorrection.applied) {
+    return `active no · mode mismatch ${formatBooleanLabel(
+      authoritativeCorrection.locomotionMismatch
+    )}`;
+  }
+
+  return `active yes · src ${formatCorrectionSource(
+    hudSnapshot.telemetry.worldSnapshot.localReconciliation.lastCorrectionSource
+  )} · ${formatOptionalMeters(
+    authoritativeCorrection.planarMagnitudeMeters
+  )} planar · ${formatOptionalMeters(
+    authoritativeCorrection.verticalMagnitudeMeters
+  )} vertical`;
+}
+
+function formatPoseCorrectionReason(
+  reason: MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionReason"]
+): string {
+  switch (reason) {
+    case "ground-state-mismatch":
+      return "ground mismatch";
+    case "gross-position-divergence":
+      return "gross divergence";
+    case "jump-rejected":
+      return "jump rejected";
+    case "locomotion-mismatch":
+      return "mode mismatch";
+    default:
+      return "none";
+  }
+}
+
+function formatJumpResolutionState(
+  state: MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["shoreline"]["authoritativeLocalPlayer"]["jumpDebug"]["resolvedJumpActionState"]
+): string {
+  switch (state) {
+    case "accepted":
+      return "accepted";
+    case "rejected-buffer-expired":
+      return "rejected buffer expired";
+    default:
+      return "none";
+  }
+}
+
+function formatTraversalActionRejectionReason(
+  reason: MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["shoreline"]["authoritativeLocalPlayer"]["traversalAuthority"]["lastRejectedActionReason"]
+): string {
+  switch (reason) {
+    case "buffer-expired":
+      return "buffer expired";
+    default:
+      return "none";
+  }
+}
+
+function formatTraversalAuthorityValue(
+  traversalAuthority:
+    | MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["shoreline"]["authoritativeLocalPlayer"]["traversalAuthority"]
+    | MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["shoreline"]["local"]["traversalAuthority"]
+): string {
+  if (
+    traversalAuthority.currentActionKind === null ||
+    traversalAuthority.currentActionPhase === null
+  ) {
+    return "n/a";
+  }
+
+  return `${traversalAuthority.currentActionKind} · ${traversalAuthority.currentActionPhase} · seq ${formatOptionalSequence(
+    traversalAuthority.currentActionSequence
+  )} · consumed ${formatOptionalSequence(
+    traversalAuthority.lastConsumedActionSequence
+  )} · rejected ${formatOptionalSequence(
+    traversalAuthority.lastRejectedActionSequence
+  )} (${formatTraversalActionRejectionReason(
+    traversalAuthority.lastRejectedActionReason
+  )})`;
+}
+
+function formatOptionalSequence(value: number | null): string {
+  if (value === null || value <= 0) {
+    return "none";
+  }
+
+  return formatCount(value);
+}
+
+function formatJumpPendingValue(
+  pendingJumpActionSequence: number | null,
+  pendingJumpBufferAgeMs: number | null
+): string {
+  if (pendingJumpActionSequence === null || pendingJumpActionSequence <= 0) {
+    return "none";
+  }
+
+  return `seq ${formatCount(pendingJumpActionSequence)} · age ${formatOptionalMilliseconds(
+    pendingJumpBufferAgeMs
+  )}`;
+}
+
+function formatJumpResolutionValue(
+  resolvedJumpActionSequence: number | null,
+  resolvedJumpActionState: MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["shoreline"]["authoritativeLocalPlayer"]["jumpDebug"]["resolvedJumpActionState"]
+): string {
+  if (resolvedJumpActionSequence === null || resolvedJumpActionSequence <= 0) {
+    return formatJumpResolutionState(resolvedJumpActionState);
+  }
+
+  return `seq ${formatCount(resolvedJumpActionSequence)} · ${formatJumpResolutionState(
+    resolvedJumpActionState
+  )}`;
+}
+
+function formatIssuedJumpActionValue(
+  issuedJumpActionSequence: number | null,
+  traversalAuthority: MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["shoreline"]["authoritativeLocalPlayer"]["traversalAuthority"]
+): string {
+  if (issuedJumpActionSequence === null || issuedJumpActionSequence <= 0) {
+    return "inactive";
+  }
+
+  return `issued ${formatCount(issuedJumpActionSequence)} · current ${formatOptionalSequence(
+    traversalAuthority.currentActionSequence
+  )} · consumed ${formatOptionalSequence(
+    traversalAuthority.lastConsumedActionSequence
+  )} · rejected ${formatOptionalSequence(
+    traversalAuthority.lastRejectedActionSequence
+  )} (${formatTraversalActionRejectionReason(
+    traversalAuthority.lastRejectedActionReason
+  )})`;
 }
 
 function formatTransportStatus(snapshot: {
@@ -148,6 +303,14 @@ function formatOptionalMilliseconds(value: number | null): string {
   return `${value.toFixed(0)} ms`;
 }
 
+function formatOptionalVelocityUnitsPerSecond(value: number | null): string {
+  if (value === null) {
+    return "n/a";
+  }
+
+  return `${value.toFixed(2)} u/s`;
+}
+
 function formatOptionalRateHz(value: number | null): string {
   if (value === null) {
     return "n/a";
@@ -176,6 +339,36 @@ function formatDecisionReason(
   reason: MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["shoreline"]["local"]["decisionReason"]
 ): string {
   return reason.replaceAll("-", " ");
+}
+
+function formatPoseCorrectionDetailValue(
+  detail: MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionDetail"]
+): string {
+  return `${formatOptionalMeters(detail.planarMagnitudeMeters)} planar · ${formatOptionalMeters(
+    detail.verticalMagnitudeMeters
+  )} vertical · local grounded ${formatBooleanLabel(
+    detail.localGrounded
+  )} · authority grounded ${formatBooleanLabel(detail.authoritativeGrounded)}`;
+}
+
+function formatLocalJumpGateValue(
+  jumpDebug: MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["shoreline"]["local"]["jumpDebug"]
+): string {
+  return `grounded ${formatBooleanLabel(
+    jumpDebug.groundedBodyGrounded
+  )} · ready ${formatBooleanLabel(
+    jumpDebug.groundedBodyJumpReady
+  )} · surface ${formatBooleanLabel(
+    jumpDebug.surfaceJumpSupported
+  )} · supported ${formatBooleanLabel(
+    jumpDebug.supported
+  )} · vy ${formatOptionalVelocityUnitsPerSecond(
+    jumpDebug.verticalSpeedUnitsPerSecond
+  )}`;
+}
+
+function formatDegreesFromRadians(value: number): string {
+  return `${((value * 180) / Math.PI).toFixed(1)}°`;
 }
 
 function formatSnapshotStreamPath(path: SnapshotStreamTransportSnapshot["path"]): string {
@@ -394,6 +587,73 @@ function formatTopLevelHandshakeDebugLine(hudSnapshot: MetaverseHudSnapshot): st
   return "No WebTransport endpoints configured.";
 }
 
+function createDeveloperReport(hudSnapshot: MetaverseHudSnapshot): string {
+  const sections = [
+    {
+      heading: "Metaverse developer report",
+      lines: [
+        `Lifecycle: ${hudSnapshot.lifecycle}`,
+        `Boot phase: ${hudSnapshot.boot.phase.replaceAll("-", " ")}`,
+        `Presence: ${hudSnapshot.presence.state} · ${hudSnapshot.presence.remotePlayerCount} remote`,
+        `Handshake: ${formatTopLevelHandshakeDebugLine(hudSnapshot)}`
+      ]
+    },
+    {
+      heading: "Renderer",
+      lines: [
+        `Frame: ${formatCount(hudSnapshot.telemetry.renderedFrameCount)} · ${hudSnapshot.telemetry.frameRate.toFixed(1)} fps`,
+        `DPR: ${hudSnapshot.telemetry.renderer.devicePixelRatio.toFixed(2)}`,
+        `Draw calls: ${formatCount(hudSnapshot.telemetry.renderer.drawCallCount)}`,
+        `Triangles: ${formatCount(hudSnapshot.telemetry.renderer.triangleCount)}`
+      ]
+    },
+    {
+      heading: "Authority",
+      lines: [
+        `Tick / poll: ${formatOptionalMilliseconds(hudSnapshot.telemetry.worldCadence.authoritativeTickIntervalMs)} · ${formatOptionalMilliseconds(hudSnapshot.telemetry.worldCadence.worldPollIntervalMs)}`,
+        `Snapshot path: ${formatSnapshotStreamPath(hudSnapshot.transport.worldSnapshotStream.path)} · ${formatSnapshotStreamLiveness(hudSnapshot.transport.worldSnapshotStream.liveness)} · ${formatCount(hudSnapshot.telemetry.worldSnapshot.bufferDepth)} buffered · ${formatOptionalRateHz(hudSnapshot.telemetry.worldSnapshot.latestSnapshotUpdateRateHz)}`,
+        `Age / offset: ${formatOptionalMilliseconds(hudSnapshot.telemetry.worldSnapshot.latestSimulationAgeMs)} · ${formatOptionalMilliseconds(hudSnapshot.telemetry.worldSnapshot.clockOffsetEstimateMs)}`,
+        `Reconciliation: ${formatCount(hudSnapshot.telemetry.worldSnapshot.localReconciliation.totalCorrectionCount)} total · ${formatCount(hudSnapshot.telemetry.worldSnapshot.localReconciliation.recentCorrectionCountPast5Seconds)} recent/5s · last ${formatOptionalMilliseconds(hudSnapshot.telemetry.worldSnapshot.localReconciliation.lastCorrectionAgeMs)} · replay ${formatCount(hudSnapshot.telemetry.worldSnapshot.localReconciliation.ackedAuthoritativeReplayCorrectionCount)} · pose ${formatCount(hudSnapshot.telemetry.worldSnapshot.localReconciliation.localAuthorityPoseCorrectionCount)}`
+      ]
+    },
+    {
+      heading: "Traversal",
+      lines: [
+        `Local shoreline: ${hudSnapshot.telemetry.worldSnapshot.shoreline.local.locomotionMode} · ${formatDecisionReason(hudSnapshot.telemetry.worldSnapshot.shoreline.local.decisionReason)}`,
+        `Authority / ack: ${hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer.locomotionMode === null ? "n/a" : `${hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer.locomotionMode} · ack ${formatCount(hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer.lastProcessedInputSequence ?? 0)}`}`,
+        `Jump / traversal: ${formatIssuedJumpActionValue(
+          hudSnapshot.telemetry.worldSnapshot.shoreline.issuedTraversalIntent
+            ?.actionIntent.kind === "jump"
+            ? hudSnapshot.telemetry.worldSnapshot.shoreline
+                .issuedTraversalIntent.actionIntent.sequence
+            : null,
+          hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer
+            .traversalAuthority
+        )} · ${formatTraversalAuthorityValue(
+          hudSnapshot.telemetry.worldSnapshot.shoreline.authoritativeLocalPlayer
+            .traversalAuthority
+        )}`,
+        `Correction: ${formatCorrectionStatusValue(hudSnapshot)}`,
+        `Render offset: ${formatMeters(hudSnapshot.telemetry.worldSnapshot.cameraPresentation.renderedOffset.planarMagnitudeMeters)} planar · ${formatMeters(hudSnapshot.telemetry.worldSnapshot.cameraPresentation.renderedOffset.verticalMagnitudeMeters)} vertical · ${formatDegreesFromRadians(hudSnapshot.telemetry.worldSnapshot.cameraPresentation.renderedOffset.lookAngleRadians)} look`
+      ]
+    },
+    {
+      heading: "Transport",
+      lines: [
+        `Presence reliable: ${formatReliableTransportSummary(hudSnapshot.transport.presenceReliable)}`,
+        `World reliable: ${formatReliableTransportSummary(hudSnapshot.transport.worldReliable)}`,
+        `World snapshot stream: ${formatSnapshotStreamSummary(hudSnapshot.transport.worldSnapshotStream)}`,
+        `World latest-wins datagram: ${formatDatagramTransportSummary(hudSnapshot.transport.worldDriverDatagram)}`,
+        `World debug: ${formatReliableHandshakeDebugLine(hudSnapshot.transport.worldReliable, metaverseWorldWebTransportTarget)}`
+      ]
+    }
+  ];
+
+  return sections
+    .map((section) => [section.heading, ...section.lines].join("\n"))
+    .join("\n\n");
+}
+
 function MetricRow({ label, value }: MetricRowProps) {
   return (
     <div className="flex items-baseline justify-between gap-3">
@@ -458,6 +718,7 @@ export function MetaverseDeveloperOverlay({
   hudSnapshot
 }: MetaverseDeveloperOverlayProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const compactMetrics = [
     {
       label: "FPS",
@@ -482,34 +743,6 @@ export function MetaverseDeveloperOverlay({
     {
       label: "Presence",
       value: `${hudSnapshot.presence.state} · ${hudSnapshot.presence.remotePlayerCount} remote`
-    }
-  ] as const;
-  const rendererBootDetails = [
-    {
-      label: "WebGPU ready",
-      value: formatBooleanLabel(hudSnapshot.telemetry.renderer.active)
-    },
-    {
-      label: "Renderer init",
-      value: formatBooleanLabel(hudSnapshot.boot.rendererInitialized)
-    },
-    {
-      label: "Scene prewarm",
-      value: formatBooleanLabel(hudSnapshot.boot.scenePrewarmed)
-    }
-  ] as const;
-  const authorityBootDetails = [
-    {
-      label: "Presence joined",
-      value: formatBooleanLabel(hudSnapshot.boot.presenceJoined)
-    },
-    {
-      label: "World connected",
-      value: formatBooleanLabel(hudSnapshot.boot.authoritativeWorldConnected)
-    },
-    {
-      label: "Lifecycle",
-      value: hudSnapshot.lifecycle
     }
   ] as const;
   const presenceTransportDetails = [
@@ -605,6 +838,20 @@ export function MetaverseDeveloperOverlay({
     }
   ] as const;
 
+  async function handleCopyReport(): Promise<void> {
+    if (navigator.clipboard?.writeText === undefined) {
+      setCopyStatus("Clipboard export is unavailable in this browser.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(createDeveloperReport(hudSnapshot));
+      setCopyStatus("Copied enhanced debug report.");
+    } catch {
+      setCopyStatus("Copy failed. Open Debug details and copy manually.");
+    }
+  }
+
   return (
     <div
       className={["pointer-events-auto min-w-0 w-full", className]
@@ -638,16 +885,35 @@ export function MetaverseDeveloperOverlay({
           <p className="type-shell-body max-w-[18rem]">
             {formatTopLevelHandshakeDebugLine(hudSnapshot)}
           </p>
-          <Button
-            onClick={() => {
-              setDialogOpen(true);
-            }}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            Debug details
-          </Button>
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                onClick={() => {
+                  void handleCopyReport();
+                }}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                Copy report
+              </Button>
+              <Button
+                onClick={() => {
+                  setDialogOpen(true);
+                }}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                Debug details
+              </Button>
+            </div>
+            {copyStatus === null ? null : (
+              <p className="type-shell-caption max-w-[18rem] text-right">
+                {copyStatus}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
@@ -715,92 +981,26 @@ export function MetaverseDeveloperOverlay({
 
             <Separator className="bg-[color:var(--shell-border)]" />
 
-            <section className="grid gap-3 md:grid-cols-2">
-              <div className="surface-shell-panel rounded-[calc(1.25rem*var(--game-ui-scale))] p-[calc(1rem*var(--game-ui-scale))]">
-                <div className="flex flex-col gap-1">
-                  <p className="type-shell-banner">Renderer boot</p>
-                  <p className="type-shell-body">
-                    Boot truth for the local WebGPU pipeline.
-                  </p>
-                </div>
-                <div className="mt-4 flex flex-col gap-2">
-                  {rendererBootDetails.map((detail) => (
-                    <MetricRow
-                      key={detail.label}
-                      label={detail.label}
-                      value={detail.value}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <div className="surface-shell-panel rounded-[calc(1.25rem*var(--game-ui-scale))] p-[calc(1rem*var(--game-ui-scale))]">
-                <div className="flex flex-col gap-1">
-                  <p className="type-shell-banner">Authority boot</p>
-                  <p className="type-shell-body">
-                    Presence join and authoritative world readiness.
-                  </p>
-                </div>
-                <div className="mt-4 flex flex-col gap-2">
-                  {authorityBootDetails.map((detail) => (
-                    <MetricRow
-                      key={detail.label}
-                      label={detail.label}
-                      value={detail.value}
-                    />
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            <Separator className="bg-[color:var(--shell-border)]" />
-
-            <section className="grid gap-3 md:grid-cols-3">
+            <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <StatPanel
-                description="Authoritative world cadence"
+                description="Authoritative cadence and current polling loop"
                 label="Tick / poll"
-                value={`Tick ${formatOptionalMilliseconds(
+                value={`${formatOptionalMilliseconds(
                   hudSnapshot.telemetry.worldCadence.authoritativeTickIntervalMs
-                )} · Poll ${formatOptionalMilliseconds(
+                )} · ${formatOptionalMilliseconds(
                   hudSnapshot.telemetry.worldCadence.worldPollIntervalMs
                 )}`}
               />
               <StatPanel
-                description="Remote world presentation window"
-                label="Interpolation / extrapolation"
-                value={`Interpolation ${formatOptionalMilliseconds(
-                  hudSnapshot.telemetry.worldCadence.remoteInterpolationDelayMs
-                )} · Extrapolation ${formatOptionalMilliseconds(
-                  hudSnapshot.telemetry.worldCadence.maxExtrapolationMs
-                )}`}
-              />
-              <StatPanel
-                description="Freshness guard for local authority"
-                label="Local freshness"
-                value={formatOptionalMilliseconds(
-                  hudSnapshot.telemetry.worldCadence.localAuthoritativeFreshnessMaxAgeMs
-                )}
-              />
-            </section>
-
-            <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-              <StatPanel
-                description="Active metaverse world snapshot path"
+                description="Active authoritative snapshot lane"
                 label="Snapshot path"
                 value={`${formatSnapshotStreamPath(
                   hudSnapshot.transport.worldSnapshotStream.path
                 )} · ${formatSnapshotStreamLiveness(
                   hudSnapshot.transport.worldSnapshotStream.liveness
-                )}`}
-              />
-              <StatPanel
-                description="Buffered snapshot count and latest arrival cadence"
-                label="Buffer / rate"
-                value={`Buffer ${formatCount(
+                )} · ${formatCount(
                   hudSnapshot.telemetry.worldSnapshot.bufferDepth
-                )} · Update ${formatOptionalRateHz(
-                  hudSnapshot.telemetry.worldSnapshot.latestSnapshotUpdateRateHz
-                )}`}
+                )} buffered`}
               />
               <StatPanel
                 description="Latest authoritative simulation age and clock estimate"
@@ -812,24 +1012,25 @@ export function MetaverseDeveloperOverlay({
                 )}`}
               />
               <StatPanel
-                description="Current frame extrapolation use across rendered samples"
-                label="Extrapolation"
-                value={`${formatOptionalMilliseconds(
-                  hudSnapshot.telemetry.worldSnapshot.currentExtrapolationMs
-                )} · ${formatPercentage(
-                  hudSnapshot.telemetry.worldSnapshot.extrapolatedFramePercent
-                )} frames`}
-              />
-              <StatPanel
-                description="Cumulative local mounted-authority corrections applied by traversal"
+                description="Recent correction activity"
                 label="Reconciliation"
-                value={formatCount(
-                  hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount
-                )}
+                value={`recent ${formatCount(
+                  hudSnapshot.telemetry.worldSnapshot.localReconciliation
+                    .recentCorrectionCountPast5Seconds
+                )}/5s · last ${formatOptionalMilliseconds(
+                  hudSnapshot.telemetry.worldSnapshot.localReconciliation
+                    .lastCorrectionAgeMs
+                )} · replay ${formatCount(
+                  hudSnapshot.telemetry.worldSnapshot.localReconciliation
+                    .ackedAuthoritativeReplayCorrectionCount
+                )} · pose ${formatCount(
+                  hudSnapshot.telemetry.worldSnapshot.localReconciliation
+                    .localAuthorityPoseCorrectionCount
+                )}`}
               />
             </section>
 
-            <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <StatPanel
                 description="Client shoreline mode hold and the latest automatic routing reason"
                 label="Local shoreline"
@@ -837,41 +1038,6 @@ export function MetaverseDeveloperOverlay({
                   hudSnapshot.telemetry.worldSnapshot.shoreline.local
                     .decisionReason
                 )}`}
-              />
-              <StatPanel
-                description="Resolved local support height and whether the exit probe path saw blocker overlap"
-                label="Support / blocker"
-                value={`${formatMeters(
-                  hudSnapshot.telemetry.worldSnapshot.shoreline.local
-                    .resolvedSupportHeightMeters
-                )} · blocker ${formatBooleanLabel(
-                  hudSnapshot.telemetry.worldSnapshot.shoreline.local
-                    .blockerOverlap
-                )}`}
-              />
-              <StatPanel
-                description="Current local autostep window and shoreline support coverage"
-                label="Autostep / probes"
-                value={`${formatOptionalMeters(
-                  hudSnapshot.telemetry.worldSnapshot.shoreline.local
-                    .autostepHeightMeters
-                )} · ${formatCount(
-                  hudSnapshot.telemetry.worldSnapshot.shoreline.local
-                    .stepSupportedProbeCount
-                )} probes`}
-              />
-              <StatPanel
-                description="Latest traversal intent issued by the client with its local input sequence"
-                label="Intent / seq"
-                value={
-                  hudSnapshot.telemetry.worldSnapshot.shoreline
-                    .issuedTraversalIntent === null
-                    ? "inactive"
-                    : `${hudSnapshot.telemetry.worldSnapshot.shoreline.issuedTraversalIntent.locomotionMode} · seq ${formatCount(
-                        hudSnapshot.telemetry.worldSnapshot.shoreline
-                          .issuedTraversalIntent.inputSequence
-                      )}`
-                }
               />
               <StatPanel
                 description="Latest fresh authoritative local-player locomotion and processed-input acknowledgement"
@@ -887,38 +1053,62 @@ export function MetaverseDeveloperOverlay({
                       )}`
                 }
               />
+              <StatPanel
+                description="Issued jump state against authoritative traversal phase"
+                label="Jump / traversal"
+                value={`${formatIssuedJumpActionValue(
+                  hudSnapshot.telemetry.worldSnapshot.shoreline
+                    .issuedTraversalIntent?.actionIntent.kind === "jump"
+                    ? hudSnapshot.telemetry.worldSnapshot.shoreline
+                        .issuedTraversalIntent.actionIntent.sequence
+                    : null,
+                  hudSnapshot.telemetry.worldSnapshot.shoreline
+                    .authoritativeLocalPlayer.traversalAuthority
+                )} · ${formatTraversalAuthorityValue(
+                  hudSnapshot.telemetry.worldSnapshot.shoreline
+                    .authoritativeLocalPlayer.traversalAuthority
+                )}`}
+              />
+              <StatPanel
+                description="Current correction status instead of raw stale authority deltas"
+                label="Correction"
+                value={formatCorrectionStatusValue(hudSnapshot)}
+              />
             </section>
 
-            <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <section className="grid gap-3 md:grid-cols-2">
               <StatPanel
-                description="Fresh authoritative delta between local traversal pose and the latest player snapshot"
-                label="Authority delta"
-                value={`${formatOptionalMeters(
-                  hudSnapshot.telemetry.worldSnapshot.shoreline
-                    .authoritativeLocalPlayer.correctionPlanarMagnitudeMeters
-                )} planar · ${formatOptionalMeters(
-                  hudSnapshot.telemetry.worldSnapshot.shoreline
-                    .authoritativeLocalPlayer.correctionVerticalMagnitudeMeters
-                )} vertical`}
+                description="Final rendered camera offset from the traversal/presentation camera used to drive the frame"
+                label="Render offset"
+                value={`${formatMeters(
+                  hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+                    .renderedOffset.planarMagnitudeMeters
+                )} planar · ${formatMeters(
+                  hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+                    .renderedOffset.verticalMagnitudeMeters
+                )} vertical · ${formatDegreesFromRadians(
+                  hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+                    .renderedOffset.lookAngleRadians
+                )} look`}
               />
               <StatPanel
-                description="Whether the latest fresh authoritative pose disagrees with the current local locomotion mode"
-                label="Mode mismatch"
-                value={formatBooleanLabel(
-                  hudSnapshot.telemetry.worldSnapshot.shoreline
-                    .authoritativeLocalPlayer.locomotionMismatch
-                )}
-              />
-              <StatPanel
-                description="Most recent authoritative correction evaluated by traversal during local reconciliation"
-                label="Correction"
-                value={`${formatOptionalMeters(
-                  hudSnapshot.telemetry.worldSnapshot.shoreline
-                    .authoritativeCorrection.planarMagnitudeMeters
-                )} planar · ${formatOptionalMeters(
-                  hudSnapshot.telemetry.worldSnapshot.shoreline
-                    .authoritativeCorrection.verticalMagnitudeMeters
-                )} vertical`}
+                description="Large rendered-camera discontinuities detected from changes in that offset over the last five seconds"
+                label="Camera snap"
+                value={`${formatCount(
+                  hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+                    .renderedSnap.totalCount
+                )} total · ${formatCount(
+                  hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+                    .renderedSnap.recentCountPast5Seconds
+                )} recent/5s · last ${
+                  hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+                    .renderedSnap.lastAgeMs === null
+                    ? "n/a"
+                    : `${Math.round(
+                        hudSnapshot.telemetry.worldSnapshot.cameraPresentation
+                          .renderedSnap.lastAgeMs
+                      )} ms`
+                }`}
               />
             </section>
 

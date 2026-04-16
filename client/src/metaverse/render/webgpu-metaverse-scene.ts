@@ -51,7 +51,7 @@ import {
   vec3
 } from "three/tsl";
 import {
-  metaverseWorldLayout,
+  metaverseWorldPlacedWaterRegions,
   resolveMetaverseWorldWaterRegionFloorHeightMeters,
   resolveMetaverseWorldWaterRegionSurfaceHeightMeters,
   type MetaverseWorldPlacedWaterRegionSnapshot
@@ -216,12 +216,6 @@ interface HeldWeaponSolveChainLink {
   readonly solveWeight: number;
 }
 
-interface HeldWeaponFirstPersonCameraRuntime {
-  readonly settledLookDirection: Vector3;
-  readonly settledPosition: Vector3;
-  settled: boolean;
-}
-
 interface MetaverseRemoteCharacterPresentationRuntime {
   readonly characterRuntime: MetaverseCharacterProofRuntime;
   mountedCharacterRuntime: MountedCharacterRuntime | null;
@@ -382,12 +376,6 @@ const remoteCharacterTeleportSnapDistanceMeters = 3.5;
 const heldWeaponAimSolveIterations = 10;
 const heldWeaponCoupledSolvePasses = 5;
 const heldWeaponAimTargetDistanceMeters = 16;
-const heldWeaponFirstPersonCameraBackOffsetMeters = 0.24;
-const heldWeaponFirstPersonCameraLookBlendRatePerSecond = 20;
-const heldWeaponFirstPersonCameraLookDistanceMeters = 1;
-const heldWeaponFirstPersonCameraPositionBlendRatePerSecond = 16;
-const heldWeaponFirstPersonCameraSideOffsetMeters = 0.055;
-const heldWeaponFirstPersonCameraUpOffsetMeters = 0.09;
 const heldWeaponClavicleSolveWeight = 0.28;
 const heldWeaponElbowPoleAcrossBias = 0.42;
 const heldWeaponElbowPoleBiasWeight = 0.92;
@@ -463,11 +451,6 @@ const heldWeaponAttachmentWorldQuaternionScratch = new Quaternion();
 const heldWeaponAttachmentWorldQuaternionInverseScratch = new Quaternion();
 const heldWeaponWeightedLocalDeltaQuaternionScratch = new Quaternion();
 const heldWeaponTargetWorldQuaternionScratch = new Quaternion();
-const heldWeaponFirstPersonCameraTargetPositionScratch = new Vector3();
-const heldWeaponFirstPersonCameraTargetLookDirectionScratch = new Vector3();
-const heldWeaponFirstPersonCameraTargetUpDirectionScratch = new Vector3();
-const heldWeaponFirstPersonCameraTargetAcrossDirectionScratch = new Vector3();
-const heldWeaponFirstPersonCameraForwardReferenceWorldPositionScratch = new Vector3();
 const heldWeaponCurrentWorldQuaternionScratch = new Quaternion();
 const heldWeaponWorldDeltaQuaternionScratch = new Quaternion();
 const heldWeaponParentLocalDeltaQuaternionScratch = new Quaternion();
@@ -4027,162 +4010,6 @@ function syncCamera(
   camera.updateMatrixWorld(true);
 }
 
-function createHeldWeaponFirstPersonCameraRuntime(): HeldWeaponFirstPersonCameraRuntime {
-  return {
-    settled: false,
-    settledLookDirection: new Vector3(0, 0, -1),
-    settledPosition: new Vector3()
-  };
-}
-
-function resetHeldWeaponFirstPersonCameraRuntime(
-  cameraRuntime: HeldWeaponFirstPersonCameraRuntime
-): void {
-  cameraRuntime.settled = false;
-}
-
-function syncHeldWeaponFirstPersonCamera(
-  camera: PerspectiveCamera,
-  cameraRuntime: HeldWeaponFirstPersonCameraRuntime,
-  attachmentRuntime: MetaverseAttachmentProofRuntime,
-  cameraSnapshot: MetaverseCameraSnapshot,
-  deltaSeconds: number
-): void {
-  attachmentRuntime.attachmentRoot.getWorldPosition(
-    heldWeaponAttachmentGripWorldPositionScratch
-  );
-
-  if (attachmentRuntime.heldForwardReferenceNode !== null) {
-    attachmentRuntime.heldForwardReferenceNode.getWorldPosition(
-      heldWeaponFirstPersonCameraForwardReferenceWorldPositionScratch
-    );
-    heldWeaponFirstPersonCameraTargetLookDirectionScratch
-      .copy(heldWeaponFirstPersonCameraForwardReferenceWorldPositionScratch)
-      .sub(heldWeaponAttachmentGripWorldPositionScratch);
-  } else {
-    heldWeaponFirstPersonCameraTargetLookDirectionScratch.set(
-      cameraSnapshot.lookDirection.x,
-      cameraSnapshot.lookDirection.y,
-      cameraSnapshot.lookDirection.z
-    );
-  }
-
-  if (
-    heldWeaponFirstPersonCameraTargetLookDirectionScratch.lengthSq() <=
-    heldWeaponSolveDirectionEpsilon
-  ) {
-    syncCamera(camera, cameraSnapshot);
-    resetHeldWeaponFirstPersonCameraRuntime(cameraRuntime);
-    return;
-  }
-
-  heldWeaponFirstPersonCameraTargetLookDirectionScratch.normalize();
-  heldWeaponFirstPersonCameraTargetUpDirectionScratch.set(0, 1, 0);
-  heldWeaponFirstPersonCameraTargetUpDirectionScratch.addScaledVector(
-    heldWeaponFirstPersonCameraTargetLookDirectionScratch,
-    -heldWeaponFirstPersonCameraTargetUpDirectionScratch.dot(
-      heldWeaponFirstPersonCameraTargetLookDirectionScratch
-    )
-  );
-
-  if (
-    heldWeaponFirstPersonCameraTargetUpDirectionScratch.lengthSq() <=
-    heldWeaponSolveDirectionEpsilon
-  ) {
-    heldWeaponFirstPersonCameraTargetUpDirectionScratch.set(0, 0, 1);
-    heldWeaponFirstPersonCameraTargetUpDirectionScratch.addScaledVector(
-      heldWeaponFirstPersonCameraTargetLookDirectionScratch,
-      -heldWeaponFirstPersonCameraTargetUpDirectionScratch.dot(
-        heldWeaponFirstPersonCameraTargetLookDirectionScratch
-      )
-    );
-  }
-
-  if (
-    heldWeaponFirstPersonCameraTargetUpDirectionScratch.lengthSq() <=
-    heldWeaponSolveDirectionEpsilon
-  ) {
-    syncCamera(camera, cameraSnapshot);
-    resetHeldWeaponFirstPersonCameraRuntime(cameraRuntime);
-    return;
-  }
-
-  heldWeaponFirstPersonCameraTargetUpDirectionScratch.normalize();
-  heldWeaponFirstPersonCameraTargetAcrossDirectionScratch
-    .copy(heldWeaponFirstPersonCameraTargetLookDirectionScratch)
-    .cross(heldWeaponFirstPersonCameraTargetUpDirectionScratch);
-
-  if (
-    heldWeaponFirstPersonCameraTargetAcrossDirectionScratch.lengthSq() <=
-    heldWeaponSolveDirectionEpsilon
-  ) {
-    syncCamera(camera, cameraSnapshot);
-    resetHeldWeaponFirstPersonCameraRuntime(cameraRuntime);
-    return;
-  }
-
-  heldWeaponFirstPersonCameraTargetAcrossDirectionScratch.normalize();
-  heldWeaponFirstPersonCameraTargetUpDirectionScratch
-    .copy(heldWeaponFirstPersonCameraTargetAcrossDirectionScratch)
-    .cross(heldWeaponFirstPersonCameraTargetLookDirectionScratch)
-    .normalize();
-  heldWeaponFirstPersonCameraTargetPositionScratch
-    .copy(heldWeaponAttachmentGripWorldPositionScratch)
-    .addScaledVector(
-      heldWeaponFirstPersonCameraTargetLookDirectionScratch,
-      -heldWeaponFirstPersonCameraBackOffsetMeters
-    )
-    .addScaledVector(
-      heldWeaponFirstPersonCameraTargetUpDirectionScratch,
-      heldWeaponFirstPersonCameraUpOffsetMeters
-    )
-    .addScaledVector(
-      heldWeaponFirstPersonCameraTargetAcrossDirectionScratch,
-      -heldWeaponFirstPersonCameraSideOffsetMeters
-    );
-
-  if (!cameraRuntime.settled || deltaSeconds <= 0) {
-    cameraRuntime.settledPosition.copy(
-      heldWeaponFirstPersonCameraTargetPositionScratch
-    );
-    cameraRuntime.settledLookDirection.copy(
-      heldWeaponFirstPersonCameraTargetLookDirectionScratch
-    );
-    cameraRuntime.settled = true;
-  } else {
-    const positionBlendAlpha =
-      1 -
-      Math.exp(
-        -heldWeaponFirstPersonCameraPositionBlendRatePerSecond * deltaSeconds
-      );
-    const lookBlendAlpha =
-      1 -
-      Math.exp(-heldWeaponFirstPersonCameraLookBlendRatePerSecond * deltaSeconds);
-
-    cameraRuntime.settledPosition.lerp(
-      heldWeaponFirstPersonCameraTargetPositionScratch,
-      positionBlendAlpha
-    );
-    cameraRuntime.settledLookDirection.lerp(
-      heldWeaponFirstPersonCameraTargetLookDirectionScratch,
-      lookBlendAlpha
-    );
-
-    if (
-      cameraRuntime.settledLookDirection.lengthSq() <=
-      heldWeaponSolveDirectionEpsilon
-    ) {
-      cameraRuntime.settledLookDirection.copy(
-        heldWeaponFirstPersonCameraTargetLookDirectionScratch
-      );
-    } else {
-      cameraRuntime.settledLookDirection.normalize();
-    }
-  }
-
-  syncCamera(camera, cameraSnapshot);
-}
-
 function createHemisphereLight(
   config: MetaverseRuntimeConfig
 ): HemisphereLight {
@@ -4362,7 +4189,7 @@ function createWaterRegionSurfaceMesh(
 function createOceanMesh(config: MetaverseRuntimeConfig): Group {
   const oceanGroup = new Group();
 
-  for (const waterRegion of metaverseWorldLayout.waterRegionSnapshots) {
+  for (const waterRegion of metaverseWorldPlacedWaterRegions) {
     oceanGroup.add(createWaterRegionFloorMesh(waterRegion));
     oceanGroup.add(createWaterRegionSurfaceMesh(config, waterRegion));
   }
@@ -4551,8 +4378,6 @@ export function createMetaverseScene(
     string,
     DynamicEnvironmentPoseSnapshot
   >();
-  const heldWeaponFirstPersonCameraRuntime =
-    createHeldWeaponFirstPersonCameraRuntime();
   const remoteCharacterRuntimesByPlayerId = new Map<
     string,
     MetaverseRemoteCharacterPresentationRuntime
@@ -4869,7 +4694,6 @@ export function createMetaverseScene(
       }
 
       dynamicEnvironmentPoseOverrides.clear();
-      resetHeldWeaponFirstPersonCameraRuntime(heldWeaponFirstPersonCameraRuntime);
       for (const remoteCharacterRuntime of remoteCharacterRuntimesByPlayerId.values()) {
         remoteCharacterRuntime.characterRuntime.anchorGroup.parent?.remove(
           remoteCharacterRuntime.characterRuntime.anchorGroup
@@ -4978,17 +4802,6 @@ export function createMetaverseScene(
           characterProofRuntime.heldWeaponPoseRuntime,
           attachmentProofRuntime,
           cameraSnapshot
-        );
-        syncHeldWeaponFirstPersonCamera(
-          camera,
-          heldWeaponFirstPersonCameraRuntime,
-          attachmentProofRuntime,
-          cameraSnapshot,
-          deltaSeconds
-        );
-      } else {
-        resetHeldWeaponFirstPersonCameraRuntime(
-          heldWeaponFirstPersonCameraRuntime
         );
       }
       syncRemoteCharacterPresentations(

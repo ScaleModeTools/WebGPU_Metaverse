@@ -1,6 +1,5 @@
 import type { Object3D, Scene } from "three/webgpu";
 import {
-  metaverseWorldLayout,
   type MetaverseWorldPlacedSurfaceColliderSnapshot
 } from "@webgpu-metaverse/shared";
 
@@ -21,6 +20,8 @@ import type {
   MetaverseRuntimeConfig,
   MetaverseVector3Snapshot
 } from "../types/metaverse-runtime";
+import { metaverseDebugSimpleSpawnSupportCollider } from "../config/metaverse-debug-simple-spawn-support";
+import { metaverseWorldLayout } from "../config/metaverse-world-layout";
 
 interface MetaverseEnvironmentPhysicsSceneRuntime {
   readonly scene: Scene;
@@ -58,6 +59,32 @@ const identityQuaternion = Object.freeze({
   w: 1
 });
 const emptyColliderHandleList = Object.freeze([]) as readonly RapierColliderHandle[];
+
+function resolveBooleanEnvFlag(rawValue: string | undefined): boolean | null {
+  if (rawValue === undefined) {
+    return null;
+  }
+
+  const normalizedValue = rawValue.trim().toLowerCase();
+
+  if (normalizedValue === "1" || normalizedValue === "true") {
+    return true;
+  }
+
+  if (normalizedValue === "0" || normalizedValue === "false") {
+    return false;
+  }
+
+  return null;
+}
+
+function shouldUseSimpleSpawnSupportOverride(): boolean {
+  return (
+    resolveBooleanEnvFlag(
+      import.meta.env?.VITE_METAVERSE_SIMPLE_SPAWN_SUPPORT_ENABLED
+    ) ?? false
+  );
+}
 
 function toFiniteNumber(value: number, fallback = 0): number {
   return Number.isFinite(value) ? value : fallback;
@@ -244,16 +271,22 @@ export class MetaverseEnvironmentPhysicsRuntime {
     this.#physicsRuntime = physicsRuntime;
     this.#sceneRuntime = sceneRuntime;
     this.#showPhysicsDebug = showPhysicsDebug;
-    this.#staticSurfaceColliderSnapshots =
+    const staticSurfaceColliderSnapshots =
       environmentProofConfig === null
-        ? Object.freeze([])
-        : Object.freeze(
-            environmentProofConfig.assets.flatMap((environmentAsset) =>
-              metaverseWorldLayout.resolveSurfaceColliderSnapshots(
-                environmentAsset.environmentAssetId
-              )
+        ? []
+        : environmentProofConfig.assets.flatMap((environmentAsset) =>
+            metaverseWorldLayout.resolveSurfaceColliderSnapshots(
+              environmentAsset.environmentAssetId
             )
           );
+
+    if (shouldUseSimpleSpawnSupportOverride()) {
+      staticSurfaceColliderSnapshots.push(metaverseDebugSimpleSpawnSupportCollider);
+    }
+
+    this.#staticSurfaceColliderSnapshots = Object.freeze(
+      staticSurfaceColliderSnapshots
+    );
     this.#surfaceColliderSnapshots = [...this.#staticSurfaceColliderSnapshots];
   }
 
@@ -499,29 +532,25 @@ export class MetaverseEnvironmentPhysicsRuntime {
   }
 
   async #bootStaticEnvironmentCollision(): Promise<void> {
-    if (this.#environmentProofConfig === null) {
+    if (this.#staticSurfaceColliderSnapshots.length === 0) {
       return;
     }
 
-    for (const environmentAsset of this.#environmentProofConfig.assets) {
-      for (const collider of metaverseWorldLayout.resolveSurfaceColliderSnapshots(
-        environmentAsset.environmentAssetId
-      )) {
-        const environmentCollider = this.#physicsRuntime.createFixedCuboidCollider(
-          collider.halfExtents,
-          collider.translation,
-          collider.rotation
-        );
+    for (const collider of this.#staticSurfaceColliderSnapshots) {
+      const environmentCollider = this.#physicsRuntime.createFixedCuboidCollider(
+        collider.halfExtents,
+        collider.translation,
+        collider.rotation
+      );
 
-        this.#environmentColliders.push(environmentCollider);
-        this.#surfaceColliderMetadataByHandle.set(
-          environmentCollider,
-          Object.freeze({
-            ownerEnvironmentAssetId: collider.ownerEnvironmentAssetId,
-            traversalAffordance: collider.traversalAffordance
-          })
-        );
-      }
+      this.#environmentColliders.push(environmentCollider);
+      this.#surfaceColliderMetadataByHandle.set(
+        environmentCollider,
+        Object.freeze({
+          ownerEnvironmentAssetId: collider.ownerEnvironmentAssetId,
+          traversalAffordance: collider.traversalAffordance
+        })
+      );
     }
   }
 

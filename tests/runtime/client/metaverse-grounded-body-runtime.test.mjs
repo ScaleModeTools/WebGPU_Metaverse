@@ -407,6 +407,22 @@ function createFakePhysicsRuntimeWithWorld(RapierPhysicsRuntime) {
   };
 }
 
+function advanceGroundedBodyRuntime(
+  physicsRuntime,
+  groundedBodyRuntime,
+  intentSnapshot,
+  deltaSeconds,
+  filterPredicate
+) {
+  physicsRuntime.stepSimulation(deltaSeconds);
+
+  return groundedBodyRuntime.advance(
+    intentSnapshot,
+    deltaSeconds,
+    filterPredicate
+  );
+}
+
 before(async () => {
   clientLoader = await createClientModuleLoader();
 });
@@ -465,7 +481,9 @@ test("MetaverseGroundedBodyRuntime advances a grounded capsule body and clamps i
     0
   );
 
-  const advancedSnapshot = groundedBodyRuntime.advance(
+  const advancedSnapshot = advanceGroundedBodyRuntime(
+    physicsRuntime,
+    groundedBodyRuntime,
     {
       boost: true,
       moveAxis: 1,
@@ -540,7 +558,9 @@ test("MetaverseGroundedBodyRuntime walks onto a low fixed step", async () => {
     );
 
     for (let frame = 0; frame < 60; frame += 1) {
-      groundedBodyRuntime.advance(
+      advanceGroundedBodyRuntime(
+        physicsRuntime,
+        groundedBodyRuntime,
         {
           boost: false,
           moveAxis: 1,
@@ -606,7 +626,9 @@ test("MetaverseGroundedBodyRuntime preserves planar momentum when jumping from g
       0
     );
 
-    groundedBodyRuntime.advance(
+    advanceGroundedBodyRuntime(
+      physicsRuntime,
+      groundedBodyRuntime,
       {
         boost: false,
         jump: false,
@@ -617,7 +639,9 @@ test("MetaverseGroundedBodyRuntime preserves planar momentum when jumping from g
       0.25
     );
 
-    const jumpSnapshot = groundedBodyRuntime.advance(
+    const jumpSnapshot = advanceGroundedBodyRuntime(
+      physicsRuntime,
+      groundedBodyRuntime,
       {
         boost: false,
         jump: true,
@@ -627,7 +651,9 @@ test("MetaverseGroundedBodyRuntime preserves planar momentum when jumping from g
       },
       0.05
     );
-    const airborneContinuationSnapshot = groundedBodyRuntime.advance(
+    const airborneContinuationSnapshot = advanceGroundedBodyRuntime(
+      physicsRuntime,
+      groundedBodyRuntime,
       {
         boost: false,
         jump: false,
@@ -645,6 +671,387 @@ test("MetaverseGroundedBodyRuntime preserves planar momentum when jumping from g
       airborneContinuationSnapshot.planarSpeedUnitsPerSecond >=
         jumpSnapshot.planarSpeedUnitsPerSecond * 0.9
     );
+  } finally {
+    groundedBodyRuntime.dispose();
+    physicsRuntime.removeCollider(groundCollider);
+  }
+});
+
+test("MetaverseGroundedBodyRuntime does not let snap-to-ground clip the first grounded jump step", async () => {
+  const { MetaverseGroundedBodyRuntime, RapierPhysicsRuntime } =
+    await clientLoader.load("/src/physics/index.ts");
+  const physicsRuntime = createFakePhysicsRuntime(RapierPhysicsRuntime);
+
+  await physicsRuntime.init();
+
+  const groundCollider = physicsRuntime.createFixedCuboidCollider(
+    { x: 6, y: 0.5, z: 6 },
+    { x: 0, y: -0.5, z: 0 }
+  );
+  const groundedBodyRuntime = new MetaverseGroundedBodyRuntime(
+    {
+      accelerationUnitsPerSecondSquared: 18,
+      airborneMovementDampingFactor: 0.4,
+      baseSpeedUnitsPerSecond: 4.5,
+      boostMultiplier: 1.25,
+      capsuleHalfHeightMeters: 0.48,
+      capsuleRadiusMeters: 0.34,
+      controllerOffsetMeters: 0.02,
+      decelerationUnitsPerSecondSquared: 24,
+      eyeHeightMeters: 1.62,
+      gravityUnitsPerSecond: 18,
+      jumpImpulseUnitsPerSecond: 6.8,
+      maxTurnSpeedRadiansPerSecond: Math.PI * 0.5,
+      snapToGroundDistanceMeters: 0.22,
+      spawnPosition: {
+        x: 0,
+        y: 0,
+        z: 0
+      },
+      worldRadius: 8
+    },
+    physicsRuntime
+  );
+
+  try {
+    await groundedBodyRuntime.init(0);
+    groundedBodyRuntime.teleport(
+      {
+        x: 0,
+        y: 0,
+        z: 0
+      },
+      0
+    );
+
+    advanceGroundedBodyRuntime(
+      physicsRuntime,
+      groundedBodyRuntime,
+      {
+        boost: false,
+        jump: false,
+        moveAxis: 0,
+        strafeAxis: 0,
+        turnAxis: 0
+      },
+      1 / 60
+    );
+
+    const jumpSnapshot = advanceGroundedBodyRuntime(
+      physicsRuntime,
+      groundedBodyRuntime,
+      {
+        boost: false,
+        jump: true,
+        moveAxis: 0,
+        strafeAxis: 0,
+        turnAxis: 0
+      },
+      1 / 30
+    );
+
+    assert.equal(jumpSnapshot.grounded, false);
+    assert.ok(jumpSnapshot.position.y > 0);
+    assert.ok(jumpSnapshot.verticalSpeedUnitsPerSecond > 0);
+  } finally {
+    groundedBodyRuntime.dispose();
+    physicsRuntime.removeCollider(groundCollider);
+  }
+});
+
+test("MetaverseGroundedBodyRuntime keeps a launched jump airborne below snap distance until touchdown", async () => {
+  const { MetaverseGroundedBodyRuntime, RapierPhysicsRuntime } =
+    await clientLoader.load("/src/physics/index.ts");
+  const physicsRuntime = createFakePhysicsRuntime(RapierPhysicsRuntime);
+
+  await physicsRuntime.init();
+
+  const groundCollider = physicsRuntime.createFixedCuboidCollider(
+    { x: 6, y: 0.5, z: 6 },
+    { x: 0, y: -0.5, z: 0 }
+  );
+  const groundedBodyRuntime = new MetaverseGroundedBodyRuntime(
+    {
+      accelerationUnitsPerSecondSquared: 18,
+      airborneMovementDampingFactor: 0.4,
+      baseSpeedUnitsPerSecond: 4.5,
+      boostMultiplier: 1.25,
+      capsuleHalfHeightMeters: 0.48,
+      capsuleRadiusMeters: 0.34,
+      controllerOffsetMeters: 0.02,
+      decelerationUnitsPerSecondSquared: 24,
+      eyeHeightMeters: 1.62,
+      gravityUnitsPerSecond: 18,
+      jumpImpulseUnitsPerSecond: 6.8,
+      maxTurnSpeedRadiansPerSecond: Math.PI * 0.5,
+      snapToGroundDistanceMeters: 0.22,
+      spawnPosition: {
+        x: 0,
+        y: 0,
+        z: 0
+      },
+      worldRadius: 8
+    },
+    physicsRuntime
+  );
+
+  try {
+    await groundedBodyRuntime.init(0);
+    groundedBodyRuntime.teleport(
+      {
+        x: 0,
+        y: 0,
+        z: 0
+      },
+      0
+    );
+
+    advanceGroundedBodyRuntime(
+      physicsRuntime,
+      groundedBodyRuntime,
+      {
+        boost: false,
+        jump: false,
+        moveAxis: 0,
+        strafeAxis: 0,
+        turnAxis: 0
+      },
+      1 / 60
+    );
+
+    let snapshot = advanceGroundedBodyRuntime(
+      physicsRuntime,
+      groundedBodyRuntime,
+      {
+        boost: false,
+        jump: true,
+        moveAxis: 0,
+        strafeAxis: 0,
+        turnAxis: 0
+      },
+      1 / 30
+    );
+    let sawDescendingNearGroundAirborne = false;
+
+    for (let stepIndex = 0; stepIndex < 40 && snapshot.grounded !== true; stepIndex += 1) {
+      snapshot = advanceGroundedBodyRuntime(
+        physicsRuntime,
+        groundedBodyRuntime,
+        {
+          boost: false,
+          jump: false,
+          moveAxis: 0,
+          strafeAxis: 0,
+          turnAxis: 0
+        },
+        1 / 30
+      );
+
+      if (
+        snapshot.grounded !== true &&
+        snapshot.verticalSpeedUnitsPerSecond < 0 &&
+        snapshot.position.y > 0 &&
+        snapshot.position.y < 0.18
+      ) {
+        sawDescendingNearGroundAirborne = true;
+      }
+    }
+
+    assert.equal(snapshot.grounded, true);
+    assert.ok(sawDescendingNearGroundAirborne);
+  } finally {
+    groundedBodyRuntime.dispose();
+    physicsRuntime.removeCollider(groundCollider);
+  }
+});
+
+test("MetaverseGroundedBodyRuntime keeps jump readiness briefly after contact is lost", async () => {
+  const { MetaverseGroundedBodyRuntime, RapierPhysicsRuntime } =
+    await clientLoader.load("/src/physics/index.ts");
+  const { physicsRuntime, world } =
+    createFakePhysicsRuntimeWithWorld(RapierPhysicsRuntime);
+
+  await physicsRuntime.init();
+
+  const groundCollider = physicsRuntime.createFixedCuboidCollider(
+    { x: 6, y: 0.5, z: 6 },
+    { x: 0, y: -0.5, z: 0 }
+  );
+  const groundedBodyRuntime = new MetaverseGroundedBodyRuntime(
+    {
+      accelerationUnitsPerSecondSquared: 18,
+      airborneMovementDampingFactor: 0.4,
+      baseSpeedUnitsPerSecond: 4.5,
+      boostMultiplier: 1.25,
+      capsuleHalfHeightMeters: 0.48,
+      capsuleRadiusMeters: 0.34,
+      controllerOffsetMeters: 0.02,
+      decelerationUnitsPerSecondSquared: 24,
+      eyeHeightMeters: 1.62,
+      gravityUnitsPerSecond: 18,
+      jumpGroundContactGraceSeconds: 0.125,
+      maxTurnSpeedRadiansPerSecond: Math.PI * 0.5,
+      snapToGroundDistanceMeters: 0.22,
+      spawnPosition: {
+        x: 0,
+        y: 0,
+        z: 0
+      },
+      worldRadius: 8
+    },
+    physicsRuntime
+  );
+
+  try {
+    await groundedBodyRuntime.init(0);
+    groundedBodyRuntime.teleport(
+      {
+        x: 0,
+        y: 0,
+        z: 0
+      },
+      0
+    );
+
+    advanceGroundedBodyRuntime(
+      physicsRuntime,
+      groundedBodyRuntime,
+      {
+        boost: false,
+        jump: false,
+        moveAxis: 0,
+        strafeAxis: 0,
+        turnAxis: 0
+      },
+      1 / 60
+    );
+
+    world.removeCollider(groundCollider);
+
+    const contactLostSnapshot = advanceGroundedBodyRuntime(
+      physicsRuntime,
+      groundedBodyRuntime,
+      {
+        boost: false,
+        jump: false,
+        moveAxis: 0,
+        strafeAxis: 0,
+        turnAxis: 0
+      },
+      1 / 60
+    );
+    const coyoteJumpSnapshot = advanceGroundedBodyRuntime(
+      physicsRuntime,
+      groundedBodyRuntime,
+      {
+        boost: false,
+        jump: true,
+        moveAxis: 0,
+        strafeAxis: 0,
+        turnAxis: 0
+      },
+      1 / 60
+    );
+
+    assert.equal(contactLostSnapshot.grounded, false);
+    assert.equal(contactLostSnapshot.jumpReady, true);
+    assert.equal(coyoteJumpSnapshot.grounded, false);
+    assert.ok(coyoteJumpSnapshot.position.y > contactLostSnapshot.position.y);
+    assert.ok(coyoteJumpSnapshot.verticalSpeedUnitsPerSecond > 0);
+    assert.equal(coyoteJumpSnapshot.jumpReady, false);
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseGroundedBodyRuntime honors higher-level jump readiness overrides while support is within snap distance", async () => {
+  const { MetaverseGroundedBodyRuntime, RapierPhysicsRuntime } =
+    await clientLoader.load("/src/physics/index.ts");
+  const physicsRuntime = createFakePhysicsRuntime(RapierPhysicsRuntime);
+
+  await physicsRuntime.init();
+
+  const groundCollider = physicsRuntime.createFixedCuboidCollider(
+    { x: 6, y: 0.5, z: 6 },
+    { x: 0, y: -0.5, z: 0 }
+  );
+  const groundedBodyRuntime = new MetaverseGroundedBodyRuntime(
+    {
+      accelerationUnitsPerSecondSquared: 18,
+      airborneMovementDampingFactor: 0.4,
+      baseSpeedUnitsPerSecond: 4.5,
+      boostMultiplier: 1.25,
+      capsuleHalfHeightMeters: 0.48,
+      capsuleRadiusMeters: 0.34,
+      controllerOffsetMeters: 0.02,
+      decelerationUnitsPerSecondSquared: 24,
+      eyeHeightMeters: 1.62,
+      gravityUnitsPerSecond: 18,
+      jumpGroundContactGraceSeconds: 0.125,
+      jumpImpulseUnitsPerSecond: 6.8,
+      maxTurnSpeedRadiansPerSecond: Math.PI * 0.5,
+      snapToGroundDistanceMeters: 0.22,
+      spawnPosition: {
+        x: 0,
+        y: 0.12,
+        z: 0
+      },
+      worldRadius: 8
+    },
+    physicsRuntime
+  );
+
+  try {
+    await groundedBodyRuntime.init(0);
+    groundedBodyRuntime.teleport(
+      {
+        x: 0,
+        y: 0.12,
+        z: 0
+      },
+      0
+    );
+
+    let snapshot = advanceGroundedBodyRuntime(
+      physicsRuntime,
+      groundedBodyRuntime,
+      {
+        boost: false,
+        jump: true,
+        jumpReadyOverride: true,
+        moveAxis: 0,
+        strafeAxis: 0,
+        turnAxis: 0
+      },
+      1 / 60
+    );
+
+    for (let stepIndex = 0; stepIndex < 2; stepIndex += 1) {
+      if (
+        snapshot.verticalSpeedUnitsPerSecond > 0 ||
+        snapshot.position.y > 0.12
+      ) {
+        break;
+      }
+
+      snapshot = advanceGroundedBodyRuntime(
+        physicsRuntime,
+        groundedBodyRuntime,
+        {
+          boost: false,
+          jump: false,
+          moveAxis: 0,
+          strafeAxis: 0,
+          turnAxis: 0
+        },
+        1 / 60
+      );
+    }
+
+    assert.ok(
+      snapshot.verticalSpeedUnitsPerSecond > 0 || snapshot.position.y > 0.12
+    );
+    assert.equal(snapshot.jumpReady, false);
   } finally {
     groundedBodyRuntime.dispose();
     physicsRuntime.removeCollider(groundCollider);
@@ -703,7 +1110,9 @@ test("MetaverseGroundedBodyRuntime stops at a tall blocker", async () => {
     );
 
     for (let frame = 0; frame < 180; frame += 1) {
-      groundedBodyRuntime.advance(
+      advanceGroundedBodyRuntime(
+        physicsRuntime,
+        groundedBodyRuntime,
         {
           boost: false,
           moveAxis: 1,
@@ -777,7 +1186,9 @@ test("MetaverseGroundedBodyRuntime applies slope rules and exposes jump readines
       0
     );
 
-    const snapshot = groundedBodyRuntime.advance(
+    const snapshot = advanceGroundedBodyRuntime(
+      physicsRuntime,
+      groundedBodyRuntime,
       {
         boost: false,
         moveAxis: 0,
@@ -873,6 +1284,84 @@ test("MetaverseGroundedBodyRuntime can disable and restore autostep without chan
   groundedBodyRuntime.setAutostepEnabled(true, 0.62);
   assert.equal(world.lastCharacterController?.stepHeight, 0.62);
   groundedBodyRuntime.dispose();
+});
+
+test("MetaverseGroundedBodyRuntime consumes a host-stepped physics world instead of stepping it internally", async () => {
+  const { MetaverseGroundedBodyRuntime, RapierPhysicsRuntime } =
+    await clientLoader.load("/src/physics/index.ts");
+  const { physicsRuntime } = createFakePhysicsRuntimeWithWorld(
+    RapierPhysicsRuntime
+  );
+
+  await physicsRuntime.init();
+
+  const groundCollider = physicsRuntime.createFixedCuboidCollider(
+    { x: 4, y: 0.5, z: 4 },
+    { x: 0, y: -0.5, z: 0 }
+  );
+  const groundedBodyRuntime = new MetaverseGroundedBodyRuntime(
+    {
+      baseSpeedUnitsPerSecond: 4,
+      boostMultiplier: 2,
+      capsuleHalfHeightMeters: 0.48,
+      capsuleRadiusMeters: 0.34,
+      controllerOffsetMeters: 0.02,
+      eyeHeightMeters: 1.62,
+      gravityUnitsPerSecond: 18,
+      maxTurnSpeedRadiansPerSecond: Math.PI * 0.5,
+      snapToGroundDistanceMeters: 0.22,
+      spawnPosition: {
+        x: 0,
+        y: 0,
+        z: 0
+      },
+      worldRadius: 8
+    },
+    physicsRuntime
+  );
+
+  try {
+    await groundedBodyRuntime.init(0);
+    groundedBodyRuntime.teleport(
+      {
+        x: 0,
+        y: 0,
+        z: 0
+      },
+      0
+    );
+
+    const staleWorldSnapshot = groundedBodyRuntime.advance(
+      {
+        boost: false,
+        jump: false,
+        moveAxis: 0,
+        strafeAxis: 0,
+        turnAxis: 0
+      },
+      1 / 60
+    );
+
+    assert.equal(staleWorldSnapshot.grounded, false);
+
+    const steppedWorldSnapshot = advanceGroundedBodyRuntime(
+      physicsRuntime,
+      groundedBodyRuntime,
+      {
+        boost: false,
+        jump: false,
+        moveAxis: 0,
+        strafeAxis: 0,
+        turnAxis: 0
+      },
+      1 / 60
+    );
+
+    assert.equal(steppedWorldSnapshot.grounded, true);
+  } finally {
+    groundedBodyRuntime.dispose();
+    physicsRuntime.removeCollider(groundCollider);
+  }
 });
 
 test("MetaverseDynamicCuboidBodyRuntime snapshots a dynamic pushable body pose from physics", async () => {

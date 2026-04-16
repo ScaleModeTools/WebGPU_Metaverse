@@ -39,7 +39,7 @@ import type {
   AttachmentSupportPointDescriptor
 } from "@/assets/types/attachment-asset-manifest";
 import {
-  metaverseWorldLayout,
+  readMetaverseWorldSurfaceAssetAuthoring,
   normalizePlanarYawRadians,
 } from "@webgpu-metaverse/shared";
 import type {
@@ -553,17 +553,16 @@ const metaverseHubDiveBoatPlacements = resolveSharedSurfacePlacements(
 function resolveSharedSurfacePlacements(
   environmentAssetId: string
 ): readonly MetaverseEnvironmentPlacementProofConfig[] {
-  const renderPlacementAsset =
-    metaverseWorldLayout.readRenderPlacementAsset(environmentAssetId);
+  const surfaceAsset = readMetaverseWorldSurfaceAssetAuthoring(environmentAssetId);
 
-  if (renderPlacementAsset === null) {
+  if (surfaceAsset === null) {
     throw new Error(
       `Metaverse shared surface authoring is missing placements for ${environmentAssetId}.`
     );
   }
 
   return Object.freeze(
-    renderPlacementAsset.placements.map((placement) =>
+    surfaceAsset.placements.map((placement) =>
       Object.freeze({
         position: Object.freeze({
           x: placement.position.x,

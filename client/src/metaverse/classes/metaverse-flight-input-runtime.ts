@@ -18,7 +18,12 @@ interface MouseFlightInputState {
 
 type MouseFlightButtonInputKey = "primaryAction" | "secondaryAction";
 
-const metaverseMouseLookPixelsPerAxisUnit = 120;
+interface MetaverseFlightInputRuntimeDependencies {
+  readonly readWallClockMs?: () => number;
+}
+
+const defaultMouseLookSampleDurationSeconds = 1 / 60;
+const metaverseMouseLookPixelsPerAxisUnitSecond = 2400;
 
 function toFiniteNumber(value: number, fallback = 0): number {
   return Number.isFinite(value) ? value : fallback;
@@ -86,9 +91,17 @@ function requestPointerLockIfAvailable(canvas: HTMLCanvasElement): void {
 export class MetaverseFlightInputRuntime {
   readonly #keyboardInput = createKeyboardFlightInputState();
   readonly #mouseInput = createMouseFlightInputState();
+  readonly #readWallClockMs: () => number;
 
   #canvas: HTMLCanvasElement | null = null;
   #inputCleanup: (() => void) | null = null;
+  #lastSnapshotAtMs: number | null = null;
+
+  constructor(dependencies: MetaverseFlightInputRuntimeDependencies = {}) {
+    this.#readWallClockMs =
+      dependencies.readWallClockMs ??
+      (() => globalThis.performance?.now?.() ?? Date.now());
+  }
 
   install(canvas: HTMLCanvasElement): void {
     this.dispose();
@@ -201,16 +214,20 @@ export class MetaverseFlightInputRuntime {
   reset(): void {
     Object.assign(this.#keyboardInput, createKeyboardFlightInputState());
     Object.assign(this.#mouseInput, createMouseFlightInputState());
+    this.#lastSnapshotAtMs = null;
   }
 
   readSnapshot(): MetaverseFlightInputSnapshot {
+    const sampleDurationSeconds = this.#resolveLookSampleDurationSeconds();
     const pitchAxis = clamp(
-      -this.#mouseInput.lookDeltaY / metaverseMouseLookPixelsPerAxisUnit,
+      -this.#mouseInput.lookDeltaY /
+        (metaverseMouseLookPixelsPerAxisUnitSecond * sampleDurationSeconds),
       -1,
       1
     );
     const yawAxis = clamp(
-      this.#mouseInput.lookDeltaX / metaverseMouseLookPixelsPerAxisUnit,
+      this.#mouseInput.lookDeltaX /
+        (metaverseMouseLookPixelsPerAxisUnitSecond * sampleDurationSeconds),
       -1,
       1
     );
@@ -241,5 +258,30 @@ export class MetaverseFlightInputRuntime {
     ) {
       globalThis.document.exitPointerLock();
     }
+  }
+
+  #resolveLookSampleDurationSeconds(): number {
+    const nowMs = this.#readWallClockMs();
+
+    if (!Number.isFinite(nowMs)) {
+      this.#lastSnapshotAtMs = null;
+      return defaultMouseLookSampleDurationSeconds;
+    }
+
+    const previousSnapshotAtMs = this.#lastSnapshotAtMs;
+
+    this.#lastSnapshotAtMs = nowMs;
+
+    if (previousSnapshotAtMs === null) {
+      return defaultMouseLookSampleDurationSeconds;
+    }
+
+    const elapsedSeconds = (nowMs - previousSnapshotAtMs) / 1_000;
+
+    if (!Number.isFinite(elapsedSeconds) || elapsedSeconds <= 0) {
+      return defaultMouseLookSampleDurationSeconds;
+    }
+
+    return elapsedSeconds;
   }
 }

@@ -183,6 +183,41 @@ export class MetaverseSurfaceDriveBodyRuntime {
     return this.#snapshot;
   }
 
+  captureStateSnapshot(): {
+    readonly forwardSpeedUnitsPerSecond: number;
+    readonly snapshot: MetaverseSurfaceDriveBodySnapshot;
+    readonly strafeSpeedUnitsPerSecond: number;
+  } {
+    return Object.freeze({
+      forwardSpeedUnitsPerSecond: this.#forwardSpeedUnitsPerSecond,
+      snapshot: this.#snapshot,
+      strafeSpeedUnitsPerSecond: this.#strafeSpeedUnitsPerSecond
+    });
+  }
+
+  restoreStateSnapshot(snapshot: {
+    readonly forwardSpeedUnitsPerSecond: number;
+    readonly snapshot: MetaverseSurfaceDriveBodySnapshot;
+    readonly strafeSpeedUnitsPerSecond: number;
+  }): void {
+    this.#collider.setTranslation(
+      this.#rootToColliderCenter(
+        snapshot.snapshot.position,
+        snapshot.snapshot.yawRadians
+      )
+    );
+
+    if (this.#config.shape.kind === "cuboid") {
+      this.#collider.setRotation(
+        quaternionFromYawRadians(snapshot.snapshot.yawRadians)
+      );
+    }
+
+    this.#forwardSpeedUnitsPerSecond = snapshot.forwardSpeedUnitsPerSecond;
+    this.#strafeSpeedUnitsPerSecond = snapshot.strafeSpeedUnitsPerSecond;
+    this.#snapshot = snapshot.snapshot;
+  }
+
   syncAuthoritativeState(snapshot: {
     readonly linearVelocity: PhysicsVector3Snapshot;
     readonly position: PhysicsVector3Snapshot;

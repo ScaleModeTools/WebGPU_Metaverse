@@ -1,4 +1,6 @@
-import type { MetaversePresenceAnimationVocabularyId } from "./metaverse-presence-contract.js";
+import type {
+  MetaverseCharacterAnimationVocabularyId
+} from "../../types/metaverse-runtime";
 
 export interface MetaverseMovementAnimationPolicyModeConfig {
   readonly enterSpeedUnitsPerSecond: number;
@@ -66,7 +68,7 @@ function resolveJumpAnimationVocabulary(
   verticalSpeedUnitsPerSecond: number,
   config: MetaverseMovementAnimationPolicyConfig["jump"]
 ): Extract<
-  MetaversePresenceAnimationVocabularyId,
+  MetaverseCharacterAnimationVocabularyId,
   "jump-down" | "jump-mid" | "jump-up"
 > {
   if (
@@ -87,7 +89,7 @@ function resolveJumpAnimationVocabulary(
 }
 
 function resolveMovingAnimationVocabulary(
-  currentVocabulary: MetaversePresenceAnimationVocabularyId,
+  currentVocabulary: MetaverseCharacterAnimationVocabularyId,
   movingVocabulary: "walk" | "swim",
   idleVocabulary: "idle" | "swim-idle",
   holdRemainingMs: number,
@@ -96,7 +98,7 @@ function resolveMovingAnimationVocabulary(
   config: MetaverseMovementAnimationPolicyModeConfig
 ): {
   readonly holdRemainingMs: number;
-  readonly vocabulary: MetaversePresenceAnimationVocabularyId;
+  readonly vocabulary: MetaverseCharacterAnimationVocabularyId;
 } {
   const normalizedHoldMs = Math.max(0, toFiniteNumber(config.holdMs, 0));
   const normalizedInputMagnitude = clamp01(inputMagnitude);
@@ -144,7 +146,7 @@ export class MetaverseMovementAnimationPolicyRuntime {
   readonly #config: MetaverseMovementAnimationPolicyConfig;
 
   #holdRemainingMs = 0;
-  #vocabulary: MetaversePresenceAnimationVocabularyId = "idle";
+  #vocabulary: MetaverseCharacterAnimationVocabularyId = "idle";
 
   constructor(
     config: MetaverseMovementAnimationPolicyConfig = metaverseMovementAnimationPolicyConfig
@@ -152,11 +154,11 @@ export class MetaverseMovementAnimationPolicyRuntime {
     this.#config = config;
   }
 
-  get animationVocabulary(): MetaversePresenceAnimationVocabularyId {
+  get animationVocabulary(): MetaverseCharacterAnimationVocabularyId {
     return this.#vocabulary;
   }
 
-  reset(vocabulary: MetaversePresenceAnimationVocabularyId = "idle"): void {
+  reset(vocabulary: MetaverseCharacterAnimationVocabularyId = "idle"): void {
     this.#holdRemainingMs = 0;
     this.#vocabulary = vocabulary;
   }
@@ -164,7 +166,7 @@ export class MetaverseMovementAnimationPolicyRuntime {
   advance(
     input: MetaverseMovementAnimationPolicyInput,
     deltaSeconds: number
-  ): MetaversePresenceAnimationVocabularyId {
+  ): MetaverseCharacterAnimationVocabularyId {
     const normalizedDeltaMs =
       deltaSeconds > 0 ? Math.max(0, toFiniteNumber(deltaSeconds, 0) * 1000) : 0;
 

@@ -3,6 +3,7 @@ import {
   type Camera,
   type Scene,
   SRGBColorSpace,
+  Vector3,
   WebGPURenderer
 } from "three/webgpu";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
@@ -34,6 +35,10 @@ import {
 import {
   resolveMetaverseBootCinematicPresentationSnapshot
 } from "../states/metaverse-boot-cinematic";
+import {
+  shouldPreferAckedTraversalReplay
+} from "../states/local-authority-reconciliation";
+import { resolveAutomaticSurfaceLocomotionSnapshot } from "../traversal/policies/surface-routing";
 import type { MetaverseControlModeId } from "../types/metaverse-control-mode";
 import type { MetaverseBootCinematicConfig } from "../types/metaverse-boot-cinematic";
 import type {
@@ -106,6 +111,10 @@ interface MetaverseRuntimeDependencies {
 }
 
 const metaverseUiUpdateIntervalMs = 120;
+const metaverseRecentLocalReconciliationWindowMs = 5_000;
+const metaverseRenderedCameraLargeSnapLookAngleThresholdRadians = 0.075;
+const metaverseRenderedCameraLargeSnapPlanarThresholdMeters = 0.12;
+const metaverseRenderedCameraLargeSnapVerticalThresholdMeters = 0.08;
 const neutralMetaverseFlightInputSnapshot = Object.freeze({
   boost: false,
   jump: false,
@@ -116,11 +125,31 @@ const neutralMetaverseFlightInputSnapshot = Object.freeze({
   strafeAxis: 0,
   yawAxis: 0
 });
+const renderedCameraLookDirectionScratch = new Vector3();
 
 type MountedOccupancyAuthoritySnapshot = Pick<
   MountedEnvironmentSnapshot,
   "entryId" | "environmentAssetId" | "occupancyKind" | "seatId"
 >;
+type LocalReconciliationCorrectionSource = Exclude<
+  MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"]["lastCorrectionSource"],
+  "none"
+>;
+type RenderedCameraOffsetTelemetrySnapshot =
+  MetaverseTelemetrySnapshot["worldSnapshot"]["cameraPresentation"]["renderedOffset"];
+
+interface LocalReconciliationEventSnapshot {
+  readonly atMs: number;
+  readonly source: LocalReconciliationCorrectionSource;
+}
+
+interface RenderedCameraOffsetDeltaEventSnapshot {
+  readonly atMs: number;
+  readonly large: boolean;
+  readonly lookAngleRadians: number;
+  readonly planarMagnitudeMeters: number;
+  readonly verticalMagnitudeMeters: number;
+}
 
 function createDefaultRenderer(canvas: HTMLCanvasElement): MetaverseRendererHost {
   const renderer = new WebGPURenderer({
@@ -228,6 +257,98 @@ function freezeOptionalVector3Snapshot(
   });
 }
 
+function clampUnitInterval(value: number): number {
+  return Math.max(-1, Math.min(1, value));
+}
+
+function resolveLookAngleRadians(
+  referenceLookDirection: {
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+  },
+  renderedLookDirection: {
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+  }
+): number {
+  const referenceMagnitude = Math.hypot(
+    referenceLookDirection.x,
+    referenceLookDirection.y,
+    referenceLookDirection.z
+  );
+  const renderedMagnitude = Math.hypot(
+    renderedLookDirection.x,
+    renderedLookDirection.y,
+    renderedLookDirection.z
+  );
+
+  if (referenceMagnitude <= 0.000001 || renderedMagnitude <= 0.000001) {
+    return 0;
+  }
+
+  return Math.acos(
+    clampUnitInterval(
+      (referenceLookDirection.x * renderedLookDirection.x +
+        referenceLookDirection.y * renderedLookDirection.y +
+        referenceLookDirection.z * renderedLookDirection.z) /
+        (referenceMagnitude * renderedMagnitude)
+    )
+  );
+}
+
+function createRenderedCameraOffsetTelemetrySnapshot(
+  referenceCameraSnapshot: MetaverseHudSnapshot["camera"],
+  renderedCamera: Camera
+): RenderedCameraOffsetTelemetrySnapshot {
+  renderedCamera.getWorldDirection(renderedCameraLookDirectionScratch);
+
+  return Object.freeze({
+    lookAngleRadians: resolveLookAngleRadians(
+      referenceCameraSnapshot.lookDirection,
+      renderedCameraLookDirectionScratch
+    ),
+    planarMagnitudeMeters: Math.hypot(
+      renderedCamera.position.x - referenceCameraSnapshot.position.x,
+      renderedCamera.position.z - referenceCameraSnapshot.position.z
+    ),
+    verticalMagnitudeMeters: Math.abs(
+      renderedCamera.position.y - referenceCameraSnapshot.position.y
+    )
+  });
+}
+
+function createRenderedCameraOffsetDeltaTelemetrySnapshot(
+  previousOffset: RenderedCameraOffsetTelemetrySnapshot,
+  nextOffset: RenderedCameraOffsetTelemetrySnapshot
+): RenderedCameraOffsetTelemetrySnapshot {
+  return Object.freeze({
+    lookAngleRadians: Math.abs(
+      nextOffset.lookAngleRadians - previousOffset.lookAngleRadians
+    ),
+    planarMagnitudeMeters: Math.abs(
+      nextOffset.planarMagnitudeMeters - previousOffset.planarMagnitudeMeters
+    ),
+    verticalMagnitudeMeters: Math.abs(
+      nextOffset.verticalMagnitudeMeters - previousOffset.verticalMagnitudeMeters
+    )
+  });
+}
+
+function isLargeRenderedCameraSnap(
+  offsetDeltaSnapshot: RenderedCameraOffsetTelemetrySnapshot
+): boolean {
+  return (
+    offsetDeltaSnapshot.planarMagnitudeMeters >=
+      metaverseRenderedCameraLargeSnapPlanarThresholdMeters ||
+    offsetDeltaSnapshot.verticalMagnitudeMeters >=
+      metaverseRenderedCameraLargeSnapVerticalThresholdMeters ||
+    offsetDeltaSnapshot.lookAngleRadians >=
+      metaverseRenderedCameraLargeSnapLookAngleThresholdRadians
+  );
+}
+
 function freezeTelemetrySnapshot(
   snapshot: MetaverseTelemetrySnapshot
 ): MetaverseTelemetrySnapshot {
@@ -247,12 +368,89 @@ function freezeTelemetrySnapshot(
     }),
     worldSnapshot: Object.freeze({
       bufferDepth: snapshot.worldSnapshot.bufferDepth,
+      cameraPresentation: Object.freeze({
+        renderedOffset: Object.freeze({
+          lookAngleRadians:
+            snapshot.worldSnapshot.cameraPresentation.renderedOffset
+              .lookAngleRadians,
+          planarMagnitudeMeters:
+            snapshot.worldSnapshot.cameraPresentation.renderedOffset
+              .planarMagnitudeMeters,
+          verticalMagnitudeMeters:
+            snapshot.worldSnapshot.cameraPresentation.renderedOffset
+              .verticalMagnitudeMeters
+        }),
+        renderedSnap: Object.freeze({
+          lastAgeMs:
+            snapshot.worldSnapshot.cameraPresentation.renderedSnap.lastAgeMs,
+          maxLookAngleRadiansPast5Seconds:
+            snapshot.worldSnapshot.cameraPresentation.renderedSnap
+              .maxLookAngleRadiansPast5Seconds,
+          maxPlanarMagnitudeMetersPast5Seconds:
+            snapshot.worldSnapshot.cameraPresentation.renderedSnap
+              .maxPlanarMagnitudeMetersPast5Seconds,
+          maxVerticalMagnitudeMetersPast5Seconds:
+            snapshot.worldSnapshot.cameraPresentation.renderedSnap
+              .maxVerticalMagnitudeMetersPast5Seconds,
+          recentCountPast5Seconds:
+            snapshot.worldSnapshot.cameraPresentation.renderedSnap
+              .recentCountPast5Seconds,
+          totalCount:
+            snapshot.worldSnapshot.cameraPresentation.renderedSnap.totalCount
+        })
+      }),
       clockOffsetEstimateMs: snapshot.worldSnapshot.clockOffsetEstimateMs,
       currentExtrapolationMs: snapshot.worldSnapshot.currentExtrapolationMs,
       datagramSendFailureCount:
         snapshot.worldSnapshot.datagramSendFailureCount,
       extrapolatedFramePercent:
         snapshot.worldSnapshot.extrapolatedFramePercent,
+      localReconciliation: Object.freeze({
+        ackedAuthoritativeReplayCorrectionCount:
+          snapshot.worldSnapshot.localReconciliation
+            .ackedAuthoritativeReplayCorrectionCount,
+        lastLocalAuthorityPoseCorrectionDetail: Object.freeze({
+          authoritativeGrounded:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail.authoritativeGrounded,
+          localGrounded:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail.localGrounded,
+          planarMagnitudeMeters:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail.planarMagnitudeMeters,
+          verticalMagnitudeMeters:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail.verticalMagnitudeMeters
+        }),
+        lastLocalAuthorityPoseCorrectionReason:
+          snapshot.worldSnapshot.localReconciliation
+            .lastLocalAuthorityPoseCorrectionReason,
+        lastCorrectionSource:
+          snapshot.worldSnapshot.localReconciliation.lastCorrectionSource,
+        lastCorrectionAgeMs:
+          snapshot.worldSnapshot.localReconciliation.lastCorrectionAgeMs,
+        localAuthorityPoseCorrectionCount:
+          snapshot.worldSnapshot.localReconciliation
+            .localAuthorityPoseCorrectionCount,
+        mountedVehicleAuthorityCorrectionCount:
+          snapshot.worldSnapshot.localReconciliation
+            .mountedVehicleAuthorityCorrectionCount,
+        recentAckedAuthoritativeReplayCorrectionCountPast5Seconds:
+          snapshot.worldSnapshot.localReconciliation
+            .recentAckedAuthoritativeReplayCorrectionCountPast5Seconds,
+        recentCorrectionCountPast5Seconds:
+          snapshot.worldSnapshot.localReconciliation
+            .recentCorrectionCountPast5Seconds,
+        recentLocalAuthorityPoseCorrectionCountPast5Seconds:
+          snapshot.worldSnapshot.localReconciliation
+            .recentLocalAuthorityPoseCorrectionCountPast5Seconds,
+        recentMountedVehicleAuthorityCorrectionCountPast5Seconds:
+          snapshot.worldSnapshot.localReconciliation
+            .recentMountedVehicleAuthorityCorrectionCountPast5Seconds,
+        totalCorrectionCount:
+          snapshot.worldSnapshot.localReconciliation.totalCorrectionCount
+      }),
       localReconciliationCorrectionCount:
         snapshot.worldSnapshot.localReconciliationCorrectionCount,
       shoreline: Object.freeze({
@@ -275,6 +473,32 @@ function freezeTelemetrySnapshot(
           correctionVerticalMagnitudeMeters:
             snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
               .correctionVerticalMagnitudeMeters,
+          jumpAuthorityState:
+            snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
+              .jumpAuthorityState,
+          jumpDebug: Object.freeze({
+            groundedBodyJumpReady:
+              snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
+                .jumpDebug.groundedBodyJumpReady,
+            pendingJumpActionSequence:
+              snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
+                .jumpDebug.pendingJumpActionSequence,
+            pendingJumpBufferAgeMs:
+              snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
+                .jumpDebug.pendingJumpBufferAgeMs,
+            resolvedJumpActionSequence:
+              snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
+                .jumpDebug.resolvedJumpActionSequence,
+            resolvedJumpActionState:
+              snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
+                .jumpDebug.resolvedJumpActionState,
+            surfaceJumpSupported:
+              snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
+                .jumpDebug.surfaceJumpSupported,
+            supported:
+              snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
+                .jumpDebug.supported
+          }),
           lastProcessedInputSequence:
             snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
               .lastProcessedInputSequence,
@@ -286,42 +510,112 @@ function freezeTelemetrySnapshot(
               .locomotionMode,
           position: freezeOptionalVector3Snapshot(
             snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer.position
-          )
+          ),
+          traversalAuthority: Object.freeze({
+            currentActionKind:
+              snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
+                .traversalAuthority.currentActionKind,
+            currentActionPhase:
+              snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
+                .traversalAuthority.currentActionPhase,
+            currentActionSequence:
+              snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
+                .traversalAuthority.currentActionSequence,
+            lastConsumedActionSequence:
+              snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
+                .traversalAuthority.lastConsumedActionSequence,
+            lastRejectedActionReason:
+              snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
+                .traversalAuthority.lastRejectedActionReason,
+            lastRejectedActionSequence:
+              snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
+                .traversalAuthority.lastRejectedActionSequence,
+            phaseStartedAtTick:
+              snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
+                .traversalAuthority.phaseStartedAtTick
+          }),
+          surfaceRouting: Object.freeze({
+            blockerOverlap:
+              snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
+                .surfaceRouting.blockerOverlap,
+            decisionReason:
+              snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
+                .surfaceRouting.decisionReason,
+            resolvedSupportHeightMeters:
+              snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
+                .surfaceRouting.resolvedSupportHeightMeters,
+            stepSupportedProbeCount:
+              snapshot.worldSnapshot.shoreline.authoritativeLocalPlayer
+                .surfaceRouting.stepSupportedProbeCount
+          })
         }),
         issuedTraversalIntent:
           snapshot.worldSnapshot.shoreline.issuedTraversalIntent === null
             ? null
             : Object.freeze({
-                boost:
-                  snapshot.worldSnapshot.shoreline.issuedTraversalIntent.boost,
+                actionIntent:
+                  snapshot.worldSnapshot.shoreline.issuedTraversalIntent
+                    .actionIntent,
+                bodyControl:
+                  snapshot.worldSnapshot.shoreline.issuedTraversalIntent
+                    .bodyControl,
                 inputSequence:
                   snapshot.worldSnapshot.shoreline.issuedTraversalIntent
                     .inputSequence,
-                jump:
-                  snapshot.worldSnapshot.shoreline.issuedTraversalIntent.jump,
                 locomotionMode:
                   snapshot.worldSnapshot.shoreline.issuedTraversalIntent
                     .locomotionMode,
-                moveAxis:
-                  snapshot.worldSnapshot.shoreline.issuedTraversalIntent
-                    .moveAxis,
-                strafeAxis:
-                  snapshot.worldSnapshot.shoreline.issuedTraversalIntent
-                    .strafeAxis,
-                yawAxis:
-                  snapshot.worldSnapshot.shoreline.issuedTraversalIntent.yawAxis
               }),
         local: Object.freeze({
           autostepHeightMeters:
             snapshot.worldSnapshot.shoreline.local.autostepHeightMeters,
           blockerOverlap: snapshot.worldSnapshot.shoreline.local.blockerOverlap,
           decisionReason: snapshot.worldSnapshot.shoreline.local.decisionReason,
+          jumpDebug: Object.freeze({
+            groundedBodyGrounded:
+              snapshot.worldSnapshot.shoreline.local.jumpDebug
+                .groundedBodyGrounded,
+            groundedBodyJumpReady:
+              snapshot.worldSnapshot.shoreline.local.jumpDebug
+                .groundedBodyJumpReady,
+            surfaceJumpSupported:
+              snapshot.worldSnapshot.shoreline.local.jumpDebug
+                .surfaceJumpSupported,
+            supported:
+              snapshot.worldSnapshot.shoreline.local.jumpDebug.supported,
+            verticalSpeedUnitsPerSecond:
+              snapshot.worldSnapshot.shoreline.local.jumpDebug
+                .verticalSpeedUnitsPerSecond
+          }),
           locomotionMode:
             snapshot.worldSnapshot.shoreline.local.locomotionMode,
           resolvedSupportHeightMeters:
             snapshot.worldSnapshot.shoreline.local.resolvedSupportHeightMeters,
           stepSupportedProbeCount:
-            snapshot.worldSnapshot.shoreline.local.stepSupportedProbeCount
+            snapshot.worldSnapshot.shoreline.local.stepSupportedProbeCount,
+          traversalAuthority: Object.freeze({
+            currentActionKind:
+              snapshot.worldSnapshot.shoreline.local.traversalAuthority
+                .currentActionKind,
+            currentActionPhase:
+              snapshot.worldSnapshot.shoreline.local.traversalAuthority
+                .currentActionPhase,
+            currentActionSequence:
+              snapshot.worldSnapshot.shoreline.local.traversalAuthority
+                .currentActionSequence,
+            lastConsumedActionSequence:
+              snapshot.worldSnapshot.shoreline.local.traversalAuthority
+                .lastConsumedActionSequence,
+            lastRejectedActionReason:
+              snapshot.worldSnapshot.shoreline.local.traversalAuthority
+                .lastRejectedActionReason,
+            lastRejectedActionSequence:
+              snapshot.worldSnapshot.shoreline.local.traversalAuthority
+                .lastRejectedActionSequence,
+            phaseStartedAtTick:
+              snapshot.worldSnapshot.shoreline.local.traversalAuthority
+                .phaseStartedAtTick
+          })
         })
       }),
       latestSimulationAgeMs: snapshot.worldSnapshot.latestSimulationAgeMs,
@@ -374,11 +668,20 @@ export class WebGpuMetaverseRuntime {
   #focusedPortal: FocusedExperiencePortalSnapshot | null = null;
   #hudSnapshot: MetaverseHudSnapshot;
   #lastFrameAtMs: number | null = null;
+  #lastLocalReconciliationAtMs: number | null = null;
+  #lastObservedLocalReconciliationTotalCount = 0;
+  #lastRenderedCameraOffsetSnapshot: RenderedCameraOffsetTelemetrySnapshot | null =
+    null;
+  #lastRenderedCameraSnapAtMs: number | null = null;
   #lastUiUpdateAtMs = Number.NEGATIVE_INFINITY;
   #mountedEnvironment: MountedEnvironmentSnapshot | null = null;
   #mountedEnvironmentAuthorityMismatchKey: string | null = null;
   #mountedEnvironmentAuthorityMismatchSinceMs: number | null = null;
+  #recentLocalReconciliationEvents: LocalReconciliationEventSnapshot[] = [];
+  #recentRenderedCameraOffsetDeltaEvents: RenderedCameraOffsetDeltaEventSnapshot[] =
+    [];
   #renderer: MetaverseRendererHost | null = null;
+  #renderedCameraSnapCount = 0;
   #runtimeInputInstalled = false;
   #runtimeEpoch = 0;
   #requestAnimationFrame: typeof globalThis.requestAnimationFrame;
@@ -485,15 +788,18 @@ export class WebGpuMetaverseRuntime {
         dependencies.createMetaversePresenceClient ?? null,
       localPlayerIdentity: dependencies.localPlayerIdentity ?? null,
       onPresenceUpdate: () => {
-        this.#syncOrPublishRuntimeState(true);
+        this.#remoteWorldRuntime.syncConnection(this.#presenceRuntime.isJoined);
+        this.#publishRuntimeHudSnapshot(false);
       }
     });
     this.#remoteWorldRuntime = new MetaverseRemoteWorldRuntime({
       createMetaverseWorldClient:
         dependencies.createMetaverseWorldClient ?? null,
       localPlayerIdentity: dependencies.localPlayerIdentity ?? null,
+      maxAckedReplayHorizonMs:
+        metaverseLocalAuthorityReconciliationConfig.maxAckedReplayHorizonMs,
       onRemoteWorldUpdate: () => {
-        this.#syncOrPublishRuntimeState(true);
+        this.#publishRuntimeHudSnapshot(false);
       },
       readWallClockMs: this.#readWallClockMs,
       samplingConfig: metaverseRemoteWorldSamplingConfig
@@ -762,6 +1068,10 @@ export class WebGpuMetaverseRuntime {
     this.#frameDeltaMs = 0;
     this.#frameRate = 0;
     this.#lastFrameAtMs = null;
+    this.#lastLocalReconciliationAtMs = null;
+    this.#lastObservedLocalReconciliationTotalCount = 0;
+    this.#lastRenderedCameraOffsetSnapshot = null;
+    this.#lastRenderedCameraSnapAtMs = null;
     this.#lastUiUpdateAtMs = Number.NEGATIVE_INFINITY;
     this.#focusedMountable = null;
     this.#focusedPortal = null;
@@ -771,7 +1081,10 @@ export class WebGpuMetaverseRuntime {
     this.#bootCinematicStartedAtMs = null;
     this.#mountedEnvironment = null;
     this.#resetMountedEnvironmentAuthorityMismatch();
+    this.#recentLocalReconciliationEvents = [];
+    this.#recentRenderedCameraOffsetDeltaEvents = [];
     this.#renderedFrameCount = 0;
+    this.#renderedCameraSnapCount = 0;
     this.#runtimeInputInstalled = false;
     this.#environmentPhysicsRuntime.dispose();
     this.#presenceRuntime.dispose();
@@ -838,8 +1151,17 @@ export class WebGpuMetaverseRuntime {
     const movementInput = bootCinematicActive
       ? neutralMetaverseFlightInputSnapshot
       : this.#flightInputRuntime.readSnapshot();
+    const issuedTraversalFacingSnapshot = this.#traversalRuntime.cameraSnapshot;
+    this.#traversalRuntime.syncIssuedTraversalIntentSnapshot(
+      this.#remoteWorldRuntime.previewLocalTraversalIntent(
+        movementInput,
+        issuedTraversalFacingSnapshot,
+        this.#traversalRuntime.locomotionMode
+      )
+    );
     this.#traversalRuntime.advance(movementInput, deltaSeconds);
     this.#syncLocalPlayerAuthorityFromWorldSnapshots();
+    this.#trackLocalReconciliationTelemetry(nowMs);
     const cameraSnapshot = this.#traversalRuntime.cameraSnapshot;
     this.#mountedEnvironment = this.#traversalRuntime.mountedEnvironmentSnapshot;
     this.#presenceRuntime.syncPresencePose(
@@ -848,14 +1170,21 @@ export class WebGpuMetaverseRuntime {
       this.#traversalRuntime.locomotionMode,
       this.#mountedEnvironment
     );
-    this.#remoteWorldRuntime.syncLocalPlayerLook(cameraSnapshot);
+    if (this.#traversalRuntime.locomotionMode === "mounted") {
+      this.#remoteWorldRuntime.syncLocalPlayerLook(cameraSnapshot);
+    } else {
+      this.#remoteWorldRuntime.syncLocalPlayerLook(null);
+    }
     this.#remoteWorldRuntime.syncLocalDriverVehicleControl(
       this.#traversalRuntime.routedDriverVehicleControlIntentSnapshot
     );
     this.#environmentPhysicsRuntime.syncPushableBodyPresentations();
-    this.#remoteWorldRuntime.syncLocalTraversalIntent(
-      movementInput,
-      this.#traversalRuntime.locomotionMode
+    this.#traversalRuntime.syncIssuedTraversalIntentSnapshot(
+      this.#remoteWorldRuntime.syncLocalTraversalIntent(
+        movementInput,
+        cameraSnapshot,
+        this.#traversalRuntime.locomotionMode
+      )
     );
     const liveFocusedPortal = resolveFocusedPortalSnapshot(
       cameraSnapshot,
@@ -892,6 +1221,10 @@ export class WebGpuMetaverseRuntime {
         : this.#traversalRuntime.characterPresentationSnapshot,
       remoteCharacterPresentations,
       this.#mountedEnvironment
+    );
+    this.#trackRenderedCameraPresentationTelemetry(
+      nowMs,
+      presentationCameraSnapshot
     );
 
     this.#environmentPhysicsRuntime.syncDebugPresentation();
@@ -1033,17 +1366,53 @@ export class WebGpuMetaverseRuntime {
       return;
     }
 
-    const authoritativeLocalPlayerSnapshot =
-      this.#remoteWorldRuntime.readFreshAckedAuthoritativeLocalPlayerPoseForReconciliation(
+    const latestTraversalIntent =
+      this.#remoteWorldRuntime.latestPlayerTraversalIntentSnapshot;
+    const latestIssuedJumpActionSequence =
+      latestTraversalIntent?.actionIntent?.kind === "jump"
+        ? latestTraversalIntent.actionIntent.sequence
+        : 0;
+    const latestAckedAuthoritativeLocalPlayerSnapshot =
+      this.#remoteWorldRuntime.readFreshAckedAuthoritativeLocalPlayerSnapshot(
         metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
       );
 
-    if (authoritativeLocalPlayerSnapshot === null) {
+    if (
+      !shouldPreferAckedTraversalReplay(
+        latestTraversalIntent,
+        latestAckedAuthoritativeLocalPlayerSnapshot
+      )
+    ) {
+      const authoritativeLocalPlayerPose =
+        this.#remoteWorldRuntime.consumeFreshAckedAuthoritativeLocalPlayerPoseForReconciliation(
+          metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
+        );
+
+      if (authoritativeLocalPlayerPose === null) {
+        return;
+      }
+
+      this.#traversalRuntime.syncAuthoritativeLocalPlayerPose(
+        authoritativeLocalPlayerPose,
+        latestIssuedJumpActionSequence
+      );
       return;
     }
 
-    this.#traversalRuntime.syncAuthoritativeLocalPlayerPose(
-      authoritativeLocalPlayerSnapshot
+    const authoritativeLocalPlayerReconciliationSample =
+      this.#remoteWorldRuntime.consumeFreshAckedAuthoritativeLocalPlayerReconciliationSample(
+        metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
+      );
+
+    if (authoritativeLocalPlayerReconciliationSample === null) {
+      return;
+    }
+
+    this.#traversalRuntime.reconcileAckedAuthoritativeLocalPlayerPose(
+      authoritativeLocalPlayerReconciliationSample.authoritativePlayerSnapshot,
+      authoritativeLocalPlayerReconciliationSample.extrapolationSeconds,
+      latestTraversalIntent,
+      latestIssuedJumpActionSequence
     );
   }
 
@@ -1131,6 +1500,15 @@ export class WebGpuMetaverseRuntime {
       forceUiUpdate
     );
   }
+
+  #publishRuntimeHudSnapshot(forceUiUpdate: boolean): void {
+    this.#setHudSnapshot(
+      this.#hudSnapshot.lifecycle,
+      this.#hudSnapshot.failureReason,
+      forceUiUpdate
+    );
+  }
+
   #setHudSnapshot(
     lifecycle: MetaverseHudSnapshot["lifecycle"],
     failureReason: string | null,
@@ -1233,6 +1611,18 @@ export class WebGpuMetaverseRuntime {
               localTraversalPose.position.y
           )
         : null;
+    const authoritativeLocalPlayerSurfaceRouting =
+      authoritativeLocalPlayerSnapshot !== null &&
+      (authoritativeLocalPlayerSnapshot.locomotionMode === "grounded" ||
+        authoritativeLocalPlayerSnapshot.locomotionMode === "swim")
+        ? resolveAutomaticSurfaceLocomotionSnapshot(
+            this.#config,
+            this.#environmentPhysicsRuntime.surfaceColliderSnapshots,
+            authoritativeLocalPlayerSnapshot.position,
+            authoritativeLocalPlayerSnapshot.yawRadians,
+            authoritativeLocalPlayerSnapshot.locomotionMode
+          )
+        : null;
 
     return Object.freeze({
       authoritativeCorrection:
@@ -1242,6 +1632,34 @@ export class WebGpuMetaverseRuntime {
           authoritativeLocalPlayerCorrectionPlanarMagnitudeMeters,
         correctionVerticalMagnitudeMeters:
           authoritativeLocalPlayerCorrectionVerticalMagnitudeMeters,
+        jumpAuthorityState:
+          authoritativeLocalPlayerSnapshot?.jumpAuthorityState ?? null,
+        jumpDebug: Object.freeze({
+          groundedBodyJumpReady:
+            authoritativeLocalPlayerSnapshot?.jumpDebug.groundedBodyJumpReady ??
+            null,
+          pendingJumpActionSequence:
+            authoritativeLocalPlayerSnapshot === null
+              ? null
+              : authoritativeLocalPlayerSnapshot.jumpDebug
+                  .pendingJumpActionSequence,
+          pendingJumpBufferAgeMs:
+            authoritativeLocalPlayerSnapshot?.jumpDebug.pendingJumpBufferAgeMs ??
+            null,
+          resolvedJumpActionSequence:
+            authoritativeLocalPlayerSnapshot === null
+              ? null
+              : authoritativeLocalPlayerSnapshot.jumpDebug
+                  .resolvedJumpActionSequence,
+          resolvedJumpActionState:
+            authoritativeLocalPlayerSnapshot?.jumpDebug.resolvedJumpActionState ??
+            null,
+          surfaceJumpSupported:
+            authoritativeLocalPlayerSnapshot?.jumpDebug.surfaceJumpSupported ??
+            null,
+          supported:
+            authoritativeLocalPlayerSnapshot?.jumpDebug.supported ?? null
+        }),
         lastProcessedInputSequence:
           authoritativeLocalPlayerSnapshot?.lastProcessedInputSequence ?? null,
         locomotionMismatch:
@@ -1255,25 +1673,257 @@ export class WebGpuMetaverseRuntime {
                 x: authoritativeLocalPlayerSnapshot.position.x,
                 y: authoritativeLocalPlayerSnapshot.position.y,
                 z: authoritativeLocalPlayerSnapshot.position.z
+              }),
+        traversalAuthority: Object.freeze({
+          currentActionKind:
+            authoritativeLocalPlayerSnapshot?.traversalAuthority
+              .currentActionKind ?? null,
+          currentActionPhase:
+            authoritativeLocalPlayerSnapshot?.traversalAuthority
+              .currentActionPhase ?? null,
+          currentActionSequence:
+            authoritativeLocalPlayerSnapshot === null
+              ? null
+              : authoritativeLocalPlayerSnapshot.traversalAuthority
+                  .currentActionSequence,
+          lastConsumedActionSequence:
+            authoritativeLocalPlayerSnapshot === null
+              ? null
+              : authoritativeLocalPlayerSnapshot.traversalAuthority
+                  .lastConsumedActionSequence,
+          lastRejectedActionReason:
+            authoritativeLocalPlayerSnapshot?.traversalAuthority
+              .lastRejectedActionReason ?? null,
+          lastRejectedActionSequence:
+            authoritativeLocalPlayerSnapshot === null
+              ? null
+              : authoritativeLocalPlayerSnapshot.traversalAuthority
+                  .lastRejectedActionSequence,
+          phaseStartedAtTick:
+            authoritativeLocalPlayerSnapshot === null
+              ? null
+              : authoritativeLocalPlayerSnapshot.traversalAuthority
+                  .phaseStartedAtTick
+        }),
+        surfaceRouting: Object.freeze({
+          blockerOverlap:
+            authoritativeLocalPlayerSurfaceRouting?.debug.blockerOverlap ?? null,
+          decisionReason:
+            authoritativeLocalPlayerSurfaceRouting?.debug.reason ?? null,
+          resolvedSupportHeightMeters:
+            authoritativeLocalPlayerSurfaceRouting?.debug
+              .resolvedSupportHeightMeters ?? null,
+          stepSupportedProbeCount:
+            authoritativeLocalPlayerSurfaceRouting?.debug.stepSupportedProbeCount ??
+            null
               })
       }),
       issuedTraversalIntent:
         issuedTraversalIntent === null
           ? null
           : Object.freeze({
-              boost: issuedTraversalIntent.boost,
+              actionIntent: issuedTraversalIntent.actionIntent,
+              bodyControl: issuedTraversalIntent.bodyControl,
               inputSequence: issuedTraversalIntent.inputSequence,
-              jump: issuedTraversalIntent.jump,
               locomotionMode: issuedTraversalIntent.locomotionMode,
-              moveAxis: issuedTraversalIntent.moveAxis,
-              strafeAxis: issuedTraversalIntent.strafeAxis,
-              yawAxis: issuedTraversalIntent.yawAxis
             }),
       local: this.#traversalRuntime.shorelineLocalTelemetrySnapshot
     });
   }
 
-  #createTelemetrySnapshot(): MetaverseHudSnapshot["telemetry"] {
+  #trackLocalReconciliationTelemetry(nowMs: number): void {
+    const totalCorrectionCount =
+      this.#traversalRuntime.localReconciliationCorrectionCount;
+    const correctionCountDelta =
+      totalCorrectionCount - this.#lastObservedLocalReconciliationTotalCount;
+    const correctionSource =
+      this.#traversalRuntime.lastLocalReconciliationCorrectionSource;
+
+    if (correctionCountDelta > 0 && correctionSource !== "none") {
+      for (let correctionIndex = 0; correctionIndex < correctionCountDelta; correctionIndex += 1) {
+        this.#recentLocalReconciliationEvents.push({
+          atMs: nowMs,
+          source: correctionSource
+        });
+      }
+
+      this.#lastLocalReconciliationAtMs = nowMs;
+    }
+
+    this.#lastObservedLocalReconciliationTotalCount = totalCorrectionCount;
+    this.#pruneRecentLocalReconciliationEvents(nowMs);
+  }
+
+  #pruneRecentLocalReconciliationEvents(nowMs: number): void {
+    const oldestIncludedEventAtMs =
+      nowMs - metaverseRecentLocalReconciliationWindowMs;
+
+    while (
+      this.#recentLocalReconciliationEvents[0]?.atMs !== undefined &&
+      this.#recentLocalReconciliationEvents[0].atMs < oldestIncludedEventAtMs
+    ) {
+      this.#recentLocalReconciliationEvents.shift();
+    }
+  }
+
+  #trackRenderedCameraPresentationTelemetry(
+    nowMs: number,
+    referenceCameraSnapshot: MetaverseHudSnapshot["camera"]
+  ): void {
+    const renderedCameraOffsetSnapshot =
+      createRenderedCameraOffsetTelemetrySnapshot(
+        referenceCameraSnapshot,
+        this.#sceneRuntime.camera
+      );
+
+    if (this.#lastRenderedCameraOffsetSnapshot !== null) {
+      const renderedCameraOffsetDeltaSnapshot =
+        createRenderedCameraOffsetDeltaTelemetrySnapshot(
+          this.#lastRenderedCameraOffsetSnapshot,
+          renderedCameraOffsetSnapshot
+        );
+      const large = isLargeRenderedCameraSnap(
+        renderedCameraOffsetDeltaSnapshot
+      );
+
+      if (
+        renderedCameraOffsetDeltaSnapshot.planarMagnitudeMeters > 0.000001 ||
+        renderedCameraOffsetDeltaSnapshot.verticalMagnitudeMeters > 0.000001 ||
+        renderedCameraOffsetDeltaSnapshot.lookAngleRadians > 0.000001
+      ) {
+        this.#recentRenderedCameraOffsetDeltaEvents.push({
+          atMs: nowMs,
+          large,
+          lookAngleRadians:
+            renderedCameraOffsetDeltaSnapshot.lookAngleRadians,
+          planarMagnitudeMeters:
+            renderedCameraOffsetDeltaSnapshot.planarMagnitudeMeters,
+          verticalMagnitudeMeters:
+            renderedCameraOffsetDeltaSnapshot.verticalMagnitudeMeters
+        });
+      }
+
+      if (large) {
+        this.#renderedCameraSnapCount += 1;
+        this.#lastRenderedCameraSnapAtMs = nowMs;
+      }
+    }
+
+    this.#lastRenderedCameraOffsetSnapshot = renderedCameraOffsetSnapshot;
+    this.#pruneRecentRenderedCameraOffsetDeltaEvents(nowMs);
+  }
+
+  #pruneRecentRenderedCameraOffsetDeltaEvents(nowMs: number): void {
+    const oldestIncludedEventAtMs =
+      nowMs - metaverseRecentLocalReconciliationWindowMs;
+
+    while (
+      this.#recentRenderedCameraOffsetDeltaEvents[0]?.atMs !== undefined &&
+      this.#recentRenderedCameraOffsetDeltaEvents[0].atMs <
+        oldestIncludedEventAtMs
+    ) {
+      this.#recentRenderedCameraOffsetDeltaEvents.shift();
+    }
+  }
+
+  #createLocalReconciliationTelemetrySnapshot(
+    nowMs: number
+  ): MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"] {
+    let recentAckedAuthoritativeReplayCorrectionCountPast5Seconds = 0;
+    let recentLocalAuthorityPoseCorrectionCountPast5Seconds = 0;
+    let recentMountedVehicleAuthorityCorrectionCountPast5Seconds = 0;
+
+    for (const correctionEvent of this.#recentLocalReconciliationEvents) {
+      switch (correctionEvent.source) {
+        case "acked-authority-replay":
+          recentAckedAuthoritativeReplayCorrectionCountPast5Seconds += 1;
+          break;
+        case "local-authority-snap":
+          recentLocalAuthorityPoseCorrectionCountPast5Seconds += 1;
+          break;
+        case "mounted-vehicle-authority":
+          recentMountedVehicleAuthorityCorrectionCountPast5Seconds += 1;
+          break;
+      }
+    }
+
+    return Object.freeze({
+      ackedAuthoritativeReplayCorrectionCount:
+        this.#traversalRuntime.ackedAuthoritativeReplayCorrectionCount,
+      lastLocalAuthorityPoseCorrectionDetail:
+        this.#traversalRuntime.lastLocalAuthorityPoseCorrectionDetail,
+      lastLocalAuthorityPoseCorrectionReason:
+        this.#traversalRuntime.lastLocalAuthorityPoseCorrectionReason,
+      lastCorrectionAgeMs:
+        this.#lastLocalReconciliationAtMs === null
+          ? null
+          : Math.max(0, nowMs - this.#lastLocalReconciliationAtMs),
+      lastCorrectionSource:
+        this.#traversalRuntime.lastLocalReconciliationCorrectionSource,
+      localAuthorityPoseCorrectionCount:
+        this.#traversalRuntime.localAuthorityPoseCorrectionCount,
+      mountedVehicleAuthorityCorrectionCount:
+        this.#traversalRuntime.mountedVehicleAuthorityCorrectionCount,
+      recentAckedAuthoritativeReplayCorrectionCountPast5Seconds,
+      recentCorrectionCountPast5Seconds:
+        this.#recentLocalReconciliationEvents.length,
+      recentLocalAuthorityPoseCorrectionCountPast5Seconds,
+      recentMountedVehicleAuthorityCorrectionCountPast5Seconds,
+      totalCorrectionCount: this.#traversalRuntime.localReconciliationCorrectionCount
+    });
+  }
+
+  #createCameraPresentationTelemetrySnapshot(
+    nowMs: number
+  ): MetaverseTelemetrySnapshot["worldSnapshot"]["cameraPresentation"] {
+    let maxLookAngleRadiansPast5Seconds = 0;
+    let maxPlanarMagnitudeMetersPast5Seconds = 0;
+    let maxVerticalMagnitudeMetersPast5Seconds = 0;
+    let recentCountPast5Seconds = 0;
+
+    for (const offsetDeltaEvent of this.#recentRenderedCameraOffsetDeltaEvents) {
+      maxLookAngleRadiansPast5Seconds = Math.max(
+        maxLookAngleRadiansPast5Seconds,
+        offsetDeltaEvent.lookAngleRadians
+      );
+      maxPlanarMagnitudeMetersPast5Seconds = Math.max(
+        maxPlanarMagnitudeMetersPast5Seconds,
+        offsetDeltaEvent.planarMagnitudeMeters
+      );
+      maxVerticalMagnitudeMetersPast5Seconds = Math.max(
+        maxVerticalMagnitudeMetersPast5Seconds,
+        offsetDeltaEvent.verticalMagnitudeMeters
+      );
+
+      if (offsetDeltaEvent.large) {
+        recentCountPast5Seconds += 1;
+      }
+    }
+
+    return Object.freeze({
+      renderedOffset:
+        this.#lastRenderedCameraOffsetSnapshot ??
+        Object.freeze({
+          lookAngleRadians: 0,
+          planarMagnitudeMeters: 0,
+          verticalMagnitudeMeters: 0
+        }),
+      renderedSnap: Object.freeze({
+        lastAgeMs:
+          this.#lastRenderedCameraSnapAtMs === null
+            ? null
+            : Math.max(0, nowMs - this.#lastRenderedCameraSnapAtMs),
+        maxLookAngleRadiansPast5Seconds,
+        maxPlanarMagnitudeMetersPast5Seconds,
+        maxVerticalMagnitudeMetersPast5Seconds,
+        recentCountPast5Seconds,
+        totalCount: this.#renderedCameraSnapCount
+      })
+    });
+  }
+
+  #createTelemetrySnapshot(nowMs: number | null = null): MetaverseHudSnapshot["telemetry"] {
+    const resolvedNowMs = nowMs ?? this.#lastFrameAtMs ?? this.#readNowMs();
     const renderInfo = this.#renderer?.info?.render;
     const worldSamplingTelemetry =
       this.#remoteWorldRuntime.samplingTelemetrySnapshot;
@@ -1303,12 +1953,16 @@ export class WebGpuMetaverseRuntime {
       },
       worldSnapshot: {
         bufferDepth: worldSamplingTelemetry.bufferDepth,
+        cameraPresentation:
+          this.#createCameraPresentationTelemetrySnapshot(resolvedNowMs),
         clockOffsetEstimateMs: worldSamplingTelemetry.clockOffsetEstimateMs,
         currentExtrapolationMs: worldSamplingTelemetry.currentExtrapolationMs,
         datagramSendFailureCount:
           worldSamplingTelemetry.datagramSendFailureCount,
         extrapolatedFramePercent:
           worldSamplingTelemetry.extrapolatedFramePercent,
+        localReconciliation:
+          this.#createLocalReconciliationTelemetrySnapshot(resolvedNowMs),
         localReconciliationCorrectionCount:
           this.#traversalRuntime.localReconciliationCorrectionCount,
         shoreline: this.#createShorelineTelemetrySnapshot(),

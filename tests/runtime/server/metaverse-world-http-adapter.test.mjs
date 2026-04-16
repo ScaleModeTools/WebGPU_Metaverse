@@ -195,13 +195,22 @@ test("MetaverseWorldHttpAdapter accepts traversal intent commands on the explici
   const commandBody = JSON.stringify(
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
-        boost: false,
+        actionIntent: {
+          kind: "none",
+          pressed: false
+        },
+        bodyControl: {
+          boost: false,
+          moveAxis: 1,
+          strafeAxis: 0,
+          turnAxis: 0.25
+        },
+        facing: {
+          pitchRadians: 0,
+          yawRadians: 0.25
+        },
         inputSequence: 2,
-        jump: false,
         locomotionMode: "grounded",
-        moveAxis: 1,
-        strafeAxis: 0,
-        yawAxis: 0.25
       },
       playerId
     })
@@ -233,9 +242,8 @@ test("MetaverseWorldHttpAdapter accepts traversal intent commands on the explici
 
   const worldSnapshot = runtime.readWorldSnapshot(200, playerId);
 
-  assert.equal(worldSnapshot.players[0]?.animationVocabulary, "swim");
   assert.equal(worldSnapshot.players[0]?.lastProcessedInputSequence, 2);
-  assert.equal(worldSnapshot.players[0]?.locomotionMode, "swim");
+  assert.equal(worldSnapshot.players[0]?.locomotionMode, "grounded");
   assert.equal(worldSnapshot.players[0]?.stateSequence, 2);
 });
 
@@ -253,9 +261,17 @@ test("MetaverseWorldHttpAdapter accepts explicit player look commands on the exp
       characterId: "metaverse-mannequin-v1",
       playerId,
       pose: {
+        locomotionMode: "mounted",
+        mountedOccupancy: {
+          environmentAssetId: "metaverse-hub-skiff-v1",
+          entryId: null,
+          occupancyKind: "seat",
+          occupantRole: "passenger",
+          seatId: "port-bench-seat"
+        },
         position: {
           x: 0,
-          y: 1.62,
+          y: 0.4,
           z: 24
         },
         stateSequence: 1,

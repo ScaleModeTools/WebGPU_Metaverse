@@ -9,10 +9,12 @@ import {
   createMetaverseSyncPlayerLookIntentCommand,
   createMetaverseSyncMountedOccupancyCommand,
   createMetaverseSyncPlayerTraversalIntentCommand,
+  metaverseRealtimePlayerTraversalActionKindIds,
   metaversePlayerTraversalIntentLocomotionModeIds,
   metaversePresenceMountedOccupancyKinds,
   metaversePresenceMountedOccupantRoleIds,
   type MetaversePlayerTraversalIntentLocomotionModeId,
+  type MetaverseRealtimePlayerTraversalActionKindId,
   type MetaversePresenceMountedOccupancySnapshotInput,
   type MetaversePresenceMountedOccupancyKind,
   type MetaversePresenceMountedOccupantRoleId,
@@ -244,11 +246,6 @@ function parseWorldTraversalIntent(intentBody: Record<string, unknown>) {
   }
 
   return {
-    ...(intentBody.boost === undefined
-      ? {}
-      : {
-          boost: readBooleanField(intentBody.boost, "intent.boost")
-        }),
     ...(intentBody.inputSequence === undefined
       ? {}
       : {
@@ -257,39 +254,117 @@ function parseWorldTraversalIntent(intentBody: Record<string, unknown>) {
             "intent.inputSequence"
           )
         }),
-    ...(intentBody.jumpActionSequence === undefined
-      ? {}
-      : {
-          jumpActionSequence: readNumberField(
-            intentBody.jumpActionSequence,
-            "intent.jumpActionSequence"
-          )
-        }),
-    ...(intentBody.jump === undefined
-      ? {}
-      : {
-          jump: readBooleanField(intentBody.jump, "intent.jump")
-        }),
     ...(locomotionMode === undefined
       ? {}
       : {
           locomotionMode:
             locomotionMode as MetaversePlayerTraversalIntentLocomotionModeId
         }),
-    ...(intentBody.moveAxis === undefined
+    ...(intentBody.bodyControl === undefined
       ? {}
       : {
-          moveAxis: readNumberField(intentBody.moveAxis, "intent.moveAxis")
+          bodyControl: parseWorldTraversalBodyControl(
+            intentBody.bodyControl,
+            "intent.bodyControl"
+          )
         }),
-    ...(intentBody.strafeAxis === undefined
+    ...(intentBody.facing === undefined
       ? {}
       : {
-          strafeAxis: readNumberField(intentBody.strafeAxis, "intent.strafeAxis")
+          facing: parseWorldLookIntent(
+            readRecordField(intentBody.facing, "intent.facing")
+          )
         }),
-    ...(intentBody.yawAxis === undefined
+    ...(intentBody.actionIntent === undefined
       ? {}
       : {
-          yawAxis: readNumberField(intentBody.yawAxis, "intent.yawAxis")
+          actionIntent: parseWorldTraversalActionIntent(
+            intentBody.actionIntent,
+            "intent.actionIntent"
+          )
+        })
+  };
+}
+
+function parseWorldTraversalBodyControl(
+  bodyControlBody: unknown,
+  fieldName: string
+) {
+  if (
+    typeof bodyControlBody !== "object" ||
+    bodyControlBody === null ||
+    Array.isArray(bodyControlBody)
+  ) {
+    throw new Error(`${fieldName} must be an object.`);
+  }
+
+  const bodyControl = bodyControlBody as Record<string, unknown>;
+
+  return {
+    ...(bodyControl.boost === undefined
+      ? {}
+      : {
+          boost: readBooleanField(bodyControl.boost, `${fieldName}.boost`)
+        }),
+    ...(bodyControl.moveAxis === undefined
+      ? {}
+      : {
+          moveAxis: readNumberField(bodyControl.moveAxis, `${fieldName}.moveAxis`)
+        }),
+    ...(bodyControl.strafeAxis === undefined
+      ? {}
+      : {
+          strafeAxis: readNumberField(
+            bodyControl.strafeAxis,
+            `${fieldName}.strafeAxis`
+          )
+        }),
+    ...(bodyControl.turnAxis === undefined
+      ? {}
+      : {
+          turnAxis: readNumberField(bodyControl.turnAxis, `${fieldName}.turnAxis`)
+        })
+  };
+}
+
+function parseWorldTraversalActionIntent(
+  actionIntentBody: unknown,
+  fieldName: string
+) {
+  if (
+    typeof actionIntentBody !== "object" ||
+    actionIntentBody === null ||
+    Array.isArray(actionIntentBody)
+  ) {
+    throw new Error(`${fieldName} must be an object.`);
+  }
+
+  const actionIntent = actionIntentBody as Record<string, unknown>;
+  const actionKind =
+    actionIntent.kind === undefined
+      ? undefined
+      : readStringField(actionIntent.kind, `${fieldName}.kind`);
+
+  if (
+    actionKind !== undefined &&
+    !metaverseRealtimePlayerTraversalActionKindIds.includes(actionKind as never)
+  ) {
+    throw new Error(`Unsupported ${fieldName}.kind: ${actionKind}`);
+  }
+
+  return {
+    ...(actionKind === undefined
+      ? {}
+      : { kind: actionKind as MetaverseRealtimePlayerTraversalActionKindId }),
+    ...(actionIntent.pressed === undefined
+      ? {}
+      : {
+          pressed: readBooleanField(actionIntent.pressed, `${fieldName}.pressed`)
+        }),
+    ...(actionIntent.sequence === undefined
+      ? {}
+      : {
+          sequence: readNumberField(actionIntent.sequence, `${fieldName}.sequence`)
         })
   };
 }

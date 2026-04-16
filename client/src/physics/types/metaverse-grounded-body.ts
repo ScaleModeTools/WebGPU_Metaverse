@@ -14,7 +14,9 @@ export interface PhysicsQuaternionSnapshot {
 export interface MetaverseGroundedBodyIntentSnapshot {
   readonly boost: boolean;
   readonly jump: boolean;
+  readonly jumpReadyOverride?: boolean;
   readonly moveAxis: number;
+  readonly snapToGroundOverrideEnabled?: boolean;
   readonly strafeAxis: number;
   readonly turnAxis: number;
 }
@@ -45,6 +47,7 @@ export interface MetaverseGroundedBodyConfig {
   readonly dragCurveExponent: number;
   readonly eyeHeightMeters: number;
   readonly gravityUnitsPerSecond: number;
+  readonly jumpGroundContactGraceSeconds?: number;
   readonly jumpImpulseUnitsPerSecond: number;
   readonly maxSlopeClimbAngleRadians: number;
   readonly minSlopeSlideAngleRadians: number;

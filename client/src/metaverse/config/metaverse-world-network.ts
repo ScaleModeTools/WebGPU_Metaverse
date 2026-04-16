@@ -1,4 +1,7 @@
-import { createMilliseconds } from "@webgpu-metaverse/shared";
+import {
+  createMilliseconds,
+  metaverseRealtimeWorldCadenceConfig
+} from "@webgpu-metaverse/shared";
 
 import {
   MetaverseWorldClient,
@@ -113,9 +116,12 @@ export const metaverseWorldPath = "/metaverse/world" as const;
 export const metaverseWorldCommandPath = "/metaverse/world/commands" as const;
 
 export const metaverseWorldCadenceConfig = Object.freeze({
-  authoritativeTickIntervalMs: createMilliseconds(33),
-  defaultCommandIntervalMs: createMilliseconds(33),
-  defaultPollIntervalMs: createMilliseconds(33),
+  authoritativeTickIntervalMs:
+    metaverseRealtimeWorldCadenceConfig.authoritativeTickIntervalMs,
+  defaultCommandIntervalMs:
+    metaverseRealtimeWorldCadenceConfig.authoritativeTickIntervalMs,
+  defaultPollIntervalMs:
+    metaverseRealtimeWorldCadenceConfig.authoritativeTickIntervalMs,
   localAuthoritativeFreshnessMaxAgeMs: 66,
   maxBufferedSnapshots: 6,
   maxExtrapolationMs: 66,
@@ -147,6 +153,7 @@ export const metaverseRemoteWorldSamplingConfig = Object.freeze({
 });
 
 export const metaverseLocalAuthorityReconciliationConfig = Object.freeze({
+  maxAckedReplayHorizonMs: 400,
   maxAuthoritativeSnapshotAgeMs:
     metaverseWorldCadenceConfig.localAuthoritativeFreshnessMaxAgeMs,
   mountedOccupancyMismatchHoldMs: 50

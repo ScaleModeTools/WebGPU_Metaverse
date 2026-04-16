@@ -4,7 +4,7 @@ import test, { after, before } from "node:test";
 import {
   createMetaverseSyncDriverVehicleControlCommand,
   createMetaverseSyncPlayerLookIntentCommand,
-  createMetaverseSyncPlayerTraversalIntentCommand,
+  createMetaverseSyncPlayerTraversalIntentCommand as createRawMetaverseSyncPlayerTraversalIntentCommand,
   createMetaversePlayerId,
   createMetaverseRealtimeWorldEvent,
   createMetaverseVehicleId,
@@ -27,6 +27,99 @@ function flushAsyncWork() {
   return new Promise((resolve) => {
     setImmediate(resolve);
   });
+}
+
+function createMetaverseSyncPlayerTraversalIntentCommand(input) {
+  const nextIntent = input.intent;
+  const normalizedFacing =
+    nextIntent.facing ?? {
+      pitchRadians: nextIntent.pitchRadians ?? 0,
+      yawRadians:
+        nextIntent.bodyYawRadians ??
+        nextIntent.lookYawRadians ??
+        nextIntent.yawRadians ??
+        0
+    };
+
+  if ("bodyControl" in nextIntent || "actionIntent" in nextIntent) {
+    return createRawMetaverseSyncPlayerTraversalIntentCommand({
+      ...input,
+      intent: {
+        ...nextIntent,
+        facing: normalizedFacing
+      }
+    });
+  }
+
+  return createRawMetaverseSyncPlayerTraversalIntentCommand({
+    ...input,
+    intent: {
+      actionIntent: {
+        kind:
+          nextIntent.jump === true || (nextIntent.jumpActionSequence ?? 0) > 0
+            ? "jump"
+            : "none",
+        pressed: nextIntent.jump === true,
+        ...(nextIntent.jumpActionSequence === undefined
+          ? {}
+          : { sequence: nextIntent.jumpActionSequence })
+      },
+      bodyControl: {
+        boost: nextIntent.boost,
+        moveAxis: nextIntent.moveAxis,
+        strafeAxis: nextIntent.strafeAxis,
+        turnAxis: nextIntent.yawAxis
+      },
+      facing: normalizedFacing,
+      inputSequence: nextIntent.inputSequence,
+      locomotionMode: nextIntent.locomotionMode
+    }
+  });
+}
+
+function createTraversalIntentInput(input) {
+  if ("bodyControl" in input || "actionIntent" in input) {
+    return {
+      ...input,
+      facing: input.facing ?? {
+        pitchRadians: input.pitchRadians ?? 0,
+        yawRadians:
+          input.bodyYawRadians ??
+          input.lookYawRadians ??
+          input.yawRadians ??
+          0
+      }
+    };
+  }
+
+  return {
+    actionIntent: {
+      kind:
+        input.jump === true || (input.jumpActionSequence ?? 0) > 0
+          ? "jump"
+          : "none",
+      pressed: input.jump === true,
+      ...(input.jumpActionSequence === undefined
+        ? {}
+        : { sequence: input.jumpActionSequence })
+    },
+    bodyControl: {
+      boost: input.boost,
+      moveAxis: input.moveAxis,
+      strafeAxis: input.strafeAxis,
+      turnAxis: input.yawAxis
+    },
+    facing: {
+      pitchRadians: input.pitchRadians ?? 0,
+      yawRadians:
+        input.bodyYawRadians ??
+        input.lookYawRadians ??
+        input.yawRadians ??
+        0
+    },
+    inputSequence: input.inputSequence,
+    locomotionMode: input.locomotionMode
+  };
 }
 
 function createDeferredPromise() {
@@ -93,6 +186,8 @@ function createWorldEvent({
   snapshotSequence,
   currentTick,
   lastProcessedInputSequence = snapshotSequence,
+  authoritativeJumpActionSequence = 0,
+  lastProcessedLookSequence = 0,
   serverTimeMs,
   tickIntervalMs = 50,
   vehicleX = 8
@@ -106,21 +201,29 @@ function createWorldEvent({
       players: [
         {
           characterId: "metaverse-mannequin-v1",
-          linearVelocity: {
-            x: 0,
-            y: 0,
-            z: 0
-          },
-          locomotionMode: "grounded",
-          playerId,
-          position: {
-            x: 0,
-            y: 1.62,
-            z: 24
-          },
-          lastProcessedInputSequence,
-          stateSequence: snapshotSequence,
-          username: "Harbor Pilot",
+        linearVelocity: {
+          x: 0,
+          y: 0,
+          z: 0
+        },
+        jumpDebug:
+          authoritativeJumpActionSequence > 0
+            ? {
+                resolvedJumpActionSequence: authoritativeJumpActionSequence,
+                resolvedJumpActionState: "accepted"
+              }
+            : undefined,
+        locomotionMode: "grounded",
+        playerId,
+        position: {
+          x: 0,
+          y: 1.62,
+          z: 24
+        },
+        lastProcessedInputSequence,
+        lastProcessedLookSequence,
+        stateSequence: snapshotSequence,
+        username: "Harbor Pilot",
           yawRadians: 0
         }
       ],
@@ -149,6 +252,20 @@ function createWorldEvent({
           yawRadians: 0
         }
       ]
+    }
+  });
+}
+
+function createPassiveSnapshotStreamTransport(initialWorldEvent = null) {
+  return Object.freeze({
+    subscribeWorldSnapshots(_playerId, handlers) {
+      if (initialWorldEvent !== null) {
+        handlers.onWorldEvent(initialWorldEvent);
+      }
+
+      return Object.freeze({
+        close() {}
+      });
     }
   });
 }
@@ -286,6 +403,7 @@ test("MetaverseWorldClient serializes reliable mounted occupancy commands throug
   let sendCommandCount = 0;
   const initialWorldEvent = createWorldEvent({
     currentTick: 10,
+    lastProcessedInputSequence: 0,
     playerId,
     serverTimeMs: 10_000,
     snapshotSequence: 1,
@@ -427,6 +545,7 @@ test("MetaverseWorldClient coalesces latest driver vehicle control commands behi
   const sentCommands = [];
   const initialWorldEvent = createWorldEvent({
     currentTick: 10,
+    lastProcessedInputSequence: 0,
     playerId,
     serverTimeMs: 10_000,
     snapshotSequence: 1,
@@ -451,6 +570,7 @@ test("MetaverseWorldClient coalesces latest driver vehicle control commands behi
           return initialWorldEvent;
         }
       },
+      readWallClockMs: () => 0,
       clearTimeout() {},
       setTimeout(callback, delay) {
         scheduledTasks.push({
@@ -517,6 +637,7 @@ test("MetaverseWorldClient prefers driver-control datagrams over reliable comman
   const sentDatagrams = [];
   const initialWorldEvent = createWorldEvent({
     currentTick: 10,
+    lastProcessedInputSequence: 0,
     playerId,
     serverTimeMs: 10_000,
     snapshotSequence: 1,
@@ -745,11 +866,12 @@ test("MetaverseWorldClient prefers latest-wins traversal intent datagrams over r
 
   assert.notEqual(playerId, null);
 
-  const scheduledTasks = [];
+  const scheduler = createManualTimerScheduler();
   const sentCommands = [];
   const sentDatagrams = [];
   const initialWorldEvent = createWorldEvent({
     currentTick: 10,
+    lastProcessedInputSequence: 0,
     playerId,
     serverTimeMs: 10_000,
     snapshotSequence: 1,
@@ -771,6 +893,9 @@ test("MetaverseWorldClient prefers latest-wins traversal intent datagrams over r
           sentDatagrams.push(command);
         }
       },
+      snapshotStreamTransport: createPassiveSnapshotStreamTransport(
+        initialWorldEvent
+      ),
       transport: {
         async pollWorldSnapshot() {
           return initialWorldEvent;
@@ -780,44 +905,40 @@ test("MetaverseWorldClient prefers latest-wins traversal intent datagrams over r
           return initialWorldEvent;
         }
       },
-      clearTimeout() {},
-      setTimeout(callback, delay) {
-        scheduledTasks.push({
-          callback,
-          delay
-        });
-        return scheduledTasks.length;
-      }
+      readWallClockMs: () => 0,
+      clearTimeout: scheduler.clearTimeout,
+      setTimeout: scheduler.setTimeout
     }
   );
 
   await client.ensureConnected(playerId);
   client.syncPlayerTraversalIntent({
-    intent: {
+    intent: createTraversalIntentInput({
       boost: false,
       jump: false,
       locomotionMode: "grounded",
       moveAxis: 0.5,
       strafeAxis: 0.2,
       yawAxis: 0.3
-    },
+    }),
     playerId
   });
   client.syncPlayerTraversalIntent({
-    intent: {
+    intent: createTraversalIntentInput({
       boost: true,
       jump: false,
       locomotionMode: "grounded",
       moveAxis: 1,
       strafeAxis: 0,
       yawAxis: 0.5
-    },
+    }),
     playerId,
   });
 
   assert.equal(client.latestPlayerInputSequence, 2);
+  assert.equal(scheduler.pendingTasks.at(-1)?.delay, 0);
 
-  scheduledTasks.pop()?.callback();
+  scheduler.runNext(0);
   await flushAsyncWork();
 
   assert.equal(sentDatagrams.length, 1);
@@ -843,100 +964,9 @@ test("MetaverseWorldClient prefers latest-wins traversal intent datagrams over r
   );
 });
 
-test("MetaverseWorldClient prefers latest-wins player look datagrams over reliable commands when available", async () => {
+test("MetaverseWorldClient flushes traversal intent changes immediately and resends until authority acks the latest input sequence", async () => {
   const { MetaverseWorldClient } = await clientLoader.load("/src/network/index.ts");
-  const playerId = createMetaversePlayerId("look-harbor-pilot-1");
-
-  assert.notEqual(playerId, null);
-
-  const scheduledTasks = [];
-  const sentCommands = [];
-  const sentDatagrams = [];
-  const initialWorldEvent = createWorldEvent({
-    currentTick: 10,
-    playerId,
-    serverTimeMs: 10_000,
-    snapshotSequence: 1,
-    vehicleX: 8
-  });
-  const client = new MetaverseWorldClient(
-    {
-      defaultCommandIntervalMs: createMilliseconds(50),
-      defaultPollIntervalMs: createMilliseconds(50),
-      maxBufferedSnapshots: 2,
-      serverOrigin: "http://127.0.0.1:3210",
-      worldCommandPath: "/metaverse/world/commands",
-      worldPath: "/metaverse/world"
-    },
-    {
-      latestWinsDatagramTransport: {
-        async sendDriverVehicleControlDatagram() {},
-        async sendPlayerLookIntentDatagram(command) {
-          sentDatagrams.push(command);
-        },
-        async sendPlayerTraversalIntentDatagram() {}
-      },
-      transport: {
-        async pollWorldSnapshot() {
-          return initialWorldEvent;
-        },
-        async sendCommand(command) {
-          sentCommands.push(command);
-          return initialWorldEvent;
-        }
-      },
-      clearTimeout() {},
-      setTimeout(callback, delay) {
-        scheduledTasks.push({
-          callback,
-          delay
-        });
-        return scheduledTasks.length;
-      }
-    }
-  );
-
-  await client.ensureConnected(playerId);
-  client.syncPlayerLookIntent({
-    lookIntent: {
-      pitchRadians: -0.2,
-      yawRadians: 0.8
-    },
-    playerId
-  });
-  client.syncPlayerLookIntent({
-    lookIntent: {
-      pitchRadians: -0.35,
-      yawRadians: 1.1
-    },
-    playerId
-  });
-
-  scheduledTasks.pop()?.callback();
-  await flushAsyncWork();
-
-  assert.equal(sentDatagrams.length, 1);
-  assert.equal(sentCommands.length, 0);
-  assert.deepEqual(
-    sentDatagrams[0],
-    createMetaverseSyncPlayerLookIntentCommand({
-      lookIntent: {
-        pitchRadians: -0.35,
-        yawRadians: 1.1
-      },
-      lookSequence: 2,
-      playerId
-    })
-  );
-  assert.equal(
-    client.telemetrySnapshot.playerTraversalInputDatagramSendFailureCount,
-    0
-  );
-});
-
-test("MetaverseWorldClient preserves a fast jump tap as an acknowledged edge through latest-wins traversal compression", async () => {
-  const { MetaverseWorldClient } = await clientLoader.load("/src/network/index.ts");
-  const playerId = createMetaversePlayerId("harbor-pilot-1");
+  const playerId = createMetaversePlayerId("turn-window-harbor-pilot-1");
 
   assert.notEqual(playerId, null);
 
@@ -944,6 +974,7 @@ test("MetaverseWorldClient preserves a fast jump tap as an acknowledged edge thr
   const sentDatagrams = [];
   const initialWorldEvent = createWorldEvent({
     currentTick: 10,
+    lastProcessedInputSequence: 0,
     playerId,
     serverTimeMs: 10_000,
     snapshotSequence: 1,
@@ -965,6 +996,9 @@ test("MetaverseWorldClient preserves a fast jump tap as an acknowledged edge thr
           sentDatagrams.push(command);
         }
       },
+      snapshotStreamTransport: createPassiveSnapshotStreamTransport(
+        initialWorldEvent
+      ),
       transport: {
         async pollWorldSnapshot() {
           return initialWorldEvent;
@@ -981,29 +1015,500 @@ test("MetaverseWorldClient preserves a fast jump tap as an acknowledged edge thr
   await client.ensureConnected(playerId);
 
   client.syncPlayerTraversalIntent({
-    intent: {
+    intent: createTraversalIntentInput({
+      boost: false,
+      jump: false,
+      locomotionMode: "grounded",
+      moveAxis: 1,
+      strafeAxis: 0,
+      yawAxis: 0.25
+    }),
+    playerId
+  });
+
+  assert.equal(scheduler.pendingTasks.length, 1);
+  assert.equal(scheduler.pendingTasks[0]?.delay, 0);
+
+  scheduler.runNext(0);
+  await flushAsyncWork();
+
+  assert.equal(sentDatagrams.length, 1);
+  assert.equal(sentDatagrams[0]?.intent.inputSequence, 1);
+  assert.equal(scheduler.pendingTasks.at(-1)?.delay, 50);
+
+  scheduler.runNext(50);
+  await flushAsyncWork();
+
+  assert.equal(sentDatagrams.length, 2);
+  assert.equal(sentDatagrams[1]?.intent.inputSequence, 1);
+});
+
+test("MetaverseWorldClient keeps pure facing turns on the traversal lane without advancing movement ack sequence", async () => {
+  const { MetaverseWorldClient } = await clientLoader.load("/src/network/index.ts");
+  const playerId = createMetaversePlayerId("turn-in-place-harbor-pilot-1");
+
+  assert.notEqual(playerId, null);
+
+  const scheduler = createManualTimerScheduler();
+  const sentDatagrams = [];
+  const initialWorldEvent = createWorldEvent({
+    currentTick: 10,
+    lastProcessedInputSequence: 0,
+    playerId,
+    serverTimeMs: 10_000,
+    snapshotSequence: 1,
+    vehicleX: 8
+  });
+  const client = new MetaverseWorldClient(
+    {
+      defaultCommandIntervalMs: createMilliseconds(50),
+      defaultPollIntervalMs: createMilliseconds(50),
+      maxBufferedSnapshots: 2,
+      serverOrigin: "http://127.0.0.1:3210",
+      worldCommandPath: "/metaverse/world/commands",
+      worldPath: "/metaverse/world"
+    },
+    {
+      latestWinsDatagramTransport: {
+        async sendDriverVehicleControlDatagram() {},
+        async sendPlayerTraversalIntentDatagram(command) {
+          sentDatagrams.push(command);
+        }
+      },
+      snapshotStreamTransport: createPassiveSnapshotStreamTransport(
+        initialWorldEvent
+      ),
+      transport: {
+        async pollWorldSnapshot() {
+          return initialWorldEvent;
+        },
+        async sendCommand() {
+          return initialWorldEvent;
+        }
+      },
+      clearTimeout: scheduler.clearTimeout,
+      setTimeout: scheduler.setTimeout
+    }
+  );
+
+  await client.ensureConnected(playerId);
+
+  client.syncPlayerTraversalIntent({
+    intent: createTraversalIntentInput({
+      boost: false,
+      jump: false,
+      locomotionMode: "grounded",
+      moveAxis: 0,
+      strafeAxis: 0,
+      yawAxis: 0,
+      yawRadians: 0
+    }),
+    playerId
+  });
+  client.syncPlayerTraversalIntent({
+    intent: createTraversalIntentInput({
+      boost: false,
+      jump: false,
+      locomotionMode: "grounded",
+      moveAxis: 0,
+      strafeAxis: 0,
+      yawAxis: 0.25,
+      yawRadians: Math.PI * 0.5
+    }),
+    playerId
+  });
+
+  assert.equal(client.latestPlayerInputSequence, 1);
+  assert.equal(client.latestPlayerTraversalIntentSnapshot?.inputSequence, 1);
+  assert.equal(
+    client.latestPlayerTraversalIntentSnapshot?.facing.yawRadians,
+    Math.PI * 0.5
+  );
+
+  scheduler.runNext(0);
+  await flushAsyncWork();
+
+  assert.equal(sentDatagrams.length, 1);
+  assert.equal(sentDatagrams[0]?.intent.inputSequence, 1);
+  assert.equal(sentDatagrams[0]?.intent.bodyControl.turnAxis, 0.25);
+  assert.equal(sentDatagrams[0]?.intent.facing.yawRadians, Math.PI * 0.5);
+});
+
+test("MetaverseWorldClient prefers latest-wins player look datagrams over reliable commands when available", async () => {
+  const { MetaverseWorldClient } = await clientLoader.load("/src/network/index.ts");
+  const playerId = createMetaversePlayerId("look-harbor-pilot-1");
+
+  assert.notEqual(playerId, null);
+
+  const scheduler = createManualTimerScheduler();
+  const sentCommands = [];
+  const sentDatagrams = [];
+  const initialWorldEvent = createWorldEvent({
+    currentTick: 10,
+    lastProcessedLookSequence: 0,
+    playerId,
+    serverTimeMs: 10_000,
+    snapshotSequence: 1,
+    vehicleX: 8
+  });
+  let snapshotStreamHandlers = null;
+  const client = new MetaverseWorldClient(
+    {
+      defaultCommandIntervalMs: createMilliseconds(50),
+      defaultPollIntervalMs: createMilliseconds(50),
+      maxBufferedSnapshots: 2,
+      serverOrigin: "http://127.0.0.1:3210",
+      worldCommandPath: "/metaverse/world/commands",
+      worldPath: "/metaverse/world"
+    },
+    {
+      latestWinsDatagramTransport: {
+        async sendDriverVehicleControlDatagram() {},
+        async sendPlayerLookIntentDatagram(command) {
+          sentDatagrams.push(command);
+        },
+        async sendPlayerTraversalIntentDatagram() {}
+      },
+      snapshotStreamTransport: {
+        subscribeWorldSnapshots(_playerId, handlers) {
+          snapshotStreamHandlers = handlers;
+          handlers.onWorldEvent(initialWorldEvent);
+          return Object.freeze({
+            close() {}
+          });
+        }
+      },
+      transport: {
+        async pollWorldSnapshot() {
+          return initialWorldEvent;
+        },
+        async sendCommand(command) {
+          sentCommands.push(command);
+          return initialWorldEvent;
+        }
+      },
+      clearTimeout: scheduler.clearTimeout,
+      setTimeout: scheduler.setTimeout
+    }
+  );
+
+  await client.ensureConnected(playerId);
+  client.syncPlayerLookIntent({
+    lookIntent: {
+      pitchRadians: -0.2,
+      yawRadians: 0.8
+    },
+    playerId
+  });
+  client.syncPlayerLookIntent({
+    lookIntent: {
+      pitchRadians: -0.35,
+      yawRadians: 1.1
+    },
+    playerId
+  });
+
+  assert.equal(scheduler.pendingTasks.length, 1);
+  assert.equal(scheduler.pendingTasks[0]?.delay, 0);
+
+  scheduler.runNext(0);
+  await flushAsyncWork();
+
+  assert.equal(sentDatagrams.length, 1);
+  assert.equal(sentCommands.length, 0);
+  assert.deepEqual(
+    sentDatagrams[0],
+    createMetaverseSyncPlayerLookIntentCommand({
+      lookIntent: {
+        pitchRadians: -0.35,
+        yawRadians: 1.1
+      },
+      lookSequence: 2,
+      playerId
+    })
+  );
+  assert.equal(scheduler.pendingTasks.length, 1);
+  assert.equal(scheduler.pendingTasks[0]?.delay, 50);
+
+  scheduler.runNext(50);
+  await flushAsyncWork();
+
+  assert.equal(sentDatagrams.length, 2);
+  assert.equal(sentDatagrams[1]?.lookSequence, 2);
+
+  snapshotStreamHandlers?.onWorldEvent(
+    createWorldEvent({
+      currentTick: 11,
+      lastProcessedLookSequence: 2,
+      playerId,
+      serverTimeMs: 10_050,
+      snapshotSequence: 2,
+      vehicleX: 8
+    })
+  );
+
+  assert.equal(sentDatagrams.length, 2);
+  assert.equal(
+    client.telemetrySnapshot.playerTraversalInputDatagramSendFailureCount,
+    0
+  );
+});
+
+test("MetaverseWorldClient rebases queued traversal jump and look sequences above authoritative reconnect state", async () => {
+  const { MetaverseWorldClient } = await clientLoader.load("/src/network/index.ts");
+  const playerId = createMetaversePlayerId("reconnect-sequence-harbor-pilot-1");
+
+  assert.notEqual(playerId, null);
+
+  const scheduler = createManualTimerScheduler();
+  const sentLookDatagrams = [];
+  const sentTraversalDatagrams = [];
+  const initialWorldEvent = createWorldEvent({
+    currentTick: 10,
+    lastProcessedInputSequence: 734,
+    authoritativeJumpActionSequence: 52,
+    lastProcessedLookSequence: 418,
+    playerId,
+    serverTimeMs: 10_000,
+    snapshotSequence: 1,
+    vehicleX: 8
+  });
+  const client = new MetaverseWorldClient(
+    {
+      defaultCommandIntervalMs: createMilliseconds(50),
+      defaultPollIntervalMs: createMilliseconds(50),
+      maxBufferedSnapshots: 2,
+      serverOrigin: "http://127.0.0.1:3210",
+      worldCommandPath: "/metaverse/world/commands",
+      worldPath: "/metaverse/world"
+    },
+    {
+      latestWinsDatagramTransport: {
+        async sendDriverVehicleControlDatagram() {},
+        async sendPlayerLookIntentDatagram(command) {
+          sentLookDatagrams.push(command);
+        },
+        async sendPlayerTraversalIntentDatagram(command) {
+          sentTraversalDatagrams.push(command);
+        }
+      },
+      snapshotStreamTransport: createPassiveSnapshotStreamTransport(
+        initialWorldEvent
+      ),
+      transport: {
+        async pollWorldSnapshot() {
+          return initialWorldEvent;
+        },
+        async sendCommand() {
+          return initialWorldEvent;
+        }
+      },
+      clearTimeout: scheduler.clearTimeout,
+      setTimeout: scheduler.setTimeout
+    }
+  );
+
+  client.syncPlayerTraversalIntent({
+    intent: createTraversalIntentInput({
+      boost: false,
+      jump: true,
+      locomotionMode: "grounded",
+      moveAxis: 1,
+      strafeAxis: 0,
+      yawAxis: 0
+    }),
+    playerId
+  });
+  client.syncPlayerLookIntent({
+    lookIntent: {
+      pitchRadians: -0.2,
+      yawRadians: 0.8
+    },
+    playerId
+  });
+
+  assert.equal(client.latestPlayerInputSequence, 1);
+
+  await client.ensureConnected(playerId);
+
+  assert.equal(client.latestPlayerInputSequence, 735);
+  assert.equal(scheduler.pendingTasks.length, 2);
+  assert.equal(
+    scheduler.pendingTasks.every((task) => task.delay === 0),
+    true
+  );
+
+  scheduler.runNext(0);
+  await flushAsyncWork();
+  scheduler.runNext(0);
+  await flushAsyncWork();
+
+  assert.equal(sentTraversalDatagrams.length, 1);
+  assert.equal(sentTraversalDatagrams[0]?.intent.inputSequence, 735);
+  assert.equal(
+    sentTraversalDatagrams[0]?.intent.actionIntent.sequence,
+    53
+  );
+  assert.equal(sentLookDatagrams.length, 1);
+  assert.equal(sentLookDatagrams[0]?.lookSequence, 419);
+});
+
+test("MetaverseWorldClient preserves transient driver yaw across latest-wins send compression", async () => {
+  const { MetaverseWorldClient } = await clientLoader.load("/src/network/index.ts");
+  const playerId = createMetaversePlayerId("driver-turn-window-harbor-pilot-1");
+
+  assert.notEqual(playerId, null);
+
+  const scheduler = createManualTimerScheduler();
+  const sentDatagrams = [];
+  const initialWorldEvent = createWorldEvent({
+    currentTick: 10,
+    lastProcessedInputSequence: 0,
+    playerId,
+    serverTimeMs: 10_000,
+    snapshotSequence: 1,
+    vehicleX: 8
+  });
+  let nowMs = 0;
+  const client = new MetaverseWorldClient(
+    {
+      defaultCommandIntervalMs: createMilliseconds(50),
+      defaultPollIntervalMs: createMilliseconds(50),
+      maxBufferedSnapshots: 2,
+      serverOrigin: "http://127.0.0.1:3210",
+      worldCommandPath: "/metaverse/world/commands",
+      worldPath: "/metaverse/world"
+    },
+    {
+      latestWinsDatagramTransport: {
+        async sendDriverVehicleControlDatagram(command) {
+          sentDatagrams.push(command);
+        },
+        async sendPlayerTraversalIntentDatagram() {}
+      },
+      readWallClockMs: () => nowMs,
+      transport: {
+        async pollWorldSnapshot() {
+          return initialWorldEvent;
+        },
+        async sendCommand() {
+          return initialWorldEvent;
+        }
+      },
+      clearTimeout: scheduler.clearTimeout,
+      setTimeout: scheduler.setTimeout
+    }
+  );
+
+  await client.ensureConnected(playerId);
+
+  client.syncDriverVehicleControl({
+    controlIntent: {
+      boost: false,
+      environmentAssetId: "metaverse-hub-skiff-v1",
+      moveAxis: 0,
+      strafeAxis: 0,
+      yawAxis: 0.25
+    },
+    playerId
+  });
+  nowMs = 48;
+  client.syncDriverVehicleControl({
+    controlIntent: {
+      boost: false,
+      environmentAssetId: "metaverse-hub-skiff-v1",
+      moveAxis: 0,
+      strafeAxis: 0,
+      yawAxis: 0
+    },
+    playerId
+  });
+  nowMs = 50;
+
+  scheduler.runNext(50);
+  await flushAsyncWork();
+
+  assert.equal(sentDatagrams.length, 1);
+  assert.equal(sentDatagrams[0]?.controlSequence, 2);
+  assert.ok(
+    Math.abs((sentDatagrams[0]?.controlIntent.yawAxis ?? 0) - 0.24) < 0.000001
+  );
+});
+
+test("MetaverseWorldClient preserves a fast jump tap as an acknowledged edge through latest-wins traversal compression", async () => {
+  const { MetaverseWorldClient } = await clientLoader.load("/src/network/index.ts");
+  const playerId = createMetaversePlayerId("harbor-pilot-1");
+
+  assert.notEqual(playerId, null);
+
+  const scheduler = createManualTimerScheduler();
+  const sentDatagrams = [];
+  const initialWorldEvent = createWorldEvent({
+    currentTick: 10,
+    lastProcessedInputSequence: 0,
+    playerId,
+    serverTimeMs: 10_000,
+    snapshotSequence: 1,
+    vehicleX: 8
+  });
+  const client = new MetaverseWorldClient(
+    {
+      defaultCommandIntervalMs: createMilliseconds(50),
+      defaultPollIntervalMs: createMilliseconds(50),
+      maxBufferedSnapshots: 2,
+      serverOrigin: "http://127.0.0.1:3210",
+      worldCommandPath: "/metaverse/world/commands",
+      worldPath: "/metaverse/world"
+    },
+    {
+      latestWinsDatagramTransport: {
+        async sendDriverVehicleControlDatagram() {},
+        async sendPlayerTraversalIntentDatagram(command) {
+          sentDatagrams.push(command);
+        }
+      },
+      snapshotStreamTransport: createPassiveSnapshotStreamTransport(
+        initialWorldEvent
+      ),
+      transport: {
+        async pollWorldSnapshot() {
+          return initialWorldEvent;
+        },
+        async sendCommand() {
+          return initialWorldEvent;
+        }
+      },
+      clearTimeout: scheduler.clearTimeout,
+      setTimeout: scheduler.setTimeout
+    }
+  );
+
+  await client.ensureConnected(playerId);
+
+  client.syncPlayerTraversalIntent({
+    intent: createTraversalIntentInput({
       boost: false,
       jump: true,
       locomotionMode: "grounded",
       moveAxis: 0,
       strafeAxis: 0,
       yawAxis: 0
-    },
+    }),
     playerId
   });
   client.syncPlayerTraversalIntent({
-    intent: {
+    intent: createTraversalIntentInput({
       boost: false,
       jump: false,
       locomotionMode: "grounded",
       moveAxis: 0,
       strafeAxis: 0,
       yawAxis: 0
-    },
+    }),
     playerId
   });
 
-  scheduler.runNext(50);
+  scheduler.runNext(0);
   await flushAsyncWork();
 
   assert.equal(sentDatagrams.length, 1);
@@ -1037,6 +1542,7 @@ test("MetaverseWorldClient falls back to reliable commands after a traversal int
   let remainingDatagramFailures = 1;
   const initialWorldEvent = createWorldEvent({
     currentTick: 10,
+    lastProcessedInputSequence: 0,
     playerId,
     serverTimeMs: 10_000,
     snapshotSequence: 1,
@@ -1062,6 +1568,9 @@ test("MetaverseWorldClient falls back to reliable commands after a traversal int
           }
         }
       },
+      snapshotStreamTransport: createPassiveSnapshotStreamTransport(
+        initialWorldEvent
+      ),
       transport: {
         async pollWorldSnapshot() {
           return initialWorldEvent;
@@ -1079,20 +1588,20 @@ test("MetaverseWorldClient falls back to reliable commands after a traversal int
   await client.ensureConnected(playerId);
 
   client.syncPlayerTraversalIntent({
-    intent: {
+    intent: createTraversalIntentInput({
       boost: false,
       jump: false,
       locomotionMode: "grounded",
       moveAxis: 1,
       strafeAxis: 0,
       yawAxis: 0.5
-    },
+    }),
     playerId,
   });
 
   assert.equal(client.latestPlayerInputSequence, 1);
 
-  scheduler.runNext(50);
+  scheduler.runNext(0);
   await flushAsyncWork();
 
   assert.equal(sentDatagrams.length, 1);
@@ -1117,18 +1626,18 @@ test("MetaverseWorldClient falls back to reliable commands after a traversal int
   assert.equal(client.driverVehicleControlDatagramStatusSnapshot.state, "active");
 
   client.syncPlayerTraversalIntent({
-    intent: {
+    intent: createTraversalIntentInput({
       boost: false,
       jump: false,
       locomotionMode: "grounded",
       moveAxis: 0,
       strafeAxis: 0,
       yawAxis: 0.45
-    },
+    }),
     playerId,
   });
 
-  scheduler.runNext(50);
+  scheduler.runNext(0);
   await flushAsyncWork();
 
   assert.equal(sentDatagrams.length, 2);

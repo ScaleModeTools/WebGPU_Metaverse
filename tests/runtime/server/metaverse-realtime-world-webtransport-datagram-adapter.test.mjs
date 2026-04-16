@@ -161,13 +161,22 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards traversal-inten
     createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram({
       command: createMetaverseSyncPlayerTraversalIntentCommand({
         intent: {
-          boost: false,
+          actionIntent: {
+            kind: "none",
+            pressed: false
+          },
+          bodyControl: {
+            boost: false,
+            moveAxis: 1,
+            strafeAxis: 0,
+            turnAxis: 0
+          },
+          facing: {
+            pitchRadians: 0,
+            yawRadians: 0
+          },
           inputSequence: 2,
-          jump: false,
           locomotionMode: "grounded",
-          moveAxis: 1,
-          strafeAxis: 0,
-          yawAxis: 0
         },
         playerId
       })
@@ -178,11 +187,10 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards traversal-inten
 
   const worldSnapshot = runtime.readWorldSnapshot(200, playerId);
 
-  assert.equal(worldSnapshot.players[0]?.animationVocabulary, "swim");
   assert.equal(worldSnapshot.players[0]?.lastProcessedInputSequence, 2);
-  assert.equal(worldSnapshot.players[0]?.locomotionMode, "swim");
+  assert.equal(worldSnapshot.players[0]?.locomotionMode, "grounded");
   assert.equal(worldSnapshot.players[0]?.stateSequence, 2);
-  assert.equal(worldSnapshot.players[0]?.position.y, 0);
+  assert.ok((worldSnapshot.players[0]?.position.y ?? 0) > 0);
   assert.ok((worldSnapshot.players[0]?.position.z ?? 24) < 24);
 });
 
@@ -206,9 +214,17 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards player-look dat
       characterId: "metaverse-mannequin-v1",
       playerId,
       pose: {
+        locomotionMode: "mounted",
+        mountedOccupancy: {
+          environmentAssetId: "metaverse-hub-skiff-v1",
+          entryId: null,
+          occupancyKind: "seat",
+          occupantRole: "passenger",
+          seatId: "port-bench-seat"
+        },
         position: {
           x: 0,
-          y: 1.62,
+          y: 0.4,
           z: 24
         },
         stateSequence: 1,

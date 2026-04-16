@@ -66,7 +66,9 @@ test("createMetaverseRealtimeWorldLatestWinsWebTransportDatagramTransport sends 
         jump: false,
         locomotionMode: "grounded",
         moveAxis: 1,
+        pitchRadians: -0.25,
         strafeAxis: 0.25,
+        yawRadians: 1.1,
         yawAxis: 0.5
       },
       playerId

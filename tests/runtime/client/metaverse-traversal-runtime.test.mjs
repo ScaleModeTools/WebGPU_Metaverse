@@ -1,9 +1,18 @@
 import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
+import {
+  metaverseRealtimeWorldCadenceConfig,
+  resolveMetaverseTraversalAuthoritySnapshotInput
+} from "@webgpu-metaverse/shared";
+
 import { createClientModuleLoader } from "./load-client-module.mjs";
 
 let clientLoader;
+const groundedFixedStepSeconds =
+  Number(metaverseRealtimeWorldCadenceConfig.authoritativeTickIntervalMs) /
+  1_000;
+const localPlayerRoutineLandingCorrectionThresholdMeters = 0.08;
 
 function createMountedEnvironmentSnapshot(
   environmentAssetId,
@@ -130,12 +139,18 @@ class FakeCharacterController {
       capsuleRadius,
       filterPredicate
     );
+    const effectiveProposedSurfaceY =
+      this.snapDistance === 0 &&
+      proposedSurfaceY !== null &&
+      proposedSurfaceY < currentFootY
+        ? null
+        : proposedSurfaceY;
 
     if (
-      proposedSurfaceY !== null &&
-      proposedSurfaceY - currentFootY > this.snapDistance &&
+      effectiveProposedSurfaceY !== null &&
+      effectiveProposedSurfaceY - currentFootY > this.snapDistance &&
       (!this.autostepEnabled ||
-        proposedSurfaceY - currentFootY > this.stepHeight)
+        effectiveProposedSurfaceY - currentFootY > this.stepHeight)
     ) {
       nextCenterX = currentTranslation.x;
       nextCenterZ = currentTranslation.z;
@@ -147,23 +162,29 @@ class FakeCharacterController {
       capsuleRadius,
       filterPredicate
     );
+    const effectiveSupportingSurfaceY =
+      this.snapDistance === 0 &&
+      supportingSurfaceY !== null &&
+      supportingSurfaceY < currentFootY
+        ? null
+        : supportingSurfaceY;
     const desiredFootY = currentFootY + desiredTranslationDelta.y;
     let nextFootY = desiredFootY;
 
-    if (supportingSurfaceY !== null) {
-      if (supportingSurfaceY > currentFootY) {
-        const stepRise = supportingSurfaceY - currentFootY;
+    if (effectiveSupportingSurfaceY !== null) {
+      if (effectiveSupportingSurfaceY > currentFootY) {
+        const stepRise = effectiveSupportingSurfaceY - currentFootY;
 
         if (this.autostepEnabled && stepRise <= this.stepHeight) {
-          nextFootY = supportingSurfaceY;
+          nextFootY = effectiveSupportingSurfaceY;
         }
       }
 
       if (
         desiredTranslationDelta.y <= 0 &&
-        desiredFootY <= supportingSurfaceY + this.snapDistance
+        desiredFootY <= effectiveSupportingSurfaceY + this.snapDistance
       ) {
-        nextFootY = supportingSurfaceY;
+        nextFootY = effectiveSupportingSurfaceY;
       }
     }
 
@@ -185,8 +206,8 @@ class FakeCharacterController {
       blockedPlanarPosition.z - currentTranslation.z
     );
     this.grounded =
-      supportingSurfaceY !== null &&
-      Math.abs(nextFootY - supportingSurfaceY) <= 0.0001;
+      effectiveSupportingSurfaceY !== null &&
+      Math.abs(nextFootY - effectiveSupportingSurfaceY) <= 0.0001;
   }
 
   computedGrounded() {
@@ -268,6 +289,7 @@ class FakeCharacterController {
     const colliderHalfExtentY = collider.bottomOffset;
     const colliderHalfExtentZ =
       collider.payload.radius ?? (collider.payload.halfExtentZ ?? 0);
+    const currentFootY = currentTranslation.y - colliderHalfExtentY;
     const currentBottomY = proposedTranslation.y - colliderHalfExtentY;
     const currentTopY = proposedTranslation.y + collider.topOffset;
 
@@ -290,7 +312,8 @@ class FakeCharacterController {
       if (
         currentTopY <= candidateBottomY ||
         currentBottomY >= candidateTopY ||
-        candidateTopY <= currentBottomY + this.snapDistance
+        candidateTopY <= currentBottomY + this.snapDistance ||
+        candidateTopY <= currentFootY + this.snapDistance
       ) {
         continue;
       }
@@ -392,6 +415,188 @@ function freezeVector3(x, y, z) {
   return Object.freeze({ x, y, z });
 }
 
+function assertApprox(actual, expected, tolerance = 0.000001) {
+  assert.ok(
+    Math.abs(actual - expected) <= tolerance,
+    `expected ${actual} to be within ${tolerance} of ${expected}`
+  );
+}
+
+function assertGroundedBodySnapshotsMatch(leftSnapshot, rightSnapshot) {
+  assert.equal(leftSnapshot.grounded, rightSnapshot.grounded);
+  assert.equal(leftSnapshot.jumpReady, rightSnapshot.jumpReady);
+  assertApprox(leftSnapshot.position.x, rightSnapshot.position.x);
+  assertApprox(leftSnapshot.position.y, rightSnapshot.position.y);
+  assertApprox(leftSnapshot.position.z, rightSnapshot.position.z);
+  assertApprox(
+    leftSnapshot.planarSpeedUnitsPerSecond,
+    rightSnapshot.planarSpeedUnitsPerSecond
+  );
+  assertApprox(
+    leftSnapshot.verticalSpeedUnitsPerSecond,
+    rightSnapshot.verticalSpeedUnitsPerSecond
+  );
+  assertApprox(leftSnapshot.yawRadians, rightSnapshot.yawRadians);
+}
+
+function assertCameraSnapshotsMatch(leftSnapshot, rightSnapshot) {
+  assertApprox(leftSnapshot.position.x, rightSnapshot.position.x);
+  assertApprox(leftSnapshot.position.y, rightSnapshot.position.y);
+  assertApprox(leftSnapshot.position.z, rightSnapshot.position.z);
+  assertApprox(leftSnapshot.pitchRadians, rightSnapshot.pitchRadians);
+  assertApprox(leftSnapshot.yawRadians, rightSnapshot.yawRadians);
+}
+
+function assertLocalTraversalPoseSnapshotsMatch(leftSnapshot, rightSnapshot) {
+  assert.notEqual(leftSnapshot, null);
+  assert.notEqual(rightSnapshot, null);
+  assert.equal(leftSnapshot.locomotionMode, rightSnapshot.locomotionMode);
+  assertApprox(leftSnapshot.position.x, rightSnapshot.position.x);
+  assertApprox(leftSnapshot.position.y, rightSnapshot.position.y);
+  assertApprox(leftSnapshot.position.z, rightSnapshot.position.z);
+  assertApprox(leftSnapshot.yawRadians, rightSnapshot.yawRadians);
+}
+
+function createTraversalAuthoritySnapshot(
+  previousPose,
+  nextPose,
+  groundedBodySnapshot,
+  deltaSeconds
+) {
+  const sanitizedDeltaSeconds = Math.max(deltaSeconds, 0.000001);
+  const jumpAuthorityState =
+    nextPose.locomotionMode === "swim"
+      ? "none"
+      : groundedBodySnapshot.grounded
+        ? "grounded"
+        : groundedBodySnapshot.verticalSpeedUnitsPerSecond > 0.05
+          ? "rising"
+          : "falling";
+
+  return Object.freeze({
+    jumpAuthorityState,
+    linearVelocity: freezeVector3(
+      (nextPose.position.x - previousPose.position.x) / sanitizedDeltaSeconds,
+      (nextPose.position.y - previousPose.position.y) / sanitizedDeltaSeconds,
+      (nextPose.position.z - previousPose.position.z) / sanitizedDeltaSeconds
+    ),
+    locomotionMode: nextPose.locomotionMode,
+    mountedOccupancy: null,
+    position: nextPose.position,
+    traversalAuthority: resolveMetaverseTraversalAuthoritySnapshotInput({
+      currentTick: 0,
+      jumpAuthorityState,
+      locomotionMode: nextPose.locomotionMode,
+      mounted: false,
+      pendingActionKind: "none",
+      pendingActionSequence: 0,
+      resolvedActionKind: "none",
+      resolvedActionSequence: 0,
+      resolvedActionState: "none"
+    }),
+    yawRadians: nextPose.yawRadians
+  });
+}
+
+function createAuthoritativeLocalPlayerPoseSnapshot(input) {
+  const {
+    lastAcceptedJumpActionSequence = 0,
+    lastProcessedJumpActionSequence = 0,
+    pendingJumpActionSequence: pendingJumpActionSequenceOverride = 0,
+    ...authoritativeSnapshot
+  } = input;
+  const mounted =
+    authoritativeSnapshot.mountedOccupancy !== null ||
+    authoritativeSnapshot.locomotionMode === "mounted";
+  const resolvedJumpActionSequence =
+    lastProcessedJumpActionSequence > lastAcceptedJumpActionSequence
+      ? lastProcessedJumpActionSequence
+      : lastAcceptedJumpActionSequence;
+  const resolvedJumpActionState =
+    lastProcessedJumpActionSequence > lastAcceptedJumpActionSequence
+      ? "rejected-buffer-expired"
+      : lastAcceptedJumpActionSequence > 0
+        ? "accepted"
+        : "none";
+  const pendingJumpActionSequence = pendingJumpActionSequenceOverride;
+
+  return Object.freeze({
+    ...authoritativeSnapshot,
+    traversalAuthority:
+      authoritativeSnapshot.traversalAuthority ??
+      resolveMetaverseTraversalAuthoritySnapshotInput({
+        currentTick: 0,
+        jumpAuthorityState: authoritativeSnapshot.jumpAuthorityState,
+        locomotionMode: authoritativeSnapshot.locomotionMode,
+        mounted,
+        pendingActionKind:
+          pendingJumpActionSequence > 0 ? "jump" : "none",
+        pendingActionSequence: pendingJumpActionSequence,
+        resolvedActionKind:
+          resolvedJumpActionSequence > 0 ? "jump" : "none",
+        resolvedActionSequence: resolvedJumpActionSequence,
+        resolvedActionState: resolvedJumpActionState
+      })
+  });
+}
+
+function createTraversalIntentSnapshot(input) {
+  const {
+    boost = false,
+    inputSequence = 0,
+    jump = false,
+    jumpActionSequence = 0,
+    locomotionMode = "grounded",
+    moveAxis = 0,
+    strafeAxis = 0,
+    yawAxis = 0
+  } = input;
+  const resolvedJumpActionSequence =
+    jump === true || jumpActionSequence > 0 ? jumpActionSequence : 0;
+
+  return Object.freeze({
+    actionIntent: Object.freeze({
+      kind: resolvedJumpActionSequence > 0 ? "jump" : "none",
+      pressed: jump === true,
+      sequence: resolvedJumpActionSequence
+    }),
+    bodyControl: Object.freeze({
+      boost,
+      moveAxis,
+      strafeAxis,
+      turnAxis: yawAxis
+    }),
+    inputSequence,
+    locomotionMode
+  });
+}
+
+function syncAuthoritativeLocalPlayerPose(
+  traversalRuntime,
+  authoritativePlayerSnapshot,
+  latestIssuedJumpActionSequence = 0
+) {
+  traversalRuntime.syncAuthoritativeLocalPlayerPose(
+    createAuthoritativeLocalPlayerPoseSnapshot(authoritativePlayerSnapshot),
+    latestIssuedJumpActionSequence
+  );
+}
+
+function reconcileAckedAuthoritativeLocalPlayerPose(
+  traversalRuntime,
+  authoritativePlayerSnapshot,
+  authoritativeReplaySeconds,
+  activeTraversalIntent,
+  latestIssuedJumpActionSequence = 0
+) {
+  traversalRuntime.reconcileAckedAuthoritativeLocalPlayerPose(
+    createAuthoritativeLocalPlayerPoseSnapshot(authoritativePlayerSnapshot),
+    authoritativeReplaySeconds,
+    activeTraversalIntent,
+    latestIssuedJumpActionSequence
+  );
+}
+
 function createMountedAnchorKey(
   environmentAssetId,
   seatId = null,
@@ -481,19 +686,21 @@ async function createTraversalHarness(options = {}) {
 
   await physicsRuntime.init();
 
-  const groundCollider = createGroundColliderConfig(config);
+  if (options.includeGroundCollider !== false) {
+    const groundCollider = createGroundColliderConfig(config);
+    const groundColliderHandle = physicsRuntime.createFixedCuboidCollider(
+      groundCollider.halfExtents,
+      groundCollider.translation
+    );
 
-  const groundColliderHandle = physicsRuntime.createFixedCuboidCollider(
-    groundCollider.halfExtents,
-    groundCollider.translation
-  );
-  colliderMetadataByHandle.set(
-    groundColliderHandle,
-    Object.freeze({
-      ownerEnvironmentAssetId: null,
-      traversalAffordance: "support"
-    })
-  );
+    colliderMetadataByHandle.set(
+      groundColliderHandle,
+      Object.freeze({
+        ownerEnvironmentAssetId: null,
+        traversalAffordance: "support"
+      })
+    );
+  }
 
   for (const collider of surfaceColliderSnapshots) {
     const colliderHandle = physicsRuntime.createFixedCuboidCollider(
@@ -662,6 +869,62 @@ async function createTraversalHarness(options = {}) {
   };
 }
 
+async function createAuthoritativeGroundedSimulationHarness(
+  options = {}
+) {
+  const spawnPosition = options.spawnPosition ?? freezeVector3(0, 0, 24);
+  const spawnYawRadians = options.spawnYawRadians ?? 0;
+  const surfaceColliderSnapshots =
+    options.surfaceColliderSnapshots ??
+    [
+      Object.freeze({
+        halfExtents: freezeVector3(4, 0.2, 20),
+        rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+        translation: freezeVector3(0, -0.1, 24)
+      })
+    ];
+  const [
+    { metaverseRuntimeConfig },
+    { MetaverseGroundedBodyRuntime, RapierPhysicsRuntime }
+  ] = await Promise.all([
+    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
+  const physicsRuntime = createFakePhysicsRuntime(RapierPhysicsRuntime);
+
+  await physicsRuntime.init();
+
+  for (const surfaceColliderSnapshot of surfaceColliderSnapshots) {
+    physicsRuntime.createFixedCuboidCollider(
+      surfaceColliderSnapshot.halfExtents,
+      surfaceColliderSnapshot.translation,
+      surfaceColliderSnapshot.rotation
+    );
+  }
+
+  const groundedBodyRuntime = new MetaverseGroundedBodyRuntime(
+    {
+      ...metaverseRuntimeConfig.groundedBody,
+      spawnPosition,
+      worldRadius: metaverseRuntimeConfig.movement.worldRadius
+    },
+    physicsRuntime
+  );
+
+  await groundedBodyRuntime.init(spawnYawRadians);
+  groundedBodyRuntime.syncAuthoritativeState({
+    grounded: true,
+    linearVelocity: freezeVector3(0, 0, 0),
+    position: spawnPosition,
+    yawRadians: spawnYawRadians
+  });
+
+  return {
+    groundedBodyRuntime,
+    physicsRuntime
+  };
+}
+
 async function createShippedSurfaceColliderSnapshots() {
   const [{ metaverseEnvironmentProofConfig }, { resolvePlacedCuboidColliders }] =
     await Promise.all([
@@ -693,6 +956,7 @@ async function createShippedTraversalHarness() {
         ...metaverseRuntimeConfig.groundedBody
       }
     },
+    includeGroundCollider: false,
     surfaceColliderSnapshots
   });
 }
@@ -743,7 +1007,7 @@ test("MetaverseTraversalRuntime resolves grounded support from local surface col
   }
 });
 
-test("MetaverseTraversalRuntime keeps the grounded first-person camera ahead of the body root", async () => {
+test("MetaverseTraversalRuntime anchors the grounded first-person camera at capsule eye height", async () => {
   const [
     { metaverseRuntimeConfig }
   ] = await Promise.all([
@@ -823,7 +1087,10 @@ test("MetaverseTraversalRuntime steers grounded and swim character yaw from look
 
     const groundedStartYaw =
       groundedHarness.traversalRuntime.cameraSnapshot.yawRadians;
-    groundedHarness.traversalRuntime.advance(lookRightInput, 1 / 60);
+    groundedHarness.traversalRuntime.advance(
+      lookRightInput,
+      groundedFixedStepSeconds
+    );
 
     assert.ok(
       groundedHarness.traversalRuntime.cameraSnapshot.yawRadians >
@@ -851,7 +1118,7 @@ test("MetaverseTraversalRuntime steers grounded and swim character yaw from look
   }
 });
 
-test("MetaverseTraversalRuntime keeps unmounted local camera yaw client-owned through authoritative corrections", async () => {
+test("MetaverseTraversalRuntime ignores routine authoritative unmounted yaw drift while keeping local look client-owned", async () => {
   const groundedHarness = await createTraversalHarness({
     surfaceColliderSnapshots: [
       Object.freeze({
@@ -879,12 +1146,17 @@ test("MetaverseTraversalRuntime keeps unmounted local camera yaw client-owned th
 
     const groundedCameraYawBeforeCorrection =
       groundedHarness.traversalRuntime.cameraSnapshot.yawRadians;
+    const groundedBodyYawBeforeCorrection =
+      groundedHarness.groundedBodyRuntime.snapshot.yawRadians;
     const groundedTraversalPose =
       groundedHarness.traversalRuntime.localTraversalPoseSnapshot;
 
     assert.ok(groundedTraversalPose !== null);
 
-    groundedHarness.traversalRuntime.syncAuthoritativeLocalPlayerPose({
+    syncAuthoritativeLocalPlayerPose(groundedHarness.traversalRuntime, {
+      jumpAuthorityState: "grounded",
+      lastAcceptedJumpActionSequence: 0,
+      lastProcessedJumpActionSequence: 0,
       linearVelocity: freezeVector3(0, 0, 0),
       locomotionMode: "grounded",
       mountedOccupancy: null,
@@ -898,11 +1170,12 @@ test("MetaverseTraversalRuntime keeps unmounted local camera yaw client-owned th
           groundedCameraYawBeforeCorrection
       ) < 0.000001
     );
+    assert.equal(groundedHarness.traversalRuntime.localReconciliationCorrectionCount, 0);
     assert.ok(
       Math.abs(
         groundedHarness.groundedBodyRuntime.snapshot.yawRadians -
-          groundedCameraYawBeforeCorrection
-      ) > 0.05
+          groundedBodyYawBeforeCorrection
+      ) < 0.000001
     );
 
     swimHarness.traversalRuntime.boot();
@@ -910,12 +1183,17 @@ test("MetaverseTraversalRuntime keeps unmounted local camera yaw client-owned th
 
     const swimCameraYawBeforeCorrection =
       swimHarness.traversalRuntime.cameraSnapshot.yawRadians;
+    const swimPresentationYawBeforeCorrection =
+      swimHarness.traversalRuntime.characterPresentationSnapshot?.yawRadians ?? 0;
     const swimTraversalPose = swimHarness.traversalRuntime.localTraversalPoseSnapshot;
 
     assert.ok(swimTraversalPose !== null);
     assert.equal(swimTraversalPose.locomotionMode, "swim");
 
-    swimHarness.traversalRuntime.syncAuthoritativeLocalPlayerPose({
+    syncAuthoritativeLocalPlayerPose(swimHarness.traversalRuntime, {
+      jumpAuthorityState: "none",
+      lastAcceptedJumpActionSequence: 0,
+      lastProcessedJumpActionSequence: 0,
       linearVelocity: freezeVector3(0, 0, -2.2),
       locomotionMode: "swim",
       mountedOccupancy: null,
@@ -929,15 +1207,280 @@ test("MetaverseTraversalRuntime keeps unmounted local camera yaw client-owned th
           swimCameraYawBeforeCorrection
       ) < 0.000001
     );
+    assert.equal(swimHarness.traversalRuntime.localReconciliationCorrectionCount, 0);
     assert.ok(
       Math.abs(
         (swimHarness.traversalRuntime.characterPresentationSnapshot?.yawRadians ?? 0) -
-          swimCameraYawBeforeCorrection
-      ) > 0.05
+          swimPresentationYawBeforeCorrection
+      ) < 0.000001
     );
   } finally {
     groundedHarness.groundedBodyRuntime.dispose();
     swimHarness.groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime ignores gross authoritative unmounted yaw drift while keeping local look client-owned", async () => {
+  const groundedHarness = await createTraversalHarness({
+    surfaceColliderSnapshots: [
+      Object.freeze({
+        halfExtents: freezeVector3(4, 0.2, 4),
+        rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+        translation: freezeVector3(0, -0.1, 24)
+      })
+    ]
+  });
+  const swimHarness = await createTraversalHarness();
+  const lookRightInput = Object.freeze({
+    boost: false,
+    jump: false,
+    moveAxis: 0,
+    pitchAxis: 0,
+    primaryAction: false,
+    secondaryAction: false,
+    strafeAxis: 0,
+    yawAxis: 1
+  });
+  try {
+    groundedHarness.traversalRuntime.boot();
+    groundedHarness.traversalRuntime.advance(lookRightInput, groundedFixedStepSeconds);
+
+    const groundedLookYaw =
+      groundedHarness.traversalRuntime.cameraSnapshot.yawRadians;
+    const groundedTraversalPoseBeforeCorrection =
+      groundedHarness.traversalRuntime.localTraversalPoseSnapshot;
+
+    assert.ok(groundedTraversalPoseBeforeCorrection !== null);
+
+    syncAuthoritativeLocalPlayerPose(groundedHarness.traversalRuntime, {
+      jumpAuthorityState: "grounded",
+      lastAcceptedJumpActionSequence: 0,
+      lastProcessedJumpActionSequence: 0,
+      linearVelocity: freezeVector3(0, 0, 0),
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: groundedTraversalPoseBeforeCorrection.position,
+      yawRadians: groundedTraversalPoseBeforeCorrection.yawRadians - 0.7
+    });
+
+    assert.equal(
+      groundedHarness.traversalRuntime.localReconciliationCorrectionCount,
+      0
+    );
+    assert.ok(
+      Math.abs(groundedHarness.groundedBodyRuntime.snapshot.yawRadians - groundedLookYaw) <
+        0.000001
+    );
+
+    swimHarness.traversalRuntime.boot();
+    swimHarness.traversalRuntime.advance(lookRightInput, 1 / 60);
+
+    const swimLookYaw = swimHarness.traversalRuntime.cameraSnapshot.yawRadians;
+    const swimTraversalPoseBeforeCorrection =
+      swimHarness.traversalRuntime.localTraversalPoseSnapshot;
+
+    assert.ok(swimTraversalPoseBeforeCorrection !== null);
+    assert.equal(swimTraversalPoseBeforeCorrection.locomotionMode, "swim");
+
+    syncAuthoritativeLocalPlayerPose(swimHarness.traversalRuntime, {
+      jumpAuthorityState: "none",
+      lastAcceptedJumpActionSequence: 0,
+      lastProcessedJumpActionSequence: 0,
+      linearVelocity: freezeVector3(0, 0, -2.2),
+      locomotionMode: "swim",
+      mountedOccupancy: null,
+      position: swimTraversalPoseBeforeCorrection.position,
+      yawRadians: swimTraversalPoseBeforeCorrection.yawRadians - 0.7
+    });
+
+    assert.equal(
+      swimHarness.traversalRuntime.localReconciliationCorrectionCount,
+      0
+    );
+    assert.ok(
+      Math.abs(
+        (swimHarness.traversalRuntime.characterPresentationSnapshot?.yawRadians ?? 0) -
+          swimLookYaw
+      ) < 0.000001
+    );
+  } finally {
+    groundedHarness.groundedBodyRuntime.dispose();
+    swimHarness.groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime keeps sustained grounded planar movement reconciliation-free against fixed-tick authority on flat support", async () => {
+  const localHarness = await createTraversalHarness({
+    surfaceColliderSnapshots: [
+      Object.freeze({
+        halfExtents: freezeVector3(4, 0.2, 20),
+        rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+        translation: freezeVector3(0, -0.1, 24)
+      })
+    ]
+  });
+  const authoritativeHarness = await createAuthoritativeGroundedSimulationHarness();
+  const moveForwardInput = Object.freeze({
+    boost: false,
+    jump: false,
+    moveAxis: 1,
+    pitchAxis: 0,
+    primaryAction: false,
+    secondaryAction: false,
+    strafeAxis: 0,
+    yawAxis: 0
+  });
+  let authoritativeAccumulatorSeconds = 0;
+  let latestAuthoritativeSnapshot = Object.freeze({
+    jumpAuthorityState: "grounded",
+    lastAcceptedJumpActionSequence: 0,
+    lastProcessedJumpActionSequence: 0,
+    linearVelocity: freezeVector3(0, 0, 0),
+    locomotionMode: "grounded",
+    mountedOccupancy: null,
+    position: authoritativeHarness.groundedBodyRuntime.snapshot.position,
+    yawRadians: authoritativeHarness.groundedBodyRuntime.snapshot.yawRadians
+  });
+  const correctionEvents = [];
+
+  try {
+    localHarness.traversalRuntime.boot();
+
+    for (let frame = 0; frame < 60; frame += 1) {
+      localHarness.traversalRuntime.advance(moveForwardInput, 1 / 60);
+      authoritativeAccumulatorSeconds += 1 / 60;
+
+      while (
+        authoritativeAccumulatorSeconds + 0.000001 >= groundedFixedStepSeconds
+      ) {
+        const previousAuthoritativeSnapshot =
+          authoritativeHarness.groundedBodyRuntime.snapshot;
+
+        authoritativeHarness.physicsRuntime.stepSimulation(groundedFixedStepSeconds);
+
+        const nextAuthoritativeSnapshot =
+          authoritativeHarness.groundedBodyRuntime.advance(
+            Object.freeze({
+              boost: false,
+              jump: false,
+              moveAxis: 1,
+              strafeAxis: 0,
+              turnAxis: 0
+            }),
+            groundedFixedStepSeconds,
+            undefined,
+            0
+          );
+
+        latestAuthoritativeSnapshot = Object.freeze({
+          jumpAuthorityState: nextAuthoritativeSnapshot.grounded
+            ? "grounded"
+            : nextAuthoritativeSnapshot.verticalSpeedUnitsPerSecond > 0.05
+              ? "rising"
+              : "falling",
+          lastAcceptedJumpActionSequence: 0,
+          lastProcessedJumpActionSequence: 0,
+          linearVelocity: freezeVector3(
+            (nextAuthoritativeSnapshot.position.x -
+              previousAuthoritativeSnapshot.position.x) /
+              groundedFixedStepSeconds,
+            (nextAuthoritativeSnapshot.position.y -
+              previousAuthoritativeSnapshot.position.y) /
+              groundedFixedStepSeconds,
+            (nextAuthoritativeSnapshot.position.z -
+              previousAuthoritativeSnapshot.position.z) /
+              groundedFixedStepSeconds
+          ),
+          locomotionMode: "grounded",
+          mountedOccupancy: null,
+          position: nextAuthoritativeSnapshot.position,
+          yawRadians: nextAuthoritativeSnapshot.yawRadians
+        });
+
+        authoritativeAccumulatorSeconds = Math.max(
+          0,
+          authoritativeAccumulatorSeconds - groundedFixedStepSeconds
+        );
+      }
+
+      syncAuthoritativeLocalPlayerPose(localHarness.traversalRuntime, 
+        latestAuthoritativeSnapshot
+      );
+
+      if (
+        localHarness.traversalRuntime.localReconciliationCorrectionCount >
+        correctionEvents.length
+      ) {
+        correctionEvents.push(
+          Object.freeze({
+            frame: frame + 1,
+            ...localHarness.traversalRuntime.authoritativeCorrectionTelemetrySnapshot
+          })
+        );
+      }
+    }
+
+    assert.equal(
+      localHarness.traversalRuntime.localReconciliationCorrectionCount,
+      0,
+      `expected zero flat-ground reconciliations, received ${localHarness.traversalRuntime.localReconciliationCorrectionCount} with events ${JSON.stringify(correctionEvents)}`
+    );
+  } finally {
+    localHarness.groundedBodyRuntime.dispose();
+    authoritativeHarness.groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime ignores tiny routine grounded-state disagreements without snapping local movement", async () => {
+  const { groundedBodyRuntime, traversalRuntime } = await createTraversalHarness({
+    surfaceColliderSnapshots: [
+      Object.freeze({
+        halfExtents: freezeVector3(4, 0.2, 20),
+        rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+        translation: freezeVector3(0, -0.1, 24)
+      })
+    ]
+  });
+
+  try {
+    traversalRuntime.boot();
+    const groundedSnapshot = groundedBodyRuntime.snapshot;
+
+    groundedBodyRuntime.syncAuthoritativeState({
+      grounded: false,
+      linearVelocity: freezeVector3(0, 0, 0),
+      position: freezeVector3(
+        groundedSnapshot.position.x,
+        groundedSnapshot.position.y + 0.02,
+        groundedSnapshot.position.z
+      ),
+      yawRadians: groundedSnapshot.yawRadians
+    });
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, {
+      jumpAuthorityState: "grounded",
+      lastAcceptedJumpActionSequence: 0,
+      lastProcessedJumpActionSequence: 0,
+      linearVelocity: freezeVector3(0, 0, 0),
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: groundedSnapshot.position,
+      yawRadians: groundedSnapshot.yawRadians
+    });
+
+    assert.equal(
+      traversalRuntime.localReconciliationCorrectionCount,
+      0,
+      JSON.stringify(traversalRuntime.authoritativeCorrectionTelemetrySnapshot)
+    );
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.y - (groundedSnapshot.position.y + 0.02)
+      ) < 0.000001
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
   }
 });
 
@@ -1617,6 +2160,174 @@ test("MetaverseTraversalRuntime routes spacebar jump intent through up, mid, and
   }
 });
 
+test("MetaverseTraversalRuntime reports local traversal startup once a buffered jump edge is stamped with a shared action sequence", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    traversalRuntime.advance(
+      Object.freeze({
+        boost: false,
+        jump: true,
+        moveAxis: 0,
+        pitchAxis: 0,
+        primaryAction: false,
+        secondaryAction: false,
+        strafeAxis: 0,
+        yawAxis: 0
+      }),
+      groundedFixedStepSeconds * 0.5
+    );
+
+    traversalRuntime.syncIssuedTraversalIntentSnapshot(
+      createTraversalIntentSnapshot({
+        boost: false,
+        inputSequence: 1,
+        jump: true,
+        jumpActionSequence: 1,
+        locomotionMode: "grounded",
+        moveAxis: 0,
+        strafeAxis: 0,
+        yawAxis: 0
+      })
+    );
+
+    assert.equal(
+      traversalRuntime.localTraversalAuthoritySnapshot.currentActionKind,
+      "jump"
+    );
+    assert.equal(
+      traversalRuntime.localTraversalAuthoritySnapshot.currentActionPhase,
+      "startup"
+    );
+    assert.equal(
+      traversalRuntime.localTraversalAuthoritySnapshot.currentActionSequence,
+      1
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime advances local traversal authority from rising back to idle after a stamped jump arc lands", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    traversalRuntime.advance(
+      Object.freeze({
+        boost: false,
+        jump: true,
+        moveAxis: 0,
+        pitchAxis: 0,
+        primaryAction: false,
+        secondaryAction: false,
+        strafeAxis: 0,
+        yawAxis: 0
+      }),
+      groundedFixedStepSeconds
+    );
+
+    traversalRuntime.syncIssuedTraversalIntentSnapshot(
+      createTraversalIntentSnapshot({
+        boost: false,
+        inputSequence: 1,
+        jump: true,
+        jumpActionSequence: 1,
+        locomotionMode: "grounded",
+        moveAxis: 0,
+        strafeAxis: 0,
+        yawAxis: 0
+      })
+    );
+
+    assert.equal(
+      traversalRuntime.localTraversalAuthoritySnapshot.currentActionKind,
+      "jump"
+    );
+    assert.equal(
+      traversalRuntime.localTraversalAuthoritySnapshot.currentActionPhase,
+      "rising"
+    );
+    assert.equal(
+      traversalRuntime.localTraversalAuthoritySnapshot.lastConsumedActionSequence,
+      1
+    );
+
+    let stepCount = 0;
+
+    while (
+      groundedBodyRuntime.snapshot.grounded !== true &&
+      stepCount < 60
+    ) {
+      traversalRuntime.advance(
+        Object.freeze({
+          boost: false,
+          jump: false,
+          moveAxis: 0,
+          pitchAxis: 0,
+          primaryAction: false,
+          secondaryAction: false,
+          strafeAxis: 0,
+          yawAxis: 0
+        }),
+        groundedFixedStepSeconds
+      );
+      traversalRuntime.syncIssuedTraversalIntentSnapshot(
+        createTraversalIntentSnapshot({
+          boost: false,
+          inputSequence: 1,
+          jump: false,
+          jumpActionSequence: 1,
+          locomotionMode: "grounded",
+          moveAxis: 0,
+          strafeAxis: 0,
+          yawAxis: 0
+        })
+      );
+      stepCount += 1;
+    }
+
+    assert.equal(groundedBodyRuntime.snapshot.grounded, true);
+    assert.equal(
+      traversalRuntime.localTraversalAuthoritySnapshot.currentActionKind,
+      "none"
+    );
+    assert.equal(
+      traversalRuntime.localTraversalAuthoritySnapshot.currentActionPhase,
+      "idle"
+    );
+    assert.equal(
+      traversalRuntime.localTraversalAuthoritySnapshot.lastConsumedActionSequence,
+      1
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
 test("MetaverseTraversalRuntime keeps authoritative airborne grounded corrections midair instead of flattening them onto support", async () => {
   const { groundedBodyRuntime, traversalRuntime } =
     await createTraversalHarness({
@@ -1633,7 +2344,10 @@ test("MetaverseTraversalRuntime keeps authoritative airborne grounded correction
     traversalRuntime.boot();
     assert.equal(traversalRuntime.locomotionMode, "grounded");
 
-    traversalRuntime.syncAuthoritativeLocalPlayerPose({
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, {
+      jumpAuthorityState: "rising",
+      lastAcceptedJumpActionSequence: 0,
+      lastProcessedJumpActionSequence: 0,
       linearVelocity: Object.freeze({
         x: 0.6,
         y: 3.4,
@@ -1671,14 +2385,1710 @@ test("MetaverseTraversalRuntime keeps authoritative airborne grounded correction
   }
 });
 
-test("MetaverseTraversalRuntime preserves active swim presentation through authoritative swim corrections", async () => {
+test("MetaverseTraversalRuntime preserves a local grounded jump ascent against routine authoritative grounded corrections", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    const groundedSnapshot = groundedBodyRuntime.snapshot;
+
+    traversalRuntime.advance(
+      Object.freeze({
+        boost: false,
+        jump: true,
+        moveAxis: 0,
+        pitchAxis: 0,
+        primaryAction: false,
+        secondaryAction: false,
+        strafeAxis: 0,
+        yawAxis: 0
+      }),
+      groundedFixedStepSeconds
+    );
+
+    const localJumpSnapshot = groundedBodyRuntime.snapshot;
+
+    assert.equal(localJumpSnapshot.grounded, false);
+    assert.ok(localJumpSnapshot.position.y > groundedSnapshot.position.y);
+    assert.ok(localJumpSnapshot.verticalSpeedUnitsPerSecond > 0);
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, {
+      jumpAuthorityState: "grounded",
+      lastAcceptedJumpActionSequence: 0,
+      lastProcessedJumpActionSequence: 0,
+      linearVelocity: Object.freeze({
+        x: 0,
+        y: 0,
+        z: 0
+      }),
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: groundedSnapshot.position,
+      yawRadians: groundedSnapshot.yawRadians
+    }, 1);
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 0);
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+    assert.ok(
+      groundedBodyRuntime.snapshot.position.y >= localJumpSnapshot.position.y
+    );
+    assert.ok(groundedBodyRuntime.snapshot.verticalSpeedUnitsPerSecond > 0);
+    assert.equal(
+      traversalRuntime.characterPresentationSnapshot?.animationVocabulary,
+      "jump-up"
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime applies authoritative grounded correction once the issued jump edge is explicitly rejected", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    const groundedSnapshot = groundedBodyRuntime.snapshot;
+
+    traversalRuntime.advance(
+      Object.freeze({
+        boost: false,
+        jump: true,
+        moveAxis: 0,
+        pitchAxis: 0,
+        primaryAction: false,
+        secondaryAction: false,
+        strafeAxis: 0,
+        yawAxis: 0
+      }),
+      groundedFixedStepSeconds
+    );
+
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+    assert.ok(groundedBodyRuntime.snapshot.position.y > groundedSnapshot.position.y);
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, {
+      jumpAuthorityState: "grounded",
+      lastAcceptedJumpActionSequence: 0,
+      lastProcessedJumpActionSequence: 1,
+      linearVelocity: Object.freeze({
+        x: 0,
+        y: 0,
+        z: 0
+      }),
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: groundedSnapshot.position,
+      traversalAuthority: Object.freeze({
+        currentActionKind: "none",
+        currentActionPhase: "idle",
+        currentActionSequence: 0,
+        lastConsumedActionKind: "none",
+        lastConsumedActionSequence: 0,
+        lastRejectedActionKind: "jump",
+        lastRejectedActionReason: "buffer-expired",
+        lastRejectedActionSequence: 1,
+        phaseStartedAtTick: 2
+      }),
+      yawRadians: groundedSnapshot.yawRadians
+    }, 1);
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(
+      traversalRuntime.lastLocalAuthorityPoseCorrectionReason,
+      "jump-rejected"
+    );
+    assert.equal(groundedBodyRuntime.snapshot.grounded, true);
+    assert.ok(
+      Math.abs(groundedBodyRuntime.snapshot.position.y - groundedSnapshot.position.y) <
+        0.0001
+    );
+    assert.ok(
+      Math.abs(groundedBodyRuntime.snapshot.verticalSpeedUnitsPerSecond) < 0.0001
+    );
+    assert.equal(
+      traversalRuntime.characterPresentationSnapshot?.animationVocabulary,
+      "idle"
+    );
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, {
+      jumpAuthorityState: "grounded",
+      lastAcceptedJumpActionSequence: 0,
+      lastProcessedJumpActionSequence: 1,
+      linearVelocity: Object.freeze({
+        x: 0,
+        y: 0,
+        z: 0
+      }),
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: groundedSnapshot.position,
+      yawRadians: groundedSnapshot.yawRadians
+    }, 1);
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime buffers a grounded jump tap in shared local traversal authority until the body becomes jump-ready", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    groundedBodyRuntime.teleport(
+      freezeVector3(0, 0.35, 24),
+      groundedBodyRuntime.snapshot.yawRadians
+    );
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+
+    traversalRuntime.advance(
+      Object.freeze({
+        boost: false,
+        jump: true,
+        moveAxis: 0,
+        pitchAxis: 0,
+        primaryAction: false,
+        secondaryAction: false,
+        strafeAxis: 0,
+        yawAxis: 0
+      }),
+      groundedFixedStepSeconds
+    );
+
+    assert.equal(
+      traversalRuntime.localTraversalAuthoritySnapshot.currentActionKind,
+      "jump"
+    );
+    assert.equal(
+      traversalRuntime.localTraversalAuthoritySnapshot.currentActionPhase,
+      "startup"
+    );
+    assert.ok(
+      traversalRuntime.localTraversalAuthoritySnapshot.currentActionSequence > 0
+    );
+    assert.ok(groundedBodyRuntime.snapshot.position.y <= 0.35);
+
+    for (let stepIndex = 0; stepIndex < 4; stepIndex += 1) {
+      traversalRuntime.advance(
+        Object.freeze({
+          boost: false,
+          jump: false,
+          moveAxis: 0,
+          pitchAxis: 0,
+          primaryAction: false,
+          secondaryAction: false,
+          strafeAxis: 0,
+          yawAxis: 0
+        }),
+        groundedFixedStepSeconds
+      );
+
+      if (
+        groundedBodyRuntime.snapshot.verticalSpeedUnitsPerSecond > 0 ||
+        groundedBodyRuntime.snapshot.position.y > 0.35
+      ) {
+        break;
+      }
+    }
+
+    assert.equal(
+      traversalRuntime.localTraversalAuthoritySnapshot.lastConsumedActionKind,
+      "jump"
+    );
+    assert.ok(
+      groundedBodyRuntime.snapshot.verticalSpeedUnitsPerSecond > 0 ||
+        groundedBodyRuntime.snapshot.position.y > 0.35
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime consumes a grounded jump from snap-distance support through shared local traversal authority", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    groundedBodyRuntime.teleport(
+      freezeVector3(0, 0.12, 24),
+      groundedBodyRuntime.snapshot.yawRadians
+    );
+
+    traversalRuntime.advance(
+      Object.freeze({
+        boost: false,
+        jump: true,
+        moveAxis: 0,
+        pitchAxis: 0,
+        primaryAction: false,
+        secondaryAction: false,
+        strafeAxis: 0,
+        yawAxis: 0
+      }),
+      groundedFixedStepSeconds
+    );
+
+    assert.equal(
+      traversalRuntime.localTraversalAuthoritySnapshot.lastConsumedActionKind,
+      "jump"
+    );
+    assert.ok(
+      traversalRuntime.localTraversalAuthoritySnapshot.lastConsumedActionSequence > 0
+    );
+    for (let stepIndex = 0; stepIndex < 3; stepIndex += 1) {
+      if (
+        groundedBodyRuntime.snapshot.verticalSpeedUnitsPerSecond > 0 ||
+        groundedBodyRuntime.snapshot.position.y > 0.12
+      ) {
+        break;
+      }
+
+      traversalRuntime.advance(
+        Object.freeze({
+          boost: false,
+          jump: false,
+          moveAxis: 0,
+          pitchAxis: 0,
+          primaryAction: false,
+          secondaryAction: false,
+          strafeAxis: 0,
+          yawAxis: 0
+        }),
+        groundedFixedStepSeconds
+      );
+    }
+
+    assert.ok(
+      groundedBodyRuntime.snapshot.verticalSpeedUnitsPerSecond > 0 ||
+        groundedBodyRuntime.snapshot.position.y > 0.12
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime ignores a rejected jump once local grounded state is already aligned", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    const groundedSnapshot = groundedBodyRuntime.snapshot;
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, 
+      {
+        jumpAuthorityState: "grounded",
+        lastAcceptedJumpActionSequence: 0,
+        lastProcessedJumpActionSequence: 1,
+        linearVelocity: Object.freeze({
+          x: 0,
+          y: 0,
+          z: 0
+        }),
+        locomotionMode: "grounded",
+        mountedOccupancy: null,
+        position: groundedSnapshot.position,
+        yawRadians: groundedSnapshot.yawRadians
+      },
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 0);
+    assert.equal(
+      traversalRuntime.lastLocalAuthorityPoseCorrectionReason,
+      "none"
+    );
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, 
+      {
+        jumpAuthorityState: "grounded",
+        lastAcceptedJumpActionSequence: 0,
+        lastProcessedJumpActionSequence: 1,
+        linearVelocity: Object.freeze({
+          x: 0,
+          y: 0,
+          z: 0
+        }),
+        locomotionMode: "grounded",
+        mountedOccupancy: null,
+        position: groundedSnapshot.position,
+        yawRadians: groundedSnapshot.yawRadians
+      },
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 0);
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime consumes a rejected jump edge once during acked replay reconciliation", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    const groundedSnapshot = groundedBodyRuntime.snapshot;
+
+    traversalRuntime.advance(
+      Object.freeze({
+        boost: false,
+        jump: true,
+        moveAxis: 0,
+        pitchAxis: 0,
+        primaryAction: false,
+        secondaryAction: false,
+        strafeAxis: 0,
+        yawAxis: 0
+      }),
+      groundedFixedStepSeconds
+    );
+
+    const rejectedJumpAuthoritySnapshot = {
+      jumpAuthorityState: "grounded",
+      lastAcceptedJumpActionSequence: 0,
+      lastProcessedJumpActionSequence: 1,
+      linearVelocity: Object.freeze({
+        x: 0,
+        y: 0,
+        z: 0
+      }),
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: groundedSnapshot.position,
+      traversalAuthority: Object.freeze({
+        currentActionKind: "none",
+        currentActionPhase: "idle",
+        currentActionSequence: 0,
+        lastConsumedActionKind: "none",
+        lastConsumedActionSequence: 0,
+        lastRejectedActionKind: "jump",
+        lastRejectedActionReason: "buffer-expired",
+        lastRejectedActionSequence: 1,
+        phaseStartedAtTick: 2
+      }),
+      yawRadians: groundedSnapshot.yawRadians
+    };
+    const activeTraversalIntent = createTraversalIntentSnapshot({
+      boost: false,
+      inputSequence: 1,
+      jump: false,
+      jumpActionSequence: 1,
+      locomotionMode: "grounded",
+      moveAxis: 0,
+      strafeAxis: 0,
+      yawAxis: 0
+    });
+
+    reconcileAckedAuthoritativeLocalPlayerPose(traversalRuntime, 
+      rejectedJumpAuthoritySnapshot,
+      groundedFixedStepSeconds,
+      activeTraversalIntent,
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(traversalRuntime.ackedAuthoritativeReplayCorrectionCount, 1);
+
+    reconcileAckedAuthoritativeLocalPlayerPose(traversalRuntime, 
+      rejectedJumpAuthoritySnapshot,
+      groundedFixedStepSeconds,
+      activeTraversalIntent,
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(traversalRuntime.ackedAuthoritativeReplayCorrectionCount, 1);
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime follows authoritative airborne jump phase changes even when the positional error is routine-sized", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    const groundedSnapshot = groundedBodyRuntime.snapshot;
+    const airborneRoutineErrorPosition = freezeVector3(
+      groundedSnapshot.position.x,
+      groundedSnapshot.position.y +
+        localPlayerRoutineLandingCorrectionThresholdMeters * 0.5,
+      groundedSnapshot.position.z
+    );
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, 
+      {
+        jumpAuthorityState: "falling",
+        lastAcceptedJumpActionSequence: 1,
+        lastProcessedJumpActionSequence: 1,
+        linearVelocity: Object.freeze({
+          x: 0,
+          y: -0.2,
+          z: 0
+        }),
+        locomotionMode: "grounded",
+        mountedOccupancy: null,
+        position: airborneRoutineErrorPosition,
+        yawRadians: groundedSnapshot.yawRadians
+      },
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(
+      traversalRuntime.lastLocalAuthorityPoseCorrectionReason,
+      "ground-state-mismatch"
+    );
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.y - airborneRoutineErrorPosition.y
+      ) < 0.0001
+    );
+    assert.equal(
+      traversalRuntime.characterPresentationSnapshot?.animationVocabulary,
+      "jump-mid"
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime ignores pure authoritative ground-state flicker when the local pose is aligned", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+    assert.equal(groundedBodyRuntime.snapshot.grounded, true);
+
+    const groundedSnapshot = groundedBodyRuntime.snapshot;
+    const authoritativeAirbornePose = {
+      jumpAuthorityState: "falling",
+      lastAcceptedJumpActionSequence: 0,
+      lastProcessedJumpActionSequence: 0,
+      linearVelocity: Object.freeze({
+        x: 0,
+        y: 0,
+        z: 0
+      }),
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: groundedSnapshot.position,
+      yawRadians: groundedSnapshot.yawRadians
+    };
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, 
+      authoritativeAirbornePose
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 0);
+    assert.equal(
+      traversalRuntime.lastLocalAuthorityPoseCorrectionReason,
+      "none"
+    );
+    assert.equal(groundedBodyRuntime.snapshot.grounded, true);
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.y - groundedSnapshot.position.y
+      ) < 0.0001
+    );
+
+    reconcileAckedAuthoritativeLocalPlayerPose(traversalRuntime, 
+      authoritativeAirbornePose,
+      groundedFixedStepSeconds,
+      null
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 0);
+    assert.equal(traversalRuntime.ackedAuthoritativeReplayCorrectionCount, 0);
+    assert.equal(groundedBodyRuntime.snapshot.grounded, true);
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime resolves an accepted jump edge before later zero-distance grounded flicker", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    const groundedSnapshot = groundedBodyRuntime.snapshot;
+    const airborneRoutineErrorPosition = freezeVector3(
+      groundedSnapshot.position.x,
+      groundedSnapshot.position.y +
+        localPlayerRoutineLandingCorrectionThresholdMeters * 0.5,
+      groundedSnapshot.position.z
+    );
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, 
+      {
+        jumpAuthorityState: "falling",
+        lastAcceptedJumpActionSequence: 1,
+        lastProcessedJumpActionSequence: 1,
+        linearVelocity: Object.freeze({
+          x: 0,
+          y: -0.2,
+          z: 0
+        }),
+        locomotionMode: "grounded",
+        mountedOccupancy: null,
+        position: airborneRoutineErrorPosition,
+        yawRadians: groundedSnapshot.yawRadians
+      },
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+
+    groundedBodyRuntime.syncAuthoritativeState({
+      grounded: false,
+      linearVelocity: freezeVector3(0, 0, 0),
+      position: groundedSnapshot.position,
+      yawRadians: groundedSnapshot.yawRadians
+    });
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+    assert.ok(
+      Math.abs(groundedBodyRuntime.snapshot.position.y - groundedSnapshot.position.y) <
+        0.0001
+    );
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, 
+      {
+        jumpAuthorityState: "grounded",
+        lastAcceptedJumpActionSequence: 1,
+        lastProcessedJumpActionSequence: 1,
+        linearVelocity: freezeVector3(0, 0, 0),
+        locomotionMode: "grounded",
+        mountedOccupancy: null,
+        position: groundedSnapshot.position,
+        yawRadians: groundedSnapshot.yawRadians
+      },
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime ignores routine accepted-jump landing mismatch before the local body settles", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    const groundedSnapshot = groundedBodyRuntime.snapshot;
+    const airborneRoutineLandingPosition = freezeVector3(
+      groundedSnapshot.position.x,
+      groundedSnapshot.position.y +
+        localPlayerRoutineLandingCorrectionThresholdMeters * 0.5,
+      groundedSnapshot.position.z
+    );
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, 
+      {
+        jumpAuthorityState: "falling",
+        lastAcceptedJumpActionSequence: 1,
+        lastProcessedJumpActionSequence: 1,
+        linearVelocity: Object.freeze({
+          x: 0,
+          y: -0.2,
+          z: 0
+        }),
+        locomotionMode: "grounded",
+        mountedOccupancy: null,
+        position: airborneRoutineLandingPosition,
+        yawRadians: groundedSnapshot.yawRadians
+      },
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.y - airborneRoutineLandingPosition.y
+      ) < 0.0001
+    );
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, 
+      {
+        jumpAuthorityState: "grounded",
+        lastAcceptedJumpActionSequence: 1,
+        lastProcessedJumpActionSequence: 1,
+        linearVelocity: freezeVector3(0, 0, 0),
+        locomotionMode: "grounded",
+        mountedOccupancy: null,
+        position: groundedSnapshot.position,
+        yawRadians: groundedSnapshot.yawRadians
+      },
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(traversalRuntime.lastLocalAuthorityPoseCorrectionReason, "ground-state-mismatch");
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.y - airborneRoutineLandingPosition.y
+      ) < 0.0001
+    );
+
+    reconcileAckedAuthoritativeLocalPlayerPose(traversalRuntime, 
+      {
+        jumpAuthorityState: "grounded",
+        lastAcceptedJumpActionSequence: 1,
+        lastProcessedJumpActionSequence: 1,
+        linearVelocity: freezeVector3(0, 0, 0),
+        locomotionMode: "grounded",
+        mountedOccupancy: null,
+        position: groundedSnapshot.position,
+        yawRadians: groundedSnapshot.yawRadians
+      },
+      groundedFixedStepSeconds,
+      null,
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(traversalRuntime.ackedAuthoritativeReplayCorrectionCount, 0);
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.y - airborneRoutineLandingPosition.y
+      ) < 0.0001
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime preserves an accepted jump landing arc against moderate authoritative grounded recovery", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    const groundedSnapshot = groundedBodyRuntime.snapshot;
+    const airborneLandingCarryPosition = freezeVector3(
+      groundedSnapshot.position.x + 0.18,
+      groundedSnapshot.position.y + 0.55,
+      groundedSnapshot.position.z
+    );
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, 
+      {
+        jumpAuthorityState: "falling",
+        lastAcceptedJumpActionSequence: 1,
+        lastProcessedJumpActionSequence: 1,
+        linearVelocity: Object.freeze({
+          x: 0.2,
+          y: -0.5,
+          z: 0
+        }),
+        locomotionMode: "grounded",
+        mountedOccupancy: null,
+        position: airborneLandingCarryPosition,
+        yawRadians: groundedSnapshot.yawRadians
+      },
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.y - airborneLandingCarryPosition.y
+      ) < 0.0001
+    );
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, 
+      {
+        jumpAuthorityState: "grounded",
+        lastAcceptedJumpActionSequence: 1,
+        lastProcessedJumpActionSequence: 1,
+        linearVelocity: freezeVector3(0, 0, 0),
+        locomotionMode: "grounded",
+        mountedOccupancy: null,
+        position: groundedSnapshot.position,
+        yawRadians: groundedSnapshot.yawRadians
+      },
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.y - airborneLandingCarryPosition.y
+      ) < 0.0001
+    );
+
+    reconcileAckedAuthoritativeLocalPlayerPose(traversalRuntime, 
+      {
+        jumpAuthorityState: "grounded",
+        lastAcceptedJumpActionSequence: 1,
+        lastProcessedJumpActionSequence: 1,
+        linearVelocity: freezeVector3(0, 0, 0),
+        locomotionMode: "grounded",
+        mountedOccupancy: null,
+        position: groundedSnapshot.position,
+        yawRadians: groundedSnapshot.yawRadians
+      },
+      groundedFixedStepSeconds,
+      null,
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(traversalRuntime.ackedAuthoritativeReplayCorrectionCount, 0);
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.y - airborneLandingCarryPosition.y
+      ) < 0.0001
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime resolves accepted jump landing state from traversal authority when legacy jump fields lag", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    const groundedSnapshot = groundedBodyRuntime.snapshot;
+    const airborneLandingCarryPosition = freezeVector3(
+      groundedSnapshot.position.x + 0.18,
+      groundedSnapshot.position.y + 0.55,
+      groundedSnapshot.position.z
+    );
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, 
+      {
+        jumpAuthorityState: "falling",
+        lastAcceptedJumpActionSequence: 0,
+        lastProcessedJumpActionSequence: 0,
+        linearVelocity: Object.freeze({
+          x: 0.2,
+          y: -0.5,
+          z: 0
+        }),
+        locomotionMode: "grounded",
+        mountedOccupancy: null,
+        position: airborneLandingCarryPosition,
+        traversalAuthority: Object.freeze({
+          currentActionKind: "jump",
+          currentActionPhase: "falling",
+          currentActionSequence: 1,
+          lastConsumedActionKind: "jump",
+          lastConsumedActionSequence: 1,
+          lastRejectedActionKind: "none",
+          lastRejectedActionReason: "none",
+          lastRejectedActionSequence: 0,
+          phaseStartedAtTick: 2
+        }),
+        yawRadians: groundedSnapshot.yawRadians
+      },
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, 
+      {
+        jumpAuthorityState: "grounded",
+        lastAcceptedJumpActionSequence: 0,
+        lastProcessedJumpActionSequence: 0,
+        linearVelocity: freezeVector3(0, 0, 0),
+        locomotionMode: "grounded",
+        mountedOccupancy: null,
+        position: groundedSnapshot.position,
+        traversalAuthority: Object.freeze({
+          currentActionKind: "none",
+          currentActionPhase: "idle",
+          currentActionSequence: 0,
+          lastConsumedActionKind: "jump",
+          lastConsumedActionSequence: 1,
+          lastRejectedActionKind: "none",
+          lastRejectedActionReason: "none",
+          lastRejectedActionSequence: 0,
+          phaseStartedAtTick: 3
+        }),
+        yawRadians: groundedSnapshot.yawRadians
+      },
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime keeps accepted jump landing hold active until the local body actually regrounds", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    const groundedSnapshot = groundedBodyRuntime.snapshot;
+    const airborneLandingCarryPosition = freezeVector3(
+      groundedSnapshot.position.x + 0.15,
+      groundedSnapshot.position.y + 0.47,
+      groundedSnapshot.position.z
+    );
+    const acceptedGroundedAuthoritySnapshot = {
+      jumpAuthorityState: "grounded",
+      lastAcceptedJumpActionSequence: 1,
+      lastProcessedJumpActionSequence: 1,
+      linearVelocity: freezeVector3(0, 0, 0),
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: groundedSnapshot.position,
+      yawRadians: groundedSnapshot.yawRadians
+    };
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, 
+      {
+        jumpAuthorityState: "falling",
+        lastAcceptedJumpActionSequence: 1,
+        lastProcessedJumpActionSequence: 1,
+        linearVelocity: Object.freeze({
+          x: 0.15,
+          y: -0.5,
+          z: 0
+        }),
+        locomotionMode: "grounded",
+        mountedOccupancy: null,
+        position: airborneLandingCarryPosition,
+        yawRadians: groundedSnapshot.yawRadians
+      },
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, 
+      acceptedGroundedAuthoritySnapshot,
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+
+    traversalRuntime.advance(
+      Object.freeze({
+        boost: false,
+        jump: false,
+        moveAxis: 0,
+        pitchAxis: 0,
+        primaryAction: false,
+        secondaryAction: false,
+        strafeAxis: 0,
+        yawAxis: 0
+      }),
+      0.25
+    );
+
+    groundedBodyRuntime.syncAuthoritativeState({
+      grounded: false,
+      linearVelocity: freezeVector3(0, 0, 0),
+      position: airborneLandingCarryPosition,
+      yawRadians: groundedSnapshot.yawRadians
+    });
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, 
+      acceptedGroundedAuthoritySnapshot,
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.y - airborneLandingCarryPosition.y
+      ) < 0.0001
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime preserves an accepted moving jump landing arc above the routine correction window", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    const groundedSnapshot = groundedBodyRuntime.snapshot;
+    const airborneLandingCarryPosition = freezeVector3(
+      groundedSnapshot.position.x + 1.27,
+      groundedSnapshot.position.y + 0.47,
+      groundedSnapshot.position.z
+    );
+    const acceptedGroundedAuthoritySnapshot = {
+      jumpAuthorityState: "grounded",
+      lastAcceptedJumpActionSequence: 1,
+      lastProcessedJumpActionSequence: 1,
+      linearVelocity: freezeVector3(0, 0, 0),
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: freezeVector3(
+        groundedSnapshot.position.x + 0.18,
+        groundedSnapshot.position.y,
+        groundedSnapshot.position.z
+      ),
+      yawRadians: groundedSnapshot.yawRadians
+    };
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, 
+      {
+        jumpAuthorityState: "falling",
+        lastAcceptedJumpActionSequence: 1,
+        lastProcessedJumpActionSequence: 1,
+        linearVelocity: Object.freeze({
+          x: 0.4,
+          y: -0.5,
+          z: 0
+        }),
+        locomotionMode: "grounded",
+        mountedOccupancy: null,
+        position: airborneLandingCarryPosition,
+        yawRadians: groundedSnapshot.yawRadians
+      },
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, 
+      acceptedGroundedAuthoritySnapshot,
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.x - airborneLandingCarryPosition.x
+      ) < 0.0001
+    );
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.y - airborneLandingCarryPosition.y
+      ) < 0.0001
+    );
+
+    reconcileAckedAuthoritativeLocalPlayerPose(traversalRuntime, 
+      acceptedGroundedAuthoritySnapshot,
+      groundedFixedStepSeconds,
+      null,
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(traversalRuntime.ackedAuthoritativeReplayCorrectionCount, 0);
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime reports gross divergence as the last local-authority pose snap reason", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    const groundedSnapshot = groundedBodyRuntime.snapshot;
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, {
+      jumpAuthorityState: "grounded",
+      lastAcceptedJumpActionSequence: 0,
+      lastProcessedJumpActionSequence: 0,
+      linearVelocity: freezeVector3(0, 0, 0),
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: freezeVector3(
+        groundedSnapshot.position.x + 4.1,
+        groundedSnapshot.position.y,
+        groundedSnapshot.position.z
+      ),
+      yawRadians: groundedSnapshot.yawRadians
+    });
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(
+      traversalRuntime.lastLocalAuthorityPoseCorrectionReason,
+      "gross-position-divergence"
+    );
+    assert.ok(Math.abs(groundedBodyRuntime.snapshot.position.x - 4.1) < 0.0001);
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime ignores moderate grounded authoritative divergence without counting a pose snap", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    const groundedSnapshot = groundedBodyRuntime.snapshot;
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, {
+      jumpAuthorityState: "grounded",
+      lastAcceptedJumpActionSequence: 0,
+      lastProcessedJumpActionSequence: 0,
+      linearVelocity: freezeVector3(0, 0, 0),
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: freezeVector3(
+        groundedSnapshot.position.x + 1.8,
+        groundedSnapshot.position.y,
+        groundedSnapshot.position.z
+      ),
+      yawRadians: groundedSnapshot.yawRadians
+    });
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 0);
+    assert.equal(
+      traversalRuntime.lastLocalAuthorityPoseCorrectionReason,
+      "none"
+    );
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.x - groundedSnapshot.position.x
+      ) < 0.0001
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime ignores moderate swim authoritative divergence without counting a pose snap", async () => {
   const { groundedBodyRuntime, traversalRuntime } = await createTraversalHarness();
 
   try {
     traversalRuntime.boot();
     assert.equal(traversalRuntime.locomotionMode, "swim");
 
-    traversalRuntime.syncAuthoritativeLocalPlayerPose({
+    const swimSnapshot = traversalRuntime.localTraversalPoseSnapshot;
+
+    assert.notEqual(swimSnapshot, null);
+    assert.equal(swimSnapshot.locomotionMode, "swim");
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, {
+      jumpAuthorityState: "none",
+      lastAcceptedJumpActionSequence: 0,
+      lastProcessedJumpActionSequence: 0,
+      linearVelocity: freezeVector3(0, 0, -2.2),
+      locomotionMode: "swim",
+      mountedOccupancy: null,
+      position: freezeVector3(
+        swimSnapshot.position.x + 1.8,
+        swimSnapshot.position.y,
+        swimSnapshot.position.z
+      ),
+      yawRadians: swimSnapshot.yawRadians
+    });
+
+    const blendedSwimSnapshot = traversalRuntime.localTraversalPoseSnapshot;
+
+    assert.notEqual(blendedSwimSnapshot, null);
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 0);
+    assert.equal(
+      traversalRuntime.lastLocalAuthorityPoseCorrectionReason,
+      "none"
+    );
+    assert.ok(
+      Math.abs(blendedSwimSnapshot.position.x - swimSnapshot.position.x) < 0.0001
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime advances grounded prediction in authoritative fixed steps across split render frames", async () => {
+  const surfaceColliderSnapshots = [
+    Object.freeze({
+      halfExtents: freezeVector3(4, 0.2, 4),
+      rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+      translation: freezeVector3(0, -0.1, 24)
+    })
+  ];
+  const splitHarness = await createTraversalHarness({
+    surfaceColliderSnapshots
+  });
+  const wholeHarness = await createTraversalHarness({
+    surfaceColliderSnapshots
+  });
+
+  try {
+    splitHarness.traversalRuntime.boot();
+    wholeHarness.traversalRuntime.boot();
+    assert.equal(splitHarness.traversalRuntime.locomotionMode, "grounded");
+    assert.equal(wholeHarness.traversalRuntime.locomotionMode, "grounded");
+
+    splitHarness.traversalRuntime.advance(
+      forwardTravelInput,
+      groundedFixedStepSeconds * 0.5
+    );
+    splitHarness.traversalRuntime.advance(
+      forwardTravelInput,
+      groundedFixedStepSeconds * 0.5
+    );
+    wholeHarness.traversalRuntime.advance(
+      forwardTravelInput,
+      groundedFixedStepSeconds
+    );
+
+    assertGroundedBodySnapshotsMatch(
+      splitHarness.groundedBodyRuntime.snapshot,
+      wholeHarness.groundedBodyRuntime.snapshot
+    );
+    assertCameraSnapshotsMatch(
+      splitHarness.traversalRuntime.cameraSnapshot,
+      wholeHarness.traversalRuntime.cameraSnapshot
+    );
+    assert.equal(
+      splitHarness.traversalRuntime.characterPresentationSnapshot
+        ?.animationVocabulary,
+      wholeHarness.traversalRuntime.characterPresentationSnapshot
+        ?.animationVocabulary
+    );
+  } finally {
+    splitHarness.groundedBodyRuntime.dispose();
+    wholeHarness.groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime advances swim prediction in authoritative fixed steps across split render frames", async () => {
+  const splitHarness = await createTraversalHarness();
+  const wholeHarness = await createTraversalHarness();
+
+  try {
+    splitHarness.traversalRuntime.boot();
+    wholeHarness.traversalRuntime.boot();
+    assert.equal(splitHarness.traversalRuntime.locomotionMode, "swim");
+    assert.equal(wholeHarness.traversalRuntime.locomotionMode, "swim");
+
+    splitHarness.traversalRuntime.advance(
+      forwardTravelInput,
+      groundedFixedStepSeconds * 0.5
+    );
+    splitHarness.traversalRuntime.advance(
+      forwardTravelInput,
+      groundedFixedStepSeconds * 0.5
+    );
+    wholeHarness.traversalRuntime.advance(
+      forwardTravelInput,
+      groundedFixedStepSeconds
+    );
+
+    assertLocalTraversalPoseSnapshotsMatch(
+      splitHarness.traversalRuntime.localTraversalPoseSnapshot,
+      wholeHarness.traversalRuntime.localTraversalPoseSnapshot
+    );
+    assertCameraSnapshotsMatch(
+      splitHarness.traversalRuntime.cameraSnapshot,
+      wholeHarness.traversalRuntime.cameraSnapshot
+    );
+    assert.equal(
+      splitHarness.traversalRuntime.characterPresentationSnapshot
+        ?.animationVocabulary,
+      wholeHarness.traversalRuntime.characterPresentationSnapshot
+        ?.animationVocabulary
+    );
+  } finally {
+    splitHarness.groundedBodyRuntime.dispose();
+    wholeHarness.groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime projects grounded camera and character presentation between authoritative fixed steps", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    traversalRuntime.advance(forwardTravelInput, groundedFixedStepSeconds);
+
+    const rawGroundedPosition = groundedBodyRuntime.snapshot.position;
+    const groundedCameraPosition = traversalRuntime.cameraSnapshot.position;
+    const groundedCharacterPosition =
+      traversalRuntime.characterPresentationSnapshot?.position;
+
+    assert.notEqual(groundedCharacterPosition, null);
+
+    traversalRuntime.advance(forwardTravelInput, groundedFixedStepSeconds * 0.5);
+
+    assert.equal(
+      groundedBodyRuntime.snapshot.position.z,
+      rawGroundedPosition.z
+    );
+    assert.ok(
+      traversalRuntime.cameraSnapshot.position.z <
+        groundedCameraPosition.z - 0.0001
+    );
+    assert.ok(
+      traversalRuntime.characterPresentationSnapshot.position.z <
+        groundedCharacterPosition.z - 0.0001
+    );
+    assert.ok(
+      traversalRuntime.characterPresentationSnapshot.position.z <
+        groundedBodyRuntime.snapshot.position.z - 0.0001
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime projects grounded jump descent ballistically between authoritative fixed steps", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    const airbornePosition = freezeVector3(0, 1.8, 24);
+    const downwardVelocity = freezeVector3(0, -4, 0);
+    const predictionSeconds = groundedFixedStepSeconds * 0.9;
+    const linearProjectedY =
+      airbornePosition.y + downwardVelocity.y * predictionSeconds;
+
+    groundedBodyRuntime.syncAuthoritativeState({
+      grounded: false,
+      linearVelocity: downwardVelocity,
+      position: airbornePosition,
+      yawRadians: 0
+    });
+
+    traversalRuntime.advance(
+      Object.freeze({
+        boost: false,
+        moveAxis: 0,
+        pitchAxis: 0,
+        yawAxis: 0
+      }),
+      predictionSeconds
+    );
+
+    assert.ok(
+      Math.abs(groundedBodyRuntime.snapshot.position.y - airbornePosition.y) <
+        0.0001
+    );
+    assert.ok(
+      traversalRuntime.characterPresentationSnapshot.position.y <
+        linearProjectedY - 0.005
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime clamps grounded jump descent presentation to authored support before touchdown", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    groundedBodyRuntime.syncAuthoritativeState({
+      grounded: false,
+      linearVelocity: freezeVector3(0, -5.7, 0),
+      position: freezeVector3(0, 0.65, 24),
+      yawRadians: 0
+    });
+
+    traversalRuntime.advance(
+      Object.freeze({
+        boost: false,
+        moveAxis: 0,
+        pitchAxis: 0,
+        yawAxis: 0
+      }),
+      groundedFixedStepSeconds * 0.9
+    );
+
+    assert.ok(
+      traversalRuntime.characterPresentationSnapshot.position.y >= 0.1 - 0.0001
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime projects swim camera and character presentation between authoritative fixed steps", async () => {
+  const { groundedBodyRuntime, traversalRuntime } = await createTraversalHarness();
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "swim");
+
+    traversalRuntime.advance(forwardTravelInput, groundedFixedStepSeconds);
+
+    const rawSwimPose = traversalRuntime.localTraversalPoseSnapshot;
+    const swimCameraPosition = traversalRuntime.cameraSnapshot.position;
+    const swimCharacterPosition =
+      traversalRuntime.characterPresentationSnapshot?.position;
+
+    assert.notEqual(rawSwimPose, null);
+    assert.notEqual(swimCharacterPosition, null);
+
+    traversalRuntime.advance(forwardTravelInput, groundedFixedStepSeconds * 0.5);
+
+    assertLocalTraversalPoseSnapshotsMatch(
+      traversalRuntime.localTraversalPoseSnapshot,
+      rawSwimPose
+    );
+    assert.ok(
+      traversalRuntime.cameraSnapshot.position.z <
+        swimCameraPosition.z - 0.0001
+    );
+    assert.ok(
+      traversalRuntime.characterPresentationSnapshot.position.z <
+        swimCharacterPosition.z - 0.0001
+    );
+    assert.ok(
+      traversalRuntime.characterPresentationSnapshot.position.z <
+        rawSwimPose.position.z - 0.0001
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime preserves a grounded jump tap across split render frames before the next fixed step", async () => {
+  const surfaceColliderSnapshots = [
+    Object.freeze({
+      halfExtents: freezeVector3(4, 0.2, 4),
+      rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+      translation: freezeVector3(0, -0.1, 24)
+    })
+  ];
+  const splitHarness = await createTraversalHarness({
+    surfaceColliderSnapshots
+  });
+  const wholeHarness = await createTraversalHarness({
+    surfaceColliderSnapshots
+  });
+
+  try {
+    splitHarness.traversalRuntime.boot();
+    wholeHarness.traversalRuntime.boot();
+    assert.equal(splitHarness.traversalRuntime.locomotionMode, "grounded");
+    assert.equal(wholeHarness.traversalRuntime.locomotionMode, "grounded");
+
+    splitHarness.traversalRuntime.advance(
+      forwardJumpTravelInput,
+      groundedFixedStepSeconds * 0.5
+    );
+    assert.equal(splitHarness.groundedBodyRuntime.snapshot.grounded, true);
+
+    splitHarness.traversalRuntime.advance(
+      forwardTravelInput,
+      groundedFixedStepSeconds * 0.5
+    );
+    wholeHarness.traversalRuntime.advance(
+      forwardJumpTravelInput,
+      groundedFixedStepSeconds
+    );
+
+    assert.equal(splitHarness.groundedBodyRuntime.snapshot.grounded, false);
+    assert.ok(splitHarness.groundedBodyRuntime.snapshot.position.y > 0);
+    assertGroundedBodySnapshotsMatch(
+      splitHarness.groundedBodyRuntime.snapshot,
+      wholeHarness.groundedBodyRuntime.snapshot
+    );
+    assertCameraSnapshotsMatch(
+      splitHarness.traversalRuntime.cameraSnapshot,
+      wholeHarness.traversalRuntime.cameraSnapshot
+    );
+    assert.equal(
+      splitHarness.traversalRuntime.characterPresentationSnapshot
+        ?.animationVocabulary,
+      wholeHarness.traversalRuntime.characterPresentationSnapshot
+        ?.animationVocabulary
+    );
+  } finally {
+    splitHarness.groundedBodyRuntime.dispose();
+    wholeHarness.groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime does not greedily re-trigger grounded jumps from a held spacebar after landing", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createTraversalHarness({
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ]
+    });
+  const heldJumpInput = Object.freeze({
+    boost: false,
+    jump: true,
+    moveAxis: 0,
+    pitchAxis: 0,
+    primaryAction: false,
+    secondaryAction: false,
+    strafeAxis: 0,
+    yawAxis: 0
+  });
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    let observedAirborne = false;
+    let observedLanding = false;
+    let observedGreedyRejump = false;
+
+    for (let frame = 0; frame < 240; frame += 1) {
+      traversalRuntime.advance(heldJumpInput, groundedFixedStepSeconds);
+
+      if (!observedAirborne && !groundedBodyRuntime.snapshot.grounded) {
+        observedAirborne = true;
+        continue;
+      }
+
+      if (observedAirborne && !observedLanding && groundedBodyRuntime.snapshot.grounded) {
+        observedLanding = true;
+        continue;
+      }
+
+      if (observedLanding && !groundedBodyRuntime.snapshot.grounded) {
+        observedGreedyRejump = true;
+        break;
+      }
+    }
+
+    assert.equal(observedAirborne, true);
+    assert.equal(observedLanding, true);
+    assert.equal(observedGreedyRejump, false);
+    assert.equal(groundedBodyRuntime.snapshot.grounded, true);
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime keeps local swim presentation client-owned against routine authoritative swim drift", async () => {
+  const { groundedBodyRuntime, traversalRuntime } = await createTraversalHarness();
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "swim");
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, {
+      jumpAuthorityState: "none",
+      lastAcceptedJumpActionSequence: 0,
+      lastProcessedJumpActionSequence: 0,
       linearVelocity: Object.freeze({
         x: 0,
         y: 0,
@@ -1695,157 +4105,284 @@ test("MetaverseTraversalRuntime preserves active swim presentation through autho
     });
 
     assert.equal(traversalRuntime.locomotionMode, "swim");
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 0);
     assert.equal(
       traversalRuntime.characterPresentationSnapshot?.animationVocabulary,
-      "swim"
+      "swim-idle"
     );
   } finally {
     groundedBodyRuntime.dispose();
   }
 });
 
-test("MetaverseTraversalRuntime routes the shipped dock spawn into water on the hub shoreline slice", async () => {
+test("MetaverseTraversalRuntime preserves a local grounded jump above water against routine authoritative swim corrections", async () => {
+  const elevatedSupportHeightMeters = 0.42;
   const { groundedBodyRuntime, traversalRuntime } =
-    await createShippedTraversalHarness();
+    await createTraversalHarness({
+      config: {
+        camera: {
+          spawnPosition: {
+            x: 0,
+            y: elevatedSupportHeightMeters + 1.62,
+            z: 24
+          }
+        },
+        groundedBody: {
+          spawnPosition: {
+            x: 0,
+            y: elevatedSupportHeightMeters,
+            z: 24
+          }
+        }
+      },
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, elevatedSupportHeightMeters - 0.2, 24)
+        })
+      ]
+    });
 
   try {
     traversalRuntime.boot();
     assert.equal(traversalRuntime.locomotionMode, "grounded");
 
-    let waterEntryFrame = null;
+    traversalRuntime.advance(
+      Object.freeze({
+        boost: false,
+        jump: true,
+        moveAxis: 0,
+        pitchAxis: 0,
+        primaryAction: false,
+        secondaryAction: false,
+        strafeAxis: 0,
+        yawAxis: 0
+      }),
+      groundedFixedStepSeconds
+    );
 
-    for (let frame = 0; frame < 90; frame += 1) {
-      traversalRuntime.advance(forwardTravelInput, 1 / 60);
+    const localJumpSnapshot = groundedBodyRuntime.snapshot;
 
-      if (traversalRuntime.locomotionMode === "swim") {
-        waterEntryFrame = frame + 1;
-        break;
-      }
-    }
+    assert.equal(localJumpSnapshot.grounded, false);
+    assert.ok(localJumpSnapshot.position.y > elevatedSupportHeightMeters);
 
-    assert.notEqual(waterEntryFrame, null);
-    assert.equal(
-      traversalRuntime.shorelineLocalTelemetrySnapshot.decisionReason,
-      "water-entry"
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, 
+      {
+        jumpAuthorityState: "none",
+        lastAcceptedJumpActionSequence: 1,
+        lastProcessedJumpActionSequence: 1,
+        linearVelocity: Object.freeze({
+          x: 0,
+          y: 0,
+          z: 0
+        }),
+        locomotionMode: "swim",
+        mountedOccupancy: null,
+        position: Object.freeze({
+          x: localJumpSnapshot.position.x,
+          y: 0,
+          z: localJumpSnapshot.position.z
+        }),
+        yawRadians: localJumpSnapshot.yawRadians
+      },
+      1
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 0);
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.y - localJumpSnapshot.position.y
+      ) < 0.0001
     );
   } finally {
     groundedBodyRuntime.dispose();
   }
 });
 
-test("MetaverseTraversalRuntime holds sustained swim after shipped dock water entry before the shoreline exit lane", async () => {
-  const { groundedBodyRuntime, traversalRuntime } =
-    await createShippedTraversalHarness();
+test("MetaverseTraversalRuntime keeps shipped dock travel reconciliation-free against fixed-tick authority before water entry", async () => {
+  const localHarness = await createShippedTraversalHarness();
+  const authoritativeHarness = await createShippedTraversalHarness();
+  const correctionEvents = [];
+  let authoritativeAccumulatorSeconds = 0;
 
   try {
-    traversalRuntime.boot();
+    localHarness.traversalRuntime.boot();
+    authoritativeHarness.traversalRuntime.boot();
+    assert.equal(localHarness.traversalRuntime.locomotionMode, "grounded");
+    assert.equal(authoritativeHarness.traversalRuntime.locomotionMode, "grounded");
+    const dockStartZ = localHarness.traversalRuntime.cameraSnapshot.position.z;
 
-    for (let frame = 0; frame < 90; frame += 1) {
-      traversalRuntime.advance(forwardTravelInput, 1 / 60);
-
-      if (traversalRuntime.locomotionMode === "swim") {
-        break;
-      }
-    }
-
-    assert.equal(traversalRuntime.locomotionMode, "swim");
-
-    const swimStartZ = traversalRuntime.cameraSnapshot.position.z;
-
-    for (let frame = 0; frame < 24; frame += 1) {
-      traversalRuntime.advance(forwardTravelInput, 1 / 60);
-      assert.equal(traversalRuntime.locomotionMode, "swim");
-    }
-
-    assert.ok(traversalRuntime.cameraSnapshot.position.z < swimStartZ - 0.9);
-    assert.equal(
-      traversalRuntime.characterPresentationSnapshot?.animationVocabulary,
-      "swim"
+    let latestAuthoritativeSnapshot = createTraversalAuthoritySnapshot(
+      authoritativeHarness.traversalRuntime.localTraversalPoseSnapshot,
+      authoritativeHarness.traversalRuntime.localTraversalPoseSnapshot,
+      authoritativeHarness.groundedBodyRuntime.snapshot,
+      groundedFixedStepSeconds
     );
-  } finally {
-    groundedBodyRuntime.dispose();
-  }
-});
 
-test("MetaverseTraversalRuntime keeps a dock jump grounded through the airborne arc before transitioning into the shoreline swim route", async () => {
-  const { config, groundedBodyRuntime, traversalRuntime } =
-    await createShippedTraversalHarness();
+    for (let frame = 0; frame < 20; frame += 1) {
+      localHarness.traversalRuntime.advance(forwardTravelInput, 1 / 60);
+      assert.equal(localHarness.traversalRuntime.locomotionMode, "grounded");
 
-  try {
-    traversalRuntime.boot();
+      authoritativeAccumulatorSeconds += 1 / 60;
 
-    let sawAirborneGrounded = false;
-    let enteredSwimAtWaterline = false;
-
-    for (let frame = 0; frame < 120; frame += 1) {
-      traversalRuntime.advance(
-        frame === 0 ? forwardJumpTravelInput : forwardTravelInput,
-        1 / 60
-      );
-
-      if (
-        traversalRuntime.locomotionMode === "grounded" &&
-        !groundedBodyRuntime.snapshot.grounded &&
-        groundedBodyRuntime.snapshot.position.y >
-          config.ocean.height + 0.05
+      while (
+        authoritativeAccumulatorSeconds + 0.000001 >= groundedFixedStepSeconds
       ) {
-        sawAirborneGrounded = true;
-        assert.match(
-          traversalRuntime.characterPresentationSnapshot?.animationVocabulary ?? "",
-          /^jump-/
+        const previousAuthoritativePose =
+          authoritativeHarness.traversalRuntime.localTraversalPoseSnapshot;
+
+        authoritativeHarness.traversalRuntime.advance(
+          forwardTravelInput,
+          groundedFixedStepSeconds
+        );
+        assert.equal(authoritativeHarness.traversalRuntime.locomotionMode, "grounded");
+
+        latestAuthoritativeSnapshot = createTraversalAuthoritySnapshot(
+          previousAuthoritativePose,
+          authoritativeHarness.traversalRuntime.localTraversalPoseSnapshot,
+          authoritativeHarness.groundedBodyRuntime.snapshot,
+          groundedFixedStepSeconds
+        );
+        authoritativeAccumulatorSeconds = Math.max(
+          0,
+          authoritativeAccumulatorSeconds - groundedFixedStepSeconds
         );
       }
 
-      if (traversalRuntime.locomotionMode === "swim") {
-        enteredSwimAtWaterline =
-          groundedBodyRuntime.snapshot.position.y <= config.ocean.height + 0.151;
-        break;
+      reconcileAckedAuthoritativeLocalPlayerPose(localHarness.traversalRuntime, 
+        latestAuthoritativeSnapshot,
+        authoritativeAccumulatorSeconds,
+        createTraversalIntentSnapshot({
+          boost: false,
+          inputSequence: frame + 1,
+          jump: false,
+          jumpActionSequence: 0,
+          locomotionMode: "grounded",
+          moveAxis: 1,
+          strafeAxis: 0,
+          yawAxis: 0
+        }),
+        0
+      );
+
+      if (
+        localHarness.traversalRuntime.localReconciliationCorrectionCount >
+        correctionEvents.length
+      ) {
+        correctionEvents.push(
+          Object.freeze({
+            correction: localHarness.traversalRuntime
+              .authoritativeCorrectionTelemetrySnapshot,
+            frame: frame + 1,
+            shoreline: localHarness.traversalRuntime.shorelineLocalTelemetrySnapshot
+          })
+        );
       }
     }
 
-    assert.equal(sawAirborneGrounded, true);
-    assert.equal(traversalRuntime.locomotionMode, "swim");
-    assert.equal(enteredSwimAtWaterline, true);
+    assert.equal(
+      localHarness.traversalRuntime.localReconciliationCorrectionCount,
+      0,
+      `expected zero shipped dock replay reconciliations, received ${localHarness.traversalRuntime.localReconciliationCorrectionCount} with events ${JSON.stringify(correctionEvents)}`
+    );
+    assert.ok(localHarness.traversalRuntime.cameraSnapshot.position.z < dockStartZ - 0.3);
   } finally {
-    groundedBodyRuntime.dispose();
+    localHarness.groundedBodyRuntime.dispose();
+    authoritativeHarness.groundedBodyRuntime.dispose();
   }
 });
 
-test("MetaverseTraversalRuntime exits swim onto the shipped shoreline lane and settles on authored support", async () => {
-  const { config, groundedBodyRuntime, traversalRuntime } =
-    await createShippedTraversalHarness();
+test("MetaverseTraversalRuntime keeps sustained swim reconciliation-free against fixed-tick authority", async () => {
+  const localHarness = await createTraversalHarness();
+  const authoritativeHarness = await createTraversalHarness();
+  const correctionEvents = [];
+  let authoritativeAccumulatorSeconds = 0;
 
   try {
-    traversalRuntime.boot();
+    localHarness.traversalRuntime.boot();
+    authoritativeHarness.traversalRuntime.boot();
+    assert.equal(localHarness.traversalRuntime.locomotionMode, "swim");
+    assert.equal(authoritativeHarness.traversalRuntime.locomotionMode, "swim");
+    const swimStartZ = localHarness.traversalRuntime.cameraSnapshot.position.z;
 
-    let sawSwim = false;
+    let latestAuthoritativeSnapshot = createTraversalAuthoritySnapshot(
+      authoritativeHarness.traversalRuntime.localTraversalPoseSnapshot,
+      authoritativeHarness.traversalRuntime.localTraversalPoseSnapshot,
+      authoritativeHarness.groundedBodyRuntime.snapshot,
+      groundedFixedStepSeconds
+    );
 
     for (let frame = 0; frame < 240; frame += 1) {
-      traversalRuntime.advance(forwardTravelInput, 1 / 60);
+      localHarness.traversalRuntime.advance(forwardTravelInput, 1 / 60);
+      authoritativeAccumulatorSeconds += 1 / 60;
 
-      if (traversalRuntime.locomotionMode === "swim") {
-        sawSwim = true;
-        continue;
+      while (
+        authoritativeAccumulatorSeconds + 0.000001 >= groundedFixedStepSeconds
+      ) {
+        const previousAuthoritativePose =
+          authoritativeHarness.traversalRuntime.localTraversalPoseSnapshot;
+
+        authoritativeHarness.traversalRuntime.advance(
+          forwardTravelInput,
+          groundedFixedStepSeconds
+        );
+
+        latestAuthoritativeSnapshot = createTraversalAuthoritySnapshot(
+          previousAuthoritativePose,
+          authoritativeHarness.traversalRuntime.localTraversalPoseSnapshot,
+          authoritativeHarness.groundedBodyRuntime.snapshot,
+          groundedFixedStepSeconds
+        );
+        authoritativeAccumulatorSeconds = Math.max(
+          0,
+          authoritativeAccumulatorSeconds - groundedFixedStepSeconds
+        );
       }
 
-      if (sawSwim) {
-        break;
+      reconcileAckedAuthoritativeLocalPlayerPose(
+        localHarness.traversalRuntime,
+        latestAuthoritativeSnapshot,
+        authoritativeAccumulatorSeconds,
+        createTraversalIntentSnapshot({
+          boost: false,
+          inputSequence: frame + 1,
+          jump: false,
+          jumpActionSequence: 0,
+          locomotionMode: "swim",
+          moveAxis: 1,
+          strafeAxis: 0,
+          yawAxis: 0
+        }),
+        0
+      );
+
+      if (
+        localHarness.traversalRuntime.localReconciliationCorrectionCount >
+        correctionEvents.length
+      ) {
+        correctionEvents.push(
+          Object.freeze({
+            correction: localHarness.traversalRuntime
+              .authoritativeCorrectionTelemetrySnapshot,
+            frame: frame + 1,
+            shoreline: localHarness.traversalRuntime.shorelineLocalTelemetrySnapshot
+          })
+        );
       }
     }
 
-    assert.equal(sawSwim, true);
-    assert.equal(traversalRuntime.locomotionMode, "grounded");
-    assert.ok(groundedBodyRuntime.snapshot.grounded);
-    assert.ok(
-      groundedBodyRuntime.snapshot.position.y >
-        config.ocean.height + config.groundedBody.stepHeightMeters * 0.5
-    );
     assert.equal(
-      traversalRuntime.shorelineLocalTelemetrySnapshot.decisionReason,
-      "shoreline-exit-success"
+      localHarness.traversalRuntime.localReconciliationCorrectionCount,
+      0,
+      `expected zero sustained swim replay reconciliations, received ${localHarness.traversalRuntime.localReconciliationCorrectionCount} with events ${JSON.stringify(correctionEvents)}`
     );
+    assert.ok(localHarness.traversalRuntime.cameraSnapshot.position.z < swimStartZ - 0.9);
   } finally {
-    groundedBodyRuntime.dispose();
+    localHarness.groundedBodyRuntime.dispose();
+    authoritativeHarness.groundedBodyRuntime.dispose();
   }
 });
 

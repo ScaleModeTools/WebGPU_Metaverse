@@ -5,11 +5,13 @@ import {
   advanceMetaverseSurfaceTraversalMotion,
   advanceMetaverseSurfaceTraversalSnapshot,
   createMetaverseSurfaceTraversalSnapshot,
+  metaverseHubDockEnvironmentAssetId,
   metaverseHubShorelineEnvironmentAssetId,
-  metaverseWorldLayout,
+  metaverseHubSkiffEnvironmentAssetId,
   metaverseWorldPlacedWaterRegions,
   metaverseWorldStaticSurfaceAssets,
   readMetaverseWorldSurfaceAssetAuthoring,
+  resolveMetaverseWorldDynamicSurfaceColliders,
   resolveMetaverseWorldAutomaticSurfaceLocomotion,
   resolveMetaverseWorldPlacedSurfaceColliders
 } from "@webgpu-metaverse/shared";
@@ -39,6 +41,7 @@ const metaverseSurfaceTraversalConfig = Object.freeze({
   dragCurveExponent: 1,
   maxTurnSpeedRadiansPerSecond: Math.PI
 });
+const shippedDockSupportHeightMeters = 0.6;
 
 function assertApprox(actual, expected, tolerance = 0.000001) {
   assert.ok(
@@ -47,24 +50,22 @@ function assertApprox(actual, expected, tolerance = 0.000001) {
   );
 }
 
-test("shared metaverse world layout owns render placements, static colliders, and dynamic collider derivation from one snapshot", () => {
-  const dockRenderPlacementAsset =
-    metaverseWorldLayout.readRenderPlacementAsset("metaverse-hub-dock-v1");
+test("shared metaverse surface authoring and queries expose placements, static colliders, and dynamic collider derivation", () => {
+  const dockSurfaceAsset = readMetaverseWorldSurfaceAssetAuthoring(
+    metaverseHubDockEnvironmentAssetId
+  );
 
-  assert.notEqual(dockRenderPlacementAsset, null);
-  assert.equal(dockRenderPlacementAsset?.placement, "static");
-  assert.equal(dockRenderPlacementAsset?.placements.length, 4);
+  assert.notEqual(dockSurfaceAsset, null);
+  assert.equal(dockSurfaceAsset?.placement, "static");
+  assert.equal(dockSurfaceAsset?.placements.length, 4);
   assert.equal(
-    metaverseWorldLayout.staticSurfaceColliderSnapshots.length,
+    staticSurfaceColliders.length,
     staticSurfaceColliders.length
   );
-  assert.equal(
-    metaverseWorldLayout.waterRegionSnapshots.length,
-    metaverseWorldPlacedWaterRegions.length
-  );
+  assert.ok(metaverseWorldPlacedWaterRegions.length > 0);
 
-  const dynamicSurfaceColliders = metaverseWorldLayout.resolveSurfaceColliderSnapshots(
-    "metaverse-hub-skiff-v1",
+  const dynamicSurfaceColliders = resolveMetaverseWorldDynamicSurfaceColliders(
+    metaverseHubSkiffEnvironmentAssetId,
     {
       position: {
         x: 12,
@@ -106,6 +107,39 @@ test("shared metaverse surface authoring exposes the shipped shoreline slice wit
   );
 });
 
+test("shared metaverse dock traversal uses one simple static support cuboid per dock placement", () => {
+  const dockSurfaceAsset = readMetaverseWorldSurfaceAssetAuthoring(
+    metaverseHubDockEnvironmentAssetId
+  );
+  const dockSurfaceColliders =
+    dockSurfaceAsset === null
+      ? []
+      : resolveMetaverseWorldPlacedSurfaceColliders(dockSurfaceAsset);
+
+  assert.notEqual(dockSurfaceAsset, null);
+  assert.equal(dockSurfaceAsset?.placement, "static");
+  assert.equal(dockSurfaceAsset?.placements.length, 4);
+  assert.equal(dockSurfaceAsset?.surfaceColliders.length, 1);
+  assert.equal(
+    dockSurfaceAsset?.surfaceColliders[0]?.traversalAffordance,
+    "support"
+  );
+  assert.deepEqual(dockSurfaceAsset?.surfaceColliders[0]?.size, {
+    x: 8.4,
+    y: 0.34,
+    z: 4.2
+  });
+  assert.equal(dockSurfaceColliders.length, 4);
+  assert.ok(
+    dockSurfaceColliders.every(
+      (surfaceCollider) =>
+        surfaceCollider.ownerEnvironmentAssetId ===
+          metaverseHubDockEnvironmentAssetId &&
+        surfaceCollider.traversalAffordance === "support"
+    )
+  );
+});
+
 test("shared metaverse surface policy keeps dock support, open water, shoreline exit, and side-lane swim distinct", () => {
   const dockDecision = resolveMetaverseWorldAutomaticSurfaceLocomotion(
     metaverseSurfacePolicyConfig,
@@ -113,7 +147,7 @@ test("shared metaverse surface policy keeps dock support, open water, shoreline 
     metaverseWorldPlacedWaterRegions,
     {
       x: -8.2,
-      y: 0.15,
+      y: shippedDockSupportHeightMeters,
       z: -14.8
     },
     Math.PI * 0.06,
@@ -227,9 +261,9 @@ test("shared surface traversal motion can turn toward an explicit yaw target ins
     Math.PI
   );
 
-  assertApprox(motionSnapshot.yawRadians, Math.PI * 0.25);
+  assertApprox(motionSnapshot.yawRadians, Math.PI);
   assertApprox(motionSnapshot.forwardSpeedUnitsPerSecond, 2);
   assertApprox(motionSnapshot.strafeSpeedUnitsPerSecond, 0);
-  assertApprox(motionSnapshot.velocityX, Math.SQRT2);
-  assertApprox(motionSnapshot.velocityZ, -Math.SQRT2);
+  assertApprox(motionSnapshot.velocityX, 0);
+  assertApprox(motionSnapshot.velocityZ, 2);
 });

@@ -2,8 +2,8 @@ import type {
   MetaverseWorldPlacedSurfaceColliderSnapshot,
   MetaverseWorldPlacedWaterRegionSnapshot,
   MetaverseWorldSurfaceVector3Snapshot
-} from "./metaverse-world-surface-authoring.js";
-import { resolveMetaverseWorldWaterSurfaceHeightMeters } from "./metaverse-world-surface-authoring.js";
+} from "./metaverse-world-surface-query.js";
+import { resolveMetaverseWorldWaterSurfaceHeightMeters } from "./metaverse-world-surface-query.js";
 
 export interface MetaverseWorldSurfacePolicyConfig {
   readonly capsuleHalfHeightMeters: number;

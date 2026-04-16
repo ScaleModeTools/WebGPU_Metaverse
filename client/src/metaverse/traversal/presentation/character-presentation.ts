@@ -19,9 +19,11 @@ interface TraversalCharacterPresentationInput {
   readonly animationVocabulary: MetaverseCharacterPresentationSnapshot["animationVocabulary"];
   readonly config: MetaverseRuntimeConfig;
   readonly groundedBodySnapshot: MetaverseGroundedBodySnapshot | null;
+  readonly groundedPresentationPosition?: PhysicsVector3Snapshot | null;
   readonly locomotionMode: MetaverseLocomotionModeId;
   readonly mountedVehicleSnapshot: TraversalMountedVehicleSnapshot | null;
   readonly swimSnapshot: SurfaceLocomotionSnapshot;
+  readonly swimPresentationPosition?: PhysicsVector3Snapshot | null;
 }
 
 function createCharacterPresentationSnapshot(
@@ -58,10 +60,11 @@ function createFixedCharacterPresentationSnapshot(
 
 function createGroundedCharacterPresentationSnapshot(
   bodySnapshot: MetaverseGroundedBodySnapshot,
-  animationVocabulary: MetaverseCharacterPresentationSnapshot["animationVocabulary"]
+  animationVocabulary: MetaverseCharacterPresentationSnapshot["animationVocabulary"],
+  position: PhysicsVector3Snapshot = bodySnapshot.position
 ): MetaverseCharacterPresentationSnapshot {
   return createCharacterPresentationSnapshot(
-    bodySnapshot.position,
+    position,
     bodySnapshot.yawRadians,
     animationVocabulary
   );
@@ -70,18 +73,19 @@ function createGroundedCharacterPresentationSnapshot(
 function createSwimCharacterPresentationSnapshot(
   swimSnapshot: SurfaceLocomotionSnapshot,
   animationVocabulary: MetaverseCharacterPresentationSnapshot["animationVocabulary"],
-  config: MetaverseRuntimeConfig
+  config: MetaverseRuntimeConfig,
+  position: PhysicsVector3Snapshot = swimSnapshot.position
 ): MetaverseCharacterPresentationSnapshot {
   const moving = animationVocabulary === "swim";
 
   return createCharacterPresentationSnapshot(
     freezeVector3(
-      swimSnapshot.position.x,
-      swimSnapshot.position.y -
+      position.x,
+      position.y -
         (moving
           ? config.bodyPresentation.swimMovingBodySubmersionDepthMeters
           : config.bodyPresentation.swimIdleBodySubmersionDepthMeters),
-      swimSnapshot.position.z
+      position.z
     ),
     swimSnapshot.yawRadians,
     moving ? "swim" : "swim-idle"
@@ -92,9 +96,11 @@ export function createTraversalCharacterPresentationSnapshot({
   animationVocabulary,
   config,
   groundedBodySnapshot,
+  groundedPresentationPosition,
   locomotionMode,
   mountedVehicleSnapshot,
-  swimSnapshot
+  swimSnapshot,
+  swimPresentationPosition
 }: TraversalCharacterPresentationInput): MetaverseCharacterPresentationSnapshot | null {
   if (
     mountedVehicleSnapshot !== null &&
@@ -117,7 +123,8 @@ export function createTraversalCharacterPresentationSnapshot({
       ? null
       : createGroundedCharacterPresentationSnapshot(
           groundedBodySnapshot,
-          animationVocabulary
+          animationVocabulary,
+          groundedPresentationPosition ?? groundedBodySnapshot.position
         );
   }
 
@@ -125,7 +132,8 @@ export function createTraversalCharacterPresentationSnapshot({
     return createSwimCharacterPresentationSnapshot(
       swimSnapshot,
       animationVocabulary,
-      config
+      config,
+      swimPresentationPosition ?? swimSnapshot.position
     );
   }
 

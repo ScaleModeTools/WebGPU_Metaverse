@@ -102,21 +102,6 @@ export type {
   ExperienceId
 } from "./metaverse/experience-catalog.js";
 export {
-  MetaverseMovementAnimationPolicyRuntime,
-  metaverseMovementAnimationPolicyConfig
-} from "./metaverse/metaverse-movement-animation-policy.js";
-export type {
-  MetaverseMovementAnimationPolicyConfig,
-  MetaverseMovementAnimationPolicyInput,
-  MetaverseMovementAnimationPolicyModeConfig
-} from "./metaverse/metaverse-movement-animation-policy.js";
-export {
-  metaverseWorldLayout
-} from "./metaverse/metaverse-world-layout.js";
-export type {
-  MetaverseWorldRenderPlacementAssetSnapshot
-} from "./metaverse/metaverse-world-layout.js";
-export {
   metaverseHubCrateEnvironmentAssetId,
   metaverseHubDockEnvironmentAssetId,
   metaverseHubDiveBoatEnvironmentAssetId,
@@ -127,30 +112,34 @@ export {
   metaverseWorldDynamicSurfaceAssets,
   metaverseWorldStaticSurfaceAssets,
   metaverseWorldSurfaceAssets,
-  metaverseWorldSurfacePlacementIds,
-  metaverseWorldSurfaceTraversalAffordanceIds,
   metaverseWorldWaterRegions,
   readMetaverseWorldSurfaceAssetAuthoring,
   readMetaverseWorldPlacedWaterRegionSnapshot,
-  resolveMetaverseWorldDynamicSurfaceColliders,
+  resolveMetaverseWorldDynamicSurfaceColliders
+} from "./metaverse/metaverse-world-surface-authoring.js";
+export type {
+  MetaverseWorldSurfaceAssetAuthoring,
+  MetaverseWorldSurfaceColliderAuthoring,
+  MetaverseWorldWaterRegionAuthoring
+} from "./metaverse/metaverse-world-surface-authoring.js";
+export {
+  metaverseWorldSurfacePlacementIds,
+  metaverseWorldSurfaceTraversalAffordanceIds,
   resolveMetaverseWorldPlacedSurfaceColliders,
   resolveMetaverseWorldPlacedWaterRegionAtPlanarPosition,
   resolveMetaverseWorldWaterRegionFloorHeightMeters,
   resolveMetaverseWorldWaterRegionSurfaceHeightMeters,
   resolveMetaverseWorldWaterSurfaceHeightMeters
-} from "./metaverse/metaverse-world-surface-authoring.js";
+} from "./metaverse/metaverse-world-surface-query.js";
 export type {
   MetaverseWorldPlacedSurfaceColliderSnapshot,
   MetaverseWorldPlacedWaterRegionSnapshot,
   MetaverseWorldSurfaceQuaternionSnapshot,
-  MetaverseWorldSurfaceAssetAuthoring,
-  MetaverseWorldSurfaceColliderAuthoring,
   MetaverseWorldSurfacePlacementId,
   MetaverseWorldSurfacePlacementSnapshot,
   MetaverseWorldSurfaceTraversalAffordanceId,
-  MetaverseWorldSurfaceVector3Snapshot,
-  MetaverseWorldWaterRegionAuthoring
-} from "./metaverse/metaverse-world-surface-authoring.js";
+  MetaverseWorldSurfaceVector3Snapshot
+} from "./metaverse/metaverse-world-surface-query.js";
 export {
   constrainMetaverseWorldPlanarPositionAgainstBlockers,
   isMetaverseWorldWaterbornePosition,
@@ -186,6 +175,126 @@ export type {
   MetaverseSurfaceTraversalSpeedSnapshot
 } from "./metaverse/metaverse-surface-traversal-simulation.js";
 export {
+  metaverseGroundedBodyTraversalCoreConfig,
+  metaverseGroundedSurfacePolicyConfig,
+  metaverseGroundedSurfaceTraversalConfig,
+  metaverseSwimSurfaceTraversalConfig,
+  metaverseTraversalWorldRadius,
+  metaverseVehicleSurfaceTraversalConfig
+} from "./metaverse/metaverse-authoritative-traversal-config.js";
+export type {
+  MetaverseGroundedBodyTraversalCoreConfig
+} from "./metaverse/metaverse-authoritative-traversal-config.js";
+export {
+  createMetaverseTraversalActionIntentSnapshot,
+  createMetaverseTraversalAuthoritySnapshot,
+  createMetaverseTraversalBodyControlSnapshot,
+  createMetaverseTraversalFacingSnapshot,
+  metaverseTraversalActionKindIds,
+  metaverseTraversalActionPhaseIds,
+  metaverseTraversalActionRejectionReasonIds,
+  metaverseTraversalActionResolutionStateIds,
+  metaverseTraversalJumpAuthorityStateIds,
+  metaverseTraversalLocomotionModeIds
+} from "./metaverse/metaverse-traversal-contract.js";
+export type {
+  MetaverseTraversalActionIntentSnapshot,
+  MetaverseTraversalActionIntentSnapshotInput,
+  MetaverseTraversalActionKindId,
+  MetaverseTraversalActionPhaseId,
+  MetaverseTraversalActionRejectionReasonId,
+  MetaverseTraversalActionResolutionStateId,
+  MetaverseTraversalAuthoritySnapshot,
+  MetaverseTraversalAuthoritySnapshotInput,
+  MetaverseTraversalBodyControlSnapshot,
+  MetaverseTraversalBodyControlSnapshotInput,
+  MetaverseTraversalFacingSnapshot,
+  MetaverseTraversalFacingSnapshotInput,
+  MetaverseTraversalJumpAuthorityStateId,
+  MetaverseTraversalLocomotionModeId
+} from "./metaverse/metaverse-traversal-contract.js";
+export {
+  advanceMetaverseTraversalActionState,
+  clearMetaverseTraversalPendingActions,
+  createMetaverseTraversalActionStateSnapshot,
+  queueMetaverseTraversalAction
+} from "./metaverse/metaverse-traversal-action-kernel.js";
+export type {
+  AdvanceMetaverseTraversalActionStateInput,
+  AdvanceMetaverseTraversalActionStateResult,
+  MetaverseTraversalActionStateSnapshot,
+  QueueMetaverseTraversalActionInput
+} from "./metaverse/metaverse-traversal-action-kernel.js";
+export {
+  createMetaverseGroundedBodyStepStateSnapshot,
+  isMetaverseGroundedTraversalSurfaceJumpSupported,
+  prepareMetaverseGroundedBodyStep,
+  resolveMetaverseGroundedBodyStep,
+  stepMetaverseGroundedTraversalAction,
+  syncMetaverseGroundedBodyStepState
+} from "./metaverse/metaverse-grounded-traversal-kernel.js";
+export type {
+  MetaverseGroundedBodyPreparedStepSnapshot,
+  MetaverseGroundedBodyResolvedStepSnapshot,
+  MetaverseGroundedBodyStepConfig,
+  MetaverseGroundedBodyStepIntentSnapshot,
+  MetaverseGroundedBodyStepStateSnapshot,
+  MetaverseGroundedTraversalBodyIntentSnapshot,
+  MetaverseGroundedTraversalSurfaceJumpSupportInput,
+  StepMetaverseGroundedTraversalActionInput,
+  StepMetaverseGroundedTraversalActionResult,
+  SyncMetaverseGroundedBodyStepStateInput
+} from "./metaverse/metaverse-grounded-traversal-kernel.js";
+export {
+  clearMetaverseUnmountedTraversalPendingActions,
+  createMetaverseUnmountedTraversalStateSnapshot,
+  prepareMetaverseUnmountedTraversalStep,
+  queueMetaverseUnmountedTraversalAction,
+  resolveMetaverseTraversalWaterlineHeightMeters,
+  resolveMetaverseUnmountedGroundedJumpSupport,
+  resolveMetaverseUnmountedTraversalStep
+} from "./metaverse/metaverse-unmounted-traversal-kernel.js";
+export type {
+  MetaversePreparedUnmountedGroundedTraversalStepSnapshot,
+  MetaversePreparedUnmountedSwimTraversalStepSnapshot,
+  MetaversePreparedUnmountedTraversalStepSnapshot,
+  MetaverseUnmountedGroundedTraversalConfigSnapshot,
+  MetaverseUnmountedGroundedBodySnapshot,
+  MetaverseUnmountedGroundedJumpSupportSnapshot,
+  MetaverseUnmountedSwimBodySnapshot,
+  MetaverseUnmountedTraversalStateSnapshot,
+  PrepareMetaverseUnmountedTraversalStepInput,
+  ResolveMetaverseUnmountedTraversalStepInput,
+  ResolveMetaverseUnmountedTraversalStepSnapshot
+} from "./metaverse/metaverse-unmounted-traversal-kernel.js";
+export {
+  prepareMetaverseGroundedTraversalStep,
+  resolveMetaverseGroundedTraversalDirectionalSpeeds,
+  resolveMetaverseGroundedTraversalStep
+} from "./metaverse/metaverse-grounded-traversal-simulation.js";
+export type {
+  MetaverseGroundedTraversalConfig,
+  MetaverseGroundedTraversalDirectionalSpeedSnapshot,
+  MetaverseGroundedTraversalIntentSnapshot,
+  MetaverseGroundedTraversalPreparedStepSnapshot,
+  MetaverseGroundedTraversalResolvedStepSnapshot,
+  MetaverseGroundedTraversalStateSnapshot
+} from "./metaverse/metaverse-grounded-traversal-simulation.js";
+export {
+  hasMetaverseTraversalAuthorityConsumedJump,
+  hasMetaverseTraversalAuthorityRejectedJump,
+  isMetaverseTraversalAuthorityJumpAirborne,
+  isMetaverseTraversalAuthorityJumpPendingOrActive,
+  readMetaverseTraversalAuthorityLatestJumpActionSequence,
+  resolveMetaverseTraversalAuthorityIssuedJumpResolution,
+  resolveMetaverseTraversalAuthoritySnapshotInput
+} from "./metaverse/metaverse-traversal-authority.js";
+export type {
+  MetaverseTraversalAuthorityIssuedJumpResolutionId,
+  MetaverseTraversalAuthorityIssuedJumpResolutionSnapshot,
+  MetaverseTraversalAuthorityResolutionInput
+} from "./metaverse/metaverse-traversal-authority.js";
+export {
   vehicleRelativeDirectionIds,
   normalizePlanarYawRadians,
   resolveVehicleRelativeYawOffsetRadians
@@ -202,8 +311,16 @@ export type {
   MetaverseSessionSnapshotInput
 } from "./metaverse/metaverse-session-contract.js";
 export {
+  metaverseRealtimeWorldCadenceConfig
+} from "./metaverse/metaverse-realtime-world-cadence.js";
+export {
   metaverseRealtimeWorldClientCommandTypes,
   metaversePlayerTraversalIntentLocomotionModeIds,
+  metaverseRealtimePlayerJumpAuthorityStateIds,
+  metaverseRealtimePlayerTraversalActionResolutionStateIds,
+  metaverseRealtimePlayerTraversalActionKindIds,
+  metaverseRealtimePlayerTraversalActionPhaseIds,
+  metaverseRealtimePlayerTraversalActionRejectionReasonIds,
   metaverseRealtimeWorldServerEventTypes,
   createMetaverseDriverVehicleControlIntentSnapshot,
   createMetaversePlayerTraversalIntentSnapshot,
@@ -219,16 +336,33 @@ export {
   createMetaverseSyncPlayerLookIntentCommand,
   createMetaverseSyncMountedOccupancyCommand,
   createMetaverseSyncPlayerTraversalIntentCommand,
-  createMetaverseVehicleId
+  createMetaverseVehicleId,
+  doMetaversePlayerTraversalSequencedInputsMatch
 } from "./metaverse/metaverse-realtime-world-contract.js";
 export type {
   MetaverseDriverVehicleControlIntentSnapshot,
   MetaverseDriverVehicleControlIntentSnapshotInput,
+  MetaversePlayerTraversalActionIntentSnapshot,
+  MetaversePlayerTraversalActionIntentSnapshotInput,
+  MetaversePlayerTraversalBodyControlSnapshot,
+  MetaversePlayerTraversalBodyControlSnapshotInput,
+  MetaversePlayerTraversalFacingSnapshot,
+  MetaversePlayerTraversalFacingSnapshotInput,
   MetaversePlayerTraversalIntentLocomotionModeId,
   MetaversePlayerTraversalIntentSnapshot,
   MetaversePlayerTraversalIntentSnapshotInput,
+  MetaverseRealtimePlayerJumpAuthorityStateId,
+  MetaverseRealtimePlayerJumpDebugSnapshot,
+  MetaverseRealtimePlayerJumpDebugSnapshotInput,
+  MetaverseRealtimePlayerJumpResolutionStateId,
+  MetaverseRealtimePlayerTraversalActionResolutionStateId,
   MetaverseRealtimePlayerLookSnapshot,
   MetaverseRealtimePlayerLookSnapshotInput,
+  MetaverseRealtimePlayerTraversalActionKindId,
+  MetaverseRealtimePlayerTraversalActionPhaseId,
+  MetaverseRealtimePlayerTraversalActionRejectionReasonId,
+  MetaverseRealtimePlayerTraversalAuthoritySnapshot,
+  MetaverseRealtimePlayerTraversalAuthoritySnapshotInput,
   MetaverseRealtimeMountedOccupancySnapshot,
   MetaverseRealtimeMountedOccupancySnapshotInput,
   MetaverseRealtimeWorldClientCommand,

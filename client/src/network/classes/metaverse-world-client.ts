@@ -14,6 +14,8 @@ import {
   createMetaverseDriverVehicleControlIntentSnapshot,
   createMetaversePlayerTraversalIntentSnapshot,
   createMetaverseSyncDriverVehicleControlCommand,
+  doMetaversePlayerTraversalSequencedInputsMatch,
+  readMetaverseTraversalAuthorityLatestJumpActionSequence,
   createMetaverseSyncPlayerLookIntentCommand,
   createMetaverseSyncMountedOccupancyCommand,
   createMetaverseSyncPlayerTraversalIntentCommand
@@ -74,7 +76,31 @@ type PendingPlayerLookIntentCommand = ReturnType<
   typeof createMetaverseSyncPlayerLookIntentCommand
 >;
 
+type LocalPlayerWorldSnapshot = MetaverseRealtimeWorldSnapshot["players"][number];
+
+interface TimedYawAxisCompressionState {
+  accumulatedDurationMs: number;
+  accumulatedYawAxisDurationMs: number;
+  lastSampleAtMs: number | null;
+  lastYawAxis: number;
+}
+
 const latestWinsDatagramFallbackRecoveryDelayMultiplier = 1;
+
+function clampNormalizedAxis(value: number): number {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(1, Math.max(-1, value))
+    : 0;
+}
+
+function createTimedYawAxisCompressionState(): TimedYawAxisCompressionState {
+  return {
+    accumulatedDurationMs: 0,
+    accumulatedYawAxisDurationMs: 0,
+    lastSampleAtMs: null,
+    lastYawAxis: 0
+  };
+}
 
 function playerTraversalIntentMatches(
   leftIntent: MetaversePlayerTraversalIntentSnapshot | null,
@@ -84,27 +110,27 @@ function playerTraversalIntentMatches(
     return false;
   }
 
-  const nextMoveAxis = rightIntent.moveAxis;
-  const nextStrafeAxis = rightIntent.strafeAxis;
-  const nextYawAxis = rightIntent.yawAxis;
+  const normalizedRightIntent = createMetaversePlayerTraversalIntentSnapshot({
+    ...rightIntent,
+    inputSequence: leftIntent.inputSequence
+  });
 
   return (
-    leftIntent.boost === (rightIntent.boost === true) &&
-    leftIntent.jump === (rightIntent.jump === true) &&
-    leftIntent.jumpActionSequence === (rightIntent.jumpActionSequence ?? 0) &&
-    leftIntent.locomotionMode === (rightIntent.locomotionMode ?? "grounded") &&
-    leftIntent.moveAxis ===
-      (typeof nextMoveAxis === "number" && Number.isFinite(nextMoveAxis)
-        ? Math.min(1, Math.max(-1, nextMoveAxis))
-        : 0) &&
-    leftIntent.strafeAxis ===
-      (typeof nextStrafeAxis === "number" && Number.isFinite(nextStrafeAxis)
-        ? Math.min(1, Math.max(-1, nextStrafeAxis))
-        : 0) &&
-    leftIntent.yawAxis ===
-      (typeof nextYawAxis === "number" && Number.isFinite(nextYawAxis)
-        ? Math.min(1, Math.max(-1, nextYawAxis))
-        : 0)
+    leftIntent.actionIntent.kind === normalizedRightIntent.actionIntent.kind &&
+    leftIntent.actionIntent.pressed ===
+      normalizedRightIntent.actionIntent.pressed &&
+    leftIntent.actionIntent.sequence ===
+      normalizedRightIntent.actionIntent.sequence &&
+    leftIntent.bodyControl.boost === normalizedRightIntent.bodyControl.boost &&
+    leftIntent.bodyControl.moveAxis ===
+      normalizedRightIntent.bodyControl.moveAxis &&
+    leftIntent.bodyControl.strafeAxis ===
+      normalizedRightIntent.bodyControl.strafeAxis &&
+    leftIntent.bodyControl.turnAxis ===
+      normalizedRightIntent.bodyControl.turnAxis &&
+    leftIntent.facing.pitchRadians === normalizedRightIntent.facing.pitchRadians &&
+    leftIntent.facing.yawRadians === normalizedRightIntent.facing.yawRadians &&
+    leftIntent.locomotionMode === normalizedRightIntent.locomotionMode
   );
 }
 
@@ -224,12 +250,17 @@ export class MetaverseWorldClient {
   #commandSyncInFlight = false;
   #connectPromise: Promise<MetaverseRealtimeWorldSnapshot> | null = null;
   #driverVehicleControlDatagramSendFailureCount = 0;
+  readonly #driverVehicleControlYawCompressionState =
+    createTimedYawAxisCompressionState();
   #hasSuccessfulLatestWinsDatagramSend = false;
   #lastJumpPressed = false;
   #lastDriverVehicleControlIntent: MetaverseDriverVehicleControlIntentSnapshot | null =
     null;
   #lastLatestWinsDatagramError: string | null = null;
   #lastPlayerLookIntent: MetaverseRealtimePlayerLookSnapshot | null = null;
+  #lastPlayerLookIntentCommand: PendingPlayerLookIntentCommand | null = null;
+  #lastPlayerTraversalIntentCommand: PendingPlayerTraversalIntentCommand | null =
+    null;
   #lastPlayerTraversalIntent: MetaversePlayerTraversalIntentSnapshot | null = null;
   #latestAcceptedSnapshotReceivedAtMs: number | null = null;
   #previousAcceptedSnapshotReceivedAtMs: number | null = null;
@@ -243,6 +274,8 @@ export class MetaverseWorldClient {
   #pendingPlayerLookIntentCommand: PendingPlayerLookIntentCommand | null = null;
   #pendingPlayerTraversalIntentCommand: PendingPlayerTraversalIntentCommand | null =
     null;
+  readonly #playerTraversalYawCompressionState =
+    createTimedYawAxisCompressionState();
   #playerId: MetaversePlayerId | null = null;
   #playerLookInputSyncHandle: TimeoutHandle | null = null;
   #playerLookInputSyncInFlight = false;
@@ -346,10 +379,33 @@ export class MetaverseWorldClient {
     return this.#nextPlayerInputSequence;
   }
 
+  get latestPlayerLookSequence(): number {
+    return this.#nextPlayerLookSequence;
+  }
+
   get latestPlayerTraversalIntentSnapshot():
     | MetaversePlayerTraversalIntentSnapshot
     | null {
     return this.#lastPlayerTraversalIntent;
+  }
+
+  previewPlayerTraversalIntent(
+    commandInput: MetaverseSyncPlayerTraversalIntentCommandInput | null
+  ): MetaversePlayerTraversalIntentSnapshot | null {
+    if (commandInput === null) {
+      return null;
+    }
+
+    this.#assertNotDisposed();
+
+    if (this.#playerId !== null && this.#playerId !== commandInput.playerId) {
+      throw new Error(
+        "Metaverse world client already connected with a different player."
+      );
+    }
+
+    return this.#resolveNextPlayerTraversalIntentSnapshot(commandInput)
+      .intentSnapshot;
   }
 
   get currentPollIntervalMs(): number {
@@ -402,6 +458,9 @@ export class MetaverseWorldClient {
     if (commandInput === null) {
       this.#lastDriverVehicleControlIntent = null;
       this.#pendingDriverVehicleControlCommand = null;
+      this.#resetTimedYawAxisCompressionState(
+        this.#driverVehicleControlYawCompressionState
+      );
       this.#cancelScheduledCommandSync();
       return;
     }
@@ -429,6 +488,16 @@ export class MetaverseWorldClient {
       return;
     }
 
+    if (this.#pendingDriverVehicleControlCommand === null) {
+      this.#resetTimedYawAxisCompressionState(
+        this.#driverVehicleControlYawCompressionState
+      );
+    }
+
+    this.#captureTimedYawAxisSample(
+      this.#driverVehicleControlYawCompressionState,
+      nextControlIntent.yawAxis
+    );
     this.#lastDriverVehicleControlIntent = nextControlIntent;
     this.#nextDriverVehicleControlSequence += 1;
     this.#pendingDriverVehicleControlCommand =
@@ -445,13 +514,17 @@ export class MetaverseWorldClient {
 
   syncPlayerTraversalIntent(
     commandInput: MetaverseSyncPlayerTraversalIntentCommandInput | null
-  ): void {
+  ): MetaversePlayerTraversalIntentSnapshot | null {
     if (commandInput === null) {
       this.#lastJumpPressed = false;
+      this.#lastPlayerTraversalIntentCommand = null;
       this.#lastPlayerTraversalIntent = null;
       this.#pendingPlayerTraversalIntentCommand = null;
+      this.#resetTimedYawAxisCompressionState(
+        this.#playerTraversalYawCompressionState
+      );
       this.#cancelScheduledPlayerTraversalInputSync();
-      return;
+      return null;
     }
 
     this.#assertNotDisposed();
@@ -463,43 +536,51 @@ export class MetaverseWorldClient {
     }
 
     this.#playerId ??= commandInput.playerId;
-
-    const jumpPressed = commandInput.intent.jump === true;
-
-    if (jumpPressed && !this.#lastJumpPressed) {
-      this.#nextJumpActionSequence += 1;
-    }
+    const {
+      intentSnapshot,
+      jumpPressed,
+      traversalIntentChanged
+    } = this.#resolveNextPlayerTraversalIntentSnapshot(commandInput);
 
     this.#lastJumpPressed = jumpPressed;
-    const nextIntent = {
-      ...commandInput.intent,
-      jumpActionSequence: this.#nextJumpActionSequence
-    };
 
-    if (
-      playerTraversalIntentMatches(
-        this.#lastPlayerTraversalIntent,
-        nextIntent
-      )
-    ) {
-      return;
+    if (!traversalIntentChanged) {
+      return intentSnapshot;
     }
 
-    this.#nextPlayerInputSequence += 1;
+    if (this.#pendingPlayerTraversalIntentCommand === null) {
+      this.#resetTimedYawAxisCompressionState(
+        this.#playerTraversalYawCompressionState
+      );
+    }
+
+    this.#captureTimedYawAxisSample(
+      this.#playerTraversalYawCompressionState,
+      intentSnapshot.bodyControl.turnAxis
+    );
+    this.#nextJumpActionSequence = Math.max(
+      this.#nextJumpActionSequence,
+      intentSnapshot.actionIntent.kind === "jump"
+        ? intentSnapshot.actionIntent.sequence
+        : 0
+    );
+    this.#nextPlayerInputSequence = intentSnapshot.inputSequence;
     this.#pendingPlayerTraversalIntentCommand =
       createMetaverseSyncPlayerTraversalIntentCommand({
-      playerId: commandInput.playerId,
-      intent: {
-        ...nextIntent,
-        inputSequence: this.#nextPlayerInputSequence
-      }
-    });
+        playerId: commandInput.playerId,
+        intent: intentSnapshot
+      });
+    this.#lastPlayerTraversalIntentCommand =
+      this.#pendingPlayerTraversalIntentCommand;
     this.#lastPlayerTraversalIntent =
       this.#pendingPlayerTraversalIntentCommand.intent;
 
     if (this.#statusSnapshot.connected) {
-      this.#schedulePlayerTraversalInputSync(this.#resolveCommandDelayMs());
+      this.#cancelScheduledPlayerTraversalInputSync();
+      this.#syncPlayerTraversalInputSchedule();
     }
+
+    return this.#lastPlayerTraversalIntent;
   }
 
   syncPlayerLookIntent(
@@ -507,6 +588,7 @@ export class MetaverseWorldClient {
   ): void {
     if (commandInput === null) {
       this.#lastPlayerLookIntent = null;
+      this.#lastPlayerLookIntentCommand = null;
       this.#pendingPlayerLookIntentCommand = null;
       this.#cancelScheduledPlayerLookInputSync();
       return;
@@ -539,10 +621,12 @@ export class MetaverseWorldClient {
         playerId: commandInput.playerId
       }
     );
+    this.#lastPlayerLookIntentCommand = this.#pendingPlayerLookIntentCommand;
     this.#lastPlayerLookIntent = this.#pendingPlayerLookIntentCommand.lookIntent;
 
     if (this.#statusSnapshot.connected) {
-      this.#schedulePlayerLookInputSync(this.#resolveCommandDelayMs());
+      this.#cancelScheduledPlayerLookInputSync();
+      this.#syncPlayerLookInputSchedule();
     }
   }
 
@@ -649,12 +733,8 @@ export class MetaverseWorldClient {
         if (this.#pendingDriverVehicleControlCommand !== null) {
           this.#scheduleCommandSync(0);
         }
-        if (this.#pendingPlayerLookIntentCommand !== null) {
-          this.#schedulePlayerLookInputSync(0);
-        }
-        if (this.#pendingPlayerTraversalIntentCommand !== null) {
-          this.#schedulePlayerTraversalInputSync(0);
-        }
+        this.#syncPlayerLookInputSchedule();
+        this.#syncPlayerTraversalInputSchedule();
         this.#startSnapshotStream(playerId);
 
         if (this.#snapshotStreamTransport === null) {
@@ -696,6 +776,56 @@ export class MetaverseWorldClient {
     }
   }
 
+  #resolveNextPlayerTraversalIntentSnapshot(
+    commandInput: MetaverseSyncPlayerTraversalIntentCommandInput
+  ): {
+    readonly intentSnapshot: MetaversePlayerTraversalIntentSnapshot;
+    readonly jumpPressed: boolean;
+    readonly traversalIntentChanged: boolean;
+  } {
+    const jumpPressed =
+      commandInput.intent.actionIntent?.kind === "jump" &&
+      commandInput.intent.actionIntent.pressed === true;
+    const nextJumpActionSequence =
+      jumpPressed && !this.#lastJumpPressed
+        ? this.#nextJumpActionSequence + 1
+        : this.#nextJumpActionSequence;
+    const nextActionKind: "none" | "jump" =
+      jumpPressed || nextJumpActionSequence > 0 ? "jump" : "none";
+    const nextIntent = {
+      ...commandInput.intent,
+      actionIntent: {
+        kind: nextActionKind,
+        pressed: jumpPressed,
+        sequence: nextActionKind === "jump" ? nextJumpActionSequence : 0
+      }
+    };
+    const normalizedNextIntent = createMetaversePlayerTraversalIntentSnapshot({
+      ...nextIntent,
+      inputSequence: this.#lastPlayerTraversalIntent?.inputSequence ?? 0
+    });
+    const traversalIntentChanged = !playerTraversalIntentMatches(
+      this.#lastPlayerTraversalIntent,
+      normalizedNextIntent
+    );
+    const sequencedInputChanged = !doMetaversePlayerTraversalSequencedInputsMatch(
+      this.#lastPlayerTraversalIntent,
+      normalizedNextIntent
+    );
+    const inputSequence = sequencedInputChanged
+      ? this.#nextPlayerInputSequence + 1
+      : this.#lastPlayerTraversalIntent?.inputSequence ?? 0;
+
+    return Object.freeze({
+      intentSnapshot: createMetaversePlayerTraversalIntentSnapshot({
+        ...nextIntent,
+        inputSequence
+      }),
+      jumpPressed,
+      traversalIntentChanged
+    });
+  }
+
   #applyWorldEvent(worldEvent: MetaverseRealtimeWorldEvent): boolean {
     if (this.#isDisposed()) {
       return false;
@@ -732,6 +862,9 @@ export class MetaverseWorldClient {
       worldEvent.world.tick.currentTick,
       null
     );
+    this.#rebaseLocalPlayerCommandSequences(worldEvent.world);
+    this.#syncPlayerLookInputSchedule();
+    this.#syncPlayerTraversalInputSchedule();
     this.#notifyUpdates();
     return true;
   }
@@ -961,6 +1094,33 @@ export class MetaverseWorldClient {
     this.#playerLookInputSyncHandle = null;
   }
 
+  #syncPlayerLookInputSchedule(): void {
+    const latestProcessedLookSequence =
+      this.#readLatestLocalPlayerLastProcessedLookSequence();
+
+    if (
+      this.#pendingPlayerLookIntentCommand !== null &&
+      latestProcessedLookSequence !== null &&
+      latestProcessedLookSequence >=
+        this.#pendingPlayerLookIntentCommand.lookSequence
+    ) {
+      this.#pendingPlayerLookIntentCommand = null;
+    }
+
+    if (this.#pendingPlayerLookIntentCommand !== null) {
+      this.#schedulePlayerLookInputSync(0);
+      return;
+    }
+
+    if (this.#shouldResendLatestPlayerLookIntentCommand()) {
+      this.#pendingPlayerLookIntentCommand = this.#lastPlayerLookIntentCommand;
+      this.#schedulePlayerLookInputSync(this.#resolveCommandDelayMs());
+      return;
+    }
+
+    this.#cancelScheduledPlayerLookInputSync();
+  }
+
   #schedulePlayerTraversalInputSync(delayMs: number): void {
     if (
       this.#statusSnapshot.state === "disposed" ||
@@ -986,6 +1146,34 @@ export class MetaverseWorldClient {
 
     this.#clearTimeout(this.#playerTraversalInputSyncHandle);
     this.#playerTraversalInputSyncHandle = null;
+  }
+
+  #syncPlayerTraversalInputSchedule(): void {
+    const latestProcessedInputSequence =
+      this.#readLatestLocalPlayerLastProcessedInputSequence();
+
+    if (
+      this.#pendingPlayerTraversalIntentCommand !== null &&
+      latestProcessedInputSequence !== null &&
+      latestProcessedInputSequence >=
+        this.#pendingPlayerTraversalIntentCommand.intent.inputSequence
+    ) {
+      this.#pendingPlayerTraversalIntentCommand = null;
+    }
+
+    if (this.#pendingPlayerTraversalIntentCommand !== null) {
+      this.#schedulePlayerTraversalInputSync(0);
+      return;
+    }
+
+    if (this.#shouldResendLatestPlayerTraversalIntentCommand()) {
+      this.#pendingPlayerTraversalIntentCommand =
+        this.#lastPlayerTraversalIntentCommand;
+      this.#schedulePlayerTraversalInputSync(this.#resolveCommandDelayMs());
+      return;
+    }
+
+    this.#cancelScheduledPlayerTraversalInputSync();
   }
 
   #scheduleLatestWinsDatagramFallbackRecovery(): void {
@@ -1062,7 +1250,9 @@ export class MetaverseWorldClient {
       return;
     }
 
-    const pendingCommand = this.#pendingDriverVehicleControlCommand;
+    const pendingCommand = this.#createCompressedDriverVehicleControlCommand(
+      this.#pendingDriverVehicleControlCommand
+    );
 
     this.#pendingDriverVehicleControlCommand = null;
     this.#commandSyncInFlight = true;
@@ -1101,6 +1291,7 @@ export class MetaverseWorldClient {
 
     const pendingCommand = this.#pendingPlayerLookIntentCommand;
 
+    this.#lastPlayerLookIntentCommand = pendingCommand;
     this.#pendingPlayerLookIntentCommand = null;
     this.#playerLookInputSyncInFlight = true;
 
@@ -1118,12 +1309,8 @@ export class MetaverseWorldClient {
     } finally {
       this.#playerLookInputSyncInFlight = false;
 
-      if (
-        !this.#isDisposed() &&
-        this.#statusSnapshot.connected &&
-        this.#pendingPlayerLookIntentCommand !== null
-      ) {
-        this.#schedulePlayerLookInputSync(0);
+      if (!this.#isDisposed() && this.#statusSnapshot.connected) {
+        this.#syncPlayerLookInputSchedule();
       }
     }
   }
@@ -1138,8 +1325,11 @@ export class MetaverseWorldClient {
       return;
     }
 
-    const pendingCommand = this.#pendingPlayerTraversalIntentCommand;
+    const pendingCommand = this.#createCompressedPlayerTraversalIntentCommand(
+      this.#pendingPlayerTraversalIntentCommand
+    );
 
+    this.#lastPlayerTraversalIntentCommand = pendingCommand;
     this.#pendingPlayerTraversalIntentCommand = null;
     this.#playerTraversalInputSyncInFlight = true;
 
@@ -1158,14 +1348,106 @@ export class MetaverseWorldClient {
     } finally {
       this.#playerTraversalInputSyncInFlight = false;
 
-      if (
-        !this.#isDisposed() &&
-        this.#statusSnapshot.connected &&
-        this.#pendingPlayerTraversalIntentCommand !== null
-      ) {
-        this.#schedulePlayerTraversalInputSync(0);
+      if (!this.#isDisposed() && this.#statusSnapshot.connected) {
+        this.#syncPlayerTraversalInputSchedule();
       }
     }
+  }
+
+  #resetTimedYawAxisCompressionState(
+    state: TimedYawAxisCompressionState
+  ): void {
+    state.accumulatedDurationMs = 0;
+    state.accumulatedYawAxisDurationMs = 0;
+    state.lastSampleAtMs = null;
+    state.lastYawAxis = 0;
+  }
+
+  #accumulateTimedYawAxisDurationUntilNow(
+    state: TimedYawAxisCompressionState
+  ): void {
+    const nowMs = this.#readWallClockMs();
+
+    if (!Number.isFinite(nowMs) || state.lastSampleAtMs === null) {
+      return;
+    }
+
+    const elapsedMs = Math.max(0, nowMs - state.lastSampleAtMs);
+
+    state.accumulatedDurationMs += elapsedMs;
+    state.accumulatedYawAxisDurationMs += state.lastYawAxis * elapsedMs;
+    state.lastSampleAtMs = nowMs;
+  }
+
+  #captureTimedYawAxisSample(
+    state: TimedYawAxisCompressionState,
+    yawAxis: number
+  ): void {
+    this.#accumulateTimedYawAxisDurationUntilNow(state);
+    state.lastYawAxis = clampNormalizedAxis(yawAxis);
+
+    if (state.lastSampleAtMs !== null) {
+      return;
+    }
+
+    const nowMs = this.#readWallClockMs();
+
+    state.lastSampleAtMs = Number.isFinite(nowMs) ? nowMs : null;
+  }
+
+  #consumeTimedYawAxisAverage(
+    state: TimedYawAxisCompressionState,
+    fallbackYawAxis: number
+  ): number {
+    this.#accumulateTimedYawAxisDurationUntilNow(state);
+
+    if (state.accumulatedDurationMs <= 0) {
+      const normalizedFallbackYawAxis = clampNormalizedAxis(fallbackYawAxis);
+
+      this.#resetTimedYawAxisCompressionState(state);
+      return normalizedFallbackYawAxis;
+    }
+
+    const averagedYawAxis = clampNormalizedAxis(
+      state.accumulatedYawAxisDurationMs / state.accumulatedDurationMs
+    );
+
+    this.#resetTimedYawAxisCompressionState(state);
+    return averagedYawAxis;
+  }
+
+  #createCompressedDriverVehicleControlCommand(
+    command: PendingDriverVehicleControlCommand
+  ): PendingDriverVehicleControlCommand {
+    return createMetaverseSyncDriverVehicleControlCommand({
+      controlIntent: {
+        ...command.controlIntent,
+        yawAxis: this.#consumeTimedYawAxisAverage(
+          this.#driverVehicleControlYawCompressionState,
+          command.controlIntent.yawAxis
+        )
+      },
+      controlSequence: command.controlSequence,
+      playerId: command.playerId
+    });
+  }
+
+  #createCompressedPlayerTraversalIntentCommand(
+    command: PendingPlayerTraversalIntentCommand
+  ): PendingPlayerTraversalIntentCommand {
+    return createMetaverseSyncPlayerTraversalIntentCommand({
+      intent: {
+        ...command.intent,
+        bodyControl: {
+          ...command.intent.bodyControl,
+          turnAxis: this.#consumeTimedYawAxisAverage(
+            this.#playerTraversalYawCompressionState,
+            command.intent.bodyControl.turnAxis
+          )
+        }
+      },
+      playerId: command.playerId
+    });
   }
 
   async #sendDriverVehicleControlCommand(
@@ -1337,6 +1619,210 @@ export class MetaverseWorldClient {
 
   #isDisposed(): boolean {
     return this.#statusSnapshot.state === "disposed";
+  }
+
+  #readLatestLocalPlayerLastProcessedInputSequence(): number | null {
+    return this.#readLatestLocalPlayerSnapshot()?.lastProcessedInputSequence ?? null;
+  }
+
+  #readLatestLocalPlayerLastProcessedLookSequence(): number | null {
+    return this.#readLatestLocalPlayerSnapshot()?.lastProcessedLookSequence ?? null;
+  }
+
+  #readLatestLocalPlayerSnapshot(): LocalPlayerWorldSnapshot | null {
+    const latestWorldSnapshot =
+      this.#worldSnapshotBuffer[this.#worldSnapshotBuffer.length - 1] ?? null;
+
+    if (latestWorldSnapshot === null || this.#playerId === null) {
+      return null;
+    }
+
+    const localPlayerSnapshot =
+      latestWorldSnapshot.players.find(
+        (playerSnapshot) => playerSnapshot.playerId === this.#playerId
+      ) ?? null;
+
+    return localPlayerSnapshot;
+  }
+
+  #rebaseLocalPlayerCommandSequences(
+    worldSnapshot: MetaverseRealtimeWorldSnapshot
+  ): void {
+    if (this.#playerId === null) {
+      return;
+    }
+
+    const localPlayerSnapshot =
+      worldSnapshot.players.find(
+        (playerSnapshot) => playerSnapshot.playerId === this.#playerId
+      ) ?? null;
+
+    if (localPlayerSnapshot === null) {
+      return;
+    }
+
+    this.#rebaseTraversalCommandSequences(localPlayerSnapshot);
+    this.#rebaseLookCommandSequences(localPlayerSnapshot);
+  }
+
+  #rebaseTraversalCommandSequences(
+    localPlayerSnapshot: Pick<
+      LocalPlayerWorldSnapshot,
+      "lastProcessedInputSequence" | "playerId" | "traversalAuthority"
+    >
+  ): void {
+    const authoritativeInputSequence =
+      localPlayerSnapshot.lastProcessedInputSequence;
+    const authoritativeJumpActionSequence =
+      readMetaverseTraversalAuthorityLatestJumpActionSequence(
+        localPlayerSnapshot.traversalAuthority
+      );
+    const inputSequenceRaised =
+      authoritativeInputSequence > this.#nextPlayerInputSequence;
+    const jumpSequenceRaised =
+      authoritativeJumpActionSequence > this.#nextJumpActionSequence;
+
+    if (!inputSequenceRaised && !jumpSequenceRaised) {
+      return;
+    }
+
+    this.#nextPlayerInputSequence = Math.max(
+      this.#nextPlayerInputSequence,
+      authoritativeInputSequence
+    );
+    this.#nextJumpActionSequence = Math.max(
+      this.#nextJumpActionSequence,
+      authoritativeJumpActionSequence
+    );
+
+    const pendingCommand = this.#pendingPlayerTraversalIntentCommand;
+
+    if (pendingCommand !== null) {
+      const nextJumpActionSequence =
+        pendingCommand.intent.actionIntent.sequence <= authoritativeJumpActionSequence
+          ? pendingCommand.intent.actionIntent.kind === "jump" &&
+              this.#lastJumpPressed
+            ? this.#nextJumpActionSequence + 1
+            : this.#nextJumpActionSequence
+          : pendingCommand.intent.actionIntent.sequence;
+      const nextInputSequence =
+        pendingCommand.intent.inputSequence <= authoritativeInputSequence
+          ? this.#nextPlayerInputSequence + 1
+          : pendingCommand.intent.inputSequence;
+
+      this.#nextJumpActionSequence = Math.max(
+        this.#nextJumpActionSequence,
+        nextJumpActionSequence
+      );
+      this.#nextPlayerInputSequence = Math.max(
+        this.#nextPlayerInputSequence,
+        nextInputSequence
+      );
+      this.#pendingPlayerTraversalIntentCommand =
+        createMetaverseSyncPlayerTraversalIntentCommand({
+          intent: {
+            actionIntent: {
+              kind:
+                pendingCommand.intent.actionIntent.kind === "jump" ||
+                this.#nextJumpActionSequence > 0
+                  ? "jump"
+                  : "none",
+              pressed:
+                pendingCommand.intent.actionIntent.kind === "jump" &&
+                pendingCommand.intent.actionIntent.pressed,
+              sequence:
+                pendingCommand.intent.actionIntent.kind === "jump" ||
+                this.#nextJumpActionSequence > 0
+                  ? this.#nextJumpActionSequence
+                  : 0
+            },
+            bodyControl: pendingCommand.intent.bodyControl,
+            facing: pendingCommand.intent.facing,
+            inputSequence: this.#nextPlayerInputSequence,
+            locomotionMode: pendingCommand.intent.locomotionMode,
+          },
+          playerId: pendingCommand.playerId
+        });
+      this.#lastPlayerTraversalIntentCommand =
+        this.#pendingPlayerTraversalIntentCommand;
+      this.#lastPlayerTraversalIntent =
+        this.#pendingPlayerTraversalIntentCommand.intent;
+      return;
+    }
+
+    this.#lastPlayerTraversalIntentCommand = null;
+    this.#lastPlayerTraversalIntent = null;
+  }
+
+  #rebaseLookCommandSequences(
+    localPlayerSnapshot: Pick<LocalPlayerWorldSnapshot, "lastProcessedLookSequence">
+  ): void {
+    const authoritativeLookSequence =
+      localPlayerSnapshot.lastProcessedLookSequence;
+
+    if (authoritativeLookSequence <= this.#nextPlayerLookSequence) {
+      return;
+    }
+
+    this.#nextPlayerLookSequence = authoritativeLookSequence;
+
+    const pendingCommand = this.#pendingPlayerLookIntentCommand;
+
+    if (pendingCommand !== null) {
+      this.#nextPlayerLookSequence += 1;
+      this.#pendingPlayerLookIntentCommand = createMetaverseSyncPlayerLookIntentCommand(
+        {
+          lookIntent: pendingCommand.lookIntent,
+          lookSequence: this.#nextPlayerLookSequence,
+          playerId: pendingCommand.playerId
+        }
+      );
+      this.#lastPlayerLookIntentCommand = this.#pendingPlayerLookIntentCommand;
+      return;
+    }
+
+    this.#lastPlayerLookIntent = null;
+    this.#lastPlayerLookIntentCommand = null;
+  }
+
+  #shouldResendLatestPlayerTraversalIntentCommand(): boolean {
+    if (
+      this.#lastPlayerTraversalIntentCommand === null ||
+      this.#playerId === null ||
+      this.#statusSnapshot.state === "disposed" ||
+      !this.#statusSnapshot.connected
+    ) {
+      return false;
+    }
+
+    const latestProcessedInputSequence =
+      this.#readLatestLocalPlayerLastProcessedInputSequence();
+
+    return (
+      latestProcessedInputSequence === null ||
+      latestProcessedInputSequence <
+        this.#lastPlayerTraversalIntentCommand.intent.inputSequence
+    );
+  }
+
+  #shouldResendLatestPlayerLookIntentCommand(): boolean {
+    if (
+      this.#lastPlayerLookIntentCommand === null ||
+      this.#playerId === null ||
+      this.#statusSnapshot.state === "disposed" ||
+      !this.#statusSnapshot.connected
+    ) {
+      return false;
+    }
+
+    const latestProcessedLookSequence =
+      this.#readLatestLocalPlayerLastProcessedLookSequence();
+
+    return (
+      latestProcessedLookSequence === null ||
+      latestProcessedLookSequence <
+        this.#lastPlayerLookIntentCommand.lookSequence
+    );
   }
 
   #notifyUpdates(): void {
