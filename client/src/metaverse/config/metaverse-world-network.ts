@@ -155,7 +155,6 @@ export const metaverseRemoteWorldSamplingConfig = Object.freeze({
 });
 
 export const metaverseLocalAuthorityReconciliationConfig = Object.freeze({
-  maxAckedReplayHorizonMs: 400,
   maxAuthoritativeSnapshotAgeMs:
     metaverseWorldCadenceConfig.localAuthoritativeFreshnessMaxAgeMs,
   mountedOccupancyMismatchHoldMs: 50

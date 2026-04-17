@@ -1,10 +1,10 @@
 import {
-  metaverseHubCrateEnvironmentAssetId,
   metaverseHubDockEnvironmentAssetId,
   metaverseHubDiveBoatEnvironmentAssetId,
   metaverseHubPushableCrateEnvironmentAssetId,
-  metaverseHubShorelineEnvironmentAssetId,
   metaverseHubSkiffEnvironmentAssetId,
+  metaversePlaygroundRangeBarrierEnvironmentAssetId,
+  metaversePlaygroundRangeFloorEnvironmentAssetId,
   metaverseWorldSurfaceAssets,
   metaverseWorldSurfacePlacementIds,
   metaverseWorldSurfaceTraversalAffordanceIds,
@@ -48,9 +48,17 @@ export interface MetaverseWorldAuthoringPlacementMutationResult {
 
 const metaverseWorldAuthoringAssetCodeMetadata = Object.freeze([
   Object.freeze({
-    environmentAssetConstantName: "metaverseHubCrateEnvironmentAssetId",
-    environmentAssetId: metaverseHubCrateEnvironmentAssetId,
-    surfaceColliderConstantName: "metaverseHubCrateSurfaceColliders"
+    environmentAssetConstantName:
+      "metaversePlaygroundRangeFloorEnvironmentAssetId",
+    environmentAssetId: metaversePlaygroundRangeFloorEnvironmentAssetId,
+    surfaceColliderConstantName: "metaversePlaygroundRangeFloorSurfaceColliders"
+  }),
+  Object.freeze({
+    environmentAssetConstantName:
+      "metaversePlaygroundRangeBarrierEnvironmentAssetId",
+    environmentAssetId: metaversePlaygroundRangeBarrierEnvironmentAssetId,
+    surfaceColliderConstantName:
+      "metaversePlaygroundRangeBarrierSurfaceColliders"
   }),
   Object.freeze({
     environmentAssetConstantName: "metaverseHubDockEnvironmentAssetId",
@@ -61,11 +69,6 @@ const metaverseWorldAuthoringAssetCodeMetadata = Object.freeze([
     environmentAssetConstantName: "metaverseHubPushableCrateEnvironmentAssetId",
     environmentAssetId: metaverseHubPushableCrateEnvironmentAssetId,
     surfaceColliderConstantName: "metaverseHubPushableCrateSurfaceColliders"
-  }),
-  Object.freeze({
-    environmentAssetConstantName: "metaverseHubShorelineEnvironmentAssetId",
-    environmentAssetId: metaverseHubShorelineEnvironmentAssetId,
-    surfaceColliderConstantName: "metaverseHubShorelineSurfaceColliders"
   }),
   Object.freeze({
     environmentAssetConstantName: "metaverseHubSkiffEnvironmentAssetId",

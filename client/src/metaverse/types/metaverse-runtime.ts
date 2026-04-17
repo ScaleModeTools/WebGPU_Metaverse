@@ -165,7 +165,6 @@ export interface MetaverseTelemetrySnapshot {
     readonly datagramSendFailureCount: number;
     readonly extrapolatedFramePercent: number;
     readonly localReconciliation: {
-      readonly ackedAuthoritativeReplayCorrectionCount: number;
       readonly lastLocalAuthorityPoseCorrectionDetail: {
         readonly authoritativeGrounded: boolean | null;
         readonly localGrounded: boolean | null;
@@ -176,17 +175,14 @@ export interface MetaverseTelemetrySnapshot {
         | "none"
         | "ground-state-mismatch"
         | "gross-position-divergence"
-        | "jump-rejected"
-        | "locomotion-mismatch";
+        | "jump-rejected";
       readonly lastCorrectionSource:
         | "none"
         | "mounted-vehicle-authority"
-        | "local-authority-snap"
-        | "acked-authority-replay";
+        | "local-authority-snap";
       readonly lastCorrectionAgeMs: number | null;
       readonly localAuthorityPoseCorrectionCount: number;
       readonly mountedVehicleAuthorityCorrectionCount: number;
-      readonly recentAckedAuthoritativeReplayCorrectionCountPast5Seconds: number;
       readonly recentCorrectionCountPast5Seconds: number;
       readonly recentLocalAuthorityPoseCorrectionCountPast5Seconds: number;
       readonly recentMountedVehicleAuthorityCorrectionCountPast5Seconds: number;
@@ -411,11 +407,23 @@ export interface MetaverseEnvironmentPlacementProofConfig {
   readonly scale: number;
 }
 
-export interface MetaverseEnvironmentLodProofConfig {
+export interface MetaverseEnvironmentModelLodProofConfig {
   readonly maxDistanceMeters: number | null;
   readonly modelPath: string;
   readonly tier: string;
 }
+
+export interface MetaverseEnvironmentProceduralBoxLodProofConfig {
+  readonly kind: "procedural-box";
+  readonly materialPreset: "training-range-accent" | "training-range-surface";
+  readonly maxDistanceMeters: number | null;
+  readonly size: MetaverseVector3Snapshot;
+  readonly tier: string;
+}
+
+export type MetaverseEnvironmentLodProofConfig =
+  | MetaverseEnvironmentModelLodProofConfig
+  | MetaverseEnvironmentProceduralBoxLodProofConfig;
 
 export type MetaverseEnvironmentTraversalAffordanceId =
   | "support"

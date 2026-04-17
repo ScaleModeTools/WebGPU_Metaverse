@@ -29,6 +29,8 @@ import {
   metaverseSwimSurfaceTraversalConfig,
   metaverseTraversalWorldRadius,
   metaverseVehicleSurfaceTraversalConfig,
+  metaverseWorldGroundedSpawnPosition,
+  metaverseWorldInitialYawRadians,
   shouldConsiderMetaverseWaterborneTraversalCollider,
   createMetaverseVehicleId,
   doMetaversePlayerTraversalSequencedInputsMatch,
@@ -203,11 +205,7 @@ const metaverseAuthoritativeGroundedBodyConfig = Object.freeze({
 } satisfies MetaverseWorldSurfacePolicyConfig);
 const metaverseAuthoritativeGroundedBodyRuntimeConfig = Object.freeze({
   ...metaverseGroundedBodyTraversalCoreConfig,
-  spawnPosition: Object.freeze({
-    x: 0,
-    y: 0,
-    z: 0
-  }),
+  spawnPosition: metaverseWorldGroundedSpawnPosition,
   worldRadius: metaverseTraversalWorldRadius
 } satisfies MetaverseAuthoritativeGroundedBodyConfig);
 const metaverseAuthoritativeCapsuleControllerOffsetMeters =
@@ -1417,8 +1415,12 @@ export class MetaverseAuthoritativeWorldRuntime {
           kind: "capsule",
           radiusMeters: metaverseAuthoritativeGroundedBodyConfig.capsuleRadiusMeters
         },
-        spawnPosition: createPhysicsVector3Snapshot(0, 0, 0),
-        spawnYawRadians: 0,
+        spawnPosition: createPhysicsVector3Snapshot(
+          metaverseWorldGroundedSpawnPosition.x,
+          metaverseWorldGroundedSpawnPosition.y,
+          metaverseWorldGroundedSpawnPosition.z
+        ),
+        spawnYawRadians: metaverseWorldInitialYawRadians,
         worldRadius: metaverseAuthoritativeSwimTraversalConfig.worldRadius
       },
       this.#physicsRuntime
@@ -1445,7 +1447,7 @@ export class MetaverseAuthoritativeWorldRuntime {
       linearVelocityY: 0,
       linearVelocityZ: 0,
       lookPitchRadians: 0,
-      lookYawRadians: 0,
+      lookYawRadians: metaverseWorldInitialYawRadians,
       locomotionMode: "grounded",
       mountedOccupancy: null,
       playerId,
@@ -1462,7 +1464,7 @@ export class MetaverseAuthoritativeWorldRuntime {
       }),
       swimBodyRuntime,
       username,
-      yawRadians: 0
+      yawRadians: metaverseWorldInitialYawRadians
     };
   }
 

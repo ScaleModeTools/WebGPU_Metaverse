@@ -19,5 +19,6 @@ export * from "./metaverse-unmounted-traversal-kernel.js";
 export * from "./metaverse-world-surface-authoring.js";
 export * from "./metaverse-world-surface-policy.js";
 export * from "./metaverse-world-surface-query.js";
+export * from "./metaverse-world-spawn-config.js";
 export * from "./portal-launch-contract.js";
 export * from "./vehicle-orientation.js";

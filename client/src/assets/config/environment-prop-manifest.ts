@@ -6,12 +6,12 @@ import {
   defaultMountedVehicleOccupancyAnimationId
 } from "../types/environment-seat";
 import {
-  metaverseHubCrateEnvironmentAssetId as sharedMetaverseHubCrateEnvironmentAssetId,
   metaverseHubDockEnvironmentAssetId as sharedMetaverseHubDockEnvironmentAssetId,
   metaverseHubDiveBoatEnvironmentAssetId as sharedMetaverseHubDiveBoatEnvironmentAssetId,
   metaverseHubPushableCrateEnvironmentAssetId as sharedMetaverseHubPushableCrateEnvironmentAssetId,
-  metaverseHubShorelineEnvironmentAssetId as sharedMetaverseHubShorelineEnvironmentAssetId,
   metaverseHubSkiffEnvironmentAssetId as sharedMetaverseHubSkiffEnvironmentAssetId,
+  metaversePlaygroundRangeBarrierEnvironmentAssetId as sharedMetaversePlaygroundRangeBarrierEnvironmentAssetId,
+  metaversePlaygroundRangeFloorEnvironmentAssetId as sharedMetaversePlaygroundRangeFloorEnvironmentAssetId,
   readMetaverseWorldSurfaceAssetAuthoring
 } from "@webgpu-metaverse/shared";
 
@@ -38,9 +38,13 @@ function resolveSurfaceColliders(environmentAssetId: string) {
   }));
 }
 
-export const metaverseHubCrateEnvironmentAssetId = createEnvironmentAssetId(
-  sharedMetaverseHubCrateEnvironmentAssetId
-);
+export const metaversePlaygroundRangeFloorEnvironmentAssetId =
+  createEnvironmentAssetId(sharedMetaversePlaygroundRangeFloorEnvironmentAssetId);
+
+export const metaversePlaygroundRangeBarrierEnvironmentAssetId =
+  createEnvironmentAssetId(
+    sharedMetaversePlaygroundRangeBarrierEnvironmentAssetId
+  );
 
 export const metaverseHubPushableCrateEnvironmentAssetId = createEnvironmentAssetId(
   sharedMetaverseHubPushableCrateEnvironmentAssetId
@@ -48,10 +52,6 @@ export const metaverseHubPushableCrateEnvironmentAssetId = createEnvironmentAsse
 
 export const metaverseHubDockEnvironmentAssetId = createEnvironmentAssetId(
   sharedMetaverseHubDockEnvironmentAssetId
-);
-
-export const metaverseHubShorelineEnvironmentAssetId = createEnvironmentAssetId(
-  sharedMetaverseHubShorelineEnvironmentAssetId
 );
 
 export const metaverseHubSkiffEnvironmentAssetId = createEnvironmentAssetId(
@@ -67,25 +67,56 @@ export const metaverseHubDiveBoatForwardModelYawRadians = Math.PI * 0.5;
 
 export const environmentPropManifest = defineEnvironmentAssetManifest([
   {
-    id: metaverseHubCrateEnvironmentAssetId,
-    label: "Metaverse hub crate",
-    placement: "instanced",
-    traversalAffordance: "blocker",
+    id: metaversePlaygroundRangeFloorEnvironmentAssetId,
+    label: "Metaverse playground range floor",
+    placement: "static",
+    traversalAffordance: "support",
     physicsColliders: resolveSurfaceColliders(
-      sharedMetaverseHubCrateEnvironmentAssetId
+      sharedMetaversePlaygroundRangeFloorEnvironmentAssetId
     ),
     renderModel: {
       defaultTier: "high",
       lods: [
         {
-          tier: "high",
-          modelPath: "/models/metaverse/environment/metaverse-hub-crate-high.gltf",
-          maxDistanceMeters: 18
-        },
+          kind: "procedural-box",
+          materialPreset: "training-range-surface",
+          maxDistanceMeters: null,
+          size: {
+            x: 72,
+            y: 0.6,
+            z: 82
+          },
+          tier: "high"
+        }
+      ]
+    },
+    orientation: null,
+    collider: null,
+    collisionPath: null,
+    entries: null,
+    seats: null
+  },
+  {
+    id: metaversePlaygroundRangeBarrierEnvironmentAssetId,
+    label: "Metaverse playground range barrier",
+    placement: "instanced",
+    traversalAffordance: "blocker",
+    physicsColliders: resolveSurfaceColliders(
+      sharedMetaversePlaygroundRangeBarrierEnvironmentAssetId
+    ),
+    renderModel: {
+      defaultTier: "high",
+      lods: [
         {
-          tier: "low",
-          modelPath: "/models/metaverse/environment/metaverse-hub-crate-low.gltf",
-          maxDistanceMeters: null
+          kind: "procedural-box",
+          materialPreset: "training-range-accent",
+          maxDistanceMeters: null,
+          size: {
+            x: 8.5,
+            y: 3.2,
+            z: 1.4
+          },
+          tier: "high"
         }
       ]
     },
@@ -121,36 +152,6 @@ export const environmentPropManifest = defineEnvironmentAssetManifest([
     orientation: null,
     collider: null,
     collisionPath: null,
-    entries: null,
-    seats: null
-  },
-  {
-    id: metaverseHubShorelineEnvironmentAssetId,
-    label: "Metaverse hub shoreline",
-    placement: "static",
-    traversalAffordance: "support",
-    physicsColliders: resolveSurfaceColliders(
-      sharedMetaverseHubShorelineEnvironmentAssetId
-    ),
-    renderModel: {
-      defaultTier: "high",
-      lods: [
-        {
-          tier: "high",
-          modelPath: "/models/metaverse/environment/metaverse-hub-shoreline-high.gltf",
-          maxDistanceMeters: 42
-        },
-        {
-          tier: "low",
-          modelPath: "/models/metaverse/environment/metaverse-hub-shoreline-low.gltf",
-          maxDistanceMeters: null
-        }
-      ]
-    },
-    orientation: null,
-    collider: null,
-    collisionPath:
-      "/models/metaverse/environment/metaverse-hub-shoreline-collision.gltf",
     entries: null,
     seats: null
   },

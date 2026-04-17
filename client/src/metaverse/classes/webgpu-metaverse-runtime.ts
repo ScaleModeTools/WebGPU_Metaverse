@@ -403,9 +403,6 @@ function freezeTelemetrySnapshot(
       extrapolatedFramePercent:
         snapshot.worldSnapshot.extrapolatedFramePercent,
       localReconciliation: Object.freeze({
-        ackedAuthoritativeReplayCorrectionCount:
-          snapshot.worldSnapshot.localReconciliation
-            .ackedAuthoritativeReplayCorrectionCount,
         lastLocalAuthorityPoseCorrectionDetail: Object.freeze({
           authoritativeGrounded:
             snapshot.worldSnapshot.localReconciliation
@@ -433,9 +430,6 @@ function freezeTelemetrySnapshot(
         mountedVehicleAuthorityCorrectionCount:
           snapshot.worldSnapshot.localReconciliation
             .mountedVehicleAuthorityCorrectionCount,
-        recentAckedAuthoritativeReplayCorrectionCountPast5Seconds:
-          snapshot.worldSnapshot.localReconciliation
-            .recentAckedAuthoritativeReplayCorrectionCountPast5Seconds,
         recentCorrectionCountPast5Seconds:
           snapshot.worldSnapshot.localReconciliation
             .recentCorrectionCountPast5Seconds,
@@ -793,8 +787,6 @@ export class WebGpuMetaverseRuntime {
       createMetaverseWorldClient:
         dependencies.createMetaverseWorldClient ?? null,
       localPlayerIdentity: dependencies.localPlayerIdentity ?? null,
-      maxAckedReplayHorizonMs:
-        metaverseLocalAuthorityReconciliationConfig.maxAckedReplayHorizonMs,
       onRemoteWorldUpdate: () => {
         this.#publishRuntimeHudSnapshot(false);
       },
@@ -1364,12 +1356,8 @@ export class WebGpuMetaverseRuntime {
       return;
     }
 
-    const latestTraversalIntent =
-      this.#remoteWorldRuntime.latestPlayerTraversalIntentSnapshot;
     const latestIssuedJumpActionSequence =
-      latestTraversalIntent?.actionIntent?.kind === "jump"
-        ? latestTraversalIntent.actionIntent.sequence
-        : 0;
+      this.#traversalRuntime.latestPredictedJumpActionSequence;
     const authoritativeLocalPlayerPose =
       this.#remoteWorldRuntime.consumeFreshAckedAuthoritativeLocalPlayerPose(
         metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
@@ -1798,15 +1786,11 @@ export class WebGpuMetaverseRuntime {
   #createLocalReconciliationTelemetrySnapshot(
     nowMs: number
   ): MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"] {
-    let recentAckedAuthoritativeReplayCorrectionCountPast5Seconds = 0;
     let recentLocalAuthorityPoseCorrectionCountPast5Seconds = 0;
     let recentMountedVehicleAuthorityCorrectionCountPast5Seconds = 0;
 
     for (const correctionEvent of this.#recentLocalReconciliationEvents) {
       switch (correctionEvent.source) {
-        case "acked-authority-replay":
-          recentAckedAuthoritativeReplayCorrectionCountPast5Seconds += 1;
-          break;
         case "local-authority-snap":
           recentLocalAuthorityPoseCorrectionCountPast5Seconds += 1;
           break;
@@ -1817,8 +1801,6 @@ export class WebGpuMetaverseRuntime {
     }
 
     return Object.freeze({
-      ackedAuthoritativeReplayCorrectionCount:
-        this.#traversalRuntime.ackedAuthoritativeReplayCorrectionCount,
       lastLocalAuthorityPoseCorrectionDetail:
         this.#traversalRuntime.lastLocalAuthorityPoseCorrectionDetail,
       lastLocalAuthorityPoseCorrectionReason:
@@ -1833,7 +1815,6 @@ export class WebGpuMetaverseRuntime {
         this.#traversalRuntime.localAuthorityPoseCorrectionCount,
       mountedVehicleAuthorityCorrectionCount:
         this.#traversalRuntime.mountedVehicleAuthorityCorrectionCount,
-      recentAckedAuthoritativeReplayCorrectionCountPast5Seconds,
       recentCorrectionCountPast5Seconds:
         this.#recentLocalReconciliationEvents.length,
       recentLocalAuthorityPoseCorrectionCountPast5Seconds,

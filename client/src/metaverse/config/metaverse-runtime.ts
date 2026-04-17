@@ -4,11 +4,14 @@ import {
   metaverseUnmountedPlayerLookConstraintBounds,
   metaverseSwimSurfaceTraversalConfig,
   metaverseTraversalWorldRadius,
-  metaverseVehicleSurfaceTraversalConfig
+  metaverseVehicleSurfaceTraversalConfig,
+  metaverseWorldGroundedSpawnPosition,
+  metaverseWorldInitialYawRadians
 } from "@webgpu-metaverse/shared";
 import type { MetaverseRuntimeConfig } from "../types/metaverse-runtime";
 
-const metaverseSpawnDockSupportHeightMeters = 0.6;
+const metaversePlaygroundFloorSupportHeightMeters =
+  metaverseWorldGroundedSpawnPosition.y;
 const metaverseGroundedFirstPersonFaceClearanceMeters = 0.12;
 const metaverseGroundedFirstPersonHeadClearanceMeters = 0.05;
 const metaverseGroundedFirstPersonHeadOcclusionRadiusMeters = 0.18;
@@ -18,12 +21,12 @@ export const metaverseRuntimeConfig = {
     far: 420,
     fieldOfViewDegrees: 62,
     initialPitchRadians: -0.08,
-    initialYawRadians: Math.PI * 0.06,
+    initialYawRadians: metaverseWorldInitialYawRadians,
     near: 0.1,
     spawnPosition: {
-      x: -8.2,
-      y: metaverseSpawnDockSupportHeightMeters + 1.62,
-      z: -15.04
+      x: metaverseWorldGroundedSpawnPosition.x,
+      y: metaversePlaygroundFloorSupportHeightMeters + 1.62,
+      z: metaverseWorldGroundedSpawnPosition.z - 0.24
     }
   },
   bodyPresentation: {
@@ -61,11 +64,7 @@ export const metaverseRuntimeConfig = {
   groundedBody: {
     ...metaverseGroundedBodyTraversalCoreConfig,
     eyeHeightMeters: 1.62,
-    spawnPosition: {
-      x: -8.2,
-      y: metaverseSpawnDockSupportHeightMeters,
-      z: -14.8
-    }
+    spawnPosition: metaverseWorldGroundedSpawnPosition
   },
   orientation: {
     maxPitchRadians: metaverseUnmountedPlayerLookConstraintBounds.maxPitchRadians,
@@ -82,10 +81,10 @@ export const metaverseRuntimeConfig = {
     farColor: [0.05, 0.22, 0.34],
     height: 0,
     nearColor: [0.12, 0.45, 0.58],
-    planeDepth: 520,
-    planeWidth: 520,
+    planeDepth: 72,
+    planeWidth: 72,
     roughness: 0.16,
-    segmentCount: 160,
+    segmentCount: 96,
     waveAmplitude: 0.32,
     waveFrequencies: {
       primary: 0.11,
@@ -127,7 +126,7 @@ export const metaverseRuntimeConfig = {
       position: {
         x: 0,
         y: 6,
-        z: -52
+        z: -34
       },
       ringColor: [0.96, 0.73, 0.25]
     }

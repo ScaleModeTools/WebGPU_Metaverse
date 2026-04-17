@@ -72,8 +72,6 @@ function formatCorrectionSource(
       return "mounted";
     case "local-authority-snap":
       return "pose";
-    case "acked-authority-replay":
-      return "replay";
     default:
       return "none";
   }
@@ -108,8 +106,6 @@ function formatPoseCorrectionReason(
       return "gross divergence";
     case "jump-rejected":
       return "jump rejected";
-    case "locomotion-mismatch":
-      return "mode mismatch";
     default:
       return "none";
   }
@@ -613,7 +609,7 @@ function createDeveloperReport(hudSnapshot: MetaverseHudSnapshot): string {
         `Tick / poll: ${formatOptionalMilliseconds(hudSnapshot.telemetry.worldCadence.authoritativeTickIntervalMs)} · ${formatOptionalMilliseconds(hudSnapshot.telemetry.worldCadence.worldPollIntervalMs)}`,
         `Snapshot path: ${formatSnapshotStreamPath(hudSnapshot.transport.worldSnapshotStream.path)} · ${formatSnapshotStreamLiveness(hudSnapshot.transport.worldSnapshotStream.liveness)} · ${formatCount(hudSnapshot.telemetry.worldSnapshot.bufferDepth)} buffered · ${formatOptionalRateHz(hudSnapshot.telemetry.worldSnapshot.latestSnapshotUpdateRateHz)}`,
         `Age / offset: ${formatOptionalMilliseconds(hudSnapshot.telemetry.worldSnapshot.latestSimulationAgeMs)} · ${formatOptionalMilliseconds(hudSnapshot.telemetry.worldSnapshot.clockOffsetEstimateMs)}`,
-        `Reconciliation: ${formatCount(hudSnapshot.telemetry.worldSnapshot.localReconciliation.totalCorrectionCount)} total · ${formatCount(hudSnapshot.telemetry.worldSnapshot.localReconciliation.recentCorrectionCountPast5Seconds)} recent/5s · last ${formatOptionalMilliseconds(hudSnapshot.telemetry.worldSnapshot.localReconciliation.lastCorrectionAgeMs)} · replay ${formatCount(hudSnapshot.telemetry.worldSnapshot.localReconciliation.ackedAuthoritativeReplayCorrectionCount)} · pose ${formatCount(hudSnapshot.telemetry.worldSnapshot.localReconciliation.localAuthorityPoseCorrectionCount)}`
+        `Reconciliation: ${formatCount(hudSnapshot.telemetry.worldSnapshot.localReconciliation.totalCorrectionCount)} total · ${formatCount(hudSnapshot.telemetry.worldSnapshot.localReconciliation.recentCorrectionCountPast5Seconds)} recent/5s · last ${formatOptionalMilliseconds(hudSnapshot.telemetry.worldSnapshot.localReconciliation.lastCorrectionAgeMs)} · pose ${formatCount(hudSnapshot.telemetry.worldSnapshot.localReconciliation.localAuthorityPoseCorrectionCount)}`
       ]
     },
     {
@@ -1020,9 +1016,6 @@ export function MetaverseDeveloperOverlay({
                 )}/5s · last ${formatOptionalMilliseconds(
                   hudSnapshot.telemetry.worldSnapshot.localReconciliation
                     .lastCorrectionAgeMs
-                )} · replay ${formatCount(
-                  hudSnapshot.telemetry.worldSnapshot.localReconciliation
-                    .ackedAuthoritativeReplayCorrectionCount
                 )} · pose ${formatCount(
                   hudSnapshot.telemetry.worldSnapshot.localReconciliation
                     .localAuthorityPoseCorrectionCount

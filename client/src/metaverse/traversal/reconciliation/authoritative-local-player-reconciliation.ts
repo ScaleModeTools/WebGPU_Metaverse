@@ -1,10 +1,9 @@
-import {
-  createRadians,
-  type MetaverseRealtimePlayerSnapshot,
-  type MetaverseRealtimeWorldSnapshot
+import type {
+  MetaverseRealtimePlayerSnapshot,
+  MetaverseRealtimeWorldSnapshot
 } from "@webgpu-metaverse/shared";
 
-export type AckedAuthoritativeLocalPlayerPoseForReconciliation = Pick<
+export type AckedAuthoritativeLocalPlayerPose = Pick<
   MetaverseRealtimePlayerSnapshot,
   | "jumpAuthorityState"
   | "linearVelocity"
@@ -15,7 +14,7 @@ export type AckedAuthoritativeLocalPlayerPoseForReconciliation = Pick<
   | "yawRadians"
 >;
 
-type AckedAuthoritativeLocalPlayerSnapshotForReconciliation = Pick<
+type AckedAuthoritativeLocalPlayerSnapshot = Pick<
   MetaverseRealtimePlayerSnapshot,
   | "jumpAuthorityState"
   | "lastProcessedInputSequence"
@@ -25,34 +24,17 @@ type AckedAuthoritativeLocalPlayerSnapshotForReconciliation = Pick<
   | "position"
   | "traversalAuthority"
   | "yawRadians"
-  | "angularVelocityRadiansPerSecond"
 >;
 
-export interface FreshAckedAuthoritativeLocalPlayerSnapshotForReconciliation {
+export interface FreshAckedAuthoritativeLocalPlayerSnapshot {
   readonly latestWorldSnapshot: Pick<
     MetaverseRealtimeWorldSnapshot,
     "snapshotSequence" | "tick"
   >;
-  readonly playerSnapshot: AckedAuthoritativeLocalPlayerSnapshotForReconciliation;
+  readonly playerSnapshot: AckedAuthoritativeLocalPlayerSnapshot;
 }
 
-export type AckedAuthoritativeLocalPlayerPose =
-  AckedAuthoritativeLocalPlayerPoseForReconciliation;
-export type FreshAckedAuthoritativeLocalPlayerSnapshot =
-  FreshAckedAuthoritativeLocalPlayerSnapshotForReconciliation;
-
-export interface AckedAuthoritativeLocalPlayerReconciliationSample {
-  readonly authoritativePlayerSnapshot: AckedAuthoritativeLocalPlayerPoseForReconciliation;
-  readonly extrapolationSeconds: number;
-}
-
-interface MutableVector3Snapshot {
-  x: number;
-  y: number;
-  z: number;
-}
-
-function createMountedOccupancyReconciliationKey(
+function createMountedOccupancyDeliveryKey(
   mountedOccupancy: MetaverseRealtimePlayerSnapshot["mountedOccupancy"]
 ): string {
   if (mountedOccupancy === null) {
@@ -67,14 +49,18 @@ function createMountedOccupancyReconciliationKey(
   ].join(":");
 }
 
-function createAckedAuthoritativeLocalPlayerReconciliationSampleKey(
-  playerSnapshot: AckedAuthoritativeLocalPlayerSnapshotForReconciliation
+export function createAckedAuthoritativeLocalPlayerDeliveryKey(
+  freshAckedLocalPlayerSnapshot: FreshAckedAuthoritativeLocalPlayerSnapshot
 ): string {
+  const { latestWorldSnapshot, playerSnapshot } = freshAckedLocalPlayerSnapshot;
+
   return [
+    latestWorldSnapshot.snapshotSequence,
+    latestWorldSnapshot.tick.currentTick,
     playerSnapshot.jumpAuthorityState,
     playerSnapshot.lastProcessedInputSequence,
     playerSnapshot.locomotionMode,
-    createMountedOccupancyReconciliationKey(playerSnapshot.mountedOccupancy),
+    createMountedOccupancyDeliveryKey(playerSnapshot.mountedOccupancy),
     playerSnapshot.position.x,
     playerSnapshot.position.y,
     playerSnapshot.position.z,
@@ -93,118 +79,9 @@ function createAckedAuthoritativeLocalPlayerReconciliationSampleKey(
   ].join("|");
 }
 
-function createMutableVector3(
-  x: number = 0,
-  y: number = 0,
-  z: number = 0
-): MutableVector3Snapshot {
-  return {
-    x,
-    y,
-    z
-  };
-}
-
-function writeMutableVector3(
-  target: MutableVector3Snapshot,
-  x: number,
-  y: number,
-  z: number
-): MutableVector3Snapshot {
-  target.x = x;
-  target.y = y;
-  target.z = z;
-
-  return target;
-}
-
-function lerp(start: number, end: number, alpha: number): number {
-  return start + (end - start) * alpha;
-}
-
-function wrapRadians(rawValue: number): number {
-  let normalizedValue = rawValue;
-
-  while (normalizedValue > Math.PI) {
-    normalizedValue -= Math.PI * 2;
-  }
-
-  while (normalizedValue <= -Math.PI) {
-    normalizedValue += Math.PI * 2;
-  }
-
-  return normalizedValue;
-}
-
-function lerpWrappedRadians(
-  startRadians: number,
-  endRadians: number,
-  alpha: number
-): number {
-  return wrapRadians(
-    startRadians + wrapRadians(endRadians - startRadians) * alpha
-  );
-}
-
-function sampleRemotePlayerPositionInto(
-  target: MutableVector3Snapshot,
-  basePlayer: AckedAuthoritativeLocalPlayerSnapshotForReconciliation,
-  extrapolationSeconds: number
-): MutableVector3Snapshot {
-  if (extrapolationSeconds <= 0) {
-    return writeMutableVector3(
-      target,
-      basePlayer.position.x,
-      basePlayer.position.y,
-      basePlayer.position.z
-    );
-  }
-
-  return writeMutableVector3(
-    target,
-    basePlayer.position.x + basePlayer.linearVelocity.x * extrapolationSeconds,
-    basePlayer.position.y + basePlayer.linearVelocity.y * extrapolationSeconds,
-    basePlayer.position.z + basePlayer.linearVelocity.z * extrapolationSeconds
-  );
-}
-
-function sampleRemotePlayerYawRadians(
-  basePlayer: AckedAuthoritativeLocalPlayerSnapshotForReconciliation,
-  extrapolationSeconds: number
-): number {
-  if (extrapolationSeconds <= 0) {
-    return basePlayer.yawRadians;
-  }
-
-  return wrapRadians(
-    basePlayer.yawRadians +
-      basePlayer.angularVelocityRadiansPerSecond * extrapolationSeconds
-  );
-}
-
-export function createAckedAuthoritativeLocalPlayerReconciliationDeliveryKey(
-  freshAckedLocalPlayerSnapshot: FreshAckedAuthoritativeLocalPlayerSnapshotForReconciliation
-): string {
-  return [
-    freshAckedLocalPlayerSnapshot.latestWorldSnapshot.snapshotSequence,
-    freshAckedLocalPlayerSnapshot.latestWorldSnapshot.tick.currentTick,
-    createAckedAuthoritativeLocalPlayerReconciliationSampleKey(
-      freshAckedLocalPlayerSnapshot.playerSnapshot
-    )
-  ].join("|");
-}
-
-export function createAckedAuthoritativeLocalPlayerDeliveryKey(
-  freshAckedLocalPlayerSnapshot: FreshAckedAuthoritativeLocalPlayerSnapshot
-): string {
-  return createAckedAuthoritativeLocalPlayerReconciliationDeliveryKey(
-    freshAckedLocalPlayerSnapshot
-  );
-}
-
-export function readAckedAuthoritativeLocalPlayerRawPoseForReconciliation(
-  playerSnapshot: AckedAuthoritativeLocalPlayerSnapshotForReconciliation
-): AckedAuthoritativeLocalPlayerPoseForReconciliation {
+export function readAckedAuthoritativeLocalPlayerPose(
+  playerSnapshot: AckedAuthoritativeLocalPlayerSnapshot
+): AckedAuthoritativeLocalPlayerPose {
   return {
     jumpAuthorityState: playerSnapshot.jumpAuthorityState,
     linearVelocity: playerSnapshot.linearVelocity,
@@ -213,36 +90,5 @@ export function readAckedAuthoritativeLocalPlayerRawPoseForReconciliation(
     position: playerSnapshot.position,
     traversalAuthority: playerSnapshot.traversalAuthority,
     yawRadians: playerSnapshot.yawRadians
-  };
-}
-
-export function readAckedAuthoritativeLocalPlayerPose(
-  playerSnapshot: AckedAuthoritativeLocalPlayerSnapshotForReconciliation
-): AckedAuthoritativeLocalPlayerPose {
-  return readAckedAuthoritativeLocalPlayerRawPoseForReconciliation(
-    playerSnapshot
-  );
-}
-
-export function projectAckedAuthoritativeLocalPlayerPoseForReconciliation(
-  playerSnapshot: AckedAuthoritativeLocalPlayerSnapshotForReconciliation,
-  extrapolationSeconds: number
-): AckedAuthoritativeLocalPlayerPoseForReconciliation {
-  if (extrapolationSeconds <= 0) {
-    return readAckedAuthoritativeLocalPlayerRawPoseForReconciliation(
-      playerSnapshot
-    );
-  }
-
-  return {
-    ...readAckedAuthoritativeLocalPlayerRawPoseForReconciliation(playerSnapshot),
-    position: sampleRemotePlayerPositionInto(
-      createMutableVector3(),
-      playerSnapshot,
-      extrapolationSeconds
-    ),
-    yawRadians: createRadians(
-      sampleRemotePlayerYawRadians(playerSnapshot, extrapolationSeconds)
-    )
   };
 }

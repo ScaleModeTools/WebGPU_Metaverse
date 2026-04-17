@@ -26,9 +26,10 @@ export {
 export {
   environmentPropManifest,
   metaverseHubDockEnvironmentAssetId,
-  metaverseHubCrateEnvironmentAssetId,
   metaverseHubDiveBoatEnvironmentAssetId,
-  metaverseHubSkiffEnvironmentAssetId
+  metaverseHubSkiffEnvironmentAssetId,
+  metaversePlaygroundRangeBarrierEnvironmentAssetId,
+  metaversePlaygroundRangeFloorEnvironmentAssetId
 } from "./config/environment-prop-manifest";
 export { reticleManifest } from "./config/reticle-manifest";
 export {
@@ -67,7 +68,8 @@ export {
 } from "./types/character-asset-manifest";
 export {
   defineEnvironmentAssetManifest,
-  environmentAssetPlacements
+  environmentAssetPlacements,
+  environmentProceduralMaterialPresetIds
 } from "./types/environment-asset-manifest";
 export {
   defineReticleManifest
@@ -113,6 +115,10 @@ export type {
   EnvironmentAssetManifest,
   EnvironmentBoxColliderDescriptor,
   EnvironmentColliderVector3,
+  EnvironmentProceduralBoxLodDescriptor,
+  EnvironmentProceduralMaterialPresetId,
+  EnvironmentRenderLodDescriptor,
+  EnvironmentRenderLodGroup,
   EnvironmentSeatDescriptor,
   EnvironmentVector3Descriptor,
   EnvironmentAssetPlacement

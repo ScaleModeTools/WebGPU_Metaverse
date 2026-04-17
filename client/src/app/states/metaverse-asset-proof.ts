@@ -17,20 +17,22 @@ import {
 } from "@/assets/config/character-model-manifest";
 import {
   environmentPropManifest,
-  metaverseHubCrateEnvironmentAssetId,
   metaverseHubDockEnvironmentAssetId,
   metaverseHubDiveBoatEnvironmentAssetId,
   metaverseHubPushableCrateEnvironmentAssetId,
-  metaverseHubShorelineEnvironmentAssetId,
-  metaverseHubSkiffEnvironmentAssetId
+  metaverseHubSkiffEnvironmentAssetId,
+  metaversePlaygroundRangeBarrierEnvironmentAssetId,
+  metaversePlaygroundRangeFloorEnvironmentAssetId
 } from "@/assets/config/environment-prop-manifest";
 import type { AssetLodGroup } from "@/assets/types/asset-lod";
 import type { SkeletonId, SocketId } from "@/assets/types/asset-socket";
 import type {
   EnvironmentAssetDescriptor,
   EnvironmentBoxColliderDescriptor,
+  EnvironmentProceduralBoxLodDescriptor,
   EnvironmentPhysicsBoxColliderDescriptor,
   EnvironmentEntryDescriptor,
+  EnvironmentRenderLodGroup,
   EnvironmentSeatDescriptor
 } from "@/assets/types/environment-asset-manifest";
 import type {
@@ -398,33 +400,53 @@ function resolveMetaverseAttachmentProofConfig(
 }
 
 function resolveEnvironmentLods(
-  renderModel: AssetLodGroup
+  renderModel: EnvironmentRenderLodGroup
 ): readonly MetaverseEnvironmentLodProofConfig[] {
   if (renderModel.lods.length === 0) {
     throw new Error("Metaverse environment asset manifest requires at least one LOD entry.");
   }
 
-  return Object.freeze(
-    renderModel.lods.map((lod) =>
-      Object.freeze({
+  const resolvedLods = renderModel.lods.map((lod) => {
+    if (isEnvironmentProceduralBoxLodDescriptor(lod)) {
+      return Object.freeze({
+        kind: lod.kind,
+        materialPreset: lod.materialPreset,
         maxDistanceMeters: lod.maxDistanceMeters,
-        modelPath: lod.modelPath,
+        size: Object.freeze({
+          x: lod.size.x,
+          y: lod.size.y,
+          z: lod.size.z
+        }),
         tier: lod.tier
-      })
-    )
-  );
+      });
+    }
+
+    return Object.freeze({
+      maxDistanceMeters: lod.maxDistanceMeters,
+      modelPath: lod.modelPath,
+      tier: lod.tier
+    });
+  });
+
+  return Object.freeze(resolvedLods);
 }
 
-const metaverseHubCratePlacements = resolveSharedSurfacePlacements(
-  metaverseHubCrateEnvironmentAssetId
+function isEnvironmentProceduralBoxLodDescriptor(
+  lod: EnvironmentRenderLodGroup["lods"][number]
+): lod is EnvironmentProceduralBoxLodDescriptor {
+  return "kind" in lod && lod.kind === "procedural-box";
+}
+
+const metaversePlaygroundRangeFloorPlacements = resolveSharedSurfacePlacements(
+  metaversePlaygroundRangeFloorEnvironmentAssetId
+);
+
+const metaversePlaygroundRangeBarrierPlacements = resolveSharedSurfacePlacements(
+  metaversePlaygroundRangeBarrierEnvironmentAssetId
 );
 
 const metaverseHubDockPlacements = resolveSharedSurfacePlacements(
   metaverseHubDockEnvironmentAssetId
-);
-
-const metaverseHubShorelinePlacements = resolveSharedSurfacePlacements(
-  metaverseHubShorelineEnvironmentAssetId
 );
 
 const metaverseHubPushableCratePlacements = resolveSharedSurfacePlacements(
@@ -747,16 +769,16 @@ function resolveMetaverseEnvironmentProofConfig(
 ): MetaverseEnvironmentProofConfig {
   const environmentAssets = [
     {
+      assetId: metaversePlaygroundRangeFloorEnvironmentAssetId,
+      placements: metaversePlaygroundRangeFloorPlacements
+    },
+    {
+      assetId: metaversePlaygroundRangeBarrierEnvironmentAssetId,
+      placements: metaversePlaygroundRangeBarrierPlacements
+    },
+    {
       assetId: metaverseHubDockEnvironmentAssetId,
       placements: metaverseHubDockPlacements
-    },
-    {
-      assetId: metaverseHubShorelineEnvironmentAssetId,
-      placements: metaverseHubShorelinePlacements
-    },
-    {
-      assetId: metaverseHubCrateEnvironmentAssetId,
-      placements: metaverseHubCratePlacements
     },
     {
       assetId: metaverseHubPushableCrateEnvironmentAssetId,

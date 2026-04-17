@@ -180,7 +180,7 @@ class MetaverseDynamicEnvironmentColliderRuntime {
     );
 
     if (nextColliderSnapshots.length === 0) {
-      this.#surfaceColliderSnapshots = Object.freeze([]);
+      this.dispose();
       return;
     }
 
@@ -340,16 +340,20 @@ export class MetaverseEnvironmentPhysicsRuntime {
       readonly yawRadians: number;
     } | null
   ): void {
-    if (poseSnapshot === null) {
-      return;
-    }
-
     const dynamicEnvironmentColliderRuntime =
       this.#dynamicEnvironmentColliderRuntimesByEnvironmentAssetId.get(
         environmentAssetId
       );
 
     if (dynamicEnvironmentColliderRuntime === undefined) {
+      return;
+    }
+
+    this.#clearDynamicEnvironmentColliderMetadata(dynamicEnvironmentColliderRuntime);
+
+    if (poseSnapshot === null) {
+      dynamicEnvironmentColliderRuntime.dispose();
+      this.#syncSurfaceColliderSnapshots();
       return;
     }
 
@@ -675,6 +679,14 @@ export class MetaverseEnvironmentPhysicsRuntime {
         collider,
         createMetaverseTraversalColliderMetadataSnapshot(colliderSnapshot)
       );
+    }
+  }
+
+  #clearDynamicEnvironmentColliderMetadata(
+    dynamicEnvironmentColliderRuntime: MetaverseDynamicEnvironmentColliderRuntime
+  ): void {
+    for (const collider of dynamicEnvironmentColliderRuntime.colliders) {
+      this.#surfaceColliderMetadataByHandle.delete(collider);
     }
   }
 

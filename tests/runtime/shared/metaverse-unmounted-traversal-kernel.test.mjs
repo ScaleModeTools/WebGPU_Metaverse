@@ -147,6 +147,52 @@ test("shared unmounted grounded traversal prep owns jump support plus autostep r
   assert.equal(step.bodyIntent.snapToGroundOverrideEnabled, true);
 });
 
+test("shared unmounted grounded traversal prep keeps snap-to-ground armed on supported floor when no water region overlaps the player", () => {
+  const step = prepareMetaverseUnmountedTraversalStep({
+    bodyControl: Object.freeze({
+      boost: false,
+      moveAxis: 0,
+      strafeAxis: 0,
+      turnAxis: 0
+    }),
+    deltaSeconds: 1 / 30,
+    groundedBodyConfig,
+    groundedBodySnapshot: Object.freeze({
+      grounded: true,
+      jumpReady: true,
+      position: Object.freeze({
+        x: 0,
+        y: 0.6,
+        z: 24
+      }),
+      verticalSpeedUnitsPerSecond: 0,
+      yawRadians: 0
+    }),
+    jumpSupportVerticalSpeedTolerance: 0.5,
+    preferredLookYawRadians: null,
+    surfaceColliderSnapshots: Object.freeze([
+      Object.freeze({
+        ...createSupportCollider(0.6),
+        translation: Object.freeze({
+          x: 0,
+          y: 0.5,
+          z: 24
+        })
+      })
+    ]),
+    surfacePolicyConfig,
+    swimBodySnapshot: null,
+    traversalState: Object.freeze({
+      actionState: createMetaverseTraversalActionStateSnapshot(),
+      locomotionMode: "grounded"
+    }),
+    waterRegionSnapshots: Object.freeze([])
+  });
+
+  assert.equal(step.locomotionMode, "grounded");
+  assert.equal(step.bodyIntent.snapToGroundOverrideEnabled, true);
+});
+
 test("shared unmounted grounded traversal outcome keeps airborne travel grounded until the waterline is actually reached", () => {
   const groundedPreparedStep = Object.freeze({
     autostepHeightMeters: null,
@@ -211,6 +257,60 @@ test("shared unmounted grounded traversal outcome keeps airborne travel grounded
 
   assert.equal(waterEntryOutcome.locomotionMode, "swim");
   assert.equal(waterEntryOutcome.grounded, false);
+});
+
+test("shared unmounted grounded traversal outcome does not fabricate water entry on supported floor outside authored water regions", () => {
+  const groundedPreparedStep = Object.freeze({
+    autostepHeightMeters: null,
+    bodyIntent: Object.freeze({
+      boost: false,
+      jump: false,
+      jumpReadyOverride: false,
+      moveAxis: 0,
+      snapToGroundOverrideEnabled: true,
+      strafeAxis: 0,
+      turnAxis: 0
+    }),
+    groundedJumpSupported: true,
+    jumpRequested: false,
+    locomotionMode: "grounded",
+    surfaceJumpSupported: true,
+    traversalState: createMetaverseUnmountedTraversalStateSnapshot({
+      locomotionMode: "grounded"
+    })
+  });
+  const groundedOutcome = resolveMetaverseUnmountedTraversalStep({
+    groundedBodySnapshot: Object.freeze({
+      grounded: true,
+      jumpReady: true,
+      position: Object.freeze({
+        x: 0,
+        y: 0.6,
+        z: 24
+      }),
+      verticalSpeedUnitsPerSecond: 0,
+      yawRadians: 0
+    }),
+    preparedTraversalStep: groundedPreparedStep,
+    surfaceColliderSnapshots: Object.freeze([
+      Object.freeze({
+        ...createSupportCollider(0.6),
+        translation: Object.freeze({
+          x: 0,
+          y: 0.5,
+          z: 24
+        })
+      })
+    ]),
+    surfacePolicyConfig,
+    swimBodySnapshot: null,
+    waterRegionSnapshots: Object.freeze([])
+  });
+
+  assert.equal(groundedOutcome.locomotionMode, "grounded");
+  assert.equal(groundedOutcome.grounded, true);
+  assert.equal(groundedOutcome.automaticSurfaceSnapshot.debug.reason, "grounded-hold");
+  assert.equal(groundedOutcome.supportHeightMeters, 0.6);
 });
 
 test("shared unmounted swim traversal outcome exits onto step-eligible authored support", () => {

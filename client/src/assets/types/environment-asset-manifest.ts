@@ -2,7 +2,7 @@ import type { RegistryById } from "@webgpu-metaverse/shared";
 import type { VehicleOrientationDescriptor } from "@webgpu-metaverse/shared";
 
 import type { EnvironmentAssetId } from "./asset-id";
-import type { AssetLodGroup } from "./asset-lod";
+import type { AssetLodDescriptor, LodTierId } from "./asset-lod";
 import type {
   MountedVehicleCameraPolicyId,
   MountedVehicleControlRoutingPolicyId,
@@ -45,6 +45,31 @@ export interface EnvironmentVector3Descriptor {
 }
 
 export type EnvironmentColliderVector3 = EnvironmentVector3Descriptor;
+
+export const environmentProceduralMaterialPresetIds = [
+  "training-range-surface",
+  "training-range-accent"
+] as const;
+
+export type EnvironmentProceduralMaterialPresetId =
+  (typeof environmentProceduralMaterialPresetIds)[number];
+
+export interface EnvironmentProceduralBoxLodDescriptor {
+  readonly kind: "procedural-box";
+  readonly materialPreset: EnvironmentProceduralMaterialPresetId;
+  readonly maxDistanceMeters: number | null;
+  readonly size: EnvironmentVector3Descriptor;
+  readonly tier: LodTierId;
+}
+
+export type EnvironmentRenderLodDescriptor =
+  | AssetLodDescriptor
+  | EnvironmentProceduralBoxLodDescriptor;
+
+export interface EnvironmentRenderLodGroup {
+  readonly defaultTier: LodTierId;
+  readonly lods: readonly EnvironmentRenderLodDescriptor[];
+}
 
 export interface EnvironmentBoxColliderDescriptor {
   readonly center: EnvironmentVector3Descriptor;
@@ -91,7 +116,7 @@ export interface EnvironmentAssetDescriptor<
   readonly physicsColliders:
     | readonly EnvironmentPhysicsBoxColliderDescriptor[]
     | null;
-  readonly renderModel: AssetLodGroup;
+  readonly renderModel: EnvironmentRenderLodGroup;
   readonly orientation: VehicleOrientationDescriptor | null;
   readonly collider: EnvironmentBoxColliderDescriptor | null;
   readonly collisionPath: string | null;

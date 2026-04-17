@@ -240,12 +240,26 @@ export function resolveMetaverseTraversalWaterlineHeightMeters(
   paddingMeters = 0
 ): number {
   return (
+    readMetaverseTraversalWaterSurfaceHeightMeters(
+      waterRegionSnapshots,
+      position,
+      paddingMeters
+    ) ?? toFiniteNumber(position.y, 0)
+  );
+}
+
+export function readMetaverseTraversalWaterSurfaceHeightMeters(
+  waterRegionSnapshots: readonly MetaverseWorldPlacedWaterRegionSnapshot[],
+  position: Pick<MetaverseWorldSurfaceVector3Snapshot, "x" | "z">,
+  paddingMeters = 0
+): number | null {
+  return (
     resolveMetaverseWorldWaterSurfaceHeightMeters(
       waterRegionSnapshots,
       position.x,
       position.z,
       paddingMeters
-    ) ?? toFiniteNumber(position.y, 0)
+    ) ?? null
   );
 }
 
@@ -345,15 +359,16 @@ function prepareMetaverseUnmountedGroundedTraversalStep({
     waterRegionSnapshots,
     excludedOwnerEnvironmentAssetId
   });
-  const waterlineHeightMeters = resolveMetaverseTraversalWaterlineHeightMeters(
+  const waterSurfaceHeightMeters = readMetaverseTraversalWaterSurfaceHeightMeters(
     waterRegionSnapshots,
     groundedBodySnapshot.position
   );
   const currentDirectSupportKeepsGrounded =
     groundedJumpSupport.supportHeightMeters !== null &&
-    groundedJumpSupport.supportHeightMeters >
-      waterlineHeightMeters +
-        metaverseWorldAutomaticSurfaceWaterlineThresholdMeters;
+    (waterSurfaceHeightMeters === null ||
+      groundedJumpSupport.supportHeightMeters >
+        waterSurfaceHeightMeters +
+          metaverseWorldAutomaticSurfaceWaterlineThresholdMeters);
   const traversalActionStep = stepMetaverseGroundedTraversalAction({
     actionState,
     bodyControl,
@@ -415,17 +430,23 @@ function resolveMetaverseUnmountedGroundedTraversalOutcome({
     "grounded",
     excludedOwnerEnvironmentAssetId
   );
-  const waterlineHeightMeters = resolveMetaverseTraversalWaterlineHeightMeters(
+  const waterSurfaceHeightMeters = readMetaverseTraversalWaterSurfaceHeightMeters(
     waterRegionSnapshots,
     groundedBodySnapshot.position
   );
+  const waterlineHeightMeters =
+    waterSurfaceHeightMeters ?? toFiniteNumber(groundedBodySnapshot.position.y, 0);
   const waterlineThresholdMeters =
-    waterlineHeightMeters +
-    metaverseWorldAutomaticSurfaceWaterlineThresholdMeters;
+    waterSurfaceHeightMeters === null
+      ? null
+      : waterSurfaceHeightMeters +
+        metaverseWorldAutomaticSurfaceWaterlineThresholdMeters;
   const directSupportKeepsGrounded =
     resolvedSupportHeightMeters !== null &&
-    resolvedSupportHeightMeters > waterlineThresholdMeters;
+    (waterlineThresholdMeters === null ||
+      resolvedSupportHeightMeters > waterlineThresholdMeters);
   const shouldEnterSwim =
+    waterlineThresholdMeters !== null &&
     directSupportKeepsGrounded === false &&
     groundedBodySnapshot.position.y <= waterlineThresholdMeters;
   const adjustedResolvedSupportHeightMeters =

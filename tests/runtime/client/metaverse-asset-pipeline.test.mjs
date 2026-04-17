@@ -177,6 +177,10 @@ function collectMetaverseDeliveryPaths({
 
   for (const environmentAsset of environmentPropManifest.environmentAssets) {
     for (const lod of environmentAsset.renderModel.lods) {
+      if ("kind" in lod && lod.kind === "procedural-box") {
+        continue;
+      }
+
       addPath(lod.modelPath);
     }
 
@@ -489,6 +493,10 @@ test("metaverse asset manifests keep stable shipped delivery paths and LOD namin
     }
 
     for (const lod of environmentAsset.renderModel.lods) {
+      if ("kind" in lod && lod.kind === "procedural-box") {
+        continue;
+      }
+
       assert.match(lod.modelPath, new RegExp(`-${lod.tier}\\.(?:glb|gltf)$`));
     }
   }
@@ -642,6 +650,49 @@ test("shipped metaverse glb assets keep normalized node scale", async () => {
       );
     }
   }
+});
+
+test("environment manifest keeps the shipped playground surfaces explicit as procedural range geometry", async () => {
+  const {
+    environmentPropManifest,
+    metaversePlaygroundRangeBarrierEnvironmentAssetId,
+    metaversePlaygroundRangeFloorEnvironmentAssetId
+  } = await clientLoader.load("/src/assets/config/environment-prop-manifest.ts");
+  const floorAsset =
+    environmentPropManifest.byId[metaversePlaygroundRangeFloorEnvironmentAssetId];
+  const barrierAsset =
+    environmentPropManifest.byId[metaversePlaygroundRangeBarrierEnvironmentAssetId];
+
+  assert.ok(floorAsset);
+  assert.ok(barrierAsset);
+  assert.equal(floorAsset.placement, "static");
+  assert.equal(barrierAsset.placement, "instanced");
+  assert.deepEqual(floorAsset.renderModel.lods, [
+    {
+      kind: "procedural-box",
+      materialPreset: "training-range-surface",
+      maxDistanceMeters: null,
+      size: {
+        x: 72,
+        y: 0.6,
+        z: 82
+      },
+      tier: "high"
+    }
+  ]);
+  assert.deepEqual(barrierAsset.renderModel.lods, [
+    {
+      kind: "procedural-box",
+      materialPreset: "training-range-accent",
+      maxDistanceMeters: null,
+      size: {
+        x: 8.5,
+        y: 3.2,
+        z: 1.4
+      },
+      tier: "high"
+    }
+  ]);
 });
 
 test("proof delivery assets keep canonical character sockets, animation vocabulary clips, and authored vehicle seat nodes", async () => {

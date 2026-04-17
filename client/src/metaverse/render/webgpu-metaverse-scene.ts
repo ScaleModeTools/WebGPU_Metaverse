@@ -4,6 +4,7 @@ import {
   AnimationMixer,
   BackSide,
   Bone,
+  BoxGeometry,
   Box3,
   BundleGroup,
   type Camera,
@@ -88,6 +89,7 @@ import {
   shouldConstrainMountedOccupancyToAnchor,
   shouldHolsterHeldAttachmentWhileMounted
 } from "../states/mounted-occupancy";
+import { createMetaverseCameraSnapshot } from "../states/metaverse-flight";
 import {
   createMountedCharacterSeatTransformSnapshot,
   resolveEnvironmentRenderYawFromSimulationYaw,
@@ -460,6 +462,81 @@ const heldWeaponGripAlignmentMatrixScratch = new Matrix4();
 
 function createDefaultSceneAssetLoader(): SceneAssetLoader {
   return new GLTFLoader() as SceneAssetLoader;
+}
+
+function createProceduralEnvironmentMaterial(
+  materialPreset:
+    | "training-range-accent"
+    | "training-range-surface"
+): MeshStandardNodeMaterial {
+  const material = new MeshStandardNodeMaterial();
+
+  switch (materialPreset) {
+    case "training-range-accent":
+      material.colorNode = color(0.76, 0.42, 0.18);
+      material.emissiveNode = color(0.05, 0.02, 0.01);
+      material.roughnessNode = float(0.76);
+      material.metalnessNode = float(0.08);
+      break;
+    default:
+      material.colorNode = color(0.56, 0.55, 0.5);
+      material.emissiveNode = color(0.015, 0.015, 0.018);
+      material.roughnessNode = float(0.94);
+      material.metalnessNode = float(0.02);
+      break;
+  }
+
+  return material;
+}
+
+function createProceduralEnvironmentLodAsset(
+  environmentAssetId: string,
+  lodConfig: Extract<
+    MetaverseEnvironmentLodProofConfig,
+    { readonly kind: "procedural-box" }
+  >
+): LoadedSceneAsset {
+  const scene = new Group();
+  const geometry = new BoxGeometry(
+    lodConfig.size.x,
+    lodConfig.size.y,
+    lodConfig.size.z
+  );
+  const material = createProceduralEnvironmentMaterial(lodConfig.materialPreset);
+  const mesh = new Mesh(geometry, material);
+
+  mesh.name = `metaverse_environment_procedural/${environmentAssetId}/${lodConfig.tier}`;
+  mesh.position.y = lodConfig.size.y * 0.5;
+  mesh.castShadow = lodConfig.materialPreset === "training-range-accent";
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+
+  return {
+    animations: [],
+    scene
+  };
+}
+
+function isProceduralEnvironmentLodConfig(
+  lodConfig: MetaverseEnvironmentLodProofConfig
+): lodConfig is Extract<
+  MetaverseEnvironmentLodProofConfig,
+  { readonly kind: "procedural-box" }
+> {
+  return "kind" in lodConfig && lodConfig.kind === "procedural-box";
+}
+
+function resolveEnvironmentLodModelPath(
+  environmentAssetProofConfig: MetaverseEnvironmentAssetProofConfig,
+  lodConfig: MetaverseEnvironmentLodProofConfig
+): string {
+  if (isProceduralEnvironmentLodConfig(lodConfig)) {
+    throw new Error(
+      `Metaverse dynamic environment asset ${environmentAssetProofConfig.label} cannot use procedural geometry.`
+    );
+  }
+
+  return lodConfig.modelPath;
 }
 
 function freezeVector3(
@@ -1889,6 +1966,29 @@ function createStaticBundleGroup(name: string): BundleGroup {
   return bundleGroup;
 }
 
+function createEnvironmentLodContainer(
+  name: string,
+  bundleOwned: boolean
+): Group | BundleGroup {
+  if (bundleOwned) {
+    return createStaticBundleGroup(name);
+  }
+
+  const container = new Group();
+
+  container.name = name;
+
+  return container;
+}
+
+function markObjectBundleGroupsDirty(object: Object3D): void {
+  object.traverse((node) => {
+    if ("isBundleGroup" in node && node.isBundleGroup === true) {
+      (node as BundleGroup).needsUpdate = true;
+    }
+  });
+}
+
 function markSceneBundleGroupsDirty(scene: Scene): void {
   scene.traverse((node) => {
     if ("isBundleGroup" in node && node.isBundleGroup === true) {
@@ -1994,7 +2094,15 @@ function setEnvironmentLodVisibility(
   lodIndex: number
 ): void {
   for (let index = 0; index < lods.length; index += 1) {
-    lods[index]!.object.visible = index === lodIndex;
+    const lodObject = lods[index]!.object;
+    const nextVisible = index === lodIndex;
+
+    if (lodObject.visible === nextVisible) {
+      continue;
+    }
+
+    lodObject.visible = nextVisible;
+    markObjectBundleGroupsDirty(lodObject);
   }
 }
 
@@ -3677,7 +3785,12 @@ async function loadEnvironmentLodObjects(
   return Promise.all(
     environmentAssetProofConfig.lods.map(async (lodConfig) => ({
       config: lodConfig,
-      ...(await sceneAssetLoader.loadAsync(lodConfig.modelPath))
+      ...(isProceduralEnvironmentLodConfig(lodConfig)
+        ? createProceduralEnvironmentLodAsset(
+            environmentAssetProofConfig.environmentAssetId,
+            lodConfig
+          )
+        : await sceneAssetLoader.loadAsync(lodConfig.modelPath))
     }))
   );
 }
@@ -3698,13 +3811,14 @@ async function loadStaticEnvironmentAssetProofRuntime(
     const placementAnchor = new Group();
     const lods = loadedLodAssets.map(({ config, scene: loadedScene }) => {
       const lodScene = cloneGroup(loadedScene);
-      const lodBundle = createStaticBundleGroup(
+      const lodBundle = createEnvironmentLodContainer(
         [
           "metaverse_environment_static",
           environmentAssetProofConfig.environmentAssetId,
           String(placementIndex),
           config.tier
-        ].join("/")
+        ].join("/"),
+        !isProceduralEnvironmentLodConfig(config)
       );
 
       lodScene.name = `${lodBundle.name}/scene`;
@@ -3759,12 +3873,13 @@ async function loadInstancedEnvironmentAssetProofRuntime(
       loadedScene,
       `Metaverse environment asset ${environmentAssetProofConfig.label} LOD ${config.tier}`
     );
-    const lodGroup = createStaticBundleGroup(
+    const lodGroup = createEnvironmentLodContainer(
       [
         "metaverse_environment_lod",
         environmentAssetProofConfig.environmentAssetId,
         config.tier
-      ].join("/")
+      ].join("/"),
+      !isProceduralEnvironmentLodConfig(config)
     );
     lodGroup.visible = false;
 
@@ -3848,7 +3963,10 @@ async function loadDynamicEnvironmentAssetProofRuntime(
 
   const sceneAssetLoader = createSceneAssetLoader();
   const environmentAsset = await sceneAssetLoader.loadAsync(
-    environmentAssetProofConfig.lods[0]!.modelPath
+    resolveEnvironmentLodModelPath(
+      environmentAssetProofConfig,
+      environmentAssetProofConfig.lods[0]!
+    )
   );
   const anchorGroup = new Group();
   const presentationGroup = new Group();
@@ -4046,6 +4164,29 @@ function syncCamera(
     cameraSnapshot.position.z + cameraSnapshot.lookDirection.z
   );
   camera.updateMatrixWorld(true);
+}
+
+function createCameraSnapshotFromPerspectiveCamera(
+  camera: PerspectiveCamera
+): MetaverseCameraSnapshot {
+  const lookDirection = new Vector3();
+
+  camera.getWorldDirection(lookDirection);
+
+  return Object.freeze({
+    lookDirection: Object.freeze({
+      x: lookDirection.x,
+      y: lookDirection.y,
+      z: lookDirection.z
+    }),
+    pitchRadians: Math.asin(clamp(lookDirection.y, -1, 1)),
+    position: Object.freeze({
+      x: camera.position.x,
+      y: camera.position.y,
+      z: camera.position.z
+    }),
+    yawRadians: wrapRadians(Math.atan2(lookDirection.x, -lookDirection.z))
+  });
 }
 
 function createHemisphereLight(
@@ -4537,13 +4678,7 @@ export function createMetaverseScene(
     );
   }
 
-  camera.position.set(
-    config.camera.spawnPosition.x,
-    config.camera.spawnPosition.y,
-    config.camera.spawnPosition.z
-  );
-  camera.lookAt(0, config.camera.spawnPosition.y, -1);
-  camera.updateMatrixWorld(true);
+  syncCamera(camera, createMetaverseCameraSnapshot(config.camera));
 
   scene.background = toThreeColor(config.environment.horizonColor);
   scene.fog = new FogExp2(
@@ -4562,20 +4697,7 @@ export function createMetaverseScene(
   }
 
   function createCurrentCameraSnapshot(): MetaverseCameraSnapshot {
-    return Object.freeze({
-      lookDirection: {
-        x: -camera.position.x,
-        y: 0,
-        z: -camera.position.z
-      },
-      pitchRadians: 0,
-      position: {
-        x: camera.position.x,
-        y: camera.position.y,
-        z: camera.position.z
-      },
-      yawRadians: 0
-    });
+    return createCameraSnapshotFromPerspectiveCamera(camera);
   }
 
   async function bootScenicEnvironment(): Promise<void> {
@@ -4603,6 +4725,7 @@ export function createMetaverseScene(
           dependencies.showSocketDebug ?? false
         );
         scene.add(environmentProofRuntime.anchorGroup);
+        markSceneBundleGroupsDirty(scene);
       }
 
       if (environmentProofRuntime !== null) {

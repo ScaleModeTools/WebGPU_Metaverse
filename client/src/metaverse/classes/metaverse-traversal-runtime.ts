@@ -135,35 +135,9 @@ interface AuthoritativeLocalPlayerPoseSnapshot
     | "yawRadians"
   > {}
 
-interface TraversalReconciliationPreviewStateSnapshot {
-  readonly authoritativeCorrectionTelemetrySnapshot: AuthoritativeCorrectionTelemetrySnapshot;
-  readonly automaticSurfaceDecisionReason: LocalShorelineTelemetrySnapshot["decisionReason"];
-  readonly autostepHeightMeters: number | null;
-  readonly blockerOverlap: boolean;
-  readonly cameraSnapshot: MetaverseCameraSnapshot;
-  readonly groundedBodyStateSnapshot:
-    | ReturnType<MetaverseGroundedBodyRuntime["captureStateSnapshot"]>
-    | null;
-  readonly groundedLocomotionAccumulatorSeconds: number;
-  readonly latestMovementInputMagnitude: number;
-  readonly localTraversalAuthorityState: MetaverseTraversalAuthoritySnapshot;
-  readonly localTraversalAuthorityTick: number;
-  readonly locomotionMode: MetaverseLocomotionModeId;
-  readonly unmountedTraversalState: MetaverseUnmountedTraversalStateSnapshot;
-  readonly resolvedSupportHeightMeters: number;
-  readonly swimLocomotionAccumulatorSeconds: number;
-  readonly stepSupportedProbeCount: number;
-  readonly swimBodyStateSnapshot:
-    | ReturnType<MetaverseSurfaceDriveBodyRuntime["captureStateSnapshot"]>
-    | null;
-  readonly traversalCameraPitchRadians: number;
-  readonly unmountedLookYawRadians: number;
-}
-
 interface LocalAuthorityPoseCorrectionReasonFlags {
   readonly authoritativeGroundStateMismatchShouldSnap: boolean;
   readonly authoritativeJumpRejected: boolean;
-  readonly locomotionMismatchShouldSnap: boolean;
   readonly grossPositionDivergence: boolean;
 }
 
@@ -188,8 +162,7 @@ function createDefaultLocalAuthorityPoseCorrectionDetailSnapshot(): LocalAuthori
 function resolveLocalAuthorityPoseCorrectionReason({
   authoritativeGroundStateMismatchShouldSnap,
   authoritativeJumpRejected,
-  grossPositionDivergence,
-  locomotionMismatchShouldSnap
+  grossPositionDivergence
 }: LocalAuthorityPoseCorrectionReasonFlags): LocalAuthorityPoseCorrectionReason {
   if (authoritativeJumpRejected) {
     return "jump-rejected";
@@ -197,10 +170,6 @@ function resolveLocalAuthorityPoseCorrectionReason({
 
   if (authoritativeGroundStateMismatchShouldSnap) {
     return "ground-state-mismatch";
-  }
-
-  if (locomotionMismatchShouldSnap) {
-    return "locomotion-mismatch";
   }
 
   if (grossPositionDivergence) {
@@ -224,7 +193,6 @@ function resolveMovementInputMagnitude(
 }
 
 const localPlayerAuthoritativeHardSnapDistanceMeters = 2.5;
-const localPlayerAuthoritativeLocomotionMismatchSnapCount = 3;
 const localPlayerAuthoritativeNoopCorrectionDistanceMeters = 0.001;
 const localPlayerAuthoritativeNoopVerticalSpeedUnitsPerSecond = 0.05;
 const localGroundedJumpSupportVerticalSpeedTolerance = 0.5;
@@ -320,7 +288,6 @@ export class MetaverseTraversalRuntime {
   #characterPresentationSnapshot: MetaverseCharacterPresentationSnapshot | null =
     null;
   readonly #movementAnimationRuntime = new MetaverseMovementAnimationPolicyRuntime();
-  #ackedAuthoritativeReplayCorrectionCount = 0;
   #latestAuthoritativeCorrectionTelemetrySnapshot =
     createDefaultAuthoritativeCorrectionTelemetrySnapshot();
   #latestAutomaticSurfaceDecisionReason: LocalShorelineTelemetrySnapshot["decisionReason"] =
@@ -330,7 +297,6 @@ export class MetaverseTraversalRuntime {
   #latestStepSupportedProbeCount = 0;
   #latestAutostepHeightMeters: number | null = null;
   #latestMovementInputMagnitude = 0;
-  #localAuthoritativeLocomotionMismatchCount = 0;
   #localAuthorityPoseCorrectionCount = 0;
   #lastLocalAuthorityPoseCorrectionDetail =
     createDefaultLocalAuthorityPoseCorrectionDetailSnapshot();
@@ -384,10 +350,15 @@ export class MetaverseTraversalRuntime {
     this.#surfaceColliderSnapshots = dependencies.surfaceColliderSnapshots;
     this.#cameraSnapshot = createMetaverseCameraSnapshot(config.camera);
     this.#traversalCameraPitchRadians = config.camera.initialPitchRadians;
-    const spawnWaterSurfaceHeightMeters = this.#resolveWaterSurfaceHeightMeters(
-      config.camera.spawnPosition
-    );
-    this.#latestResolvedSupportHeightMeters = spawnWaterSurfaceHeightMeters;
+    const groundedSpawnPosition = this.#readCanonicalGroundedSpawnPosition();
+
+    this.#latestResolvedSupportHeightMeters =
+      resolveSurfaceHeightMeters(
+        this.#config,
+        this.#surfaceColliderSnapshots,
+        groundedSpawnPosition.x,
+        groundedSpawnPosition.z
+      ) ?? groundedSpawnPosition.y;
     this.#unmountedLookYawRadians = config.camera.initialYawRadians;
   }
 
@@ -403,6 +374,38 @@ export class MetaverseTraversalRuntime {
 
   get locomotionMode(): MetaverseLocomotionModeId {
     return this.#locomotionMode;
+  }
+
+  get latestPredictedJumpActionSequence(): number {
+    if (this.#locomotionMode !== "grounded") {
+      return 0;
+    }
+
+    const latestIssuedJumpActionSequence =
+      this.#latestIssuedTraversalIntentSnapshot?.actionIntent?.kind === "jump"
+        ? this.#latestIssuedTraversalIntentSnapshot.actionIntent.sequence
+        : 0;
+
+    if (latestIssuedJumpActionSequence > 0) {
+      return latestIssuedJumpActionSequence;
+    }
+
+    const groundedTraversalActionState = this.#unmountedTraversalState.actionState;
+    const pendingJumpActionSequence =
+      groundedTraversalActionState.pendingActionKind === "jump"
+        ? groundedTraversalActionState.pendingActionSequence
+        : 0;
+    const localJumpAuthorityState = this.#resolveLocalPredictedJumpAuthorityState();
+    const resolvedAirborneJumpActionSequence =
+      groundedTraversalActionState.resolvedActionKind === "jump" &&
+      localJumpAuthorityState !== "grounded"
+        ? groundedTraversalActionState.resolvedActionSequence
+        : 0;
+
+    return Math.max(
+      pendingJumpActionSequence,
+      resolvedAirborneJumpActionSequence
+    );
   }
 
   get mountedEnvironmentSnapshot(): MountedEnvironmentSnapshot | null {
@@ -461,10 +464,6 @@ export class MetaverseTraversalRuntime {
 
   get lastLocalAuthorityPoseCorrectionDetail(): LocalAuthorityPoseCorrectionDetailSnapshot {
     return this.#lastLocalAuthorityPoseCorrectionDetail;
-  }
-
-  get ackedAuthoritativeReplayCorrectionCount(): number {
-    return this.#ackedAuthoritativeReplayCorrectionCount;
   }
 
   get mountedVehicleAuthorityCorrectionCount(): number {
@@ -554,10 +553,7 @@ export class MetaverseTraversalRuntime {
   #resolveLatestPredictedJumpActionSequence(
     jumpPressedThisFrame: boolean
   ): number {
-    const latestIssuedJumpActionSequence =
-      this.#latestIssuedTraversalIntentSnapshot?.actionIntent?.kind === "jump"
-        ? this.#latestIssuedTraversalIntentSnapshot.actionIntent.sequence
-        : 0;
+    const latestIssuedJumpActionSequence = this.latestPredictedJumpActionSequence;
 
     if (latestIssuedJumpActionSequence > 0) {
       return latestIssuedJumpActionSequence;
@@ -711,17 +707,18 @@ export class MetaverseTraversalRuntime {
     this.#latestAutomaticSurfaceDecisionReason = "grounded-hold";
     this.#latestAutostepHeightMeters = null;
     this.#latestBlockerOverlap = false;
-    const spawnWaterSurfaceHeightMeters =
-      resolveWaterSurfaceHeightMeters(
+    const groundedSpawnPosition = this.#readCanonicalGroundedSpawnPosition();
+
+    this.#latestResolvedSupportHeightMeters =
+      resolveSurfaceHeightMeters(
         this.#config,
-        this.#config.camera.spawnPosition
-      ) ?? this.#config.camera.spawnPosition.y;
-    this.#latestResolvedSupportHeightMeters = spawnWaterSurfaceHeightMeters;
+        this.#surfaceColliderSnapshots,
+        groundedSpawnPosition.x,
+        groundedSpawnPosition.z
+      ) ?? groundedSpawnPosition.y;
     this.#latestStepSupportedProbeCount = 0;
     this.#latestMovementInputMagnitude = 0;
     this.#localReconciliationCorrectionCount = 0;
-    this.#localAuthoritativeLocomotionMismatchCount = 0;
-    this.#ackedAuthoritativeReplayCorrectionCount = 0;
     this.#localAuthorityPoseCorrectionCount = 0;
     this.#lastLocalAuthorityPoseCorrectionDetail =
       createDefaultLocalAuthorityPoseCorrectionDetailSnapshot();
@@ -1087,10 +1084,6 @@ export class MetaverseTraversalRuntime {
       (authoritativeJumpRejectedShouldSnap ||
         authoritativeAirborneJumpPhaseShouldSnap);
 
-    this.#localAuthoritativeLocomotionMismatchCount = locomotionMismatch
-      ? this.#localAuthoritativeLocomotionMismatchCount + 1
-      : 0;
-
     this.#syncAuthoritativeCorrectionTelemetry(
       localTraversalPose,
       authoritativePlayerSnapshot,
@@ -1100,29 +1093,31 @@ export class MetaverseTraversalRuntime {
     if (
       !locomotionMismatch &&
       authoritativePlayerSnapshot.locomotionMode === "grounded" &&
-      authoritativeGrounded &&
       localGroundedBodySnapshot !== null &&
-      !localGroundedBodySnapshot.grounded &&
-      !authoritativeJumpRejected &&
-      this.#hasLocallyPredictedJumpSequence(latestIssuedJumpActionSequence) &&
-      positionDistance < localPlayerAuthoritativeHardSnapDistanceMeters
+      this.#shouldPreserveLocalAirborneJumpArc(
+        localGroundedBodySnapshot,
+        authoritativeGrounded,
+        authoritativeJumpRejected,
+        latestIssuedJumpActionSequence,
+        locomotionMismatch,
+        positionDistance
+      )
     ) {
       // Let a routine grounded server pose lag one jump behind without
       // flattening a local airborne arc back onto the floor.
       return;
     }
 
-    const locomotionMismatchShouldSnap =
-      locomotionMismatch &&
-      this.#localAuthoritativeLocomotionMismatchCount >=
-        localPlayerAuthoritativeLocomotionMismatchSnapCount;
     const grossPositionDivergence =
       positionDistance >= localPlayerAuthoritativeHardSnapDistanceMeters;
     const shouldSnapCorrection =
       authoritativeJumpRejectedShouldSnap ||
       authoritativeGroundStateMismatchShouldSnap ||
-      grossPositionDivergence ||
-      locomotionMismatchShouldSnap;
+      grossPositionDivergence;
+
+    // Grounded/swim classification is derived from shoreline surface queries, so
+    // slight predicted-vs-authoritative drift near the waterline can disagree
+    // without indicating an invalid local state.
 
     if (!shouldSnapCorrection) {
       return;
@@ -1147,8 +1142,7 @@ export class MetaverseTraversalRuntime {
       resolveLocalAuthorityPoseCorrectionReason({
         authoritativeGroundStateMismatchShouldSnap,
         authoritativeJumpRejected: authoritativeJumpRejectedShouldSnap,
-        grossPositionDivergence,
-        locomotionMismatchShouldSnap
+        grossPositionDivergence
       });
     this.#lastLocalReconciliationCorrectionSource = "local-authority-snap";
     this.#syncAuthoritativeCorrectionTelemetry(
@@ -1177,256 +1171,6 @@ export class MetaverseTraversalRuntime {
     }
 
     this.#syncCharacterPresentationSnapshot();
-  }
-
-  reconcileAckedAuthoritativeLocalPlayerPose(
-    authoritativePlayerSnapshot: AuthoritativeLocalPlayerPoseSnapshot,
-    authoritativeReplaySeconds: number,
-    activeTraversalIntent:
-      | MetaversePlayerTraversalIntentSnapshot
-      | null,
-    latestIssuedJumpActionSequence: number = 0
-  ): void {
-    if (
-      authoritativePlayerSnapshot.mountedOccupancy !== null ||
-      authoritativePlayerSnapshot.locomotionMode === "mounted"
-    ) {
-      return;
-    }
-
-    const localTraversalPose = this.#readLocalTraversalPoseForReconciliation();
-
-    if (localTraversalPose === null) {
-      return;
-    }
-
-    const rawPositionDistance = Math.hypot(
-      authoritativePlayerSnapshot.position.x - localTraversalPose.position.x,
-      authoritativePlayerSnapshot.position.y - localTraversalPose.position.y,
-      authoritativePlayerSnapshot.position.z - localTraversalPose.position.z
-    );
-    const rawVerticalDistance = Math.abs(
-      authoritativePlayerSnapshot.position.y - localTraversalPose.position.y
-    );
-    const locomotionMismatch =
-      authoritativePlayerSnapshot.locomotionMode !==
-      localTraversalPose.locomotionMode;
-    const authoritativeGrounded =
-      authoritativePlayerSnapshot.locomotionMode === "grounded"
-        ? this.#isAuthoritativeGroundedPlayerSnapshot(authoritativePlayerSnapshot)
-        : false;
-    const authoritativeTraversalAuthority =
-      authoritativePlayerSnapshot.traversalAuthority;
-    this.#syncPredictedGroundedTraversalActionStateFromAuthoritativeTraversal(
-      authoritativeTraversalAuthority,
-      latestIssuedJumpActionSequence
-    );
-    const authoritativeAirborneJumpPhase =
-      isMetaverseTraversalAuthorityJumpAirborne(
-        authoritativeTraversalAuthority,
-        latestIssuedJumpActionSequence
-      );
-    const authoritativeJumpResolution =
-      this.#resolveAuthoritativeIssuedJumpResolution(
-      authoritativeTraversalAuthority,
-      latestIssuedJumpActionSequence
-    );
-    const authoritativeJumpRejected =
-      authoritativeJumpResolution === "rejected";
-    const localGroundedBodySnapshot =
-      localTraversalPose.locomotionMode === "grounded" &&
-      this.#groundedBodyRuntime.isInitialized
-        ? this.#groundedBodyRuntime.snapshot
-        : null;
-    const authoritativeGroundStateMismatch =
-      authoritativePlayerSnapshot.locomotionMode === "grounded" &&
-      localGroundedBodySnapshot !== null &&
-      authoritativeGrounded !== localGroundedBodySnapshot.grounded;
-    const authoritativeAirborneJumpPhaseShouldSnap =
-      authoritativeAirborneJumpPhase &&
-      (latestIssuedJumpActionSequence > 0 ||
-        rawPositionDistance > localPlayerAuthoritativeNoopCorrectionDistanceMeters ||
-        rawVerticalDistance > localPlayerAuthoritativeNoopCorrectionDistanceMeters ||
-        Math.abs(authoritativePlayerSnapshot.linearVelocity.y) >
-          localPlayerAuthoritativeNoopVerticalSpeedUnitsPerSecond);
-    const authoritativeGroundStateMismatchShouldSnap =
-      authoritativeGroundStateMismatch &&
-      (authoritativeJumpRejected ||
-        authoritativeAirborneJumpPhaseShouldSnap);
-
-    this.#localAuthoritativeLocomotionMismatchCount = locomotionMismatch
-      ? this.#localAuthoritativeLocomotionMismatchCount + 1
-      : 0;
-
-    if (
-      !locomotionMismatch &&
-      authoritativePlayerSnapshot.locomotionMode === "grounded" &&
-      authoritativeGrounded &&
-      localGroundedBodySnapshot !== null &&
-      !localGroundedBodySnapshot.grounded &&
-      !authoritativeJumpRejected &&
-      this.#hasLocallyPredictedJumpSequence(latestIssuedJumpActionSequence) &&
-      rawPositionDistance < localPlayerAuthoritativeHardSnapDistanceMeters
-    ) {
-      return;
-    }
-
-    const requiresImmediateCorrection =
-      authoritativeJumpRejected ||
-      authoritativeGroundStateMismatchShouldSnap ||
-      (locomotionMismatch &&
-        this.#localAuthoritativeLocomotionMismatchCount >=
-          localPlayerAuthoritativeLocomotionMismatchSnapCount);
-    const requiresReplayPreview =
-      requiresImmediateCorrection ||
-      rawPositionDistance >= localPlayerAuthoritativeHardSnapDistanceMeters;
-
-    this.#syncAuthoritativeCorrectionTelemetry(
-      localTraversalPose,
-      authoritativePlayerSnapshot,
-      false
-    );
-
-    if (!requiresReplayPreview) {
-      return;
-    }
-
-    const previewStateSnapshot = this.#captureReconciliationPreviewState();
-
-    if (authoritativePlayerSnapshot.locomotionMode === "swim") {
-      this.#syncAuthoritativeSwimLocomotion(
-        authoritativePlayerSnapshot.position,
-        localTraversalPose.yawRadians,
-        authoritativePlayerSnapshot.linearVelocity,
-        1,
-        1
-      );
-    } else {
-      this.#syncAuthoritativeGroundedLocomotion(
-        authoritativePlayerSnapshot.position,
-        localTraversalPose.yawRadians,
-        authoritativePlayerSnapshot.linearVelocity,
-        authoritativeGrounded,
-        1,
-        1
-      );
-    }
-
-    this.#replayAckedTraversalIntent(
-      activeTraversalIntent,
-      authoritativeReplaySeconds
-    );
-
-    const replayedTraversalPose = this.#readLocalTraversalPoseForReconciliation();
-
-    if (replayedTraversalPose === null) {
-      this.#restoreReconciliationPreviewState(previewStateSnapshot);
-      this.#syncCharacterPresentationSnapshot();
-      return;
-    }
-
-    const replayedPositionDistance = Math.hypot(
-      replayedTraversalPose.position.x - localTraversalPose.position.x,
-      replayedTraversalPose.position.y - localTraversalPose.position.y,
-      replayedTraversalPose.position.z - localTraversalPose.position.z
-    );
-    const shouldApplyCorrection =
-      requiresImmediateCorrection ||
-      replayedPositionDistance >= localPlayerAuthoritativeHardSnapDistanceMeters;
-
-    if (!shouldApplyCorrection) {
-      this.#restoreReconciliationPreviewState(previewStateSnapshot);
-      this.#syncAuthoritativeCorrectionTelemetry(
-        localTraversalPose,
-        replayedTraversalPose,
-        false
-      );
-      return;
-    }
-
-    this.#syncAuthoritativeCorrectionTelemetry(
-      localTraversalPose,
-      replayedTraversalPose,
-      true
-    );
-    this.#localReconciliationCorrectionCount += 1;
-    this.#ackedAuthoritativeReplayCorrectionCount += 1;
-    this.#lastLocalReconciliationCorrectionSource = "acked-authority-replay";
-
-    this.#syncCharacterPresentationSnapshot();
-  }
-
-  #captureReconciliationPreviewState(): TraversalReconciliationPreviewStateSnapshot {
-    return Object.freeze({
-      authoritativeCorrectionTelemetrySnapshot:
-        this.#latestAuthoritativeCorrectionTelemetrySnapshot,
-      automaticSurfaceDecisionReason: this.#latestAutomaticSurfaceDecisionReason,
-      autostepHeightMeters: this.#latestAutostepHeightMeters,
-      blockerOverlap: this.#latestBlockerOverlap,
-      cameraSnapshot: this.#cameraSnapshot,
-      groundedBodyStateSnapshot: this.#groundedBodyRuntime.isInitialized
-        ? this.#groundedBodyRuntime.captureStateSnapshot()
-        : null,
-      groundedLocomotionAccumulatorSeconds:
-        this.#groundedLocomotionAccumulatorSeconds,
-      latestMovementInputMagnitude: this.#latestMovementInputMagnitude,
-      localTraversalAuthorityState: this.#localTraversalAuthorityState,
-      localTraversalAuthorityTick: this.#localTraversalAuthorityTick,
-      locomotionMode: this.#locomotionMode,
-      unmountedTraversalState: this.#unmountedTraversalState,
-      resolvedSupportHeightMeters: this.#latestResolvedSupportHeightMeters,
-      swimLocomotionAccumulatorSeconds: this.#swimLocomotionAccumulatorSeconds,
-      stepSupportedProbeCount: this.#latestStepSupportedProbeCount,
-      swimBodyStateSnapshot: this.#swimBodyRuntime?.captureStateSnapshot() ?? null,
-      traversalCameraPitchRadians: this.#traversalCameraPitchRadians,
-      unmountedLookYawRadians: this.#unmountedLookYawRadians
-    });
-  }
-
-  #restoreReconciliationPreviewState(
-    previewStateSnapshot: TraversalReconciliationPreviewStateSnapshot
-  ): void {
-    if (previewStateSnapshot.groundedBodyStateSnapshot !== null) {
-      this.#groundedBodyRuntime.restoreStateSnapshot(
-        previewStateSnapshot.groundedBodyStateSnapshot
-      );
-    }
-
-    if (previewStateSnapshot.swimBodyStateSnapshot === null) {
-      this.#swimBodyRuntime?.dispose();
-      this.#swimBodyRuntime = null;
-    } else {
-      this.#ensureSwimBodyRuntime().restoreStateSnapshot(
-        previewStateSnapshot.swimBodyStateSnapshot
-      );
-    }
-
-    this.#latestAuthoritativeCorrectionTelemetrySnapshot =
-      previewStateSnapshot.authoritativeCorrectionTelemetrySnapshot;
-    this.#latestAutomaticSurfaceDecisionReason =
-      previewStateSnapshot.automaticSurfaceDecisionReason;
-    this.#latestAutostepHeightMeters = previewStateSnapshot.autostepHeightMeters;
-    this.#latestBlockerOverlap = previewStateSnapshot.blockerOverlap;
-    this.#cameraSnapshot = previewStateSnapshot.cameraSnapshot;
-    this.#groundedLocomotionAccumulatorSeconds =
-      previewStateSnapshot.groundedLocomotionAccumulatorSeconds;
-    this.#latestMovementInputMagnitude =
-      previewStateSnapshot.latestMovementInputMagnitude;
-    this.#localTraversalAuthorityState =
-      previewStateSnapshot.localTraversalAuthorityState;
-    this.#localTraversalAuthorityTick =
-      previewStateSnapshot.localTraversalAuthorityTick;
-    this.#locomotionMode = previewStateSnapshot.locomotionMode;
-    this.#unmountedTraversalState = previewStateSnapshot.unmountedTraversalState;
-    this.#latestResolvedSupportHeightMeters =
-      previewStateSnapshot.resolvedSupportHeightMeters;
-    this.#swimLocomotionAccumulatorSeconds =
-      previewStateSnapshot.swimLocomotionAccumulatorSeconds;
-    this.#latestStepSupportedProbeCount =
-      previewStateSnapshot.stepSupportedProbeCount;
-    this.#traversalCameraPitchRadians =
-      previewStateSnapshot.traversalCameraPitchRadians;
-    this.#unmountedLookYawRadians = previewStateSnapshot.unmountedLookYawRadians;
   }
 
   #setLocomotionMode(locomotionMode: MetaverseLocomotionModeId): void {
@@ -1520,15 +1264,24 @@ export class MetaverseTraversalRuntime {
     );
   }
 
+  #readCanonicalGroundedSpawnPosition(): PhysicsVector3Snapshot {
+    return freezeVector3(
+      this.#config.groundedBody.spawnPosition.x,
+      this.#config.groundedBody.spawnPosition.y,
+      this.#config.groundedBody.spawnPosition.z
+    );
+  }
+
   #ensureSwimBodyRuntime(): MetaverseSurfaceDriveBodyRuntime {
     if (this.#swimBodyRuntime !== null) {
       return this.#swimBodyRuntime;
     }
 
+    const groundedSpawnPosition = this.#readCanonicalGroundedSpawnPosition();
     const spawnPosition = freezeVector3(
-      this.#config.camera.spawnPosition.x,
-      this.#resolveWaterSurfaceHeightMeters(this.#config.camera.spawnPosition),
-      this.#config.camera.spawnPosition.z
+      groundedSpawnPosition.x,
+      this.#resolveWaterSurfaceHeightMeters(groundedSpawnPosition),
+      groundedSpawnPosition.z
     );
 
     this.#swimBodyRuntime = new MetaverseSurfaceDriveBodyRuntime(
@@ -1760,130 +1513,6 @@ export class MetaverseTraversalRuntime {
     });
   }
 
-  #createReplayMovementInput(
-    activeTraversalIntent: MetaversePlayerTraversalIntentSnapshot | null
-  ): MetaverseFlightInputSnapshot {
-    return Object.freeze({
-      boost: activeTraversalIntent?.bodyControl?.boost ?? false,
-      jump: false,
-      moveAxis: activeTraversalIntent?.bodyControl?.moveAxis ?? 0,
-      pitchAxis: 0,
-      primaryAction: false,
-      secondaryAction: false,
-      strafeAxis: activeTraversalIntent?.bodyControl?.strafeAxis ?? 0,
-      yawAxis: activeTraversalIntent?.bodyControl?.turnAxis ?? 0
-    });
-  }
-
-  #replayAckedTraversalIntent(
-    activeTraversalIntent: MetaversePlayerTraversalIntentSnapshot | null,
-    replaySeconds: number
-  ): void {
-    const sanitizedReplaySeconds = Math.max(0, toFiniteNumber(replaySeconds, 0));
-
-    if (sanitizedReplaySeconds <= 0) {
-      if (this.#locomotionMode === "grounded") {
-        this.#groundedLocomotionAccumulatorSeconds = 0;
-        this.#unmountedTraversalState =
-          clearMetaverseUnmountedTraversalPendingActions(
-            this.#unmountedTraversalState
-          );
-        this.#syncLocalTraversalAuthorityState(false);
-      } else if (this.#locomotionMode === "swim") {
-        this.#swimLocomotionAccumulatorSeconds = 0;
-        this.#syncLocalTraversalAuthorityState(false);
-      }
-
-      return;
-    }
-
-    const replayMovementInput = this.#createReplayMovementInput(
-      activeTraversalIntent
-    );
-
-    this.#latestMovementInputMagnitude =
-      resolveMovementInputMagnitude(replayMovementInput);
-
-    if (this.#locomotionMode === "grounded") {
-      this.#replayAckedGroundedLocomotion(replayMovementInput, sanitizedReplaySeconds);
-      return;
-    }
-
-    if (this.#locomotionMode === "swim") {
-      this.#replayAckedSwimLocomotion(replayMovementInput, sanitizedReplaySeconds);
-    }
-  }
-
-  #replayAckedGroundedLocomotion(
-    movementInput: MetaverseFlightInputSnapshot,
-    replaySeconds: number
-  ): void {
-    let replayAccumulatorSeconds = replaySeconds;
-
-    while (
-      replayAccumulatorSeconds + authoritativeTraversalFixedStepEpsilon >=
-        authoritativeTraversalFixedStepSeconds &&
-      this.#locomotionMode === "grounded"
-    ) {
-      const groundedCameraSnapshot = this.#advanceGroundedLocomotionStep(
-        movementInput,
-        authoritativeTraversalFixedStepSeconds
-      );
-
-      replayAccumulatorSeconds = Math.max(
-        0,
-        replayAccumulatorSeconds - authoritativeTraversalFixedStepSeconds
-      );
-
-      if (this.#locomotionMode !== "grounded") {
-        this.#clearGroundedPredictionAccumulator();
-        this.#cameraSnapshot = groundedCameraSnapshot;
-        return;
-      }
-    }
-
-    this.#groundedLocomotionAccumulatorSeconds = replayAccumulatorSeconds;
-    this.#unmountedTraversalState =
-      clearMetaverseUnmountedTraversalPendingActions(
-        this.#unmountedTraversalState
-      );
-    this.#syncLocalTraversalAuthorityState(false);
-    this.#syncGroundedCameraPresentation();
-  }
-
-  #replayAckedSwimLocomotion(
-    movementInput: MetaverseFlightInputSnapshot,
-    replaySeconds: number
-  ): void {
-    let replayAccumulatorSeconds = replaySeconds;
-
-    while (
-      replayAccumulatorSeconds + authoritativeTraversalFixedStepEpsilon >=
-        authoritativeTraversalFixedStepSeconds &&
-      this.#locomotionMode === "swim"
-    ) {
-      const swimCameraSnapshot = this.#advanceSwimLocomotionStep(
-        movementInput,
-        authoritativeTraversalFixedStepSeconds
-      );
-
-      replayAccumulatorSeconds = Math.max(
-        0,
-        replayAccumulatorSeconds - authoritativeTraversalFixedStepSeconds
-      );
-
-      if (this.#locomotionMode !== "swim") {
-        this.#clearSwimPredictionAccumulator();
-        this.#cameraSnapshot = swimCameraSnapshot;
-        return;
-      }
-    }
-
-    this.#swimLocomotionAccumulatorSeconds = replayAccumulatorSeconds;
-    this.#syncLocalTraversalAuthorityState(false);
-    this.#syncSwimCameraPresentation();
-  }
-
   #syncAutomaticSurfaceLocomotion(
     position: PhysicsVector3Snapshot,
     yawRadians: number,
@@ -2010,16 +1639,38 @@ export class MetaverseTraversalRuntime {
   #hasLocallyPredictedJumpSequence(
     latestIssuedJumpActionSequence: number
   ): boolean {
+    const localJumpAuthorityState = this.#resolveLocalPredictedJumpAuthorityState();
     const localTraversalAuthority =
       this.#resolveLocalTraversalAuthoritySnapshotForIssuedJumpSequence(
         latestIssuedJumpActionSequence
       );
+    const issuedJumpResolution = resolveMetaverseTraversalAuthorityIssuedJumpResolution(
+      localTraversalAuthority,
+      latestIssuedJumpActionSequence
+    ).resolution;
 
     return (
-      resolveMetaverseTraversalAuthorityIssuedJumpResolution(
-        localTraversalAuthority,
-        latestIssuedJumpActionSequence
-      ).resolution === "pending-or-active"
+      issuedJumpResolution === "pending-or-active" ||
+      (issuedJumpResolution === "accepted" &&
+        localJumpAuthorityState !== "grounded")
+    );
+  }
+
+  #shouldPreserveLocalAirborneJumpArc(
+    localGroundedBodySnapshot: MetaverseGroundedBodyRuntime["snapshot"],
+    authoritativeGrounded: boolean,
+    authoritativeJumpRejected: boolean,
+    latestIssuedJumpActionSequence: number,
+    locomotionMismatch: boolean,
+    positionDistance: number
+  ): boolean {
+    return (
+      !locomotionMismatch &&
+      authoritativeGrounded &&
+      !localGroundedBodySnapshot.grounded &&
+      !authoritativeJumpRejected &&
+      this.#hasLocallyPredictedJumpSequence(latestIssuedJumpActionSequence) &&
+      positionDistance < localPlayerAuthoritativeHardSnapDistanceMeters
     );
   }
 
@@ -2853,13 +2504,14 @@ export class MetaverseTraversalRuntime {
   }
 
   #syncCharacterPresentationSnapshot(deltaSeconds = 0): void {
+    const groundedSpawnPosition = this.#readCanonicalGroundedSpawnPosition();
     const swimSnapshot =
       this.#readSwimSnapshot() ??
       createSurfaceLocomotionSnapshot(
         freezeVector3(
-          this.#config.camera.spawnPosition.x,
-          this.#resolveWaterSurfaceHeightMeters(this.#config.camera.spawnPosition),
-          this.#config.camera.spawnPosition.z
+          groundedSpawnPosition.x,
+          this.#resolveWaterSurfaceHeightMeters(groundedSpawnPosition),
+          groundedSpawnPosition.z
         ),
         this.#config.camera.initialYawRadians
       );

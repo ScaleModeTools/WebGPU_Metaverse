@@ -41,12 +41,7 @@ import { MetaverseRemoteVehiclePresentationOwner } from "../traversal/presentati
 import {
   type AckedAuthoritativeLocalPlayerPose,
   createAckedAuthoritativeLocalPlayerDeliveryKey,
-  createAckedAuthoritativeLocalPlayerReconciliationDeliveryKey,
-  projectAckedAuthoritativeLocalPlayerPoseForReconciliation,
-  readAckedAuthoritativeLocalPlayerPose,
-  readAckedAuthoritativeLocalPlayerRawPoseForReconciliation,
-  type AckedAuthoritativeLocalPlayerPoseForReconciliation,
-  type AckedAuthoritativeLocalPlayerReconciliationSample
+  readAckedAuthoritativeLocalPlayerPose
 } from "../traversal/reconciliation/authoritative-local-player-reconciliation";
 import {
   indexMetaverseWorldPlayersByPlayerId,
@@ -102,7 +97,6 @@ interface MetaverseRemoteWorldRuntimeDependencies {
     | (() => MetaverseWorldClientRuntime)
     | null;
   readonly localPlayerIdentity: MetaverseLocalPlayerIdentity | null;
-  readonly maxAckedReplayHorizonMs?: number;
   readonly onRemoteWorldUpdate: () => void;
   readonly presentationConfig?: Pick<
     MetaverseRuntimeConfig,
@@ -150,7 +144,6 @@ export class MetaverseRemoteWorldRuntime {
     | (() => MetaverseWorldClientRuntime)
     | null;
   readonly #localPlayerIdentity: MetaverseLocalPlayerIdentity | null;
-  readonly #maxAckedReplayHorizonMs: number;
   readonly #onRemoteWorldUpdate: () => void;
   readonly #presentationConfig: Pick<
     MetaverseRuntimeConfig,
@@ -193,7 +186,6 @@ export class MetaverseRemoteWorldRuntime {
   #lastSampledAtMs: number | null = null;
   #lastSampledExtrapolationMs = 0;
   #lastConsumedAckedLocalPlayerPoseDeliveryKey: string | null = null;
-  #lastConsumedAckedLocalPlayerReconciliationDeliveryKey: string | null = null;
   #latestIndexedWorldSnapshot: MetaverseRealtimeWorldSnapshot | null = null;
   #sampleEpoch = 0;
   #sampledFrameCount = 0;
@@ -203,7 +195,6 @@ export class MetaverseRemoteWorldRuntime {
   constructor({
     createMetaverseWorldClient,
     localPlayerIdentity,
-    maxAckedReplayHorizonMs,
     onRemoteWorldUpdate,
     presentationConfig,
     readWallClockMs,
@@ -211,8 +202,6 @@ export class MetaverseRemoteWorldRuntime {
   }: MetaverseRemoteWorldRuntimeDependencies) {
     this.#createMetaverseWorldClient = createMetaverseWorldClient;
     this.#localPlayerIdentity = localPlayerIdentity;
-    this.#maxAckedReplayHorizonMs =
-      maxAckedReplayHorizonMs ?? samplingConfig.maxExtrapolationMs;
     this.#onRemoteWorldUpdate = onRemoteWorldUpdate;
     this.#presentationConfig = presentationConfig ?? metaverseRuntimeConfig;
     this.#readWallClockMs = readWallClockMs ?? Date.now;
@@ -380,91 +369,6 @@ export class MetaverseRemoteWorldRuntime {
     );
   }
 
-  readFreshAckedAuthoritativeLocalPlayerPoseForReconciliation(
-    maxAuthoritativeSnapshotAgeMs: number
-  ): AckedAuthoritativeLocalPlayerPoseForReconciliation | null {
-    const freshAckedLocalPlayerSnapshot = this.#readFreshAckedLocalPlayerSnapshot(
-      maxAuthoritativeSnapshotAgeMs
-    );
-
-    if (freshAckedLocalPlayerSnapshot === null) {
-      return null;
-    }
-
-    return projectAckedAuthoritativeLocalPlayerPoseForReconciliation(
-      freshAckedLocalPlayerSnapshot.playerSnapshot,
-      this.#readAckedLocalPlayerReplaySeconds(
-        freshAckedLocalPlayerSnapshot.latestWorldSnapshot
-      )
-    );
-  }
-
-  consumeFreshAckedAuthoritativeLocalPlayerPoseForReconciliation(
-    maxAuthoritativeSnapshotAgeMs: number
-  ): AckedAuthoritativeLocalPlayerPoseForReconciliation | null {
-    const freshAckedLocalPlayerSnapshot = this.#readFreshAckedLocalPlayerSnapshot(
-      maxAuthoritativeSnapshotAgeMs
-    );
-    const reconciliationDeliveryKey =
-      freshAckedLocalPlayerSnapshot === null
-        ? null
-        : createAckedAuthoritativeLocalPlayerReconciliationDeliveryKey(
-            freshAckedLocalPlayerSnapshot
-          );
-
-    if (
-      freshAckedLocalPlayerSnapshot === null ||
-      reconciliationDeliveryKey ===
-        this.#lastConsumedAckedLocalPlayerReconciliationDeliveryKey
-    ) {
-      return null;
-    }
-
-    this.#lastConsumedAckedLocalPlayerReconciliationDeliveryKey =
-      reconciliationDeliveryKey;
-
-    return projectAckedAuthoritativeLocalPlayerPoseForReconciliation(
-      freshAckedLocalPlayerSnapshot.playerSnapshot,
-      this.#readAckedLocalPlayerReplaySeconds(
-        freshAckedLocalPlayerSnapshot.latestWorldSnapshot
-      )
-    );
-  }
-
-  consumeFreshAckedAuthoritativeLocalPlayerReconciliationSample(
-    maxAuthoritativeSnapshotAgeMs: number
-  ): AckedAuthoritativeLocalPlayerReconciliationSample | null {
-    const freshAckedLocalPlayerSnapshot = this.#readFreshAckedLocalPlayerSnapshot(
-      maxAuthoritativeSnapshotAgeMs
-    );
-    const reconciliationDeliveryKey =
-      freshAckedLocalPlayerSnapshot === null
-        ? null
-        : createAckedAuthoritativeLocalPlayerReconciliationDeliveryKey(
-            freshAckedLocalPlayerSnapshot
-          );
-
-    if (
-      freshAckedLocalPlayerSnapshot === null ||
-      reconciliationDeliveryKey ===
-        this.#lastConsumedAckedLocalPlayerReconciliationDeliveryKey
-    ) {
-      return null;
-    }
-
-    this.#lastConsumedAckedLocalPlayerReconciliationDeliveryKey =
-      reconciliationDeliveryKey;
-
-    return Object.freeze({
-      authoritativePlayerSnapshot:
-        readAckedAuthoritativeLocalPlayerRawPoseForReconciliation(
-          freshAckedLocalPlayerSnapshot.playerSnapshot
-        ),
-      extrapolationSeconds: this.#readAckedLocalPlayerReplaySeconds(
-        freshAckedLocalPlayerSnapshot.latestWorldSnapshot
-      )
-    });
-  }
   readFreshAuthoritativeVehicleSnapshot(
     environmentAssetId: string,
     maxAuthoritativeSnapshotAgeMs: number
@@ -518,7 +422,6 @@ export class MetaverseRemoteWorldRuntime {
     this.#lastSampledAtMs = null;
     this.#lastSampledExtrapolationMs = 0;
     this.#lastConsumedAckedLocalPlayerPoseDeliveryKey = null;
-    this.#lastConsumedAckedLocalPlayerReconciliationDeliveryKey = null;
     this.#latestIndexedWorldSnapshot = null;
     this.#sampleEpoch = 0;
     this.#sampledFrameCount = 0;
@@ -1020,32 +923,6 @@ export class MetaverseRemoteWorldRuntime {
     );
 
     return extrapolationMs / 1000;
-  }
-
-  #readAckedLocalPlayerReplaySeconds(
-    latestWorldSnapshot: MetaverseRealtimeWorldSnapshot
-  ): number {
-    const localWallClockMs = this.#readWallClockMs();
-
-    this.#authoritativeServerClock.observeServerTime(
-      Number(latestWorldSnapshot.tick.emittedAtServerTimeMs),
-      localWallClockMs
-    );
-
-    const authoritativeSimulationAgeMs =
-      this.#authoritativeServerClock.readEstimatedServerTimeMs(localWallClockMs) -
-      Number(latestWorldSnapshot.tick.simulationTimeMs);
-    const hiddenTruthDelayMs = Math.max(
-      0,
-      -(this.#authoritativeServerClock.clockOffsetEstimateMs ?? 0)
-    );
-    const replayHorizonMs = clamp(
-      authoritativeSimulationAgeMs + hiddenTruthDelayMs,
-      0,
-      this.#maxAckedReplayHorizonMs
-    );
-
-    return replayHorizonMs / 1000;
   }
 
   #syncLatestWorldSnapshotIndexes(

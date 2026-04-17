@@ -663,6 +663,7 @@ test("MetaverseWorldClient prefers driver-control datagrams over reliable comman
         },
         async sendPlayerTraversalIntentDatagram() {}
       },
+      readWallClockMs: () => 0,
       transport: {
         async pollWorldSnapshot() {
           return initialWorldEvent;

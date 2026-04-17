@@ -1,12 +1,12 @@
 import {
   metaverseWorldSurfaceAssets,
   metaverseWorldWaterRegions,
-  metaverseHubCrateEnvironmentAssetId,
   metaverseHubDockEnvironmentAssetId,
   metaverseHubDiveBoatEnvironmentAssetId,
   metaverseHubPushableCrateEnvironmentAssetId,
-  metaverseHubShorelineEnvironmentAssetId,
-  metaverseHubSkiffEnvironmentAssetId
+  metaverseHubSkiffEnvironmentAssetId,
+  metaversePlaygroundRangeBarrierEnvironmentAssetId,
+  metaversePlaygroundRangeFloorEnvironmentAssetId
 } from "./metaverse-world-surface-authoring-data.js";
 import {
   resolveMetaverseWorldDynamicSurfaceCollidersForAsset,
@@ -19,12 +19,12 @@ import {
 } from "./metaverse-world-surface-query.js";
 
 export {
-  metaverseHubCrateEnvironmentAssetId,
   metaverseHubDockEnvironmentAssetId,
   metaverseHubDiveBoatEnvironmentAssetId,
   metaverseHubPushableCrateEnvironmentAssetId,
-  metaverseHubShorelineEnvironmentAssetId,
   metaverseHubSkiffEnvironmentAssetId,
+  metaversePlaygroundRangeBarrierEnvironmentAssetId,
+  metaversePlaygroundRangeFloorEnvironmentAssetId,
   metaverseWorldSurfaceAssets,
   metaverseWorldWaterRegions
 } from "./metaverse-world-surface-authoring-data.js";

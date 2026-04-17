@@ -6,8 +6,10 @@ import {
   advanceMetaverseSurfaceTraversalSnapshot,
   createMetaverseSurfaceTraversalSnapshot,
   metaverseHubDockEnvironmentAssetId,
-  metaverseHubShorelineEnvironmentAssetId,
   metaverseHubSkiffEnvironmentAssetId,
+  metaversePlaygroundRangeBarrierEnvironmentAssetId,
+  metaversePlaygroundRangeFloorEnvironmentAssetId,
+  metaverseWorldGroundedSpawnPosition,
   metaverseWorldPlacedWaterRegions,
   metaverseWorldStaticSurfaceAssets,
   readMetaverseWorldSurfaceAssetAuthoring,
@@ -41,7 +43,7 @@ const metaverseSurfaceTraversalConfig = Object.freeze({
   dragCurveExponent: 1,
   maxTurnSpeedRadiansPerSecond: Math.PI
 });
-const shippedDockSupportHeightMeters = 0.6;
+const shippedPlaygroundFloorSupportHeightMeters = metaverseWorldGroundedSpawnPosition.y;
 
 function assertApprox(actual, expected, tolerance = 0.000001) {
   assert.ok(
@@ -51,17 +53,20 @@ function assertApprox(actual, expected, tolerance = 0.000001) {
 }
 
 test("shared metaverse surface authoring and queries expose placements, static colliders, and dynamic collider derivation", () => {
-  const dockSurfaceAsset = readMetaverseWorldSurfaceAssetAuthoring(
-    metaverseHubDockEnvironmentAssetId
+  const floorSurfaceAsset = readMetaverseWorldSurfaceAssetAuthoring(
+    metaversePlaygroundRangeFloorEnvironmentAssetId
+  );
+  const barrierSurfaceAsset = readMetaverseWorldSurfaceAssetAuthoring(
+    metaversePlaygroundRangeBarrierEnvironmentAssetId
   );
 
-  assert.notEqual(dockSurfaceAsset, null);
-  assert.equal(dockSurfaceAsset?.placement, "static");
-  assert.equal(dockSurfaceAsset?.placements.length, 4);
-  assert.equal(
-    staticSurfaceColliders.length,
-    staticSurfaceColliders.length
-  );
+  assert.notEqual(floorSurfaceAsset, null);
+  assert.notEqual(barrierSurfaceAsset, null);
+  assert.equal(floorSurfaceAsset?.placement, "static");
+  assert.equal(floorSurfaceAsset?.placements.length, 1);
+  assert.equal(barrierSurfaceAsset?.placement, "instanced");
+  assert.equal(barrierSurfaceAsset?.placements.length, 6);
+  assert.ok(staticSurfaceColliders.length > 0);
   assert.ok(metaverseWorldPlacedWaterRegions.length > 0);
 
   const dynamicSurfaceColliders = resolveMetaverseWorldDynamicSurfaceColliders(
@@ -85,72 +90,47 @@ test("shared metaverse surface authoring and queries expose placements, static c
   );
 });
 
-test("shared metaverse surface authoring exposes the shipped shoreline slice with static placements", () => {
-  const shorelineSurfaceAsset = readMetaverseWorldSurfaceAssetAuthoring(
-    metaverseHubShorelineEnvironmentAssetId
+test("shared metaverse surface authoring exposes the shipped range floor slice with one support slab", () => {
+  const floorSurfaceAsset = readMetaverseWorldSurfaceAssetAuthoring(
+    metaversePlaygroundRangeFloorEnvironmentAssetId
   );
 
-  assert.notEqual(shorelineSurfaceAsset, null);
-  assert.equal(shorelineSurfaceAsset?.placement, "static");
-  assert.equal(shorelineSurfaceAsset?.placements.length, 1);
+  assert.notEqual(floorSurfaceAsset, null);
+  assert.equal(floorSurfaceAsset?.placement, "static");
+  assert.equal(floorSurfaceAsset?.placements.length, 1);
   assert.equal(
-    shorelineSurfaceAsset?.surfaceColliders.filter(
+    floorSurfaceAsset?.surfaceColliders.filter(
       (collider) => collider.traversalAffordance === "support"
     ).length,
-    3
-  );
-  assert.equal(
-    shorelineSurfaceAsset?.surfaceColliders.filter(
-      (collider) => collider.traversalAffordance === "blocker"
-    ).length,
-    3
+    1
   );
 });
 
-test("shared metaverse dock traversal uses one simple static support cuboid per dock placement", () => {
-  const dockSurfaceAsset = readMetaverseWorldSurfaceAssetAuthoring(
-    metaverseHubDockEnvironmentAssetId
+test("shared metaverse barrier authoring stays instanced and blocker-only", () => {
+  const barrierSurfaceAsset = readMetaverseWorldSurfaceAssetAuthoring(
+    metaversePlaygroundRangeBarrierEnvironmentAssetId
   );
-  const dockSurfaceColliders =
-    dockSurfaceAsset === null
-      ? []
-      : resolveMetaverseWorldPlacedSurfaceColliders(dockSurfaceAsset);
 
-  assert.notEqual(dockSurfaceAsset, null);
-  assert.equal(dockSurfaceAsset?.placement, "static");
-  assert.equal(dockSurfaceAsset?.placements.length, 4);
-  assert.equal(dockSurfaceAsset?.surfaceColliders.length, 1);
+  assert.notEqual(barrierSurfaceAsset, null);
+  assert.equal(barrierSurfaceAsset?.placement, "instanced");
+  assert.equal(barrierSurfaceAsset?.placements.length, 6);
   assert.equal(
-    dockSurfaceAsset?.surfaceColliders[0]?.traversalAffordance,
-    "support"
+    barrierSurfaceAsset?.surfaceColliders.length,
+    1
   );
-  assert.deepEqual(dockSurfaceAsset?.surfaceColliders[0]?.size, {
-    x: 8.4,
-    y: 0.34,
-    z: 4.2
-  });
-  assert.equal(dockSurfaceColliders.length, 4);
-  assert.ok(
-    dockSurfaceColliders.every(
-      (surfaceCollider) =>
-        surfaceCollider.ownerEnvironmentAssetId ===
-          metaverseHubDockEnvironmentAssetId &&
-        surfaceCollider.traversalAffordance === "support"
-    )
+  assert.equal(
+    barrierSurfaceAsset?.surfaceColliders[0]?.traversalAffordance,
+    "blocker"
   );
 });
 
-test("shared metaverse surface policy keeps dock support, open water, shoreline exit, and side-lane swim distinct", () => {
-  const dockDecision = resolveMetaverseWorldAutomaticSurfaceLocomotion(
+test("shared metaverse surface policy keeps range support, open water, and bay-edge exit distinct", () => {
+  const floorDecision = resolveMetaverseWorldAutomaticSurfaceLocomotion(
     metaverseSurfacePolicyConfig,
     staticSurfaceColliders,
     metaverseWorldPlacedWaterRegions,
-    {
-      x: -8.2,
-      y: shippedDockSupportHeightMeters,
-      z: -14.8
-    },
-    Math.PI * 0.06,
+    metaverseWorldGroundedSpawnPosition,
+    0,
     "grounded"
   );
   const openWaterDecision = resolveMetaverseWorldAutomaticSurfaceLocomotion(
@@ -158,52 +138,35 @@ test("shared metaverse surface policy keeps dock support, open water, shoreline 
     staticSurfaceColliders,
     metaverseWorldPlacedWaterRegions,
     {
-      x: -8.2,
+      x: 66,
       y: 0,
-      z: -20
+      z: 10
     },
-    Math.PI * 0.06,
+    0,
     "swim"
   );
-  const shorelineExitDecision = resolveMetaverseWorldAutomaticSurfaceLocomotion(
+  const bayEdgeExitDecision = resolveMetaverseWorldAutomaticSurfaceLocomotion(
     metaverseSurfacePolicyConfig,
     staticSurfaceColliders,
     metaverseWorldPlacedWaterRegions,
     {
-      x: -8.45,
+      x: 36,
       y: 0,
-      z: -24
+      z: 10
     },
-    Math.PI * 0.06,
-    "swim"
-  );
-  const blockedSideDecision = resolveMetaverseWorldAutomaticSurfaceLocomotion(
-    metaverseSurfacePolicyConfig,
-    staticSurfaceColliders,
-    metaverseWorldPlacedWaterRegions,
-    {
-      x: -4.2,
-      y: 0,
-      z: -23.5
-    },
-    Math.PI * 0.06,
+    0,
     "swim"
   );
 
-  assert.equal(dockDecision.decision.locomotionMode, "grounded");
-  assert.equal(dockDecision.debug.reason, "grounded-hold");
+  assert.equal(floorDecision.decision.locomotionMode, "grounded");
+  assert.equal(floorDecision.debug.reason, "grounded-hold");
 
   assert.equal(openWaterDecision.decision.locomotionMode, "swim");
   assert.equal(openWaterDecision.debug.reason, "shoreline-exit-blocked");
   assert.equal(openWaterDecision.debug.blockerOverlap, false);
 
-  assert.equal(shorelineExitDecision.decision.locomotionMode, "grounded");
-  assert.equal(shorelineExitDecision.debug.reason, "shoreline-exit-success");
-
-  assert.equal(blockedSideDecision.decision.locomotionMode, "swim");
-  assert.equal(blockedSideDecision.debug.reason, "shoreline-exit-blocked");
-  assert.equal(blockedSideDecision.debug.blockerOverlap, false);
-  assert.ok(blockedSideDecision.debug.stepSupportedProbeCount > 0);
+  assert.equal(bayEdgeExitDecision.decision.locomotionMode, "grounded");
+  assert.equal(bayEdgeExitDecision.debug.reason, "shoreline-exit-success");
 });
 
 test("shared surface traversal snapshot applies the shared planar model before world-radius clamping", () => {

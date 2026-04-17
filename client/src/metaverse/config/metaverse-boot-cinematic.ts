@@ -1,3 +1,8 @@
+import {
+  metaverseWorldGroundedSpawnPosition,
+  metaverseWorldInitialYawRadians
+} from "@webgpu-metaverse/shared";
+
 import type { MetaverseBootCinematicConfig } from "../types/metaverse-boot-cinematic";
 
 function resolveBooleanEnvFlag(rawValue: string | undefined): boolean | null {
@@ -39,50 +44,50 @@ export const metaverseBootCinematicConfig = Object.freeze({
   enabled:
     resolveBooleanEnvFlag(
       import.meta.env?.VITE_METAVERSE_BOOT_CINEMATIC_ENABLED
-    ) ?? Boolean(import.meta.env?.DEV ?? false),
+    ) ?? false,
   minimumDwellMs: resolvePositiveDurationMs(
     import.meta.env?.VITE_METAVERSE_BOOT_CINEMATIC_MIN_DWELL_MS,
     1600
   ),
   shots: Object.freeze([
     Object.freeze({
-      durationMs: 1200,
+      durationMs: 950,
       highlightPortalExperienceId: "duck-hunt",
-      id: "portal-establishing",
+      id: "range-overview",
+      pitchRadians: -0.18,
+      position: Object.freeze({
+        x: metaverseWorldGroundedSpawnPosition.x + 2.6,
+        y: 6.8,
+        z: metaverseWorldGroundedSpawnPosition.z + 11.8
+      }),
+      requiresEnvironment: true,
+      yawRadians: metaverseWorldInitialYawRadians + 0.1
+    }),
+    Object.freeze({
+      durationMs: 900,
+      highlightPortalExperienceId: "duck-hunt",
+      id: "portal-lane",
+      pitchRadians: -0.12,
+      position: Object.freeze({
+        x: metaverseWorldGroundedSpawnPosition.x - 1.4,
+        y: 4.6,
+        z: metaverseWorldGroundedSpawnPosition.z + 6.8
+      }),
+      requiresEnvironment: true,
+      yawRadians: metaverseWorldInitialYawRadians
+    }),
+    Object.freeze({
+      durationMs: 850,
+      highlightPortalExperienceId: "duck-hunt",
+      id: "range-handoff",
       pitchRadians: -0.08,
       position: Object.freeze({
-        x: 0,
-        y: 6.9,
-        z: 24
-      }),
-      requiresEnvironment: false,
-      yawRadians: 0
-    }),
-    Object.freeze({
-      durationMs: 1350,
-      highlightPortalExperienceId: null,
-      id: "dock-overlook",
-      pitchRadians: -0.24,
-      position: Object.freeze({
-        x: -1.6,
-        y: 8.2,
-        z: 6.5
+        x: metaverseWorldGroundedSpawnPosition.x,
+        y: 2.22,
+        z: metaverseWorldGroundedSpawnPosition.z - 0.24
       }),
       requiresEnvironment: true,
-      yawRadians: -0.58
-    }),
-    Object.freeze({
-      durationMs: 1200,
-      highlightPortalExperienceId: "duck-hunt",
-      id: "harbor-handoff",
-      pitchRadians: -0.1,
-      position: Object.freeze({
-        x: -8.2,
-        y: 1.77,
-        z: -15.04
-      }),
-      requiresEnvironment: true,
-      yawRadians: Math.PI * 0.06
+      yawRadians: metaverseWorldInitialYawRadians
     })
   ])
 } as const satisfies MetaverseBootCinematicConfig);
