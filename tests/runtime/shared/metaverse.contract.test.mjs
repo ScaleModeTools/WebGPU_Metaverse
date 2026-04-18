@@ -37,7 +37,11 @@ import {
   createUsername,
   defaultMetaverseMountedLookLimitPolicyId,
   experienceCatalog,
+  isMetaversePresenceMountedCompatibilityLocomotionMode,
+  isMetaversePresencePrimaryLocomotionMode,
   metaverseMountedLookLimitPolicyIds,
+  metaversePresenceCompatibilityLocomotionModeIds,
+  metaversePresencePrimaryLocomotionModeIds,
   metaverseUnmountedPlayerLookConstraintBounds,
   readExperienceCatalogEntry,
   readExperienceTickOwner,
@@ -169,6 +173,30 @@ test("shared metaverse look constraint policy keeps mounted look limits aligned 
   assert.deepEqual(
     resolveMetaverseMountedLookConstraintBounds("driver-forward"),
     resolveMetaverseMountedOccupantRoleLookConstraintBounds("driver")
+  );
+});
+
+test("shared metaverse presence locomotion keeps mounted as an explicit compatibility mode", () => {
+  assert.deepEqual(metaversePresencePrimaryLocomotionModeIds, [
+    "grounded",
+    "swim",
+    "fly"
+  ]);
+  assert.deepEqual(metaversePresenceCompatibilityLocomotionModeIds, [
+    "grounded",
+    "swim",
+    "fly",
+    "mounted"
+  ]);
+  assert.equal(isMetaversePresencePrimaryLocomotionMode("grounded"), true);
+  assert.equal(isMetaversePresencePrimaryLocomotionMode("mounted"), false);
+  assert.equal(
+    isMetaversePresenceMountedCompatibilityLocomotionMode("mounted"),
+    true
+  );
+  assert.equal(
+    isMetaversePresenceMountedCompatibilityLocomotionMode("swim"),
+    false
   );
 });
 
@@ -353,7 +381,6 @@ test("metaverse realtime world contracts freeze snapshots and derive seated occu
     worldSnapshot.players[0]?.mountedOccupancy?.occupantRole,
     "driver"
   );
-  assert.equal(worldSnapshot.players[0]?.jumpAuthorityState, "none");
   assert.equal(worldSnapshot.players[0]?.lastProcessedInputSequence, 7);
   assert.equal(
     worldSnapshot.players[0]?.traversalAuthority.currentActionKind,
@@ -410,10 +437,9 @@ test("metaverse realtime world contracts derive traversal authority from accepte
       {
         characterId: "metaverse-mannequin-v1",
         jumpDebug: {
-          resolvedJumpActionSequence: 7,
-          resolvedJumpActionState: "accepted"
+          resolvedActionSequence: 7,
+          resolvedActionState: "accepted"
         },
-        jumpAuthorityState: "rising",
         linearVelocity: {
           x: 0,
           y: 3.2,
@@ -439,7 +465,6 @@ test("metaverse realtime world contracts derive traversal authority from accepte
     vehicles: []
   });
 
-  assert.equal(worldSnapshot.players[0]?.jumpAuthorityState, "rising");
   assert.equal(
     worldSnapshot.players[0]?.traversalAuthority.currentActionKind,
     "jump"
@@ -474,9 +499,8 @@ test("metaverse realtime world contracts derive traversal startup from buffered 
       {
         characterId: "metaverse-mannequin-v1",
         jumpDebug: {
-          pendingJumpActionSequence: 4
+          pendingActionSequence: 4
         },
-        jumpAuthorityState: "grounded",
         linearVelocity: {
           x: 0,
           y: 0,

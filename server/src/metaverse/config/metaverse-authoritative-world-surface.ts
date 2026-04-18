@@ -6,7 +6,7 @@ import {
   resolveMetaverseWorldPlacedSurfaceColliders,
   type MetaverseWorldPlacedSurfaceColliderSnapshot,
   type MetaverseWorldSurfaceVector3Snapshot
-} from "@webgpu-metaverse/shared/metaverse";
+} from "@webgpu-metaverse/shared/metaverse/world";
 import { metaverseDebugSimpleSpawnSupportCollider } from "./metaverse-debug-simple-spawn-support.js";
 
 export type MetaverseAuthoritativeSurfaceColliderSnapshot =

@@ -4,12 +4,12 @@ import type {
   MetaversePresencePoseSnapshotInput,
   MetaversePresenceRosterEvent,
   MetaversePresenceRosterSnapshot
-} from "@webgpu-metaverse/shared";
+} from "@webgpu-metaverse/shared/metaverse/presence";
 import {
   createMetaverseJoinPresenceCommand,
   createMetaverseLeavePresenceCommand,
   createMetaverseSyncPresenceCommand
-} from "@webgpu-metaverse/shared";
+} from "@webgpu-metaverse/shared/metaverse/presence";
 
 import { createMetaversePresenceHttpTransport } from "../adapters/metaverse-presence-http-transport";
 import type {

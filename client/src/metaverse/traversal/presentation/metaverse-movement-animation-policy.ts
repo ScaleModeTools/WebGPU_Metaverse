@@ -1,6 +1,4 @@
-import type {
-  MetaverseCharacterAnimationVocabularyId
-} from "../../types/metaverse-runtime";
+import type { MetaverseCharacterAnimationVocabularyId } from "../../types/presentation";
 
 export interface MetaverseMovementAnimationPolicyModeConfig {
   readonly enterSpeedUnitsPerSecond: number;

@@ -1,15 +1,14 @@
 import {
-  isMetaverseTraversalAuthorityJumpAirborne,
-  isMetaverseTraversalAuthorityJumpPendingOrActive,
-  type MetaverseRealtimePlayerObservedTraversalSnapshot,
-  type MetaverseRealtimePlayerSnapshot
-} from "@webgpu-metaverse/shared";
-
+  isMetaverseTraversalAuthorityActionAirborne,
+  isMetaverseTraversalAuthorityActionPendingOrActive,
+} from "@webgpu-metaverse/shared/metaverse/traversal";
 import type {
-  MetaverseCameraSnapshot,
-  MetaverseRuntimeConfig,
-  MetaverseRemoteCharacterPresentationSnapshot
-} from "../../types/metaverse-runtime";
+  MetaverseRealtimePlayerObservedTraversalSnapshot,
+  MetaverseRealtimePlayerSnapshot
+} from "@webgpu-metaverse/shared/metaverse/realtime";
+
+import type { MetaverseCameraSnapshot, MetaverseRemoteCharacterPresentationSnapshot } from "../../types/presentation";
+import type { MetaverseRuntimeConfig } from "../../types/runtime-config";
 import {
   MetaverseMovementAnimationPolicyRuntime
 } from "./metaverse-movement-animation-policy";
@@ -314,11 +313,13 @@ function resolveRemoteCharacterAnimationVocabulary(
       grounded:
         playerSnapshot.mountedOccupancy !== null ||
         (playerSnapshot.locomotionMode === "grounded" &&
-          !isMetaverseTraversalAuthorityJumpPendingOrActive(
-            playerSnapshot.traversalAuthority
+          !isMetaverseTraversalAuthorityActionPendingOrActive(
+            playerSnapshot.traversalAuthority,
+            "jump"
           ) &&
-          !isMetaverseTraversalAuthorityJumpAirborne(
-            playerSnapshot.traversalAuthority
+          !isMetaverseTraversalAuthorityActionAirborne(
+            playerSnapshot.traversalAuthority,
+            "jump"
           )),
       inputMagnitude,
       locomotionMode:

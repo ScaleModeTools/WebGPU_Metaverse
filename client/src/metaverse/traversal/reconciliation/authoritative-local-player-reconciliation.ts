@@ -1,11 +1,10 @@
 import type {
   MetaverseRealtimePlayerSnapshot,
   MetaverseRealtimeWorldSnapshot
-} from "@webgpu-metaverse/shared";
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 
 export type AckedAuthoritativeLocalPlayerPose = Pick<
   MetaverseRealtimePlayerSnapshot,
-  | "jumpAuthorityState"
   | "linearVelocity"
   | "locomotionMode"
   | "mountedOccupancy"
@@ -16,7 +15,6 @@ export type AckedAuthoritativeLocalPlayerPose = Pick<
 
 type AckedAuthoritativeLocalPlayerSnapshot = Pick<
   MetaverseRealtimePlayerSnapshot,
-  | "jumpAuthorityState"
   | "lastProcessedInputSequence"
   | "linearVelocity"
   | "locomotionMode"
@@ -57,7 +55,6 @@ export function createAckedAuthoritativeLocalPlayerDeliveryKey(
   return [
     latestWorldSnapshot.snapshotSequence,
     latestWorldSnapshot.tick.currentTick,
-    playerSnapshot.jumpAuthorityState,
     playerSnapshot.lastProcessedInputSequence,
     playerSnapshot.locomotionMode,
     createMountedOccupancyDeliveryKey(playerSnapshot.mountedOccupancy),
@@ -83,7 +80,6 @@ export function readAckedAuthoritativeLocalPlayerPose(
   playerSnapshot: AckedAuthoritativeLocalPlayerSnapshot
 ): AckedAuthoritativeLocalPlayerPose {
   return {
-    jumpAuthorityState: playerSnapshot.jumpAuthorityState,
     linearVelocity: playerSnapshot.linearVelocity,
     locomotionMode: playerSnapshot.locomotionMode,
     mountedOccupancy: playerSnapshot.mountedOccupancy,

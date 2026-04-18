@@ -27,11 +27,29 @@
       "@webgpu-metaverse/shared/experiences": [
         "../packages/shared/src/experiences/index.ts"
       ],
+      "@webgpu-metaverse/shared/metaverse/portal": [
+        "../packages/shared/src/metaverse/portal/index.ts"
+      ],
+      "@webgpu-metaverse/shared/metaverse/realtime": [
+        "../packages/shared/src/metaverse/realtime/index.ts"
+      ],
+      "@webgpu-metaverse/shared/metaverse/session": [
+        "../packages/shared/src/metaverse/session/index.ts"
+      ],
+      "@webgpu-metaverse/shared/metaverse/traversal": [
+        "../packages/shared/src/metaverse/traversal/index.ts"
+      ],
+      "@webgpu-metaverse/shared/metaverse/world": [
+        "../packages/shared/src/metaverse/world/index.ts"
+      ],
+      "@webgpu-metaverse/shared/metaverse/presence": [
+        "../packages/shared/src/metaverse/presence/index.ts"
+      ],
       "@webgpu-metaverse/shared/metaverse": [
         "../packages/shared/src/metaverse/index.ts"
       ],
       "@webgpu-metaverse/shared": [
-        "../packages/shared/src"
+        "../packages/shared/src/index.ts"
       ]
     },
     "useDefineForClassFields": true,

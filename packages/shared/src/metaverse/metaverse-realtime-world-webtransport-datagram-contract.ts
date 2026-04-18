@@ -2,12 +2,12 @@ import type {
   MetaverseSyncPlayerLookIntentCommand,
   MetaverseSyncDriverVehicleControlCommand,
   MetaverseSyncPlayerTraversalIntentCommand
-} from "./metaverse-realtime-world-contract.js";
+} from "./realtime/metaverse-realtime-world-commands.js";
 import {
   createMetaverseSyncPlayerLookIntentCommand,
   createMetaverseSyncDriverVehicleControlCommand,
   createMetaverseSyncPlayerTraversalIntentCommand
-} from "./metaverse-realtime-world-contract.js";
+} from "./realtime/metaverse-realtime-world-commands.js";
 
 export const metaverseRealtimeWorldWebTransportClientDatagramTypes = [
   "world-player-look-intent-datagram",

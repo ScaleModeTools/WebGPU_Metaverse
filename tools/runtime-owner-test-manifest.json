@@ -33,25 +33,116 @@
     {
       "ownerPath": "client/src/metaverse/classes/webgpu-metaverse-runtime.ts",
       "testPaths": [
-        "tests/runtime/client/metaverse-runtime.test.mjs"
+        "tests/runtime/client/metaverse/runtime/webgpu-metaverse-runtime-boot.test.mjs",
+        "tests/runtime/client/metaverse/runtime/webgpu-metaverse-runtime.integration.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/hud/metaverse-runtime-hud-publisher.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/runtime/metaverse-runtime-hud-publisher.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/hud/debug/metaverse-runtime-hud-telemetry-state.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/runtime/metaverse-runtime-hud-telemetry-state.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/boot/metaverse-runtime-boot-lifecycle.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/boot/metaverse-runtime-boot-lifecycle.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/boot/metaverse-runtime-start-coordinator.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/boot/metaverse-runtime-start-coordinator.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/classes/metaverse-runtime-frame-loop.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/runtime/metaverse-runtime-frame-loop.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/classes/metaverse-runtime-service-lifecycle.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/runtime/metaverse-runtime-service-lifecycle.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/classes/metaverse-runtime-render-session.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/runtime/metaverse-runtime-render-session.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/classes/metaverse-mounted-interaction-runtime.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/runtime/metaverse-mounted-interaction-runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/classes/metaverse-authoritative-world-sync.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/runtime/metaverse-authoritative-world-sync.runtime.test.mjs"
       ]
     },
     {
       "ownerPath": "client/src/metaverse/classes/metaverse-environment-physics-runtime.ts",
       "testPaths": [
-        "tests/runtime/client/metaverse-runtime.test.mjs"
+        "tests/runtime/client/metaverse/runtime/metaverse-environment-physics-runtime.test.mjs"
       ]
     },
     {
       "ownerPath": "client/src/metaverse/classes/metaverse-presence-runtime.ts",
       "testPaths": [
-        "tests/runtime/client/metaverse-runtime.test.mjs"
+        "tests/runtime/client/metaverse/runtime/metaverse-presence-runtime.test.mjs"
       ]
     },
     {
       "ownerPath": "client/src/metaverse/classes/metaverse-remote-world-runtime.ts",
       "testPaths": [
-        "tests/runtime/client/metaverse-runtime.test.mjs"
+        "tests/runtime/client/metaverse/remote-world/metaverse-remote-world-runtime.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/remote-world/metaverse-remote-world-presentation-state.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/remote-world/metaverse-remote-world-presentation-state.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/remote-world/metaverse-remote-world-authoritative-snapshot-state.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/remote-world/metaverse-remote-world-authoritative-snapshot-state.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/remote-world/metaverse-remote-world-connection-lifecycle.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/remote-world/metaverse-remote-world-connection-lifecycle.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/remote-world/metaverse-remote-world-command-transport.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/remote-world/metaverse-remote-world-command-transport.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/remote-world/metaverse-remote-world-sampling-state.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/remote-world/metaverse-remote-world-sampling-state.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/remote-world/metaverse-remote-world-sampling.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse-remote-world-sampling.runtime.test.mjs"
       ]
     },
     {
@@ -63,13 +154,63 @@
     {
       "ownerPath": "client/src/metaverse/classes/metaverse-traversal-runtime.ts",
       "testPaths": [
-        "tests/runtime/client/metaverse-traversal-runtime.test.mjs"
+        "tests/runtime/client/metaverse/traversal/metaverse-traversal-runtime.integration.test.mjs",
+        "tests/runtime/client/metaverse/traversal/metaverse-traversal-runtime-fixed-step.test.mjs",
+        "tests/runtime/client/metaverse/traversal/metaverse-traversal-runtime-surface.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/traversal/surface/metaverse-unmounted-surface-locomotion-state.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/traversal/metaverse-traversal-runtime-surface.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/traversal/reconciliation/classes/metaverse-local-authority-reconciliation-state.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/traversal/metaverse-local-authority-reconciliation-state.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/traversal/classes/metaverse-local-traversal-authority-state.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/traversal/metaverse-local-traversal-authority-state.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/traversal/classes/metaverse-traversal-telemetry-state.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/traversal/metaverse-traversal-telemetry-state.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/traversal/classes/metaverse-unmounted-traversal-orchestration-state.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/traversal/metaverse-traversal-runtime.integration.test.mjs",
+        "tests/runtime/client/metaverse/traversal/metaverse-traversal-runtime-authority.test.mjs",
+        "tests/runtime/client/metaverse/traversal/metaverse-traversal-runtime-fixed-step.test.mjs",
+        "tests/runtime/client/metaverse/traversal/metaverse-traversal-runtime-surface.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/traversal/classes/metaverse-unmounted-traversal-motion-state.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/traversal/metaverse-traversal-runtime.integration.test.mjs",
+        "tests/runtime/client/metaverse/traversal/metaverse-traversal-runtime-fixed-step.test.mjs",
+        "tests/runtime/client/metaverse/traversal/metaverse-traversal-runtime-surface.test.mjs",
+        "tests/runtime/client/metaverse/traversal/metaverse-traversal-runtime-authority.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/traversal/simulation/metaverse-fixed-step-traversal-simulation.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/traversal/metaverse-traversal-runtime-fixed-step.test.mjs"
       ]
     },
     {
       "ownerPath": "client/src/metaverse/vehicles/classes/metaverse-vehicle-runtime.ts",
       "testPaths": [
-        "tests/runtime/client/metaverse-traversal-runtime.test.mjs"
+        "tests/runtime/client/metaverse/runtime/metaverse-vehicle-runtime.test.mjs"
       ]
     },
     {
@@ -81,8 +222,8 @@
     {
       "ownerPath": "client/src/physics/classes/metaverse-surface-drive-body-runtime.ts",
       "testPaths": [
-        "tests/runtime/client/metaverse-traversal-runtime.test.mjs",
-        "tests/runtime/client/metaverse-runtime.test.mjs"
+        "tests/runtime/client/metaverse/traversal/metaverse-traversal-runtime-fixed-step.test.mjs",
+        "tests/runtime/client/physics/metaverse-surface-drive-body-runtime.runtime.test.mjs"
       ]
     },
     {
@@ -95,7 +236,7 @@
       "ownerPath": "client/src/physics/classes/rapier-physics-runtime.ts",
       "testPaths": [
         "tests/runtime/client/metaverse-grounded-body-runtime.test.mjs",
-        "tests/runtime/client/metaverse-runtime.test.mjs"
+        "tests/runtime/client/physics/rapier-physics-runtime.runtime.test.mjs"
       ]
     },
     {
@@ -120,6 +261,42 @@
       "ownerPath": "client/src/network/classes/authoritative-server-clock.ts",
       "testPaths": [
         "tests/runtime/client/authoritative-server-clock.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/network/classes/metaverse-world-driver-control-sync.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse-world-driver-control-sync.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/network/classes/metaverse-world-connection-lifecycle.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse-world-connection-lifecycle.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/network/classes/metaverse-world-mounted-occupancy-sync.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse-world-mounted-occupancy-sync.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/network/classes/metaverse-world-player-look-sync.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse-world-player-look-sync.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/network/classes/metaverse-world-player-traversal-intent-sync.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse-world-player-traversal-intent-sync.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/network/classes/metaverse-world-player-intent-sync.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse-world-player-intent-sync.runtime.test.mjs"
       ]
     },
     {
@@ -162,6 +339,18 @@
       "ownerPath": "client/src/network/classes/metaverse-world-client.ts",
       "testPaths": [
         "tests/runtime/client/metaverse-world-client.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/network/classes/metaverse-world-latest-wins-command-lane.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse-world-client.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/network/classes/metaverse-world-snapshot-state.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse-world-snapshot-state.runtime.test.mjs"
       ]
     },
     {
@@ -287,31 +476,123 @@
     {
       "ownerPath": "server/src/metaverse/classes/metaverse-authoritative-world-runtime.ts",
       "testPaths": [
-        "tests/runtime/server/metaverse-authoritative-world-runtime.test.mjs"
+        "tests/runtime/server/metaverse/authoritative-world-runtime.integration.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/authority/mounted/metaverse-authoritative-mounted-occupancy-authority.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse/authoritative-world-mounted-occupancy.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/authority/players/metaverse-authoritative-player-pose-authority.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse/authoritative-world-player-pose-authority.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/authority/players/metaverse-authoritative-player-state-sync.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse/authoritative-world-player-pose-authority.test.mjs",
+        "tests/runtime/server/metaverse/authoritative-world-player-traversal-authority.test.mjs",
+        "tests/runtime/server/metaverse/authoritative-world-mounted-occupancy.test.mjs",
+        "tests/runtime/server/metaverse/authoritative-world-runtime.integration.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/authority/players/metaverse-authoritative-player-lifecycle-authority.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse/authoritative-world-player-lifecycle-authority.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/authority/traversal/metaverse-authoritative-player-traversal-authority.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse/authoritative-world-player-traversal-authority.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/authority/traversal/metaverse-authoritative-unmounted-player-simulation.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse/authoritative-world-runtime.integration.test.mjs",
+        "tests/runtime/server/metaverse/authoritative-world-player-traversal-authority.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/authority/traversal/metaverse-authoritative-world-surface-state.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse/authoritative-world-runtime.integration.test.mjs",
+        "tests/runtime/server/metaverse/authoritative-world-mounted-occupancy.test.mjs",
+        "tests/runtime/server/metaverse/authoritative-world-traversal.test.mjs",
+        "tests/runtime/server/metaverse/authoritative-world-vehicle-control.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/authority/world/metaverse-authoritative-world-tick-state.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse/authoritative-world-runtime.integration.test.mjs",
+        "tests/runtime/server/metaverse/authoritative-world-snapshot.test.mjs",
+        "tests/runtime/server/metaverse/authoritative-world-traversal.test.mjs",
+        "tests/runtime/server/metaverse/authoritative-world-vehicle-control.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/authority/world/metaverse-authoritative-world-read-state.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse/authoritative-world-snapshot.test.mjs",
+        "tests/runtime/server/metaverse/authoritative-world-player-lifecycle-authority.test.mjs",
+        "tests/runtime/server/metaverse/authoritative-world-player-pose-authority.test.mjs",
+        "tests/runtime/server/metaverse/authoritative-world-mounted-occupancy.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/authority/vehicles/metaverse-authoritative-vehicle-drive-authority.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse/authoritative-world-vehicle-control.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/authority/vehicles/metaverse-authoritative-vehicle-runtime-registry.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse/authoritative-world-mounted-occupancy.test.mjs",
+        "tests/runtime/server/metaverse/authoritative-world-vehicle-control.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/authority/snapshots/metaverse-authoritative-world-snapshot-assembly.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse/authoritative-world-snapshot.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/authority/commands/metaverse-authoritative-world-command-intake.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse/authoritative-world-command-intake.test.mjs"
       ]
     },
     {
       "ownerPath": "server/src/metaverse/classes/metaverse-authoritative-rapier-physics-runtime.ts",
       "testPaths": [
-        "tests/runtime/server/metaverse-authoritative-world-runtime.test.mjs"
+        "tests/runtime/server/metaverse/authoritative-world-runtime.integration.test.mjs"
       ]
     },
     {
       "ownerPath": "server/src/metaverse/classes/metaverse-authoritative-grounded-body-runtime.ts",
       "testPaths": [
-        "tests/runtime/server/metaverse-authoritative-world-runtime.test.mjs"
+        "tests/runtime/server/metaverse/authoritative-world-runtime.integration.test.mjs"
       ]
     },
     {
       "ownerPath": "server/src/metaverse/classes/metaverse-authoritative-surface-drive-runtime.ts",
       "testPaths": [
-        "tests/runtime/server/metaverse-authoritative-world-runtime.test.mjs"
+        "tests/runtime/server/metaverse/authoritative-world-runtime.integration.test.mjs"
       ]
     },
     {
       "ownerPath": "server/src/metaverse/classes/metaverse-authoritative-dynamic-surface-collider-runtime.ts",
       "testPaths": [
-        "tests/runtime/server/metaverse-authoritative-world-runtime.test.mjs"
+        "tests/runtime/server/metaverse/authoritative-world-runtime.integration.test.mjs"
       ]
     },
     {

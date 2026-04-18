@@ -5,21 +5,23 @@ import type {
 
 import {
   createMetaversePlayerId,
+  metaversePresenceMountedOccupancyKinds,
+  metaversePresenceMountedOccupantRoleIds,
+  type MetaversePresenceMountedOccupancyKind,
+  type MetaversePresenceMountedOccupancySnapshotInput,
+  type MetaversePresenceMountedOccupantRoleId
+} from "@webgpu-metaverse/shared/metaverse/presence";
+import {
   createMetaverseSyncDriverVehicleControlCommand,
   createMetaverseSyncPlayerLookIntentCommand,
   createMetaverseSyncMountedOccupancyCommand,
   createMetaverseSyncPlayerTraversalIntentCommand,
-  metaverseRealtimePlayerTraversalActionKindIds,
   metaversePlayerTraversalIntentLocomotionModeIds,
-  metaversePresenceMountedOccupancyKinds,
-  metaversePresenceMountedOccupantRoleIds,
   type MetaversePlayerTraversalIntentLocomotionModeId,
+  metaverseRealtimePlayerTraversalActionKindIds,
   type MetaverseRealtimePlayerTraversalActionKindId,
-  type MetaversePresenceMountedOccupancySnapshotInput,
-  type MetaversePresenceMountedOccupancyKind,
-  type MetaversePresenceMountedOccupantRoleId,
   type MetaverseRealtimeWorldClientCommand
-} from "@webgpu-metaverse/shared";
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import { MetaverseAuthoritativeWorldRuntime } from "../classes/metaverse-authoritative-world-runtime.js";
 

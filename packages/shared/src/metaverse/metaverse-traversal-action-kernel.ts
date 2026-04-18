@@ -29,6 +29,13 @@ export interface AdvanceMetaverseTraversalActionStateResult {
   readonly state: MetaverseTraversalActionStateSnapshot;
 }
 
+export interface SyncMetaverseTraversalActionStateFromAcceptedActionSequenceInput {
+  readonly acceptedActionKind: MetaverseTraversalActionKindId;
+  readonly acceptedActionSequence: number;
+}
+
+export const metaverseTraversalActionBufferSeconds = 0.2;
+
 function normalizeFiniteNonNegativeInteger(rawValue: number): number {
   if (!Number.isFinite(rawValue) || rawValue <= 0) {
     return 0;
@@ -134,6 +141,111 @@ export function clearMetaverseTraversalPendingActions(
     resolvedActionSequence: state.resolvedActionSequence,
     resolvedActionState: state.resolvedActionState
   });
+}
+
+export function syncMetaverseTraversalActionStateFromAcceptedActionSequence(
+  state: MetaverseTraversalActionStateSnapshot,
+  {
+    acceptedActionKind,
+    acceptedActionSequence
+  }: SyncMetaverseTraversalActionStateFromAcceptedActionSequenceInput
+): MetaverseTraversalActionStateSnapshot {
+  const normalizedAcceptedActionSequence = normalizeFiniteNonNegativeInteger(
+    acceptedActionSequence
+  );
+  const normalizedAcceptedActionKind = resolveNormalizedActionKind(
+    acceptedActionKind,
+    normalizedAcceptedActionSequence
+  );
+
+  if (
+    normalizedAcceptedActionKind === "none" ||
+    normalizedAcceptedActionSequence <= 0
+  ) {
+    return state;
+  }
+
+  const currentResolvedActionSequence = normalizeFiniteNonNegativeInteger(
+    state.resolvedActionSequence
+  );
+  const shouldPreservePendingAction =
+    state.pendingActionKind !== "none" &&
+    normalizeFiniteNonNegativeInteger(state.pendingActionSequence) >
+      normalizedAcceptedActionSequence;
+  const shouldRewriteResolvedAction =
+    normalizedAcceptedActionSequence > currentResolvedActionSequence ||
+    (normalizedAcceptedActionSequence === currentResolvedActionSequence &&
+      (state.resolvedActionKind !== normalizedAcceptedActionKind ||
+        state.resolvedActionState !== "accepted"));
+  const nextPendingActionBufferSecondsRemaining = shouldPreservePendingAction
+    ? state.pendingActionBufferSecondsRemaining
+    : 0;
+  const nextPendingActionKind = shouldPreservePendingAction
+    ? state.pendingActionKind
+    : "none";
+  const nextPendingActionSequence = shouldPreservePendingAction
+    ? state.pendingActionSequence
+    : 0;
+  const nextResolvedActionKind = shouldRewriteResolvedAction
+    ? normalizedAcceptedActionKind
+    : state.resolvedActionKind;
+  const nextResolvedActionSequence = shouldRewriteResolvedAction
+    ? normalizedAcceptedActionSequence
+    : state.resolvedActionSequence;
+  const nextResolvedActionState = shouldRewriteResolvedAction
+    ? "accepted"
+    : state.resolvedActionState;
+
+  if (
+    nextPendingActionBufferSecondsRemaining ===
+      state.pendingActionBufferSecondsRemaining &&
+    nextPendingActionKind === state.pendingActionKind &&
+    nextPendingActionSequence === state.pendingActionSequence &&
+    nextResolvedActionKind === state.resolvedActionKind &&
+    nextResolvedActionSequence === state.resolvedActionSequence &&
+    nextResolvedActionState === state.resolvedActionState
+  ) {
+    return state;
+  }
+
+  return createMetaverseTraversalActionStateSnapshot({
+    pendingActionBufferSecondsRemaining:
+      nextPendingActionBufferSecondsRemaining,
+    pendingActionKind: nextPendingActionKind,
+    pendingActionSequence: nextPendingActionSequence,
+    resolvedActionKind: nextResolvedActionKind,
+    resolvedActionSequence: nextResolvedActionSequence,
+    resolvedActionState: nextResolvedActionState
+  });
+}
+
+export function readMetaverseTraversalPendingActionBufferAgeMs(
+  state: Pick<
+    MetaverseTraversalActionStateSnapshot,
+    | "pendingActionBufferSecondsRemaining"
+    | "pendingActionKind"
+    | "pendingActionSequence"
+  >,
+  bufferSeconds: number,
+  actionKind: MetaverseTraversalActionKindId = "jump"
+): number | null {
+  if (
+    state.pendingActionKind !== actionKind ||
+    normalizeFiniteNonNegativeInteger(state.pendingActionSequence) <= 0
+  ) {
+    return null;
+  }
+
+  return Math.max(
+    0,
+    Math.round(
+      (normalizeFiniteNonNegativeSeconds(bufferSeconds) -
+        normalizeFiniteNonNegativeSeconds(
+          state.pendingActionBufferSecondsRemaining
+        )) *
+        1_000
+    )
+  );
 }
 
 export function advanceMetaverseTraversalActionState(

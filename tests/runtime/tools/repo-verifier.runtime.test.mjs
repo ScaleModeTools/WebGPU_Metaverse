@@ -226,6 +226,108 @@ test("collectRepoVerificationErrors reports missing runtime owner test manifest 
   );
 });
 
+test("collectRepoVerificationErrors treats authority folders as runtime owner roots", () => {
+  const repoRoot = createFixtureRepo({
+    "server/src/metaverse/authority/traversal/player-traversal-authority.ts":
+      "export class PlayerTraversalAuthority {}\n"
+  });
+
+  const errors = collectRepoVerificationErrors({ repoRoot, trackedFiles: [] });
+
+  assert.ok(
+    errors.some((error) =>
+      error.includes(
+        "Missing runtime owner test manifest entry for server/src/metaverse/authority/traversal/player-traversal-authority.ts"
+      )
+    )
+  );
+});
+
+test("collectRepoVerificationErrors treats hud folders as runtime owner roots", () => {
+  const repoRoot = createFixtureRepo({
+    "client/src/metaverse/hud/metaverse-runtime-hud-publisher.ts":
+      "export class MetaverseRuntimeHudPublisher {}\n"
+  });
+
+  const errors = collectRepoVerificationErrors({ repoRoot, trackedFiles: [] });
+
+  assert.ok(
+    errors.some((error) =>
+      error.includes(
+        "Missing runtime owner test manifest entry for client/src/metaverse/hud/metaverse-runtime-hud-publisher.ts"
+      )
+    )
+  );
+});
+
+test("collectRepoVerificationErrors treats boot folders as runtime owner roots", () => {
+  const repoRoot = createFixtureRepo({
+    "client/src/metaverse/boot/metaverse-runtime-boot-lifecycle.ts":
+      "export class MetaverseRuntimeBootLifecycle {}\n"
+  });
+
+  const errors = collectRepoVerificationErrors({ repoRoot, trackedFiles: [] });
+
+  assert.ok(
+    errors.some((error) =>
+      error.includes(
+        "Missing runtime owner test manifest entry for client/src/metaverse/boot/metaverse-runtime-boot-lifecycle.ts"
+      )
+    )
+  );
+});
+
+test("collectRepoVerificationErrors treats remote-world folders as runtime owner roots", () => {
+  const repoRoot = createFixtureRepo({
+    "client/src/metaverse/remote-world/metaverse-remote-world-presentation-state.ts":
+      "export class MetaverseRemoteWorldPresentationState {}\n"
+  });
+
+  const errors = collectRepoVerificationErrors({ repoRoot, trackedFiles: [] });
+
+  assert.ok(
+    errors.some((error) =>
+      error.includes(
+        "Missing runtime owner test manifest entry for client/src/metaverse/remote-world/metaverse-remote-world-presentation-state.ts"
+      )
+    )
+  );
+});
+
+test("collectRepoVerificationErrors treats simulation folders as runtime owner roots", () => {
+  const repoRoot = createFixtureRepo({
+    "client/src/metaverse/traversal/simulation/metaverse-fixed-step-traversal-simulation.ts":
+      "export class MetaverseFixedStepTraversalSimulation {}\n"
+  });
+
+  const errors = collectRepoVerificationErrors({ repoRoot, trackedFiles: [] });
+
+  assert.ok(
+    errors.some((error) =>
+      error.includes(
+        "Missing runtime owner test manifest entry for client/src/metaverse/traversal/simulation/metaverse-fixed-step-traversal-simulation.ts"
+      )
+    )
+  );
+});
+
+test("collectRepoVerificationErrors treats surface folders as runtime owner roots", () => {
+  const repoRoot = createFixtureRepo({
+    "client/src/metaverse/traversal/surface/metaverse-unmounted-surface-locomotion-state.ts":
+      "export class MetaverseUnmountedSurfaceLocomotionState {}\n"
+  });
+
+  const errors = collectRepoVerificationErrors({ repoRoot, trackedFiles: [] });
+
+  assert.ok(
+    errors.some((error) =>
+      error.includes(
+        "Missing runtime owner test manifest entry for client/src/metaverse/traversal/surface/metaverse-unmounted-surface-locomotion-state.ts"
+      )
+    )
+  );
+});
+
 test("collectRepoVerificationErrors reports missing runtime test files referenced by the manifest", () => {
   const repoRoot = createFixtureRepo({
     "tools/runtime-owner-test-manifest.json": JSON.stringify(

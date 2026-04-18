@@ -12,10 +12,8 @@ import {
   directionFromYawPitch
 } from "../../states/metaverse-flight";
 import type { MetaverseFlightInputSnapshot } from "../../types/metaverse-control-mode";
-import type {
-  MetaverseCameraSnapshot,
-  MetaverseRuntimeConfig
-} from "../../types/metaverse-runtime";
+import type { MetaverseCameraSnapshot } from "../../types/presentation";
+import type { MetaverseRuntimeConfig } from "../../types/runtime-config";
 import { wrapRadians } from "../policies/surface-locomotion";
 import type {
   MountedEnvironmentAnchorSnapshot,

@@ -3,12 +3,12 @@ import type {
   MetaverseSyncDriverVehicleControlCommand,
   MetaverseSyncPlayerLookIntentCommand,
   MetaverseSyncPlayerTraversalIntentCommand
-} from "@webgpu-metaverse/shared";
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 import {
   createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram,
   createMetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram,
   createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram
-} from "@webgpu-metaverse/shared";
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import { LatestWinsWebTransportJsonDatagramChannel } from "./latest-wins-webtransport-json-datagram-channel";
 import type { MetaverseRealtimeWorldLatestWinsDatagramTransport } from "../types/metaverse-realtime-world-latest-wins-datagram-transport";

@@ -1,7 +1,7 @@
 import type {
-  MetaversePlayerId,
   MetaverseRealtimeWorldWebTransportClientDatagram
-} from "@webgpu-metaverse/shared";
+} from "@webgpu-metaverse/shared/metaverse/realtime";
+import type { MetaversePlayerId } from "@webgpu-metaverse/shared/metaverse/presence";
 
 import { MetaverseAuthoritativeWorldRuntime } from "../classes/metaverse-authoritative-world-runtime.js";
 

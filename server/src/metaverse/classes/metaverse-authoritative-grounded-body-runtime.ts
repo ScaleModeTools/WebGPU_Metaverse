@@ -8,7 +8,7 @@ import {
   toFiniteNumber,
   wrapRadians,
   type MetaverseGroundedBodyStepStateSnapshot
-} from "@webgpu-metaverse/shared/metaverse";
+} from "@webgpu-metaverse/shared/metaverse/traversal";
 
 import { MetaverseAuthoritativeRapierPhysicsRuntime } from "./metaverse-authoritative-rapier-physics-runtime.js";
 import type {

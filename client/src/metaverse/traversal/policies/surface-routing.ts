@@ -3,17 +3,17 @@ import {
   constrainMetaverseWorldPlanarPositionAgainstBlockers,
   isMetaverseWorldWaterbornePosition,
   metaverseWorldPlacedWaterRegions,
-  resolveMetaverseWorldAutomaticSurfaceLocomotion,
+  resolveMetaverseTraversalStateFromWorldAffordances,
   resolveMetaverseWorldGroundedAutostepHeightMeters,
   resolveMetaverseWorldSurfaceHeightMeters,
   resolveMetaverseWorldWaterSurfaceHeightMeters,
-  type MetaverseWorldAutomaticSurfaceLocomotionDebugSnapshot,
-  type MetaverseWorldAutomaticSurfaceLocomotionSnapshot,
+  type MetaverseTraversalStateResolutionDebugSnapshot,
+  type MetaverseTraversalStateResolutionSnapshot,
   type MetaverseWorldSurfacePolicyConfig
 } from "@webgpu-metaverse/shared";
 
 import type { MetaversePlacedCuboidColliderSnapshot } from "../../states/metaverse-environment-collision";
-import type { MetaverseRuntimeConfig } from "../../types/metaverse-runtime";
+import type { MetaverseRuntimeConfig } from "../../types/runtime-config";
 import type {
   AutomaticSurfaceLocomotionDecision,
   AutomaticSurfaceLocomotionModeId
@@ -49,9 +49,9 @@ export function readMetaverseSurfacePolicyConfig(
 }
 
 export type AutomaticSurfaceLocomotionDebugSnapshot =
-  MetaverseWorldAutomaticSurfaceLocomotionDebugSnapshot;
+  MetaverseTraversalStateResolutionDebugSnapshot;
 export type AutomaticSurfaceLocomotionSnapshot =
-  MetaverseWorldAutomaticSurfaceLocomotionSnapshot;
+  MetaverseTraversalStateResolutionSnapshot;
 
 export function resolveSurfaceHeightMeters(
   config: MetaverseRuntimeConfig,
@@ -163,7 +163,7 @@ export function resolveAutomaticSurfaceLocomotionSnapshot(
   currentLocomotionMode: AutomaticSurfaceLocomotionModeId,
   excludedOwnerEnvironmentAssetId: string | null = null
 ): AutomaticSurfaceLocomotionSnapshot {
-  return resolveMetaverseWorldAutomaticSurfaceLocomotion(
+  return resolveMetaverseTraversalStateFromWorldAffordances(
     readMetaverseSurfacePolicyConfig(config),
     surfaceColliderSnapshots,
     metaverseWaterRegionSnapshots,

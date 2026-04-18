@@ -1,4 +1,4 @@
-import type { MetaverseSyncDriverVehicleControlCommand } from "@webgpu-metaverse/shared";
+import type { MetaverseSyncDriverVehicleControlCommand } from "@webgpu-metaverse/shared/metaverse/realtime";
 
 export interface MetaverseRealtimeWorldDriverVehicleControlDatagramTransport {
   dispose?(): void;

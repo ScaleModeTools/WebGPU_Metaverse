@@ -7,7 +7,7 @@ import {
   Vector3
 } from "three/webgpu";
 
-import type { MetaverseEnvironmentAssetProofConfig } from "../../types/metaverse-runtime";
+import type { MetaverseEnvironmentAssetProofConfig } from "../../types/proof";
 import { wrapRadians } from "../policies/surface-locomotion";
 
 export interface MountedCharacterSeatTransformSnapshot {

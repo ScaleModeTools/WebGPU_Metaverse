@@ -19,12 +19,19 @@ export const metaversePresenceAnimationVocabularyIds = [
   "seated"
 ] as const;
 
-export const metaversePresenceLocomotionModeIds = [
+export const metaversePresencePrimaryLocomotionModeIds = [
   "grounded",
   "swim",
-  "fly",
+  "fly"
+] as const;
+
+export const metaversePresenceCompatibilityLocomotionModeIds = [
+  ...metaversePresencePrimaryLocomotionModeIds,
   "mounted"
 ] as const;
+
+export const metaversePresenceLocomotionModeIds =
+  metaversePresenceCompatibilityLocomotionModeIds;
 
 export const metaversePresenceMountedOccupancyKinds = [
   "entry",
@@ -49,8 +56,12 @@ export const metaversePresenceServerEventTypes = [
 
 export type MetaversePresenceAnimationVocabularyId =
   (typeof metaversePresenceAnimationVocabularyIds)[number];
+export type MetaversePresencePrimaryLocomotionModeId =
+  (typeof metaversePresencePrimaryLocomotionModeIds)[number];
+export type MetaversePresenceCompatibilityLocomotionModeId =
+  (typeof metaversePresenceCompatibilityLocomotionModeIds)[number];
 export type MetaversePresenceLocomotionModeId =
-  (typeof metaversePresenceLocomotionModeIds)[number];
+  MetaversePresenceCompatibilityLocomotionModeId;
 export type MetaversePresenceMountedOccupancyKind =
   (typeof metaversePresenceMountedOccupancyKinds)[number];
 export type MetaversePresenceMountedOccupantRoleId =
@@ -192,6 +203,18 @@ export type MetaversePresenceCommand =
   | MetaverseSyncPresenceCommand;
 
 export type MetaversePresenceServerEvent = MetaversePresenceRosterEvent;
+
+export function isMetaversePresencePrimaryLocomotionMode(
+  locomotionMode: MetaversePresenceLocomotionModeId
+): locomotionMode is MetaversePresencePrimaryLocomotionModeId {
+  return locomotionMode !== "mounted";
+}
+
+export function isMetaversePresenceMountedCompatibilityLocomotionMode(
+  locomotionMode: MetaversePresenceLocomotionModeId
+): locomotionMode is "mounted" {
+  return locomotionMode === "mounted";
+}
 
 const metaversePlayerIdPattern = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 

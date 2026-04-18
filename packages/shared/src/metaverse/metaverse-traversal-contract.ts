@@ -6,12 +6,8 @@ export const metaverseTraversalLocomotionModeIds = [
   "swim"
 ] as const;
 
-export const metaverseTraversalJumpAuthorityStateIds = [
-  "none",
-  "grounded",
-  "rising",
-  "falling"
-] as const;
+export const metaverseTraversalCapabilityIds =
+  metaverseTraversalLocomotionModeIds;
 
 export const metaverseTraversalActionResolutionStateIds = [
   "none",
@@ -38,8 +34,8 @@ export const metaverseTraversalActionRejectionReasonIds = [
 
 export type MetaverseTraversalLocomotionModeId =
   (typeof metaverseTraversalLocomotionModeIds)[number];
-export type MetaverseTraversalJumpAuthorityStateId =
-  (typeof metaverseTraversalJumpAuthorityStateIds)[number];
+export type MetaverseTraversalCapabilityId =
+  (typeof metaverseTraversalCapabilityIds)[number];
 export type MetaverseTraversalActionResolutionStateId =
   (typeof metaverseTraversalActionResolutionStateIds)[number];
 export type MetaverseTraversalActionKindId =
@@ -83,6 +79,16 @@ export interface MetaverseTraversalActionIntentSnapshotInput {
   readonly kind?: MetaverseTraversalActionKindId;
   readonly pressed?: boolean;
   readonly sequence?: number;
+}
+
+export interface MetaverseTraversalActiveActionSnapshot {
+  readonly kind: MetaverseTraversalActionKindId;
+  readonly phase: MetaverseTraversalActionPhaseId;
+}
+
+export interface MetaverseTraversalActiveActionSnapshotInput {
+  readonly kind?: MetaverseTraversalActionKindId;
+  readonly phase?: MetaverseTraversalActionPhaseId;
 }
 
 export interface MetaverseTraversalAuthoritySnapshot {
@@ -191,6 +197,17 @@ export function createMetaverseTraversalActionIntentSnapshot(
     kind: resolvedKind,
     pressed,
     sequence: resolvedKind === "none" ? 0 : sequence
+  });
+}
+
+export function createMetaverseTraversalActiveActionSnapshot(
+  input: MetaverseTraversalActiveActionSnapshotInput = {}
+): MetaverseTraversalActiveActionSnapshot {
+  const kind = resolveTraversalActionKind(input.kind);
+
+  return Object.freeze({
+    kind,
+    phase: kind === "none" ? "idle" : resolveTraversalActionPhase(input.phase)
   });
 }
 

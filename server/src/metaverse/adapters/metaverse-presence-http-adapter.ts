@@ -8,7 +8,6 @@ import {
   createMetaverseLeavePresenceCommand,
   createMetaversePlayerId,
   createMetaverseSyncPresenceCommand,
-  createUsername,
   metaversePresenceAnimationVocabularyIds,
   metaversePresenceLocomotionModeIds,
   metaversePresenceMountedOccupancyKinds,
@@ -17,7 +16,8 @@ import {
   type MetaversePresenceMountedOccupancyKind,
   type MetaversePresenceMountedOccupantRoleId,
   type MetaversePresenceCommand
-} from "@webgpu-metaverse/shared";
+} from "@webgpu-metaverse/shared/metaverse/presence";
+import { createUsername } from "@webgpu-metaverse/shared";
 
 import { MetaverseAuthoritativeWorldRuntime } from "../classes/metaverse-authoritative-world-runtime.js";
 

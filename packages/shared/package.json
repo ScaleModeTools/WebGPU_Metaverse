@@ -19,6 +19,36 @@
       "import": "./dist/metaverse/index.js",
       "default": "./dist/metaverse/index.js"
     },
+    "./metaverse/traversal": {
+      "types": "./dist/metaverse/traversal/index.d.ts",
+      "import": "./dist/metaverse/traversal/index.js",
+      "default": "./dist/metaverse/traversal/index.js"
+    },
+    "./metaverse/world": {
+      "types": "./dist/metaverse/world/index.d.ts",
+      "import": "./dist/metaverse/world/index.js",
+      "default": "./dist/metaverse/world/index.js"
+    },
+    "./metaverse/presence": {
+      "types": "./dist/metaverse/presence/index.d.ts",
+      "import": "./dist/metaverse/presence/index.js",
+      "default": "./dist/metaverse/presence/index.js"
+    },
+    "./metaverse/realtime": {
+      "types": "./dist/metaverse/realtime/index.d.ts",
+      "import": "./dist/metaverse/realtime/index.js",
+      "default": "./dist/metaverse/realtime/index.js"
+    },
+    "./metaverse/session": {
+      "types": "./dist/metaverse/session/index.d.ts",
+      "import": "./dist/metaverse/session/index.js",
+      "default": "./dist/metaverse/session/index.js"
+    },
+    "./metaverse/portal": {
+      "types": "./dist/metaverse/portal/index.d.ts",
+      "import": "./dist/metaverse/portal/index.js",
+      "default": "./dist/metaverse/portal/index.js"
+    },
     "./experiences": {
       "types": "./dist/experiences/index.d.ts",
       "import": "./dist/experiences/index.js",

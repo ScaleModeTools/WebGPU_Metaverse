@@ -2,41 +2,57 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  hasMetaverseTraversalAuthorityConsumedJump,
-  hasMetaverseTraversalAuthorityRejectedJump,
-  isMetaverseTraversalAuthorityJumpAirborne,
-  isMetaverseTraversalAuthorityJumpPendingOrActive,
-  readMetaverseTraversalAuthorityLatestJumpActionSequence,
-  resolveMetaverseTraversalAuthorityIssuedJumpResolution,
-  resolveMetaverseTraversalAuthoritySnapshotInput
-} from "@webgpu-metaverse/shared";
+  createMetaverseTraversalActiveActionSnapshot,
+  hasMetaverseTraversalAuthorityConsumedAction,
+  hasMetaverseTraversalAuthorityLocallyPredictedIssuedAction,
+  hasMetaverseTraversalAuthorityRejectedAction,
+  isMetaverseTraversalAuthorityActionAirborne,
+  isMetaverseTraversalAuthorityActionPendingOrActive,
+  readMetaverseTraversalAuthorityLatestActionSequence,
+  resolveMetaverseTraversalAuthorityIssuedActionResolution,
+  resolveMetaverseTraversalAuthoritySnapshotForActionState,
+  resolveMetaverseTraversalAuthoritySnapshotForIssuedAction,
+  resolveMetaverseTraversalAuthoritySnapshotInput,
+  resolveMetaverseTraversalKinematicActionSnapshot
+} from "@webgpu-metaverse/shared/metaverse/traversal";
+
+function resolveActiveAction(phase = "idle", kind = phase === "idle" ? "none" : "jump") {
+  return createMetaverseTraversalActiveActionSnapshot({
+    kind,
+    phase
+  });
+}
 
 function resolveTraversalAuthority(input) {
-  const pendingActionSequence =
-    input.pendingActionSequence ?? input.pendingJumpActionSequence ?? 0;
-  const resolvedActionSequence =
-    input.resolvedActionSequence ?? input.resolvedJumpActionSequence ?? 0;
+  const pendingActionSequence = input.pendingActionSequence ?? 0;
+  const resolvedActionSequence = input.resolvedActionSequence ?? 0;
+  const activeActionPhase = input.activeActionPhase ?? "idle";
+  const activeActionKind =
+    input.activeActionKind ?? (activeActionPhase === "idle" ? "none" : "jump");
 
   return resolveMetaverseTraversalAuthoritySnapshotInput({
-    ...input,
+    activeAction: resolveActiveAction(activeActionPhase, activeActionKind),
+    currentTick: input.currentTick,
+    locomotionMode: input.locomotionMode,
+    mounted: input.mounted,
     pendingActionKind: pendingActionSequence > 0 ? "jump" : "none",
     pendingActionSequence,
+    previousTraversalAuthority: input.previousTraversalAuthority,
     resolvedActionKind: resolvedActionSequence > 0 ? "jump" : "none",
     resolvedActionSequence,
-    resolvedActionState:
-      input.resolvedActionState ?? input.resolvedJumpActionState ?? "none"
+    resolvedActionState: input.resolvedActionState ?? "none"
   });
 }
 
 test("shared traversal authority resolver advances jump startup into rising and falling with stable consumed sequencing", () => {
   const startup = resolveTraversalAuthority({
+    activeActionPhase: "idle",
     currentTick: 11,
-    jumpAuthorityState: "grounded",
     locomotionMode: "grounded",
     mounted: false,
-    pendingJumpActionSequence: 4,
-    resolvedJumpActionSequence: 0,
-    resolvedJumpActionState: "none"
+    pendingActionSequence: 4,
+    resolvedActionSequence: 0,
+    resolvedActionState: "none"
   });
 
   assert.equal(startup.currentActionKind, "jump");
@@ -45,14 +61,14 @@ test("shared traversal authority resolver advances jump startup into rising and 
   assert.equal(startup.phaseStartedAtTick, 11);
 
   const rising = resolveTraversalAuthority({
+    activeActionPhase: "rising",
     currentTick: 12,
-    jumpAuthorityState: "rising",
     locomotionMode: "grounded",
     mounted: false,
-    pendingJumpActionSequence: 4,
+    pendingActionSequence: 4,
     previousTraversalAuthority: startup,
-    resolvedJumpActionSequence: 4,
-    resolvedJumpActionState: "accepted"
+    resolvedActionSequence: 4,
+    resolvedActionState: "accepted"
   });
 
   assert.equal(rising.currentActionKind, "jump");
@@ -63,14 +79,14 @@ test("shared traversal authority resolver advances jump startup into rising and 
   assert.equal(rising.lastConsumedActionSequence, 4);
 
   const falling = resolveTraversalAuthority({
+    activeActionPhase: "falling",
     currentTick: 13,
-    jumpAuthorityState: "falling",
     locomotionMode: "grounded",
     mounted: false,
-    pendingJumpActionSequence: 0,
+    pendingActionSequence: 0,
     previousTraversalAuthority: rising,
-    resolvedJumpActionSequence: 4,
-    resolvedJumpActionState: "accepted"
+    resolvedActionSequence: 4,
+    resolvedActionState: "accepted"
   });
 
   assert.equal(falling.currentActionKind, "jump");
@@ -79,14 +95,14 @@ test("shared traversal authority resolver advances jump startup into rising and 
   assert.equal(falling.phaseStartedAtTick, 13);
 
   const grounded = resolveTraversalAuthority({
+    activeActionPhase: "idle",
     currentTick: 14,
-    jumpAuthorityState: "grounded",
     locomotionMode: "grounded",
     mounted: false,
-    pendingJumpActionSequence: 0,
+    pendingActionSequence: 0,
     previousTraversalAuthority: falling,
-    resolvedJumpActionSequence: 4,
-    resolvedJumpActionState: "accepted"
+    resolvedActionSequence: 4,
+    resolvedActionState: "accepted"
   });
 
   assert.equal(grounded.currentActionKind, "none");
@@ -98,13 +114,13 @@ test("shared traversal authority resolver advances jump startup into rising and 
 
 test("shared traversal authority resolver preserves the last rejected jump when later ticks are otherwise idle", () => {
   const rejected = resolveTraversalAuthority({
+    activeActionPhase: "idle",
     currentTick: 20,
-    jumpAuthorityState: "grounded",
     locomotionMode: "grounded",
     mounted: false,
-    pendingJumpActionSequence: 0,
-    resolvedJumpActionSequence: 5,
-    resolvedJumpActionState: "rejected-buffer-expired"
+    pendingActionSequence: 0,
+    resolvedActionSequence: 5,
+    resolvedActionState: "rejected-buffer-expired"
   });
 
   assert.equal(rejected.lastRejectedActionKind, "jump");
@@ -112,14 +128,14 @@ test("shared traversal authority resolver preserves the last rejected jump when 
   assert.equal(rejected.lastRejectedActionSequence, 5);
 
   const idleLater = resolveTraversalAuthority({
+    activeActionPhase: "idle",
     currentTick: 21,
-    jumpAuthorityState: "grounded",
     locomotionMode: "grounded",
     mounted: false,
-    pendingJumpActionSequence: 0,
+    pendingActionSequence: 0,
     previousTraversalAuthority: rejected,
-    resolvedJumpActionSequence: 0,
-    resolvedJumpActionState: "none"
+    resolvedActionSequence: 0,
+    resolvedActionState: "none"
   });
 
   assert.equal(idleLater.currentActionKind, "none");
@@ -128,181 +144,435 @@ test("shared traversal authority resolver preserves the last rejected jump when 
   assert.equal(idleLater.lastRejectedActionSequence, 5);
 });
 
-test("shared traversal authority helpers expose coarse gameplay-relevant jump truth", () => {
+test("shared traversal authority helpers expose coarse gameplay-relevant action truth", () => {
   const startup = resolveTraversalAuthority({
+    activeActionPhase: "idle",
     currentTick: 11,
-    jumpAuthorityState: "grounded",
     locomotionMode: "grounded",
     mounted: false,
-    pendingJumpActionSequence: 4,
-    resolvedJumpActionSequence: 0,
-    resolvedJumpActionState: "none"
+    pendingActionSequence: 4,
+    resolvedActionSequence: 0,
+    resolvedActionState: "none"
   });
 
-  assert.equal(isMetaverseTraversalAuthorityJumpPendingOrActive(startup), true);
-  assert.equal(isMetaverseTraversalAuthorityJumpPendingOrActive(startup, 4), true);
-  assert.equal(isMetaverseTraversalAuthorityJumpAirborne(startup), false);
-  assert.equal(hasMetaverseTraversalAuthorityConsumedJump(startup, 4), false);
-  assert.equal(hasMetaverseTraversalAuthorityRejectedJump(startup, 4), false);
+  assert.equal(
+    isMetaverseTraversalAuthorityActionPendingOrActive(startup, "jump"),
+    true
+  );
+  assert.equal(
+    isMetaverseTraversalAuthorityActionPendingOrActive(startup, "jump", 4),
+    true
+  );
+  assert.equal(
+    isMetaverseTraversalAuthorityActionAirborne(startup, "jump"),
+    false
+  );
+  assert.equal(
+    hasMetaverseTraversalAuthorityConsumedAction(startup, "jump", 4),
+    false
+  );
+  assert.equal(
+    hasMetaverseTraversalAuthorityRejectedAction(startup, "jump", 4),
+    false
+  );
 
   const falling = resolveTraversalAuthority({
+    activeActionPhase: "falling",
     currentTick: 12,
-    jumpAuthorityState: "falling",
     locomotionMode: "grounded",
     mounted: false,
-    pendingJumpActionSequence: 0,
+    pendingActionSequence: 0,
     previousTraversalAuthority: startup,
-    resolvedJumpActionSequence: 4,
-    resolvedJumpActionState: "accepted"
+    resolvedActionSequence: 4,
+    resolvedActionState: "accepted"
   });
 
-  assert.equal(isMetaverseTraversalAuthorityJumpPendingOrActive(falling), true);
-  assert.equal(isMetaverseTraversalAuthorityJumpAirborne(falling), true);
-  assert.equal(hasMetaverseTraversalAuthorityConsumedJump(falling, 4), true);
-  assert.equal(hasMetaverseTraversalAuthorityRejectedJump(falling, 4), false);
+  assert.equal(
+    isMetaverseTraversalAuthorityActionPendingOrActive(falling, "jump"),
+    true
+  );
+  assert.equal(
+    isMetaverseTraversalAuthorityActionAirborne(falling, "jump"),
+    true
+  );
+  assert.equal(
+    hasMetaverseTraversalAuthorityConsumedAction(falling, "jump", 4),
+    true
+  );
+  assert.equal(
+    hasMetaverseTraversalAuthorityRejectedAction(falling, "jump", 4),
+    false
+  );
 
   const rejected = resolveTraversalAuthority({
+    activeActionPhase: "idle",
     currentTick: 13,
-    jumpAuthorityState: "grounded",
     locomotionMode: "grounded",
     mounted: false,
-    pendingJumpActionSequence: 0,
-    resolvedJumpActionSequence: 5,
-    resolvedJumpActionState: "rejected-buffer-expired"
+    pendingActionSequence: 0,
+    resolvedActionSequence: 5,
+    resolvedActionState: "rejected-buffer-expired"
   });
 
-  assert.equal(isMetaverseTraversalAuthorityJumpPendingOrActive(rejected, 5), false);
-  assert.equal(hasMetaverseTraversalAuthorityConsumedJump(rejected, 5), false);
-  assert.equal(hasMetaverseTraversalAuthorityRejectedJump(rejected, 5), true);
+  assert.equal(
+    isMetaverseTraversalAuthorityActionPendingOrActive(rejected, "jump", 5),
+    false
+  );
+  assert.equal(
+    hasMetaverseTraversalAuthorityConsumedAction(rejected, "jump", 5),
+    false
+  );
+  assert.equal(
+    hasMetaverseTraversalAuthorityRejectedAction(rejected, "jump", 5),
+    true
+  );
 });
 
-test("shared traversal authority resolver preserves coarse airborne jump state even when no jump sequence is available", () => {
+test("shared traversal authority resolver preserves coarse airborne action state even when no action sequence is available", () => {
   const airborneWithoutSequence = resolveTraversalAuthority({
+    activeActionPhase: "rising",
     currentTick: 30,
-    jumpAuthorityState: "rising",
     locomotionMode: "grounded",
     mounted: false,
-    pendingJumpActionSequence: 0,
-    resolvedJumpActionSequence: 0,
-    resolvedJumpActionState: "none"
+    pendingActionSequence: 0,
+    resolvedActionSequence: 0,
+    resolvedActionState: "none"
   });
 
   assert.equal(airborneWithoutSequence.currentActionKind, "jump");
   assert.equal(airborneWithoutSequence.currentActionPhase, "rising");
   assert.equal(airborneWithoutSequence.currentActionSequence, 0);
   assert.equal(
-    isMetaverseTraversalAuthorityJumpPendingOrActive(airborneWithoutSequence),
+    isMetaverseTraversalAuthorityActionPendingOrActive(
+      airborneWithoutSequence,
+      "jump"
+    ),
     true
   );
   assert.equal(
-    isMetaverseTraversalAuthorityJumpAirborne(airborneWithoutSequence),
+    isMetaverseTraversalAuthorityActionAirborne(
+      airborneWithoutSequence,
+      "jump"
+    ),
     true
   );
 });
 
-test("shared traversal authority helper resolves issued jump sequencing without runtime-local heuristics", () => {
+test("shared traversal authority action-state adapter keeps client and server authority assembly on one path", () => {
+  const authority = resolveMetaverseTraversalAuthoritySnapshotForActionState({
+    activeAction: resolveActiveAction("idle"),
+    actionState: Object.freeze({
+      pendingActionKind: "jump",
+      pendingActionSequence: 8,
+      resolvedActionKind: "jump",
+      resolvedActionSequence: 7,
+      resolvedActionState: "accepted"
+    }),
+    currentTick: 51,
+    locomotionMode: "grounded",
+    mounted: false
+  });
+
+  assert.equal(authority.currentActionKind, "jump");
+  assert.equal(authority.currentActionPhase, "startup");
+  assert.equal(authority.currentActionSequence, 8);
+  assert.equal(authority.lastConsumedActionKind, "jump");
+  assert.equal(authority.lastConsumedActionSequence, 7);
+  assert.equal(authority.phaseStartedAtTick, 51);
+});
+
+test("shared traversal authority helper resolves issued action sequencing without runtime-local heuristics", () => {
   const startup = resolveTraversalAuthority({
+    activeActionPhase: "idle",
     currentTick: 40,
-    jumpAuthorityState: "grounded",
     locomotionMode: "grounded",
     mounted: false,
-    pendingJumpActionSequence: 6,
-    resolvedJumpActionSequence: 0,
-    resolvedJumpActionState: "none"
+    pendingActionSequence: 6,
+    resolvedActionSequence: 0,
+    resolvedActionState: "none"
   });
 
   assert.deepEqual(
-    resolveMetaverseTraversalAuthorityIssuedJumpResolution(startup, 6),
+    resolveMetaverseTraversalAuthorityIssuedActionResolution(
+      startup,
+      "jump",
+      6
+    ),
     {
-      jumpActionSequence: 6,
+      actionSequence: 6,
       resolution: "pending-or-active"
     }
   );
 
   const acceptedGrounded = resolveTraversalAuthority({
+    activeActionPhase: "idle",
     currentTick: 41,
-    jumpAuthorityState: "grounded",
     locomotionMode: "grounded",
     mounted: false,
-    pendingJumpActionSequence: 0,
+    pendingActionSequence: 0,
     previousTraversalAuthority: startup,
-    resolvedJumpActionSequence: 6,
-    resolvedJumpActionState: "accepted"
+    resolvedActionSequence: 6,
+    resolvedActionState: "accepted"
   });
 
   assert.deepEqual(
-    resolveMetaverseTraversalAuthorityIssuedJumpResolution(
+    resolveMetaverseTraversalAuthorityIssuedActionResolution(
       acceptedGrounded,
+      "jump",
       6
     ),
     {
-      jumpActionSequence: 6,
+      actionSequence: 6,
       resolution: "accepted"
     }
   );
   assert.deepEqual(
-    resolveMetaverseTraversalAuthorityIssuedJumpResolution(
+    resolveMetaverseTraversalAuthorityIssuedActionResolution(
       acceptedGrounded,
+      "jump",
       6,
       6
     ),
     {
-      jumpActionSequence: 0,
+      actionSequence: 0,
       resolution: "none"
     }
   );
 
   const rejected = resolveTraversalAuthority({
+    activeActionPhase: "idle",
     currentTick: 42,
-    jumpAuthorityState: "grounded",
     locomotionMode: "grounded",
     mounted: false,
-    pendingJumpActionSequence: 0,
-    resolvedJumpActionSequence: 7,
-    resolvedJumpActionState: "rejected-buffer-expired"
+    pendingActionSequence: 0,
+    resolvedActionSequence: 7,
+    resolvedActionState: "rejected-buffer-expired"
   });
 
   assert.deepEqual(
-    resolveMetaverseTraversalAuthorityIssuedJumpResolution(rejected, 7),
+    resolveMetaverseTraversalAuthorityIssuedActionResolution(
+      rejected,
+      "jump",
+      7
+    ),
     {
-      jumpActionSequence: 7,
+      actionSequence: 7,
       resolution: "rejected"
     }
   );
 });
 
-test("shared traversal authority exposes the latest authoritative jump action sequence from coarse gameplay truth", () => {
+test("shared traversal authority helper reuses current action authority when the issued action is already pending", () => {
   const startup = resolveTraversalAuthority({
-    currentTick: 50,
-    jumpAuthorityState: "grounded",
+    activeActionPhase: "idle",
+    currentTick: 60,
     locomotionMode: "grounded",
     mounted: false,
-    pendingJumpActionSequence: 8,
-    resolvedJumpActionSequence: 0,
-    resolvedJumpActionState: "none"
-  });
-  const accepted = resolveTraversalAuthority({
-    currentTick: 51,
-    jumpAuthorityState: "rising",
-    locomotionMode: "grounded",
-    mounted: false,
-    pendingJumpActionSequence: 8,
-    previousTraversalAuthority: startup,
-    resolvedJumpActionSequence: 8,
-    resolvedJumpActionState: "accepted"
-  });
-  const rejected = resolveTraversalAuthority({
-    currentTick: 52,
-    jumpAuthorityState: "grounded",
-    locomotionMode: "grounded",
-    mounted: false,
-    pendingJumpActionSequence: 0,
-    previousTraversalAuthority: accepted,
-    resolvedJumpActionSequence: 11,
-    resolvedJumpActionState: "rejected-buffer-expired"
+    pendingActionSequence: 9,
+    resolvedActionSequence: 0,
+    resolvedActionState: "none"
   });
 
-  assert.equal(readMetaverseTraversalAuthorityLatestJumpActionSequence(startup), 8);
-  assert.equal(readMetaverseTraversalAuthorityLatestJumpActionSequence(accepted), 8);
-  assert.equal(readMetaverseTraversalAuthorityLatestJumpActionSequence(rejected), 11);
+  const resolved = resolveMetaverseTraversalAuthoritySnapshotForIssuedAction({
+    activeAction: resolveActiveAction("idle"),
+    actionState: Object.freeze({
+      pendingActionKind: "jump",
+      pendingActionSequence: 9,
+      resolvedActionKind: "none",
+      resolvedActionSequence: 0,
+      resolvedActionState: "none"
+    }),
+    currentTick: 61,
+    issuedActionKind: "jump",
+    issuedActionSequence: 9,
+    locomotionMode: "grounded",
+    mounted: false,
+    previousTraversalAuthority: startup
+  });
+
+  assert.equal(resolved, startup);
+});
+
+test("shared traversal authority helper reconstructs an airborne accepted action from local action state", () => {
+  const acceptedGrounded = resolveTraversalAuthority({
+    activeActionPhase: "idle",
+    currentTick: 70,
+    locomotionMode: "grounded",
+    mounted: false,
+    pendingActionSequence: 0,
+    resolvedActionSequence: 10,
+    resolvedActionState: "accepted"
+  });
+
+  const resolved = resolveMetaverseTraversalAuthoritySnapshotForIssuedAction({
+    activeAction: resolveActiveAction("rising"),
+    actionState: Object.freeze({
+      pendingActionKind: "none",
+      pendingActionSequence: 0,
+      resolvedActionKind: "jump",
+      resolvedActionSequence: 10,
+      resolvedActionState: "accepted"
+    }),
+    currentTick: 71,
+    issuedActionKind: "jump",
+    issuedActionSequence: 10,
+    locomotionMode: "grounded",
+    mounted: false,
+    previousTraversalAuthority: acceptedGrounded
+  });
+
+  assert.equal(resolved.currentActionKind, "jump");
+  assert.equal(resolved.currentActionPhase, "rising");
+  assert.equal(resolved.currentActionSequence, 10);
+  assert.equal(resolved.lastConsumedActionKind, "jump");
+  assert.equal(resolved.lastConsumedActionSequence, 10);
+});
+
+test("shared traversal authority helper reports whether an issued action should still count as locally predicted", () => {
+  const acceptedGrounded = resolveTraversalAuthority({
+    activeActionPhase: "idle",
+    currentTick: 80,
+    locomotionMode: "grounded",
+    mounted: false,
+    pendingActionSequence: 0,
+    resolvedActionSequence: 12,
+    resolvedActionState: "accepted"
+  });
+
+  assert.equal(
+    hasMetaverseTraversalAuthorityLocallyPredictedIssuedAction({
+      activeAction: resolveActiveAction("rising"),
+      actionState: Object.freeze({
+        pendingActionKind: "none",
+        pendingActionSequence: 0,
+        resolvedActionKind: "jump",
+        resolvedActionSequence: 12,
+        resolvedActionState: "accepted"
+      }),
+      currentTick: 81,
+      issuedActionKind: "jump",
+      issuedActionSequence: 12,
+      locomotionMode: "grounded",
+      mounted: false,
+      previousTraversalAuthority: acceptedGrounded
+    }),
+    true
+  );
+
+  assert.equal(
+    hasMetaverseTraversalAuthorityLocallyPredictedIssuedAction({
+      activeAction: resolveActiveAction("idle"),
+      actionState: Object.freeze({
+        pendingActionKind: "none",
+        pendingActionSequence: 0,
+        resolvedActionKind: "jump",
+        resolvedActionSequence: 12,
+        resolvedActionState: "accepted"
+      }),
+      currentTick: 81,
+      issuedActionKind: "jump",
+      issuedActionSequence: 12,
+      locomotionMode: "grounded",
+      mounted: false,
+      previousTraversalAuthority: acceptedGrounded
+    }),
+    false
+  );
+});
+
+test("shared traversal authority resolves coarse grounded traversal action from kinematics without runtime-local heuristics", () => {
+  assert.deepEqual(
+    resolveMetaverseTraversalKinematicActionSnapshot({
+      grounded: true,
+      locomotionMode: "grounded",
+      mounted: false,
+      verticalSpeedUnitsPerSecond: 0
+    }),
+    resolveActiveAction("idle")
+  );
+
+  assert.deepEqual(
+    resolveMetaverseTraversalKinematicActionSnapshot({
+      grounded: false,
+      locomotionMode: "grounded",
+      mounted: false,
+      verticalSpeedUnitsPerSecond: 0.2
+    }),
+    resolveActiveAction("rising")
+  );
+
+  assert.deepEqual(
+    resolveMetaverseTraversalKinematicActionSnapshot({
+      grounded: false,
+      locomotionMode: "grounded",
+      mounted: false,
+      verticalSpeedUnitsPerSecond: -0.2
+    }),
+    resolveActiveAction("falling")
+  );
+
+  assert.deepEqual(
+    resolveMetaverseTraversalKinematicActionSnapshot({
+      grounded: true,
+      locomotionMode: "swim",
+      mounted: false,
+      verticalSpeedUnitsPerSecond: 0
+    }),
+    resolveActiveAction("idle")
+  );
+
+  assert.deepEqual(
+    resolveMetaverseTraversalKinematicActionSnapshot({
+      grounded: true,
+      locomotionMode: "grounded",
+      mounted: true,
+      verticalSpeedUnitsPerSecond: 0
+    }),
+    resolveActiveAction("idle")
+  );
+});
+
+test("shared traversal authority exposes the latest authoritative action sequence from coarse gameplay truth", () => {
+  const startup = resolveTraversalAuthority({
+    activeActionPhase: "idle",
+    currentTick: 50,
+    locomotionMode: "grounded",
+    mounted: false,
+    pendingActionSequence: 8,
+    resolvedActionSequence: 0,
+    resolvedActionState: "none"
+  });
+  const accepted = resolveTraversalAuthority({
+    activeActionPhase: "rising",
+    currentTick: 51,
+    locomotionMode: "grounded",
+    mounted: false,
+    pendingActionSequence: 8,
+    previousTraversalAuthority: startup,
+    resolvedActionSequence: 8,
+    resolvedActionState: "accepted"
+  });
+  const rejected = resolveTraversalAuthority({
+    activeActionPhase: "idle",
+    currentTick: 52,
+    locomotionMode: "grounded",
+    mounted: false,
+    pendingActionSequence: 0,
+    previousTraversalAuthority: accepted,
+    resolvedActionSequence: 11,
+    resolvedActionState: "rejected-buffer-expired"
+  });
+
+  assert.equal(
+    readMetaverseTraversalAuthorityLatestActionSequence(startup, "jump"),
+    8
+  );
+  assert.equal(
+    readMetaverseTraversalAuthorityLatestActionSequence(accepted, "jump"),
+    8
+  );
+  assert.equal(
+    readMetaverseTraversalAuthorityLatestActionSequence(rejected, "jump"),
+    11
+  );
 });

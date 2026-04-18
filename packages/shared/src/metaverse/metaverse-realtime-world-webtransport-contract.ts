@@ -1,14 +1,18 @@
 import type {
-  MetaverseRealtimeWorldClientCommand,
   MetaverseRealtimeWorldEvent
-} from "./metaverse-realtime-world-contract.js";
+} from "./realtime/metaverse-realtime-world-snapshots.js";
 import {
-  createMetaverseRealtimeWorldEvent,
   createMetaverseSyncDriverVehicleControlCommand,
   createMetaverseSyncPlayerLookIntentCommand,
   createMetaverseSyncMountedOccupancyCommand,
   createMetaverseSyncPlayerTraversalIntentCommand
-} from "./metaverse-realtime-world-contract.js";
+} from "./realtime/metaverse-realtime-world-commands.js";
+import type {
+  MetaverseRealtimeWorldClientCommand
+} from "./realtime/metaverse-realtime-world-commands.js";
+import {
+  createMetaverseRealtimeWorldEvent
+} from "./realtime/metaverse-realtime-world-snapshots.js";
 import type { MetaversePlayerId } from "./metaverse-presence-contract.js";
 
 export const metaverseRealtimeWorldWebTransportClientMessageTypes = [

@@ -1,0 +1,173 @@
+import type { AnimationClip, Group, Scene } from "three/webgpu";
+
+import {
+  loadMetaverseAttachmentProofRuntime,
+  syncAttachmentProofRuntimeMount,
+  type MetaverseAttachmentProofRuntime,
+  type MetaverseAttachmentRuntimeNodeResolvers
+} from "../attachments/metaverse-scene-attachment-runtime";
+import {
+  loadMetaverseCharacterProofRuntime,
+  type LoadedMetaverseCharacterProofRuntime,
+  type MetaverseCharacterProofRuntimeNodeResolvers
+} from "./metaverse-scene-character-proof-runtime";
+import {
+  createHeldWeaponPoseRuntime,
+  heldWeaponSolveDirectionEpsilon,
+  type HumanoidV2HeldWeaponPoseRuntime,
+  type MetaverseHeldWeaponPoseRuntimeNodeResolvers
+} from "./metaverse-scene-held-weapon-pose";
+
+import type {
+  MetaverseAttachmentProofConfig,
+  MetaverseCharacterProofConfig,
+  MountedEnvironmentSnapshot
+} from "../../types/metaverse-runtime";
+
+export interface MetaverseSceneAsset {
+  readonly animations: readonly AnimationClip[];
+  readonly scene: Group;
+}
+
+export interface MetaverseSceneAssetLoader {
+  loadAsync(path: string): Promise<MetaverseSceneAsset>;
+}
+
+export type MetaverseSceneCharacterProofRuntime =
+  LoadedMetaverseCharacterProofRuntime<HumanoidV2HeldWeaponPoseRuntime>;
+
+interface MetaverseSceneInteractivePresentationStateDependencies {
+  readonly attachmentProofConfig: MetaverseAttachmentProofConfig | null;
+  readonly attachmentRuntimeNodeResolvers: MetaverseAttachmentRuntimeNodeResolvers;
+  readonly characterProofConfig: MetaverseCharacterProofConfig | null;
+  readonly characterProofRuntimeNodeResolvers: MetaverseCharacterProofRuntimeNodeResolvers;
+  readonly createSceneAssetLoader: () => MetaverseSceneAssetLoader;
+  readonly heldWeaponPoseRuntimeNodeResolvers: MetaverseHeldWeaponPoseRuntimeNodeResolvers;
+  readonly scene: Scene;
+  readonly showSocketDebug: boolean;
+  readonly warn: (message: string) => void;
+}
+
+export class MetaverseSceneInteractivePresentationState {
+  attachmentProofRuntime: MetaverseAttachmentProofRuntime | null = null;
+  characterProofRuntime: MetaverseSceneCharacterProofRuntime | null = null;
+
+  readonly #dependencies: MetaverseSceneInteractivePresentationStateDependencies;
+  #interactivePresentationBootPromise: Promise<void> | null = null;
+  #interactivePresentationBooted = false;
+
+  constructor(dependencies: MetaverseSceneInteractivePresentationStateDependencies) {
+    this.#dependencies = dependencies;
+  }
+
+  async boot(): Promise<void> {
+    if (this.#interactivePresentationBooted) {
+      return;
+    }
+
+    if (this.#interactivePresentationBootPromise !== null) {
+      await this.#interactivePresentationBootPromise;
+      return;
+    }
+
+    this.#interactivePresentationBootPromise = (async () => {
+      const {
+        attachmentProofConfig,
+        attachmentRuntimeNodeResolvers,
+        characterProofConfig,
+        characterProofRuntimeNodeResolvers,
+        createSceneAssetLoader,
+        heldWeaponPoseRuntimeNodeResolvers,
+        scene,
+        showSocketDebug,
+        warn
+      } = this.#dependencies;
+
+      if (attachmentProofConfig !== null && characterProofConfig !== null) {
+        const loadedCharacterProofRuntime = await loadMetaverseCharacterProofRuntime(
+          characterProofConfig,
+          {
+            createHeldWeaponPoseRuntime: (skeletonId, characterScene) =>
+              createHeldWeaponPoseRuntime(
+                skeletonId,
+                characterScene,
+                heldWeaponPoseRuntimeNodeResolvers
+              ),
+            createSceneAssetLoader,
+            heldWeaponSolveDirectionEpsilon,
+            showSocketDebug,
+            warn,
+            ...characterProofRuntimeNodeResolvers
+          }
+        );
+
+        this.characterProofRuntime = loadedCharacterProofRuntime;
+        scene.add(loadedCharacterProofRuntime.anchorGroup);
+        this.attachmentProofRuntime = await loadMetaverseAttachmentProofRuntime(
+          attachmentProofConfig,
+          loadedCharacterProofRuntime,
+          {
+            createSceneAssetLoader,
+            heldWeaponSolveDirectionEpsilon,
+            ...attachmentRuntimeNodeResolvers
+          }
+        );
+      } else if (characterProofConfig !== null) {
+        const loadedCharacterProofRuntime = await loadMetaverseCharacterProofRuntime(
+          characterProofConfig,
+          {
+            createHeldWeaponPoseRuntime: (skeletonId, characterScene) =>
+              createHeldWeaponPoseRuntime(
+                skeletonId,
+                characterScene,
+                heldWeaponPoseRuntimeNodeResolvers
+              ),
+            createSceneAssetLoader,
+            heldWeaponSolveDirectionEpsilon,
+            showSocketDebug,
+            warn,
+            ...characterProofRuntimeNodeResolvers
+          }
+        );
+
+        this.characterProofRuntime = loadedCharacterProofRuntime;
+        scene.add(loadedCharacterProofRuntime.anchorGroup);
+      } else if (attachmentProofConfig !== null) {
+        throw new Error(
+          "Metaverse scene cannot boot an attachment proof slice without a character proof slice."
+        );
+      }
+
+      this.#interactivePresentationBooted = true;
+    })();
+
+    try {
+      await this.#interactivePresentationBootPromise;
+    } finally {
+      if (this.#interactivePresentationBootPromise !== null) {
+        this.#interactivePresentationBootPromise = null;
+      }
+    }
+  }
+
+  syncAttachmentMount(
+    mountedEnvironment: Pick<
+      MountedEnvironmentSnapshot,
+      "occupancyKind" | "occupantRole"
+    > | null
+  ): void {
+    if (
+      this.attachmentProofRuntime === null ||
+      this.characterProofRuntime === null
+    ) {
+      return;
+    }
+
+    syncAttachmentProofRuntimeMount(
+      this.attachmentProofRuntime,
+      this.characterProofRuntime,
+      mountedEnvironment,
+      this.#dependencies.attachmentRuntimeNodeResolvers
+    );
+  }
+}

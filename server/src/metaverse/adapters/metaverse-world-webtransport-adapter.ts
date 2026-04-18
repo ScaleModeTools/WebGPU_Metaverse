@@ -1,12 +1,12 @@
 import type {
-  MetaversePlayerId,
   MetaverseRealtimeWorldWebTransportClientMessage,
   MetaverseRealtimeWorldWebTransportServerMessage
-} from "@webgpu-metaverse/shared";
+} from "@webgpu-metaverse/shared/metaverse/realtime";
+import type { MetaversePlayerId } from "@webgpu-metaverse/shared/metaverse/presence";
 import {
   createMetaverseRealtimeWorldWebTransportErrorMessage,
   createMetaverseRealtimeWorldWebTransportServerEventMessage
-} from "@webgpu-metaverse/shared";
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import { MetaverseAuthoritativeWorldRuntime } from "../classes/metaverse-authoritative-world-runtime.js";
 

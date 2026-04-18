@@ -2,7 +2,7 @@ import type {
   MetaverseSyncDriverVehicleControlCommand,
   MetaverseSyncPlayerLookIntentCommand,
   MetaverseSyncPlayerTraversalIntentCommand
-} from "@webgpu-metaverse/shared";
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 
 export interface MetaverseRealtimeWorldLatestWinsDatagramTransport {
   dispose?(): void;

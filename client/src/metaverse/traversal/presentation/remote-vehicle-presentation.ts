@@ -1,8 +1,6 @@
 import type { MetaverseRealtimeVehicleSnapshot } from "@webgpu-metaverse/shared";
 
-import type {
-  MetaverseRemoteVehiclePresentationSnapshot
-} from "../../types/metaverse-runtime";
+import type { MetaverseRemoteVehiclePresentationSnapshot } from "../../types/presentation";
 
 interface MutableVector3Snapshot {
   x: number;

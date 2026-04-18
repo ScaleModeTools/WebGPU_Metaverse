@@ -1,9 +1,11 @@
 import type { Object3D, Scene } from "three/webgpu";
 import {
   createMetaverseTraversalColliderMetadataSnapshot,
-  shouldConsiderMetaverseWaterborneTraversalCollider,
-  type MetaverseWorldPlacedSurfaceColliderSnapshot
-} from "@webgpu-metaverse/shared/metaverse";
+  shouldConsiderMetaverseWaterborneTraversalCollider
+} from "@webgpu-metaverse/shared/metaverse/traversal";
+import type {
+  MetaverseWorldPlacedSurfaceColliderSnapshot
+} from "@webgpu-metaverse/shared/metaverse/world";
 
 import {
   MetaverseDynamicCuboidBodyRuntime,

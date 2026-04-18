@@ -2,10 +2,12 @@ import {
   advanceMetaverseSurfaceTraversalMotion,
   clamp,
   constrainMetaverseSurfaceTraversalPositionToWorldRadius,
+  constrainMetaverseWorldPlanarPositionAgainstBlockers,
   createMetaverseSurfaceTraversalVector3Snapshot as freezeVector3,
   toFiniteNumber,
   wrapRadians,
-  type MetaverseSurfaceTraversalConfig
+  type MetaverseSurfaceTraversalConfig,
+  type MetaverseWorldPlacedSurfaceColliderSnapshot
 } from "@webgpu-metaverse/shared";
 
 import { RapierPhysicsRuntime } from "./rapier-physics-runtime";
@@ -49,6 +51,12 @@ export interface MetaverseSurfaceDriveBodySnapshot {
   readonly planarSpeedUnitsPerSecond: number;
   readonly position: PhysicsVector3Snapshot;
   readonly yawRadians: number;
+}
+
+export interface MetaverseSurfaceDriveBodyBlockerResolutionOptions {
+  readonly excludedOwnerEnvironmentAssetId?: string | null;
+  readonly surfaceColliderSnapshots:
+    readonly MetaverseWorldPlacedSurfaceColliderSnapshot[];
 }
 
 function freezeSnapshot(
@@ -263,7 +271,8 @@ export class MetaverseSurfaceDriveBodyRuntime {
     deltaSeconds: number,
     lockedHeightMeters: number,
     preferredLookYawRadians: number | null = null,
-    filterPredicate?: RapierQueryFilterPredicate
+    filterPredicate?: RapierQueryFilterPredicate,
+    blockerResolution?: MetaverseSurfaceDriveBodyBlockerResolutionOptions
   ): MetaverseSurfaceDriveBodySnapshot {
     if (deltaSeconds <= 0) {
       return this.#snapshot;
@@ -326,9 +335,16 @@ export class MetaverseSurfaceDriveBodyRuntime {
         ),
         this.#config.worldRadius
       );
-    const appliedDeltaX = clampedRootPosition.x - this.#snapshot.position.x;
+    const resolvedRootPosition =
+      blockerResolution === undefined
+        ? clampedRootPosition
+        : this.#constrainPlanarPositionAgainstSharedBlockers(
+            clampedRootPosition,
+            blockerResolution
+          );
+    const appliedDeltaX = resolvedRootPosition.x - this.#snapshot.position.x;
     const appliedDeltaY = lockedHeightMeters - this.#snapshot.position.y;
-    const appliedDeltaZ = clampedRootPosition.z - this.#snapshot.position.z;
+    const appliedDeltaZ = resolvedRootPosition.z - this.#snapshot.position.z;
     const forwardX = Math.sin(nextYawRadians);
     const forwardZ = -Math.cos(nextYawRadians);
     const rightX = Math.cos(nextYawRadians);
@@ -340,7 +356,7 @@ export class MetaverseSurfaceDriveBodyRuntime {
     );
 
     this.#collider.setTranslation(
-      this.#rootToColliderCenter(clampedRootPosition, nextYawRadians)
+      this.#rootToColliderCenter(resolvedRootPosition, nextYawRadians)
     );
 
     if (this.#config.shape.kind === "cuboid") {
@@ -354,7 +370,7 @@ export class MetaverseSurfaceDriveBodyRuntime {
     this.#snapshot = freezeSnapshot(
       linearVelocity,
       Math.hypot(appliedDeltaX, appliedDeltaZ) / deltaSeconds,
-      clampedRootPosition,
+      resolvedRootPosition,
       nextYawRadians
     );
 
@@ -438,5 +454,62 @@ export class MetaverseSurfaceDriveBodyRuntime {
       colliderCenter.y - rotatedCenter.y,
       colliderCenter.z - rotatedCenter.z
     );
+  }
+
+  #constrainPlanarPositionAgainstSharedBlockers(
+    nextPosition: PhysicsVector3Snapshot,
+    blockerResolution: MetaverseSurfaceDriveBodyBlockerResolutionOptions
+  ): PhysicsVector3Snapshot {
+    const currentHeightRange = this.#resolveCollisionHeightRangeMeters(
+      this.#snapshot.position.y
+    );
+    const nextHeightRange = this.#resolveCollisionHeightRangeMeters(
+      nextPosition.y
+    );
+
+    return constrainMetaverseWorldPlanarPositionAgainstBlockers(
+      blockerResolution.surfaceColliderSnapshots,
+      this.#snapshot.position,
+      nextPosition,
+      this.#planarCollisionPaddingMeters,
+      Math.min(currentHeightRange.minHeightMeters, nextHeightRange.minHeightMeters),
+      Math.max(currentHeightRange.maxHeightMeters, nextHeightRange.maxHeightMeters),
+      blockerResolution.excludedOwnerEnvironmentAssetId ?? null
+    );
+  }
+
+  #resolveCollisionHeightRangeMeters(rootPositionY: number): {
+    readonly maxHeightMeters: number;
+    readonly minHeightMeters: number;
+  } {
+    if (this.#config.shape.kind === "capsule") {
+      const standingOffsetMeters =
+        this.#config.shape.halfHeightMeters + this.#config.shape.radiusMeters;
+
+      return Object.freeze({
+        maxHeightMeters: rootPositionY + standingOffsetMeters * 2,
+        minHeightMeters: rootPositionY
+      });
+    }
+
+    return Object.freeze({
+      maxHeightMeters:
+        rootPositionY +
+        this.#config.shape.localCenter.y +
+        this.#config.shape.halfExtents.y,
+      minHeightMeters:
+        rootPositionY +
+        this.#config.shape.localCenter.y -
+        this.#config.shape.halfExtents.y
+    });
+  }
+
+  get #planarCollisionPaddingMeters(): number {
+    return this.#config.shape.kind === "capsule"
+      ? this.#config.shape.radiusMeters
+      : Math.max(
+          this.#config.shape.halfExtents.x,
+          this.#config.shape.halfExtents.z
+        );
   }
 }

@@ -65,6 +65,7 @@ export interface MetaverseWorldSnapshotStreamTelemetrySnapshot {
 export interface MetaverseWorldClientTelemetrySnapshot {
   readonly driverVehicleControlDatagramSendFailureCount: number;
   readonly latestSnapshotUpdateRateHz: number | null;
+  readonly playerLookInputDatagramSendFailureCount: number;
   readonly playerTraversalInputDatagramSendFailureCount: number;
   readonly snapshotStream: MetaverseWorldSnapshotStreamTelemetrySnapshot;
 }

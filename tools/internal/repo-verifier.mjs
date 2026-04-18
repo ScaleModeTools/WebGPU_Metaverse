@@ -134,7 +134,17 @@ const clientDomainPolicies = new Map([
     new Set(["lib", "shared"])
   ]
 ]);
-const runtimeOwnerDirectoryNames = new Set(["classes", "adapters", "guards"]);
+const runtimeOwnerDirectoryNames = new Set([
+  "authority",
+  "classes",
+  "adapters",
+  "guards",
+  "boot",
+  "hud",
+  "remote-world",
+  "surface",
+  "simulation"
+]);
 const runtimeOwnerTestManifestPath = "tools/runtime-owner-test-manifest.json";
 const explicitAnyScanRoots = [
   "client",

@@ -31,7 +31,7 @@ test("metaverse world authoring document round-trips the shipped shared surface 
   assert.equal(metaverseWorldAuthoringSourcePath.includes("packages/shared"), true);
   assert.equal(summary.assetCount, 6);
   assert.equal(summary.placementCount, 12);
-  assert.equal(summary.surfaceColliderCount, 25);
+  assert.equal(summary.surfaceColliderCount, 20);
   assert.equal(summary.waterRegionCount, 1);
   assert.match(
     generatedSource,

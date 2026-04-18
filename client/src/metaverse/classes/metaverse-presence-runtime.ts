@@ -1,9 +1,11 @@
 import type {
-  MetaversePlayerId,
-  MetaversePresencePoseSnapshotInput,
-  MetaversePresenceRosterSnapshot,
   Username
 } from "@webgpu-metaverse/shared";
+import type {
+  MetaversePlayerId,
+  MetaversePresencePoseSnapshotInput,
+  MetaversePresenceRosterSnapshot
+} from "@webgpu-metaverse/shared/metaverse/presence";
 
 import type {
   MetaversePresenceClientStatusSnapshot,

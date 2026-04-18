@@ -13,8 +13,8 @@ import {
   metaverseWorldPlacedWaterRegions,
   metaverseWorldStaticSurfaceAssets,
   readMetaverseWorldSurfaceAssetAuthoring,
+  resolveMetaverseTraversalStateFromWorldAffordances,
   resolveMetaverseWorldDynamicSurfaceColliders,
-  resolveMetaverseWorldAutomaticSurfaceLocomotion,
   resolveMetaverseWorldPlacedSurfaceColliders
 } from "@webgpu-metaverse/shared";
 
@@ -124,8 +124,8 @@ test("shared metaverse barrier authoring stays instanced and blocker-only", () =
   );
 });
 
-test("shared metaverse surface policy keeps range support, open water, and bay-edge exit distinct", () => {
-  const floorDecision = resolveMetaverseWorldAutomaticSurfaceLocomotion(
+test("shared traversal state resolver keeps range support, open water, and bay-edge exit distinct", () => {
+  const floorDecision = resolveMetaverseTraversalStateFromWorldAffordances(
     metaverseSurfacePolicyConfig,
     staticSurfaceColliders,
     metaverseWorldPlacedWaterRegions,
@@ -133,7 +133,7 @@ test("shared metaverse surface policy keeps range support, open water, and bay-e
     0,
     "grounded"
   );
-  const openWaterDecision = resolveMetaverseWorldAutomaticSurfaceLocomotion(
+  const openWaterDecision = resolveMetaverseTraversalStateFromWorldAffordances(
     metaverseSurfacePolicyConfig,
     staticSurfaceColliders,
     metaverseWorldPlacedWaterRegions,
@@ -145,7 +145,7 @@ test("shared metaverse surface policy keeps range support, open water, and bay-e
     0,
     "swim"
   );
-  const bayEdgeExitDecision = resolveMetaverseWorldAutomaticSurfaceLocomotion(
+  const bayEdgeExitDecision = resolveMetaverseTraversalStateFromWorldAffordances(
     metaverseSurfacePolicyConfig,
     staticSurfaceColliders,
     metaverseWorldPlacedWaterRegions,
@@ -159,14 +159,20 @@ test("shared metaverse surface policy keeps range support, open water, and bay-e
   );
 
   assert.equal(floorDecision.decision.locomotionMode, "grounded");
-  assert.equal(floorDecision.debug.reason, "grounded-hold");
+  assert.equal(floorDecision.decision.capabilityId, "grounded");
+  assert.equal(floorDecision.debug.reason, "capability-maintained");
 
   assert.equal(openWaterDecision.decision.locomotionMode, "swim");
-  assert.equal(openWaterDecision.debug.reason, "shoreline-exit-blocked");
+  assert.equal(openWaterDecision.decision.capabilityId, "swim");
+  assert.equal(openWaterDecision.debug.reason, "capability-maintained");
   assert.equal(openWaterDecision.debug.blockerOverlap, false);
 
   assert.equal(bayEdgeExitDecision.decision.locomotionMode, "grounded");
-  assert.equal(bayEdgeExitDecision.debug.reason, "shoreline-exit-success");
+  assert.equal(bayEdgeExitDecision.decision.capabilityId, "grounded");
+  assert.equal(
+    bayEdgeExitDecision.debug.reason,
+    "capability-transition-validated"
+  );
 });
 
 test("shared surface traversal snapshot applies the shared planar model before world-radius clamping", () => {

@@ -4,10 +4,8 @@ import {
 } from "@/physics";
 
 import type { MetaverseLocomotionModeId } from "../../types/metaverse-locomotion-mode";
-import type {
-  MetaverseCharacterPresentationSnapshot,
-  MetaverseRuntimeConfig
-} from "../../types/metaverse-runtime";
+import type { MetaverseCharacterPresentationSnapshot } from "../../types/presentation";
+import type { MetaverseRuntimeConfig } from "../../types/runtime-config";
 import { shouldConstrainMountedOccupancyToAnchor } from "../../states/mounted-occupancy";
 import { freezeVector3, wrapRadians } from "../policies/surface-locomotion";
 import type {

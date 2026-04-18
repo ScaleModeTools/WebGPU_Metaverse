@@ -42,6 +42,7 @@ import type {
   MetaverseSurfaceTraversalMotionSnapshot,
   MetaverseSurfaceTraversalSnapshot,
   MetaverseSurfaceTraversalSpeedSnapshot,
+  MetaverseWorldSurfacePolicyConfig,
   MetaversePresenceWebTransportClientMessage,
   MetaversePresenceWebTransportServerMessage,
   MetaverseDriverVehicleControlIntentSnapshot,
@@ -70,9 +71,28 @@ import type {
   Username
 } from "@webgpu-metaverse/shared";
 import type {
+  MetaversePresencePoseSnapshot as MetaversePresencePoseSnapshotFromMetaverseDomain,
   MetaversePlayerLookConstraintBounds as MetaversePlayerLookConstraintBoundsFromMetaverseDomain,
   MetaverseRealtimeWorldSnapshot as MetaverseRealtimeWorldSnapshotFromMetaverseDomain
 } from "@webgpu-metaverse/shared/metaverse";
+import type {
+  MetaversePresencePoseSnapshot as MetaversePresencePoseSnapshotFromPresenceConcern
+} from "@webgpu-metaverse/shared/metaverse/presence";
+import type {
+  MetaversePlayerLookConstraintBounds as MetaversePlayerLookConstraintBoundsFromTraversalConcern
+} from "@webgpu-metaverse/shared/metaverse/traversal";
+import type {
+  MetaverseRealtimeWorldSnapshot as MetaverseRealtimeWorldSnapshotFromRealtimeConcern
+} from "@webgpu-metaverse/shared/metaverse/realtime";
+import type {
+  MetaverseWorldSurfacePolicyConfig as MetaverseWorldSurfacePolicyConfigFromWorldConcern
+} from "@webgpu-metaverse/shared/metaverse/world";
+import type {
+  MetaverseSessionSnapshot as MetaverseSessionSnapshotFromSessionConcern
+} from "@webgpu-metaverse/shared/metaverse/session";
+import type {
+  PortalLaunchSelectionSnapshot as PortalLaunchSelectionSnapshotFromPortalConcern
+} from "@webgpu-metaverse/shared/metaverse/portal";
 import type { CoopRoomSnapshot as CoopRoomSnapshotFromDuckHuntDomain } from "@webgpu-metaverse/shared/experiences/duck-hunt";
 import {
   affineAimTransformFitQualities,
@@ -163,6 +183,12 @@ type ExperienceCatalogEntryIdMatches = AssertTrue<
 type PortalLaunchSelectionUsesExperienceId = AssertTrue<
   IsEqual<PortalLaunchSelectionSnapshot["experienceId"], ExperienceId>
 >;
+type PortalLaunchSelectionConcernMatches = AssertTrue<
+  IsEqual<
+    PortalLaunchSelectionSnapshotFromPortalConcern,
+    PortalLaunchSelectionSnapshot
+  >
+>;
 type PortalLaunchSelectionUsesTickOwner = AssertTrue<
   IsEqual<PortalLaunchSelectionSnapshot["tickOwner"], GameplayTickOwner>
 >;
@@ -197,6 +223,36 @@ type MetaverseMountedLookLimitPolicyMatches = AssertTrue<
   IsEqual<
     MetaverseMountedLookLimitPolicyId,
     ExpectedMetaverseMountedLookLimitPolicyId
+  >
+>;
+type MetaversePlayerLookConstraintBoundsConcernMatches = AssertTrue<
+  IsEqual<
+    MetaversePlayerLookConstraintBoundsFromTraversalConcern,
+    MetaversePlayerLookConstraintBoundsFromMetaverseDomain
+  >
+>;
+type MetaversePresencePoseConcernMatches = AssertTrue<
+  IsEqual<
+    MetaversePresencePoseSnapshotFromPresenceConcern,
+    MetaversePresencePoseSnapshotFromMetaverseDomain
+  >
+>;
+type MetaverseRealtimeWorldSnapshotConcernMatches = AssertTrue<
+  IsEqual<
+    MetaverseRealtimeWorldSnapshotFromRealtimeConcern,
+    MetaverseRealtimeWorldSnapshotFromMetaverseDomain
+  >
+>;
+type MetaverseWorldSurfacePolicyConcernMatches = AssertTrue<
+  IsEqual<
+    MetaverseWorldSurfacePolicyConfigFromWorldConcern,
+    MetaverseWorldSurfacePolicyConfig
+  >
+>;
+type MetaverseSessionConcernMatches = AssertTrue<
+  IsEqual<
+    MetaverseSessionSnapshotFromSessionConcern,
+    MetaverseSessionSnapshot
   >
 >;
 type MetaversePlayerLookConstraintBoundsUseNullableYawOffset = AssertTrue<

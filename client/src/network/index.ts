@@ -97,6 +97,9 @@ export type {
   MetaverseWorldSnapshotStreamLiveness,
   MetaverseWorldSnapshotStreamTelemetrySnapshot
 } from "./types/metaverse-world-client";
+export type {
+  MetaverseWorldClientRuntime
+} from "./types/metaverse-world-client-runtime";
 export type { MetaverseWorldTransport } from "./types/metaverse-world-transport";
 export type {
   ReliableWebTransportSubscriptionHandle

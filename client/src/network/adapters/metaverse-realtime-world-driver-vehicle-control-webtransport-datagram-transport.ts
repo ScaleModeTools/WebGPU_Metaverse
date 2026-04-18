@@ -1,10 +1,10 @@
 import type {
   MetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram,
   MetaverseSyncDriverVehicleControlCommand
-} from "@webgpu-metaverse/shared";
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 import {
   createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram
-} from "@webgpu-metaverse/shared";
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import { LatestWinsWebTransportJsonDatagramChannel } from "./latest-wins-webtransport-json-datagram-channel";
 import type { MetaverseRealtimeWorldDriverVehicleControlDatagramTransport } from "../types/metaverse-realtime-world-driver-vehicle-control-datagram-transport";

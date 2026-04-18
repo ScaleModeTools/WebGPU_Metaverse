@@ -8,7 +8,7 @@ import {
   metaverseWorldGroundedSpawnPosition,
   metaverseWorldInitialYawRadians
 } from "@webgpu-metaverse/shared";
-import type { MetaverseRuntimeConfig } from "../types/metaverse-runtime";
+import type { MetaverseRuntimeConfig } from "../types/runtime-config";
 
 const metaversePlaygroundFloorSupportHeightMeters =
   metaverseWorldGroundedSpawnPosition.y;

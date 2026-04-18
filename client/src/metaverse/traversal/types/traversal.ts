@@ -9,12 +9,12 @@ import type {
   MetaverseSurfaceTraversalConfig as SharedMetaverseSurfaceTraversalConfig,
   MetaverseSurfaceTraversalSnapshot as SharedMetaverseSurfaceTraversalSnapshot,
   MetaverseSurfaceTraversalSpeedSnapshot as SharedMetaverseSurfaceTraversalSpeedSnapshot
-} from "@webgpu-metaverse/shared";
+} from "@webgpu-metaverse/shared/metaverse/traversal";
 
 import type {
-  MetaverseEnvironmentAssetProofConfig,
   MountedEnvironmentSnapshot
-} from "../../types/metaverse-runtime";
+} from "../../types/mounted";
+import type { MetaverseEnvironmentAssetProofConfig } from "../../types/proof";
 import type { MetaversePlacedCuboidColliderSnapshot } from "../../states/metaverse-environment-collision";
 import type {
   MountedVehicleControlIntent,

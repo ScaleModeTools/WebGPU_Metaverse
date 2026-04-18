@@ -23,16 +23,21 @@ import {
   resolveMetaverseWorldWaterSurfaceHeightMeters
 } from "./metaverse-world-surface-query.js";
 import type {
-  MetaverseWorldAutomaticSurfaceLocomotionSnapshot,
-  MetaverseWorldSurfaceLocomotionDecision,
   MetaverseWorldSurfacePolicyConfig
 } from "./metaverse-world-surface-policy.js";
 import {
   metaverseWorldAutomaticSurfaceWaterlineThresholdMeters,
-  resolveMetaverseWorldAutomaticSurfaceLocomotion,
   resolveMetaverseWorldGroundedAutostepHeightMeters,
   resolveMetaverseWorldSurfaceHeightMeters
 } from "./metaverse-world-surface-policy.js";
+import type {
+  MetaverseTraversalCapabilityId,
+  MetaverseTraversalStateDecision,
+  MetaverseTraversalStateResolutionSnapshot
+} from "./metaverse-traversal-state-resolver.js";
+import {
+  resolveMetaverseTraversalStateFromWorldAffordances
+} from "./metaverse-traversal-state-resolver.js";
 import {
   clamp,
   toFiniteNumber,
@@ -151,7 +156,7 @@ export interface ResolveMetaverseUnmountedTraversalStepInput {
 }
 
 export interface ResolveMetaverseUnmountedTraversalStepSnapshot {
-  readonly automaticSurfaceSnapshot: MetaverseWorldAutomaticSurfaceLocomotionSnapshot;
+  readonly automaticSurfaceSnapshot: MetaverseTraversalStateResolutionSnapshot;
   readonly grounded: boolean;
   readonly locomotionMode: "grounded" | "swim";
   readonly supportHeightMeters: number | null;
@@ -191,7 +196,7 @@ interface ResolveMetaverseUnmountedGroundedTraversalOutcomeInput {
 }
 
 interface ResolveMetaverseUnmountedGroundedTraversalOutcomeSnapshot {
-  readonly automaticSurfaceSnapshot: MetaverseWorldAutomaticSurfaceLocomotionSnapshot;
+  readonly automaticSurfaceSnapshot: MetaverseTraversalStateResolutionSnapshot;
   readonly grounded: boolean;
   readonly locomotionMode: "grounded" | "swim";
   readonly supportHeightMeters: number | null;
@@ -207,7 +212,7 @@ interface ResolveMetaverseUnmountedSwimTraversalOutcomeInput {
 }
 
 interface ResolveMetaverseUnmountedSwimTraversalOutcomeSnapshot {
-  readonly automaticSurfaceSnapshot: MetaverseWorldAutomaticSurfaceLocomotionSnapshot;
+  readonly automaticSurfaceSnapshot: MetaverseTraversalStateResolutionSnapshot;
   readonly grounded: boolean;
   readonly locomotionMode: "grounded" | "swim";
   readonly supportHeightMeters: number | null;
@@ -220,10 +225,10 @@ function resolveAutomaticSurfaceSnapshot(
   waterRegionSnapshots: readonly MetaverseWorldPlacedWaterRegionSnapshot[],
   position: MetaverseWorldSurfaceVector3Snapshot,
   yawRadians: number,
-  currentLocomotionMode: "grounded" | "swim",
+  currentLocomotionMode: MetaverseTraversalCapabilityId,
   excludedOwnerEnvironmentAssetId: string | null
-): MetaverseWorldAutomaticSurfaceLocomotionSnapshot {
-  return resolveMetaverseWorldAutomaticSurfaceLocomotion(
+): MetaverseTraversalStateResolutionSnapshot {
+  return resolveMetaverseTraversalStateFromWorldAffordances(
     surfacePolicyConfig,
     surfaceColliderSnapshots,
     waterRegionSnapshots,
@@ -457,14 +462,15 @@ function resolveMetaverseUnmountedGroundedTraversalOutcome({
     ? Object.freeze({
         debug: Object.freeze({
           ...automaticSurfaceSnapshot.debug,
-          reason: "water-entry",
+          reason: "capability-transition-validated",
           resolvedSupportHeightMeters: adjustedResolvedSupportHeightMeters
         }),
         decision: Object.freeze({
+          capabilityId: "swim",
           locomotionMode: "swim",
           supportHeightMeters: null
-        } satisfies MetaverseWorldSurfaceLocomotionDecision)
-      } satisfies MetaverseWorldAutomaticSurfaceLocomotionSnapshot)
+        } satisfies MetaverseTraversalStateDecision)
+        } satisfies MetaverseTraversalStateResolutionSnapshot)
     : automaticSurfaceSnapshot;
 
   return Object.freeze({
@@ -504,7 +510,7 @@ function resolveMetaverseUnmountedSwimTraversalOutcome({
     "swim",
     excludedOwnerEnvironmentAssetId
   );
-  const nextLocomotionDecision: MetaverseWorldSurfaceLocomotionDecision =
+  const nextLocomotionDecision: MetaverseTraversalStateDecision =
     automaticSurfaceSnapshot.decision;
   const grounded =
     nextLocomotionDecision.locomotionMode === "grounded" &&

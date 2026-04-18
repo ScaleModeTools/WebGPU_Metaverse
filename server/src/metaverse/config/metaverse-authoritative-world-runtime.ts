@@ -3,7 +3,7 @@ import {
 } from "@webgpu-metaverse/shared";
 import {
   metaverseRealtimeWorldCadenceConfig
-} from "@webgpu-metaverse/shared/metaverse";
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import type { MetaverseAuthoritativeWorldRuntimeConfig } from "../types/metaverse-authoritative-world-runtime.js";
 

@@ -1,14 +1,22 @@
 import type {
+  MetaverseTraversalActiveActionSnapshot,
   MetaverseTraversalActionKindId,
   MetaverseTraversalAuthoritySnapshot,
   MetaverseTraversalAuthoritySnapshotInput,
-  MetaverseTraversalJumpAuthorityStateId,
   MetaverseTraversalLocomotionModeId,
   MetaverseTraversalActionResolutionStateId
 } from "./metaverse-traversal-contract.js";
 import {
+  createMetaverseTraversalActiveActionSnapshot,
   createMetaverseTraversalAuthoritySnapshot
 } from "./metaverse-traversal-contract.js";
+import type {
+  MetaverseTraversalActionStateSnapshot
+} from "./metaverse-traversal-action-kernel.js";
+import {
+  createMetaverseTraversalActionStateSnapshot,
+  syncMetaverseTraversalActionStateFromAcceptedActionSequence
+} from "./metaverse-traversal-action-kernel.js";
 
 interface TraversalAuthoritySnapshotLike
   extends Pick<
@@ -24,7 +32,7 @@ interface TraversalAuthoritySnapshotLike
     | "phaseStartedAtTick"
   > {}
 
-interface TraversalAuthorityJumpSnapshotLike
+interface TraversalAuthorityActionSnapshotLike
   extends Pick<
     MetaverseTraversalAuthoritySnapshot,
     | "currentActionKind"
@@ -36,20 +44,20 @@ interface TraversalAuthorityJumpSnapshotLike
     | "lastRejectedActionSequence"
   > {}
 
-export type MetaverseTraversalAuthorityIssuedJumpResolutionId =
+export type MetaverseTraversalAuthorityIssuedActionResolutionId =
   | "none"
   | "pending-or-active"
   | "accepted"
   | "rejected";
 
-export interface MetaverseTraversalAuthorityIssuedJumpResolutionSnapshot {
-  readonly jumpActionSequence: number;
-  readonly resolution: MetaverseTraversalAuthorityIssuedJumpResolutionId;
+export interface MetaverseTraversalAuthorityIssuedActionResolutionSnapshot {
+  readonly actionSequence: number;
+  readonly resolution: MetaverseTraversalAuthorityIssuedActionResolutionId;
 }
 
 export interface MetaverseTraversalAuthorityResolutionInput {
+  readonly activeAction: Pick<MetaverseTraversalActiveActionSnapshot, "kind" | "phase">;
   readonly currentTick: number;
-  readonly jumpAuthorityState: MetaverseTraversalJumpAuthorityStateId;
   readonly locomotionMode: MetaverseTraversalLocomotionModeId;
   readonly mounted: boolean;
   readonly pendingActionKind: MetaverseTraversalActionKindId;
@@ -60,6 +68,58 @@ export interface MetaverseTraversalAuthorityResolutionInput {
   readonly resolvedActionState: MetaverseTraversalActionResolutionStateId;
 }
 
+export interface ResolveMetaverseTraversalAuthoritySnapshotForActionStateInput {
+  readonly activeAction: Pick<MetaverseTraversalActiveActionSnapshot, "kind" | "phase">;
+  readonly actionState: Pick<
+    MetaverseTraversalActionStateSnapshot,
+    | "pendingActionKind"
+    | "pendingActionSequence"
+    | "resolvedActionKind"
+    | "resolvedActionSequence"
+    | "resolvedActionState"
+  >;
+  readonly currentTick: number;
+  readonly locomotionMode: MetaverseTraversalLocomotionModeId;
+  readonly mounted: boolean;
+  readonly previousTraversalAuthority?: TraversalAuthoritySnapshotLike | null;
+}
+
+export interface ResolveMetaverseTraversalAuthoritySnapshotForIssuedActionInput {
+  readonly activeAction: Pick<MetaverseTraversalActiveActionSnapshot, "kind" | "phase">;
+  readonly actionState: Pick<
+    MetaverseTraversalActionStateSnapshot,
+    | "pendingActionKind"
+    | "pendingActionSequence"
+    | "resolvedActionKind"
+    | "resolvedActionSequence"
+    | "resolvedActionState"
+  >;
+  readonly currentTick: number;
+  readonly issuedActionKind: MetaverseTraversalActionKindId;
+  readonly issuedActionSequence: number;
+  readonly locomotionMode: MetaverseTraversalLocomotionModeId;
+  readonly mounted: boolean;
+  readonly previousTraversalAuthority: MetaverseTraversalAuthoritySnapshot;
+}
+
+export interface HasMetaverseTraversalAuthorityLocallyPredictedIssuedActionInput
+  extends ResolveMetaverseTraversalAuthoritySnapshotForIssuedActionInput {}
+
+export interface MetaverseTraversalKinematicActionInput {
+  readonly grounded: boolean;
+  readonly locomotionMode: MetaverseTraversalLocomotionModeId;
+  readonly mounted: boolean;
+  readonly verticalSpeedUnitsPerSecond: number;
+}
+
+export interface MetaverseTraversalAuthorityGroundedLocomotionInput {
+  readonly locomotionMode: MetaverseTraversalLocomotionModeId;
+  readonly mounted: boolean;
+  readonly traversalAuthority: TraversalAuthorityActionSnapshotLike;
+}
+
+const metaverseTraversalActionVerticalSpeedTolerance = 0.05;
+
 function normalizeFiniteNonNegativeInteger(rawValue: number): number {
   if (!Number.isFinite(rawValue) || rawValue <= 0) {
     return 0;
@@ -68,176 +128,229 @@ function normalizeFiniteNonNegativeInteger(rawValue: number): number {
   return Math.floor(rawValue);
 }
 
-function jumpActionSequenceMatches(
+function actionSequenceMatches(
   currentActionSequence: number,
-  jumpActionSequence: number
+  actionSequence: number
 ): boolean {
-  const normalizedJumpActionSequence =
-    normalizeFiniteNonNegativeInteger(jumpActionSequence);
+  const normalizedActionSequence =
+    normalizeFiniteNonNegativeInteger(actionSequence);
 
   return (
-    normalizedJumpActionSequence === 0 ||
+    normalizedActionSequence === 0 ||
     normalizeFiniteNonNegativeInteger(currentActionSequence) >=
-      normalizedJumpActionSequence
+      normalizedActionSequence
   );
 }
 
-export function isMetaverseTraversalAuthorityJumpPendingOrActive(
-  traversalAuthority: TraversalAuthorityJumpSnapshotLike,
-  jumpActionSequence = 0
+export function resolveMetaverseTraversalKinematicActionSnapshot({
+  grounded,
+  locomotionMode,
+  mounted,
+  verticalSpeedUnitsPerSecond
+}: MetaverseTraversalKinematicActionInput): MetaverseTraversalActiveActionSnapshot {
+  if (mounted || locomotionMode !== "grounded") {
+    return createMetaverseTraversalActiveActionSnapshot();
+  }
+
+  if (grounded) {
+    return createMetaverseTraversalActiveActionSnapshot();
+  }
+
+  return createMetaverseTraversalActiveActionSnapshot({
+    kind: "jump",
+    phase:
+      verticalSpeedUnitsPerSecond > metaverseTraversalActionVerticalSpeedTolerance
+        ? "rising"
+        : "falling"
+  });
+}
+
+export function isMetaverseTraversalAuthorityActionPendingOrActive(
+  traversalAuthority: TraversalAuthorityActionSnapshotLike,
+  actionKind: MetaverseTraversalActionKindId,
+  actionSequence = 0
 ): boolean {
   return (
-    traversalAuthority.currentActionKind === "jump" &&
-    jumpActionSequenceMatches(
+    actionKind !== "none" &&
+    traversalAuthority.currentActionKind === actionKind &&
+    actionSequenceMatches(
       traversalAuthority.currentActionSequence,
-      jumpActionSequence
+      actionSequence
     )
   );
 }
 
-export function isMetaverseTraversalAuthorityJumpAirborne(
-  traversalAuthority: TraversalAuthorityJumpSnapshotLike,
-  jumpActionSequence = 0
+export function isMetaverseTraversalAuthorityActionAirborne(
+  traversalAuthority: TraversalAuthorityActionSnapshotLike,
+  actionKind: MetaverseTraversalActionKindId,
+  actionSequence = 0
 ): boolean {
   return (
-    isMetaverseTraversalAuthorityJumpPendingOrActive(
+    isMetaverseTraversalAuthorityActionPendingOrActive(
       traversalAuthority,
-      jumpActionSequence
+      actionKind,
+      actionSequence
     ) &&
     (traversalAuthority.currentActionPhase === "rising" ||
       traversalAuthority.currentActionPhase === "falling")
   );
 }
 
-export function hasMetaverseTraversalAuthorityConsumedJump(
-  traversalAuthority: TraversalAuthorityJumpSnapshotLike,
-  jumpActionSequence: number
+export function isMetaverseTraversalAuthorityGroundedLocomotion({
+  locomotionMode,
+  mounted,
+  traversalAuthority
+}: MetaverseTraversalAuthorityGroundedLocomotionInput): boolean {
+  return (
+    !mounted &&
+    locomotionMode === "grounded" &&
+    traversalAuthority.currentActionPhase !== "rising" &&
+    traversalAuthority.currentActionPhase !== "falling"
+  );
+}
+
+export function hasMetaverseTraversalAuthorityConsumedAction(
+  traversalAuthority: TraversalAuthorityActionSnapshotLike,
+  actionKind: MetaverseTraversalActionKindId,
+  actionSequence: number
 ): boolean {
-  const normalizedJumpActionSequence =
-    normalizeFiniteNonNegativeInteger(jumpActionSequence);
+  const normalizedActionSequence =
+    normalizeFiniteNonNegativeInteger(actionSequence);
 
   return (
-    normalizedJumpActionSequence > 0 &&
-    traversalAuthority.lastConsumedActionKind === "jump" &&
-    jumpActionSequenceMatches(
+    actionKind !== "none" &&
+    normalizedActionSequence > 0 &&
+    traversalAuthority.lastConsumedActionKind === actionKind &&
+    actionSequenceMatches(
       traversalAuthority.lastConsumedActionSequence,
-      normalizedJumpActionSequence
+      normalizedActionSequence
     )
   );
 }
 
-export function hasMetaverseTraversalAuthorityRejectedJump(
-  traversalAuthority: TraversalAuthorityJumpSnapshotLike,
-  jumpActionSequence: number
+export function hasMetaverseTraversalAuthorityRejectedAction(
+  traversalAuthority: TraversalAuthorityActionSnapshotLike,
+  actionKind: MetaverseTraversalActionKindId,
+  actionSequence: number
 ): boolean {
-  const normalizedJumpActionSequence =
-    normalizeFiniteNonNegativeInteger(jumpActionSequence);
+  const normalizedActionSequence =
+    normalizeFiniteNonNegativeInteger(actionSequence);
 
   return (
-    normalizedJumpActionSequence > 0 &&
-    traversalAuthority.lastRejectedActionKind === "jump" &&
-    jumpActionSequenceMatches(
+    actionKind !== "none" &&
+    normalizedActionSequence > 0 &&
+    traversalAuthority.lastRejectedActionKind === actionKind &&
+    actionSequenceMatches(
       traversalAuthority.lastRejectedActionSequence,
-      normalizedJumpActionSequence
+      normalizedActionSequence
     )
   );
 }
 
-export function readMetaverseTraversalAuthorityLatestJumpActionSequence(
-  traversalAuthority: TraversalAuthorityJumpSnapshotLike
+export function readMetaverseTraversalAuthorityLatestActionSequence(
+  traversalAuthority: TraversalAuthorityActionSnapshotLike,
+  actionKind: MetaverseTraversalActionKindId
 ): number {
-  const currentJumpActionSequence =
-    traversalAuthority.currentActionKind === "jump"
+  if (actionKind === "none") {
+    return 0;
+  }
+
+  const currentActionSequence =
+    traversalAuthority.currentActionKind === actionKind
       ? normalizeFiniteNonNegativeInteger(
           traversalAuthority.currentActionSequence
         )
       : 0;
-  const consumedJumpActionSequence =
-    traversalAuthority.lastConsumedActionKind === "jump"
+  const consumedActionSequence =
+    traversalAuthority.lastConsumedActionKind === actionKind
       ? normalizeFiniteNonNegativeInteger(
           traversalAuthority.lastConsumedActionSequence
         )
       : 0;
-  const rejectedJumpActionSequence =
-    traversalAuthority.lastRejectedActionKind === "jump"
+  const rejectedActionSequence =
+    traversalAuthority.lastRejectedActionKind === actionKind
       ? normalizeFiniteNonNegativeInteger(
           traversalAuthority.lastRejectedActionSequence
         )
       : 0;
 
   return Math.max(
-    currentJumpActionSequence,
-    consumedJumpActionSequence,
-    rejectedJumpActionSequence
+    currentActionSequence,
+    consumedActionSequence,
+    rejectedActionSequence
   );
 }
 
-export function resolveMetaverseTraversalAuthorityIssuedJumpResolution(
-  traversalAuthority: TraversalAuthorityJumpSnapshotLike,
-  jumpActionSequence: number,
-  lastResolvedJumpActionSequence = 0
-): MetaverseTraversalAuthorityIssuedJumpResolutionSnapshot {
-  const normalizedJumpActionSequence =
-    normalizeFiniteNonNegativeInteger(jumpActionSequence);
-  const normalizedLastResolvedJumpActionSequence =
-    normalizeFiniteNonNegativeInteger(lastResolvedJumpActionSequence);
-  const unresolvedJumpActionSequence =
-    normalizedJumpActionSequence > normalizedLastResolvedJumpActionSequence
-      ? normalizedJumpActionSequence
+export function resolveMetaverseTraversalAuthorityIssuedActionResolution(
+  traversalAuthority: TraversalAuthorityActionSnapshotLike,
+  actionKind: MetaverseTraversalActionKindId,
+  actionSequence: number,
+  lastResolvedActionSequence = 0
+): MetaverseTraversalAuthorityIssuedActionResolutionSnapshot {
+  const normalizedActionSequence =
+    normalizeFiniteNonNegativeInteger(actionSequence);
+  const normalizedLastResolvedActionSequence =
+    normalizeFiniteNonNegativeInteger(lastResolvedActionSequence);
+  const unresolvedActionSequence =
+    normalizedActionSequence > normalizedLastResolvedActionSequence
+      ? normalizedActionSequence
       : 0;
 
-  if (unresolvedJumpActionSequence <= 0) {
+  if (actionKind === "none" || unresolvedActionSequence <= 0) {
     return {
-      jumpActionSequence: 0,
+      actionSequence: 0,
       resolution: "none"
     };
   }
 
   if (
-    isMetaverseTraversalAuthorityJumpPendingOrActive(
+    isMetaverseTraversalAuthorityActionPendingOrActive(
       traversalAuthority,
-      unresolvedJumpActionSequence
+      actionKind,
+      unresolvedActionSequence
     )
   ) {
     return {
-      jumpActionSequence: unresolvedJumpActionSequence,
+      actionSequence: unresolvedActionSequence,
       resolution: "pending-or-active"
     };
   }
 
   if (
-    hasMetaverseTraversalAuthorityConsumedJump(
+    hasMetaverseTraversalAuthorityConsumedAction(
       traversalAuthority,
-      unresolvedJumpActionSequence
+      actionKind,
+      unresolvedActionSequence
     )
   ) {
     return {
-      jumpActionSequence: unresolvedJumpActionSequence,
+      actionSequence: unresolvedActionSequence,
       resolution: "accepted"
     };
   }
 
   if (
-    hasMetaverseTraversalAuthorityRejectedJump(
+    hasMetaverseTraversalAuthorityRejectedAction(
       traversalAuthority,
-      unresolvedJumpActionSequence
+      actionKind,
+      unresolvedActionSequence
     )
   ) {
     return {
-      jumpActionSequence: unresolvedJumpActionSequence,
+      actionSequence: unresolvedActionSequence,
       resolution: "rejected"
     };
   }
 
   return {
-    jumpActionSequence: unresolvedJumpActionSequence,
+    actionSequence: unresolvedActionSequence,
     resolution: "none"
   };
 }
 
 export function resolveMetaverseTraversalAuthoritySnapshotInput({
+  activeAction,
   currentTick,
-  jumpAuthorityState,
   locomotionMode,
   mounted,
   pendingActionKind,
@@ -247,6 +360,8 @@ export function resolveMetaverseTraversalAuthoritySnapshotInput({
   resolvedActionSequence,
   resolvedActionState
 }: MetaverseTraversalAuthorityResolutionInput): MetaverseTraversalAuthoritySnapshot {
+  const normalizedActiveAction =
+    createMetaverseTraversalActiveActionSnapshot(activeAction);
   const normalizedCurrentTick = normalizeFiniteNonNegativeInteger(currentTick);
   const normalizedPendingActionSequence =
     normalizeFiniteNonNegativeInteger(pendingActionSequence);
@@ -257,54 +372,81 @@ export function resolveMetaverseTraversalAuthoritySnapshotInput({
   const normalizedResolvedActionKind =
     normalizedResolvedActionSequence > 0 ? resolvedActionKind : "none";
   const canOwnTraversalAction = !mounted && locomotionMode === "grounded";
-  const previousConsumedJumpActionSequence =
-    previousTraversalAuthority?.lastConsumedActionKind === "jump"
-      ? normalizeFiniteNonNegativeInteger(
-          previousTraversalAuthority.lastConsumedActionSequence
-        )
-      : 0;
-  const previousRejectedJumpActionSequence =
-    previousTraversalAuthority?.lastRejectedActionKind === "jump"
-      ? normalizeFiniteNonNegativeInteger(
-          previousTraversalAuthority.lastRejectedActionSequence
-        )
-      : 0;
-  const previousCurrentJumpActionSequence =
-    previousTraversalAuthority?.currentActionKind === "jump"
-      ? normalizeFiniteNonNegativeInteger(
-          previousTraversalAuthority.currentActionSequence
-        )
-      : 0;
+  const previousLastConsumedActionKind =
+    previousTraversalAuthority?.lastConsumedActionKind ?? "none";
+  const previousLastConsumedActionSequence =
+    normalizeFiniteNonNegativeInteger(
+      previousTraversalAuthority?.lastConsumedActionSequence ?? 0
+    );
+  const previousLastRejectedActionKind =
+    previousTraversalAuthority?.lastRejectedActionKind ?? "none";
+  const previousLastRejectedActionReason =
+    previousTraversalAuthority?.lastRejectedActionReason ?? "none";
+  const previousLastRejectedActionSequence =
+    normalizeFiniteNonNegativeInteger(
+      previousTraversalAuthority?.lastRejectedActionSequence ?? 0
+    );
   const acceptedThisTick =
-    normalizedResolvedActionKind === "jump" &&
+    normalizedResolvedActionKind !== "none" &&
     resolvedActionState === "accepted" &&
     normalizedResolvedActionSequence > 0;
   const rejectedThisTick =
-    normalizedResolvedActionKind === "jump" &&
+    normalizedResolvedActionKind !== "none" &&
     resolvedActionState === "rejected-buffer-expired" &&
     normalizedResolvedActionSequence > 0;
+  const previousConsumedResolvedActionSequence =
+    previousLastConsumedActionKind === normalizedResolvedActionKind
+      ? previousLastConsumedActionSequence
+      : 0;
+  const previousRejectedResolvedActionSequence =
+    previousLastRejectedActionKind === normalizedResolvedActionKind
+      ? previousLastRejectedActionSequence
+      : 0;
+  const lastConsumedActionKind = acceptedThisTick
+    ? normalizedResolvedActionKind
+    : previousLastConsumedActionKind;
   const lastConsumedActionSequence = acceptedThisTick
     ? Math.max(
-        previousConsumedJumpActionSequence,
+        previousConsumedResolvedActionSequence,
         normalizedResolvedActionSequence
       )
-    : previousConsumedJumpActionSequence;
-  const lastConsumedActionKind = lastConsumedActionSequence > 0 ? "jump" : "none";
+    : previousLastConsumedActionSequence;
+  const lastRejectedActionKind = rejectedThisTick
+    ? normalizedResolvedActionKind
+    : previousLastRejectedActionKind;
+  const lastRejectedActionReason = rejectedThisTick
+    ? "buffer-expired"
+    : previousLastRejectedActionReason;
   const lastRejectedActionSequence = rejectedThisTick
     ? Math.max(
-        previousRejectedJumpActionSequence,
+        previousRejectedResolvedActionSequence,
         normalizedResolvedActionSequence
       )
-    : previousRejectedJumpActionSequence;
-  const lastRejectedActionKind = lastRejectedActionSequence > 0 ? "jump" : "none";
-  const startupBlockedJumpActionSequence = Math.max(
-    lastConsumedActionSequence,
-    lastRejectedActionSequence
+    : previousLastRejectedActionSequence;
+  const startupBlockedActionSequence = Math.max(
+    lastConsumedActionKind === normalizedPendingActionKind
+      ? lastConsumedActionSequence
+      : 0,
+    lastRejectedActionKind === normalizedPendingActionKind
+      ? lastRejectedActionSequence
+      : 0
   );
-  const startupJumpActionSequence =
-    normalizedPendingActionKind === "jump" &&
-      normalizedPendingActionSequence > startupBlockedJumpActionSequence
+  const startupActionSequence =
+    normalizedPendingActionKind !== "none" &&
+      normalizedPendingActionSequence > startupBlockedActionSequence
       ? normalizedPendingActionSequence
+      : 0;
+  const currentResolvedActionSequence =
+    normalizedActiveAction.kind === "none"
+      ? 0
+      : lastConsumedActionKind === normalizedActiveAction.kind
+        ? lastConsumedActionSequence
+        : 0;
+  const previousCurrentResolvedActionSequence =
+    previousTraversalAuthority?.currentActionKind === normalizedActiveAction.kind
+      ? normalizeFiniteNonNegativeInteger(
+          previousTraversalAuthority.currentActionSequence
+        )
       : 0;
 
   let currentActionKind: MetaverseTraversalAuthoritySnapshotInput["currentActionKind"] =
@@ -314,24 +456,20 @@ export function resolveMetaverseTraversalAuthoritySnapshotInput({
   let currentActionSequence = 0;
 
   if (canOwnTraversalAction) {
-    if (startupJumpActionSequence > 0) {
-      currentActionKind = "jump";
+    if (
+      normalizedActiveAction.kind !== "none" &&
+      normalizedActiveAction.phase !== "idle"
+    ) {
+      currentActionKind = normalizedActiveAction.kind;
+      currentActionPhase = normalizedActiveAction.phase;
+      currentActionSequence =
+        currentResolvedActionSequence > 0
+          ? currentResolvedActionSequence
+          : previousCurrentResolvedActionSequence;
+    } else if (startupActionSequence > 0) {
+      currentActionKind = normalizedPendingActionKind;
       currentActionPhase = "startup";
-      currentActionSequence = startupJumpActionSequence;
-    } else if (jumpAuthorityState === "rising") {
-      currentActionKind = "jump";
-      currentActionPhase = "rising";
-      currentActionSequence =
-        lastConsumedActionSequence > 0
-          ? lastConsumedActionSequence
-          : previousCurrentJumpActionSequence;
-    } else if (jumpAuthorityState === "falling") {
-      currentActionKind = "jump";
-      currentActionPhase = "falling";
-      currentActionSequence =
-        lastConsumedActionSequence > 0
-          ? lastConsumedActionSequence
-          : previousCurrentJumpActionSequence;
+      currentActionSequence = startupActionSequence;
     }
   }
 
@@ -348,36 +486,136 @@ export function resolveMetaverseTraversalAuthoritySnapshotInput({
           )
         : normalizedCurrentTick;
 
-  const previousLastRejectedActionKind =
-    previousTraversalAuthority?.lastRejectedActionKind ?? "none";
-  const previousLastRejectedActionReason =
-    previousTraversalAuthority?.lastRejectedActionReason ?? "none";
-  const previousLastRejectedActionSequence = normalizeFiniteNonNegativeInteger(
-    previousTraversalAuthority?.lastRejectedActionSequence ?? 0
-  );
-  const lastRejectedActionKindResolved = rejectedThisTick
-    ? "jump"
-    : previousLastRejectedActionKind;
-  const lastRejectedActionReason = rejectedThisTick
-    ? "buffer-expired"
-    : previousLastRejectedActionReason;
-  const lastRejectedActionSequenceResolved = rejectedThisTick
-    ? normalizedResolvedActionSequence
-    : previousLastRejectedActionSequence;
-
   return createMetaverseTraversalAuthoritySnapshot({
     currentActionKind,
     currentActionPhase,
     currentActionSequence,
     lastConsumedActionKind,
     lastConsumedActionSequence,
-    lastRejectedActionKind:
-      lastRejectedActionKindResolved === "none" ? "none" : lastRejectedActionKind,
+    lastRejectedActionKind,
     lastRejectedActionReason,
-    lastRejectedActionSequence:
-      lastRejectedActionKindResolved === "none"
-        ? 0
-        : lastRejectedActionSequenceResolved,
+    lastRejectedActionSequence,
     phaseStartedAtTick
   });
+}
+
+export function resolveMetaverseTraversalAuthoritySnapshotForActionState({
+  activeAction,
+  actionState,
+  currentTick,
+  locomotionMode,
+  mounted,
+  previousTraversalAuthority = null
+}: ResolveMetaverseTraversalAuthoritySnapshotForActionStateInput): MetaverseTraversalAuthoritySnapshot {
+  return resolveMetaverseTraversalAuthoritySnapshotInput({
+    activeAction,
+    currentTick,
+    locomotionMode,
+    mounted,
+    pendingActionKind: actionState.pendingActionKind,
+    pendingActionSequence: actionState.pendingActionSequence,
+    previousTraversalAuthority,
+    resolvedActionKind: actionState.resolvedActionKind,
+    resolvedActionSequence: actionState.resolvedActionSequence,
+    resolvedActionState: actionState.resolvedActionState
+  });
+}
+
+export function resolveMetaverseTraversalAuthoritySnapshotForIssuedAction({
+  activeAction,
+  actionState,
+  currentTick,
+  issuedActionKind,
+  issuedActionSequence,
+  locomotionMode,
+  mounted,
+  previousTraversalAuthority
+}: ResolveMetaverseTraversalAuthoritySnapshotForIssuedActionInput): MetaverseTraversalAuthoritySnapshot {
+  const normalizedIssuedActionSequence =
+    normalizeFiniteNonNegativeInteger(issuedActionSequence);
+  const normalizedIssuedActionKind =
+    normalizedIssuedActionSequence > 0 ? issuedActionKind : "none";
+
+  if (normalizedIssuedActionKind === "none") {
+    return previousTraversalAuthority;
+  }
+
+  const normalizedActiveAction =
+    createMetaverseTraversalActiveActionSnapshot(activeAction);
+  const issuedActionResolution =
+    resolveMetaverseTraversalAuthorityIssuedActionResolution(
+      previousTraversalAuthority,
+      normalizedIssuedActionKind,
+      normalizedIssuedActionSequence
+    );
+  const activeIssuedAction =
+    normalizedActiveAction.kind === normalizedIssuedActionKind &&
+    normalizedActiveAction.phase !== "idle";
+
+  if (
+    issuedActionResolution.resolution === "pending-or-active" ||
+    (issuedActionResolution.resolution === "accepted" && !activeIssuedAction)
+  ) {
+    return previousTraversalAuthority;
+  }
+
+  const normalizedActionState =
+    createMetaverseTraversalActionStateSnapshot(actionState);
+  const nextActionState =
+    activeIssuedAction
+      ? syncMetaverseTraversalActionStateFromAcceptedActionSequence(
+          normalizedActionState,
+          {
+            acceptedActionKind: normalizedIssuedActionKind,
+            acceptedActionSequence: normalizedIssuedActionSequence
+          }
+        )
+      : normalizedActionState;
+
+  return resolveMetaverseTraversalAuthoritySnapshotForActionState({
+    activeAction: normalizedActiveAction,
+    actionState: nextActionState,
+    currentTick,
+    locomotionMode,
+    mounted,
+    previousTraversalAuthority
+  });
+}
+
+export function hasMetaverseTraversalAuthorityLocallyPredictedIssuedAction({
+  activeAction,
+  actionState,
+  currentTick,
+  issuedActionKind,
+  issuedActionSequence,
+  locomotionMode,
+  mounted,
+  previousTraversalAuthority
+}: HasMetaverseTraversalAuthorityLocallyPredictedIssuedActionInput): boolean {
+  const normalizedActiveAction =
+    createMetaverseTraversalActiveActionSnapshot(activeAction);
+  const traversalAuthorityForIssuedAction =
+    resolveMetaverseTraversalAuthoritySnapshotForIssuedAction({
+      activeAction: normalizedActiveAction,
+      actionState,
+      currentTick,
+      issuedActionKind,
+      issuedActionSequence,
+      locomotionMode,
+      mounted,
+      previousTraversalAuthority
+    });
+  const issuedActionResolution =
+    resolveMetaverseTraversalAuthorityIssuedActionResolution(
+      traversalAuthorityForIssuedAction,
+      issuedActionKind,
+      issuedActionSequence
+    ).resolution;
+
+  return (
+    issuedActionResolution === "pending-or-active" ||
+    (issuedActionResolution === "accepted" &&
+      normalizedActiveAction.kind === issuedActionKind &&
+      normalizedActiveAction.phase !== "idle")
+  );
 }

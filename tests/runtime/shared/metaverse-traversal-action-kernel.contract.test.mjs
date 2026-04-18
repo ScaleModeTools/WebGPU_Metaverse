@@ -5,7 +5,10 @@ import {
   advanceMetaverseTraversalActionState,
   createMetaverseTraversalActionStateSnapshot,
   isMetaverseGroundedTraversalSurfaceJumpSupported,
+  metaverseTraversalActionBufferSeconds,
   queueMetaverseTraversalAction,
+  readMetaverseTraversalPendingActionBufferAgeMs,
+  syncMetaverseTraversalActionStateFromAcceptedActionSequence,
   stepMetaverseGroundedTraversalAction
 } from "@webgpu-metaverse/shared";
 
@@ -22,7 +25,7 @@ test("shared traversal action kernel queues only newer jump sequences", () => {
         pressed: true,
         sequence: 4
       },
-      bufferSeconds: 0.2
+      bufferSeconds: metaverseTraversalActionBufferSeconds
     }
   );
 
@@ -36,11 +39,14 @@ test("shared traversal action kernel queues only newer jump sequences", () => {
       pressed: true,
       sequence: 4
     },
-    bufferSeconds: 0.2
+    bufferSeconds: metaverseTraversalActionBufferSeconds
   });
 
   assert.equal(unchangedState.pendingActionSequence, 4);
-  assert.equal(unchangedState.pendingActionBufferSecondsRemaining, 0.2);
+  assert.equal(
+    unchangedState.pendingActionBufferSecondsRemaining,
+    metaverseTraversalActionBufferSeconds
+  );
 });
 
 test("shared grounded traversal kernel consumes an accepted jump into one body intent snapshot", () => {
@@ -52,7 +58,7 @@ test("shared grounded traversal kernel consumes an accepted jump into one body i
         pressed: true,
         sequence: 7
       },
-      bufferSeconds: 0.2
+      bufferSeconds: metaverseTraversalActionBufferSeconds
     }
   );
   const steppedState = stepMetaverseGroundedTraversalAction({
@@ -93,7 +99,7 @@ test("shared traversal action kernel expires a buffered jump from fixed-step tim
         pressed: true,
         sequence: 9
       },
-      bufferSeconds: 0.2
+      bufferSeconds: metaverseTraversalActionBufferSeconds
     }
   );
 
@@ -113,6 +119,99 @@ test("shared traversal action kernel expires a buffered jump from fixed-step tim
   assert.equal(actionState.resolvedActionKind, "jump");
   assert.equal(actionState.resolvedActionSequence, 9);
   assert.equal(actionState.resolvedActionState, "rejected-buffer-expired");
+});
+
+test("shared traversal action kernel derives pending jump buffer age from one shared duration", () => {
+  const queuedState = queueMetaverseTraversalAction(
+    createMetaverseTraversalActionStateSnapshot(),
+    {
+      actionIntent: {
+        kind: "jump",
+        pressed: true,
+        sequence: 11
+      },
+      bufferSeconds: metaverseTraversalActionBufferSeconds
+    }
+  );
+
+  const halfExpiredState = advanceMetaverseTraversalActionState(queuedState, {
+    canConsumePendingAction: false,
+    deltaSeconds: metaverseTraversalActionBufferSeconds / 2
+  }).state;
+
+  assert.equal(
+    readMetaverseTraversalPendingActionBufferAgeMs(
+      halfExpiredState,
+      metaverseTraversalActionBufferSeconds
+    ),
+    100
+  );
+  assert.equal(
+    readMetaverseTraversalPendingActionBufferAgeMs(
+      createMetaverseTraversalActionStateSnapshot(),
+      metaverseTraversalActionBufferSeconds
+    ),
+    null
+  );
+});
+
+test("shared traversal action kernel syncs accepted action sequences without discarding newer pending action", () => {
+  const syncedState = syncMetaverseTraversalActionStateFromAcceptedActionSequence(
+    createMetaverseTraversalActionStateSnapshot({
+      pendingActionBufferSecondsRemaining: 0.12,
+      pendingActionKind: "jump",
+      pendingActionSequence: 12,
+      resolvedActionKind: "jump",
+      resolvedActionSequence: 10,
+      resolvedActionState: "rejected-buffer-expired"
+    }),
+    {
+      acceptedActionKind: "jump",
+      acceptedActionSequence: 11
+    }
+  );
+
+  assert.equal(syncedState.pendingActionKind, "jump");
+  assert.equal(syncedState.pendingActionSequence, 12);
+  assert.equal(syncedState.pendingActionBufferSecondsRemaining, 0.12);
+  assert.equal(syncedState.resolvedActionKind, "jump");
+  assert.equal(syncedState.resolvedActionSequence, 11);
+  assert.equal(syncedState.resolvedActionState, "accepted");
+});
+
+test("shared traversal action kernel lets authoritative acceptance recover a locally expired action sequence", () => {
+  const syncedState = syncMetaverseTraversalActionStateFromAcceptedActionSequence(
+    createMetaverseTraversalActionStateSnapshot({
+      resolvedActionKind: "jump",
+      resolvedActionSequence: 13,
+      resolvedActionState: "rejected-buffer-expired"
+    }),
+    {
+      acceptedActionKind: "jump",
+      acceptedActionSequence: 13
+    }
+  );
+
+  assert.equal(syncedState.resolvedActionKind, "jump");
+  assert.equal(syncedState.resolvedActionSequence, 13);
+  assert.equal(syncedState.resolvedActionState, "accepted");
+});
+
+test("shared traversal action kernel does not let an older accepted action overwrite newer resolved state", () => {
+  const state = createMetaverseTraversalActionStateSnapshot({
+    resolvedActionKind: "jump",
+    resolvedActionSequence: 14,
+    resolvedActionState: "accepted"
+  });
+  const syncedState = syncMetaverseTraversalActionStateFromAcceptedActionSequence(
+    state,
+    {
+      acceptedActionKind: "jump",
+      acceptedActionSequence: 13
+    }
+  );
+
+  assert.equal(syncedState, state);
 });
 
 test("shared grounded traversal surface jump support keeps the support heuristic explicit and reusable", () => {

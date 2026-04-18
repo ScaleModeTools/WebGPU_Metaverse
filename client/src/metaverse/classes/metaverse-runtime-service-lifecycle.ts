@@ -1,0 +1,256 @@
+import type { Camera, Scene } from "three/webgpu";
+
+import type { MetaverseSceneRendererHost } from "../render/webgpu-metaverse-scene";
+import type { MountedEnvironmentSnapshot } from "../types/mounted";
+import type { MetaverseLocomotionModeId } from "../types/metaverse-locomotion-mode";
+import type {
+  MetaverseCameraSnapshot,
+  MetaverseCharacterPresentationSnapshot
+} from "../types/presentation";
+import type { MetaverseHudSnapshot } from "../types/metaverse-runtime";
+
+interface MetaverseRuntimeServiceLifecycleCanvasHost {
+  readonly clientHeight: number;
+  readonly clientWidth: number;
+}
+
+interface MetaverseRuntimeServiceLifecycleRendererHost
+  extends MetaverseSceneRendererHost {
+  init(): Promise<void | MetaverseRuntimeServiceLifecycleRendererHost>;
+  render(scene: Scene, camera: Camera): void;
+  dispose(): void;
+}
+
+interface MetaverseRuntimeServiceLifecycleAuthoritativeWorldSync {
+  reset(): void;
+}
+
+interface MetaverseRuntimeServiceLifecycleBootLifecycle {
+  readonly bootCinematicEnabled: boolean;
+  bootRuntime(input: {
+    readonly bootGroundedRuntime: () => Promise<void>;
+    readonly canvas: MetaverseRuntimeServiceLifecycleCanvasHost;
+    readonly renderer: MetaverseRuntimeServiceLifecycleRendererHost;
+  }): Promise<void>;
+  ensureRuntimeInputInstalled(
+    canvas: MetaverseRuntimeServiceLifecycleCanvasHost,
+    flightInputRuntime: MetaverseRuntimeServiceLifecycleFlightInputRuntime
+  ): void;
+  isBootCinematicActive(nowMs: number): boolean;
+  reset(): void;
+}
+
+interface MetaverseRuntimeServiceLifecycleEnvironmentPhysicsRuntime {
+  boot(initialYawRadians: number): Promise<void>;
+  dispose(): void;
+}
+
+interface MetaverseRuntimeServiceLifecycleFlightInputRuntime {
+  install(canvas: MetaverseRuntimeServiceLifecycleCanvasHost): void;
+  dispose(): void;
+}
+
+interface MetaverseRuntimeServiceLifecycleFrameLoop {
+  reset(): void;
+}
+
+interface MetaverseRuntimeServiceLifecycleHudPublisher {
+  resetTelemetryState(): void;
+}
+
+interface MetaverseRuntimeServiceLifecyclePresenceRuntime {
+  boot(
+    characterPresentationSnapshot: MetaverseCharacterPresentationSnapshot,
+    cameraSnapshot: MetaverseCameraSnapshot,
+    locomotionMode: MetaverseLocomotionModeId,
+    mountedEnvironmentSnapshot: MountedEnvironmentSnapshot | null
+  ): void;
+  dispose(): void;
+}
+
+interface MetaverseRuntimeServiceLifecycleRemoteWorldRuntime {
+  boot(): void;
+  dispose(): void;
+}
+
+interface MetaverseRuntimeServiceLifecycleSceneRuntime {
+  resetPresentation(): void;
+}
+
+interface MetaverseRuntimeServiceLifecycleTraversalRuntime {
+  readonly cameraSnapshot: MetaverseCameraSnapshot;
+  readonly characterPresentationSnapshot:
+    | MetaverseCharacterPresentationSnapshot
+    | null;
+  readonly locomotionMode: MetaverseLocomotionModeId;
+  readonly mountedEnvironmentSnapshot: MountedEnvironmentSnapshot | null;
+  boot(): void;
+  reset(): void;
+}
+
+interface MetaverseRuntimeServiceLifecycleDependencies {
+  readonly authoritativeWorldSync: MetaverseRuntimeServiceLifecycleAuthoritativeWorldSync;
+  readonly bootLifecycle: MetaverseRuntimeServiceLifecycleBootLifecycle;
+  readonly environmentPhysicsRuntime: MetaverseRuntimeServiceLifecycleEnvironmentPhysicsRuntime;
+  readonly flightInputRuntime: MetaverseRuntimeServiceLifecycleFlightInputRuntime;
+  readonly frameLoop: MetaverseRuntimeServiceLifecycleFrameLoop;
+  readonly hudPublisher: MetaverseRuntimeServiceLifecycleHudPublisher;
+  readonly presenceRuntime: MetaverseRuntimeServiceLifecyclePresenceRuntime;
+  readonly readNowMs: () => number;
+  readonly remoteWorldRuntime: MetaverseRuntimeServiceLifecycleRemoteWorldRuntime;
+  readonly sceneRuntime: MetaverseRuntimeServiceLifecycleSceneRuntime;
+  readonly traversalRuntime: MetaverseRuntimeServiceLifecycleTraversalRuntime;
+}
+
+interface MetaverseRuntimeServiceBootRequest {
+  readonly canvas: MetaverseRuntimeServiceLifecycleCanvasHost;
+  readonly publishHudSnapshot: (
+    lifecycle: MetaverseHudSnapshot["lifecycle"],
+    failureReason: string | null,
+    forceUiUpdate: boolean
+  ) => void;
+  readonly renderer: MetaverseRuntimeServiceLifecycleRendererHost;
+}
+
+interface MetaverseRuntimeServiceActivationRequest {
+  readonly canvas: MetaverseRuntimeServiceLifecycleCanvasHost;
+  readonly queueNextFrame: () => void;
+  readonly syncFrame: (nowMs: number, forceUiUpdate: boolean) => void;
+}
+
+interface MetaverseRuntimeServiceBootCleanupRequest {
+  readonly clearActiveSurface: () => void;
+  readonly renderer: MetaverseRuntimeServiceLifecycleRendererHost;
+}
+
+export class MetaverseRuntimeServiceLifecycle {
+  readonly #authoritativeWorldSync: MetaverseRuntimeServiceLifecycleAuthoritativeWorldSync;
+  readonly #bootLifecycle: MetaverseRuntimeServiceLifecycleBootLifecycle;
+  readonly #environmentPhysicsRuntime: MetaverseRuntimeServiceLifecycleEnvironmentPhysicsRuntime;
+  readonly #flightInputRuntime: MetaverseRuntimeServiceLifecycleFlightInputRuntime;
+  readonly #frameLoop: MetaverseRuntimeServiceLifecycleFrameLoop;
+  readonly #hudPublisher: MetaverseRuntimeServiceLifecycleHudPublisher;
+  readonly #presenceRuntime: MetaverseRuntimeServiceLifecyclePresenceRuntime;
+  readonly #readNowMs: () => number;
+  readonly #remoteWorldRuntime: MetaverseRuntimeServiceLifecycleRemoteWorldRuntime;
+  readonly #sceneRuntime: MetaverseRuntimeServiceLifecycleSceneRuntime;
+  readonly #traversalRuntime: MetaverseRuntimeServiceLifecycleTraversalRuntime;
+
+  constructor({
+    authoritativeWorldSync,
+    bootLifecycle,
+    environmentPhysicsRuntime,
+    flightInputRuntime,
+    frameLoop,
+    hudPublisher,
+    presenceRuntime,
+    readNowMs,
+    remoteWorldRuntime,
+    sceneRuntime,
+    traversalRuntime
+  }: MetaverseRuntimeServiceLifecycleDependencies) {
+    this.#authoritativeWorldSync = authoritativeWorldSync;
+    this.#bootLifecycle = bootLifecycle;
+    this.#environmentPhysicsRuntime = environmentPhysicsRuntime;
+    this.#flightInputRuntime = flightInputRuntime;
+    this.#frameLoop = frameLoop;
+    this.#hudPublisher = hudPublisher;
+    this.#presenceRuntime = presenceRuntime;
+    this.#readNowMs = readNowMs;
+    this.#remoteWorldRuntime = remoteWorldRuntime;
+    this.#sceneRuntime = sceneRuntime;
+    this.#traversalRuntime = traversalRuntime;
+  }
+
+  resetForStart(): void {
+    this.#traversalRuntime.reset();
+    this.#frameLoop.reset();
+    this.#presenceRuntime.dispose();
+    this.#remoteWorldRuntime.dispose();
+  }
+
+  async beginBootRuntimeServices({
+    canvas,
+    publishHudSnapshot,
+    renderer,
+  }: MetaverseRuntimeServiceBootRequest): Promise<void> {
+    publishHudSnapshot("booting", null, true);
+
+    if (!this.#bootLifecycle.bootCinematicEnabled) {
+      this.#bootLifecycle.ensureRuntimeInputInstalled(
+        canvas,
+        this.#flightInputRuntime
+      );
+    }
+
+    await this.#bootLifecycle.bootRuntime({
+      bootGroundedRuntime: async () => {
+        await this.#environmentPhysicsRuntime.boot(
+          this.#traversalRuntime.cameraSnapshot.yawRadians
+        );
+        this.#traversalRuntime.boot();
+      },
+      canvas,
+      renderer
+    });
+
+    publishHudSnapshot("booting", null, true);
+  }
+
+  activateBootedRuntimeServices({
+    canvas,
+    queueNextFrame,
+    syncFrame
+  }: MetaverseRuntimeServiceActivationRequest): void {
+    const characterPresentationSnapshot =
+      this.#traversalRuntime.characterPresentationSnapshot;
+
+    if (characterPresentationSnapshot === null) {
+      throw new Error(
+        "Metaverse traversal must publish a local character presentation before runtime activation."
+      );
+    }
+
+    const firstFrameAtMs = this.#readNowMs();
+
+    if (!this.#bootLifecycle.isBootCinematicActive(firstFrameAtMs)) {
+      this.#bootLifecycle.ensureRuntimeInputInstalled(
+        canvas,
+        this.#flightInputRuntime
+      );
+    }
+
+    this.#presenceRuntime.boot(
+      characterPresentationSnapshot,
+      this.#traversalRuntime.cameraSnapshot,
+      this.#traversalRuntime.locomotionMode,
+      this.#traversalRuntime.mountedEnvironmentSnapshot
+    );
+    this.#remoteWorldRuntime.boot();
+    syncFrame(firstFrameAtMs, true);
+    queueNextFrame();
+  }
+
+  cleanupBootAttempt({
+    clearActiveSurface,
+    renderer
+  }: MetaverseRuntimeServiceBootCleanupRequest): void {
+    clearActiveSurface();
+    renderer.dispose();
+    this.#flightInputRuntime.dispose();
+    this.#environmentPhysicsRuntime.dispose();
+  }
+
+  disposeRuntimeServices(): void {
+    this.#flightInputRuntime.dispose();
+    this.#authoritativeWorldSync.reset();
+    this.#frameLoop.reset();
+    this.#environmentPhysicsRuntime.dispose();
+    this.#presenceRuntime.dispose();
+    this.#remoteWorldRuntime.dispose();
+    this.#traversalRuntime.reset();
+    this.#sceneRuntime.resetPresentation();
+    this.#bootLifecycle.reset();
+    this.#hudPublisher.resetTelemetryState();
+  }
+}

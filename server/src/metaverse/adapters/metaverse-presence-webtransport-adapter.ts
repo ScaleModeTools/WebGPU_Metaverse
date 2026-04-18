@@ -1,11 +1,11 @@
 import type {
   MetaversePresenceWebTransportClientMessage,
   MetaversePresenceWebTransportServerMessage
-} from "@webgpu-metaverse/shared";
+} from "@webgpu-metaverse/shared/metaverse/presence";
 import {
   createMetaversePresenceWebTransportErrorMessage,
   createMetaversePresenceWebTransportServerEventMessage
-} from "@webgpu-metaverse/shared";
+} from "@webgpu-metaverse/shared/metaverse/presence";
 
 import { MetaverseAuthoritativeWorldRuntime } from "../classes/metaverse-authoritative-world-runtime.js";
 
