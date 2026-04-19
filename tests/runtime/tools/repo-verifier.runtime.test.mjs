@@ -159,6 +159,21 @@ test("collectRepoVerificationErrors reports illegal client domain imports", () =
   );
 });
 
+test("collectRepoVerificationErrors allows app to depend on engine-tool launch surfaces", () => {
+  const repoRoot = createFixtureRepo({
+    "client/src/app/metaverse-shell.tsx": `import { launcher } from "../engine-tool/index.ts"; export const shell = launcher; `,
+    "client/src/engine-tool/index.ts": `import { buttonLabel } from "../components/ui/button.tsx"; export const launcher = buttonLabel; `
+  });
+
+  const errors = collectRepoVerificationErrors({ repoRoot, trackedFiles: [] });
+
+  assert.ok(
+    !errors.some((error) =>
+      error.includes("app must not depend on engine-tool")
+    )
+  );
+});
+
 test("collectRepoVerificationErrors reports illegal runtime package ownership and banned gameplay APIs", () => {
   const repoRoot = createFixtureRepo({
     "client/src/experiences/duck-hunt/classes/webgpu-gameplay-runtime.ts": `import { ShaderMaterial } from "three"; export const runtime = ShaderMaterial; `,
@@ -205,6 +220,39 @@ test("collectRepoVerificationErrors reports illegal runtime package ownership an
     errors.some((error) =>
       error.includes(
         "Illegal Rapier import in client/src/app/physics-screen.ts: @dimforge/rapier3d belongs in client/src/physics only."
+      )
+    )
+  );
+});
+
+test("collectRepoVerificationErrors allows Three.js in engine-tool viewport owners", () => {
+  const repoRoot = createFixtureRepo({
+    "client/src/engine-tool/viewport/map-editor-viewport.tsx": `import { Scene } from "three/webgpu"; export const viewport = Scene; `
+  });
+
+  const errors = collectRepoVerificationErrors({ repoRoot, trackedFiles: [] });
+
+  assert.ok(
+    !errors.some((error) =>
+      error.includes(
+        "Illegal runtime package in client/src/engine-tool/viewport/map-editor-viewport.tsx"
+      )
+    )
+  );
+});
+
+test("collectRepoVerificationErrors allows metaverse proof owners to depend on assets", () => {
+  const repoRoot = createFixtureRepo({
+    "client/src/metaverse/world/proof/load-metaverse-environment-proof-config.ts": `import { buttonLabel } from "../../../assets/config/environment-prop-manifest.ts"; export const proof = buttonLabel; `,
+    "client/src/assets/config/environment-prop-manifest.ts": `export const buttonLabel = "asset-manifest"; `
+  });
+
+  const errors = collectRepoVerificationErrors({ repoRoot, trackedFiles: [] });
+
+  assert.ok(
+    !errors.some((error) =>
+      error.includes(
+        "Illegal client domain import in client/src/metaverse/world/proof/load-metaverse-environment-proof-config.ts: metaverse must not depend on assets."
       )
     )
   );
@@ -272,6 +320,23 @@ test("collectRepoVerificationErrors treats boot folders as runtime owner roots",
     errors.some((error) =>
       error.includes(
         "Missing runtime owner test manifest entry for client/src/metaverse/boot/metaverse-runtime-boot-lifecycle.ts"
+      )
+    )
+  );
+});
+
+test("collectRepoVerificationErrors treats project folders as runtime owner roots", () => {
+  const repoRoot = createFixtureRepo({
+    "client/src/engine-tool/project/map-editor-project-state.ts":
+      "export class MapEditorProjectState {}\n"
+  });
+
+  const errors = collectRepoVerificationErrors({ repoRoot, trackedFiles: [] });
+
+  assert.ok(
+    errors.some((error) =>
+      error.includes(
+        "Missing runtime owner test manifest entry for client/src/engine-tool/project/map-editor-project-state.ts"
       )
     )
   );

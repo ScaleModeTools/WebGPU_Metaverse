@@ -117,6 +117,45 @@ test("MetaverseTraversalRuntime applies authoritative mounted vehicle correction
   }
 });
 
+test("MetaverseTraversalRuntime seeds mounted vehicle occupancy from collision pose instead of scene presentation pose", async () => {
+  const collisionPose = Object.freeze({
+    position: freezeVector3(12, 0.55, 9),
+    yawRadians: 0.8
+  });
+  const presentationPose = Object.freeze({
+    position: freezeVector3(2, 0.3, 18),
+    yawRadians: 0
+  });
+  const { dynamicPoseWrites, groundedBodyRuntime, traversalRuntime } =
+    await fixtureContext.createTraversalHarness({
+      dynamicEnvironmentCollisionPoses: {
+        "metaverse-hub-skiff-v1": collisionPose
+      },
+      dynamicEnvironmentPoses: {
+        "metaverse-hub-skiff-v1": presentationPose
+      }
+    });
+
+  try {
+    traversalRuntime.boot();
+    traversalRuntime.occupySeat("metaverse-hub-skiff-v1", "driver-seat");
+
+    assert.deepEqual(dynamicPoseWrites.at(-1)?.poseSnapshot, collisionPose);
+    assert.ok(
+      Math.abs(
+        (traversalRuntime.characterPresentationSnapshot?.position.x ?? 0) -
+          collisionPose.position.x
+      ) < 0.000001
+    );
+    assert.ok(
+      Math.abs(traversalRuntime.cameraSnapshot.yawRadians - collisionPose.yawRadians) <
+        0.000001
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
 test("MetaverseTraversalRuntime routes mounted vehicle occupancy through the traversal owner and restores swim on dismount", async () => {
   const vehicleAssetId = "metaverse-test-canoe-v1";
   const { config, dynamicPoseWrites, groundedBodyRuntime, traversalRuntime } =

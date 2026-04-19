@@ -6,6 +6,9 @@ import type {
   MetaverseSceneInteractionSnapshot
 } from "../mounts/metaverse-scene-mounts";
 import type {
+  MetaverseSceneMountedPresentationSnapshot
+} from "../mounts/metaverse-scene-mounted-presentation-snapshot";
+import type {
   MetaverseSceneMountInteractionState
 } from "../mounts/metaverse-scene-mount-interaction-state";
 import type {
@@ -16,8 +19,7 @@ import type {
 } from "../characters/metaverse-scene-interactive-presentation-state";
 
 import type {
-  MetaverseCameraSnapshot,
-  MountedEnvironmentSnapshot
+  MetaverseCameraSnapshot
 } from "../../types/metaverse-runtime";
 
 interface MetaverseSceneCameraPresentationStateDependencies {
@@ -57,11 +59,11 @@ export class MetaverseSceneCameraPresentationState {
 
   syncSceneInteractionSnapshot(
     cameraSnapshot: MetaverseCameraSnapshot,
-    mountedEnvironment: MountedEnvironmentSnapshot | null
+    mountedPresentationSnapshot: MetaverseSceneMountedPresentationSnapshot | null
   ): MetaverseSceneInteractionSnapshot {
     return this.#dependencies.mountInteractionState.syncSceneInteractionSnapshot(
       cameraSnapshot,
-      mountedEnvironment
+      mountedPresentationSnapshot?.mountedEnvironment ?? null
     );
   }
 }

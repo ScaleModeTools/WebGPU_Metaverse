@@ -46,6 +46,7 @@ import type {
   MetaversePresenceWebTransportClientMessage,
   MetaversePresenceWebTransportServerMessage,
   MetaverseDriverVehicleControlIntentSnapshot,
+  MetaverseRealtimeEnvironmentBodySnapshot,
   MetaverseRealtimeMountedOccupancySnapshot,
   MetaverseRealtimeWorldClientCommand,
   MetaverseRealtimeWorldWebTransportClientDatagram,
@@ -302,6 +303,18 @@ type MetaverseRealtimeWorldUsesMetaversePlayerId = AssertTrue<
 >;
 type MetaverseRealtimeWorldUsesVehicleId = AssertTrue<
   IsEqual<MetaverseRealtimeWorldSnapshot["vehicles"][number]["vehicleId"], MetaverseVehicleId>
+>;
+type MetaverseRealtimeWorldEnvironmentBodiesMatch = AssertTrue<
+  IsEqual<
+    MetaverseRealtimeWorldSnapshot["environmentBodies"][number],
+    MetaverseRealtimeEnvironmentBodySnapshot
+  >
+>;
+type MetaverseRealtimeWorldEnvironmentBodiesUseEnvironmentAssetId = AssertTrue<
+  IsEqual<
+    MetaverseRealtimeWorldSnapshot["environmentBodies"][number]["environmentAssetId"],
+    string
+  >
 >;
 type MetaverseSurfaceTraversalConfigUsesTurnSpeed = AssertTrue<
   IsEqual<MetaverseSurfaceTraversalConfig["maxTurnSpeedRadiansPerSecond"], number>

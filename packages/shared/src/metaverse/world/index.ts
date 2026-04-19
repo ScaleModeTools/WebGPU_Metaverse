@@ -1,4 +1,6 @@
 export * from "../metaverse-world-spawn-config.js";
+export * from "./metaverse-gameplay-profiles.js";
+export * from "./map-bundles/index.js";
 export * from "../metaverse-world-surface-authoring-data.js";
 export * from "../metaverse-world-surface-authoring.js";
 export * from "../metaverse-world-surface-policy.js";

@@ -122,6 +122,32 @@ export class MetaverseDynamicCuboidBodyRuntime {
     return this.#snapshot;
   }
 
+  syncAuthoritativeState(snapshot: {
+    readonly linearVelocity: PhysicsVector3Snapshot;
+    readonly position: PhysicsVector3Snapshot;
+    readonly yawRadians: number;
+  }): void {
+    const rigidBody = this.#requireRigidBody();
+    const position = freezeVector3(
+      snapshot.position.x,
+      snapshot.position.y,
+      snapshot.position.z
+    );
+    const linearVelocity = freezeVector3(
+      snapshot.linearVelocity.x,
+      snapshot.linearVelocity.y,
+      snapshot.linearVelocity.z
+    );
+
+    rigidBody.setTranslation(position, true);
+    rigidBody.setLinvel(linearVelocity, true);
+    this.#snapshot = freezeDynamicCuboidBodySnapshot(
+      position,
+      snapshot.yawRadians,
+      linearVelocity
+    );
+  }
+
   async init(): Promise<void> {
     if (this.isInitialized) {
       return;

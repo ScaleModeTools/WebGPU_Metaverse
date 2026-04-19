@@ -1,5 +1,7 @@
 import type {
+  MetaversePlayerTraversalIntentSnapshotInput,
   MetaversePlayerTraversalIntentSnapshot,
+  MetaverseRealtimeEnvironmentBodySnapshot,
   MetaverseRealtimePlayerSnapshot,
   MetaverseRealtimeVehicleSnapshot,
   MetaverseRealtimeWorldSnapshot
@@ -18,10 +20,9 @@ import {
 } from "@/network";
 import type {
   MetaverseCameraSnapshot,
-  MetaverseFlightInputSnapshot,
-  MetaverseHudSnapshot,
   MountedEnvironmentSnapshot,
   MetaverseRemoteCharacterPresentationSnapshot,
+  MetaverseRemoteEnvironmentBodyPresentationSnapshot,
   MetaverseRemoteVehiclePresentationSnapshot,
   MetaverseRuntimeConfig
 } from "../types/metaverse-runtime";
@@ -49,6 +50,8 @@ export interface MetaverseRemoteWorldSamplingConfig
   extends AuthoritativeServerClockConfig {
   readonly interpolationDelayMs: number;
   readonly maxExtrapolationMs: number;
+  readonly remoteCharacterRootInterpolationDelayMs: number;
+  readonly remoteCharacterRootMaxExtrapolationMs: number;
 }
 
 interface MetaverseRemoteWorldRuntimeDependencies {
@@ -67,6 +70,7 @@ interface MetaverseRemoteWorldRuntimeDependencies {
 
 export class MetaverseRemoteWorldRuntime {
   readonly #commandTransport: MetaverseRemoteWorldCommandTransport;
+  readonly #connectionRequired: boolean;
   readonly #connectionLifecycle: MetaverseRemoteWorldConnectionLifecycle;
   readonly #remoteWorldAuthoritativeSnapshotState: MetaverseRemoteWorldAuthoritativeSnapshotState;
   readonly #remoteWorldPresentationState: MetaverseRemoteWorldPresentationState;
@@ -80,6 +84,8 @@ export class MetaverseRemoteWorldRuntime {
     readWallClockMs,
     samplingConfig
   }: MetaverseRemoteWorldRuntimeDependencies) {
+    this.#connectionRequired =
+      createMetaverseWorldClient !== null && localPlayerIdentity !== null;
     const resolvedReadWallClockMs = readWallClockMs ?? Date.now;
     const authoritativeServerClock = new AuthoritativeServerClock({
       clockOffsetCorrectionAlpha: samplingConfig.clockOffsetCorrectionAlpha,
@@ -115,6 +121,10 @@ export class MetaverseRemoteWorldRuntime {
       interpolationDelayMs: samplingConfig.interpolationDelayMs,
       localPlayerIdentity,
       maxExtrapolationMs: samplingConfig.maxExtrapolationMs,
+      remoteCharacterRootInterpolationDelayMs:
+        samplingConfig.remoteCharacterRootInterpolationDelayMs,
+      remoteCharacterRootMaxExtrapolationMs:
+        samplingConfig.remoteCharacterRootMaxExtrapolationMs,
       presentationState: this.#remoteWorldPresentationState,
       readWallClockMs: resolvedReadWallClockMs,
       readWorldClient: () => this.#connectionLifecycle.worldClient
@@ -123,6 +133,10 @@ export class MetaverseRemoteWorldRuntime {
 
   get hasWorldSnapshot(): boolean {
     return (this.#connectionLifecycle.worldClient?.worldSnapshotBuffer.length ?? 0) > 0;
+  }
+
+  get connectionRequired(): boolean {
+    return this.#connectionRequired;
   }
 
   get isConnected(): boolean {
@@ -175,6 +189,11 @@ export class MetaverseRemoteWorldRuntime {
     return this.#remoteWorldPresentationState.remoteVehiclePresentations;
   }
 
+  get remoteEnvironmentBodyPresentations():
+    readonly MetaverseRemoteEnvironmentBodyPresentationSnapshot[] {
+    return this.#remoteWorldPresentationState.remoteEnvironmentBodyPresentations;
+  }
+
   readFreshAuthoritativeLocalPlayerSnapshot(
     maxAuthoritativeSnapshotAgeMs: number
   ): MetaverseRealtimePlayerSnapshot | null {
@@ -217,6 +236,22 @@ export class MetaverseRemoteWorldRuntime {
     );
   }
 
+  readFreshAuthoritativeEnvironmentBodySnapshots(
+    maxAuthoritativeSnapshotAgeMs: number
+  ): readonly MetaverseRealtimeEnvironmentBodySnapshot[] {
+    return this.#remoteWorldAuthoritativeSnapshotState.readFreshAuthoritativeEnvironmentBodySnapshots(
+      maxAuthoritativeSnapshotAgeMs
+    );
+  }
+
+  readFreshAuthoritativeRemotePlayerSnapshots(
+    maxAuthoritativeSnapshotAgeMs: number
+  ): readonly MetaverseRealtimePlayerSnapshot[] {
+    return this.#remoteWorldAuthoritativeSnapshotState.readFreshAuthoritativeRemotePlayerSnapshots(
+      maxAuthoritativeSnapshotAgeMs
+    );
+  }
+
   boot(): void {
     this.#connectionLifecycle.boot();
   }
@@ -248,32 +283,16 @@ export class MetaverseRemoteWorldRuntime {
   }
 
   syncLocalTraversalIntent(
-    movementInput: Pick<
-      MetaverseFlightInputSnapshot,
-      "boost" | "jump" | "moveAxis" | "strafeAxis" | "yawAxis"
-    >,
-    traversalFacing: Pick<MetaverseCameraSnapshot, "pitchRadians" | "yawRadians">,
-    locomotionMode: MetaverseHudSnapshot["locomotionMode"]
+    traversalIntentInput: MetaversePlayerTraversalIntentSnapshotInput | null
   ): MetaversePlayerTraversalIntentSnapshot | null {
-    return this.#commandTransport.syncLocalTraversalIntent(
-      movementInput,
-      traversalFacing,
-      locomotionMode
-    );
+    return this.#commandTransport.syncLocalTraversalIntent(traversalIntentInput);
   }
 
   previewLocalTraversalIntent(
-    movementInput: Pick<
-      MetaverseFlightInputSnapshot,
-      "boost" | "jump" | "moveAxis" | "strafeAxis" | "yawAxis"
-    >,
-    traversalFacing: Pick<MetaverseCameraSnapshot, "pitchRadians" | "yawRadians">,
-    locomotionMode: MetaverseHudSnapshot["locomotionMode"]
+    traversalIntentInput: MetaversePlayerTraversalIntentSnapshotInput | null
   ): MetaversePlayerTraversalIntentSnapshot | null {
     return this.#commandTransport.previewLocalTraversalIntent(
-      movementInput,
-      traversalFacing,
-      locomotionMode
+      traversalIntentInput
     );
   }
 

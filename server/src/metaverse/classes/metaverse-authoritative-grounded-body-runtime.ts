@@ -3,7 +3,7 @@ import {
   createMetaverseGroundedBodyStepStateSnapshot,
   createMetaverseSurfaceTraversalVector3Snapshot as freezeVector3,
   prepareMetaverseGroundedBodyStep,
-  resolveMetaverseGroundedBodyStep,
+  resolveMetaverseGroundedBodyControllerStep,
   syncMetaverseGroundedBodyStepState,
   toFiniteNumber,
   wrapRadians,
@@ -177,6 +177,7 @@ export class MetaverseAuthoritativeGroundedBodyRuntime {
   readonly #characterController: RapierCharacterControllerHandle;
   readonly #collider: RapierColliderHandle;
 
+  #applyImpulsesToDynamicBodies = false;
   #autostepEnabled = true;
   #autostepHeightMeters: number;
   #stepState: MetaverseGroundedBodyStepStateSnapshot;
@@ -193,6 +194,9 @@ export class MetaverseAuthoritativeGroundedBodyRuntime {
       this.#config.controllerOffsetMeters
     );
     this.#characterController.setUp?.(this.#physicsRuntime.createVector3(0, 1, 0));
+    this.#characterController.setApplyImpulsesToDynamicBodies(
+      this.#applyImpulsesToDynamicBodies
+    );
     this.#characterController.setCharacterMass(1);
     this.#syncSnapToGroundConfiguration(true);
     this.#characterController.setMaxSlopeClimbAngle?.(
@@ -222,6 +226,11 @@ export class MetaverseAuthoritativeGroundedBodyRuntime {
 
   get snapshot(): MetaverseAuthoritativeGroundedBodySnapshot {
     return this.#snapshot;
+  }
+
+  setApplyImpulsesToDynamicBodies(enabled: boolean): void {
+    this.#applyImpulsesToDynamicBodies = enabled;
+    this.#characterController.setApplyImpulsesToDynamicBodies(enabled);
   }
 
   setAutostepEnabled(
@@ -297,15 +306,23 @@ export class MetaverseAuthoritativeGroundedBodyRuntime {
 
     const currentTranslation = this.#collider.translation();
     const computedMovement = this.#characterController.computedMovement();
-    const resolvedStep = resolveMetaverseGroundedBodyStep(
+    const resolvedStep = resolveMetaverseGroundedBodyControllerStep(
       this.#stepState,
       preparedStep,
-      freezeVector3(
-        currentTranslation.x + computedMovement.x,
-        currentTranslation.y + computedMovement.y - this.#standingOffsetMeters,
-        currentTranslation.z + computedMovement.z
-      ),
-      this.#characterController.computedGrounded(),
+      {
+        colliderCenterPosition: freezeVector3(
+          currentTranslation.x,
+          currentTranslation.y,
+          currentTranslation.z
+        ),
+        computedGrounded: this.#characterController.computedGrounded(),
+        computedMovementDelta: freezeVector3(
+          computedMovement.x,
+          computedMovement.y,
+          computedMovement.z
+        ),
+        standingOffsetMeters: this.#standingOffsetMeters
+      },
       this.#config,
       deltaSeconds
     );
@@ -331,6 +348,7 @@ export class MetaverseAuthoritativeGroundedBodyRuntime {
   dispose(): void {
     this.#physicsRuntime.removeCollider(this.#collider);
     this.#characterController.free?.();
+    this.#applyImpulsesToDynamicBodies = false;
     this.#stepState = createMetaverseGroundedBodyStepStateSnapshot({
       position: this.#config.spawnPosition,
       yawRadians: this.#stepState.yawRadians

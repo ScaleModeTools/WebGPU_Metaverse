@@ -10,7 +10,10 @@ import {
   clampTraversalMountedOccupancyPitchRadians,
   createTraversalMountedVehicleCameraPresentationSnapshot
 } from "../presentation/camera-presentation";
-import { shouldKeepMountedOccupancyFreeRoam } from "../../states/mounted-occupancy";
+import {
+  resolveMetaverseMountedOccupancyPresentationStateSnapshot,
+  type MetaverseMountedOccupancyPresentationStateSnapshot
+} from "../../states/mounted-occupancy";
 import {
   createMountedVehicleRuntimeContext,
   didMountedVehiclePoseChange,
@@ -34,7 +37,7 @@ type MountableEnvironmentConfig = Pick<
 type MountedTraversalDependencies = Pick<
   MetaverseTraversalRuntimeDependencies,
   | "physicsRuntime"
-  | "readDynamicEnvironmentPose"
+  | "readDynamicEnvironmentCollisionPose"
   | "readMountedEnvironmentAnchorSnapshot"
   | "readMountableEnvironmentConfig"
   | "resolveWaterborneTraversalFilterPredicate"
@@ -84,12 +87,7 @@ export class MetaverseMountedVehicleTraversalState {
   }
 
   get keepsFreeRoam(): boolean {
-    const mountedEnvironment = this.mountedEnvironmentSnapshot;
-
-    return (
-      mountedEnvironment !== null &&
-      shouldKeepMountedOccupancyFreeRoam(mountedEnvironment)
-    );
+    return this.mountedOccupancyPresentationState?.keepFreeRoam === true;
   }
 
   get mountedEnvironmentSnapshot(): MountedEnvironmentSnapshot | null {
@@ -108,6 +106,14 @@ export class MetaverseMountedVehicleTraversalState {
 
   get mountedVehicleSnapshot(): TraversalMountedVehicleSnapshot | null {
     return this.#mountedVehicleRuntime?.snapshot ?? null;
+  }
+
+  get mountedOccupancyPresentationState():
+    | MetaverseMountedOccupancyPresentationStateSnapshot
+    | null {
+    return resolveMetaverseMountedOccupancyPresentationStateSnapshot(
+      this.#mountedVehicleRuntime?.snapshot.occupancy ?? null
+    );
   }
 
   get occupancy(): TraversalMountedVehicleSnapshot["occupancy"] {
@@ -233,6 +239,8 @@ export class MetaverseMountedVehicleTraversalState {
       }
     );
     const mountedEnvironment = this.mountedEnvironmentSnapshot;
+    const mountedOccupancyPresentationState =
+      this.mountedOccupancyPresentationState;
     const mountedEnvironmentAnchorSnapshot =
       mountedEnvironment === null
         ? null
@@ -245,6 +253,7 @@ export class MetaverseMountedVehicleTraversalState {
       traversalCameraPitchRadians,
       this.#config,
       mountedEnvironmentAnchorSnapshot,
+      mountedOccupancyPresentationState,
       this.#mountedOccupancyLookYawRadians
     );
   }
@@ -264,6 +273,8 @@ export class MetaverseMountedVehicleTraversalState {
     }
 
     const mountedVehicleState = mountedVehicleRuntime.snapshot;
+    const mountedOccupancyPresentationState =
+      this.mountedOccupancyPresentationState;
     const nextTraversalCameraPitchRadians =
       clampTraversalMountedOccupancyPitchRadians(
         advanceTraversalCameraPresentationPitchRadians(
@@ -272,14 +283,13 @@ export class MetaverseMountedVehicleTraversalState {
           this.#config,
           deltaSeconds
         ),
-        mountedVehicleState,
-        this.#config
+        mountedOccupancyPresentationState
       );
     this.#mountedOccupancyLookYawRadians =
       advanceTraversalMountedOccupancyLookYawRadians(
         this.#mountedOccupancyLookYawRadians,
         movementInput,
-        mountedVehicleState,
+        mountedOccupancyPresentationState,
         this.#config,
         deltaSeconds
       );
@@ -321,6 +331,7 @@ export class MetaverseMountedVehicleTraversalState {
         nextTraversalCameraPitchRadians,
         this.#config,
         mountedEnvironmentAnchorSnapshot,
+        mountedOccupancyPresentationState,
         this.#mountedOccupancyLookYawRadians
       ),
       traversalCameraPitchRadians: nextTraversalCameraPitchRadians
@@ -407,7 +418,8 @@ export class MetaverseMountedVehicleTraversalState {
       environmentAssetId,
       excludedColliders,
       physicsRuntime: this.#dependencies.physicsRuntime,
-      readDynamicEnvironmentPose: this.#dependencies.readDynamicEnvironmentPose,
+      readDynamicEnvironmentCollisionPose:
+        this.#dependencies.readDynamicEnvironmentCollisionPose,
       readMountableEnvironmentConfig:
         this.#dependencies.readMountableEnvironmentConfig,
       resolveWaterborneTraversalFilterPredicate:

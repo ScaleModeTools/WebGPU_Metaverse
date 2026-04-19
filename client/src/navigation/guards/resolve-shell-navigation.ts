@@ -34,13 +34,18 @@ function resolveNextMetaverseStep(
 export function resolveShellNavigation(
   progress: ShellNavigationProgress
 ): ShellNavigationSnapshot {
-  if (!progress.hasConfirmedProfile) {
+  if (progress.shellStage === "tool") {
+    const nextMetaverseStep =
+      progress.gameplayCapability !== "unsupported"
+        ? resolveNextMetaverseStep(progress)
+        : null;
+
     return {
-      activeStep: "login",
-      canAdvanceFromPermissions: false,
-      canEnterMetaverse: false,
+      activeStep: "tool",
+      canAdvanceFromPermissions: nextMetaverseStep !== null,
+      canEnterMetaverse: nextMetaverseStep === "metaverse",
       isUnsupportedRoute: false,
-      nextMetaverseStep: null
+      nextMetaverseStep
     };
   }
 

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createMetaverseGroundedBodyStepStateSnapshot,
   prepareMetaverseGroundedBodyStep,
+  resolveMetaverseGroundedBodyControllerStep,
   resolveMetaverseGroundedBodyStep,
   syncMetaverseGroundedBodyStepState
 } from "@webgpu-metaverse/shared";
@@ -150,4 +151,66 @@ test("shared grounded traversal kernel syncs authoritative state without discard
   assertApprox(syncedState.position.x, 1.1);
   assertApprox(syncedState.position.y, 1.05);
   assertApprox(syncedState.position.z, -2.05);
+});
+
+test("shared grounded traversal kernel resolves controller results into the same grounded step state", () => {
+  const groundedStepState = createMetaverseGroundedBodyStepStateSnapshot({
+    grounded: false,
+    jumpGroundContactGraceSecondsRemaining: 0.12,
+    jumpReady: true,
+    position: {
+      x: 1.4,
+      y: 0.72,
+      z: -0.8
+    },
+    strafeSpeedUnitsPerSecond: 0.75,
+    verticalSpeedUnitsPerSecond: -1.4,
+    yawRadians: Math.PI * 0.125
+  });
+  const preparedStep = prepareMetaverseGroundedBodyStep(
+    groundedStepState,
+    {
+      boost: true,
+      jump: false,
+      moveAxis: 0.85,
+      strafeAxis: -0.15,
+      turnAxis: 0.3
+    },
+    groundedBodyStepConfig,
+    0.033
+  );
+  const directResolvedStep = resolveMetaverseGroundedBodyStep(
+    groundedStepState,
+    preparedStep,
+    {
+      x: 1.62,
+      y: 0.6,
+      z: -0.73
+    },
+    true,
+    groundedBodyStepConfig,
+    0.033
+  );
+  const controllerResolvedStep = resolveMetaverseGroundedBodyControllerStep(
+    groundedStepState,
+    preparedStep,
+    {
+      colliderCenterPosition: {
+        x: 1.55,
+        y: 1.41,
+        z: -0.78
+      },
+      computedGrounded: true,
+      computedMovementDelta: {
+        x: 0.07,
+        y: 0.01,
+        z: 0.05
+      },
+      standingOffsetMeters: 0.82
+    },
+    groundedBodyStepConfig,
+    0.033
+  );
+
+  assert.deepEqual(controllerResolvedStep, directResolvedStep);
 });

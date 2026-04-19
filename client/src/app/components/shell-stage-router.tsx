@@ -13,6 +13,7 @@ import {
   type GameplaySignal
 } from "../../experiences/duck-hunt";
 import type { MetaverseControlModeId } from "../../metaverse";
+import type { MetaverseWorldPreviewLaunchSelectionSnapshot } from "../../metaverse/world/map-bundles";
 import type { WebGpuMetaverseCapabilitySnapshot } from "../../metaverse";
 import type {
   MetaverseEntryStepId,
@@ -37,12 +38,18 @@ import { UnsupportedStageScreen } from "./unsupported-stage-screen";
 import {
   metaverseAttachmentProofConfig,
   metaverseCharacterProofConfig,
-  metaverseEnvironmentProofConfig
-} from "../states/metaverse-asset-proof";
+  loadMetaverseEnvironmentProofConfig
+} from "../../metaverse/world/proof";
+import { resolveMetaverseWorldBundleSourceBundleId } from "../../metaverse/world/bundle-registry";
 
 const MetaverseStageScreen = lazy(async () =>
   import("../../metaverse").then((module) => ({
     default: module.MetaverseStageScreen
+  }))
+);
+const MapEditorStageScreen = lazy(async () =>
+  import("../../engine-tool/routes/map-editor-stage-screen").then((module) => ({
+    default: module.MapEditorStageScreen
   }))
 );
 const DuckHuntGameplayStageScreen = lazy(async () =>
@@ -55,6 +62,7 @@ const DuckHuntGameplayStageScreen = lazy(async () =>
 
 interface ShellStageRouterProps {
   readonly activeExperienceId: ExperienceId | null;
+  readonly activeMetaverseBundleId: string;
   readonly activeStep: NavigationStepId;
   readonly audioStatusLabel: string;
   readonly bestScore: number;
@@ -70,6 +78,7 @@ interface ShellStageRouterProps {
   readonly loginError: string | null;
   readonly metaverseControlMode: MetaverseControlModeId;
   readonly nextMetaverseStep: MetaverseEntryStepId | null;
+  readonly onCloseToolRequest: () => void;
   readonly permissionError: string | null;
   readonly permissionState: WebcamPermissionState;
   readonly profile: PlayerProfile | null;
@@ -93,6 +102,10 @@ interface ShellStageRouterProps {
     controlMode: MetaverseControlModeId
   ) => void;
   readonly onOpenGameplayMenu: () => void;
+  readonly onOpenToolRequest: () => void;
+  readonly onRunToolPreviewRequest: (
+    launchSelection: MetaverseWorldPreviewLaunchSelectionSnapshot
+  ) => void;
   readonly onRequestPermission: () => void;
   readonly onRecalibrationRequest: () => void;
   readonly onRetryCapabilityProbe: () => void;
@@ -118,6 +131,7 @@ function GameplayStageFallback() {
 
 export function ShellStageRouter({
   activeExperienceId,
+  activeMetaverseBundleId,
   activeStep,
   audioStatusLabel,
   bestScore,
@@ -133,6 +147,7 @@ export function ShellStageRouter({
   loginError,
   metaverseControlMode,
   nextMetaverseStep,
+  onCloseToolRequest,
   permissionError,
   permissionState,
   profile,
@@ -151,6 +166,8 @@ export function ShellStageRouter({
   onLoginSubmit,
   onMetaverseControlModeChange,
   onOpenGameplayMenu,
+  onOpenToolRequest,
+  onRunToolPreviewRequest,
   onRequestPermission,
   onRecalibrationRequest,
   onRetryCapabilityProbe,
@@ -166,16 +183,17 @@ export function ShellStageRouter({
 
   return (
     <section>
-      {activeStep === "login" || activeStep === "main-menu" ? (
+      {activeStep === "main-menu" ? (
         <ShellEntryStageScreen
           capabilityStatus={capabilityStatus}
-          hasConfirmedProfile={activeStep === "main-menu" && profile !== null}
+          hasConfirmedProfile={profile !== null}
           hasStoredProfile={hasStoredProfile}
           inputMode={inputMode}
           loginError={loginError}
           onClearProfile={onClearProfile}
           onEditProfile={onEditProfile}
           onEnterMetaverse={onEnterMetaverseRequest}
+          onOpenToolRequest={onOpenToolRequest}
           onRequestPermission={onRequestPermission}
           onRecalibrationRequest={onRecalibrationRequest}
           nextMetaverseStep={nextMetaverseStep}
@@ -208,10 +226,14 @@ export function ShellStageRouter({
           <MetaverseStageScreen
             attachmentProofConfig={metaverseAttachmentProofConfig}
             audioStatusLabel={audioStatusLabel}
+            bundleId={activeMetaverseBundleId}
             calibrationQualityLabel={calibrationQualityLabel}
             characterProofConfig={metaverseCharacterProofConfig}
             coopRoomIdDraft={coopRoomIdDraft}
-            environmentProofConfig={metaverseEnvironmentProofConfig}
+            environmentProofConfig={loadMetaverseEnvironmentProofConfig(
+              activeMetaverseBundleId,
+              metaverseCharacterProofConfig
+            )}
             gameplayInputMode={inputMode}
             metaverseControlMode={metaverseControlMode}
             onCoopRoomIdDraftChange={onCoopRoomIdDraftChange}
@@ -222,6 +244,18 @@ export function ShellStageRouter({
             onSetupRequest={onSetupRequest}
             sessionMode={sessionMode}
             username={profile.snapshot.username}
+          />
+        </Suspense>
+      ) : null}
+
+      {activeStep === "tool" ? (
+        <Suspense fallback={<GameplayStageFallback />}>
+          <MapEditorStageScreen
+            initialBundleId={resolveMetaverseWorldBundleSourceBundleId(
+              activeMetaverseBundleId
+            )}
+            onCloseRequest={onCloseToolRequest}
+            onRunPreviewRequest={onRunToolPreviewRequest}
           />
         </Suspense>
       ) : null}

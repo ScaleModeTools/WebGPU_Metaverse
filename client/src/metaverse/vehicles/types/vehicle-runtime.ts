@@ -1,4 +1,7 @@
 import type { PhysicsVector3Snapshot } from "@/physics";
+import type {
+  MetaverseWorldMountedOccupancyPolicySnapshot
+} from "@webgpu-metaverse/shared/metaverse/world";
 
 import type {
   MountedVehicleCameraPolicyId,
@@ -35,19 +38,12 @@ export interface MountedVehicleEntryRuntimeSnapshot {
   readonly occupantRole: MountedVehicleSeatRoleId;
 }
 
-export type MountedVehicleOccupancyKind = "entry" | "seat";
+export type MountedVehicleOccupancyKind =
+  MetaverseWorldMountedOccupancyPolicySnapshot["occupancyKind"];
 
-export interface MountedVehicleOccupancyRuntimeSnapshot {
-  readonly cameraPolicyId: MountedVehicleCameraPolicyId;
-  readonly controlRoutingPolicyId: MountedVehicleControlRoutingPolicyId;
+export interface MountedVehicleOccupancyRuntimeSnapshot
+  extends MetaverseWorldMountedOccupancyPolicySnapshot {
   readonly dismountOffset: PhysicsVector3Snapshot;
-  readonly entryId: string | null;
-  readonly lookLimitPolicyId: MountedVehicleLookLimitPolicyId;
-  readonly occupancyAnimationId: MountedVehicleOccupancyAnimationId;
-  readonly occupancyKind: MountedVehicleOccupancyKind;
-  readonly occupantLabel: string;
-  readonly occupantRole: MountedVehicleSeatRoleId;
-  readonly seatId: string | null;
 }
 
 export interface MountedVehicleRuntimeSnapshot {

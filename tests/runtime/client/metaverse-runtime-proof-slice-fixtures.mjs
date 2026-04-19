@@ -156,7 +156,10 @@ export async function createSkiffMountProofSlice() {
     },
     createSceneAssetLoader: () => ({
       async loadAsync(path) {
-        if (path === "/models/metaverse/environment/metaverse-hub-skiff.gltf") {
+        if (
+          path === "/models/metaverse/environment/metaverse-hub-skiff.gltf" ||
+          path === "/models/metaverse/environment/metaverse-hub-skiff-collision.gltf"
+        ) {
           return {
             animations: [],
             scene: skiffScene
@@ -547,7 +550,7 @@ export async function createHeldWeaponProofSlice() {
 
 export async function createStaticSurfaceProofSlice(clientModuleLoader) {
   const [{ metaverseEnvironmentProofConfig }, createSceneAssetLoader] = await Promise.all([
-    clientModuleLoader.load("/src/app/states/metaverse-asset-proof.ts"),
+    clientModuleLoader.load("/src/metaverse/world/proof/index.ts"),
     createEmptySceneAssetLoader()
   ]);
 
@@ -560,15 +563,22 @@ export async function createStaticSurfaceProofSlice(clientModuleLoader) {
 export async function createEmptySceneAssetLoader() {
   const { BoxGeometry, Group, Mesh, MeshStandardMaterial } = await import("three/webgpu");
 
-  const createStaticEnvironmentScene = (name) => {
+  const createStaticEnvironmentScene = (
+    name,
+    {
+      color = 0x94a3b8,
+      size = { x: 1, y: 1, z: 1 },
+      y = size.y * 0.5
+    } = {}
+  ) => {
     const scene = new Group();
     const mesh = new Mesh(
-      new BoxGeometry(1, 1, 1),
-      new MeshStandardMaterial({ color: 0x94a3b8 })
+      new BoxGeometry(size.x, size.y, size.z),
+      new MeshStandardMaterial({ color })
     );
 
     scene.name = name;
-    mesh.position.y = 0.5;
+    mesh.position.y = y;
     scene.add(mesh);
 
     return scene;
@@ -583,6 +593,10 @@ export async function createEmptySceneAssetLoader() {
     return anchor;
   };
   const skiffScene = createStaticEnvironmentScene("metaverse_hub_skiff_root");
+  const dockScene = createStaticEnvironmentScene("metaverse_hub_dock_root", {
+    size: { x: 8.4, y: 0.34, z: 4.2 },
+    y: 0
+  });
 
   skiffScene.add(
     createNamedAnchor("deck_entry", { x: -2.12, y: 1, z: 0 }),
@@ -609,6 +623,16 @@ export async function createEmptySceneAssetLoader() {
 
   return () => ({
     async loadAsync(path) {
+      if (
+        path === "/models/metaverse/environment/metaverse-hub-dock-high.gltf" ||
+        path === "/models/metaverse/environment/metaverse-hub-dock-low.gltf"
+      ) {
+        return {
+          animations: [],
+          scene: dockScene
+        };
+      }
+
       if (
         path === "/models/metaverse/environment/metaverse-hub-skiff.gltf" ||
         path === "/models/metaverse/environment/metaverse-hub-skiff-collision.gltf"
@@ -666,6 +690,14 @@ export async function createPushableCrateProofSlice() {
             shape: "box",
             size: { x: 0.92, y: 0.92, z: 0.92 }
           },
+          dynamicBody: {
+            additionalMass: 12,
+            angularDamping: 10,
+            gravityScale: 1,
+            kind: "dynamic-rigid-body",
+            linearDamping: 4.5,
+            lockRotations: true
+          },
           environmentAssetId: "metaverse-hub-pushable-crate-v1",
           label: "Metaverse hub pushable crate",
           lods: [
@@ -686,7 +718,7 @@ export async function createPushableCrateProofSlice() {
           entries: null,
           physicsColliders: null,
           seats: null,
-          traversalAffordance: "pushable"
+          traversalAffordance: "blocker"
         }
       ]
     }

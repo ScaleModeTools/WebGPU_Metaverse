@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createFakePhysicsRuntime } from "./fake-rapier-runtime.mjs";
 import {
   FakeMetaverseRenderer,
-  disabledBootCinematicConfig
+  disabledRuntimeCameraPhaseConfig
 } from "./metaverse/runtime/fixtures/fake-renderer.mjs";
 import { FakeMetaversePresenceClient } from "./metaverse/runtime/fixtures/fake-presence-client.mjs";
 import {
@@ -30,7 +30,7 @@ export {
   createOpenWaterSpawnRuntimeConfig,
   createRealtimeWorldSnapshot,
   createSkiffBoardingRuntimeConfig,
-  disabledBootCinematicConfig,
+  disabledRuntimeCameraPhaseConfig,
   shippedWaterBayOpenWaterSpawn,
   shippedWaterBaySkiffPlacement,
   shippedWaterBaySkiffYawRadians
@@ -81,7 +81,7 @@ export async function createStartedWebGpuMetaverseRuntimeHarness({
           : {
               authoritativePlayerMovementEnabled
             }),
-        bootCinematicConfig: disabledBootCinematicConfig,
+        runtimeCameraPhaseConfig: disabledRuntimeCameraPhaseConfig,
         cancelAnimationFrame:
           globalThis.window.cancelAnimationFrame.bind(globalThis.window),
         ...(proofSlice ?? {}),

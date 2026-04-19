@@ -126,6 +126,19 @@ function isPlanarPositionInsideCollider(
   z: number,
   paddingMeters: number
 ): boolean {
+  if (collider.shape === "trimesh") {
+    const localOffset = rotatePlanarPoint(
+      x - collider.translation.x,
+      z - collider.translation.z,
+      -collider.rotationYRadians
+    );
+
+    return (
+      Math.abs(localOffset.x) <= collider.halfExtents.x + paddingMeters &&
+      Math.abs(localOffset.z) <= collider.halfExtents.z + paddingMeters
+    );
+  }
+
   const localOffset = rotatePlanarPoint(
     x - collider.translation.x,
     z - collider.translation.z,
@@ -136,6 +149,246 @@ function isPlanarPositionInsideCollider(
     Math.abs(localOffset.x) <= collider.halfExtents.x + paddingMeters &&
     Math.abs(localOffset.z) <= collider.halfExtents.z + paddingMeters
   );
+}
+
+function isSurfaceTriMeshCollider(
+  collider: MetaverseWorldPlacedSurfaceColliderSnapshot
+): collider is MetaverseWorldPlacedSurfaceColliderSnapshot & {
+  readonly indices: Uint32Array;
+  readonly shape: "trimesh";
+  readonly vertices: Float32Array;
+} {
+  return (
+    collider.shape === "trimesh" &&
+    collider.indices instanceof Uint32Array &&
+    collider.vertices instanceof Float32Array
+  );
+}
+
+function dotPlanar(
+  leftX: number,
+  leftZ: number,
+  rightX: number,
+  rightZ: number
+): number {
+  return leftX * rightX + leftZ * rightZ;
+}
+
+function resolveClosestPlanarPointOnTriangle(
+  output: {
+    pointX: number;
+    pointZ: number;
+    u: number;
+    v: number;
+    w: number;
+  },
+  pointX: number,
+  pointZ: number,
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+  cx: number,
+  cz: number
+): void {
+  const abX = bx - ax;
+  const abZ = bz - az;
+  const acX = cx - ax;
+  const acZ = cz - az;
+  const apX = pointX - ax;
+  const apZ = pointZ - az;
+  const d1 = dotPlanar(abX, abZ, apX, apZ);
+  const d2 = dotPlanar(acX, acZ, apX, apZ);
+
+  if (d1 <= 0 && d2 <= 0) {
+    output.pointX = ax;
+    output.pointZ = az;
+    output.u = 1;
+    output.v = 0;
+    output.w = 0;
+    return;
+  }
+
+  const bpX = pointX - bx;
+  const bpZ = pointZ - bz;
+  const d3 = dotPlanar(abX, abZ, bpX, bpZ);
+  const d4 = dotPlanar(acX, acZ, bpX, bpZ);
+
+  if (d3 >= 0 && d4 <= d3) {
+    output.pointX = bx;
+    output.pointZ = bz;
+    output.u = 0;
+    output.v = 1;
+    output.w = 0;
+    return;
+  }
+
+  const vc = d1 * d4 - d3 * d2;
+
+  if (vc <= 0 && d1 >= 0 && d3 <= 0) {
+    const v = d1 / Math.max(0.000001, d1 - d3);
+
+    output.pointX = ax + abX * v;
+    output.pointZ = az + abZ * v;
+    output.u = 1 - v;
+    output.v = v;
+    output.w = 0;
+    return;
+  }
+
+  const cpX = pointX - cx;
+  const cpZ = pointZ - cz;
+  const d5 = dotPlanar(abX, abZ, cpX, cpZ);
+  const d6 = dotPlanar(acX, acZ, cpX, cpZ);
+
+  if (d6 >= 0 && d5 <= d6) {
+    output.pointX = cx;
+    output.pointZ = cz;
+    output.u = 0;
+    output.v = 0;
+    output.w = 1;
+    return;
+  }
+
+  const vb = d5 * d2 - d1 * d6;
+
+  if (vb <= 0 && d2 >= 0 && d6 <= 0) {
+    const w = d2 / Math.max(0.000001, d2 - d6);
+
+    output.pointX = ax + acX * w;
+    output.pointZ = az + acZ * w;
+    output.u = 1 - w;
+    output.v = 0;
+    output.w = w;
+    return;
+  }
+
+  const va = d3 * d6 - d5 * d4;
+
+  if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) {
+    const w = (d4 - d3) / Math.max(0.000001, d4 - d3 + (d5 - d6));
+
+    output.pointX = bx + (cx - bx) * w;
+    output.pointZ = bz + (cz - bz) * w;
+    output.u = 0;
+    output.v = 1 - w;
+    output.w = w;
+    return;
+  }
+
+  const inverseDenominator = 1 / Math.max(0.000001, va + vb + vc);
+  const v = vb * inverseDenominator;
+  const w = vc * inverseDenominator;
+  const u = 1 - v - w;
+
+  output.pointX = ax + abX * v + acX * w;
+  output.pointZ = az + abZ * v + acZ * w;
+  output.u = u;
+  output.v = v;
+  output.w = w;
+}
+
+function resolveTriMeshSupportHeightMeters(
+  collider: MetaverseWorldPlacedSurfaceColliderSnapshot,
+  x: number,
+  z: number,
+  paddingMeters: number
+): number | null {
+  if (!isSurfaceTriMeshCollider(collider)) {
+    return null;
+  }
+
+  const localPoint = rotatePlanarPoint(
+    x - collider.translation.x,
+    z - collider.translation.z,
+    -collider.rotationYRadians
+  );
+
+  if (
+    Math.abs(localPoint.x) > collider.halfExtents.x + paddingMeters ||
+    Math.abs(localPoint.z) > collider.halfExtents.z + paddingMeters
+  ) {
+    return null;
+  }
+
+  let highestSurfaceY: number | null = null;
+  const maxDistanceSquared = paddingMeters * paddingMeters;
+  const closestPoint = {
+    pointX: 0,
+    pointZ: 0,
+    u: 0,
+    v: 0,
+    w: 0
+  };
+
+  for (let index = 0; index + 2 < collider.indices.length; index += 3) {
+    const vertexAIndex = (collider.indices[index] ?? 0) * 3;
+    const vertexBIndex = (collider.indices[index + 1] ?? 0) * 3;
+    const vertexCIndex = (collider.indices[index + 2] ?? 0) * 3;
+    const ax = collider.vertices[vertexAIndex] ?? 0;
+    const ay = collider.vertices[vertexAIndex + 1] ?? 0;
+    const az = collider.vertices[vertexAIndex + 2] ?? 0;
+    const bx = collider.vertices[vertexBIndex] ?? 0;
+    const by = collider.vertices[vertexBIndex + 1] ?? 0;
+    const bz = collider.vertices[vertexBIndex + 2] ?? 0;
+    const cx = collider.vertices[vertexCIndex] ?? 0;
+    const cy = collider.vertices[vertexCIndex + 1] ?? 0;
+    const cz = collider.vertices[vertexCIndex + 2] ?? 0;
+    resolveClosestPlanarPointOnTriangle(
+      closestPoint,
+      localPoint.x,
+      localPoint.z,
+      ax,
+      az,
+      bx,
+      bz,
+      cx,
+      cz
+    );
+    const deltaX = closestPoint.pointX - localPoint.x;
+    const deltaZ = closestPoint.pointZ - localPoint.z;
+
+    if (
+      paddingMeters > 0 &&
+      deltaX * deltaX + deltaZ * deltaZ > maxDistanceSquared
+    ) {
+      continue;
+    }
+
+    if (
+      paddingMeters <= 0 &&
+      (Math.abs(deltaX) > 0.0001 || Math.abs(deltaZ) > 0.0001)
+    ) {
+      continue;
+    }
+
+    const localSurfaceY =
+      ay * closestPoint.u + by * closestPoint.v + cy * closestPoint.w;
+    const surfaceY = collider.translation.y + localSurfaceY;
+
+    if (highestSurfaceY === null || surfaceY > highestSurfaceY) {
+      highestSurfaceY = surfaceY;
+    }
+  }
+
+  return highestSurfaceY;
+}
+
+function resolveColliderSupportHeightMeters(
+  collider: MetaverseWorldPlacedSurfaceColliderSnapshot,
+  x: number,
+  z: number,
+  paddingMeters: number
+): number | null {
+  if (isSurfaceTriMeshCollider(collider)) {
+    return resolveTriMeshSupportHeightMeters(collider, x, z, paddingMeters);
+  }
+
+  if (!isPlanarPositionInsideCollider(collider, x, z, paddingMeters)) {
+    return null;
+  }
+
+  return collider.translation.y + collider.halfExtents.y;
 }
 
 function resolveSurfaceSupportHeightMeters(
@@ -159,11 +412,16 @@ function resolveSurfaceSupportHeightMeters(
       continue;
     }
 
-    if (!isPlanarPositionInsideCollider(collider, x, z, paddingMeters)) {
+    const surfaceY = resolveColliderSupportHeightMeters(
+      collider,
+      x,
+      z,
+      paddingMeters
+    );
+
+    if (surfaceY === null) {
       continue;
     }
-
-    const surfaceY = collider.translation.y + collider.halfExtents.y;
 
     if (highestSurfaceY === null || surfaceY > highestSurfaceY) {
       highestSurfaceY = surfaceY;
@@ -247,11 +505,17 @@ function resolveAutomaticSurfaceProbeSupport(
       continue;
     }
 
-    if (!isPlanarPositionInsideCollider(collider, x, z, paddingMeters)) {
+    const surfaceY = resolveColliderSupportHeightMeters(
+      collider,
+      x,
+      z,
+      paddingMeters
+    );
+
+    if (surfaceY === null) {
       continue;
     }
 
-    const surfaceY = collider.translation.y + collider.halfExtents.y;
     if (localWaterSurfaceHeightMeters === null) {
       if (
         highestSupportHeightMeters === null ||

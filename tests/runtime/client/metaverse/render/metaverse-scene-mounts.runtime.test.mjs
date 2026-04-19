@@ -342,7 +342,7 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
   );
   assert.equal(initialInteractionSnapshot.focusedMountable?.boardingEntries.length, 1);
   assert.equal(initialInteractionSnapshot.focusedMountable?.directSeatTargets.length, 1);
-  assert.equal(initialInteractionSnapshot.mountedEnvironment, null);
+  assert.equal("mountedEnvironment" in initialInteractionSnapshot, false);
 
   const passengerSeatMountedEnvironment = sceneRuntime.resolveSeatOccupancy(
     cameraSnapshot,
@@ -358,18 +358,8 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
     passengerSeatMountedEnvironment
   );
 
-  assert.equal(
-    passengerSeatInteractionSnapshot.mountedEnvironment?.environmentAssetId,
-    "metaverse-hub-skiff-v1"
-  );
-  assert.equal(
-    passengerSeatInteractionSnapshot.mountedEnvironment?.occupancyKind,
-    "seat"
-  );
-  assert.equal(
-    passengerSeatInteractionSnapshot.mountedEnvironment?.seatId,
-    "port-bench-seat"
-  );
+  assert.equal(passengerSeatInteractionSnapshot.focusedMountable, null);
+  assert.equal("mountedEnvironment" in passengerSeatInteractionSnapshot, false);
   assert.equal(
     characterRoot.parent?.name,
     "metaverse_environment_seat_anchor/metaverse-hub-skiff-v1/port-bench-seat"
@@ -385,7 +375,7 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
     null
   );
 
-  assert.equal(boardedInteractionSnapshot.mountedEnvironment, null);
+  assert.equal("mountedEnvironment" in boardedInteractionSnapshot, false);
   assert.equal(
     boardedInteractionSnapshot.focusedMountable?.environmentAssetId,
     "metaverse-hub-skiff-v1"
@@ -405,24 +395,13 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
   );
 
   assert.equal(mountedInteractionSnapshot.focusedMountable, null);
-  assert.equal(
-    mountedInteractionSnapshot.mountedEnvironment?.environmentAssetId,
-    "metaverse-hub-skiff-v1"
-  );
-  assert.equal(
-    mountedInteractionSnapshot.mountedEnvironment?.occupancyKind,
-    "entry"
-  );
-  assert.equal(mountedInteractionSnapshot.mountedEnvironment?.entryId, "deck-entry");
-  assert.equal(mountedInteractionSnapshot.mountedEnvironment?.seatId, null);
-  assert.equal(
-    mountedInteractionSnapshot.mountedEnvironment?.directSeatTargets.length,
-    1
-  );
-  assert.equal(
-    mountedInteractionSnapshot.mountedEnvironment?.seatTargets.length,
-    5
-  );
+  assert.equal("mountedEnvironment" in mountedInteractionSnapshot, false);
+  assert.equal(boardedMountedEnvironment?.environmentAssetId, "metaverse-hub-skiff-v1");
+  assert.equal(boardedMountedEnvironment?.occupancyKind, "entry");
+  assert.equal(boardedMountedEnvironment?.entryId, "deck-entry");
+  assert.equal(boardedMountedEnvironment?.seatId, null);
+  assert.equal(boardedMountedEnvironment?.directSeatTargets.length, 1);
+  assert.equal(boardedMountedEnvironment?.seatTargets.length, 5);
   assert.equal(characterRoot.parent, originalParent);
   assert.ok(
     characterRoot.getWorldPosition(new Vector3()).distanceTo(originalWorldPosition) <
@@ -450,18 +429,10 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
   );
 
   assert.equal(driverSeatInteractionSnapshot.focusedMountable, null);
-  assert.equal(
-    driverSeatInteractionSnapshot.mountedEnvironment?.occupancyKind,
-    "seat"
-  );
-  assert.equal(
-    driverSeatInteractionSnapshot.mountedEnvironment?.seatId,
-    "driver-seat"
-  );
-  assert.equal(
-    driverSeatInteractionSnapshot.mountedEnvironment?.occupantRole,
-    "driver"
-  );
+  assert.equal("mountedEnvironment" in driverSeatInteractionSnapshot, false);
+  assert.equal(driverSeatMountedEnvironment?.occupancyKind, "seat");
+  assert.equal(driverSeatMountedEnvironment?.seatId, "driver-seat");
+  assert.equal(driverSeatMountedEnvironment?.occupantRole, "driver");
   assert.equal(
     characterRoot.parent?.name,
     "metaverse_environment_seat_anchor/metaverse-hub-skiff-v1/driver-seat"
@@ -519,7 +490,7 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
     0.016,
     null,
     [],
-    driverSeatInteractionSnapshot.mountedEnvironment
+    driverSeatMountedEnvironment
   );
   sceneRuntime.scene.updateMatrixWorld(true);
 
@@ -556,7 +527,7 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
     0.016,
     null,
     [],
-    driverSeatInteractionSnapshot.mountedEnvironment
+    driverSeatMountedEnvironment
   );
   sceneRuntime.scene.updateMatrixWorld(true);
 
@@ -600,7 +571,7 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
     null
   );
 
-  assert.equal(dismountedInteractionSnapshot.mountedEnvironment, null);
+  assert.equal("mountedEnvironment" in dismountedInteractionSnapshot, false);
   assert.equal(
     dismountedInteractionSnapshot.focusedMountable?.environmentAssetId,
     "metaverse-hub-skiff-v1"

@@ -2,10 +2,7 @@ import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
 import { createClientModuleLoader } from "../../load-client-module.mjs";
-import {
-  FakeMetaverseRenderer,
-  disabledBootCinematicConfig
-} from "../runtime/fixtures/fake-renderer.mjs";
+import { FakeMetaverseRenderer } from "../runtime/fixtures/fake-renderer.mjs";
 
 let clientLoader;
 
@@ -45,6 +42,23 @@ function createFakeSceneRuntime(callLog) {
   };
 }
 
+function createPreviewCameraSnapshot() {
+  return Object.freeze({
+    lookDirection: Object.freeze({
+      x: 0,
+      y: -0.5,
+      z: -0.5
+    }),
+    pitchRadians: -0.72,
+    position: Object.freeze({
+      x: 0,
+      y: 12,
+      z: 10
+    }),
+    yawRadians: 0
+  });
+}
+
 before(async () => {
   clientLoader = await createClientModuleLoader();
 });
@@ -53,7 +67,7 @@ after(async () => {
   await clientLoader?.close();
 });
 
-test("MetaverseRuntimeBootLifecycle boots the non-cinematic path without rendering boot shots and resets input install state cleanly", async () => {
+test("MetaverseRuntimeBootLifecycle boots the direct path without preview rendering and resets input install state cleanly", async () => {
   const { MetaverseRuntimeBootLifecycle } = await clientLoader.load(
     "/src/metaverse/boot/metaverse-runtime-boot-lifecycle.ts"
   );
@@ -61,9 +75,28 @@ test("MetaverseRuntimeBootLifecycle boots the non-cinematic path without renderi
   const callLog = [];
   const installCalls = [];
   const lifecycle = new MetaverseRuntimeBootLifecycle({
-    bootCinematicConfig: disabledBootCinematicConfig,
+    cameraPhaseState: {
+      entryPreviewEnabled: false,
+      markEntryPreviewLiveReady() {
+        callLog.push("cameraPhase:markReady");
+      },
+      reset() {
+        callLog.push("cameraPhase:reset");
+      },
+      resolveBootPresentationSnapshot() {
+        return null;
+      },
+      resolveRuntimeCameraPhaseState() {
+        return null;
+      },
+      setDeathCameraSnapshot() {},
+      setGameplayControlLocked() {},
+      setRespawnControlLocked() {},
+      startEntryPreview() {
+        callLog.push("cameraPhase:start");
+      }
+    },
     devicePixelRatio: 2,
-    portals: Object.freeze([]),
     readNowMs: () => 100,
     sceneRuntime: createFakeSceneRuntime(callLog)
   });
@@ -78,10 +111,10 @@ test("MetaverseRuntimeBootLifecycle boots the non-cinematic path without renderi
 
   assert.equal(lifecycle.bootRendererInitialized, true);
   assert.equal(lifecycle.bootScenePrewarmed, true);
-  assert.equal(lifecycle.isBootCinematicActive(100), false);
   assert.equal(renderer.initCalls, 1);
   assert.equal(renderer.renderCalls, 0);
   assert.deepEqual(callLog, [
+    "cameraPhase:reset",
     "boot",
     "bootGroundedRuntime",
     "syncViewport",
@@ -114,35 +147,41 @@ test("MetaverseRuntimeBootLifecycle boots the non-cinematic path without renderi
   assert.equal(installCalls.length, 2);
 });
 
-test("MetaverseRuntimeBootLifecycle runs the cinematic boot path in staged order and keeps the cinematic active through minimum dwell", async () => {
+test("MetaverseRuntimeBootLifecycle stages the entry preview path and keeps rendering through prewarm before handing off to live runtime", async () => {
   const { MetaverseRuntimeBootLifecycle } = await clientLoader.load(
     "/src/metaverse/boot/metaverse-runtime-boot-lifecycle.ts"
   );
   const renderer = new FakeMetaverseRenderer();
   const callLog = [];
   let nowMs = 500;
+  const previewSnapshot = {
+    cameraSnapshot: createPreviewCameraSnapshot(),
+    focusedPortal: null
+  };
   const lifecycle = new MetaverseRuntimeBootLifecycle({
-    bootCinematicConfig: Object.freeze({
-      enabled: true,
-      minimumDwellMs: 200,
-      shots: Object.freeze([
-        Object.freeze({
-          durationMs: 800,
-          highlightPortalExperienceId: null,
-          id: "intro",
-          pitchRadians: -0.1,
-          position: Object.freeze({
-            x: 0,
-            y: 3,
-            z: 6
-          }),
-          requiresEnvironment: false,
-          yawRadians: 0.2
-        })
-      ])
-    }),
+    cameraPhaseState: {
+      entryPreviewEnabled: true,
+      markEntryPreviewLiveReady(value) {
+        callLog.push(`cameraPhase:markReady:${value}`);
+      },
+      reset() {
+        callLog.push("cameraPhase:reset");
+      },
+      resolveBootPresentationSnapshot(value) {
+        callLog.push(`cameraPhase:resolve:${value}`);
+        return previewSnapshot;
+      },
+      resolveRuntimeCameraPhaseState() {
+        return null;
+      },
+      setDeathCameraSnapshot() {},
+      setGameplayControlLocked() {},
+      setRespawnControlLocked() {},
+      startEntryPreview(value) {
+        callLog.push(`cameraPhase:start:${value}`);
+      }
+    },
     devicePixelRatio: 1,
-    portals: Object.freeze([]),
     readNowMs: () => nowMs,
     sceneRuntime: createFakeSceneRuntime(callLog)
   });
@@ -158,7 +197,8 @@ test("MetaverseRuntimeBootLifecycle runs the cinematic boot path in staged order
   assert.equal(lifecycle.bootRendererInitialized, true);
   assert.equal(lifecycle.bootScenePrewarmed, true);
   assert.equal(renderer.initCalls, 1);
-  assert.equal(renderer.renderCalls, 4);
+  assert.equal(renderer.renderCalls, 3);
+  assert.ok(callLog.indexOf("cameraPhase:start:500") !== -1);
   assert.ok(callLog.indexOf("bootScenicEnvironment") !== -1);
   assert.ok(callLog.indexOf("bootGroundedRuntime") !== -1);
   assert.ok(callLog.indexOf("bootInteractivePresentation") !== -1);
@@ -176,13 +216,9 @@ test("MetaverseRuntimeBootLifecycle runs the cinematic boot path in staged order
   );
   assert.equal(
     callLog.filter((entry) => entry === "syncPresentation").length,
-    4
+    3
   );
-  assert.equal(lifecycle.isBootCinematicActive(500), true);
-
-  nowMs = 699;
-  assert.equal(lifecycle.isBootCinematicActive(nowMs), true);
-
-  nowMs = 700;
-  assert.equal(lifecycle.isBootCinematicActive(nowMs), false);
+  assert.ok(
+    callLog.some((entry) => entry === "cameraPhase:markReady:500")
+  );
 });

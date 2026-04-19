@@ -44,8 +44,13 @@ export class FakeMetaverseRenderer {
   }
 }
 
-export const disabledBootCinematicConfig = Object.freeze({
-  enabled: false,
-  minimumDwellMs: 0,
-  shots: Object.freeze([])
+export const disabledRuntimeCameraPhaseConfig = Object.freeze({
+  entryPreview: Object.freeze({
+    enabled: false,
+    framingPadding: 1,
+    minDistanceMeters: 0,
+    minHeightMeters: 0,
+    minimumDwellMs: 0,
+    pitchRadians: -0.72
+  })
 });

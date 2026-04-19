@@ -1,5 +1,5 @@
 import type {
-  FocusedMountableSnapshot,
+  MetaverseMountedInteractionSnapshot,
   MountedEnvironmentSnapshot
 } from "../types/mounted";
 
@@ -8,8 +8,7 @@ interface MetaverseMountedInteractionAuthoritySync {
 }
 
 interface MetaverseMountedInteractionFrameLoop {
-  readonly focusedMountable: FocusedMountableSnapshot | null;
-  readonly mountedEnvironment: MountedEnvironmentSnapshot | null;
+  readonly mountedInteraction: MetaverseMountedInteractionSnapshot;
 }
 
 interface MetaverseMountedInteractionRemoteWorldRuntime {
@@ -57,7 +56,7 @@ export class MetaverseMountedInteractionRuntime {
   }
 
   boardMountable(entryId: string | null = null): boolean {
-    const focusedMountable = this.#frameLoop.focusedMountable;
+    const focusedMountable = this.#frameLoop.mountedInteraction.focusedMountable;
 
     if (focusedMountable === null) {
       return false;
@@ -75,9 +74,7 @@ export class MetaverseMountedInteractionRuntime {
 
   occupySeat(seatId: string): boolean {
     const environmentAssetId =
-      this.#frameLoop.mountedEnvironment?.environmentAssetId ??
-      this.#frameLoop.focusedMountable?.environmentAssetId ??
-      null;
+      this.#frameLoop.mountedInteraction.seatTargetEnvironmentAssetId;
 
     if (environmentAssetId === null) {
       return false;
@@ -97,7 +94,7 @@ export class MetaverseMountedInteractionRuntime {
   }
 
   toggleMount(): boolean {
-    if (this.#frameLoop.mountedEnvironment === null) {
+    if (this.#frameLoop.mountedInteraction.mountedEnvironment === null) {
       return this.boardMountable();
     }
 

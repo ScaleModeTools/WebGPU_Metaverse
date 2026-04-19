@@ -58,6 +58,17 @@ function createFakeWorldClientTelemetrySnapshot(
 
 export function createRealtimeWorldSnapshot({
   currentTick,
+  environmentBodyEnvironmentAssetId = "metaverse-hub-pushable-crate-v1",
+  environmentBodyLinearVelocity = {
+    x: 4,
+    y: 0,
+    z: 0
+  },
+  environmentBodyX = 4,
+  environmentBodyY = 0.46,
+  environmentBodyYawRadians = 0,
+  environmentBodyZ = 14,
+  includeEnvironmentBody = false,
   includeRemotePlayer = true,
   includeVehicle = true,
   localAnimationVocabulary = "idle",
@@ -321,6 +332,20 @@ export function createRealtimeWorldSnapshot({
       serverTimeMs,
       tickIntervalMs
     },
+    environmentBodies: includeEnvironmentBody
+      ? [
+          {
+            environmentAssetId: environmentBodyEnvironmentAssetId,
+            linearVelocity: environmentBodyLinearVelocity,
+            position: {
+              x: environmentBodyX,
+              y: environmentBodyY,
+              z: environmentBodyZ
+            },
+            yawRadians: environmentBodyYawRadians
+          }
+        ]
+      : [],
     vehicles: includeVehicle
       ? [
           {

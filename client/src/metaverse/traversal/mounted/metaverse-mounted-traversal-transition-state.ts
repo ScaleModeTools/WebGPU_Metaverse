@@ -4,7 +4,6 @@ import type { MetaverseLocomotionModeId } from "../../types/metaverse-locomotion
 import type { MountedEnvironmentSnapshot } from "../../types/mounted";
 import type { MetaverseCameraSnapshot } from "../../types/presentation";
 import type { MountedEnvironmentAnchorSnapshot } from "../types/traversal";
-import { shouldKeepMountedOccupancyFreeRoam } from "../../states/mounted-occupancy";
 import { freezeVector3 } from "../policies/surface-locomotion";
 import { MetaverseUnmountedSurfaceLocomotionState } from "../surface/metaverse-unmounted-surface-locomotion-state";
 import { MetaverseMountedVehicleTraversalState } from "./metaverse-mounted-vehicle-traversal-state";
@@ -217,7 +216,7 @@ export class MetaverseMountedTraversalTransitionState {
       return;
     }
 
-    if (shouldKeepMountedOccupancyFreeRoam(mountedEnvironment)) {
+    if (this.#dependencies.mountedVehicleState.keepsFreeRoam) {
       const anchorSnapshot =
         this.#dependencies.readMountedEnvironmentAnchorSnapshot(
           mountedEnvironment

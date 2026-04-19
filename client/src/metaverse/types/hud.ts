@@ -6,8 +6,9 @@ import type { MetaverseCameraSnapshot } from "./presentation";
 import type { MetaverseTelemetrySnapshot } from "./telemetry";
 import type {
   FocusedExperiencePortalSnapshot,
-  FocusedMountableSnapshot,
-  MountedEnvironmentSnapshot
+  MetaverseMountedInteractionSnapshot,
+  MountableBoardingEntrySnapshot,
+  MountableSeatSelectionSnapshot
 } from "./mounted";
 import type {
   MetaverseWorldSnapshotStreamTelemetrySnapshot,
@@ -60,11 +61,11 @@ export interface MetaverseHudSnapshot {
   readonly camera: MetaverseCameraSnapshot;
   readonly controlMode: MetaverseControlModeId;
   readonly failureReason: string | null;
-  readonly focusedMountable: FocusedMountableSnapshot | null;
   readonly focusedPortal: FocusedExperiencePortalSnapshot | null;
   readonly lifecycle: MetaverseRuntimeLifecycleState;
   readonly locomotionMode: MetaverseLocomotionModeId;
-  readonly mountedEnvironment: MountedEnvironmentSnapshot | null;
+  readonly mountedInteraction: MetaverseMountedInteractionSnapshot;
+  readonly mountedInteractionHud: MetaverseMountedInteractionHudSnapshot;
   readonly presence: {
     readonly joined: boolean;
     readonly lastError: string | null;
@@ -78,4 +79,14 @@ export interface MetaverseHudSnapshot {
     readonly worldReliable: RealtimeReliableTransportStatusSnapshot;
     readonly worldSnapshotStream: MetaverseWorldSnapshotStreamTelemetrySnapshot;
   };
+}
+
+export interface MetaverseMountedInteractionHudSnapshot {
+  readonly boardingEntries: readonly MountableBoardingEntrySnapshot[];
+  readonly detail: string | null;
+  readonly heading: string | null;
+  readonly leaveActionLabel: string | null;
+  readonly seatTargetButtonVariant: "default" | "outline";
+  readonly seatTargets: readonly MountableSeatSelectionSnapshot[];
+  readonly visible: boolean;
 }

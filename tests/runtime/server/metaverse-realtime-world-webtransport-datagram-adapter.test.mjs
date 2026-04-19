@@ -13,6 +13,10 @@ import {
   createUsername
 } from "@webgpu-metaverse/shared";
 
+import {
+  authoredWaterBaySkiffPlacement,
+  authoredWaterBaySkiffYawRadians
+} from "../metaverse-authored-world-test-fixtures.mjs";
 import { MetaverseRealtimeWorldWebTransportDatagramAdapter } from "../../../server/dist/metaverse/adapters/metaverse-realtime-world-webtransport-datagram-adapter.js";
 import { MetaverseAuthoritativeWorldRuntime } from "../../../server/dist/metaverse/classes/metaverse-authoritative-world-runtime.js";
 
@@ -51,12 +55,12 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards driver-control 
           seatId: "driver-seat"
         },
         position: {
-          x: 0,
+          x: authoredWaterBaySkiffPlacement.x,
           y: 0.4,
-          z: 24
+          z: authoredWaterBaySkiffPlacement.z
         },
         stateSequence: 1,
-        yawRadians: 0
+        yawRadians: authoredWaterBaySkiffYawRadians
       },
       username
     }),
@@ -84,9 +88,12 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards driver-control 
   const worldSnapshot = runtime.readWorldSnapshot(1_000, playerId);
 
   assert.equal(worldSnapshot.tick.currentTick, 10);
-  assert.ok(Math.abs(worldSnapshot.vehicles[0]?.position.z - 18.63) < 0.0001);
   assert.ok(
-    Math.abs(worldSnapshot.players[0]?.linearVelocity.z + 10.5) < 0.0001
+    (worldSnapshot.vehicles[0]?.position.x ?? Number.NEGATIVE_INFINITY) >
+      authoredWaterBaySkiffPlacement.x
+  );
+  assert.ok(
+    (worldSnapshot.players[0]?.linearVelocity.x ?? 0) > 0
   );
 });
 

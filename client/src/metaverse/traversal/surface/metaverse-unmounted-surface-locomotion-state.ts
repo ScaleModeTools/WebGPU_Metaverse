@@ -4,6 +4,9 @@ import {
   type RapierColliderHandle,
   type RapierPhysicsRuntime
 } from "@/physics";
+import {
+  metaverseRealtimeWorldCadenceConfig
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import type { MetaverseLocomotionModeId } from "../../types/metaverse-locomotion-mode";
 import type { MetaverseCameraSnapshot } from "../../types/presentation";
@@ -30,6 +33,10 @@ import type {
 import type { MetaverseFlightInputSnapshot } from "../../types/metaverse-control-mode";
 import type { MetaverseUnmountedTraversalStateSnapshot } from "@webgpu-metaverse/shared";
 
+const authoritativeTraversalFixedStepSeconds =
+  Number(metaverseRealtimeWorldCadenceConfig.authoritativeTickIntervalMs) /
+  1_000;
+
 function createIdleGroundedBodyIntentSnapshot() {
   return Object.freeze({
     boost: false,
@@ -48,6 +55,7 @@ type SurfaceLocomotionDependencies = Pick<
 >;
 
 interface EnterGroundedLocomotionInput {
+  readonly linearVelocity?: PhysicsVector3Snapshot | null;
   readonly lookYawRadians: number;
   readonly position: PhysicsVector3Snapshot;
   readonly resolveGroundedPresentationPosition: () => PhysicsVector3Snapshot;
@@ -57,6 +65,7 @@ interface EnterGroundedLocomotionInput {
 }
 
 interface EnterSwimLocomotionInput {
+  readonly linearVelocity?: PhysicsVector3Snapshot | null;
   readonly lookYawRadians: number;
   readonly position: PhysicsVector3Snapshot;
   readonly resolveSwimPresentationPosition: (
@@ -132,9 +141,9 @@ export class MetaverseUnmountedSurfaceLocomotionState {
     typeof resolveAutomaticSurfaceLocomotionSnapshot
   >["debug"]["reason"];
   #latestAutostepHeightMeters: number | null = null;
-  #latestBlockerOverlap = false;
+  #latestBlockingAffordanceDetected = false;
   #latestResolvedSupportHeightMeters = 0;
-  #latestStepSupportedProbeCount = 0;
+  #latestSupportingAffordanceSampleCount = 0;
 
   constructor(input: {
     readonly config: MetaverseRuntimeConfig;
@@ -171,16 +180,16 @@ export class MetaverseUnmountedSurfaceLocomotionState {
     return this.#latestAutostepHeightMeters;
   }
 
-  get latestBlockerOverlap(): boolean {
-    return this.#latestBlockerOverlap;
+  get latestBlockingAffordanceDetected(): boolean {
+    return this.#latestBlockingAffordanceDetected;
   }
 
   get latestResolvedSupportHeightMeters(): number {
     return this.#latestResolvedSupportHeightMeters;
   }
 
-  get latestStepSupportedProbeCount(): number {
-    return this.#latestStepSupportedProbeCount;
+  get latestSupportingAffordanceSampleCount(): number {
+    return this.#latestSupportingAffordanceSampleCount;
   }
 
   reset(): void {
@@ -376,26 +385,39 @@ export class MetaverseUnmountedSurfaceLocomotionState {
       return null;
     }
 
+    const groundedPosition = freezeVector3(
+      input.position.x,
+      input.supportHeightMeters ??
+        this.resolveGroundedSupportHeightMeters(input.position),
+      input.position.z
+    );
+
     this.#groundedBodyRuntime.setAutostepEnabled(false);
     this.#fixedStepSimulation.disposeSwimBodyRuntime();
-    this.#groundedBodyRuntime.teleport(
-      freezeVector3(
-        input.position.x,
-        input.supportHeightMeters ??
-          this.resolveGroundedSupportHeightMeters(input.position),
-        input.position.z
-      ),
-      input.yawRadians
-    );
-    this.#physicsRuntime.stepSimulation(1 / 60);
-    this.#groundedBodyRuntime.advance(
-      createIdleGroundedBodyIntentSnapshot(),
-      1 / 60,
-      this.#dependencies.resolveGroundedTraversalFilterPredicate(
-        this.readGroundedTraversalExcludedColliders()
-      ),
-      input.lookYawRadians
-    );
+
+    if (input.linearVelocity === undefined || input.linearVelocity === null) {
+      this.#groundedBodyRuntime.teleport(groundedPosition, input.yawRadians);
+      this.#physicsRuntime.stepSimulation(authoritativeTraversalFixedStepSeconds);
+      this.#groundedBodyRuntime.advance(
+        createIdleGroundedBodyIntentSnapshot(),
+        authoritativeTraversalFixedStepSeconds,
+        this.#dependencies.resolveGroundedTraversalFilterPredicate(
+          this.readGroundedTraversalExcludedColliders()
+        ),
+        input.lookYawRadians
+      );
+    } else {
+      this.#groundedBodyRuntime.syncAuthoritativeState({
+        grounded: true,
+        linearVelocity: freezeVector3(
+          input.linearVelocity.x,
+          0,
+          input.linearVelocity.z
+        ),
+        position: groundedPosition,
+        yawRadians: input.yawRadians
+      });
+    }
 
     return createTraversalGroundedCameraPresentationSnapshot(
       this.#groundedBodyRuntime.snapshot,
@@ -412,7 +434,8 @@ export class MetaverseUnmountedSurfaceLocomotionState {
       input.position,
       input.yawRadians,
       (position, paddingMeters) =>
-        this.resolveWaterSurfaceHeightMeters(position, paddingMeters)
+        this.resolveWaterSurfaceHeightMeters(position, paddingMeters),
+      input.linearVelocity ?? null
     );
 
     return createTraversalSwimCameraPresentationSnapshot(
@@ -585,7 +608,7 @@ export class MetaverseUnmountedSurfaceLocomotionState {
   #resetSurfaceTelemetry(): void {
     this.#latestAutomaticSurfaceDecisionReason = "capability-maintained";
     this.#latestAutostepHeightMeters = null;
-    this.#latestBlockerOverlap = false;
+    this.#latestBlockingAffordanceDetected = false;
     const groundedSpawnPosition = this.readCanonicalGroundedSpawnPosition();
 
     this.#latestResolvedSupportHeightMeters =
@@ -595,7 +618,7 @@ export class MetaverseUnmountedSurfaceLocomotionState {
         groundedSpawnPosition.x,
         groundedSpawnPosition.z
       ) ?? groundedSpawnPosition.y;
-    this.#latestStepSupportedProbeCount = 0;
+    this.#latestSupportingAffordanceSampleCount = 0;
   }
 
   #syncAutomaticSurfaceTelemetry(
@@ -603,11 +626,12 @@ export class MetaverseUnmountedSurfaceLocomotionState {
     autostepHeightMeters: number | null
   ): void {
     this.#latestAutostepHeightMeters = autostepHeightMeters;
-    this.#latestBlockerOverlap = automaticSurfaceSnapshot.debug.blockerOverlap;
+    this.#latestBlockingAffordanceDetected =
+      automaticSurfaceSnapshot.debug.blockingAffordanceDetected;
     this.#latestResolvedSupportHeightMeters =
       automaticSurfaceSnapshot.debug.resolvedSupportHeightMeters;
-    this.#latestStepSupportedProbeCount =
-      automaticSurfaceSnapshot.debug.stepSupportedProbeCount;
+    this.#latestSupportingAffordanceSampleCount =
+      automaticSurfaceSnapshot.debug.supportingAffordanceSampleCount;
     this.#latestAutomaticSurfaceDecisionReason =
       automaticSurfaceSnapshot.debug.reason;
   }

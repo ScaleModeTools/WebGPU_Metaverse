@@ -91,6 +91,7 @@ test("MetaverseVehicleRuntime ignores self-owned support colliders when resolvin
         traversalAffordance: "support"
       })
     ],
+    waterRegionSnapshots: metaverseRuntimeConfig.waterRegionSnapshots,
     waterContactProbeRadiusMeters:
       metaverseRuntimeConfig.skiff.waterContactProbeRadiusMeters,
     waterlineHeightMeters: metaverseRuntimeConfig.skiff.waterlineHeightMeters,
@@ -176,6 +177,7 @@ test("MetaverseVehicleRuntime blends routine authoritative correction and preser
       }
     ],
     surfaceColliderSnapshots: [],
+    waterRegionSnapshots: metaverseRuntimeConfig.waterRegionSnapshots,
     waterContactProbeRadiusMeters:
       metaverseRuntimeConfig.skiff.waterContactProbeRadiusMeters,
     waterlineHeightMeters: metaverseRuntimeConfig.skiff.waterlineHeightMeters,
@@ -273,6 +275,7 @@ test("MetaverseVehicleRuntime snaps gross authoritative divergence instead of bl
       }
     ],
     surfaceColliderSnapshots: [],
+    waterRegionSnapshots: metaverseRuntimeConfig.waterRegionSnapshots,
     waterContactProbeRadiusMeters:
       metaverseRuntimeConfig.skiff.waterContactProbeRadiusMeters,
     waterlineHeightMeters: metaverseRuntimeConfig.skiff.waterlineHeightMeters,
@@ -296,4 +299,113 @@ test("MetaverseVehicleRuntime snaps gross authoritative divergence instead of bl
   assert.equal(correctedSnapshot.position.x, 5);
   assert.equal(correctedSnapshot.position.z, 20);
   assert.equal(correctedSnapshot.yawRadians, 1);
+});
+
+test("MetaverseVehicleRuntime resolves mounted occupancy snapshots from shared authored seat and entry policy", async () => {
+  const [
+    { MetaverseVehicleRuntime },
+    { RapierPhysicsRuntime },
+    { metaverseRuntimeConfig }
+  ] = await Promise.all([
+    clientLoader.load("/src/metaverse/vehicles/classes/metaverse-vehicle-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts"),
+    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts")
+  ]);
+  const physicsRuntime = createFakePhysicsRuntime(RapierPhysicsRuntime);
+
+  await physicsRuntime.init();
+  const vehicleRuntime = new MetaverseVehicleRuntime({
+    authoritativeCorrection: metaverseRuntimeConfig.skiff.authoritativeCorrection,
+    driveCollider: Object.freeze({
+      center: Object.freeze({ x: 0, y: 0.72, z: 0 }),
+      size: Object.freeze({ x: 4.2, y: 1.44, z: 1.8 })
+    }),
+    environmentAssetId: "metaverse-hub-skiff-v1",
+    entries: [
+      {
+        cameraPolicyId: "seat-follow",
+        controlRoutingPolicyId: "look-only",
+        dismountOffset: { x: 0, y: 0, z: -1 },
+        entryId: "deck-entry",
+        entryNodeName: "deck_entry",
+        label: "Board deck",
+        lookLimitPolicyId: "passenger-bench",
+        occupancyAnimationId: "standing",
+        occupantRole: "passenger"
+      }
+    ],
+    label: "Metaverse hub skiff",
+    oceanHeightMeters: metaverseRuntimeConfig.ocean.height,
+    physicsRuntime,
+    poseSnapshot: {
+      position: {
+        x: 0,
+        y: metaverseRuntimeConfig.skiff.waterlineHeightMeters,
+        z: 24
+      },
+      yawRadians: 0
+    },
+    resolveWaterborneTraversalFilterPredicate(
+      _excludedOwnerEnvironmentAssetId = null,
+      excludedColliders = []
+    ) {
+      const excludedColliderSet = new Set(excludedColliders);
+
+      return (collider) => !excludedColliderSet.has(collider);
+    },
+    seats: [
+      {
+        cameraPolicyId: "vehicle-follow",
+        controlRoutingPolicyId: "vehicle-surface-drive",
+        directEntryEnabled: true,
+        dismountOffset: { x: 0, y: 0, z: 1 },
+        label: "Take helm",
+        lookLimitPolicyId: "driver-forward",
+        occupancyAnimationId: "seated",
+        seatId: "driver-seat",
+        seatNodeName: "driver_seat",
+        seatRole: "driver"
+      }
+    ],
+    surfaceColliderSnapshots: [],
+    waterRegionSnapshots: metaverseRuntimeConfig.waterRegionSnapshots,
+    waterContactProbeRadiusMeters:
+      metaverseRuntimeConfig.skiff.waterContactProbeRadiusMeters,
+    waterlineHeightMeters: metaverseRuntimeConfig.skiff.waterlineHeightMeters,
+    worldRadius: metaverseRuntimeConfig.movement.worldRadius
+  });
+
+  const occupiedSeat = vehicleRuntime.occupySeat("driver-seat");
+  const seatedSnapshot = vehicleRuntime.snapshot;
+
+  assert.equal(occupiedSeat?.seatId, "driver-seat");
+  assert.deepEqual(seatedSnapshot.occupancy, {
+    cameraPolicyId: "vehicle-follow",
+    controlRoutingPolicyId: "vehicle-surface-drive",
+    dismountOffset: { x: 0, y: 0, z: 1 },
+    entryId: null,
+    lookLimitPolicyId: "driver-forward",
+    occupancyAnimationId: "seated",
+    occupancyKind: "seat",
+    occupantLabel: "Take helm",
+    occupantRole: "driver",
+    seatId: "driver-seat"
+  });
+
+  const occupiedEntry = vehicleRuntime.occupyEntry("deck-entry");
+  const boardedSnapshot = vehicleRuntime.snapshot;
+
+  assert.equal(occupiedEntry?.entryId, "deck-entry");
+  assert.deepEqual(boardedSnapshot.occupancy, {
+    cameraPolicyId: "seat-follow",
+    controlRoutingPolicyId: "look-only",
+    dismountOffset: { x: 0, y: 0, z: -1 },
+    entryId: "deck-entry",
+    lookLimitPolicyId: "passenger-bench",
+    occupancyAnimationId: "standing",
+    occupancyKind: "entry",
+    occupantLabel: "Board deck",
+    occupantRole: "passenger",
+    seatId: null
+  });
 });

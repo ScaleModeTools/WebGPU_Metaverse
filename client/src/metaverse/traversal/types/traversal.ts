@@ -24,6 +24,7 @@ import type {
 export type SurfaceLocomotionConfig = SharedMetaverseSurfaceTraversalConfig;
 
 export type SurfaceLocomotionSnapshot = SharedMetaverseSurfaceTraversalSnapshot & {
+  readonly linearVelocity?: PhysicsVector3Snapshot;
   readonly position: PhysicsVector3Snapshot;
 };
 
@@ -43,7 +44,7 @@ export interface MountedEnvironmentAnchorSnapshot {
 export interface MetaverseTraversalRuntimeDependencies {
   readonly groundedBodyRuntime: MetaverseGroundedBodyRuntime;
   readonly physicsRuntime: RapierPhysicsRuntime;
-  readonly readDynamicEnvironmentPose: (
+  readonly readDynamicEnvironmentCollisionPose: (
     environmentAssetId: string
   ) => DynamicEnvironmentPoseSnapshot | null;
   readonly readMountedEnvironmentAnchorSnapshot: (

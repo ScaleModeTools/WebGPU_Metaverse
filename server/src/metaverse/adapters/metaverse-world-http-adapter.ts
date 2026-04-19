@@ -23,7 +23,7 @@ import {
   type MetaverseRealtimeWorldClientCommand
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
-import { MetaverseAuthoritativeWorldRuntime } from "../classes/metaverse-authoritative-world-runtime.js";
+import type { MetaverseAuthoritativeWorldRuntimeOwner } from "../types/metaverse-authoritative-world-runtime-owner.js";
 
 function writeCorsHeaders(
   response: ServerResponse<IncomingMessage>
@@ -476,9 +476,9 @@ function parseWorldCommand(
 }
 
 export class MetaverseWorldHttpAdapter {
-  readonly #runtime: MetaverseAuthoritativeWorldRuntime;
+  readonly #runtime: MetaverseAuthoritativeWorldRuntimeOwner;
 
-  constructor(runtime: MetaverseAuthoritativeWorldRuntime) {
+  constructor(runtime: MetaverseAuthoritativeWorldRuntimeOwner) {
     this.#runtime = runtime;
   }
 

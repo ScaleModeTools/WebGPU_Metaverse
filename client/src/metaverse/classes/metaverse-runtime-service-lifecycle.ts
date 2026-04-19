@@ -26,7 +26,6 @@ interface MetaverseRuntimeServiceLifecycleAuthoritativeWorldSync {
 }
 
 interface MetaverseRuntimeServiceLifecycleBootLifecycle {
-  readonly bootCinematicEnabled: boolean;
   bootRuntime(input: {
     readonly bootGroundedRuntime: () => Promise<void>;
     readonly canvas: MetaverseRuntimeServiceLifecycleCanvasHost;
@@ -36,7 +35,6 @@ interface MetaverseRuntimeServiceLifecycleBootLifecycle {
     canvas: MetaverseRuntimeServiceLifecycleCanvasHost,
     flightInputRuntime: MetaverseRuntimeServiceLifecycleFlightInputRuntime
   ): void;
-  isBootCinematicActive(nowMs: number): boolean;
   reset(): void;
 }
 
@@ -176,12 +174,10 @@ export class MetaverseRuntimeServiceLifecycle {
   }: MetaverseRuntimeServiceBootRequest): Promise<void> {
     publishHudSnapshot("booting", null, true);
 
-    if (!this.#bootLifecycle.bootCinematicEnabled) {
-      this.#bootLifecycle.ensureRuntimeInputInstalled(
-        canvas,
-        this.#flightInputRuntime
-      );
-    }
+    this.#bootLifecycle.ensureRuntimeInputInstalled(
+      canvas,
+      this.#flightInputRuntime
+    );
 
     await this.#bootLifecycle.bootRuntime({
       bootGroundedRuntime: async () => {
@@ -212,13 +208,6 @@ export class MetaverseRuntimeServiceLifecycle {
     }
 
     const firstFrameAtMs = this.#readNowMs();
-
-    if (!this.#bootLifecycle.isBootCinematicActive(firstFrameAtMs)) {
-      this.#bootLifecycle.ensureRuntimeInputInstalled(
-        canvas,
-        this.#flightInputRuntime
-      );
-    }
 
     this.#presenceRuntime.boot(
       characterPresentationSnapshot,

@@ -1,6 +1,8 @@
 import type { GameplaySessionMode } from "@webgpu-metaverse/shared";
 import {
   AudioSettings,
+  PlayerProfile,
+  createUsername,
   defaultGameplayInputMode
 } from "@webgpu-metaverse/shared";
 
@@ -11,6 +13,10 @@ import {
   resetControllerConfigurationState
 } from "../../input";
 import { defaultMetaverseControlMode } from "../../metaverse/config/metaverse-control-modes";
+import {
+  readMetaverseWorldBundleRegistryEntry,
+  resolveDefaultMetaverseWorldBundleId
+} from "../../metaverse/world/bundle-registry";
 import type { WebGpuMetaverseCapabilitySnapshot } from "../../metaverse/types/webgpu-capability";
 
 import type {
@@ -24,11 +30,34 @@ export const initialCapabilitySnapshot = Object.freeze({
   reason: "pending"
 }) satisfies WebGpuMetaverseCapabilitySnapshot;
 const defaultSessionMode: GameplaySessionMode = "single-player";
+const guestShellUsername = createUsername("Unknown")!;
+
+function resolveActiveMetaverseBundleId(bundleId: string): string {
+  return readMetaverseWorldBundleRegistryEntry(bundleId) === null
+    ? resolveDefaultMetaverseWorldBundleId()
+    : bundleId;
+}
 
 function resolveNextShellStageAfterModeChange(
   state: MetaverseShellControllerState
 ): MetaverseShellControllerState["shellStage"] {
+  if (state.shellStage === "tool") {
+    return "tool";
+  }
+
   return state.shellStage === "main-menu" ? "main-menu" : "metaverse";
+}
+
+function resolveConfirmedShellProfile(
+  state: MetaverseShellControllerState
+) {
+  if (state.profile !== null) {
+    return state.profile;
+  }
+
+  return PlayerProfile.create({
+    username: createUsername(state.usernameDraft) ?? guestShellUsername
+  });
 }
 
 function withMusicVolume(
@@ -73,6 +102,8 @@ export function createInitialMetaverseShellControllerState({
 }: MetaverseShellControllerInit): MetaverseShellControllerState {
   return {
     activeExperienceId: null,
+    activeMetaverseBundleId: resolveDefaultMetaverseWorldBundleId(),
+    activeMetaverseLaunchVariationId: null,
     audioSnapshot,
     capabilitySnapshot: initialCapabilitySnapshot,
     coopRoomIdDraft: defaultDuckHuntCoopRoomId,
@@ -81,7 +112,7 @@ export function createInitialMetaverseShellControllerState({
       metaverseControlMode: defaultMetaverseControlMode
     }),
     debugPanelMode: "hidden",
-    hasConfirmedProfile: false,
+    hasConfirmedProfile: hydratedProfile.profile !== null,
     hydrationSource: hydratedProfile.source,
     inputMode: hydratedProfile.inputMode,
     isMenuOpen: false,
@@ -129,19 +160,14 @@ export function reduceMetaverseShellControllerState(
         profile: action.profile
       };
     case "calibrationResetRequested":
-      return state.profile === null
-        ? {
-            ...state,
-            activeExperienceId: null,
-            isMenuOpen: false
-          }
-        : {
-            ...state,
-            activeExperienceId: null,
-            isMenuOpen: false,
-            profile: state.profile.resetCalibration(),
-            shellStage: "metaverse"
-          };
+      return {
+        ...state,
+        activeExperienceId: null,
+        hasConfirmedProfile: true,
+        isMenuOpen: false,
+        profile: resolveConfirmedShellProfile(state).resetCalibration(),
+        shellStage: "metaverse"
+      };
     case "capabilityProbeStarted":
       return {
         ...state,
@@ -170,16 +196,62 @@ export function reduceMetaverseShellControllerState(
             isMenuOpen: false,
             shellStage: "gameplay"
           };
-    case "metaverseEntryRequested":
-      return state.shellStage === "metaverse" && state.activeExperienceId === null
+    case "toolPreviewRequested":
+      return {
+        ...state,
+        activeExperienceId: null,
+        activeMetaverseBundleId: action.launchSelection.bundleId,
+        activeMetaverseLaunchVariationId: action.launchSelection.variationId,
+        debugPanelMode: "hidden",
+        hasConfirmedProfile: true,
+        isMenuOpen: false,
+        profile: resolveConfirmedShellProfile(state),
+        shellStage: "metaverse"
+      };
+    case "toolEditorRequested":
+      return state.shellStage === "tool" && !state.isMenuOpen
         ? state
         : {
             ...state,
             activeExperienceId: null,
             debugPanelMode: "hidden",
             isMenuOpen: false,
-            shellStage: "metaverse"
+            shellStage: "tool"
           };
+    case "toolEditorExited":
+      return state.shellStage === "tool" && !state.isMenuOpen
+        ? {
+            ...state,
+            shellStage: "main-menu"
+          }
+        : state;
+    case "metaverseEntryRequested":
+      {
+        const activeMetaverseBundleId = resolveActiveMetaverseBundleId(
+          state.activeMetaverseBundleId
+        );
+        const activeMetaverseLaunchVariationId =
+          activeMetaverseBundleId === state.activeMetaverseBundleId
+            ? state.activeMetaverseLaunchVariationId
+            : null;
+
+        return state.shellStage === "metaverse" &&
+          state.activeExperienceId === null &&
+          state.activeMetaverseBundleId === activeMetaverseBundleId &&
+          state.activeMetaverseLaunchVariationId === activeMetaverseLaunchVariationId
+          ? state
+          : {
+              ...state,
+              activeExperienceId: null,
+              activeMetaverseBundleId,
+              activeMetaverseLaunchVariationId,
+              debugPanelMode: "hidden",
+              hasConfirmedProfile: true,
+              isMenuOpen: false,
+              profile: resolveConfirmedShellProfile(state),
+              shellStage: "metaverse"
+            };
+      }
     case "sessionModeChanged":
       return action.sessionMode === state.sessionMode &&
         state.shellStage === "main-menu" &&
@@ -283,6 +355,8 @@ export function reduceMetaverseShellControllerState(
       return {
         ...state,
         activeExperienceId: null,
+        activeMetaverseBundleId: resolveDefaultMetaverseWorldBundleId(),
+        activeMetaverseLaunchVariationId: null,
         audioSnapshot: action.audioSnapshot,
         hasConfirmedProfile: false,
         hydrationSource: "empty",

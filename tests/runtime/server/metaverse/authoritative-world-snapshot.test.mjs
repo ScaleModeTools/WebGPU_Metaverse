@@ -3,7 +3,8 @@ import test from "node:test";
 
 import {
   createMetaversePlayerId,
-  createUsername
+  createUsername,
+  metaverseHubPushableCrateEnvironmentAssetId
 } from "@webgpu-metaverse/shared";
 
 import {
@@ -106,4 +107,26 @@ test("MetaverseAuthoritativeWorldRuntime does not advance simulation when snapsh
   assert.equal(secondSnapshot.tick.currentTick, 1);
   assert.equal(firstSnapshot.tick.simulationTimeMs, 100);
   assert.equal(secondSnapshot.tick.simulationTimeMs, 100);
+});
+
+test("MetaverseAuthoritativeWorldRuntime includes authored environment bodies in world snapshots", () => {
+  const runtime = createAuthoritativeRuntime();
+  const worldSnapshot = runtime.readWorldSnapshot(0);
+
+  assert.deepEqual(worldSnapshot.environmentBodies, [
+    Object.freeze({
+      environmentAssetId: metaverseHubPushableCrateEnvironmentAssetId,
+      linearVelocity: Object.freeze({
+        x: 0,
+        y: 0,
+        z: 0
+      }),
+      position: Object.freeze({
+        x: -8,
+        y: 0.46,
+        z: 14
+      }),
+      yawRadians: Math.PI * -0.08
+    })
+  ]);
 });

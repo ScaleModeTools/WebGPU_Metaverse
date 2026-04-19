@@ -59,3 +59,9 @@ export interface MetaverseRemoteVehiclePresentationSnapshot {
   readonly position: MetaverseVector3Snapshot;
   readonly yawRadians: number;
 }
+
+export interface MetaverseRemoteEnvironmentBodyPresentationSnapshot {
+  readonly environmentAssetId: string;
+  readonly position: MetaverseVector3Snapshot;
+  readonly yawRadians: number;
+}

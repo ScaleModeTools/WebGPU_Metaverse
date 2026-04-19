@@ -12,6 +12,7 @@ import type {
   MetaverseControllerSchemeId
 } from "../../input";
 import type { MetaverseControlModeId } from "../../metaverse";
+import type { MetaverseWorldPreviewLaunchSelectionSnapshot } from "../../metaverse/world/map-bundles";
 import type {
   MetaverseShellControllerAction,
   MetaverseShellControllerState
@@ -27,12 +28,17 @@ interface MetaverseShellFlowPolicy {
   readonly onDuckHuntControllerSchemeChange: (
     duckHuntControllerSchemeId: DuckHuntControllerSchemeId
   ) => void;
+  readonly onCloseToolRequest: () => void;
   readonly onEnterMetaverseRequest: () => void;
   readonly onExperienceLaunchRequest: (experienceId: ExperienceId) => void;
   readonly onGlobalControllerBindingPresetChange: (
     globalBindingPresetId: GlobalControllerBindingPresetId
   ) => void;
   readonly onInputModeChange: (inputMode: GameplayInputModeId) => void;
+  readonly onOpenToolRequest: () => void;
+  readonly onRunToolPreviewRequest: (
+    launchSelection: MetaverseWorldPreviewLaunchSelectionSnapshot
+  ) => void;
   readonly onMetaverseControlModeChange: (
     controlMode: MetaverseControlModeId
   ) => void;
@@ -183,12 +189,48 @@ export function useMetaverseShellFlowPolicy({
     }
   );
 
+  const onOpenToolRequest = useEffectEvent(() => {
+    dispatch({
+      type: "toolEditorRequested"
+    });
+    dispatch({
+      type: "audioSnapshotChanged",
+      audioSnapshot: audioSession.playCue("ui-confirm")
+    });
+  });
+
+  const onCloseToolRequest = useEffectEvent(() => {
+    dispatch({
+      type: "toolEditorExited"
+    });
+    dispatch({
+      type: "audioSnapshotChanged",
+      audioSnapshot: audioSession.playCue("ui-menu-close")
+    });
+  });
+
+  const onRunToolPreviewRequest = useEffectEvent(
+    (launchSelection: MetaverseWorldPreviewLaunchSelectionSnapshot) => {
+    dispatch({
+      launchSelection,
+      type: "toolPreviewRequested"
+    });
+    dispatch({
+      type: "audioSnapshotChanged",
+      audioSnapshot: audioSession.playCue("ui-confirm")
+    });
+    }
+  );
+
   return {
     onDuckHuntControllerSchemeChange,
+    onCloseToolRequest,
     onEnterMetaverseRequest,
     onExperienceLaunchRequest,
     onGlobalControllerBindingPresetChange,
     onInputModeChange,
+    onOpenToolRequest,
+    onRunToolPreviewRequest,
     onMetaverseControlModeChange,
     onMetaverseControllerSchemeChange,
     onReturnToMetaverseRequest,

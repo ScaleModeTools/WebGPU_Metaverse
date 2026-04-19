@@ -13,6 +13,13 @@ single-player and server-authoritative co-op.
   combat rewind validation are all live behind the repo stop-ship gate
 - metaverse shell flow is live: profile setup -> metaverse hub -> experience
   launch -> return to hub without a full reload
+- the first admin-only engine tool is live under `client/src/engine-tool`: a
+  full-screen map editor with a Three.js viewport, authored draft state, and
+  shadcn-driven library/inspector panels
+- map preview no longer depends on live editor object graphs: `Run` validates,
+  exports, and launches through runtime-facing bundle loaders, and authored
+  launch variations can now describe combinations such as map + experience +
+  gameplay variation + weapon layout + vehicle layout
 - the current metaverse world starts from the staging-ground/playground slice:
   the shared floor, barriers, authored water bay, and canonical grounded spawn
   are the active world owners across client, server, render, and collision
@@ -75,6 +82,37 @@ single-player and server-authoritative co-op.
 - server-ticked co-op Duck Hunt rooms
 - shared shell and gameplay audio with Strudel BGM plus Web Audio SFX
 - runtime, typecheck, and bench gates through the repo entrypoints
+- admin-only map editing with saved tool drafts and authored launch-variation
+  preview selection
+
+## What We Are Building Now
+
+The current refactor focus is a real authored content pipeline rather than more
+runtime-side assembly.
+
+In practice that means:
+
+- build maps through an admin-only editor under `client/src/engine-tool`
+- store tool-only draft state separately from shipped runtime artifacts
+- export shared authored map bundles and launch variations that both client and
+  server can consume
+- launch preview content through the same runtime-facing loaders the shipped
+  shell uses, not through hidden editor-only code paths
+
+The gameplay trust model is broader than "the editor prevents cheating."
+
+What actually matters is:
+
+- gameplay-affecting truth lives in shared contracts and small shared kernels
+  where client prediction and server authority must agree
+- the server remains authoritative for live gameplay outcomes
+- the editor is only an authoring surface; it must not bypass validation,
+  export, or runtime bootstrap seams
+
+The long-term target is content authoring that can express combinations such as
+`Team Slayer on Gladiation` where the map, mode or session variation, weapon
+layout, and vehicle layout are authored selections instead of ad hoc runtime
+assembly.
 
 ## Control Surfaces
 
@@ -94,6 +132,7 @@ single-player and server-authoritative co-op.
 ```text
 client/src
   app/                      # shell composition only
+  engine-tool/              # admin-only map editor and run/save workflows
   metaverse/                # world runtime, traversal, render, vehicles, HUD
   experiences/duck-hunt/    # Duck Hunt-owned client code
   tracking/                 # shared hand/cursor tracking owners
@@ -154,6 +193,10 @@ npm run dev
 This starts the client and the server together. In localdev it also boots the
 localhost WebTransport host when the transport preference is enabled and the
 local certificate flow is available.
+
+From the normal shell/dev flow, use the in-app `Open Tool` action to enter the
+admin-only editor. The editor is lazy-loaded and should not add normal runtime
+cost unless you open it.
 
 ### Prefer WebTransport In Localdev
 

@@ -1,9 +1,10 @@
-import type { MetaversePlayerTraversalIntentSnapshot } from "@webgpu-metaverse/shared/metaverse/realtime";
+import type {
+  MetaversePlayerTraversalIntentSnapshot,
+  MetaversePlayerTraversalIntentSnapshotInput
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import type {
   MetaverseCameraSnapshot,
-  MetaverseFlightInputSnapshot,
-  MetaverseHudSnapshot,
   MountedEnvironmentSnapshot
 } from "../types/metaverse-runtime";
 import type { MetaverseLocalPlayerIdentity } from "../classes/metaverse-presence-runtime";
@@ -78,12 +79,7 @@ export class MetaverseRemoteWorldCommandTransport {
   }
 
   syncLocalTraversalIntent(
-    movementInput: Pick<
-      MetaverseFlightInputSnapshot,
-      "boost" | "jump" | "moveAxis" | "strafeAxis" | "yawAxis"
-    >,
-    traversalFacing: Pick<MetaverseCameraSnapshot, "pitchRadians" | "yawRadians">,
-    locomotionMode: MetaverseHudSnapshot["locomotionMode"]
+    traversalIntentInput: MetaversePlayerTraversalIntentSnapshotInput | null
   ): MetaversePlayerTraversalIntentSnapshot | null {
     const worldClient = this.#readWorldClient();
 
@@ -92,40 +88,19 @@ export class MetaverseRemoteWorldCommandTransport {
       return null;
     }
 
-    if (locomotionMode !== "grounded" && locomotionMode !== "swim") {
+    if (traversalIntentInput === null) {
       worldClient.syncPlayerTraversalIntent(null);
       return null;
     }
 
     return worldClient.syncPlayerTraversalIntent({
-      intent: {
-        actionIntent: this.#createTraversalActionIntentSnapshot(
-          locomotionMode,
-          movementInput.jump
-        ),
-        bodyControl: {
-          boost: movementInput.boost,
-          moveAxis: movementInput.moveAxis,
-          strafeAxis: movementInput.strafeAxis,
-          turnAxis: movementInput.yawAxis
-        },
-        facing: {
-          pitchRadians: traversalFacing.pitchRadians,
-          yawRadians: traversalFacing.yawRadians
-        },
-        locomotionMode
-      },
+      intent: traversalIntentInput,
       playerId: this.#localPlayerIdentity.playerId
     });
   }
 
   previewLocalTraversalIntent(
-    movementInput: Pick<
-      MetaverseFlightInputSnapshot,
-      "boost" | "jump" | "moveAxis" | "strafeAxis" | "yawAxis"
-    >,
-    traversalFacing: Pick<MetaverseCameraSnapshot, "pitchRadians" | "yawRadians">,
-    locomotionMode: MetaverseHudSnapshot["locomotionMode"]
+    traversalIntentInput: MetaversePlayerTraversalIntentSnapshotInput | null
   ): MetaversePlayerTraversalIntentSnapshot | null {
     const worldClient = this.#readWorldClient();
 
@@ -133,28 +108,12 @@ export class MetaverseRemoteWorldCommandTransport {
       return null;
     }
 
-    if (locomotionMode !== "grounded" && locomotionMode !== "swim") {
+    if (traversalIntentInput === null) {
       return null;
     }
 
     return worldClient.previewPlayerTraversalIntent({
-      intent: {
-        actionIntent: this.#createTraversalActionIntentSnapshot(
-          locomotionMode,
-          movementInput.jump
-        ),
-        bodyControl: {
-          boost: movementInput.boost,
-          moveAxis: movementInput.moveAxis,
-          strafeAxis: movementInput.strafeAxis,
-          turnAxis: movementInput.yawAxis
-        },
-        facing: {
-          pitchRadians: traversalFacing.pitchRadians,
-          yawRadians: traversalFacing.yawRadians
-        },
-        locomotionMode
-      },
+      intent: traversalIntentInput,
       playerId: this.#localPlayerIdentity.playerId
     });
   }
@@ -182,26 +141,6 @@ export class MetaverseRemoteWorldCommandTransport {
         yawRadians: lookSnapshot.yawRadians
       },
       playerId: this.#localPlayerIdentity.playerId
-    });
-  }
-
-  #createTraversalActionIntentSnapshot(
-    locomotionMode: MetaverseHudSnapshot["locomotionMode"],
-    jumpPressed: boolean
-  ): {
-    readonly kind: "none" | "jump";
-    readonly pressed: boolean;
-  } {
-    if (locomotionMode !== "grounded") {
-      return Object.freeze({
-        kind: "none",
-        pressed: false
-      });
-    }
-
-    return Object.freeze({
-      kind: jumpPressed ? "jump" : "none",
-      pressed: jumpPressed
     });
   }
 }

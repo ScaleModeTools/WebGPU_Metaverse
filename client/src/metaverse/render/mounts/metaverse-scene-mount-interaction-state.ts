@@ -24,6 +24,9 @@ import type {
   MetaverseCameraSnapshot,
   MountedEnvironmentSnapshot
 } from "../../types/metaverse-runtime";
+import type {
+  MetaverseMountedOccupancyPresentationStateSnapshot
+} from "../../states/mounted-occupancy";
 
 interface MetaverseSceneMountInteractionStateDependencies<
   TCharacterRuntime extends MetaverseSceneMountedCharacterPresentationRuntime,
@@ -52,7 +55,7 @@ export class MetaverseSceneMountInteractionState<
 
   #mountedCharacterRuntime: MountedCharacterRuntime<TEnvironmentRuntime> | null =
     null;
-  #sceneInteractionSnapshot = createMetaverseSceneInteractionSnapshot(null, null);
+  #sceneInteractionSnapshot = createMetaverseSceneInteractionSnapshot(null);
 
   constructor(
     dependencies: MetaverseSceneMountInteractionStateDependencies<
@@ -81,10 +84,7 @@ export class MetaverseSceneMountInteractionState<
       this.#mountedCharacterRuntime = null;
     }
 
-    this.#sceneInteractionSnapshot = createMetaverseSceneInteractionSnapshot(
-      null,
-      null
-    );
+    this.#sceneInteractionSnapshot = createMetaverseSceneInteractionSnapshot(null);
   }
 
   resolveBoardFocusedMountable(
@@ -163,7 +163,10 @@ export class MetaverseSceneMountInteractionState<
   }
 
   syncMountedCharacterRuntime(
-    mountedEnvironment: MountedEnvironmentSnapshot | null
+    mountedEnvironment: MountedEnvironmentSnapshot | null,
+    mountedOccupancyPresentationState:
+      | MetaverseMountedOccupancyPresentationStateSnapshot
+      | null
   ): void {
     const characterProofRuntime = this.#dependencies.readCharacterProofRuntime();
     const environmentProofRuntime =
@@ -177,6 +180,7 @@ export class MetaverseSceneMountInteractionState<
       characterProofRuntime,
       this.#mountedCharacterRuntime,
       mountedEnvironment,
+      mountedOccupancyPresentationState,
       this.#dependencies.resolveMountedEnvironmentRuntime
     );
   }
@@ -190,15 +194,14 @@ export class MetaverseSceneMountInteractionState<
 
     this.#sceneInteractionSnapshot =
       environmentProofRuntime === null
-        ? createMetaverseSceneInteractionSnapshot(null, mountedEnvironment)
+        ? createMetaverseSceneInteractionSnapshot(null)
         : createMetaverseSceneInteractionSnapshot(
             resolveFocusedMountableSnapshot(
               environmentProofRuntime,
               mountedEnvironment,
               cameraSnapshot,
               this.#dependencies.focusProbeForwardMeters
-            ),
-            mountedEnvironment
+            )
           );
 
     return this.#sceneInteractionSnapshot;

@@ -324,6 +324,62 @@ function formatDegreesFromRadians(value: number): string {
   return `${((value * 180) / Math.PI).toFixed(1)}°`;
 }
 
+function formatPositionTriplet(position: {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+}): string {
+  return `(${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)})`;
+}
+
+function formatLastSnapIssuedTraversalIntentValue(
+  snapshot: NonNullable<
+    NonNullable<
+      MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionSnapshot"]
+    >["local"]["issuedTraversalIntent"]
+  > | null
+): string {
+  if (snapshot === null) {
+    return "issued none";
+  }
+
+  return `issued ${formatCount(snapshot.inputSequence)} · boost ${formatBooleanLabel(
+    snapshot.bodyControl.boost
+  )} · move ${snapshot.bodyControl.moveAxis.toFixed(2)} · strafe ${snapshot.bodyControl.strafeAxis.toFixed(
+    2
+  )} · turn ${snapshot.bodyControl.turnAxis.toFixed(2)}`;
+}
+
+function formatLastLocalAuthorityPoseCorrectionSnapshotValue(
+  snapshot: MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionSnapshot"]
+): string {
+  if (snapshot === null) {
+    return "none";
+  }
+
+  return `local ${snapshot.local.locomotionMode} @ ${formatPositionTriplet(
+    snapshot.local.position
+  )} · vel ${formatPositionTriplet(
+    snapshot.local.linearVelocity
+  )} · ${formatDecisionReason(
+    snapshot.local.surfaceRouting.decisionReason
+  )} · support ${formatOptionalMeters(
+    snapshot.local.surfaceRouting.resolvedSupportHeightMeters
+  )} · ${formatLastSnapIssuedTraversalIntentValue(
+    snapshot.local.issuedTraversalIntent
+  )} -> authority ${snapshot.authoritative.locomotionMode} ack ${formatCount(
+    snapshot.authoritative.lastProcessedInputSequence
+  )} @ ${formatPositionTriplet(
+    snapshot.authoritative.position
+  )} · vel ${formatPositionTriplet(
+    snapshot.authoritative.linearVelocity
+  )} · ${formatDecisionReason(
+    snapshot.authoritative.surfaceRouting.decisionReason
+  )} · support ${formatOptionalMeters(
+    snapshot.authoritative.surfaceRouting.resolvedSupportHeightMeters
+  )}`;
+}
+
 function formatSnapshotStreamPath(path: SnapshotStreamTransportSnapshot["path"]): string {
   return path.replaceAll("-", " ");
 }
@@ -587,6 +643,10 @@ function createDeveloperReport(hudSnapshot: MetaverseHudSnapshot): string {
             .traversalAuthority
         )}`,
         `Correction: ${formatCorrectionStatusValue(hudSnapshot)}`,
+        `Last snap: ${formatLastLocalAuthorityPoseCorrectionSnapshotValue(
+          hudSnapshot.telemetry.worldSnapshot.localReconciliation
+            .lastLocalAuthorityPoseCorrectionSnapshot
+        )}`,
         `Render offset: ${formatMeters(hudSnapshot.telemetry.worldSnapshot.cameraPresentation.renderedOffset.planarMagnitudeMeters)} planar · ${formatMeters(hudSnapshot.telemetry.worldSnapshot.cameraPresentation.renderedOffset.verticalMagnitudeMeters)} vertical · ${formatDegreesFromRadians(hudSnapshot.telemetry.worldSnapshot.cameraPresentation.renderedOffset.lookAngleRadians)} look`
       ]
     },

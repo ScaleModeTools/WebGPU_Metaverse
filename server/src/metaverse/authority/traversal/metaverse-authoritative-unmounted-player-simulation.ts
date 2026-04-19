@@ -1,8 +1,7 @@
 import {
+  advanceMetaverseUnmountedTraversalBodyStep,
   clamp,
   createMetaverseUnmountedTraversalStateSnapshot,
-  prepareMetaverseUnmountedTraversalStep,
-  resolveMetaverseUnmountedTraversalStep,
   type MetaverseSurfaceTraversalConfig
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 import type { MetaversePlayerId } from "@webgpu-metaverse/shared/metaverse/presence";
@@ -11,7 +10,7 @@ import type {
   MetaverseWorldSurfacePolicyConfig
 } from "@webgpu-metaverse/shared/metaverse/world";
 
-import type { MetaverseAuthoritativeSurfaceColliderSnapshot } from "../../config/metaverse-authoritative-world-surface.js";
+import type { MetaverseAuthoritativeSurfaceColliderSnapshot } from "../../world/map-bundles/metaverse-authoritative-world-bundle-inputs.js";
 import { MetaverseAuthoritativeGroundedBodyRuntime } from "../../classes/metaverse-authoritative-grounded-body-runtime.js";
 import { MetaverseAuthoritativeSurfaceDriveRuntime } from "../../classes/metaverse-authoritative-surface-drive-runtime.js";
 import {
@@ -43,7 +42,12 @@ interface MetaverseAuthoritativeUnmountedPlayerSimulationDependencies<
   MountedOccupancy extends MetaverseAuthoritativePlayerStateSyncMountedOccupancyRuntimeState,
   VehicleRuntime extends MetaverseAuthoritativePlayerStateSyncVehicleRuntimeState
 > {
+  readonly createGroundedTraversalColliderPredicate: (
+    playerRuntime: PlayerRuntime,
+    excludedColliders?: readonly RapierColliderHandle[]
+  ) => RapierQueryFilterPredicate;
   readonly createWaterborneTraversalColliderPredicate: (
+    playerRuntime: PlayerRuntime,
     excludedOwnerEnvironmentAssetId?: string | null,
     excludedColliders?: readonly RapierColliderHandle[]
   ) => RapierQueryFilterPredicate;
@@ -63,9 +67,6 @@ interface MetaverseAuthoritativeUnmountedPlayerSimulationDependencies<
   >;
   readonly playersById: ReadonlyMap<MetaversePlayerId, PlayerRuntime>;
   readonly resolveAuthoritativeSurfaceColliders: () => readonly MetaverseAuthoritativeSurfaceColliderSnapshot[];
-  readonly shouldConsiderTraversalCollider: (
-    collider: RapierColliderHandle
-  ) => boolean;
   readonly swimTraversalConfig: MetaverseSurfaceTraversalConfig;
   readonly waterRegionSnapshots: readonly MetaverseWorldPlacedWaterRegionSnapshot[];
 }
@@ -153,7 +154,54 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
     let surfaceJumpSupported = false;
     let groundedJumpSupported = false;
     let resolvedLocomotionMode: "grounded" | "swim" = locomotionMode;
-    const preparedTraversalStep = prepareMetaverseUnmountedTraversalStep({
+    if (locomotionMode === "grounded") {
+      groundedBodyJumpReady = playerRuntime.groundedBodyRuntime.snapshot.jumpReady;
+    }
+
+    const traversalBodyStep = advanceMetaverseUnmountedTraversalBodyStep({
+      advanceGroundedBodySnapshot: ({
+        autostepHeightMeters,
+        bodyIntent,
+        preferredLookYawRadians: resolvedLookYawRadians
+      }) => {
+        playerRuntime.groundedBodyRuntime.setAutostepEnabled(
+          autostepHeightMeters !== null,
+          autostepHeightMeters ??
+            this.#dependencies.groundedBodyConfig.stepHeightMeters
+        );
+
+        return playerRuntime.groundedBodyRuntime.advance(
+          bodyIntent,
+          deltaSeconds,
+          resolvedLookYawRadians,
+          this.#dependencies.createGroundedTraversalColliderPredicate(
+            playerRuntime
+          )
+        );
+      },
+      advanceSwimBodySnapshot: ({
+        bodyControl,
+        preferredLookYawRadians: resolvedLookYawRadians,
+        waterlineHeightMeters
+      }) =>
+        playerRuntime.swimBodyRuntime.advance(
+          {
+            boost: bodyControl.boost,
+            moveAxis: bodyControl.moveAxis,
+            strafeAxis: bodyControl.strafeAxis,
+            yawAxis: bodyControl.turnAxis
+          },
+          this.#dependencies.swimTraversalConfig,
+          deltaSeconds,
+          waterlineHeightMeters,
+          resolvedLookYawRadians,
+          this.#dependencies.createWaterborneTraversalColliderPredicate(
+            playerRuntime
+          ),
+          Object.freeze({
+            surfaceColliderSnapshots: authoritativeSurfaceColliders
+          })
+        ),
       bodyControl: Object.freeze({
         boost: traversalIntent?.bodyControl.boost === true,
         moveAxis,
@@ -183,34 +231,21 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
       traversalState: playerRuntime.unmountedTraversalState,
       waterRegionSnapshots: this.#dependencies.waterRegionSnapshots
     });
-    playerRuntime.unmountedTraversalState = preparedTraversalStep.traversalState;
+    const preparedTraversalStep = traversalBodyStep.preparedTraversalStep;
+    playerRuntime.unmountedTraversalState =
+      traversalBodyStep.locomotionOutcome.traversalState;
+    const transitionSnapshot = traversalBodyStep.transitionSnapshot;
 
     if (preparedTraversalStep.locomotionMode === "swim") {
-      const swimSnapshot = playerRuntime.swimBodyRuntime.advance(
-        {
-          boost: preparedTraversalStep.bodyControl.boost,
-          moveAxis: preparedTraversalStep.bodyControl.moveAxis,
-          strafeAxis: preparedTraversalStep.bodyControl.strafeAxis,
-          yawAxis: preparedTraversalStep.bodyControl.turnAxis
-        },
-        this.#dependencies.swimTraversalConfig,
-        deltaSeconds,
-        preparedTraversalStep.waterlineHeightMeters,
-        preferredFacingYawRadians,
-        this.#dependencies.createWaterborneTraversalColliderPredicate(),
-        Object.freeze({
-          surfaceColliderSnapshots: authoritativeSurfaceColliders
-        })
-      );
-      const swimTraversalOutcome = resolveMetaverseUnmountedTraversalStep({
-        groundedBodySnapshot: null,
-        preparedTraversalStep,
-        surfaceColliderSnapshots: authoritativeSurfaceColliders,
-        surfacePolicyConfig: this.#dependencies.groundedBodyConfig,
-        swimBodySnapshot: swimSnapshot,
-        waterRegionSnapshots: this.#dependencies.waterRegionSnapshots
-      });
-      playerRuntime.unmountedTraversalState = swimTraversalOutcome.traversalState;
+      const swimSnapshot = traversalBodyStep.swimBodySnapshot;
+      const swimTraversalOutcome = traversalBodyStep.locomotionOutcome;
+
+      if (swimSnapshot === null) {
+        throw new Error(
+          "advanceMetaverseUnmountedTraversalBodyStep returned a grounded snapshot while swimming"
+        );
+      }
+
       this.#dependencies.playerStateSync.applySurfaceDriveSnapshotToPlayerRuntime(
         playerRuntime,
         {
@@ -225,54 +260,45 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
         deltaSeconds
       );
 
-      if (swimTraversalOutcome.grounded) {
+      if (transitionSnapshot.enteredGrounded) {
         playerRuntime.positionY =
-          swimTraversalOutcome.supportHeightMeters ?? playerRuntime.positionY;
-        playerRuntime.linearVelocityY = 0;
-        grounded = true;
-        resolvedLocomotionMode = "grounded";
+          transitionSnapshot.positionYMeters ?? playerRuntime.positionY;
       }
+
+      if (transitionSnapshot.resetVerticalVelocity) {
+        playerRuntime.linearVelocityY = 0;
+      }
+
+      grounded = transitionSnapshot.grounded;
+      resolvedLocomotionMode = transitionSnapshot.locomotionMode;
     } else {
-      groundedBodyJumpReady = playerRuntime.groundedBodyRuntime.snapshot.jumpReady;
       surfaceJumpSupported = preparedTraversalStep.surfaceJumpSupported;
       groundedJumpSupported = preparedTraversalStep.groundedJumpSupported;
+      const groundedBodySnapshot = traversalBodyStep.groundedBodySnapshot;
 
-      playerRuntime.groundedBodyRuntime.setAutostepEnabled(
-        preparedTraversalStep.autostepHeightMeters !== null,
-        preparedTraversalStep.autostepHeightMeters ??
-          this.#dependencies.groundedBodyConfig.stepHeightMeters
-      );
-      const groundedBodySnapshot = playerRuntime.groundedBodyRuntime.advance(
-        preparedTraversalStep.bodyIntent,
-        deltaSeconds,
-        preferredFacingYawRadians,
-        this.#dependencies.shouldConsiderTraversalCollider
-      );
+      if (groundedBodySnapshot === null) {
+        throw new Error(
+          "advanceMetaverseUnmountedTraversalBodyStep returned a swim snapshot while grounded"
+        );
+      }
+
       this.#dependencies.playerStateSync.applyGroundedBodySnapshotToPlayerRuntime(
         playerRuntime,
         groundedBodySnapshot,
         deltaSeconds
       );
-      const groundedTraversalOutcome = resolveMetaverseUnmountedTraversalStep({
-        groundedBodySnapshot,
-        preparedTraversalStep,
-        surfaceColliderSnapshots: authoritativeSurfaceColliders,
-        surfacePolicyConfig: this.#dependencies.groundedBodyConfig,
-        swimBodySnapshot: null,
-        waterRegionSnapshots: this.#dependencies.waterRegionSnapshots
-      });
-      playerRuntime.unmountedTraversalState =
-        groundedTraversalOutcome.traversalState;
 
-      if (groundedTraversalOutcome.locomotionMode === "swim") {
-        playerRuntime.positionY = groundedTraversalOutcome.waterlineHeightMeters;
-        playerRuntime.linearVelocityY = 0;
-        grounded = false;
-        resolvedLocomotionMode = "swim";
-      } else {
-        resolvedLocomotionMode = "grounded";
-        grounded = groundedTraversalOutcome.grounded;
+      if (transitionSnapshot.enteredSwim) {
+        playerRuntime.positionY =
+          transitionSnapshot.positionYMeters ?? playerRuntime.positionY;
       }
+
+      if (transitionSnapshot.resetVerticalVelocity) {
+        playerRuntime.linearVelocityY = 0;
+      }
+
+      resolvedLocomotionMode = transitionSnapshot.locomotionMode;
+      grounded = transitionSnapshot.grounded;
     }
 
     playerRuntime.lastGroundedBodyJumpReady = groundedBodyJumpReady;

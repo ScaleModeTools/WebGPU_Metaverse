@@ -13,8 +13,11 @@ import {
   createDuckHuntCoopRoomWebTransportServerEventMessage,
   createDuckHuntCoopRoomWebTransportSnapshotRequest,
   createMetaverseDriverVehicleControlIntentSnapshot,
+  createMetaverseGameplayTraversalIntentSnapshotInput,
   createMetaverseJoinPresenceCommand,
+  createMetaverseMountedOccupancyIdentityKey,
   createMetaversePlayerId,
+  createMetaversePresenceMountedOccupancySnapshot,
   createMetaversePresenceRosterSnapshot,
   createMetaversePresenceWebTransportCommandRequest,
   createMetaversePresenceWebTransportRosterRequest,
@@ -35,6 +38,7 @@ import {
   createMetaverseVehicleId,
   createPortalLaunchSelectionSnapshot,
   createUsername,
+  defaultMetaverseGameplayProfileId,
   defaultMetaverseMountedLookLimitPolicyId,
   experienceCatalog,
   isMetaversePresenceMountedCompatibilityLocomotionMode,
@@ -43,10 +47,15 @@ import {
   metaversePresenceCompatibilityLocomotionModeIds,
   metaversePresencePrimaryLocomotionModeIds,
   metaverseUnmountedPlayerLookConstraintBounds,
+  parseMetaverseMapBundleSnapshot,
   readExperienceCatalogEntry,
   readExperienceTickOwner,
   resolveMetaverseMountedLookConstraintBounds,
-  resolveMetaverseMountedOccupantRoleLookConstraintBounds
+  resolveMetaverseMountedOccupantRoleLookConstraintBounds,
+  shouldKeepMetaverseMountedOccupancyFreeRoam,
+  shouldTreatMetaversePlayerPoseAsTraversalBlocker,
+  shellArcadeGameplayProfile,
+  stagingGroundMapBundle
 } from "@webgpu-metaverse/shared";
 
 function createMetaverseSyncPlayerTraversalIntentCommand(input) {
@@ -200,6 +209,120 @@ test("shared metaverse presence locomotion keeps mounted as an explicit compatib
   );
 });
 
+test("shared metaverse presence blocker policy keeps player collision truth aligned across client and server", () => {
+  assert.equal(shouldKeepMetaverseMountedOccupancyFreeRoam(null), false);
+  assert.equal(
+    shouldKeepMetaverseMountedOccupancyFreeRoam({
+      occupancyKind: "entry",
+      occupantRole: "passenger"
+    }),
+    true
+  );
+  assert.equal(
+    shouldKeepMetaverseMountedOccupancyFreeRoam({
+      occupancyKind: "seat",
+      occupantRole: "passenger"
+    }),
+    false
+  );
+  assert.equal(
+    shouldTreatMetaversePlayerPoseAsTraversalBlocker("grounded", null),
+    true
+  );
+  assert.equal(
+    shouldTreatMetaversePlayerPoseAsTraversalBlocker("swim", null),
+    false
+  );
+  assert.equal(
+    shouldTreatMetaversePlayerPoseAsTraversalBlocker("grounded", {
+      occupancyKind: "entry",
+      occupantRole: "passenger"
+    }),
+    true
+  );
+  assert.equal(
+    shouldTreatMetaversePlayerPoseAsTraversalBlocker("grounded", {
+      occupancyKind: "seat",
+      occupantRole: "passenger"
+    }),
+    false
+  );
+});
+
+test("shared metaverse world bundles carry validated gameplay profile ids", () => {
+  assert.equal(
+    stagingGroundMapBundle.gameplayProfileId,
+    defaultMetaverseGameplayProfileId
+  );
+  assert.equal(shellArcadeGameplayProfile.id, "shell-arcade-gameplay");
+  assert.equal(
+    shellArcadeGameplayProfile.vehicleTraversal.waterContactProbeRadiusMeters,
+    1.75
+  );
+  assert.equal(
+    shellArcadeGameplayProfile.vehicleTraversal.waterlineHeightMeters,
+    0.12
+  );
+
+  const parsedBundle = parseMetaverseMapBundleSnapshot({
+    ...stagingGroundMapBundle,
+    gameplayProfileId: shellArcadeGameplayProfile.id
+  });
+
+  assert.equal(parsedBundle.gameplayProfileId, shellArcadeGameplayProfile.id);
+  assert.throws(
+    () =>
+      parseMetaverseMapBundleSnapshot({
+        ...stagingGroundMapBundle,
+        gameplayProfileId: "missing-gameplay-profile"
+      }),
+    /Unsupported metaverse gameplay profile/
+  );
+});
+
+test("shared metaverse world bundles preserve mounted seat and entry authoring", () => {
+  const parsedBundle = parseMetaverseMapBundleSnapshot(stagingGroundMapBundle);
+  const dockAsset = parsedBundle.environmentAssets.find(
+    (environmentAsset) => environmentAsset.assetId === "metaverse-hub-dock-v1"
+  );
+  const skiffAsset = parsedBundle.environmentAssets.find(
+    (environmentAsset) => environmentAsset.assetId === "metaverse-hub-skiff-v1"
+  );
+  const diveBoatAsset = parsedBundle.environmentAssets.find(
+    (environmentAsset) => environmentAsset.assetId === "metaverse-hub-dive-boat-v1"
+  );
+  const pushableCrateAsset = parsedBundle.environmentAssets.find(
+    (environmentAsset) =>
+      environmentAsset.assetId === "metaverse-hub-pushable-crate-v1"
+  );
+
+  assert.notEqual(dockAsset, undefined);
+  assert.notEqual(skiffAsset, undefined);
+  assert.notEqual(diveBoatAsset, undefined);
+  assert.notEqual(pushableCrateAsset, undefined);
+  assert.equal(dockAsset?.traversalAffordance, "support");
+  assert.equal(dockAsset?.surfaceColliders.length, 0);
+  assert.equal(dockAsset?.collider, null);
+  assert.notEqual(skiffAsset?.collider, null);
+  assert.equal(skiffAsset?.dynamicBody, null);
+  assert.equal(skiffAsset?.entries?.[0]?.entryId, "deck-entry");
+  assert.equal(skiffAsset?.surfaceColliders.length, 0);
+  assert.equal(skiffAsset?.seats?.[0]?.seatId, "driver-seat");
+  assert.equal(
+    skiffAsset?.seats?.[0]?.controlRoutingPolicyId,
+    "vehicle-surface-drive"
+  );
+  assert.equal(skiffAsset?.traversalAffordance, "mount");
+  assert.equal(skiffAsset?.collider?.size.y, 2.4);
+  assert.notEqual(diveBoatAsset?.collider, null);
+  assert.equal(diveBoatAsset?.dynamicBody, null);
+  assert.equal(diveBoatAsset?.surfaceColliders.length, 0);
+  assert.equal(diveBoatAsset?.traversalAffordance, "mount");
+  assert.equal(diveBoatAsset?.collider?.size.y, 3.8);
+  assert.equal(pushableCrateAsset?.traversalAffordance, "blocker");
+  assert.equal(pushableCrateAsset?.dynamicBody?.kind, "dynamic-rigid-body");
+});
+
 test("metaverse presence contracts freeze roster and normalize ids", () => {
   const playerId = createMetaversePlayerId(" harbor-pilot-1 ");
   const username = createUsername("Harbor Pilot");
@@ -321,6 +444,22 @@ test("metaverse realtime world contracts freeze snapshots and derive seated occu
     }
   ];
   const worldSnapshot = createMetaverseRealtimeWorldSnapshot({
+    environmentBodies: [
+      {
+        environmentAssetId: " metaverse-hub-pushable-crate-v1 ",
+        linearVelocity: {
+          x: 0.2,
+          y: 0,
+          z: -0.4
+        },
+        position: {
+          x: -8,
+          y: 0.46,
+          z: 14
+        },
+        yawRadians: Math.PI * -2.08
+      }
+    ],
     players: playerInputs,
     snapshotSequence: 9.6,
     tick: {
@@ -420,7 +559,14 @@ test("metaverse realtime world contracts freeze snapshots and derive seated occu
     worldSnapshot.vehicles[0]?.seats[0]?.occupantPlayerId,
     playerId
   );
+  assert.equal(
+    worldSnapshot.environmentBodies[0]?.environmentAssetId,
+    "metaverse-hub-pushable-crate-v1"
+  );
+  assert.equal(worldSnapshot.environmentBodies[0]?.linearVelocity.z, -0.4);
+  assert.equal(worldSnapshot.environmentBodies[0]?.yawRadians, Math.PI * -2.08);
   assert.ok(Object.isFrozen(worldSnapshot.players));
+  assert.ok(Object.isFrozen(worldSnapshot.environmentBodies));
   assert.ok(Object.isFrozen(worldSnapshot.vehicles));
   assert.ok(Object.isFrozen(worldSnapshot.players[0]?.mountedOccupancy));
 });
@@ -617,6 +763,53 @@ test("metaverse realtime world contracts reject seat occupancy that disagrees wi
   );
 });
 
+test("metaverse realtime world contracts reject duplicate environment body ids", () => {
+  assert.throws(
+    () =>
+      createMetaverseRealtimeWorldSnapshot({
+        environmentBodies: [
+          {
+            environmentAssetId: "metaverse-hub-pushable-crate-v1",
+            linearVelocity: {
+              x: 0,
+              y: 0,
+              z: 0
+            },
+            position: {
+              x: -8,
+              y: 0.46,
+              z: 14
+            },
+            yawRadians: 0
+          },
+          {
+            environmentAssetId: "metaverse-hub-pushable-crate-v1",
+            linearVelocity: {
+              x: 0,
+              y: 0,
+              z: 0
+            },
+            position: {
+              x: -7,
+              y: 0.46,
+              z: 14
+            },
+            yawRadians: 0
+          }
+        ],
+        players: [],
+        tick: {
+          currentTick: 1,
+          emittedAtServerTimeMs: 100,
+          simulationTimeMs: 100,
+          tickIntervalMs: 100
+        },
+        vehicles: []
+      }),
+    /duplicate environment body environmentAssetId/
+  );
+});
+
 test("metaverse realtime world driver control commands normalize explicit intent for transport", () => {
   const playerId = createMetaversePlayerId(" harbor-pilot-1 ");
 
@@ -689,6 +882,46 @@ test("metaverse realtime world traversal intent commands normalize explicit tran
   assert.equal(webTransportRequest.command.intent.inputSequence, 4);
 });
 
+test("metaverse gameplay traversal intent snapshots normalize supported locomotion and drop unsupported routing", () => {
+  const groundedIntent = createMetaverseGameplayTraversalIntentSnapshotInput({
+    boost: true,
+    jump: true,
+    locomotionMode: "grounded",
+    moveAxis: 2.4,
+    pitchRadians: Math.PI * 0.25,
+    strafeAxis: -4,
+    turnAxis: 0.5,
+    yawRadians: -Math.PI * 0.5
+  });
+  const swimIntent = createMetaverseGameplayTraversalIntentSnapshotInput({
+    boost: true,
+    jump: true,
+    locomotionMode: "swim",
+    moveAxis: 2.4,
+    pitchRadians: 0.1,
+    strafeAxis: -4,
+    turnAxis: 0.5,
+    yawRadians: 0.25
+  });
+  const unsupportedIntent = createMetaverseGameplayTraversalIntentSnapshotInput({
+    boost: true,
+    jump: true,
+    locomotionMode: null,
+    moveAxis: 1,
+    pitchRadians: 0,
+    strafeAxis: 0,
+    turnAxis: 0,
+    yawRadians: 0
+  });
+
+  assert.equal(groundedIntent?.actionIntent?.kind, "jump");
+  assert.equal(groundedIntent?.bodyControl?.moveAxis, 1);
+  assert.equal(groundedIntent?.bodyControl?.strafeAxis, -1);
+  assert.equal(swimIntent?.actionIntent?.kind, "none");
+  assert.equal(swimIntent?.bodyControl?.moveAxis, 1);
+  assert.equal(unsupportedIntent, null);
+});
+
 test("metaverse realtime world look intent commands normalize explicit transport inputs", () => {
   const playerId = createMetaversePlayerId(" harbor-pilot-1 ");
 
@@ -748,6 +981,28 @@ test("metaverse realtime world mounted occupancy commands normalize explicit rel
     webTransportRequest.command.mountedOccupancy?.seatId,
     "driver-seat"
   );
+});
+
+test("shared metaverse mounted occupancy identity keys stay aligned across command and authority seams", () => {
+  const entryKey = createMetaverseMountedOccupancyIdentityKey({
+    environmentAssetId: "harbor-skiff-1",
+    entryId: "boarding-port",
+    occupancyKind: "entry",
+    seatId: null
+  });
+  const seatKey = createMetaverseMountedOccupancyIdentityKey(
+    createMetaversePresenceMountedOccupancySnapshot({
+      environmentAssetId: " harbor-skiff-1 ",
+      entryId: null,
+      occupancyKind: "seat",
+      occupantRole: "driver",
+      seatId: " driver-seat "
+    })
+  );
+
+  assert.equal(entryKey, "harbor-skiff-1:entry:boarding-port:");
+  assert.equal(seatKey, "harbor-skiff-1:seat::driver-seat");
+  assert.equal(createMetaverseMountedOccupancyIdentityKey(null), null);
 });
 
 test("webtransport shared contracts wrap presence, world, and Duck Hunt room messages with explicit domain names", () => {

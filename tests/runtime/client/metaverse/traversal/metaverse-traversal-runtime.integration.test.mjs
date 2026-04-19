@@ -9,7 +9,9 @@ import {
   resolveMetaverseTraversalAuthoritySnapshotInput
 } from "@webgpu-metaverse/shared";
 
-import { authoredWaterBayOpenWaterSpawn } from "../../../metaverse-authored-world-test-fixtures.mjs";
+import {
+  authoredWaterBayOpenWaterSpawn
+} from "../../../metaverse-authored-world-test-fixtures.mjs";
 import { createClientModuleLoader } from "../../load-client-module.mjs";
 import { createFakePhysicsRuntime } from "../../fake-rapier-runtime.mjs";
 
@@ -72,6 +74,7 @@ function createTraversalAuthoritySnapshot(
 
 function createAuthoritativeLocalPlayerPoseSnapshot(input) {
   const {
+    lastProcessedInputSequence = 0,
     lastAcceptedJumpActionSequence = 0,
     lastProcessedJumpActionSequence = 0,
     pendingActionSequence: pendingActionSequenceOverride = 0,
@@ -94,6 +97,7 @@ function createAuthoritativeLocalPlayerPoseSnapshot(input) {
 
   return Object.freeze({
     ...authoritativeSnapshot,
+    lastProcessedInputSequence,
     traversalAuthority:
       authoritativeSnapshot.traversalAuthority ??
       resolveMetaverseTraversalAuthoritySnapshotInput({
@@ -131,6 +135,12 @@ function createMountedAnchorKey(
 
 const forwardTravelInput = Object.freeze({
   boost: false,
+  moveAxis: 1,
+  pitchAxis: 0,
+  yawAxis: 0
+});
+const boostedForwardTravelInput = Object.freeze({
+  boost: true,
   moveAxis: 1,
   pitchAxis: 0,
   yawAxis: 0
@@ -301,7 +311,7 @@ async function createTraversalHarness(options = {}) {
   const traversalRuntime = new MetaverseTraversalRuntime(config, {
     groundedBodyRuntime,
     physicsRuntime,
-    readDynamicEnvironmentPose(environmentAssetId) {
+    readDynamicEnvironmentCollisionPose(environmentAssetId) {
       return dynamicPoseMap.get(environmentAssetId) ?? null;
     },
     readMountedEnvironmentAnchorSnapshot(mountedEnvironment) {
@@ -413,6 +423,53 @@ async function createOpenWaterTraversalHarness(options = {}) {
   });
 }
 
+async function createShorelineTransitionTraversalHarness(options = {}) {
+  const nextConfig = options.config ?? {};
+  const elevatedSupportHeightMeters = authoredWaterBayOpenWaterSpawn.y + 0.42;
+  const supportCenterX = authoredWaterBayOpenWaterSpawn.x - 1.25;
+  const supportCenterZ = authoredWaterBayOpenWaterSpawn.z;
+
+  return createTraversalHarness({
+    ...options,
+    includeGroundCollider: false,
+    config: {
+      ...nextConfig,
+      camera: {
+        ...(nextConfig.camera ?? {}),
+        initialYawRadians: Math.PI / 2,
+        spawnPosition: {
+          x: supportCenterX,
+          y: elevatedSupportHeightMeters + 1.62,
+          z: supportCenterZ,
+          ...(nextConfig.camera?.spawnPosition ?? {})
+        }
+      },
+      groundedBody: {
+        ...(nextConfig.groundedBody ?? {}),
+        spawnPosition: {
+          x: supportCenterX,
+          y: elevatedSupportHeightMeters,
+          z: supportCenterZ,
+          ...(nextConfig.groundedBody?.spawnPosition ?? {})
+        }
+      }
+    },
+    surfaceColliderSnapshots: [
+      Object.freeze({
+        halfExtents: freezeVector3(1.25, 0.21, 3),
+        rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+        translation: freezeVector3(
+          supportCenterX,
+          elevatedSupportHeightMeters - 0.21,
+          supportCenterZ
+        ),
+        traversalAffordance: "support"
+      }),
+      ...(options.surfaceColliderSnapshots ?? [])
+    ]
+  });
+}
+
 async function createAuthoritativeGroundedSimulationHarness(
   options = {}
 ) {
@@ -472,7 +529,7 @@ async function createAuthoritativeGroundedSimulationHarness(
 async function createShippedSurfaceColliderSnapshots() {
   const [{ metaverseEnvironmentProofConfig }, { resolvePlacedCuboidColliders }] =
     await Promise.all([
-      clientLoader.load("/src/app/states/metaverse-asset-proof.ts"),
+      clientLoader.load("/src/metaverse/world/proof/index.ts"),
       clientLoader.load("/src/metaverse/states/metaverse-environment-collision.ts")
     ]);
 
@@ -1160,6 +1217,98 @@ test("MetaverseTraversalRuntime keeps sustained swim reconciliation-free against
       `expected zero sustained swim authority corrections, received ${localHarness.traversalRuntime.localReconciliationCorrectionCount} with events ${JSON.stringify(correctionEvents)}`
     );
     assert.ok(localHarness.traversalRuntime.cameraSnapshot.position.z < swimStartZ - 0.9);
+  } finally {
+    localHarness.groundedBodyRuntime.dispose();
+    authoritativeHarness.groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime keeps boosted shoreline water entry reconciliation-free against fixed-tick authority when a render frame spans the transition", async () => {
+  const localHarness = await createShorelineTransitionTraversalHarness();
+  const authoritativeHarness = await createShorelineTransitionTraversalHarness();
+  const correctionEvents = [];
+  let authoritativeAccumulatorSeconds = 0;
+  const localDeltaSeconds = 0.12;
+
+  try {
+    localHarness.traversalRuntime.boot();
+    authoritativeHarness.traversalRuntime.boot();
+    assert.equal(localHarness.traversalRuntime.locomotionMode, "grounded");
+    assert.equal(authoritativeHarness.traversalRuntime.locomotionMode, "grounded");
+    const groundedStartX =
+      localHarness.traversalRuntime.localTraversalPoseSnapshot.position.x;
+
+    let latestAuthoritativeSnapshot = createTraversalAuthoritySnapshot(
+      authoritativeHarness.traversalRuntime.localTraversalPoseSnapshot,
+      authoritativeHarness.traversalRuntime.localTraversalPoseSnapshot,
+      authoritativeHarness.groundedBodyRuntime.snapshot,
+      groundedFixedStepSeconds
+    );
+
+    for (let frame = 0; frame < 20; frame += 1) {
+      localHarness.traversalRuntime.advance(
+        boostedForwardTravelInput,
+        localDeltaSeconds
+      );
+      authoritativeAccumulatorSeconds += localDeltaSeconds;
+
+      while (
+        authoritativeAccumulatorSeconds + 0.000001 >= groundedFixedStepSeconds
+      ) {
+        const previousAuthoritativePose =
+          authoritativeHarness.traversalRuntime.localTraversalPoseSnapshot;
+
+        authoritativeHarness.traversalRuntime.advance(
+          boostedForwardTravelInput,
+          groundedFixedStepSeconds
+        );
+
+        latestAuthoritativeSnapshot = createTraversalAuthoritySnapshot(
+          previousAuthoritativePose,
+          authoritativeHarness.traversalRuntime.localTraversalPoseSnapshot,
+          authoritativeHarness.groundedBodyRuntime.snapshot,
+          groundedFixedStepSeconds
+        );
+        authoritativeAccumulatorSeconds = Math.max(
+          0,
+          authoritativeAccumulatorSeconds - groundedFixedStepSeconds
+        );
+      }
+
+      syncAuthoritativeLocalPlayerPose(
+        localHarness.traversalRuntime,
+        latestAuthoritativeSnapshot
+      );
+
+      if (
+        localHarness.traversalRuntime.localReconciliationCorrectionCount >
+        correctionEvents.length
+      ) {
+        correctionEvents.push(
+          Object.freeze({
+            correction: localHarness.traversalRuntime
+              .authoritativeCorrectionTelemetrySnapshot,
+            frame: frame + 1,
+            localPose: localHarness.traversalRuntime.localTraversalPoseSnapshot,
+            locomotionMode: localHarness.traversalRuntime.locomotionMode,
+            surfaceRouting:
+              localHarness.traversalRuntime.surfaceRoutingLocalTelemetrySnapshot
+          })
+        );
+      }
+    }
+
+    assert.equal(
+      localHarness.traversalRuntime.localReconciliationCorrectionCount,
+      0,
+      `expected zero boosted shoreline-entry authority corrections, received ${localHarness.traversalRuntime.localReconciliationCorrectionCount} with events ${JSON.stringify(correctionEvents)}`
+    );
+    assert.equal(localHarness.traversalRuntime.locomotionMode, "swim");
+    assert.equal(authoritativeHarness.traversalRuntime.locomotionMode, "swim");
+    assert.ok(
+      localHarness.traversalRuntime.localTraversalPoseSnapshot.position.x >
+        groundedStartX + 0.6
+    );
   } finally {
     localHarness.groundedBodyRuntime.dispose();
     authoritativeHarness.groundedBodyRuntime.dispose();

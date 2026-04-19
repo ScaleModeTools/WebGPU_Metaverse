@@ -8,7 +8,7 @@ import {
   createMetaverseRealtimeWorldWebTransportServerEventMessage
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
-import { MetaverseAuthoritativeWorldRuntime } from "../classes/metaverse-authoritative-world-runtime.js";
+import type { MetaverseAuthoritativeWorldRuntimeOwner } from "../types/metaverse-authoritative-world-runtime-owner.js";
 
 interface PersistentReliableStreamContext<Response> {
   readonly closed: Promise<void>;
@@ -46,13 +46,13 @@ function resolveBoundPlayerId(
 
 export class MetaverseWorldWebTransportSession {
   readonly #adapter: MetaverseWorldWebTransportAdapter;
-  readonly #runtime: MetaverseAuthoritativeWorldRuntime;
+  readonly #runtime: MetaverseAuthoritativeWorldRuntimeOwner;
 
   #boundPlayerId: MetaversePlayerId | null = null;
   #disposed = false;
 
   constructor(
-    runtime: MetaverseAuthoritativeWorldRuntime,
+    runtime: MetaverseAuthoritativeWorldRuntimeOwner,
     adapter: MetaverseWorldWebTransportAdapter
   ) {
     this.#adapter = adapter;
@@ -170,13 +170,13 @@ export class MetaverseWorldWebTransportSession {
 }
 
 export class MetaverseWorldWebTransportAdapter {
-  readonly #runtime: MetaverseAuthoritativeWorldRuntime;
+  readonly #runtime: MetaverseAuthoritativeWorldRuntimeOwner;
   readonly #snapshotSubscribers = new Map<
     MetaverseWorldWebTransportSession,
     MetaverseWorldSnapshotSubscriber
   >();
 
-  constructor(runtime: MetaverseAuthoritativeWorldRuntime) {
+  constructor(runtime: MetaverseAuthoritativeWorldRuntimeOwner) {
     this.#runtime = runtime;
   }
 

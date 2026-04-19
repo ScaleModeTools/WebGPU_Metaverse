@@ -244,3 +244,50 @@ test("resolvePlacedCollisionTriMeshes keeps static contact meshes when semantic 
   assert.ok(triMeshes[0].vertices.length > 0);
   assert.ok(triMeshes[0].indices.length > 0);
 });
+
+test("resolveDynamicCollisionTriMeshes preserves local mesh shape while baking authored scale for moving assets", async () => {
+  const [{ BoxGeometry, Group, Mesh, MeshStandardMaterial }, { resolveDynamicCollisionTriMeshes }] =
+    await Promise.all([
+      import("three/webgpu"),
+      clientLoader.load("/src/metaverse/states/metaverse-environment-collision.ts")
+    ]);
+  const collisionScene = new Group();
+  const collisionMesh = new Mesh(
+    new BoxGeometry(2, 1, 4),
+    new MeshStandardMaterial({ color: 0xffffff })
+  );
+
+  collisionScene.add(collisionMesh);
+  collisionScene.updateMatrixWorld(true);
+
+  const triMeshes = resolveDynamicCollisionTriMeshes(
+    {
+      placement: "dynamic",
+      placements: [
+        {
+          position: { x: 12, y: 3, z: -8 },
+          rotationYRadians: Math.PI * 0.5,
+          scale: 2
+        }
+      ]
+    },
+    collisionScene
+  );
+
+  assert.equal(triMeshes.length, 1);
+  assert.ok(triMeshes[0].vertices.length > 0);
+  assert.ok(triMeshes[0].indices.length > 0);
+
+  const bounds = measureBounds(triMeshes[0].vertices);
+
+  assert.deepEqual(bounds.min, {
+    x: -2,
+    y: -1,
+    z: -4
+  });
+  assert.deepEqual(bounds.max, {
+    x: 2,
+    y: 1,
+    z: 4
+  });
+});

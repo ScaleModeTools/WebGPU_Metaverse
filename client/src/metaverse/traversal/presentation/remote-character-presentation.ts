@@ -46,6 +46,9 @@ export interface RemoteCharacterPresentationAuthoritativeSample {
   readonly deltaSeconds: number;
   readonly extrapolationSeconds: number;
   readonly nextPlayer: MetaverseRealtimePlayerSnapshot | null;
+  readonly remoteCharacterRootAlpha: number;
+  readonly remoteCharacterRootBasePlayer: MetaverseRealtimePlayerSnapshot;
+  readonly remoteCharacterRootNextPlayer: MetaverseRealtimePlayerSnapshot | null;
   readonly sampleEpoch: number;
 }
 
@@ -103,36 +106,38 @@ function lerpWrappedRadians(
   );
 }
 
-function sampleRemotePlayerPositionInto(
+function sampleRemotePlayerRootPositionInto(
   target: MutableVector3Snapshot,
-  basePlayer: MetaverseRealtimePlayerSnapshot,
-  nextPlayer: MetaverseRealtimePlayerSnapshot | null,
-  alpha: number,
-  extrapolationSeconds: number
+  remoteCharacterRootBasePlayer: MetaverseRealtimePlayerSnapshot,
+  remoteCharacterRootNextPlayer: MetaverseRealtimePlayerSnapshot | null,
+  remoteCharacterRootAlpha: number
 ): MutableVector3Snapshot {
-  if (nextPlayer !== null) {
+  if (remoteCharacterRootNextPlayer !== null) {
     return writeMutableVector3(
       target,
-      lerp(basePlayer.position.x, nextPlayer.position.x, alpha),
-      lerp(basePlayer.position.y, nextPlayer.position.y, alpha),
-      lerp(basePlayer.position.z, nextPlayer.position.z, alpha)
-    );
-  }
-
-  if (extrapolationSeconds <= 0) {
-    return writeMutableVector3(
-      target,
-      basePlayer.position.x,
-      basePlayer.position.y,
-      basePlayer.position.z
+      lerp(
+        remoteCharacterRootBasePlayer.position.x,
+        remoteCharacterRootNextPlayer.position.x,
+        remoteCharacterRootAlpha
+      ),
+      lerp(
+        remoteCharacterRootBasePlayer.position.y,
+        remoteCharacterRootNextPlayer.position.y,
+        remoteCharacterRootAlpha
+      ),
+      lerp(
+        remoteCharacterRootBasePlayer.position.z,
+        remoteCharacterRootNextPlayer.position.z,
+        remoteCharacterRootAlpha
+      )
     );
   }
 
   return writeMutableVector3(
     target,
-    basePlayer.position.x + basePlayer.linearVelocity.x * extrapolationSeconds,
-    basePlayer.position.y + basePlayer.linearVelocity.y * extrapolationSeconds,
-    basePlayer.position.z + basePlayer.linearVelocity.z * extrapolationSeconds
+    remoteCharacterRootBasePlayer.position.x,
+    remoteCharacterRootBasePlayer.position.y,
+    remoteCharacterRootBasePlayer.position.z
   );
 }
 
@@ -387,6 +392,9 @@ export class MetaverseRemoteCharacterPresentationOwner {
     deltaSeconds,
     extrapolationSeconds,
     nextPlayer,
+    remoteCharacterRootAlpha,
+    remoteCharacterRootBasePlayer,
+    remoteCharacterRootNextPlayer,
     sampleEpoch
   }: RemoteCharacterPresentationAuthoritativeSample): void {
     const sampledDiscretePlayerSnapshot = selectSampledRemotePlayerSnapshot(
@@ -419,12 +427,11 @@ export class MetaverseRemoteCharacterPresentationOwner {
         ),
         deltaSeconds
       );
-    sampleRemotePlayerPositionInto(
+    sampleRemotePlayerRootPositionInto(
       this.#snapshot.presentation.position,
-      basePlayer,
-      nextPlayer,
-      alpha,
-      extrapolationSeconds
+      remoteCharacterRootBasePlayer,
+      remoteCharacterRootNextPlayer,
+      remoteCharacterRootAlpha
     );
     this.#snapshot.presentation.yawRadians =
       sampledDiscretePlayerSnapshot.mountedOccupancy === null

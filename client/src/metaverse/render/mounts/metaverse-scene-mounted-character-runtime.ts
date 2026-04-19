@@ -1,7 +1,7 @@
 import { Object3D } from "three/webgpu";
 
-import {
-  shouldConstrainMountedOccupancyToAnchor
+import type {
+  MetaverseMountedOccupancyPresentationStateSnapshot
 } from "../../states/mounted-occupancy";
 import {
   createMountedCharacterSeatTransformSnapshot,
@@ -15,7 +15,9 @@ import type {
   MountedEnvironmentSelectionReference,
   ResolvedMountedEnvironmentSelection
 } from "./metaverse-scene-mounts";
-import { resolveMountedEnvironmentSelectionFromSnapshot } from "./metaverse-scene-mount-snapshots";
+import {
+  resolveMetaverseSceneMountedSelectionSnapshot
+} from "./metaverse-scene-mount-snapshots";
 
 const mountedCharacterSeatTransformScratch =
   createMountedCharacterSeatTransformSnapshot();
@@ -97,11 +99,15 @@ export function syncMountedCharacterRuntimeFromSelectionReference<
   characterProofRuntime: TCharacterRuntime,
   mountedCharacterRuntime: MountedCharacterRuntime<TEnvironmentRuntime> | null,
   mountedEnvironment: MountedEnvironmentSelectionReference | null | undefined,
+  mountedOccupancyPresentationState:
+    | MetaverseMountedOccupancyPresentationStateSnapshot
+    | null
+    | undefined,
   resolveMountedEnvironmentRuntime: (
     environmentAssetId: string
   ) => TEnvironmentRuntime | null
 ): MountedCharacterRuntime<TEnvironmentRuntime> | null {
-  if (!shouldConstrainMountedOccupancyToAnchor(mountedEnvironment)) {
+  if (mountedOccupancyPresentationState?.constrainToAnchor !== true) {
     if (mountedCharacterRuntime !== null) {
       dismountCharacterFromEnvironmentAsset(
         characterProofRuntime,
@@ -123,27 +129,13 @@ export function syncMountedCharacterRuntimeFromSelectionReference<
     return null;
   }
 
-  const targetEnvironment = resolveMountedEnvironmentRuntime(
-    mountedEnvironment.environmentAssetId
-  );
+  const mountedSelectionSnapshot =
+    resolveMetaverseSceneMountedSelectionSnapshot(
+      mountedEnvironment,
+      resolveMountedEnvironmentRuntime
+    );
 
-  if (targetEnvironment === null) {
-    if (mountedCharacterRuntime !== null) {
-      dismountCharacterFromEnvironmentAsset(
-        characterProofRuntime,
-        mountedCharacterRuntime
-      );
-    }
-
-    return null;
-  }
-
-  const occupiedSelection = resolveMountedEnvironmentSelectionFromSnapshot(
-    targetEnvironment,
-    mountedEnvironment
-  );
-
-  if (occupiedSelection === null) {
+  if (mountedSelectionSnapshot === null) {
     if (mountedCharacterRuntime !== null) {
       dismountCharacterFromEnvironmentAsset(
         characterProofRuntime,
@@ -157,9 +149,9 @@ export function syncMountedCharacterRuntimeFromSelectionReference<
   const mountTargetChanged =
     mountedCharacterRuntime === null ||
     mountedCharacterRuntime.environmentAsset.environmentAssetId !==
-      mountedEnvironment.environmentAssetId ||
-    mountedCharacterRuntime.entryId !== mountedEnvironment.entryId ||
-    mountedCharacterRuntime.seatId !== mountedEnvironment.seatId;
+      mountedSelectionSnapshot.mountedEnvironment.environmentAssetId ||
+    mountedCharacterRuntime.entryId !== mountedSelectionSnapshot.mountedEnvironment.entryId ||
+    mountedCharacterRuntime.seatId !== mountedSelectionSnapshot.mountedEnvironment.seatId;
 
   if (!mountTargetChanged) {
     return mountedCharacterRuntime;
@@ -174,8 +166,8 @@ export function syncMountedCharacterRuntimeFromSelectionReference<
 
   return mountCharacterOnEnvironmentAsset(
     characterProofRuntime,
-    targetEnvironment,
-    occupiedSelection
+    mountedSelectionSnapshot.environmentAsset,
+    mountedSelectionSnapshot.occupiedSelection
   );
 }
 

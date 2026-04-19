@@ -23,6 +23,46 @@ function normalizeTraversalActionSequence(rawValue: number): number {
   return Math.floor(rawValue);
 }
 
+function normalizeActiveTraversalAction(
+  localActiveTraversalAction:
+    | MetaverseTraversalActiveActionSnapshot
+    | undefined
+): MetaverseTraversalActiveActionSnapshot {
+  return (
+    localActiveTraversalAction ??
+    Object.freeze({
+      kind: "none",
+      phase: "idle"
+    } satisfies MetaverseTraversalActiveActionSnapshot)
+  );
+}
+
+function resolveAuthorityActiveTraversalAction(
+  locomotionMode: MetaverseLocomotionModeId,
+  localActiveTraversalAction:
+    | MetaverseTraversalActiveActionSnapshot
+    | undefined,
+  traversalState: MetaverseUnmountedTraversalStateSnapshot
+): MetaverseTraversalActiveActionSnapshot {
+  const normalizedActiveTraversalAction =
+    normalizeActiveTraversalAction(localActiveTraversalAction);
+
+  if (
+    locomotionMode === "grounded" &&
+    traversalState.actionState.pendingActionKind === "jump" &&
+    traversalState.actionState.resolvedActionKind !== "jump" &&
+    normalizedActiveTraversalAction.kind === "jump" &&
+    normalizedActiveTraversalAction.phase === "falling"
+  ) {
+    return Object.freeze({
+      kind: "none",
+      phase: "idle"
+    });
+  }
+
+  return normalizedActiveTraversalAction;
+}
+
 export interface SyncLocalTraversalAuthorityStateInput {
   readonly advanceTick: boolean;
   readonly localActiveTraversalAction: MetaverseTraversalActiveActionSnapshot;
@@ -31,7 +71,9 @@ export interface SyncLocalTraversalAuthorityStateInput {
 }
 
 export interface ResolveLatestPredictedGroundedTraversalActionSequenceInput {
-  readonly localActiveTraversalAction: MetaverseTraversalActiveActionSnapshot;
+  readonly localActiveTraversalAction:
+    | MetaverseTraversalActiveActionSnapshot
+    | undefined;
   readonly locomotionMode: MetaverseLocomotionModeId;
   readonly traversalState: MetaverseUnmountedTraversalStateSnapshot;
 }
@@ -78,7 +120,11 @@ export class MetaverseLocalTraversalAuthorityState {
     }
 
     this.#snapshot = resolveMetaverseTraversalAuthoritySnapshotForActionState({
-      activeAction: localActiveTraversalAction,
+      activeAction: resolveAuthorityActiveTraversalAction(
+        locomotionMode,
+        localActiveTraversalAction,
+        traversalState
+      ),
       actionState: traversalState.actionState,
       currentTick: this.#currentTick,
       locomotionMode: locomotionMode === "swim" ? "swim" : "grounded",
@@ -118,6 +164,8 @@ export class MetaverseLocalTraversalAuthorityState {
       return latestIssuedTraversalActionSequence;
     }
 
+    const normalizedActiveTraversalAction =
+      normalizeActiveTraversalAction(localActiveTraversalAction);
     const groundedTraversalActionState = traversalState.actionState;
     const pendingActionSequence =
       groundedTraversalActionState.pendingActionKind === "jump"
@@ -125,8 +173,13 @@ export class MetaverseLocalTraversalAuthorityState {
         : 0;
     const resolvedActiveJumpActionSequence =
       groundedTraversalActionState.resolvedActionKind === "jump" &&
-      localActiveTraversalAction.kind === "jump" &&
-      localActiveTraversalAction.phase !== "idle"
+      (
+        localActiveTraversalAction === undefined ||
+        (
+          normalizedActiveTraversalAction.kind === "jump" &&
+          normalizedActiveTraversalAction.phase !== "idle"
+        )
+      )
         ? groundedTraversalActionState.resolvedActionSequence
         : 0;
 

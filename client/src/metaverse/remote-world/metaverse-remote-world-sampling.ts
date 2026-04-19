@@ -1,4 +1,5 @@
 import type {
+  MetaverseRealtimeEnvironmentBodySnapshot,
   MetaversePlayerId,
   MetaverseRealtimePlayerSnapshot,
   MetaverseRealtimeVehicleSnapshot,
@@ -152,5 +153,22 @@ export function indexMetaverseWorldVehiclesByVehicleId(
 
   for (const vehicleSnapshot of vehicles) {
     vehicleSnapshotsByVehicleId.set(vehicleSnapshot.vehicleId, vehicleSnapshot);
+  }
+}
+
+export function indexMetaverseWorldEnvironmentBodiesByEnvironmentAssetId(
+  environmentBodies: readonly MetaverseRealtimeEnvironmentBodySnapshot[],
+  environmentBodySnapshotsByEnvironmentAssetId: Map<
+    string,
+    MetaverseRealtimeEnvironmentBodySnapshot
+  >
+): void {
+  environmentBodySnapshotsByEnvironmentAssetId.clear();
+
+  for (const environmentBodySnapshot of environmentBodies) {
+    environmentBodySnapshotsByEnvironmentAssetId.set(
+      environmentBodySnapshot.environmentAssetId,
+      environmentBodySnapshot
+    );
   }
 }

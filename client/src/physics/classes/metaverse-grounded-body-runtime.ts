@@ -3,7 +3,7 @@ import {
   createMetaverseGroundedBodyStepStateSnapshot,
   createMetaverseSurfaceTraversalVector3Snapshot as freezeVector3,
   prepareMetaverseGroundedBodyStep,
-  resolveMetaverseGroundedBodyStep,
+  resolveMetaverseGroundedBodyControllerStep,
   syncMetaverseGroundedBodyStepState,
   toFiniteNumber,
   wrapRadians,
@@ -352,15 +352,23 @@ export class MetaverseGroundedBodyRuntime {
 
     const currentTranslation = collider.translation();
     const computedMovement = controller.computedMovement();
-    const resolvedStep = resolveMetaverseGroundedBodyStep(
+    const resolvedStep = resolveMetaverseGroundedBodyControllerStep(
       this.#stepState,
       preparedStep,
-      freezeVector3(
-        currentTranslation.x + computedMovement.x,
-        currentTranslation.y + computedMovement.y - this.#standingOffsetMeters,
-        currentTranslation.z + computedMovement.z
-      ),
-      controller.computedGrounded(),
+      {
+        colliderCenterPosition: freezeVector3(
+          currentTranslation.x,
+          currentTranslation.y,
+          currentTranslation.z
+        ),
+        computedGrounded: controller.computedGrounded(),
+        computedMovementDelta: freezeVector3(
+          computedMovement.x,
+          computedMovement.y,
+          computedMovement.z
+        ),
+        standingOffsetMeters: this.#standingOffsetMeters
+      },
       this.#config,
       deltaSeconds
     );

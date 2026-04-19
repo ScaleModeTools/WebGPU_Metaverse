@@ -1,8 +1,8 @@
 import { Group, Object3D, Quaternion, Vector3 } from "three/webgpu";
 
 import type { MetaverseAttachmentProofConfig } from "../../types/metaverse-runtime";
-import {
-  shouldHolsterHeldAttachmentWhileMounted
+import type {
+  MetaverseMountedOccupancyPresentationStateSnapshot
 } from "../../states/mounted-occupancy";
 
 interface SceneAssetLoaderLike {
@@ -156,14 +156,13 @@ export function syncAttachmentProofRuntimeMount<
 >(
   attachmentRuntime: MetaverseAttachmentProofRuntime,
   characterProofRuntime: TCharacterRuntime,
-  mountedEnvironment: Pick<
-    import("../../types/metaverse-runtime").MountedEnvironmentSnapshot,
-    "occupancyKind" | "occupantRole"
-  > | null,
+  mountedOccupancyPresentationState:
+    | MetaverseMountedOccupancyPresentationStateSnapshot
+    | null,
   nodeResolvers: Pick<MetaverseAttachmentRuntimeNodeResolvers, "findSocketNode">
 ): void {
   const nextMountKind =
-    shouldHolsterHeldAttachmentWhileMounted(mountedEnvironment) &&
+    mountedOccupancyPresentationState?.holsterHeldAttachment === true &&
     attachmentRuntime.mountedHolsterMount !== null
       ? "mounted-holster"
       : "held";

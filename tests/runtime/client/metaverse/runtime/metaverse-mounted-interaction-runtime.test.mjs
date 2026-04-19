@@ -36,6 +36,34 @@ function createMountedEnvironmentSnapshot({
   });
 }
 
+function createMountedInteractionSnapshot({
+  focusedMountable = null,
+  mountedEnvironment = null
+} = {}) {
+  return Object.freeze({
+    boardingEntries:
+      mountedEnvironment === null
+        ? focusedMountable?.boardingEntries ?? Object.freeze([])
+        : Object.freeze([]),
+    focusedMountable,
+    mountedEnvironment,
+    seatTargetEnvironmentAssetId:
+      mountedEnvironment?.environmentAssetId ??
+      focusedMountable?.environmentAssetId ??
+      null,
+    selectableSeatTargets:
+      mountedEnvironment === null
+        ? focusedMountable?.directSeatTargets ?? Object.freeze([])
+        : mountedEnvironment.seatId === null
+          ? mountedEnvironment.seatTargets
+          : Object.freeze(
+              mountedEnvironment.seatTargets.filter(
+                (seatTarget) => seatTarget.seatId !== mountedEnvironment.seatId
+              )
+            )
+  });
+}
+
 test("MetaverseMountedInteractionRuntime boards the focused mountable and syncs canonical mounted occupancy through the world seam", async () => {
   const { MetaverseMountedInteractionRuntime } = await clientLoader.load(
     "/src/metaverse/classes/metaverse-mounted-interaction-runtime.ts"
@@ -69,14 +97,15 @@ test("MetaverseMountedInteractionRuntime boards the focused mountable and syncs 
       }
     },
     frameLoop: {
-      focusedMountable: Object.freeze({
-        boardingEntries: Object.freeze([]),
-        directSeatTargets: Object.freeze([]),
-        distanceFromCamera: 1.25,
-        environmentAssetId: "harbor-skiff",
-        label: "Harbor Skiff"
-      }),
-      mountedEnvironment: null
+      mountedInteraction: createMountedInteractionSnapshot({
+        focusedMountable: Object.freeze({
+          boardingEntries: Object.freeze([]),
+          directSeatTargets: Object.freeze([]),
+          distanceFromCamera: 1.25,
+          environmentAssetId: "harbor-skiff",
+          label: "Harbor Skiff"
+        })
+      })
     },
     remoteWorldRuntime: {
       syncMountedOccupancy(nextMountedEnvironment) {
@@ -102,15 +131,17 @@ test("MetaverseMountedInteractionRuntime resolves seat occupancy against mounted
   const callLog = [];
   const mountedEnvironmentSnapshot = createMountedEnvironmentSnapshot();
   const frameLoop = {
-    focusedMountable: Object.freeze({
-      boardingEntries: Object.freeze([]),
-      directSeatTargets: Object.freeze([]),
-      distanceFromCamera: 1.25,
-      environmentAssetId: "focused-skiff",
-      label: "Focused Skiff"
-    }),
-    mountedEnvironment: createMountedEnvironmentSnapshot({
-      environmentAssetId: "mounted-skiff"
+    mountedInteraction: createMountedInteractionSnapshot({
+      focusedMountable: Object.freeze({
+        boardingEntries: Object.freeze([]),
+        directSeatTargets: Object.freeze([]),
+        distanceFromCamera: 1.25,
+        environmentAssetId: "focused-skiff",
+        label: "Focused Skiff"
+      }),
+      mountedEnvironment: createMountedEnvironmentSnapshot({
+        environmentAssetId: "mounted-skiff"
+      })
     })
   };
   const traversalRuntime = {
@@ -152,7 +183,10 @@ test("MetaverseMountedInteractionRuntime resolves seat occupancy against mounted
   ]);
 
   callLog.length = 0;
-  frameLoop.mountedEnvironment = null;
+  frameLoop.mountedInteraction = createMountedInteractionSnapshot({
+    focusedMountable: frameLoop.mountedInteraction.focusedMountable,
+    mountedEnvironment: null
+  });
 
   assert.equal(mountedInteractionRuntime.occupySeat("passenger-seat"), true);
   assert.deepEqual(callLog, [
@@ -162,7 +196,10 @@ test("MetaverseMountedInteractionRuntime resolves seat occupancy against mounted
   ]);
 
   callLog.length = 0;
-  frameLoop.focusedMountable = null;
+  frameLoop.mountedInteraction = createMountedInteractionSnapshot({
+    focusedMountable: null,
+    mountedEnvironment: null
+  });
 
   assert.equal(mountedInteractionRuntime.occupySeat("observer-seat"), false);
   assert.deepEqual(callLog, []);
@@ -174,14 +211,15 @@ test("MetaverseMountedInteractionRuntime toggles between local board and leave w
   );
   const callLog = [];
   const frameLoop = {
-    focusedMountable: Object.freeze({
-      boardingEntries: Object.freeze([]),
-      directSeatTargets: Object.freeze([]),
-      distanceFromCamera: 1.25,
-      environmentAssetId: "harbor-skiff",
-      label: "Harbor Skiff"
-    }),
-    mountedEnvironment: null
+    mountedInteraction: createMountedInteractionSnapshot({
+      focusedMountable: Object.freeze({
+        boardingEntries: Object.freeze([]),
+        directSeatTargets: Object.freeze([]),
+        distanceFromCamera: 1.25,
+        environmentAssetId: "harbor-skiff",
+        label: "Harbor Skiff"
+      })
+    })
   };
   const boardedSnapshot = createMountedEnvironmentSnapshot({
     entryId: "starboard-entry",
@@ -193,13 +231,19 @@ test("MetaverseMountedInteractionRuntime toggles between local board and leave w
     boardEnvironment(environmentAssetId) {
       callLog.push(`board:${environmentAssetId}`);
       this.mountedEnvironmentSnapshot = boardedSnapshot;
-      frameLoop.mountedEnvironment = boardedSnapshot;
+      frameLoop.mountedInteraction = createMountedInteractionSnapshot({
+        focusedMountable: frameLoop.mountedInteraction.focusedMountable,
+        mountedEnvironment: boardedSnapshot
+      });
       return boardedSnapshot;
     },
     leaveMountedEnvironment() {
       callLog.push("leave");
       this.mountedEnvironmentSnapshot = null;
-      frameLoop.mountedEnvironment = null;
+      frameLoop.mountedInteraction = createMountedInteractionSnapshot({
+        focusedMountable: frameLoop.mountedInteraction.focusedMountable,
+        mountedEnvironment: null
+      });
     },
     occupySeat(environmentAssetId, seatId) {
       callLog.push(`seat:${environmentAssetId}:${seatId}`);

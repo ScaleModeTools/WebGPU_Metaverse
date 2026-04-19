@@ -164,6 +164,63 @@ export interface ResolveMetaverseUnmountedTraversalStepSnapshot {
   readonly waterlineHeightMeters: number;
 }
 
+export interface ResolveMetaverseUnmountedTraversalTransitionInput {
+  readonly locomotionOutcome: Pick<
+    ResolveMetaverseUnmountedTraversalStepSnapshot,
+    "grounded" | "locomotionMode" | "supportHeightMeters" | "waterlineHeightMeters"
+  >;
+  readonly preparedTraversalStep: Pick<
+    MetaversePreparedUnmountedTraversalStepSnapshot,
+    "locomotionMode"
+  >;
+}
+
+export interface MetaverseUnmountedTraversalTransitionSnapshot {
+  readonly enteredGrounded: boolean;
+  readonly enteredSwim: boolean;
+  readonly grounded: boolean;
+  readonly locomotionMode: "grounded" | "swim";
+  readonly positionYMeters: number | null;
+  readonly positionYSource: "none" | "support" | "waterline";
+  readonly resetVerticalVelocity: boolean;
+}
+
+export interface AdvanceMetaverseUnmountedGroundedBodyStepInput {
+  readonly autostepHeightMeters: number | null;
+  readonly bodyIntent: MetaverseGroundedTraversalBodyIntentSnapshot;
+  readonly preferredLookYawRadians: number | null;
+}
+
+export interface AdvanceMetaverseUnmountedSwimBodyStepInput {
+  readonly bodyControl: MetaverseTraversalBodyControlSnapshot;
+  readonly preferredLookYawRadians: number | null;
+  readonly waterlineHeightMeters: number;
+}
+
+export interface AdvanceMetaverseUnmountedTraversalBodyStepInput<
+  GroundedBodySnapshot extends MetaverseUnmountedGroundedBodySnapshot = MetaverseUnmountedGroundedBodySnapshot,
+  SwimBodySnapshot extends MetaverseUnmountedSwimBodySnapshot = MetaverseUnmountedSwimBodySnapshot
+>
+  extends PrepareMetaverseUnmountedTraversalStepInput {
+  readonly advanceGroundedBodySnapshot: (
+    input: AdvanceMetaverseUnmountedGroundedBodyStepInput
+  ) => GroundedBodySnapshot;
+  readonly advanceSwimBodySnapshot: (
+    input: AdvanceMetaverseUnmountedSwimBodyStepInput
+  ) => SwimBodySnapshot;
+}
+
+export interface AdvanceMetaverseUnmountedTraversalBodyStepSnapshot<
+  GroundedBodySnapshot extends MetaverseUnmountedGroundedBodySnapshot = MetaverseUnmountedGroundedBodySnapshot,
+  SwimBodySnapshot extends MetaverseUnmountedSwimBodySnapshot = MetaverseUnmountedSwimBodySnapshot
+> {
+  readonly groundedBodySnapshot: GroundedBodySnapshot | null;
+  readonly preparedTraversalStep: MetaversePreparedUnmountedTraversalStepSnapshot;
+  readonly locomotionOutcome: ResolveMetaverseUnmountedTraversalStepSnapshot;
+  readonly swimBodySnapshot: SwimBodySnapshot | null;
+  readonly transitionSnapshot: MetaverseUnmountedTraversalTransitionSnapshot;
+}
+
 interface PrepareMetaverseUnmountedGroundedTraversalStepInput {
   readonly actionState: MetaverseTraversalActionStateSnapshot;
   readonly bodyControl: MetaverseTraversalBodyControlSnapshot;
@@ -666,5 +723,114 @@ export function resolveMetaverseUnmountedTraversalStep({
       locomotionMode: locomotionOutcome.locomotionMode
     }),
     waterlineHeightMeters: locomotionOutcome.waterlineHeightMeters
+  });
+}
+
+export function resolveMetaverseUnmountedTraversalTransition({
+  locomotionOutcome,
+  preparedTraversalStep
+}: ResolveMetaverseUnmountedTraversalTransitionInput): MetaverseUnmountedTraversalTransitionSnapshot {
+  const enteredGrounded =
+    preparedTraversalStep.locomotionMode === "swim" &&
+    locomotionOutcome.locomotionMode === "grounded" &&
+    locomotionOutcome.supportHeightMeters !== null;
+  const enteredSwim =
+    preparedTraversalStep.locomotionMode === "grounded" &&
+    locomotionOutcome.locomotionMode === "swim";
+
+  return Object.freeze({
+    enteredGrounded,
+    enteredSwim,
+    grounded:
+      locomotionOutcome.locomotionMode === "grounded" &&
+      locomotionOutcome.grounded,
+    locomotionMode: locomotionOutcome.locomotionMode,
+    positionYMeters: enteredGrounded
+      ? locomotionOutcome.supportHeightMeters
+      : enteredSwim
+        ? locomotionOutcome.waterlineHeightMeters
+        : null,
+    positionYSource: enteredGrounded
+      ? "support"
+      : enteredSwim
+        ? "waterline"
+        : "none",
+    resetVerticalVelocity: enteredGrounded || enteredSwim
+  });
+}
+
+export function advanceMetaverseUnmountedTraversalBodyStep<
+  GroundedBodySnapshot extends MetaverseUnmountedGroundedBodySnapshot,
+  SwimBodySnapshot extends MetaverseUnmountedSwimBodySnapshot
+>({
+  advanceGroundedBodySnapshot,
+  advanceSwimBodySnapshot,
+  ...prepareInput
+}: AdvanceMetaverseUnmountedTraversalBodyStepInput<
+  GroundedBodySnapshot,
+  SwimBodySnapshot
+>): AdvanceMetaverseUnmountedTraversalBodyStepSnapshot<
+  GroundedBodySnapshot,
+  SwimBodySnapshot
+> {
+  const preparedTraversalStep =
+    prepareMetaverseUnmountedTraversalStep(prepareInput);
+
+  if (preparedTraversalStep.locomotionMode === "grounded") {
+    const groundedBodySnapshot = advanceGroundedBodySnapshot({
+      autostepHeightMeters: preparedTraversalStep.autostepHeightMeters,
+      bodyIntent: preparedTraversalStep.bodyIntent,
+      preferredLookYawRadians: prepareInput.preferredLookYawRadians ?? null
+    });
+    const locomotionOutcome = resolveMetaverseUnmountedTraversalStep({
+      groundedBodySnapshot,
+      preparedTraversalStep,
+      surfaceColliderSnapshots: prepareInput.surfaceColliderSnapshots,
+      surfacePolicyConfig: prepareInput.surfacePolicyConfig,
+      swimBodySnapshot: null,
+      waterRegionSnapshots: prepareInput.waterRegionSnapshots,
+      excludedOwnerEnvironmentAssetId:
+        prepareInput.excludedOwnerEnvironmentAssetId ?? null
+    });
+    const transitionSnapshot = resolveMetaverseUnmountedTraversalTransition({
+      locomotionOutcome,
+      preparedTraversalStep
+    });
+
+    return Object.freeze({
+      groundedBodySnapshot,
+      preparedTraversalStep,
+      locomotionOutcome,
+      swimBodySnapshot: null,
+      transitionSnapshot
+    });
+  }
+
+  const swimBodySnapshot = advanceSwimBodySnapshot({
+    bodyControl: preparedTraversalStep.bodyControl,
+    preferredLookYawRadians: prepareInput.preferredLookYawRadians ?? null,
+    waterlineHeightMeters: preparedTraversalStep.waterlineHeightMeters
+  });
+  const locomotionOutcome = resolveMetaverseUnmountedTraversalStep({
+    groundedBodySnapshot: null,
+    preparedTraversalStep,
+    surfaceColliderSnapshots: prepareInput.surfaceColliderSnapshots,
+    surfacePolicyConfig: prepareInput.surfacePolicyConfig,
+    swimBodySnapshot,
+    waterRegionSnapshots: prepareInput.waterRegionSnapshots,
+    excludedOwnerEnvironmentAssetId:
+      prepareInput.excludedOwnerEnvironmentAssetId ?? null
+  });
+  const transitionSnapshot = resolveMetaverseUnmountedTraversalTransition({
+    locomotionOutcome,
+    preparedTraversalStep
+  });
+
+  return Object.freeze({
+    groundedBodySnapshot: null,
+    preparedTraversalStep,
+    locomotionOutcome,
+    swimBodySnapshot,
+    transitionSnapshot
   });
 }

@@ -1,4 +1,5 @@
 import type { MetaverseRealtimeWorldSnapshot } from "@webgpu-metaverse/shared";
+import type { MetaversePlayerId } from "@webgpu-metaverse/shared/metaverse/presence";
 
 import type {
   MetaverseWorldClientRuntime,
@@ -36,7 +37,8 @@ interface MetaverseRemoteWorldSamplingPresentationState {
   clear(): void;
   syncAuthoritativeSample(input: {
     readonly deltaSeconds: number;
-    readonly localPlayerId: string;
+    readonly localPlayerId: MetaversePlayerId;
+    readonly remoteCharacterRootFrame: MetaverseRemoteWorldSampledFrame;
     readonly sampledFrame: MetaverseRemoteWorldSampledFrame;
   }): number;
 }
@@ -49,6 +51,8 @@ interface MetaverseRemoteWorldSamplingStateDependencies {
   readonly presentationState: MetaverseRemoteWorldSamplingPresentationState;
   readonly readWallClockMs: () => number;
   readonly readWorldClient: () => MetaverseWorldClientRuntime | null;
+  readonly remoteCharacterRootInterpolationDelayMs: number;
+  readonly remoteCharacterRootMaxExtrapolationMs: number;
 }
 
 const disabledMetaverseWorldClientTelemetrySnapshot: MetaverseWorldClientTelemetrySnapshot =
@@ -75,6 +79,8 @@ export class MetaverseRemoteWorldSamplingState {
   readonly #presentationState: MetaverseRemoteWorldSamplingPresentationState;
   readonly #readWallClockMs: () => number;
   readonly #readWorldClient: () => MetaverseWorldClientRuntime | null;
+  readonly #remoteCharacterRootInterpolationDelayMs: number;
+  readonly #remoteCharacterRootMaxExtrapolationMs: number;
 
   #extrapolatedFrameCount = 0;
   #lastSampledAtMs: number | null = null;
@@ -88,7 +94,9 @@ export class MetaverseRemoteWorldSamplingState {
     maxExtrapolationMs,
     presentationState,
     readWallClockMs,
-    readWorldClient
+    readWorldClient,
+    remoteCharacterRootInterpolationDelayMs,
+    remoteCharacterRootMaxExtrapolationMs
   }: MetaverseRemoteWorldSamplingStateDependencies) {
     this.#authoritativeServerClock = authoritativeServerClock;
     this.#interpolationDelayMs = interpolationDelayMs;
@@ -97,6 +105,14 @@ export class MetaverseRemoteWorldSamplingState {
     this.#presentationState = presentationState;
     this.#readWallClockMs = readWallClockMs;
     this.#readWorldClient = readWorldClient;
+    this.#remoteCharacterRootInterpolationDelayMs =
+      Number.isFinite(remoteCharacterRootInterpolationDelayMs)
+        ? Math.max(0, remoteCharacterRootInterpolationDelayMs)
+        : 0;
+    this.#remoteCharacterRootMaxExtrapolationMs =
+      Number.isFinite(remoteCharacterRootMaxExtrapolationMs)
+        ? Math.max(0, remoteCharacterRootMaxExtrapolationMs)
+        : 0;
   }
 
   get latestAuthoritativeTickIntervalMs(): number | null {
@@ -190,8 +206,23 @@ export class MetaverseRemoteWorldSamplingState {
             this.#resolveTargetServerTimeMs(worldClient.worldSnapshotBuffer),
             this.#maxExtrapolationMs
           );
+    const remoteCharacterRootFrame =
+      worldClient === null || localPlayerIdentity === null
+        ? null
+        : resolveMetaverseRemoteWorldSampledFrame(
+            worldClient.worldSnapshotBuffer,
+            this.#resolveTargetServerTimeMs(
+              worldClient.worldSnapshotBuffer,
+              this.#remoteCharacterRootInterpolationDelayMs
+            ),
+            this.#remoteCharacterRootMaxExtrapolationMs
+          );
 
-    if (sampledWorldFrame === null || localPlayerIdentity === null) {
+    if (
+      sampledWorldFrame === null ||
+      remoteCharacterRootFrame === null ||
+      localPlayerIdentity === null
+    ) {
       this.#lastSampledExtrapolationMs = 0;
       this.#presentationState.clear();
       return;
@@ -200,6 +231,7 @@ export class MetaverseRemoteWorldSamplingState {
     const extrapolationMs = this.#presentationState.syncAuthoritativeSample({
       deltaSeconds,
       localPlayerId: localPlayerIdentity.playerId,
+      remoteCharacterRootFrame,
       sampledFrame: sampledWorldFrame
     });
 
@@ -212,7 +244,8 @@ export class MetaverseRemoteWorldSamplingState {
   }
 
   #resolveTargetServerTimeMs(
-    worldSnapshotBuffer: readonly MetaverseRealtimeWorldSnapshot[]
+    worldSnapshotBuffer: readonly MetaverseRealtimeWorldSnapshot[],
+    interpolationDelayMs = this.#interpolationDelayMs
   ): number {
     const latestSnapshot =
       worldSnapshotBuffer[worldSnapshotBuffer.length - 1] ?? null;
@@ -229,7 +262,7 @@ export class MetaverseRemoteWorldSamplingState {
 
     return this.#authoritativeServerClock.readTargetServerTimeMs(
       localWallClockMs,
-      this.#interpolationDelayMs
+      interpolationDelayMs
     );
   }
 

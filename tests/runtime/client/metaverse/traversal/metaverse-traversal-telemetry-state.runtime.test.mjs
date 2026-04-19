@@ -30,6 +30,7 @@ function createReconciliationStateStub() {
     lastLocalAuthorityPoseCorrectionDetail: Object.freeze({
       planarMagnitudeMeters: null
     }),
+    lastLocalAuthorityPoseCorrectionSnapshot: null,
     lastLocalAuthorityPoseCorrectionReason: "none",
     localAuthorityPoseCorrectionCount: 0,
     reset() {
@@ -54,6 +55,7 @@ test("MetaverseTraversalTelemetryState tracks correction counts and resets deleg
     },
     localAuthorityReconciliationState: reconciliationState,
     localTraversalAuthorityState: {
+      latestIssuedTraversalIntentSnapshot: null,
       snapshot: createMetaverseTraversalAuthoritySnapshot()
     },
     readLocomotionMode: () => "grounded",
@@ -61,9 +63,12 @@ test("MetaverseTraversalTelemetryState tracks correction counts and resets deleg
     surfaceLocomotionState: {
       latestAutomaticSurfaceDecisionReason: "none",
       latestAutostepHeightMeters: null,
-      latestBlockerOverlap: null,
+      latestBlockingAffordanceDetected: null,
       latestResolvedSupportHeightMeters: null,
-      latestStepSupportedProbeCount: 0
+      latestSupportingAffordanceSampleCount: 0,
+      readSwimSnapshot() {
+        return null;
+      }
     }
   });
 
@@ -109,6 +114,7 @@ test("MetaverseTraversalTelemetryState publishes surface-routing telemetry witho
     },
     localAuthorityReconciliationState: createReconciliationStateStub(),
     localTraversalAuthorityState: {
+      latestIssuedTraversalIntentSnapshot: null,
       snapshot: traversalAuthoritySnapshot
     },
     readLocomotionMode: () => "swim",
@@ -116,9 +122,12 @@ test("MetaverseTraversalTelemetryState publishes surface-routing telemetry witho
     surfaceLocomotionState: {
       latestAutomaticSurfaceDecisionReason: "capability-transition-validated",
       latestAutostepHeightMeters: 0.18,
-      latestBlockerOverlap: false,
+      latestBlockingAffordanceDetected: false,
       latestResolvedSupportHeightMeters: 0.42,
-      latestStepSupportedProbeCount: 2
+      latestSupportingAffordanceSampleCount: 2,
+      readSwimSnapshot() {
+        return null;
+      }
     }
   });
 
@@ -131,7 +140,7 @@ test("MetaverseTraversalTelemetryState publishes surface-routing telemetry witho
   });
   assert.deepEqual(telemetryState.surfaceRoutingLocalTelemetrySnapshot, {
     autostepHeightMeters: 0.18,
-    blockerOverlap: false,
+    blockingAffordanceDetected: false,
     decisionReason: "capability-transition-validated",
     jumpDebug: {
       groundedBodyGrounded: null,
@@ -142,7 +151,140 @@ test("MetaverseTraversalTelemetryState publishes surface-routing telemetry witho
     },
     locomotionMode: "swim",
     resolvedSupportHeightMeters: 0.42,
-    stepSupportedProbeCount: 2,
+    supportingAffordanceSampleCount: 2,
     traversalAuthority: traversalAuthoritySnapshot
   });
+});
+
+test("MetaverseTraversalTelemetryState captures local and authoritative surface-routing context for a local-authority snap", async () => {
+  const [{ MetaverseTraversalTelemetryState }, { metaverseRuntimeConfig }] =
+    await Promise.all([
+      clientLoader.load(
+        "/src/metaverse/traversal/classes/metaverse-traversal-telemetry-state.ts"
+      ),
+      clientLoader.load("/src/metaverse/config/metaverse-runtime.ts")
+    ]);
+  const telemetryState = new MetaverseTraversalTelemetryState({
+    config: metaverseRuntimeConfig,
+    groundedBodyRuntime: {
+      isInitialized: false
+    },
+    localAuthorityReconciliationState: createReconciliationStateStub(),
+    localTraversalAuthorityState: {
+      latestIssuedTraversalIntentSnapshot: Object.freeze({
+        actionIntent: Object.freeze({
+          kind: "none",
+          pressed: false,
+          sequence: 0
+        }),
+        bodyControl: Object.freeze({
+          boost: true,
+          moveAxis: 1,
+          strafeAxis: -0.25,
+          turnAxis: 0.5
+        }),
+        inputSequence: 19,
+        locomotionMode: "grounded"
+      }),
+      snapshot: createMetaverseTraversalAuthoritySnapshot()
+    },
+    readLocomotionMode: () => "grounded",
+    surfaceColliderSnapshots: Object.freeze([
+      Object.freeze({
+        halfExtents: Object.freeze({ x: 4, y: 0.2, z: 4 }),
+        ownerEnvironmentAssetId: null,
+        rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+        rotationYRadians: 0,
+        translation: Object.freeze({ x: 0, y: -0.1, z: 24 }),
+        traversalAffordance: "support"
+      })
+    ]),
+    surfaceLocomotionState: {
+      latestAutomaticSurfaceDecisionReason: "capability-maintained",
+      latestAutostepHeightMeters: 0.12,
+      latestBlockingAffordanceDetected: false,
+      latestResolvedSupportHeightMeters: 0.1,
+      latestSupportingAffordanceSampleCount: 1,
+      readSwimSnapshot() {
+        return null;
+      }
+    }
+  });
+
+  const snapshot = telemetryState.createLocalAuthorityPoseCorrectionSnapshot({
+    authoritativePlayerSnapshot: Object.freeze({
+      lastProcessedInputSequence: 18,
+      linearVelocity: Object.freeze({ x: 0.5, y: 0, z: -1.2 }),
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: Object.freeze({ x: 0, y: 0, z: 24 }),
+      traversalAuthority: createMetaverseTraversalAuthoritySnapshot(),
+      yawRadians: 0
+    }),
+    localTraversalPose: Object.freeze({
+      locomotionMode: "grounded",
+      position: Object.freeze({ x: 0.4, y: 0.2, z: 23.7 }),
+      yawRadians: 0
+    })
+  });
+
+  assert.deepEqual(snapshot.local, {
+    issuedTraversalIntent: {
+      actionIntent: {
+        kind: "none",
+        pressed: false,
+        sequence: 0
+      },
+      bodyControl: {
+        boost: true,
+        moveAxis: 1,
+        strafeAxis: -0.25,
+        turnAxis: 0.5
+      },
+      inputSequence: 19,
+      locomotionMode: "grounded"
+    },
+    linearVelocity: {
+      x: 0,
+      y: 0,
+      z: 0
+    },
+    locomotionMode: "grounded",
+    position: {
+      x: 0.4,
+      y: 0.2,
+      z: 23.7
+    },
+    surfaceRouting: {
+      autostepHeightMeters: 0.12,
+      blockingAffordanceDetected: false,
+      decisionReason: "capability-maintained",
+      jumpDebug: {
+        groundedBodyGrounded: null,
+        groundedBodyJumpReady: null,
+        surfaceJumpSupported: null,
+        supported: null,
+        verticalSpeedUnitsPerSecond: null
+      },
+      locomotionMode: "grounded",
+      resolvedSupportHeightMeters: 0.1,
+      supportingAffordanceSampleCount: 1,
+      traversalAuthority: createMetaverseTraversalAuthoritySnapshot()
+    }
+  });
+  assert.deepEqual(snapshot.authoritative.linearVelocity, {
+    x: 0.5,
+    y: 0,
+    z: -1.2
+  });
+  assert.equal(snapshot.authoritative.lastProcessedInputSequence, 18);
+  assert.equal(snapshot.authoritative.locomotionMode, "grounded");
+  assert.equal(
+    snapshot.authoritative.surfaceRouting.decisionReason,
+    "capability-maintained"
+  );
+  assert.equal(
+    snapshot.authoritative.surfaceRouting.resolvedSupportHeightMeters,
+    0.1
+  );
 });

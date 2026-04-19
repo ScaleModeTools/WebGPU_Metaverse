@@ -26,6 +26,7 @@ import {
   metaverseControlModes,
   resolveMetaverseControlMode
 } from "../config/metaverse-control-modes";
+import { createMetaverseRuntimeConfig } from "../config/metaverse-runtime";
 import {
   resolveMetaverseLocomotionMode
 } from "../config/metaverse-locomotion-modes";
@@ -46,6 +47,7 @@ import type {
 interface MetaverseStageScreenProps {
   readonly attachmentProofConfig: MetaverseAttachmentProofConfig | null;
   readonly audioStatusLabel: string;
+  readonly bundleId: string;
   readonly calibrationQualityLabel: string;
   readonly characterProofConfig: MetaverseCharacterProofConfig | null;
   readonly coopRoomIdDraft: string;
@@ -168,6 +170,7 @@ function MetaverseHudChip({ children, className }: MetaverseHudFrameProps) {
 export function MetaverseStageScreen({
   attachmentProofConfig,
   audioStatusLabel,
+  bundleId,
   calibrationQualityLabel,
   characterProofConfig,
   coopRoomIdDraft,
@@ -192,7 +195,7 @@ export function MetaverseStageScreen({
         characterProofConfig?.characterId ?? "metaverse-mannequin-v1"
       );
 
-      return new WebGpuMetaverseRuntime(undefined, {
+      return new WebGpuMetaverseRuntime(createMetaverseRuntimeConfig(bundleId), {
         attachmentProofConfig,
         characterProofConfig,
         createMetaversePresenceClient,
@@ -203,6 +206,7 @@ export function MetaverseStageScreen({
     },
     [
       attachmentProofConfig,
+      bundleId,
       characterProofConfig,
       environmentProofConfig,
       username
@@ -335,23 +339,11 @@ export function MetaverseStageScreen({
     ]
   );
   const focusedPortal = hudSnapshot.focusedPortal;
-  const focusedMountable = hudSnapshot.focusedMountable;
   const focusDistanceLabel =
     focusedPortal === null
       ? null
       : `${focusedPortal.distanceFromCamera.toFixed(1)}m from portal`;
-  const mountedEnvironment = hudSnapshot.mountedEnvironment;
-  const mountDistanceLabel =
-    focusedMountable === null
-      ? null
-      : `${focusedMountable.distanceFromCamera.toFixed(1)}m inside mount collider`;
-  const focusedBoardingEntries = focusedMountable?.boardingEntries ?? [];
-  const selectableSeatTargets =
-    mountedEnvironment === null
-      ? focusedMountable?.directSeatTargets ?? []
-      : mountedEnvironment.seatTargets.filter(
-          (seatTarget) => seatTarget.seatId !== mountedEnvironment.seatId
-        );
+  const mountedInteractionHud = hudSnapshot.mountedInteractionHud;
 
   return (
     <ImmersiveStageFrame className="bg-game-stage">
@@ -492,32 +484,18 @@ export function MetaverseStageScreen({
                 ) : null}
               </MetaverseHudSurface>
 
-              {mountedEnvironment !== null || focusedMountable !== null ? (
+              {mountedInteractionHud.visible ? (
                 <MetaverseHudSurface className="max-w-[min(26rem,100%)]">
                   <p className="type-shell-banner">Vehicle access</p>
                   <p className="type-shell-heading mt-2">
-                    {mountedEnvironment !== null
-                      ? mountedEnvironment.occupancyKind === "seat"
-                        ? `${mountedEnvironment.label}: ${mountedEnvironment.occupantLabel}.`
-                        : `${mountedEnvironment.label} boarded via ${mountedEnvironment.occupantLabel.toLowerCase()}.`
-                      : `${focusedMountable?.label} is in range.`}
+                    {mountedInteractionHud.heading}
                   </p>
                   <p className="type-shell-body mt-3">
-                    {mountedEnvironment !== null
-                      ? mountedEnvironment.occupancyKind === "entry"
-                        ? "Boarding is separate from seat ownership here. Direct seats stay claimable until you intentionally take one."
-                        : mountedEnvironment.occupantRole === "driver"
-                          ? "Hub movement controls now drive this vehicle. Propulsion cuts out when the hull is beached on hard ground."
-                          : "This seat keeps vehicle steering locked to the active driver."
-                      : focusedBoardingEntries.length > 0 &&
-                          selectableSeatTargets.length > 0
-                        ? "Board the deck first or take a direct seat now."
-                        : mountDistanceLabel}
+                    {mountedInteractionHud.detail}
                   </p>
 
                   <div className="mt-4 flex flex-wrap gap-2">
-                    {mountedEnvironment === null
-                      ? focusedBoardingEntries.map((entry) => (
+                    {mountedInteractionHud.boardingEntries.map((entry) => (
                           <Button
                             key={entry.entryId}
                             onClick={() => {
@@ -527,23 +505,22 @@ export function MetaverseStageScreen({
                           >
                             {entry.label}
                           </Button>
-                        ))
-                      : null}
-                    {selectableSeatTargets.map((seatTarget) => (
+                        ))}
+                    {mountedInteractionHud.seatTargets.map((seatTarget) => (
                       <Button
                         key={seatTarget.seatId}
                         onClick={() => {
                           metaverseRuntime.occupySeat(seatTarget.seatId);
                         }}
                         type="button"
-                        variant={mountedEnvironment === null ? "outline" : "default"}
+                        variant={mountedInteractionHud.seatTargetButtonVariant}
                       >
-                        {mountedEnvironment === null
+                        {mountedInteractionHud.seatTargetButtonVariant === "outline"
                           ? `Sit ${seatTarget.label}`
                           : `Move to ${seatTarget.label}`}
                       </Button>
                     ))}
-                    {mountedEnvironment !== null ? (
+                    {mountedInteractionHud.leaveActionLabel !== null ? (
                       <Button
                         onClick={() => {
                           metaverseRuntime.leaveMountedEnvironment();
@@ -551,7 +528,7 @@ export function MetaverseStageScreen({
                         type="button"
                         variant="outline"
                       >
-                        Leave {mountedEnvironment.label}
+                        {mountedInteractionHud.leaveActionLabel}
                       </Button>
                     ) : null}
                   </div>

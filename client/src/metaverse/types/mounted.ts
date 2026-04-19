@@ -1,10 +1,9 @@
 import type { ExperienceId } from "@webgpu-metaverse/shared";
+import type {
+  MetaverseWorldMountedOccupancyPolicySnapshot
+} from "@webgpu-metaverse/shared/metaverse/world";
 
 import type {
-  MountedVehicleCameraPolicyId,
-  MountedVehicleControlRoutingPolicyId,
-  MountedVehicleLookLimitPolicyId,
-  MountedVehicleOccupancyAnimationId,
   MountedVehicleSeatRoleId
 } from "../vehicles";
 
@@ -33,20 +32,21 @@ export interface FocusedMountableSnapshot {
   readonly label: string;
 }
 
-export type MountedEnvironmentOccupancyKind = "entry" | "seat";
+export type MountedEnvironmentOccupancyKind =
+  MetaverseWorldMountedOccupancyPolicySnapshot["occupancyKind"];
 
-export interface MountedEnvironmentSnapshot {
-  readonly cameraPolicyId: MountedVehicleCameraPolicyId;
-  readonly controlRoutingPolicyId: MountedVehicleControlRoutingPolicyId;
+export interface MountedEnvironmentSnapshot
+  extends MetaverseWorldMountedOccupancyPolicySnapshot {
   readonly directSeatTargets: readonly MountableSeatSelectionSnapshot[];
-  readonly entryId: string | null;
   readonly environmentAssetId: string;
   readonly label: string;
-  readonly lookLimitPolicyId: MountedVehicleLookLimitPolicyId;
-  readonly occupancyAnimationId: MountedVehicleOccupancyAnimationId;
-  readonly occupancyKind: MountedEnvironmentOccupancyKind;
-  readonly occupantLabel: string;
-  readonly occupantRole: MountedVehicleSeatRoleId;
-  readonly seatId: string | null;
   readonly seatTargets: readonly MountableSeatSelectionSnapshot[];
+}
+
+export interface MetaverseMountedInteractionSnapshot {
+  readonly boardingEntries: readonly MountableBoardingEntrySnapshot[];
+  readonly focusedMountable: FocusedMountableSnapshot | null;
+  readonly mountedEnvironment: MountedEnvironmentSnapshot | null;
+  readonly seatTargetEnvironmentAssetId: string | null;
+  readonly selectableSeatTargets: readonly MountableSeatSelectionSnapshot[];
 }

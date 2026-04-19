@@ -70,7 +70,7 @@ test("WebGpuMetaverseRuntime boots pushable rigid bodies and enables dynamic-bod
       ),
       true
     );
-    assert.equal(runtime.hudSnapshot.focusedMountable, null);
+    assert.equal(runtime.hudSnapshot.mountedInteraction.focusedMountable, null);
 
     runtime.dispose();
   } finally {
@@ -78,7 +78,7 @@ test("WebGpuMetaverseRuntime boots pushable rigid bodies and enables dynamic-bod
   }
 });
 
-test("MetaverseEnvironmentPhysicsRuntime keeps mountable skiff colliders and support snapshots synced to dynamic vehicle pose", async () => {
+test("MetaverseEnvironmentPhysicsRuntime keeps mountable skiff mesh collision and support snapshots synced to dynamic vehicle pose", async () => {
   const [
     { Group },
     { metaverseRuntimeConfig },
@@ -116,64 +116,44 @@ test("MetaverseEnvironmentPhysicsRuntime keeps mountable skiff colliders and sup
 
   await environmentPhysicsRuntime.boot(0);
 
-  assert.equal(world.colliders.length, 8);
-  const portBenchSupportCollider = world.colliders.find(
-    (candidate) =>
-      candidate.shape === "cuboid" &&
-      Math.abs((candidate.payload.halfExtentX ?? 0) - 1.3) < 0.0001 &&
-      Math.abs((candidate.payload.halfExtentZ ?? 0) - 0.26) < 0.0001
+  assert.equal(world.colliders.length, 1);
+  assert.equal(
+    world.colliders.filter((candidate) => candidate.shape === "trimesh").length,
+    1
+  );
+  const skiffCollisionMeshCollider = world.colliders.find(
+    (candidate) => candidate.shape === "trimesh"
   );
 
-  assert.ok(portBenchSupportCollider);
+  assert.ok(skiffCollisionMeshCollider);
   environmentPhysicsRuntime.setDynamicEnvironmentPose("metaverse-hub-skiff-v1", {
     position: { x: 4.2, y: 0.25, z: -6.8 },
     yawRadians: Math.PI * 0.25
   });
 
-  const syncedPortBenchColliderTranslation = portBenchSupportCollider.translation();
-  const expectedPortBenchOffsetX =
-    0 * Math.cos(Math.PI * 0.25) + -0.74 * Math.sin(Math.PI * 0.25);
-  const expectedPortBenchOffsetZ =
-    -(0) * Math.sin(Math.PI * 0.25) + -0.74 * Math.cos(Math.PI * 0.25);
-
-  assert.ok(
-    Math.abs(
-      syncedPortBenchColliderTranslation.x - (4.2 + expectedPortBenchOffsetX)
-    ) < 0.0001
-  );
-  assert.ok(
-    Math.abs(syncedPortBenchColliderTranslation.y - (0.25 + 0.92)) < 0.0001
-  );
-  assert.ok(
-    Math.abs(
-      syncedPortBenchColliderTranslation.z - (-6.8 + expectedPortBenchOffsetZ)
-    ) < 0.0001
-  );
-  const syncedPortBenchSupportSnapshot =
+  const syncedSkiffSupportSnapshot =
     environmentPhysicsRuntime.surfaceColliderSnapshots.find(
-      (collider) =>
-        collider.traversalAffordance === "support" &&
-        Math.abs(collider.halfExtents.x - 1.3) < 0.0001 &&
-        Math.abs(collider.halfExtents.z - 0.26) < 0.0001
+      (collider) => collider.ownerEnvironmentAssetId === "metaverse-hub-skiff-v1"
     );
 
-  assert.ok(syncedPortBenchSupportSnapshot);
+  assert.ok(syncedSkiffSupportSnapshot);
   assert.equal(
-    syncedPortBenchSupportSnapshot.ownerEnvironmentAssetId,
+    syncedSkiffSupportSnapshot.ownerEnvironmentAssetId,
     "metaverse-hub-skiff-v1"
   );
+  assert.equal(syncedSkiffSupportSnapshot.shape, "trimesh");
+  assert.ok(syncedSkiffSupportSnapshot.indices instanceof Uint32Array);
+  assert.ok(syncedSkiffSupportSnapshot.vertices instanceof Float32Array);
+  assert.equal(syncedSkiffSupportSnapshot.translation.x, 4.2);
+  assert.equal(syncedSkiffSupportSnapshot.translation.y, 0.25);
+  assert.equal(syncedSkiffSupportSnapshot.translation.z, -6.8);
   assert.ok(
-    Math.abs(
-      syncedPortBenchSupportSnapshot.translation.x -
-        syncedPortBenchColliderTranslation.x
-    ) < 0.0001
+    Math.abs(syncedSkiffSupportSnapshot.rotationYRadians - Math.PI * 0.25) <
+      0.0001
   );
-  assert.ok(
-    Math.abs(
-      syncedPortBenchSupportSnapshot.translation.z -
-        syncedPortBenchColliderTranslation.z
-    ) < 0.0001
-  );
+  assert.equal(skiffCollisionMeshCollider.translation().x, 4.2);
+  assert.equal(skiffCollisionMeshCollider.translation().y, 0.25);
+  assert.equal(skiffCollisionMeshCollider.translation().z, -6.8);
 
   environmentPhysicsRuntime.dispose();
 });
@@ -216,13 +196,13 @@ test("MetaverseEnvironmentPhysicsRuntime clears and restores dynamic skiff colli
 
   await environmentPhysicsRuntime.boot(0);
 
-  assert.equal(world.colliders.length, 8);
+  assert.equal(world.colliders.length, 1);
   assert.equal(
     environmentPhysicsRuntime.surfaceColliderSnapshots.filter(
       (collider) =>
         collider.ownerEnvironmentAssetId === "metaverse-hub-skiff-v1"
     ).length,
-    8
+    1
   );
 
   environmentPhysicsRuntime.setDynamicEnvironmentPose(
@@ -244,21 +224,21 @@ test("MetaverseEnvironmentPhysicsRuntime clears and restores dynamic skiff colli
     yawRadians: Math.PI * 0.5
   });
 
-  assert.equal(world.colliders.length, 8);
+  assert.equal(world.colliders.length, 1);
   assert.equal(
     environmentPhysicsRuntime.surfaceColliderSnapshots.filter(
       (collider) =>
         collider.ownerEnvironmentAssetId === "metaverse-hub-skiff-v1"
     ).length,
-    8
+    1
   );
 
   environmentPhysicsRuntime.dispose();
 });
 
-test("MetaverseEnvironmentPhysicsRuntime ignores legacy shoreline proof assets that are no longer part of the shipped environment slice", async () => {
+test("MetaverseEnvironmentPhysicsRuntime loads proof-authored collision meshes as shared support surfaces", async () => {
   const [
-    { Group },
+    { BoxGeometry, Group, Mesh, MeshStandardMaterial },
     { metaverseRuntimeConfig },
     { MetaverseEnvironmentPhysicsRuntime },
     { RapierPhysicsRuntime }
@@ -271,6 +251,14 @@ test("MetaverseEnvironmentPhysicsRuntime ignores legacy shoreline proof assets t
   const { physicsRuntime, world } =
     createFakePhysicsRuntimeWithWorld(RapierPhysicsRuntime);
   let collisionLoadCount = 0;
+  const collisionScene = new Group();
+
+  collisionScene.add(
+    new Mesh(
+      new BoxGeometry(4, 0.5, 3),
+      new MeshStandardMaterial({ color: 0xffffff })
+    )
+  );
   const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
     metaverseRuntimeConfig,
     {
@@ -280,7 +268,7 @@ test("MetaverseEnvironmentPhysicsRuntime ignores legacy shoreline proof assets t
 
           return {
             animations: [],
-            scene: new Group()
+            scene: collisionScene
           };
         }
       }),
@@ -344,15 +332,236 @@ test("MetaverseEnvironmentPhysicsRuntime ignores legacy shoreline proof assets t
   );
   assert.equal(
     world.colliders.filter((collider) => collider.shape === "trimesh").length,
-    0
+    1
   );
-  assert.equal(environmentPhysicsRuntime.surfaceColliderSnapshots.length, 0);
-  assert.equal(collisionLoadCount, 0);
+  assert.equal(environmentPhysicsRuntime.surfaceColliderSnapshots.length, 1);
+  assert.equal(
+    environmentPhysicsRuntime.surfaceColliderSnapshots.every(
+      (collider) =>
+        collider.ownerEnvironmentAssetId === "metaverse-hub-shoreline-v1"
+    ),
+    true
+  );
+  assert.equal(
+    environmentPhysicsRuntime.surfaceColliderSnapshots[0]?.shape,
+    "trimesh"
+  );
+  assert.equal(collisionLoadCount, 1);
 
   environmentPhysicsRuntime.dispose();
 });
 
-test("MetaverseEnvironmentPhysicsRuntime syncs remote standing players into blocker colliders without turning swimmers or seated occupants into land", async () => {
+test("MetaverseEnvironmentPhysicsRuntime uses proof-authored collisionPath for static mesh support instead of box approximations", async () => {
+  const [
+    { BoxGeometry, Group, Mesh, MeshStandardMaterial },
+    { metaverseRuntimeConfig },
+    { MetaverseEnvironmentPhysicsRuntime },
+    { RapierPhysicsRuntime }
+  ] = await Promise.all([
+    import("three/webgpu"),
+    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
+    clientLoader.load("/src/metaverse/classes/metaverse-environment-physics-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
+  const { physicsRuntime, world } =
+    createFakePhysicsRuntimeWithWorld(RapierPhysicsRuntime);
+  let collisionLoadCount = 0;
+  const collisionScene = new Group();
+
+  collisionScene.add(
+    new Mesh(
+      new BoxGeometry(8.4, 0.34, 4.2),
+      new MeshStandardMaterial({ color: 0xffffff })
+    )
+  );
+  const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
+    metaverseRuntimeConfig,
+    {
+      createSceneAssetLoader: () => ({
+        async loadAsync(path) {
+          collisionLoadCount += 1;
+          assert.equal(path, "/models/metaverse/environment/metaverse-hub-dock-high.gltf");
+
+          return {
+            animations: [],
+            scene: collisionScene
+          };
+        }
+      }),
+      environmentProofConfig: {
+        assets: [
+          {
+            collisionPath: "/models/metaverse/environment/metaverse-hub-dock-high.gltf",
+            collider: null,
+            dynamicBody: null,
+            entries: null,
+            environmentAssetId: "metaverse-hub-dock-v1",
+            label: "Metaverse hub dock",
+            lods: [
+              {
+                maxDistanceMeters: 28,
+                modelPath: "/models/metaverse/environment/metaverse-hub-dock-high.gltf",
+                tier: "high"
+              },
+              {
+                maxDistanceMeters: null,
+                modelPath: "/models/metaverse/environment/metaverse-hub-dock-low.gltf",
+                tier: "low"
+              }
+            ],
+            orientation: null,
+            physicsColliders: [
+              {
+                center: { x: 0, y: 0, z: 0 },
+                shape: "box",
+                size: { x: 8.4, y: 0.34, z: 4.2 },
+                traversalAffordance: "support"
+              }
+            ],
+            placement: "static",
+            placements: [
+              {
+                position: { x: 5, y: 0.43, z: -12 },
+                rotationYRadians: Math.PI * 0.5,
+                scale: 1
+              }
+            ],
+            seats: null,
+            traversalAffordance: "support"
+          }
+        ]
+      },
+      groundedBodyRuntime: {
+        async init() {},
+        dispose() {},
+        setApplyImpulsesToDynamicBodies() {}
+      },
+      physicsRuntime,
+      sceneRuntime: {
+        scene: new Group(),
+        setDynamicEnvironmentPose() {}
+      },
+      showPhysicsDebug: false
+    }
+  );
+
+  await environmentPhysicsRuntime.boot(0);
+
+  assert.equal(
+    world.colliders.filter((collider) => collider.shape === "cuboid").length,
+    0
+  );
+  assert.equal(
+    world.colliders.filter((collider) => collider.shape === "trimesh").length,
+    1
+  );
+  assert.equal(environmentPhysicsRuntime.surfaceColliderSnapshots.length, 1);
+  assert.equal(
+    environmentPhysicsRuntime.surfaceColliderSnapshots[0]?.shape,
+    "trimesh"
+  );
+  assert.equal(collisionLoadCount, 1);
+
+  environmentPhysicsRuntime.dispose();
+});
+
+test("MetaverseEnvironmentPhysicsRuntime derives static barrier colliders from the active proof placements instead of the legacy world layout", async () => {
+  const [
+    { Group },
+    { metaverseRuntimeConfig },
+    { MetaverseEnvironmentPhysicsRuntime },
+    { RapierPhysicsRuntime }
+  ] = await Promise.all([
+    import("three/webgpu"),
+    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
+    clientLoader.load("/src/metaverse/classes/metaverse-environment-physics-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
+  const { physicsRuntime, world } =
+    createFakePhysicsRuntimeWithWorld(RapierPhysicsRuntime);
+  const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
+    metaverseRuntimeConfig,
+    {
+      createSceneAssetLoader: () => ({
+        async loadAsync() {
+          return {
+            animations: [],
+            scene: new Group()
+          };
+        }
+      }),
+      environmentProofConfig: {
+        assets: [
+          {
+            collisionPath: null,
+            collider: null,
+            entries: null,
+            environmentAssetId: "metaverse-playground-range-barrier-v1",
+            label: "Moved proof barrier",
+            lods: [],
+            orientation: null,
+            physicsColliders: [
+              {
+                center: { x: 1, y: 1, z: 0 },
+                shape: "box",
+                size: { x: 2, y: 4, z: 6 },
+                traversalAffordance: "blocker"
+              }
+            ],
+            placement: "static",
+            placements: [
+              {
+                position: { x: 37, y: 2, z: -19 },
+                rotationYRadians: Math.PI * 0.5,
+                scale: { x: 2, y: 1, z: 0.5 }
+              }
+            ],
+            seats: null,
+            traversalAffordance: "blocker"
+          }
+        ]
+      },
+      groundedBodyRuntime: {
+        async init() {},
+        dispose() {},
+        setApplyImpulsesToDynamicBodies() {}
+      },
+      physicsRuntime,
+      sceneRuntime: {
+        scene: new Group(),
+        setDynamicEnvironmentPose() {}
+      },
+      showPhysicsDebug: false
+    }
+  );
+
+  await environmentPhysicsRuntime.boot(0);
+
+  assert.equal(world.colliders.length, 1);
+  assert.equal(environmentPhysicsRuntime.surfaceColliderSnapshots.length, 1);
+  assert.deepEqual(environmentPhysicsRuntime.surfaceColliderSnapshots[0], {
+    halfExtents: { x: 2, y: 2, z: 1.5 },
+    ownerEnvironmentAssetId: "metaverse-playground-range-barrier-v1",
+    rotation: {
+      x: 0,
+      y: Math.sin(Math.PI * 0.25),
+      z: 0,
+      w: Math.cos(Math.PI * 0.25)
+    },
+    rotationYRadians: Math.PI * 0.5,
+    shape: "box",
+    translation: { x: 37, y: 3, z: -21 },
+    traversalAffordance: "blocker"
+  });
+
+  assert.equal(world.colliders[0].translation().x, 37);
+  assert.equal(world.colliders[0].translation().y, 3);
+  assert.equal(world.colliders[0].translation().z, -21);
+
+  environmentPhysicsRuntime.dispose();
+});
+
+test("MetaverseEnvironmentPhysicsRuntime keeps authoritative remote player blocker colliders physics-only while preserving traversal collision", async () => {
   const [
     { Group },
     { metaverseRuntimeConfig },
@@ -395,43 +604,23 @@ test("MetaverseEnvironmentPhysicsRuntime syncs remote standing players into bloc
   await environmentPhysicsRuntime.boot(0);
   assert.equal(world.colliders.length, 0);
 
-  environmentPhysicsRuntime.syncRemoteCharacterBlockers([
+  environmentPhysicsRuntime.syncAuthoritativeRemotePlayerBlockers([
     Object.freeze({
-      characterId: "metaverse-mannequin-v1",
-      look: Object.freeze({
-        pitchRadians: 0,
-        yawRadians: 0
-      }),
+      locomotionMode: "grounded",
       mountedOccupancy: null,
       playerId: "remote-deckhand-1",
-      poseSyncMode: "runtime-server-sampled",
-      presentation: Object.freeze({
-        animationVocabulary: "idle",
-        position: Object.freeze({ x: 2.4, y: 0.68, z: -5.2 }),
-        yawRadians: 0
-      })
+      position: Object.freeze({ x: 2.4, y: 0.68, z: -5.2 }),
+      yawRadians: 0
     }),
     Object.freeze({
-      characterId: "metaverse-mannequin-v1",
-      look: Object.freeze({
-        pitchRadians: 0,
-        yawRadians: 0
-      }),
+      locomotionMode: "swim",
       mountedOccupancy: null,
       playerId: "remote-swimmer-2",
-      poseSyncMode: "runtime-server-sampled",
-      presentation: Object.freeze({
-        animationVocabulary: "swim",
-        position: Object.freeze({ x: 4.4, y: 0, z: -8 }),
-        yawRadians: 0
-      })
+      position: Object.freeze({ x: 4.4, y: 0, z: -8 }),
+      yawRadians: 0
     }),
     Object.freeze({
-      characterId: "metaverse-mannequin-v1",
-      look: Object.freeze({
-        pitchRadians: 0.2,
-        yawRadians: 0.4
-      }),
+      locomotionMode: "grounded",
       mountedOccupancy: Object.freeze({
         environmentAssetId: "metaverse-hub-skiff-v1",
         entryId: null,
@@ -440,41 +629,121 @@ test("MetaverseEnvironmentPhysicsRuntime syncs remote standing players into bloc
         seatId: "port-bench-seat"
       }),
       playerId: "remote-passenger-3",
-      poseSyncMode: "runtime-server-sampled",
-      presentation: Object.freeze({
-        animationVocabulary: "seated",
-        position: Object.freeze({ x: 1.8, y: 0.8, z: -5.6 }),
-        yawRadians: 0
-      })
+      position: Object.freeze({ x: 1.8, y: 0.8, z: -5.6 }),
+      yawRadians: 0
     })
   ]);
 
   assert.equal(world.colliders.length, 1);
+  const remoteBlockerCollider = world.colliders[0];
+
+  assert.ok(remoteBlockerCollider);
+  assert.equal(remoteBlockerCollider.shape, "capsule");
+  assert.equal(
+    environmentPhysicsRuntime.resolveGroundedTraversalFilterPredicate()(
+      remoteBlockerCollider
+    ),
+    true
+  );
+  assert.equal(
+    environmentPhysicsRuntime.resolveWaterborneTraversalFilterPredicate()(
+      remoteBlockerCollider
+    ),
+    true
+  );
   assert.equal(
     environmentPhysicsRuntime.surfaceColliderSnapshots.filter(
       (collider) => collider.traversalAffordance === "blocker"
     ).length,
-    1
+    0
   );
-  const remoteBlockerSnapshot =
-    environmentPhysicsRuntime.surfaceColliderSnapshots.find(
-      (collider) =>
-        collider.traversalAffordance === "blocker" &&
-        collider.ownerEnvironmentAssetId === null
-    );
 
-  assert.ok(remoteBlockerSnapshot);
-  assert.ok(
-    Math.abs((remoteBlockerSnapshot?.translation.x ?? 0) - 2.4) < 0.0001
+  environmentPhysicsRuntime.dispose();
+});
+
+test("MetaverseEnvironmentPhysicsRuntime keeps authoritative environment-body collision sync separate from scene presentation for the current frame", async () => {
+  const [
+    { Group },
+    { metaverseRuntimeConfig },
+    { MetaverseEnvironmentPhysicsRuntime },
+    { RapierPhysicsRuntime }
+  ] = await Promise.all([
+    import("three/webgpu"),
+    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
+    clientLoader.load("/src/metaverse/classes/metaverse-environment-physics-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
+  const { createSceneAssetLoader, environmentProofConfig } =
+    await createPushableCrateProofSlice();
+  const { physicsRuntime } = createFakePhysicsRuntimeWithWorld(RapierPhysicsRuntime);
+  const pushableCrateYawRadians = Math.PI * 0.04;
+  const scenePoseCalls = [];
+  const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
+    metaverseRuntimeConfig,
+    {
+      createSceneAssetLoader,
+      environmentProofConfig,
+      groundedBodyRuntime: {
+        async init() {},
+        dispose() {},
+        setApplyImpulsesToDynamicBodies() {}
+      },
+      physicsRuntime,
+      sceneRuntime: {
+        scene: new Group(),
+        setDynamicEnvironmentPose(environmentAssetId, poseSnapshot) {
+          scenePoseCalls.push(
+            Object.freeze({
+              environmentAssetId,
+              poseSnapshot
+            })
+          );
+        }
+      },
+      showPhysicsDebug: false
+    }
   );
-  assert.ok(
-    Math.abs(
-      (remoteBlockerSnapshot?.translation.y ?? 0) -
-        (0.68 +
-          metaverseRuntimeConfig.groundedBody.capsuleHalfHeightMeters +
-          metaverseRuntimeConfig.groundedBody.capsuleRadiusMeters)
-    ) < 0.0001
+
+  await environmentPhysicsRuntime.boot(0);
+  scenePoseCalls.length = 0;
+
+  environmentPhysicsRuntime.beginAuthoritativeEnvironmentBodyCollisionSync();
+  environmentPhysicsRuntime.syncAuthoritativeEnvironmentBodyCollisionPose(
+    "metaverse-hub-pushable-crate-v1",
+    {
+      linearVelocity: Object.freeze({
+        x: 0.8,
+        y: 0,
+        z: -0.1
+      }),
+      position: Object.freeze({
+        x: -7.4,
+        y: 0.46,
+        z: 13.1
+      }),
+      yawRadians: pushableCrateYawRadians
+    }
   );
+  environmentPhysicsRuntime.syncDynamicEnvironmentBodyPresentations();
+
+  assert.deepEqual(scenePoseCalls, []);
+
+  environmentPhysicsRuntime.beginAuthoritativeEnvironmentBodyCollisionSync();
+  environmentPhysicsRuntime.syncDynamicEnvironmentBodyPresentations();
+
+  assert.deepEqual(scenePoseCalls, [
+    Object.freeze({
+      environmentAssetId: "metaverse-hub-pushable-crate-v1",
+      poseSnapshot: Object.freeze({
+        position: Object.freeze({
+          x: -7.4,
+          y: 0.46,
+          z: 13.1
+        }),
+        yawRadians: pushableCrateYawRadians
+      })
+    })
+  ]);
 
   environmentPhysicsRuntime.dispose();
 });

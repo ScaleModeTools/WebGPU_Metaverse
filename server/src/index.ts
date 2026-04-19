@@ -21,8 +21,9 @@ import { MetaversePresenceHttpAdapter } from "./metaverse/adapters/metaverse-pre
 import { MetaversePresenceWebTransportAdapter } from "./metaverse/adapters/metaverse-presence-webtransport-adapter.js";
 import { MetaverseRealtimeWorldWebTransportDatagramAdapter } from "./metaverse/adapters/metaverse-realtime-world-webtransport-datagram-adapter.js";
 import { MetaverseWorldHttpAdapter } from "./metaverse/adapters/metaverse-world-http-adapter.js";
+import { MetaverseWorldPreviewHttpAdapter } from "./metaverse/adapters/metaverse-world-preview-http-adapter.js";
 import { MetaverseWorldWebTransportAdapter } from "./metaverse/adapters/metaverse-world-webtransport-adapter.js";
-import { MetaverseAuthoritativeWorldRuntime } from "./metaverse/classes/metaverse-authoritative-world-runtime.js";
+import { MetaverseAuthoritativeWorldRuntimeHost } from "./metaverse/classes/metaverse-authoritative-world-runtime-host.js";
 import { MetaverseSessionHttpAdapter } from "./metaverse/adapters/metaverse-session-http-adapter.js";
 import { MetaverseSessionRuntime } from "./metaverse/classes/metaverse-session-runtime.js";
 import type { ServerRuntimeConfig } from "./types/server-runtime-config.js";
@@ -41,13 +42,16 @@ const duckHuntCoopRoomWebTransportAdapter = new DuckHuntCoopRoomWebTransportAdap
 );
 const duckHuntCoopRoomWebTransportDatagramAdapter =
   new DuckHuntCoopRoomWebTransportDatagramAdapter(coopRoomDirectory);
-const metaverseAuthoritativeWorldRuntime = new MetaverseAuthoritativeWorldRuntime();
+const metaverseAuthoritativeWorldRuntime = new MetaverseAuthoritativeWorldRuntimeHost();
 const metaversePresenceHttpAdapter = new MetaversePresenceHttpAdapter(
   metaverseAuthoritativeWorldRuntime
 );
 const metaversePresenceWebTransportAdapter =
   new MetaversePresenceWebTransportAdapter(metaverseAuthoritativeWorldRuntime);
 const metaverseWorldHttpAdapter = new MetaverseWorldHttpAdapter(
+  metaverseAuthoritativeWorldRuntime
+);
+const metaverseWorldPreviewHttpAdapter = new MetaverseWorldPreviewHttpAdapter(
   metaverseAuthoritativeWorldRuntime
 );
 const metaverseWorldWebTransportAdapter = new MetaverseWorldWebTransportAdapter(
@@ -256,6 +260,16 @@ const server = createServer(async (request, response) => {
   }
 
   if (metaverseSessionHttpAdapter.handleRequest(request, response, requestUrl)) {
+    return;
+  }
+
+  if (
+    await metaverseWorldPreviewHttpAdapter.handleRequest(
+      request,
+      response,
+      requestUrl
+    )
+  ) {
     return;
   }
 

@@ -5,6 +5,7 @@ import {
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 import type {
   MetaversePlayerTraversalIntentSnapshot,
+  MetaversePlayerTraversalIntentSnapshotInput
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import type { MetaverseGroundedBodyRuntime, PhysicsVector3Snapshot } from "@/physics";
@@ -20,6 +21,9 @@ import type {
   MetaverseCharacterPresentationSnapshot
 } from "../../types/presentation";
 import type { MetaverseRuntimeConfig } from "../../types/runtime-config";
+import type {
+  MetaverseMountedOccupancyPresentationStateSnapshot
+} from "../../states/mounted-occupancy";
 import { MetaverseTraversalCharacterPresentationState } from "../presentation/metaverse-traversal-character-presentation-state";
 import {
   clamp,
@@ -57,6 +61,8 @@ interface MetaverseUnmountedTraversalOrchestrationStateDependencies {
   readonly localAuthorityReconciliationState: MetaverseLocalAuthorityReconciliationState;
   readonly localTraversalAuthorityState: MetaverseLocalTraversalAuthorityState;
   readonly readLocomotionMode: () => MetaverseLocomotionModeId;
+  readonly readMountedOccupancyPresentationState:
+    () => MetaverseMountedOccupancyPresentationStateSnapshot | null;
   readonly readMountedVehicleSnapshot: () => TraversalMountedVehicleSnapshot | null;
   readonly readTraversalState: () => MetaverseUnmountedTraversalStateSnapshot;
   readonly resolveGroundedPresentationPosition: () => PhysicsVector3Snapshot;
@@ -101,11 +107,22 @@ export class MetaverseUnmountedTraversalOrchestrationState {
   }
 
   captureJumpPressedThisFrame(
-    movementInput: MetaverseFlightInputSnapshot
+    movementInput: MetaverseFlightInputSnapshot,
+    traversalIntentInput: MetaversePlayerTraversalIntentSnapshotInput | null = null
   ): boolean {
+    const movementMagnitudeInput =
+      traversalIntentInput?.bodyControl === undefined
+        ? movementInput
+        : {
+            moveAxis: traversalIntentInput.bodyControl.moveAxis ?? 0,
+            strafeAxis: traversalIntentInput.bodyControl.strafeAxis ?? 0
+          };
     this.#latestMovementInputMagnitude =
-      resolveMovementInputMagnitude(movementInput);
-    const jumpInputPressed = movementInput.jump === true;
+      resolveMovementInputMagnitude(movementMagnitudeInput);
+    const jumpInputPressed =
+      traversalIntentInput?.actionIntent?.kind === "jump"
+        ? traversalIntentInput.actionIntent.pressed === true
+        : movementInput.jump === true;
     const jumpPressedThisFrame = jumpInputPressed && !this.#lastJumpInputPressed;
 
     this.#lastJumpInputPressed = jumpInputPressed;
@@ -208,7 +225,8 @@ export class MetaverseUnmountedTraversalOrchestrationState {
     cameraSnapshot: MetaverseCameraSnapshot,
     movementInput: MetaverseFlightInputSnapshot,
     deltaSeconds: number,
-    jumpPressedThisFrame: boolean
+    jumpPressedThisFrame: boolean,
+    traversalIntentInput: MetaversePlayerTraversalIntentSnapshotInput | null = null
   ): MetaverseCameraSnapshot {
     if (this.#dependencies.readLocomotionMode() === "grounded") {
       const groundedAdvanceResult =
@@ -218,6 +236,7 @@ export class MetaverseUnmountedTraversalOrchestrationState {
             deltaSeconds,
             jumpPressedThisFrame,
             movementInput,
+            traversalIntentInput,
             traversalState: this.#dependencies.readTraversalState()
           }
         );
@@ -233,6 +252,7 @@ export class MetaverseUnmountedTraversalOrchestrationState {
           cameraSnapshot,
           deltaSeconds,
           movementInput,
+          traversalIntentInput,
           traversalState: this.#dependencies.readTraversalState()
         });
       this.#dependencies.writeTraversalState(swimAdvanceResult.traversalState);
@@ -301,6 +321,9 @@ export class MetaverseUnmountedTraversalOrchestrationState {
                 input
               )),
           authoritativePlayerSnapshot,
+          createLocalAuthorityPoseCorrectionSnapshot: (input) =>
+            this.#dependencies.telemetryState
+              .createLocalAuthorityPoseCorrectionSnapshot(input),
           currentTick: this.#dependencies.localTraversalAuthorityState.currentTick,
           hardSnapDistanceMeters: localPlayerAuthoritativeHardSnapDistanceMeters,
           latestIssuedTraversalActionSequence,
@@ -341,6 +364,8 @@ export class MetaverseUnmountedTraversalOrchestrationState {
       groundedSpawnPosition,
       latestMovementInputMagnitude: this.#latestMovementInputMagnitude,
       locomotionMode: this.#dependencies.readLocomotionMode(),
+      mountedOccupancyPresentationState:
+        this.#dependencies.readMountedOccupancyPresentationState(),
       mountedVehicleSnapshot: this.#dependencies.readMountedVehicleSnapshot(),
       presentationYawRadians:
         this.#dependencies.readMountedVehicleSnapshot() === null

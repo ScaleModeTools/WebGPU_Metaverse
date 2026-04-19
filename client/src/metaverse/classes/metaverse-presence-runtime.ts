@@ -98,6 +98,10 @@ export class MetaversePresenceRuntime {
     return this.#remoteCharacterPresentations;
   }
 
+  get connectionRequired(): boolean {
+    return this.#isConfigured();
+  }
+
   get isJoined(): boolean {
     return this.#metaversePresenceClient?.statusSnapshot.joined ?? false;
   }

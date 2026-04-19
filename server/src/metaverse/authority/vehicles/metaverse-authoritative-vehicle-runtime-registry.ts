@@ -4,11 +4,16 @@ import {
   type MetaversePresenceMountedOccupantRoleId
 } from "@webgpu-metaverse/shared/metaverse/presence";
 import {
+  readMetaverseWorldMountedEntryAuthoring,
+  readMetaverseWorldMountedSeatAuthoring,
+  type MetaverseMountedVehicleControlRoutingPolicyId,
+  type MetaverseWorldMountedEntryAuthoring,
+  type MetaverseWorldMountedSeatAuthoring,
   createMetaverseVehicleId,
   type MetaverseVehicleId
-} from "@webgpu-metaverse/shared/metaverse/realtime";
+} from "@webgpu-metaverse/shared";
+import type { MetaverseWorldSurfaceAssetAuthoring } from "@webgpu-metaverse/shared/metaverse/world";
 
-import { readMetaverseAuthoritativeSurfaceAsset } from "../../config/metaverse-authoritative-world-surface.js";
 import { MetaverseAuthoritativeRapierPhysicsRuntime } from "../../classes/metaverse-authoritative-rapier-physics-runtime.js";
 import { MetaverseAuthoritativeSurfaceDriveRuntime } from "../../classes/metaverse-authoritative-surface-drive-runtime.js";
 import type {
@@ -38,6 +43,7 @@ export interface MetaverseAuthoritativeVehicleRegistryPlayerRuntimeState {
 }
 
 export interface MetaverseAuthoritativeVehicleRuntimeRegistrySeatRuntimeState {
+  readonly controlRoutingPolicyId: MetaverseMountedVehicleControlRoutingPolicyId;
   occupantPlayerId: MetaversePlayerId | null;
   occupantRole: MetaversePresenceMountedOccupantRoleId;
   readonly seatId: string;
@@ -68,6 +74,9 @@ interface MetaverseAuthoritativeVehicleRuntimeRegistryDependencies<
 > {
   readonly controllerOffsetMeters: number;
   readonly physicsRuntime: MetaverseAuthoritativeRapierPhysicsRuntime;
+  readonly readSurfaceAsset: (
+    environmentAssetId: string
+  ) => MetaverseWorldSurfaceAssetAuthoring | null;
   readonly syncVehicleDynamicSurfaceColliders: (
     vehicleRuntime: VehicleRuntime
   ) => void;
@@ -89,30 +98,29 @@ function createPhysicsVector3Snapshot(
 }
 
 function resolveVehicleDriveColliderShape(
+  readSurfaceAsset: (
+    environmentAssetId: string
+  ) => MetaverseWorldSurfaceAssetAuthoring | null,
   environmentAssetId: string
 ): MetaverseAuthoritativeVehicleDriveColliderShape {
-  const surfaceAsset = readMetaverseAuthoritativeSurfaceAsset(environmentAssetId);
-  const blockerCollider =
-    surfaceAsset?.surfaceColliders.find(
-      (surfaceCollider) => surfaceCollider.traversalAffordance === "blocker"
-    ) ?? null;
+  const surfaceAsset = readSurfaceAsset(environmentAssetId);
 
-  if (surfaceAsset === null || blockerCollider === null) {
+  if (surfaceAsset?.collider === null || surfaceAsset === null) {
     throw new Error(
-      `Metaverse authoritative world requires blocker collider authoring for ${environmentAssetId}.`
+      `Metaverse authoritative world requires collider authoring for ${environmentAssetId}.`
     );
   }
 
   return Object.freeze({
     halfExtents: createPhysicsVector3Snapshot(
-      Math.abs(blockerCollider.size.x) * 0.5,
-      Math.abs(blockerCollider.size.y) * 0.5,
-      Math.abs(blockerCollider.size.z) * 0.5
+      Math.abs(surfaceAsset.collider.size.x) * 0.5,
+      Math.abs(surfaceAsset.collider.size.y) * 0.5,
+      Math.abs(surfaceAsset.collider.size.z) * 0.5
     ),
     localCenter: createPhysicsVector3Snapshot(
-      blockerCollider.center.x,
-      blockerCollider.center.y,
-      blockerCollider.center.z
+      surfaceAsset.collider.center.x,
+      surfaceAsset.collider.center.y,
+      surfaceAsset.collider.center.z
     )
   });
 }
@@ -169,6 +177,7 @@ export class MetaverseAuthoritativeVehicleRuntimeRegistry<
     }
 
     const driveColliderShape = resolveVehicleDriveColliderShape(
+      this.#dependencies.readSurfaceAsset,
       environmentAssetId
     );
     const vehicleRuntime = {
@@ -210,6 +219,26 @@ export class MetaverseAuthoritativeVehicleRuntimeRegistry<
     return vehicleRuntime;
   }
 
+  readMountedSeatAuthoring(
+    environmentAssetId: string,
+    seatId: string
+  ): MetaverseWorldMountedSeatAuthoring | null {
+    return readMetaverseWorldMountedSeatAuthoring(
+      this.#dependencies.readSurfaceAsset(environmentAssetId),
+      seatId
+    );
+  }
+
+  readMountedEntryAuthoring(
+    environmentAssetId: string,
+    entryId: string
+  ): MetaverseWorldMountedEntryAuthoring | null {
+    return readMetaverseWorldMountedEntryAuthoring(
+      this.#dependencies.readSurfaceAsset(environmentAssetId),
+      entryId
+    );
+  }
+
   syncVehicleOccupancyAndInitialPoseFromPlayer(
     playerRuntime: PlayerRuntime,
     mountedOccupancy: MountedOccupancy,
@@ -224,14 +253,24 @@ export class MetaverseAuthoritativeVehicleRuntimeRegistry<
       mountedOccupancy.occupancyKind === "seat" &&
       mountedOccupancy.seatId !== null
     ) {
+      const seatAuthoring = this.readMountedSeatAuthoring(
+        mountedOccupancy.environmentAssetId,
+        mountedOccupancy.seatId
+      );
+
+      if (seatAuthoring === null) {
+        throw new Error(
+          `Metaverse authoritative world could not resolve authored seat ${mountedOccupancy.seatId} for ${mountedOccupancy.environmentAssetId}.`
+        );
+      }
+
       const seatRuntime = this.#ensureVehicleSeatRuntime(
         vehicleRuntime,
-        mountedOccupancy.seatId,
-        mountedOccupancy.occupantRole
+        seatAuthoring
       );
 
       seatRuntime.occupantPlayerId = playerRuntime.playerId;
-      seatRuntime.occupantRole = mountedOccupancy.occupantRole;
+      seatRuntime.occupantRole = seatAuthoring.seatRole;
     }
 
     if (vehicleRuntime.lastPoseAtMs === null) {
@@ -256,22 +295,22 @@ export class MetaverseAuthoritativeVehicleRuntimeRegistry<
 
   #ensureVehicleSeatRuntime(
     vehicleRuntime: VehicleRuntime,
-    seatId: string,
-    occupantRole: MetaversePresenceMountedOccupantRoleId
+    seatAuthoring: MetaverseWorldMountedSeatAuthoring
   ): SeatRuntime {
-    const existingSeatRuntime = vehicleRuntime.seatsById.get(seatId);
+    const existingSeatRuntime = vehicleRuntime.seatsById.get(seatAuthoring.seatId);
 
     if (existingSeatRuntime !== undefined) {
       return existingSeatRuntime;
     }
 
     const seatRuntime = {
+      controlRoutingPolicyId: seatAuthoring.controlRoutingPolicyId,
       occupantPlayerId: null,
-      occupantRole,
-      seatId
+      occupantRole: seatAuthoring.seatRole,
+      seatId: seatAuthoring.seatId
     } as SeatRuntime;
 
-    vehicleRuntime.seatsById.set(seatId, seatRuntime);
+    vehicleRuntime.seatsById.set(seatAuthoring.seatId, seatRuntime);
 
     return seatRuntime;
   }

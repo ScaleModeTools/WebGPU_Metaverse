@@ -9,9 +9,21 @@ import type {
   MetaversePresenceMountedOccupantRoleId
 } from "@webgpu-metaverse/shared/metaverse/presence";
 import {
-  wrapRadians,
-  type MetaverseSurfaceTraversalConfig
+  canMetaverseMountedOccupancyRouteSurfaceDrive,
+  resolveMetaverseMountedVehicleSurfaceDriveControlIntent,
+  type MetaverseMountedVehicleControlRoutingPolicyId,
+  type MetaverseSurfaceTraversalConfig,
+  type MetaverseTraversalKinematicStateSnapshot,
+  type MetaverseVehicleTraversalConfig
 } from "@webgpu-metaverse/shared/metaverse/traversal";
+import type {
+  MetaverseWorldPlacedSurfaceColliderSnapshot,
+  MetaverseWorldPlacedWaterRegionSnapshot,
+  MetaverseWorldSurfacePolicyConfig
+} from "@webgpu-metaverse/shared/metaverse/world";
+import {
+  isMetaverseWorldWaterbornePosition
+} from "@webgpu-metaverse/shared/metaverse/world";
 
 import type {
   PhysicsVector3Snapshot,
@@ -28,12 +40,14 @@ export interface MetaverseAuthoritativeDriverVehicleControlRuntimeState {
 }
 
 export interface MetaverseAuthoritativeVehicleSeatRuntimeState {
+  readonly controlRoutingPolicyId: MetaverseMountedVehicleControlRoutingPolicyId;
   occupantPlayerId: MetaversePlayerId | null;
   occupantRole: MetaversePresenceMountedOccupantRoleId;
   readonly seatId: string;
 }
 
 export interface MetaverseAuthoritativeVehicleMountedOccupancyRuntimeState {
+  readonly controlRoutingPolicyId: MetaverseMountedVehicleControlRoutingPolicyId;
   readonly environmentAssetId: string;
   readonly occupancyKind: MetaversePresenceMountedOccupancySnapshot["occupancyKind"];
   readonly occupantRole: MetaversePresenceMountedOccupantRoleId;
@@ -54,11 +68,7 @@ interface MetaverseAuthoritativeVehicleDriveRuntime {
     lockedHeightMeters: number,
     preferredLookYawRadians: number | null,
     filterPredicate?: RapierQueryFilterPredicate
-  ): {
-    readonly linearVelocity: PhysicsVector3Snapshot;
-    readonly position: PhysicsVector3Snapshot;
-    readonly yawRadians: number;
-  };
+  ): MetaverseTraversalKinematicStateSnapshot;
 }
 
 export interface MetaverseAuthoritativeVehicleRuntimeState<
@@ -112,12 +122,13 @@ interface MetaverseAuthoritativeVehicleDriveAuthorityDependencies<
   readonly syncVehicleDynamicSurfaceColliders: (
     vehicleRuntime: VehicleRuntime
   ) => void;
-  readonly vehicleSurfaceTraversalConfig: MetaverseSurfaceTraversalConfig;
+  readonly resolveAuthoritativeSurfaceColliders:
+    () => readonly MetaverseWorldPlacedSurfaceColliderSnapshot[];
+  readonly surfacePolicyConfig: MetaverseWorldSurfacePolicyConfig;
+  readonly vehicleSurfaceTraversalConfig: MetaverseVehicleTraversalConfig;
   readonly vehiclesById: ReadonlyMap<MetaverseVehicleId, VehicleRuntime>;
-}
-
-function normalizeAngularDeltaRadians(rawValue: number): number {
-  return wrapRadians(rawValue);
+  readonly waterRegionSnapshots:
+    readonly MetaverseWorldPlacedWaterRegionSnapshot[];
 }
 
 export class MetaverseAuthoritativeVehicleDriveAuthority<
@@ -164,6 +175,10 @@ export class MetaverseAuthoritativeVehicleDriveAuthority<
       mountedOccupancy === null ||
       mountedOccupancy.occupancyKind !== "seat" ||
       mountedOccupancy.occupantRole !== "driver" ||
+      !canMetaverseMountedOccupancyRouteSurfaceDrive({
+        controlRoutingPolicyId: mountedOccupancy.controlRoutingPolicyId,
+        occupantRole: mountedOccupancy.occupantRole
+      }) ||
       mountedOccupancy.seatId === null ||
       mountedOccupancy.environmentAssetId !==
         normalizedCommand.controlIntent.environmentAssetId
@@ -180,7 +195,10 @@ export class MetaverseAuthoritativeVehicleDriveAuthority<
     if (
       seatRuntime === null ||
       seatRuntime.occupantPlayerId !== command.playerId ||
-      seatRuntime.occupantRole !== "driver"
+      !canMetaverseMountedOccupancyRouteSurfaceDrive({
+        controlRoutingPolicyId: seatRuntime.controlRoutingPolicyId,
+        occupantRole: seatRuntime.occupantRole
+      })
     ) {
       return;
     }
@@ -298,13 +316,30 @@ export class MetaverseAuthoritativeVehicleDriveAuthority<
       return;
     }
 
-    const nextVehicleState = vehicleRuntime.driveRuntime.advance(
-      {
+    const surfaceColliders = this.#dependencies.resolveAuthoritativeSurfaceColliders();
+    const mountedVehicleControlIntent =
+      resolveMetaverseMountedVehicleSurfaceDriveControlIntent({
         boost: driverControlState?.boost === true,
         moveAxis: driverControlState?.moveAxis ?? 0,
+        occupantRole: driverControlState === null ? null : "driver",
         strafeAxis: driverControlState?.strafeAxis ?? 0,
+        waterborne: isMetaverseWorldWaterbornePosition(
+          this.#dependencies.surfacePolicyConfig,
+          surfaceColliders,
+          this.#dependencies.waterRegionSnapshots,
+          {
+            x: vehicleRuntime.positionX,
+            y: vehicleRuntime.positionY,
+            z: vehicleRuntime.positionZ
+          },
+          this.#dependencies.vehicleSurfaceTraversalConfig
+            .waterContactProbeRadiusMeters,
+          vehicleRuntime.environmentAssetId
+        ),
         yawAxis: driverControlState?.yawAxis ?? 0
-      },
+      });
+    const nextVehicleState = vehicleRuntime.driveRuntime.advance(
+      mountedVehicleControlIntent,
       this.#dependencies.vehicleSurfaceTraversalConfig,
       deltaSeconds,
       vehicleRuntime.positionY,
@@ -313,34 +348,20 @@ export class MetaverseAuthoritativeVehicleDriveAuthority<
         vehicleRuntime.environmentAssetId
       )
     );
-    const nextYawRadians = nextVehicleState.yawRadians;
-    const nextPositionX = nextVehicleState.position.x;
-    const nextPositionZ = nextVehicleState.position.z;
-    const deltaX = nextPositionX - vehicleRuntime.positionX;
-    const deltaZ = nextPositionZ - vehicleRuntime.positionZ;
-    const previousYawRadians = vehicleRuntime.yawRadians;
 
-    vehicleRuntime.positionX = nextPositionX;
+    vehicleRuntime.positionX = nextVehicleState.position.x;
     vehicleRuntime.positionY = nextVehicleState.position.y;
-    vehicleRuntime.positionZ = nextPositionZ;
-    vehicleRuntime.yawRadians = nextYawRadians;
+    vehicleRuntime.positionZ = nextVehicleState.position.z;
+    vehicleRuntime.yawRadians = nextVehicleState.yawRadians;
     vehicleRuntime.linearVelocityX = nextVehicleState.linearVelocity.x;
     vehicleRuntime.linearVelocityY = nextVehicleState.linearVelocity.y;
     vehicleRuntime.linearVelocityZ = nextVehicleState.linearVelocity.z;
     vehicleRuntime.angularVelocityRadiansPerSecond =
-      normalizeAngularDeltaRadians(nextYawRadians - previousYawRadians) /
-      deltaSeconds;
-    const forwardX = Math.sin(nextYawRadians);
-    const forwardZ = -Math.cos(nextYawRadians);
-    const rightX = Math.cos(nextYawRadians);
-    const rightZ = Math.sin(nextYawRadians);
-
+      nextVehicleState.angularVelocityRadiansPerSecond;
     vehicleRuntime.forwardSpeedUnitsPerSecond =
-      deltaSeconds > 0
-        ? (deltaX * forwardX + deltaZ * forwardZ) / deltaSeconds
-        : 0;
+      nextVehicleState.forwardSpeedUnitsPerSecond;
     vehicleRuntime.strafeSpeedUnitsPerSecond =
-      deltaSeconds > 0 ? (deltaX * rightX + deltaZ * rightZ) / deltaSeconds : 0;
+      nextVehicleState.strafeSpeedUnitsPerSecond;
     this.#dependencies.syncVehicleDynamicSurfaceColliders(vehicleRuntime);
   }
 }

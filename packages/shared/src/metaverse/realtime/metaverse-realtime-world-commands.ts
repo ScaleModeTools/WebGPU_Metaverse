@@ -107,6 +107,17 @@ export interface MetaversePlayerTraversalIntentSnapshotInput {
   readonly orientationSequence?: number;
 }
 
+export interface MetaverseGameplayTraversalIntentInput {
+  readonly boost?: boolean;
+  readonly jump?: boolean;
+  readonly locomotionMode?: MetaversePlayerTraversalIntentLocomotionModeId | null;
+  readonly moveAxis?: number;
+  readonly pitchRadians?: number;
+  readonly strafeAxis?: number;
+  readonly turnAxis?: number;
+  readonly yawRadians?: number;
+}
+
 export function doMetaversePlayerTraversalSequencedInputsMatch(
   leftIntent: Pick<
     MetaversePlayerTraversalIntentSnapshot,
@@ -225,6 +236,45 @@ function resolveTraversalIntentLocomotionMode(
   }
 
   return "grounded";
+}
+
+export function createMetaverseGameplayTraversalIntentSnapshotInput(
+  input: MetaverseGameplayTraversalIntentInput
+): MetaversePlayerTraversalIntentSnapshotInput | null {
+  if (input.locomotionMode !== "grounded" && input.locomotionMode !== "swim") {
+    return null;
+  }
+
+  const bodyControlInput = {
+    ...(input.boost === undefined ? {} : { boost: input.boost }),
+    ...(input.moveAxis === undefined ? {} : { moveAxis: input.moveAxis }),
+    ...(input.strafeAxis === undefined
+      ? {}
+      : { strafeAxis: input.strafeAxis }),
+    ...(input.turnAxis === undefined ? {} : { turnAxis: input.turnAxis })
+  } satisfies MetaversePlayerTraversalBodyControlSnapshotInput;
+  const facingInput = {
+    ...(input.pitchRadians === undefined
+      ? {}
+      : { pitchRadians: input.pitchRadians }),
+    ...(input.yawRadians === undefined ? {} : { yawRadians: input.yawRadians })
+  } satisfies MetaversePlayerTraversalFacingSnapshotInput;
+
+  return Object.freeze({
+    actionIntent:
+      input.locomotionMode === "grounded"
+        ? createMetaverseTraversalActionIntentSnapshot({
+            kind: input.jump === true ? "jump" : "none",
+            pressed: input.jump === true
+          })
+        : createMetaverseTraversalActionIntentSnapshot({
+            kind: "none",
+            pressed: false
+          }),
+    bodyControl: createMetaverseTraversalBodyControlSnapshot(bodyControlInput),
+    facing: createMetaverseTraversalFacingSnapshot(facingInput),
+    locomotionMode: input.locomotionMode
+  });
 }
 
 function freezeDriverVehicleControlIntentSnapshot(

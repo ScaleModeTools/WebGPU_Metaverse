@@ -2,6 +2,9 @@ import type { MetaverseSceneCameraPresentationState } from "./camera/metaverse-s
 import type { MetaverseSceneLocalCharacterPresentationState } from "./characters/metaverse-scene-local-character-presentation-state";
 import type { MetaverseSceneRemoteCharacterPresentationState } from "./characters/metaverse-scene-remote-character-presentation-state";
 import type { MetaverseScenePresentationLifecycleState } from "./metaverse-scene-presentation-lifecycle-state";
+import {
+  createMetaverseSceneMountedPresentationSnapshot
+} from "./mounts/metaverse-scene-mounted-presentation-snapshot";
 import type {
   MetaverseSceneInteractionSnapshot
 } from "./mounts/metaverse-scene-mounts";
@@ -65,11 +68,13 @@ export class MetaverseScenePresentationState {
       portalPresentationState,
       remoteCharacterPresentationState
     } = this.#dependencies;
+    const mountedPresentationSnapshot =
+      createMetaverseSceneMountedPresentationSnapshot(mountedEnvironment);
     const presentedCameraSnapshot = localCharacterPresentationState.syncPresentation(
       cameraSnapshot,
       deltaSeconds,
       characterPresentation,
-      mountedEnvironment
+      mountedPresentationSnapshot
     );
     cameraPresentationState.syncPresentedCamera(presentedCameraSnapshot, nowMs);
     remoteCharacterPresentationState.syncPresentation(
@@ -80,7 +85,7 @@ export class MetaverseScenePresentationState {
 
     return cameraPresentationState.syncSceneInteractionSnapshot(
       presentedCameraSnapshot,
-      mountedEnvironment
+      mountedPresentationSnapshot
     );
   }
 }

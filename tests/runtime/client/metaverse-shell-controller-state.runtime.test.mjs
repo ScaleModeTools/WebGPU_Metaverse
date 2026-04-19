@@ -49,6 +49,7 @@ test("createInitialMetaverseShellControllerState seeds typed shell policy from h
   });
 
   assert.equal(state.profile?.snapshot.username, "shell-user");
+  assert.equal(state.hasConfirmedProfile, true);
   assert.equal(state.hydrationSource, "profile-record");
   assert.equal(state.inputMode, "mouse");
   assert.equal(state.usernameDraft, "shell-user");
@@ -62,6 +63,126 @@ test("createInitialMetaverseShellControllerState seeds typed shell policy from h
   assert.equal(state.activeExperienceId, null);
   assert.equal(state.permissionState, "prompt");
   assert.equal(state.sessionMode, "single-player");
+});
+
+test("metaverse entry and tool preview auto-confirm a guest profile when none is stored", async () => {
+  const {
+    createInitialMetaverseShellControllerState,
+    reduceMetaverseShellControllerState
+  } = await clientLoader.load("/src/app/states/metaverse-shell-controller-state.ts");
+  const { registerMetaverseWorldBundlePreviewEntry } = await clientLoader.load(
+    "/src/metaverse/world/bundle-registry/index.ts"
+  );
+  const { loadMetaverseMapBundle } = await clientLoader.load(
+    "/src/metaverse/world/map-bundles/index.ts"
+  );
+  const stagingGroundBundle = loadMetaverseMapBundle("staging-ground").bundle;
+  const customPreviewBundle = Object.freeze({
+    ...stagingGroundBundle,
+    label: "Custom Preview",
+    mapId: "custom-preview-bundle"
+  });
+
+  registerMetaverseWorldBundlePreviewEntry(
+    Object.freeze({
+      bundle: customPreviewBundle,
+      bundleId: customPreviewBundle.mapId,
+      label: customPreviewBundle.label,
+      sourceBundleId: "staging-ground"
+    })
+  );
+
+  let state = createInitialMetaverseShellControllerState({
+    audioSnapshot: createAudioSnapshot(),
+    hydratedProfile: {
+      inputMode: "mouse",
+      profile: null,
+      source: "empty"
+    }
+  });
+
+  state = reduceMetaverseShellControllerState(state, {
+    type: "metaverseEntryRequested"
+  });
+
+  assert.equal(state.hasConfirmedProfile, true);
+  assert.equal(state.profile?.snapshot.username, "Unknown");
+  assert.equal(state.shellStage, "metaverse");
+  assert.equal(state.activeMetaverseLaunchVariationId, null);
+
+  state = reduceMetaverseShellControllerState(state, {
+    type: "toolPreviewRequested",
+    launchSelection: {
+      bundleId: "custom-preview-bundle",
+      bundleLabel: "Custom Preview",
+      experienceId: null,
+      gameplayVariationId: null,
+      sessionMode: null,
+      sourceBundleId: "staging-ground",
+      variationId: "custom-free-roam",
+      variationLabel: "Custom Free Roam",
+      vehicleLayoutId: null,
+      weaponLayoutId: null
+    }
+  });
+
+  state = reduceMetaverseShellControllerState(state, {
+    type: "metaverseEntryRequested"
+  });
+
+  assert.equal(state.activeMetaverseBundleId, "custom-preview-bundle");
+  assert.equal(state.activeMetaverseLaunchVariationId, "custom-free-roam");
+
+  state = reduceMetaverseShellControllerState(state, {
+    type: "profileCleared",
+    audioSnapshot: createAudioSnapshot()
+  });
+
+  state = reduceMetaverseShellControllerState(state, {
+    type: "toolPreviewRequested",
+    launchSelection: {
+      bundleId: "staging-ground",
+      bundleLabel: "Staging Ground",
+      experienceId: null,
+      gameplayVariationId: null,
+      sessionMode: null,
+      sourceBundleId: "staging-ground",
+      variationId: "shell-free-roam",
+      variationLabel: "Free Roam",
+      vehicleLayoutId: null,
+      weaponLayoutId: null
+    }
+  });
+
+  assert.equal(state.hasConfirmedProfile, true);
+  assert.equal(state.profile?.snapshot.username, "Unknown");
+  assert.equal(state.shellStage, "metaverse");
+  assert.equal(state.activeMetaverseLaunchVariationId, "shell-free-roam");
+});
+
+test("calibration reset auto-confirms a guest profile before entering calibration flow", async () => {
+  const {
+    createInitialMetaverseShellControllerState,
+    reduceMetaverseShellControllerState
+  } = await clientLoader.load("/src/app/states/metaverse-shell-controller-state.ts");
+
+  let state = createInitialMetaverseShellControllerState({
+    audioSnapshot: createAudioSnapshot(),
+    hydratedProfile: {
+      inputMode: "camera-thumb-trigger",
+      profile: null,
+      source: "empty"
+    }
+  });
+
+  state = reduceMetaverseShellControllerState(state, {
+    type: "calibrationResetRequested"
+  });
+
+  assert.equal(state.hasConfirmedProfile, true);
+  assert.equal(state.profile?.snapshot.username, "Unknown");
+  assert.equal(state.shellStage, "metaverse");
+  assert.equal(state.profile?.hasAimCalibration, false);
 });
 
 test("reduceMetaverseShellControllerState keeps hub and experience mutations behind typed actions", async () => {

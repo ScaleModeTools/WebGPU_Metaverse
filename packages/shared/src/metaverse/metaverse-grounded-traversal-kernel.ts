@@ -81,6 +81,13 @@ export interface MetaverseGroundedBodyPreparedStepSnapshot {
   readonly yawRadians: number;
 }
 
+export interface MetaverseGroundedBodyControllerResultSnapshot {
+  readonly colliderCenterPosition: MetaverseWorldSurfaceVector3Snapshot;
+  readonly computedGrounded: boolean;
+  readonly computedMovementDelta: MetaverseWorldSurfaceVector3Snapshot;
+  readonly standingOffsetMeters: number;
+}
+
 export interface MetaverseGroundedBodyResolvedStepSnapshot {
   readonly planarSpeedUnitsPerSecond: number;
   readonly state: MetaverseGroundedBodyStepStateSnapshot;
@@ -289,6 +296,36 @@ export function resolveMetaverseGroundedBodyStep(
     planarSpeedUnitsPerSecond: resolvedTraversalStep.planarSpeedUnitsPerSecond,
     state: stepState
   });
+}
+
+export function resolveMetaverseGroundedBodyControllerStep(
+  stateSnapshot: MetaverseGroundedBodyStepStateSnapshot,
+  preparedStepSnapshot: MetaverseGroundedBodyPreparedStepSnapshot,
+  controllerResultSnapshot: MetaverseGroundedBodyControllerResultSnapshot,
+  config: MetaverseGroundedBodyStepConfig,
+  deltaSeconds: number
+): MetaverseGroundedBodyResolvedStepSnapshot {
+  const standingOffsetMeters = Math.max(
+    0,
+    toFiniteNumber(controllerResultSnapshot.standingOffsetMeters, 0)
+  );
+
+  return resolveMetaverseGroundedBodyStep(
+    stateSnapshot,
+    preparedStepSnapshot,
+    createMetaverseSurfaceTraversalVector3Snapshot(
+      controllerResultSnapshot.colliderCenterPosition.x +
+        controllerResultSnapshot.computedMovementDelta.x,
+      controllerResultSnapshot.colliderCenterPosition.y +
+        controllerResultSnapshot.computedMovementDelta.y -
+        standingOffsetMeters,
+      controllerResultSnapshot.colliderCenterPosition.z +
+        controllerResultSnapshot.computedMovementDelta.z
+    ),
+    controllerResultSnapshot.computedGrounded === true,
+    config,
+    deltaSeconds
+  );
 }
 
 export function syncMetaverseGroundedBodyStepState(

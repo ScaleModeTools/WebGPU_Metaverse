@@ -14,6 +14,7 @@ import {
   createMetaverseAuthoritativeWorldEvent,
   createMetaverseAuthoritativeWorldSnapshot,
   type MetaverseAuthoritativeSnapshotPlayerRuntimeState,
+  type MetaverseAuthoritativeSnapshotEnvironmentBodyRuntimeState,
   type MetaverseAuthoritativeSnapshotPlayerTraversalIntentRuntimeState,
   type MetaverseAuthoritativeSnapshotVehicleRuntimeState
 } from "../snapshots/metaverse-authoritative-world-snapshot-assembly.js";
@@ -33,8 +34,13 @@ interface MetaverseAuthoritativeWorldReadPlayerRuntimeState
 
 interface MetaverseAuthoritativeWorldReadStateDependencies<
   PlayerRuntime extends MetaverseAuthoritativeWorldReadPlayerRuntimeState,
+  EnvironmentBodyRuntime extends MetaverseAuthoritativeSnapshotEnvironmentBodyRuntimeState,
   VehicleRuntime extends MetaverseAuthoritativeSnapshotVehicleRuntimeState
 > {
+  readonly environmentBodiesByEnvironmentAssetId: ReadonlyMap<
+    string,
+    EnvironmentBodyRuntime
+  >;
   readonly playersById: Map<MetaversePlayerId, PlayerRuntime>;
   readonly readCurrentTick: () => number;
   readonly readLastAdvancedAtMs: () => number | null;
@@ -49,16 +55,19 @@ interface MetaverseAuthoritativeWorldReadStateDependencies<
 
 export class MetaverseAuthoritativeWorldReadState<
   PlayerRuntime extends MetaverseAuthoritativeWorldReadPlayerRuntimeState,
+  EnvironmentBodyRuntime extends MetaverseAuthoritativeSnapshotEnvironmentBodyRuntimeState,
   VehicleRuntime extends MetaverseAuthoritativeSnapshotVehicleRuntimeState
 > {
   readonly #dependencies: MetaverseAuthoritativeWorldReadStateDependencies<
     PlayerRuntime,
+    EnvironmentBodyRuntime,
     VehicleRuntime
   >;
 
   constructor(
     dependencies: MetaverseAuthoritativeWorldReadStateDependencies<
       PlayerRuntime,
+      EnvironmentBodyRuntime,
       VehicleRuntime
     >
   ) {
@@ -105,6 +114,8 @@ export class MetaverseAuthoritativeWorldReadState<
 
     return createMetaverseAuthoritativeWorldSnapshot({
       currentTick: this.#dependencies.readCurrentTick(),
+      environmentBodies:
+        this.#dependencies.environmentBodiesByEnvironmentAssetId.values(),
       lastAdvancedAtMs: this.#dependencies.readLastAdvancedAtMs(),
       nowMs: normalizedNowMs,
       players: this.#dependencies.playersById.values(),

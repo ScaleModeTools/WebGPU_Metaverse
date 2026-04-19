@@ -14,7 +14,12 @@ export const gameplayCapabilityStates = [
   "unsupported"
 ] as const;
 export const calibrationShellStates = ["pending", "reviewed"] as const;
-export const shellStageStates = ["main-menu", "metaverse", "gameplay"] as const;
+export const shellStageStates = [
+  "main-menu",
+  "tool",
+  "metaverse",
+  "gameplay"
+] as const;
 export const metaverseEntryStepIds = [
   "permissions",
   "calibration",

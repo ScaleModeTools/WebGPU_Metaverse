@@ -23,8 +23,7 @@ export type EnvironmentAssetPlacement =
 export const environmentTraversalAffordanceIds = [
   "support",
   "blocker",
-  "mount",
-  "pushable"
+  "mount"
 ] as const;
 
 export type EnvironmentTraversalAffordanceId =
@@ -82,6 +81,15 @@ export interface EnvironmentPhysicsBoxColliderDescriptor
   readonly traversalAffordance: EnvironmentPhysicsColliderTraversalAffordanceId;
 }
 
+export interface EnvironmentDynamicBodyDescriptor {
+  readonly additionalMass: number;
+  readonly angularDamping: number;
+  readonly gravityScale: number;
+  readonly kind: "dynamic-rigid-body";
+  readonly linearDamping: number;
+  readonly lockRotations: boolean;
+}
+
 export interface EnvironmentSeatDescriptor {
   readonly cameraPolicyId: MountedVehicleCameraPolicyId;
   readonly controlRoutingPolicyId: MountedVehicleControlRoutingPolicyId;
@@ -113,6 +121,7 @@ export interface EnvironmentAssetDescriptor<
   readonly id: TId;
   readonly label: string;
   readonly placement: EnvironmentAssetPlacement;
+  readonly dynamicBody?: EnvironmentDynamicBodyDescriptor | null;
   readonly physicsColliders:
     | readonly EnvironmentPhysicsBoxColliderDescriptor[]
     | null;

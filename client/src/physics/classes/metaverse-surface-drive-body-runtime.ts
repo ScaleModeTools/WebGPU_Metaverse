@@ -1,12 +1,13 @@
 import {
-  advanceMetaverseSurfaceTraversalMotion,
-  clamp,
-  constrainMetaverseSurfaceTraversalPositionToWorldRadius,
   constrainMetaverseWorldPlanarPositionAgainstBlockers,
+  resolveMetaverseSurfaceDriveBodyStep,
   createMetaverseSurfaceTraversalVector3Snapshot as freezeVector3,
+  syncMetaverseTraversalKinematicState,
   toFiniteNumber,
   wrapRadians,
   type MetaverseSurfaceTraversalConfig,
+  type MetaverseSurfaceDriveBodyIntentSnapshot,
+  type MetaverseTraversalKinematicStateSnapshot,
   type MetaverseWorldPlacedSurfaceColliderSnapshot
 } from "@webgpu-metaverse/shared";
 
@@ -19,12 +20,7 @@ import type {
   RapierQueryFilterPredicate
 } from "../types/metaverse-grounded-body";
 
-export interface MetaverseSurfaceDriveBodyIntentSnapshot {
-  readonly boost: boolean;
-  readonly moveAxis: number;
-  readonly strafeAxis: number;
-  readonly yawAxis: number;
-}
+export type { MetaverseSurfaceDriveBodyIntentSnapshot } from "@webgpu-metaverse/shared";
 
 type MetaverseSurfaceDriveBodyShapeConfig =
   | {
@@ -46,31 +42,13 @@ export interface MetaverseSurfaceDriveBodyRuntimeConfig {
   readonly worldRadius: number;
 }
 
-export interface MetaverseSurfaceDriveBodySnapshot {
-  readonly linearVelocity: PhysicsVector3Snapshot;
-  readonly planarSpeedUnitsPerSecond: number;
-  readonly position: PhysicsVector3Snapshot;
-  readonly yawRadians: number;
-}
+export interface MetaverseSurfaceDriveBodySnapshot
+  extends MetaverseTraversalKinematicStateSnapshot {}
 
 export interface MetaverseSurfaceDriveBodyBlockerResolutionOptions {
   readonly excludedOwnerEnvironmentAssetId?: string | null;
   readonly surfaceColliderSnapshots:
     readonly MetaverseWorldPlacedSurfaceColliderSnapshot[];
-}
-
-function freezeSnapshot(
-  linearVelocity: PhysicsVector3Snapshot,
-  planarSpeedUnitsPerSecond: number,
-  position: PhysicsVector3Snapshot,
-  yawRadians: number
-): MetaverseSurfaceDriveBodySnapshot {
-  return Object.freeze({
-    linearVelocity,
-    planarSpeedUnitsPerSecond: Math.max(0, toFiniteNumber(planarSpeedUnitsPerSecond)),
-    position,
-    yawRadians: wrapRadians(yawRadians)
-  });
 }
 
 function rotateVectorAroundYaw(
@@ -175,12 +153,11 @@ export class MetaverseSurfaceDriveBodyRuntime {
             ),
             quaternionFromYawRadians(this.#config.spawnYawRadians)
           );
-    this.#snapshot = freezeSnapshot(
-      freezeVector3(0, 0, 0),
-      0,
-      this.#config.spawnPosition,
-      this.#config.spawnYawRadians
-    );
+    this.#snapshot = syncMetaverseTraversalKinematicState({
+      linearVelocity: freezeVector3(0, 0, 0),
+      position: this.#config.spawnPosition,
+      yawRadians: this.#config.spawnYawRadians
+    });
   }
 
   get colliderHandle(): RapierColliderHandle {
@@ -242,10 +219,6 @@ export class MetaverseSurfaceDriveBodyRuntime {
       snapshot.linearVelocity.y,
       snapshot.linearVelocity.z
     );
-    const forwardX = Math.sin(yawRadians);
-    const forwardZ = -Math.cos(yawRadians);
-    const rightX = Math.cos(yawRadians);
-    const rightZ = Math.sin(yawRadians);
 
     this.#collider.setTranslation(this.#rootToColliderCenter(position, yawRadians));
 
@@ -253,16 +226,15 @@ export class MetaverseSurfaceDriveBodyRuntime {
       this.#collider.setRotation(quaternionFromYawRadians(yawRadians));
     }
 
-    this.#forwardSpeedUnitsPerSecond =
-      linearVelocity.x * forwardX + linearVelocity.z * forwardZ;
-    this.#strafeSpeedUnitsPerSecond =
-      linearVelocity.x * rightX + linearVelocity.z * rightZ;
-    this.#snapshot = freezeSnapshot(
+    this.#snapshot = syncMetaverseTraversalKinematicState({
       linearVelocity,
-      Math.hypot(linearVelocity.x, linearVelocity.z),
       position,
       yawRadians
-    );
+    });
+    this.#forwardSpeedUnitsPerSecond =
+      this.#snapshot.forwardSpeedUnitsPerSecond;
+    this.#strafeSpeedUnitsPerSecond =
+      this.#snapshot.strafeSpeedUnitsPerSecond;
   }
 
   advance(
@@ -279,100 +251,82 @@ export class MetaverseSurfaceDriveBodyRuntime {
     }
 
     this.#physicsRuntime.stepSimulation(deltaSeconds);
-    const motionSnapshot = advanceMetaverseSurfaceTraversalMotion(
-      this.#snapshot.yawRadians,
-      {
-        forwardSpeedUnitsPerSecond: this.#forwardSpeedUnitsPerSecond,
-        strafeSpeedUnitsPerSecond: this.#strafeSpeedUnitsPerSecond
-      },
-      {
-        boost: intentSnapshot.boost,
-        moveAxis: clamp(toFiniteNumber(intentSnapshot.moveAxis, 0), -1, 1),
-        strafeAxis: clamp(toFiniteNumber(intentSnapshot.strafeAxis, 0), -1, 1),
-        yawAxis: clamp(toFiniteNumber(intentSnapshot.yawAxis, 0), -1, 1)
-      },
-      locomotionConfig,
+    const nextBodyStep = resolveMetaverseSurfaceDriveBodyStep({
+      currentForwardSpeedUnitsPerSecond: this.#forwardSpeedUnitsPerSecond,
+      currentSnapshot: this.#snapshot,
+      currentStrafeSpeedUnitsPerSecond: this.#strafeSpeedUnitsPerSecond,
       deltaSeconds,
-      true,
-      1,
-      preferredLookYawRadians
-    );
-    const nextYawRadians = motionSnapshot.yawRadians;
-    const desiredMovement = this.#physicsRuntime.createVector3(
-      motionSnapshot.velocityX * deltaSeconds,
-      0,
-      motionSnapshot.velocityZ * deltaSeconds
-    );
+      intentSnapshot,
+      lockedHeightMeters,
+      locomotionConfig,
+      preferredLookYawRadians,
+      resolveUnclampedRootPosition: ({
+        desiredDeltaX,
+        desiredDeltaZ,
+        nextYawRadians
+      }) => {
+        const desiredMovement = this.#physicsRuntime.createVector3(
+          desiredDeltaX,
+          0,
+          desiredDeltaZ
+        );
 
-    if (this.#config.shape.kind === "cuboid") {
-      this.#collider.setRotation(quaternionFromYawRadians(nextYawRadians));
-    }
+        if (this.#config.shape.kind === "cuboid") {
+          this.#collider.setRotation(quaternionFromYawRadians(nextYawRadians));
+        }
 
-    this.#characterController.computeColliderMovement(
-      this.#collider,
-      desiredMovement,
-      undefined,
-      undefined,
-      filterPredicate
-    );
+        this.#characterController.computeColliderMovement(
+          this.#collider,
+          desiredMovement,
+          undefined,
+          undefined,
+          filterPredicate
+        );
 
-    const currentTranslation = this.#collider.translation();
-    const computedMovement = this.#characterController.computedMovement();
-    const unclampedRootPosition = this.#colliderCenterToRoot(
-      freezeVector3(
-        currentTranslation.x + computedMovement.x,
-        currentTranslation.y + computedMovement.y,
-        currentTranslation.z + computedMovement.z
-      ),
-      nextYawRadians
-    );
-    const clampedRootPosition =
-      constrainMetaverseSurfaceTraversalPositionToWorldRadius(
-        freezeVector3(
-          unclampedRootPosition.x,
-          lockedHeightMeters,
-          unclampedRootPosition.z
-        ),
-        this.#config.worldRadius
-      );
-    const resolvedRootPosition =
-      blockerResolution === undefined
-        ? clampedRootPosition
-        : this.#constrainPlanarPositionAgainstSharedBlockers(
-            clampedRootPosition,
-            blockerResolution
-          );
-    const appliedDeltaX = resolvedRootPosition.x - this.#snapshot.position.x;
-    const appliedDeltaY = lockedHeightMeters - this.#snapshot.position.y;
-    const appliedDeltaZ = resolvedRootPosition.z - this.#snapshot.position.z;
-    const forwardX = Math.sin(nextYawRadians);
-    const forwardZ = -Math.cos(nextYawRadians);
-    const rightX = Math.cos(nextYawRadians);
-    const rightZ = Math.sin(nextYawRadians);
-    const linearVelocity = freezeVector3(
-      appliedDeltaX / deltaSeconds,
-      appliedDeltaY / deltaSeconds,
-      appliedDeltaZ / deltaSeconds
-    );
+        const currentTranslation = this.#collider.translation();
+        const computedMovement = this.#characterController.computedMovement();
+
+        return this.#colliderCenterToRoot(
+          freezeVector3(
+            currentTranslation.x + computedMovement.x,
+            currentTranslation.y + computedMovement.y,
+            currentTranslation.z + computedMovement.z
+          ),
+          nextYawRadians
+        );
+      },
+      ...(blockerResolution === undefined
+        ? {}
+        : {
+            resolveBlockedPlanarPosition: (
+              rootPosition: PhysicsVector3Snapshot
+            ) =>
+              this.#constrainPlanarPositionAgainstSharedBlockers(
+                rootPosition,
+                blockerResolution
+              )
+          }),
+      worldRadius: this.#config.worldRadius
+    });
+    this.#snapshot = nextBodyStep.nextSnapshot;
 
     this.#collider.setTranslation(
-      this.#rootToColliderCenter(resolvedRootPosition, nextYawRadians)
+      this.#rootToColliderCenter(
+        nextBodyStep.resolvedRootPosition,
+        nextBodyStep.nextYawRadians
+      )
     );
 
     if (this.#config.shape.kind === "cuboid") {
-      this.#collider.setRotation(quaternionFromYawRadians(nextYawRadians));
+      this.#collider.setRotation(
+        quaternionFromYawRadians(nextBodyStep.nextYawRadians)
+      );
     }
 
     this.#forwardSpeedUnitsPerSecond =
-      (appliedDeltaX * forwardX + appliedDeltaZ * forwardZ) / deltaSeconds;
+      nextBodyStep.nextForwardSpeedUnitsPerSecond;
     this.#strafeSpeedUnitsPerSecond =
-      (appliedDeltaX * rightX + appliedDeltaZ * rightZ) / deltaSeconds;
-    this.#snapshot = freezeSnapshot(
-      linearVelocity,
-      Math.hypot(appliedDeltaX, appliedDeltaZ) / deltaSeconds,
-      resolvedRootPosition,
-      nextYawRadians
-    );
+      nextBodyStep.nextStrafeSpeedUnitsPerSecond;
 
     return this.#snapshot;
   }
@@ -391,12 +345,11 @@ export class MetaverseSurfaceDriveBodyRuntime {
 
     this.#forwardSpeedUnitsPerSecond = 0;
     this.#strafeSpeedUnitsPerSecond = 0;
-    this.#snapshot = freezeSnapshot(
-      freezeVector3(0, 0, 0),
-      0,
-      sanitizedPosition,
-      wrappedYawRadians
-    );
+    this.#snapshot = syncMetaverseTraversalKinematicState({
+      linearVelocity: freezeVector3(0, 0, 0),
+      position: sanitizedPosition,
+      yawRadians: wrappedYawRadians
+    });
   }
 
   dispose(): void {

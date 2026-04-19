@@ -62,6 +62,19 @@ test("MetaverseRuntimeFrameLoop owns the live frame sequencing and frame state o
       playerId: "remote-player"
     })
   ]);
+  const authoritativeRemotePlayerSnapshots = Object.freeze([
+    Object.freeze({
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      playerId: "remote-player",
+      position: Object.freeze({
+        x: 5,
+        y: 0.68,
+        z: -3
+      }),
+      yawRadians: 0.25
+    })
+  ]);
   const focusedMountable = Object.freeze({
     environmentAssetId: "harbor-skiff"
   });
@@ -85,11 +98,20 @@ test("MetaverseRuntimeFrameLoop owns the live frame sequencing and frame state o
       }
     },
     bootLifecycle: {
-      isBootCinematicActive() {
-        return false;
-      },
-      resolveBootCinematicPresentationSnapshot() {
-        return null;
+      resolveRuntimeCameraPhaseState({
+        liveCameraSnapshot,
+        liveFocusedPortal
+      }) {
+        return {
+          blocksMovementInput: false,
+          hidesLocalCharacter: false,
+          phaseId: "live",
+          presentationSnapshot: {
+            cameraSnapshot: liveCameraSnapshot,
+            focusedPortal: liveFocusedPortal
+          },
+          suppressesInteractionFocus: false
+        };
       }
     },
     devicePixelRatio: 2,
@@ -97,14 +119,14 @@ test("MetaverseRuntimeFrameLoop owns the live frame sequencing and frame state o
       syncDebugPresentation() {
         callLog.push("syncDebugPresentation");
       },
-      syncPushableBodyPresentations() {
-        callLog.push("syncPushableBodyPresentations");
+      syncDynamicEnvironmentBodyPresentations() {
+        callLog.push("syncDynamicEnvironmentBodyPresentations");
       },
-      syncRemoteCharacterBlockers(nextRemoteCharacterPresentations) {
-        callLog.push("syncRemoteCharacterBlockers");
+      syncAuthoritativeRemotePlayerBlockers(nextRemotePlayerSnapshots) {
+        callLog.push("syncAuthoritativeRemotePlayerBlockers");
         assert.equal(
-          nextRemoteCharacterPresentations,
-          remoteCharacterPresentations
+          nextRemotePlayerSnapshots,
+          authoritativeRemotePlayerSnapshots
         );
       }
     },
@@ -135,6 +157,7 @@ test("MetaverseRuntimeFrameLoop owns the live frame sequencing and frame state o
     },
     portals: Object.freeze([]),
     presenceRuntime: {
+      connectionRequired: false,
       isJoined: true,
       syncPresencePose(
         characterPresentationSnapshot,
@@ -153,18 +176,16 @@ test("MetaverseRuntimeFrameLoop owns the live frame sequencing and frame state o
       }
     },
     remoteWorldRuntime: {
+      connectionRequired: false,
+      isConnected: true,
       remoteCharacterPresentations,
-      previewLocalTraversalIntent(
-        movementInput,
-        traversalFacing,
-        locomotionMode
-      ) {
+      readFreshAuthoritativeRemotePlayerSnapshots() {
+        callLog.push("readFreshAuthoritativeRemotePlayerSnapshots");
+        return authoritativeRemotePlayerSnapshots;
+      },
+      previewLocalTraversalIntent(traversalIntentInput) {
         callLog.push("previewLocalTraversalIntent");
-        previewInputs.push({
-          locomotionMode,
-          movementInput,
-          traversalFacing
-        });
+        previewInputs.push(traversalIntentInput);
         return "preview-intent";
       },
       sampleRemoteWorld() {
@@ -182,17 +203,9 @@ test("MetaverseRuntimeFrameLoop owns the live frame sequencing and frame state o
         callLog.push("syncLocalPlayerLook");
         assert.equal(lookSnapshot, null);
       },
-      syncLocalTraversalIntent(
-        movementInput,
-        traversalFacing,
-        locomotionMode
-      ) {
+      syncLocalTraversalIntent(traversalIntentInput) {
         callLog.push("syncLocalTraversalIntent");
-        syncedTraversalInputs.push({
-          locomotionMode,
-          movementInput,
-          traversalFacing
-        });
+        syncedTraversalInputs.push(traversalIntentInput);
         return "synced-intent";
       }
     },
@@ -236,9 +249,26 @@ test("MetaverseRuntimeFrameLoop owns the live frame sequencing and frame state o
       locomotionMode: "grounded",
       mountedEnvironmentSnapshot: null,
       routedDriverVehicleControlIntentSnapshot: null,
-      advance(movementInput, deltaSeconds) {
+      resolveLocalTraversalIntentInput(movementInput) {
+        return Object.freeze({
+          actionIntent: Object.freeze({
+            kind: movementInput.jump ? "jump" : "none",
+            pressed: movementInput.jump
+          }),
+          bodyControl: Object.freeze({
+            boost: movementInput.boost,
+            moveAxis: movementInput.moveAxis,
+            strafeAxis: movementInput.strafeAxis,
+            turnAxis: movementInput.yawAxis
+          }),
+          facing: traversalCameraSnapshot,
+          locomotionMode: "grounded"
+        });
+      },
+      advance(movementInput, deltaSeconds, traversalIntentInput) {
         callLog.push("advance");
         assert.equal(movementInput.moveAxis, 1);
+        assert.equal(traversalIntentInput?.bodyControl.moveAxis, 1);
         advancedDeltas.push(deltaSeconds);
       },
       syncIssuedTraversalIntentSnapshot(intentSnapshot) {
@@ -275,22 +305,22 @@ test("MetaverseRuntimeFrameLoop owns the live frame sequencing and frame state o
     "synced-intent"
   ]);
   assert.deepEqual(advancedDeltas, [0, 0.016]);
-  assert.equal(previewInputs[0].movementInput.moveAxis, 1);
-  assert.equal(syncedTraversalInputs[0].movementInput.jump, true);
+  assert.equal(previewInputs[0].bodyControl.moveAxis, 1);
+  assert.equal(syncedTraversalInputs[0].actionIntent.pressed, true);
   assert.equal(scenePresentationCalls[0].characterPresentationSnapshot, localCharacterPresentation);
   assert.equal(scenePresentationCalls[0].nextRemoteCharacterPresentations, remoteCharacterPresentations);
   assert.equal(scenePresentationCalls[0].focusedPortal, null);
   assert.equal(trackedTelemetry[0].nowMs, 1000);
   assert.equal(trackedTelemetry[0].presentationCameraSnapshot, traversalCameraSnapshot);
-  assert.equal(frameLoop.focusedMountable, focusedMountable);
+  assert.equal(frameLoop.mountedInteraction.focusedMountable, focusedMountable);
   assert.equal(frameLoop.focusedPortal, null);
-  assert.equal(frameLoop.mountedEnvironment, null);
+  assert.equal(frameLoop.mountedInteraction.mountedEnvironment, null);
   assert.equal(frameLoop.frameDeltaMs, 16);
   assert.equal(frameLoop.frameRate, 62.5);
   assert.equal(frameLoop.renderedFrameCount, 2);
 });
 
-test("MetaverseRuntimeFrameLoop keeps boot-cinematic frames neutral and suppresses live interaction focus", async () => {
+test("MetaverseRuntimeFrameLoop keeps blocked camera-phase frames neutral and suppresses live interaction focus", async () => {
   const { MetaverseRuntimeFrameLoop } = await clientLoader.load(
     "/src/metaverse/classes/metaverse-runtime-frame-loop.ts"
   );
@@ -303,28 +333,31 @@ test("MetaverseRuntimeFrameLoop keeps boot-cinematic frames neutral and suppress
       syncAuthoritativeWorldSnapshots() {}
     },
     bootLifecycle: {
-      isBootCinematicActive() {
-        return true;
-      },
-      resolveBootCinematicPresentationSnapshot() {
+      resolveRuntimeCameraPhaseState() {
         return {
-          cameraSnapshot: createCameraSnapshot({
-            x: 9,
-            y: 4,
-            z: 3,
-            yawRadians: 1.2
-          }),
-          focusedPortal: Object.freeze({
-            experienceId: "duck-hunt"
-          })
+          blocksMovementInput: true,
+          hidesLocalCharacter: true,
+          phaseId: "entry-preview",
+          presentationSnapshot: {
+            cameraSnapshot: createCameraSnapshot({
+              x: 9,
+              y: 4,
+              z: 3,
+              yawRadians: 1.2
+            }),
+            focusedPortal: Object.freeze({
+              experienceId: "duck-hunt"
+            })
+          },
+          suppressesInteractionFocus: true
         };
       }
     },
     devicePixelRatio: 1,
     environmentPhysicsRuntime: {
       syncDebugPresentation() {},
-      syncPushableBodyPresentations() {},
-      syncRemoteCharacterBlockers() {}
+      syncDynamicEnvironmentBodyPresentations() {},
+      syncAuthoritativeRemotePlayerBlockers() {}
     },
     flightInputRuntime: {
       readSnapshot() {
@@ -346,14 +379,20 @@ test("MetaverseRuntimeFrameLoop keeps boot-cinematic frames neutral and suppress
     },
     portals: Object.freeze([]),
     presenceRuntime: {
+      connectionRequired: true,
       isJoined: false,
       syncPresencePose() {},
       syncRemoteCharacterPresentations() {}
     },
     remoteWorldRuntime: {
+      connectionRequired: true,
+      isConnected: false,
       remoteCharacterPresentations: Object.freeze([]),
-      previewLocalTraversalIntent(movementInput) {
-        previewInputs.push(movementInput);
+      readFreshAuthoritativeRemotePlayerSnapshots() {
+        return Object.freeze([]);
+      },
+      previewLocalTraversalIntent(traversalIntentInput) {
+        previewInputs.push(traversalIntentInput);
         return "preview-intent";
       },
       sampleRemoteWorld() {},
@@ -401,6 +440,22 @@ test("MetaverseRuntimeFrameLoop keeps boot-cinematic frames neutral and suppress
       locomotionMode: "grounded",
       mountedEnvironmentSnapshot: null,
       routedDriverVehicleControlIntentSnapshot: null,
+      resolveLocalTraversalIntentInput(movementInput) {
+        return Object.freeze({
+          actionIntent: Object.freeze({
+            kind: "none",
+            pressed: false
+          }),
+          bodyControl: Object.freeze({
+            boost: movementInput.boost,
+            moveAxis: movementInput.moveAxis,
+            strafeAxis: movementInput.strafeAxis,
+            turnAxis: movementInput.yawAxis
+          }),
+          facing: createCameraSnapshot(),
+          locomotionMode: "grounded"
+        });
+      },
       advance() {},
       syncIssuedTraversalIntentSnapshot() {}
     }
@@ -416,11 +471,11 @@ test("MetaverseRuntimeFrameLoop keeps boot-cinematic frames neutral and suppress
   });
 
   assert.equal(flightInputReadCount, 0);
-  assert.equal(previewInputs[0].moveAxis, 0);
-  assert.equal(previewInputs[0].jump, false);
+  assert.equal(previewInputs[0].bodyControl.moveAxis, 0);
+  assert.equal(previewInputs[0].actionIntent.pressed, false);
   assert.equal(scenePresentationCalls[0].characterPresentationSnapshot, null);
   assert.equal(scenePresentationCalls[0].focusedPortal?.experienceId, "duck-hunt");
-  assert.equal(frameLoop.focusedMountable, null);
+  assert.equal(frameLoop.mountedInteraction.focusedMountable, null);
   assert.equal(frameLoop.focusedPortal, null);
   assert.equal(frameLoop.renderedFrameCount, 1);
 });

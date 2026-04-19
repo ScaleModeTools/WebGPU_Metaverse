@@ -2,6 +2,7 @@ import type { PhysicsVector3Snapshot } from "@/physics";
 import type { MetaverseRealtimePlayerSnapshot } from "@webgpu-metaverse/shared/metaverse/realtime";
 import {
   hasMetaverseTraversalAuthorityLocallyPredictedIssuedAction,
+  isMetaverseTraversalAuthorityActionAirborne,
   type MetaverseTraversalActiveActionSnapshot,
   type MetaverseTraversalActionStateSnapshot,
   type MetaverseTraversalAuthoritySnapshot
@@ -15,6 +16,8 @@ export type LocalAuthorityPoseCorrectionReason =
   MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionReason"];
 export type LocalAuthorityPoseCorrectionDetailSnapshot =
   MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionDetail"];
+export type LocalAuthorityPoseCorrectionSnapshot =
+  MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionSnapshot"];
 
 export interface LocalTraversalPoseSnapshot {
   readonly locomotionMode: "grounded" | "swim";
@@ -31,7 +34,7 @@ export interface ResolveLocalAuthorityPoseCorrectionDecisionInput {
   readonly authoritativeLocomotionMode: CorrectionTargetPoseSnapshot["locomotionMode"];
   readonly hardSnapDistanceMeters: number;
   readonly localLocomotionMode: LocalTraversalPoseSnapshot["locomotionMode"];
-  readonly positionDistance: number;
+  readonly planarDistance: number;
   readonly verticalDistance: number;
 }
 
@@ -46,7 +49,7 @@ export interface ShouldSuppressRoutineGroundedCorrectionInput {
   readonly hardSnapDistanceMeters: number;
   readonly localGrounded: boolean;
   readonly locomotionMismatch: boolean;
-  readonly positionDistance: number;
+  readonly planarDistance: number;
   readonly preserveLocalGroundedContinuity: boolean;
 }
 
@@ -56,6 +59,7 @@ export interface ShouldSuppressRoutineGroundedCorrectionForIssuedTraversalAction
     "preserveLocalGroundedContinuity"
   > {
   readonly actionState: MetaverseTraversalActionStateSnapshot;
+  readonly authoritativeTraversalAuthority: MetaverseTraversalAuthoritySnapshot;
   readonly currentTick: number;
   readonly issuedTraversalActionSequence: number;
   readonly localTraversalActionAuthority: MetaverseTraversalAuthoritySnapshot;
@@ -82,6 +86,10 @@ export function createDefaultLocalAuthorityPoseCorrectionDetailSnapshot(): Local
     planarMagnitudeMeters: null,
     verticalMagnitudeMeters: null
   });
+}
+
+export function createDefaultLocalAuthorityPoseCorrectionSnapshot(): LocalAuthorityPoseCorrectionSnapshot {
+  return null;
 }
 
 export function createAuthoritativeCorrectionTelemetrySnapshot(
@@ -136,13 +144,13 @@ export function resolveLocalAuthorityPoseCorrectionDecision({
   authoritativeLocomotionMode,
   hardSnapDistanceMeters,
   localLocomotionMode,
-  positionDistance,
+  planarDistance,
   verticalDistance
 }: ResolveLocalAuthorityPoseCorrectionDecisionInput): LocalAuthorityPoseCorrectionDecision {
   const locomotionMismatch =
     authoritativeLocomotionMode !== localLocomotionMode;
   const grossPositionDivergence =
-    Math.hypot(positionDistance, verticalDistance) >=
+    Math.hypot(planarDistance, verticalDistance) >=
     hardSnapDistanceMeters;
 
   return Object.freeze({
@@ -157,7 +165,7 @@ export function shouldSuppressRoutineGroundedCorrection({
   hardSnapDistanceMeters,
   localGrounded,
   locomotionMismatch,
-  positionDistance,
+  planarDistance,
   preserveLocalGroundedContinuity
 }: ShouldSuppressRoutineGroundedCorrectionInput): boolean {
   return (
@@ -165,13 +173,14 @@ export function shouldSuppressRoutineGroundedCorrection({
     authoritativeGrounded &&
     !localGrounded &&
     preserveLocalGroundedContinuity &&
-    positionDistance < hardSnapDistanceMeters
+    planarDistance < hardSnapDistanceMeters
   );
 }
 
 export function shouldSuppressRoutineGroundedCorrectionForIssuedTraversalAction({
   actionState,
   authoritativeGrounded,
+  authoritativeTraversalAuthority,
   currentTick,
   hardSnapDistanceMeters,
   issuedTraversalActionSequence,
@@ -179,24 +188,38 @@ export function shouldSuppressRoutineGroundedCorrectionForIssuedTraversalAction(
   localTraversalActionAuthority,
   localTraversalAction,
   locomotionMismatch,
-  positionDistance
+  planarDistance
 }: ShouldSuppressRoutineGroundedCorrectionForIssuedTraversalActionInput): boolean {
-  return shouldSuppressRoutineGroundedCorrection({
-    authoritativeGrounded,
-    hardSnapDistanceMeters,
-    localGrounded,
-    locomotionMismatch,
-    positionDistance,
-    preserveLocalGroundedContinuity:
-      hasMetaverseTraversalAuthorityLocallyPredictedIssuedAction({
-        activeAction: localTraversalAction,
-        actionState,
-        currentTick,
-        issuedActionKind: "jump",
-        issuedActionSequence: issuedTraversalActionSequence,
-        locomotionMode: "grounded",
-        mounted: false,
-        previousTraversalAuthority: localTraversalActionAuthority
-      })
-  });
+  const preserveLocalGroundedContinuity =
+    hasMetaverseTraversalAuthorityLocallyPredictedIssuedAction({
+      activeAction: localTraversalAction,
+      actionState,
+      currentTick,
+      issuedActionKind: "jump",
+      issuedActionSequence: issuedTraversalActionSequence,
+      locomotionMode: "grounded",
+      mounted: false,
+      previousTraversalAuthority: localTraversalActionAuthority
+    });
+
+  return (
+    shouldSuppressRoutineGroundedCorrection({
+      authoritativeGrounded,
+      hardSnapDistanceMeters,
+      localGrounded,
+      locomotionMismatch,
+      planarDistance,
+      preserveLocalGroundedContinuity
+    }) ||
+    (
+      !locomotionMismatch &&
+      !localGrounded &&
+      preserveLocalGroundedContinuity &&
+      isMetaverseTraversalAuthorityActionAirborne(
+        authoritativeTraversalAuthority,
+        "jump",
+        issuedTraversalActionSequence
+      )
+    )
+  );
 }

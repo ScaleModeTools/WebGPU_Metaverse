@@ -1,5 +1,7 @@
 import {
   createMetaverseUnmountedTraversalStateSnapshot,
+  type MetaverseMountedLookLimitPolicyId,
+  type MetaverseMountedVehicleControlRoutingPolicyId,
   type MetaverseUnmountedTraversalStateSnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 import type {
@@ -14,11 +16,19 @@ import {
   type MetaverseVehicleId
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
-import type { MetaverseAuthoritativeSurfaceColliderSnapshot } from "../../config/metaverse-authoritative-world-surface.js";
+import type { MetaverseAuthoritativeSurfaceColliderSnapshot } from "../../world/map-bundles/metaverse-authoritative-world-bundle-inputs.js";
+import {
+  resolveMetaverseWorldMountedOccupancyPolicySnapshotFromAuthoring,
+  type MetaverseWorldMountedOccupancyPolicySnapshot,
+  type MetaverseWorldMountedEntryAuthoring,
+  type MetaverseWorldMountedSeatAuthoring
+} from "@webgpu-metaverse/shared/metaverse/world";
 
 export interface MetaverseAuthoritativeMountedOccupancyRuntimeState {
+  readonly controlRoutingPolicyId: MetaverseMountedVehicleControlRoutingPolicyId;
   readonly entryId: string | null;
   readonly environmentAssetId: string;
+  readonly lookLimitPolicyId: MetaverseMountedLookLimitPolicyId;
   readonly occupancyKind: MetaversePresenceMountedOccupancySnapshot["occupancyKind"];
   readonly occupantRole: MetaversePresenceMountedOccupantRoleId;
   readonly seatId: string | null;
@@ -69,6 +79,14 @@ interface MetaverseAuthoritativeMountedOccupancyAuthorityDependencies<
   ) => VehicleRuntime;
   readonly incrementSnapshotSequence: () => void;
   readonly playersById: ReadonlyMap<MetaversePlayerId, PlayerRuntime>;
+  readonly readMountedEntryAuthoring: (
+    environmentAssetId: string,
+    entryId: string
+  ) => MetaverseWorldMountedEntryAuthoring | null;
+  readonly readMountedSeatAuthoring: (
+    environmentAssetId: string,
+    seatId: string
+  ) => MetaverseWorldMountedSeatAuthoring | null;
   readonly resolveAuthoritativeSurfaceColliders:
     () => readonly MetaverseAuthoritativeSurfaceColliderSnapshot[];
   readonly resolveVehicleId: (
@@ -99,14 +117,17 @@ interface MetaverseAuthoritativeMountedOccupancyAuthorityDependencies<
 
 function createMountedOccupancyRuntimeState(
   mountedOccupancy: MetaversePresenceMountedOccupancySnapshot,
-  vehicleId: MetaverseVehicleId
+  vehicleId: MetaverseVehicleId,
+  occupancyPolicy: MetaverseWorldMountedOccupancyPolicySnapshot
 ): MetaverseAuthoritativeMountedOccupancyRuntimeState {
   return Object.freeze({
-    entryId: mountedOccupancy.entryId,
+    controlRoutingPolicyId: occupancyPolicy.controlRoutingPolicyId,
+    entryId: occupancyPolicy.entryId,
     environmentAssetId: mountedOccupancy.environmentAssetId,
-    occupancyKind: mountedOccupancy.occupancyKind,
-    occupantRole: mountedOccupancy.occupantRole,
-    seatId: mountedOccupancy.seatId,
+    lookLimitPolicyId: occupancyPolicy.lookLimitPolicyId,
+    occupancyKind: occupancyPolicy.occupancyKind,
+    occupantRole: occupancyPolicy.occupantRole,
+    seatId: occupancyPolicy.seatId,
     vehicleId
   });
 }
@@ -139,10 +160,35 @@ export class MetaverseAuthoritativeMountedOccupancyAuthority<
       return null;
     }
 
-    return createMountedOccupancyRuntimeState(
-      mountedOccupancy,
-      this.#dependencies.resolveVehicleId(mountedOccupancy.environmentAssetId)
-    ) as MountedOccupancy;
+    const authoredMountedOccupancy =
+      mountedOccupancy.occupancyKind === "seat" &&
+      mountedOccupancy.seatId !== null
+        ? this.#dependencies.readMountedSeatAuthoring(
+            mountedOccupancy.environmentAssetId,
+            mountedOccupancy.seatId
+          )
+        : mountedOccupancy.occupancyKind === "entry" &&
+            mountedOccupancy.entryId !== null
+          ? this.#dependencies.readMountedEntryAuthoring(
+              mountedOccupancy.environmentAssetId,
+              mountedOccupancy.entryId
+            )
+          : null;
+    const occupancyPolicy =
+      resolveMetaverseWorldMountedOccupancyPolicySnapshotFromAuthoring(
+        mountedOccupancy,
+        authoredMountedOccupancy
+      );
+
+    if (occupancyPolicy !== null) {
+      return createMountedOccupancyRuntimeState(
+        mountedOccupancy,
+        this.#dependencies.resolveVehicleId(mountedOccupancy.environmentAssetId),
+        occupancyPolicy
+      ) as MountedOccupancy;
+    }
+
+    return null;
   }
 
   resolveAcceptedMountedOccupancy(
@@ -172,6 +218,8 @@ export class MetaverseAuthoritativeMountedOccupancyAuthority<
     nowMs: number
   ): void {
     const normalizedCommand = createMetaverseSyncMountedOccupancyCommand(command);
+    const requestedMountedEnvironmentAssetId =
+      normalizedCommand.mountedOccupancy?.environmentAssetId ?? null;
     const playerRuntime = this.#dependencies.playersById.get(
       normalizedCommand.playerId
     );
@@ -216,10 +264,11 @@ export class MetaverseAuthoritativeMountedOccupancyAuthority<
     const requestedMountedOccupancy = this.resolveMountedOccupancyRuntimeState(
       normalizedCommand.mountedOccupancy
     );
+    const previousMountedOccupancy = playerRuntime.mountedOccupancy;
     const acceptedMountedOccupancy = this.resolveAcceptedMountedOccupancy(
       playerRuntime.playerId,
       requestedMountedOccupancy,
-      playerRuntime.mountedOccupancy
+      previousMountedOccupancy
     );
 
     this.#dependencies.clearPlayerVehicleOccupancy(playerRuntime.playerId);
@@ -239,8 +288,9 @@ export class MetaverseAuthoritativeMountedOccupancyAuthority<
       const authoritativeSurfaceColliders =
         this.#dependencies.resolveAuthoritativeSurfaceColliders();
       const excludedMountedEnvironmentAssetId =
+        requestedMountedEnvironmentAssetId ??
         requestedMountedOccupancy?.environmentAssetId ??
-        playerRuntime.mountedOccupancy?.environmentAssetId ??
+        previousMountedOccupancy?.environmentAssetId ??
         null;
 
       this.#dependencies.clearDriverVehicleControl(playerRuntime.playerId);

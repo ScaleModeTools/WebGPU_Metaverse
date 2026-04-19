@@ -5,6 +5,11 @@ import {
   type RapierPhysicsRuntime,
   type RapierQueryFilterPredicate
 } from "@/physics";
+import {
+  createMetaverseWorldMountedEntryOccupancyPolicySnapshot,
+  createMetaverseWorldMountedSeatOccupancyPolicySnapshot,
+  type MetaverseWorldPlacedWaterRegionSnapshot
+} from "@webgpu-metaverse/shared/metaverse/world";
 
 import type { MetaversePlacedCuboidColliderSnapshot } from "../../states/metaverse-environment-collision";
 import type {
@@ -54,6 +59,7 @@ interface MetaverseVehicleRuntimeInit {
   readonly entries: readonly MetaverseEnvironmentEntryProofConfig[] | null;
   readonly seats: readonly MetaverseEnvironmentSeatProofConfig[];
   readonly surfaceColliderSnapshots: readonly MetaversePlacedCuboidColliderSnapshot[];
+  readonly waterRegionSnapshots: readonly MetaverseWorldPlacedWaterRegionSnapshot[];
   readonly waterContactProbeRadiusMeters: number;
   readonly waterlineHeightMeters: number;
   readonly worldRadius: number;
@@ -172,17 +178,20 @@ class MetaverseVehicleSeatRuntime {
   }
 
   occupancySnapshot(): MountedVehicleOccupancyRuntimeSnapshot {
+    const occupancyPolicySnapshot =
+      createMetaverseWorldMountedSeatOccupancyPolicySnapshot({
+        cameraPolicyId: this.#cameraPolicyId,
+        controlRoutingPolicyId: this.#controlRoutingPolicyId,
+        label: this.#label,
+        lookLimitPolicyId: this.#lookLimitPolicyId,
+        occupancyAnimationId: this.#occupancyAnimationId,
+        seatId: this.#seatId,
+        seatRole: this.#seatRole
+      });
+
     return Object.freeze({
-      cameraPolicyId: this.#cameraPolicyId,
-      controlRoutingPolicyId: this.#controlRoutingPolicyId,
       dismountOffset: this.#dismountOffset,
-      entryId: null,
-      lookLimitPolicyId: this.#lookLimitPolicyId,
-      occupancyAnimationId: this.#occupancyAnimationId,
-      occupancyKind: "seat",
-      occupantLabel: this.#label,
-      occupantRole: this.#seatRole,
-      seatId: this.#seatId
+      ...occupancyPolicySnapshot
     });
   }
 }
@@ -244,17 +253,20 @@ class MetaverseVehicleEntryRuntime {
   }
 
   occupancySnapshot(): MountedVehicleOccupancyRuntimeSnapshot {
+    const occupancyPolicySnapshot =
+      createMetaverseWorldMountedEntryOccupancyPolicySnapshot({
+        cameraPolicyId: this.#cameraPolicyId,
+        controlRoutingPolicyId: this.#controlRoutingPolicyId,
+        entryId: this.#entryId,
+        label: this.#label,
+        lookLimitPolicyId: this.#lookLimitPolicyId,
+        occupancyAnimationId: this.#occupancyAnimationId,
+        occupantRole: this.#occupantRole
+      });
+
     return Object.freeze({
-      cameraPolicyId: this.#cameraPolicyId,
-      controlRoutingPolicyId: this.#controlRoutingPolicyId,
       dismountOffset: this.#dismountOffset,
-      entryId: this.#entryId,
-      lookLimitPolicyId: this.#lookLimitPolicyId,
-      occupancyAnimationId: this.#occupancyAnimationId,
-      occupancyKind: "entry",
-      occupantLabel: this.#label,
-      occupantRole: this.#occupantRole,
-      seatId: null
+      ...occupancyPolicySnapshot
     });
   }
 }
@@ -313,6 +325,7 @@ export class MetaverseVehicleRuntime {
     MetaverseVehicleRuntimeInit["resolveWaterborneTraversalFilterPredicate"];
   readonly #seatRuntimes: readonly MetaverseVehicleSeatRuntime[];
   readonly #surfaceColliderSnapshots: readonly MetaversePlacedCuboidColliderSnapshot[];
+  readonly #waterRegionSnapshots: readonly MetaverseWorldPlacedWaterRegionSnapshot[];
   readonly #waterContactProbeRadiusMeters: number;
   readonly #waterlineHeightMeters: number;
 
@@ -331,6 +344,7 @@ export class MetaverseVehicleRuntime {
     resolveWaterborneTraversalFilterPredicate,
     seats,
     surfaceColliderSnapshots,
+    waterRegionSnapshots,
     waterContactProbeRadiusMeters,
     waterlineHeightMeters,
     worldRadius
@@ -348,6 +362,7 @@ export class MetaverseVehicleRuntime {
       seats.map((seat) => new MetaverseVehicleSeatRuntime(seat))
     );
     this.#surfaceColliderSnapshots = surfaceColliderSnapshots;
+    this.#waterRegionSnapshots = waterRegionSnapshots;
     this.#waterContactProbeRadiusMeters = waterContactProbeRadiusMeters;
     this.#waterlineHeightMeters = toFiniteNumber(
       waterlineHeightMeters,
@@ -549,7 +564,8 @@ export class MetaverseVehicleRuntime {
         },
         ocean: {
           height: this.#oceanHeightMeters
-        }
+        },
+        waterRegionSnapshots: this.#waterRegionSnapshots
       } as never,
       this.#surfaceColliderSnapshots,
       driveSnapshot.position,

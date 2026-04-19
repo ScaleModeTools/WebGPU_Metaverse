@@ -43,8 +43,29 @@ test("MetaverseAuthoritativeWorldSync forwards fresh authoritative local pose wi
 
   const worldSync = new MetaverseAuthoritativeWorldSync({
     authoritativePlayerMovementEnabled: true,
+    dynamicEnvironmentPresentationRuntime: {
+      syncRemoteVehiclePresentationPose() {
+        throw new Error(
+          "syncRemoteVehiclePresentationPose should stay idle for local pose sync."
+        );
+      },
+      syncRemoteEnvironmentBodyPresentationPose() {
+        throw new Error(
+          "syncRemoteEnvironmentBodyPresentationPose should stay idle for local pose sync."
+        );
+      }
+    },
+    environmentBodyCollisionRuntime: {
+      beginAuthoritativeEnvironmentBodyCollisionSync() {},
+      syncAuthoritativeEnvironmentBodyCollisionPose() {
+        throw new Error(
+          "syncAuthoritativeEnvironmentBodyCollisionPose should stay idle for local pose sync."
+        );
+      }
+    },
     readWallClockMs: () => 1_250,
     remoteWorldRuntime: {
+      remoteEnvironmentBodyPresentations: Object.freeze([]),
       remoteVehiclePresentations: Object.freeze([]),
       consumeFreshAckedAuthoritativeLocalPlayerPose() {
         return authoritativeLocalPlayerPose;
@@ -53,6 +74,9 @@ test("MetaverseAuthoritativeWorldSync forwards fresh authoritative local pose wi
         return Object.freeze({
           mountedOccupancy: null
         });
+      },
+      readFreshAuthoritativeEnvironmentBodySnapshots() {
+        return Object.freeze([]);
       },
       readFreshAuthoritativeVehicleSnapshot() {
         return null;
@@ -79,6 +103,13 @@ test("MetaverseAuthoritativeWorldSync forwards fresh authoritative local pose wi
           "syncAuthoritativeVehiclePose should stay idle for local pose sync."
         );
       }
+    },
+    vehicleCollisionRuntime: {
+      syncAuthoritativeVehicleCollisionPose() {
+        throw new Error(
+          "syncAuthoritativeVehicleCollisionPose should stay idle for local pose sync."
+        );
+      }
     }
   });
 
@@ -96,11 +127,37 @@ test("MetaverseAuthoritativeWorldSync reconciles the locally mounted vehicle fro
   );
   const localMountedOccupancy = createMountedSeatOccupancy();
   const authoritativeVehicleSyncCalls = [];
+  const remoteVehiclePresentationSyncCalls = [];
+  const remoteVehicleCollisionSyncCalls = [];
 
   const worldSync = new MetaverseAuthoritativeWorldSync({
     authoritativePlayerMovementEnabled: true,
+    dynamicEnvironmentPresentationRuntime: {
+      syncRemoteVehiclePresentationPose(environmentAssetId, poseSnapshot) {
+        remoteVehiclePresentationSyncCalls.push(
+          Object.freeze({
+            environmentAssetId,
+            poseSnapshot
+          })
+        );
+      },
+      syncRemoteEnvironmentBodyPresentationPose() {
+        throw new Error(
+          "syncRemoteEnvironmentBodyPresentationPose should stay idle for vehicle sync."
+        );
+      }
+    },
+    environmentBodyCollisionRuntime: {
+      beginAuthoritativeEnvironmentBodyCollisionSync() {},
+      syncAuthoritativeEnvironmentBodyCollisionPose() {
+        throw new Error(
+          "syncAuthoritativeEnvironmentBodyCollisionPose should stay idle for vehicle sync."
+        );
+      }
+    },
     readWallClockMs: () => 1_250,
     remoteWorldRuntime: {
+      remoteEnvironmentBodyPresentations: Object.freeze([]),
       remoteVehiclePresentations: Object.freeze([
         Object.freeze({
           environmentAssetId: "metaverse-hub-skiff-v1",
@@ -128,6 +185,9 @@ test("MetaverseAuthoritativeWorldSync reconciles the locally mounted vehicle fro
         return Object.freeze({
           mountedOccupancy: localMountedOccupancy
         });
+      },
+      readFreshAuthoritativeEnvironmentBodySnapshots() {
+        return Object.freeze([]);
       },
       readFreshAuthoritativeVehicleSnapshot(environmentAssetId) {
         if (environmentAssetId !== "metaverse-hub-skiff-v1") {
@@ -171,12 +231,22 @@ test("MetaverseAuthoritativeWorldSync reconciles the locally mounted vehicle fro
           })
         );
       }
+    },
+    vehicleCollisionRuntime: {
+      syncAuthoritativeVehicleCollisionPose(environmentAssetId, poseSnapshot) {
+        remoteVehicleCollisionSyncCalls.push(
+          Object.freeze({
+            environmentAssetId,
+            poseSnapshot
+          })
+        );
+      }
     }
   });
 
   worldSync.syncAuthoritativeWorldSnapshots();
 
-  assert.deepEqual(authoritativeVehicleSyncCalls, [
+  assert.deepEqual(remoteVehiclePresentationSyncCalls, [
     Object.freeze({
       environmentAssetId: "metaverse-hub-skiff-v2",
       poseSnapshot: Object.freeze({
@@ -187,7 +257,10 @@ test("MetaverseAuthoritativeWorldSync reconciles the locally mounted vehicle fro
         }),
         yawRadians: -0.25
       })
-    }),
+    })
+  ]);
+  assert.deepEqual(remoteVehicleCollisionSyncCalls, []);
+  assert.deepEqual(authoritativeVehicleSyncCalls, [
     Object.freeze({
       environmentAssetId: "metaverse-hub-skiff-v1",
       poseSnapshot: Object.freeze({
@@ -207,6 +280,154 @@ test("MetaverseAuthoritativeWorldSync reconciles the locally mounted vehicle fro
   ]);
 });
 
+test("MetaverseAuthoritativeWorldSync keeps remote vehicle presentation smoothing separate from authoritative collision pose", async () => {
+  const { MetaverseAuthoritativeWorldSync } = await clientLoader.load(
+    "/src/metaverse/classes/metaverse-authoritative-world-sync.ts"
+  );
+  const remoteVehiclePresentationSyncCalls = [];
+  const remoteVehicleCollisionSyncCalls = [];
+
+  const worldSync = new MetaverseAuthoritativeWorldSync({
+    authoritativePlayerMovementEnabled: true,
+    dynamicEnvironmentPresentationRuntime: {
+      syncRemoteVehiclePresentationPose(environmentAssetId, poseSnapshot) {
+        remoteVehiclePresentationSyncCalls.push(
+          Object.freeze({
+            environmentAssetId,
+            poseSnapshot
+          })
+        );
+      },
+      syncRemoteEnvironmentBodyPresentationPose() {
+        throw new Error(
+          "syncRemoteEnvironmentBodyPresentationPose should stay idle for remote vehicle sync."
+        );
+      }
+    },
+    environmentBodyCollisionRuntime: {
+      beginAuthoritativeEnvironmentBodyCollisionSync() {},
+      syncAuthoritativeEnvironmentBodyCollisionPose() {
+        throw new Error(
+          "syncAuthoritativeEnvironmentBodyCollisionPose should stay idle for remote vehicle sync."
+        );
+      }
+    },
+    readWallClockMs: () => 1_250,
+    remoteWorldRuntime: {
+      remoteEnvironmentBodyPresentations: Object.freeze([]),
+      remoteVehiclePresentations: Object.freeze([
+        Object.freeze({
+          environmentAssetId: "metaverse-hub-skiff-v2",
+          position: Object.freeze({
+            x: 33,
+            y: 0.2,
+            z: -4
+          }),
+          yawRadians: -0.25
+        })
+      ]),
+      consumeFreshAckedAuthoritativeLocalPlayerPose() {
+        return null;
+      },
+      readFreshAuthoritativeLocalPlayerSnapshot() {
+        return Object.freeze({
+          mountedOccupancy: null
+        });
+      },
+      readFreshAuthoritativeEnvironmentBodySnapshots() {
+        return Object.freeze([]);
+      },
+      readFreshAuthoritativeVehicleSnapshot(environmentAssetId) {
+        if (environmentAssetId !== "metaverse-hub-skiff-v2") {
+          return null;
+        }
+
+        return Object.freeze({
+          linearVelocity: Object.freeze({
+            x: 2.2,
+            y: 0,
+            z: -0.4
+          }),
+          position: Object.freeze({
+            x: 34.5,
+            y: 0.18,
+            z: -3.5
+          }),
+          yawRadians: -0.1
+        });
+      }
+    },
+    traversalRuntime: {
+      mountedEnvironmentSnapshot: null,
+      boardEnvironment() {
+        throw new Error(
+          "boardEnvironment should stay idle for remote vehicle sync."
+        );
+      },
+      leaveMountedEnvironment() {
+        throw new Error(
+          "leaveMountedEnvironment should stay idle for remote vehicle sync."
+        );
+      },
+      occupySeat() {
+        throw new Error(
+          "occupySeat should stay idle for remote vehicle sync."
+        );
+      },
+      syncAuthoritativeLocalPlayerPose() {},
+      syncAuthoritativeVehiclePose() {
+        throw new Error(
+          "syncAuthoritativeVehiclePose should stay idle for non-local remote vehicle sync."
+        );
+      }
+    },
+    vehicleCollisionRuntime: {
+      syncAuthoritativeVehicleCollisionPose(environmentAssetId, poseSnapshot) {
+        remoteVehicleCollisionSyncCalls.push(
+          Object.freeze({
+            environmentAssetId,
+            poseSnapshot
+          })
+        );
+      }
+    }
+  });
+
+  worldSync.syncAuthoritativeWorldSnapshots();
+
+  assert.deepEqual(remoteVehiclePresentationSyncCalls, [
+    Object.freeze({
+      environmentAssetId: "metaverse-hub-skiff-v2",
+      poseSnapshot: Object.freeze({
+        position: Object.freeze({
+          x: 33,
+          y: 0.2,
+          z: -4
+        }),
+        yawRadians: -0.25
+      })
+    })
+  ]);
+  assert.deepEqual(remoteVehicleCollisionSyncCalls, [
+    Object.freeze({
+      environmentAssetId: "metaverse-hub-skiff-v2",
+      poseSnapshot: Object.freeze({
+        linearVelocity: Object.freeze({
+          x: 2.2,
+          y: 0,
+          z: -0.4
+        }),
+        position: Object.freeze({
+          x: 34.5,
+          y: 0.18,
+          z: -3.5
+        }),
+        yawRadians: -0.1
+      })
+    })
+  ]);
+});
+
 test("MetaverseAuthoritativeWorldSync clears a rejected local mounted seat claim only after the mismatch hold elapses", async () => {
   const [
     { MetaverseAuthoritativeWorldSync },
@@ -221,8 +442,17 @@ test("MetaverseAuthoritativeWorldSync clears a rejected local mounted seat claim
 
   const worldSync = new MetaverseAuthoritativeWorldSync({
     authoritativePlayerMovementEnabled: true,
+    dynamicEnvironmentPresentationRuntime: {
+      syncRemoteVehiclePresentationPose() {},
+      syncRemoteEnvironmentBodyPresentationPose() {}
+    },
+    environmentBodyCollisionRuntime: {
+      beginAuthoritativeEnvironmentBodyCollisionSync() {},
+      syncAuthoritativeEnvironmentBodyCollisionPose() {}
+    },
     readWallClockMs: () => wallClockMs,
     remoteWorldRuntime: {
+      remoteEnvironmentBodyPresentations: Object.freeze([]),
       remoteVehiclePresentations: Object.freeze([]),
       consumeFreshAckedAuthoritativeLocalPlayerPose() {
         return null;
@@ -231,6 +461,9 @@ test("MetaverseAuthoritativeWorldSync clears a rejected local mounted seat claim
         return Object.freeze({
           mountedOccupancy: null
         });
+      },
+      readFreshAuthoritativeEnvironmentBodySnapshots() {
+        return Object.freeze([]);
       },
       readFreshAuthoritativeVehicleSnapshot() {
         return null;
@@ -253,6 +486,9 @@ test("MetaverseAuthoritativeWorldSync clears a rejected local mounted seat claim
       },
       syncAuthoritativeLocalPlayerPose() {},
       syncAuthoritativeVehiclePose() {}
+    },
+    vehicleCollisionRuntime: {
+      syncAuthoritativeVehicleCollisionPose() {}
     }
   });
 
@@ -267,4 +503,139 @@ test("MetaverseAuthoritativeWorldSync clears a rejected local mounted seat claim
   wallClockMs += 1;
   worldSync.syncAuthoritativeWorldSnapshots();
   assert.equal(leaveMountedEnvironmentCallCount, 1);
+});
+
+test("MetaverseAuthoritativeWorldSync keeps remote environment body presentation smoothing separate from authoritative collision pose", async () => {
+  const { MetaverseAuthoritativeWorldSync } = await clientLoader.load(
+    "/src/metaverse/classes/metaverse-authoritative-world-sync.ts"
+  );
+  const environmentBodyPresentationSyncCalls = [];
+  const environmentBodyCollisionSyncCalls = [];
+  let authoritativeEnvironmentBodyCollisionSyncResetCount = 0;
+
+  const worldSync = new MetaverseAuthoritativeWorldSync({
+    authoritativePlayerMovementEnabled: true,
+    dynamicEnvironmentPresentationRuntime: {
+      syncRemoteVehiclePresentationPose() {},
+      syncRemoteEnvironmentBodyPresentationPose(environmentAssetId, poseSnapshot) {
+        environmentBodyPresentationSyncCalls.push(
+          Object.freeze({
+            environmentAssetId,
+            poseSnapshot
+          })
+        );
+      }
+    },
+    environmentBodyCollisionRuntime: {
+      beginAuthoritativeEnvironmentBodyCollisionSync() {
+        authoritativeEnvironmentBodyCollisionSyncResetCount += 1;
+      },
+      syncAuthoritativeEnvironmentBodyCollisionPose(environmentAssetId, poseSnapshot) {
+        environmentBodyCollisionSyncCalls.push(
+          Object.freeze({
+            environmentAssetId,
+            poseSnapshot
+          })
+        );
+      }
+    },
+    readWallClockMs: () => 1_250,
+    remoteWorldRuntime: {
+      remoteEnvironmentBodyPresentations: Object.freeze([
+        Object.freeze({
+          environmentAssetId: "metaverse-hub-pushable-crate-v1",
+          position: Object.freeze({
+            x: -7.1,
+            y: 0.46,
+            z: 13.4
+          }),
+          yawRadians: -0.1
+        })
+      ]),
+      remoteVehiclePresentations: Object.freeze([]),
+      consumeFreshAckedAuthoritativeLocalPlayerPose() {
+        return null;
+      },
+      readFreshAuthoritativeLocalPlayerSnapshot() {
+        return Object.freeze({
+          mountedOccupancy: null
+        });
+      },
+      readFreshAuthoritativeEnvironmentBodySnapshots() {
+        return Object.freeze([
+          Object.freeze({
+            environmentAssetId: "metaverse-hub-pushable-crate-v1",
+            linearVelocity: Object.freeze({
+              x: 0.8,
+              y: 0,
+              z: -0.1
+            }),
+            position: Object.freeze({
+              x: -7.4,
+              y: 0.46,
+              z: 13.1
+            }),
+            yawRadians: -0.25
+          })
+        ]);
+      },
+      readFreshAuthoritativeVehicleSnapshot() {
+        return null;
+      }
+    },
+    traversalRuntime: {
+      mountedEnvironmentSnapshot: null,
+      boardEnvironment() {
+        throw new Error("boardEnvironment should stay idle for environment body sync.");
+      },
+      leaveMountedEnvironment() {
+        throw new Error(
+          "leaveMountedEnvironment should stay idle for environment body sync."
+        );
+      },
+      occupySeat() {
+        throw new Error("occupySeat should stay idle for environment body sync.");
+      },
+      syncAuthoritativeLocalPlayerPose() {},
+      syncAuthoritativeVehiclePose() {}
+    },
+    vehicleCollisionRuntime: {
+      syncAuthoritativeVehicleCollisionPose() {}
+    }
+  });
+
+  worldSync.syncAuthoritativeWorldSnapshots();
+
+  assert.equal(authoritativeEnvironmentBodyCollisionSyncResetCount, 1);
+  assert.deepEqual(environmentBodyPresentationSyncCalls, [
+    Object.freeze({
+      environmentAssetId: "metaverse-hub-pushable-crate-v1",
+      poseSnapshot: Object.freeze({
+        position: Object.freeze({
+          x: -7.1,
+          y: 0.46,
+          z: 13.4
+        }),
+        yawRadians: -0.1
+      })
+    })
+  ]);
+  assert.deepEqual(environmentBodyCollisionSyncCalls, [
+    Object.freeze({
+      environmentAssetId: "metaverse-hub-pushable-crate-v1",
+      poseSnapshot: Object.freeze({
+        linearVelocity: Object.freeze({
+          x: 0.8,
+          y: 0,
+          z: -0.1
+        }),
+        position: Object.freeze({
+          x: -7.4,
+          y: 0.46,
+          z: 13.1
+        }),
+        yawRadians: -0.25
+      })
+    })
+  ]);
 });

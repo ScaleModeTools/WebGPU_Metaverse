@@ -92,6 +92,123 @@ function freezeOptionalVector3Snapshot(
   });
 }
 
+function freezeVector3Snapshot(snapshot: {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+}) {
+  return Object.freeze({
+    x: snapshot.x,
+    y: snapshot.y,
+    z: snapshot.z
+  });
+}
+
+function freezeIssuedTraversalIntentSnapshot(
+  snapshot:
+    | NonNullable<
+        MetaverseTelemetrySnapshot["worldSnapshot"]["surfaceRouting"]["issuedTraversalIntent"]
+      >
+    | NonNullable<
+        NonNullable<
+          MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionSnapshot"]
+        >["local"]["issuedTraversalIntent"]
+      >
+): NonNullable<
+  MetaverseTelemetrySnapshot["worldSnapshot"]["surfaceRouting"]["issuedTraversalIntent"]
+> {
+  return Object.freeze({
+    actionIntent: Object.freeze({
+      ...snapshot.actionIntent
+    }),
+    bodyControl: Object.freeze({
+      ...snapshot.bodyControl
+    }),
+    inputSequence: snapshot.inputSequence,
+    locomotionMode: snapshot.locomotionMode
+  });
+}
+
+function freezeLocalAuthorityPoseCorrectionSnapshot(
+  snapshot: MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionSnapshot"]
+): MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionSnapshot"] {
+  if (snapshot === null) {
+    return null;
+  }
+
+  return Object.freeze({
+    authoritative: Object.freeze({
+      lastProcessedInputSequence: snapshot.authoritative.lastProcessedInputSequence,
+      linearVelocity: freezeVector3Snapshot(
+        snapshot.authoritative.linearVelocity
+      ),
+      locomotionMode: snapshot.authoritative.locomotionMode,
+      position: freezeVector3Snapshot(snapshot.authoritative.position),
+      surfaceRouting: Object.freeze({
+        blockingAffordanceDetected:
+          snapshot.authoritative.surfaceRouting.blockingAffordanceDetected,
+        decisionReason: snapshot.authoritative.surfaceRouting.decisionReason,
+        resolvedSupportHeightMeters:
+          snapshot.authoritative.surfaceRouting.resolvedSupportHeightMeters,
+        supportingAffordanceSampleCount:
+          snapshot.authoritative.surfaceRouting.supportingAffordanceSampleCount
+      })
+    }),
+    local: Object.freeze({
+      issuedTraversalIntent:
+        snapshot.local.issuedTraversalIntent === null
+          ? null
+          : freezeIssuedTraversalIntentSnapshot(
+              snapshot.local.issuedTraversalIntent
+            ),
+      linearVelocity: freezeVector3Snapshot(snapshot.local.linearVelocity),
+      locomotionMode: snapshot.local.locomotionMode,
+      position: freezeVector3Snapshot(snapshot.local.position),
+      surfaceRouting: Object.freeze({
+        autostepHeightMeters: snapshot.local.surfaceRouting.autostepHeightMeters,
+        blockingAffordanceDetected:
+          snapshot.local.surfaceRouting.blockingAffordanceDetected,
+        decisionReason: snapshot.local.surfaceRouting.decisionReason,
+        jumpDebug: Object.freeze({
+          groundedBodyGrounded:
+            snapshot.local.surfaceRouting.jumpDebug.groundedBodyGrounded,
+          groundedBodyJumpReady:
+            snapshot.local.surfaceRouting.jumpDebug.groundedBodyJumpReady,
+          surfaceJumpSupported:
+            snapshot.local.surfaceRouting.jumpDebug.surfaceJumpSupported,
+          supported: snapshot.local.surfaceRouting.jumpDebug.supported,
+          verticalSpeedUnitsPerSecond:
+            snapshot.local.surfaceRouting.jumpDebug.verticalSpeedUnitsPerSecond
+        }),
+        locomotionMode: snapshot.local.surfaceRouting.locomotionMode,
+        resolvedSupportHeightMeters:
+          snapshot.local.surfaceRouting.resolvedSupportHeightMeters,
+        supportingAffordanceSampleCount:
+          snapshot.local.surfaceRouting.supportingAffordanceSampleCount,
+        traversalAuthority: Object.freeze({
+          currentActionKind:
+            snapshot.local.surfaceRouting.traversalAuthority.currentActionKind,
+          currentActionPhase:
+            snapshot.local.surfaceRouting.traversalAuthority.currentActionPhase,
+          currentActionSequence:
+            snapshot.local.surfaceRouting.traversalAuthority.currentActionSequence,
+          lastConsumedActionSequence:
+            snapshot.local.surfaceRouting.traversalAuthority
+              .lastConsumedActionSequence,
+          lastRejectedActionReason:
+            snapshot.local.surfaceRouting.traversalAuthority
+              .lastRejectedActionReason,
+          lastRejectedActionSequence:
+            snapshot.local.surfaceRouting.traversalAuthority
+              .lastRejectedActionSequence,
+          phaseStartedAtTick:
+            snapshot.local.surfaceRouting.traversalAuthority.phaseStartedAtTick
+        })
+      })
+    })
+  });
+}
+
 function clampUnitInterval(value: number): number {
   return Math.max(-1, Math.min(1, value));
 }
@@ -255,6 +372,11 @@ function freezeTelemetrySnapshot(
             snapshot.worldSnapshot.localReconciliation
               .lastLocalAuthorityPoseCorrectionDetail.verticalMagnitudeMeters
         }),
+        lastLocalAuthorityPoseCorrectionSnapshot:
+          freezeLocalAuthorityPoseCorrectionSnapshot(
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionSnapshot
+          ),
         lastLocalAuthorityPoseCorrectionReason:
           snapshot.worldSnapshot.localReconciliation
             .lastLocalAuthorityPoseCorrectionReason,
@@ -361,41 +483,32 @@ function freezeTelemetrySnapshot(
                 .traversalAuthority.phaseStartedAtTick
           }),
           surfaceRouting: Object.freeze({
-            blockerOverlap:
+            blockingAffordanceDetected:
               snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
-                .surfaceRouting.blockerOverlap,
+                .surfaceRouting.blockingAffordanceDetected,
             decisionReason:
               snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
                 .surfaceRouting.decisionReason,
             resolvedSupportHeightMeters:
               snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
                 .surfaceRouting.resolvedSupportHeightMeters,
-            stepSupportedProbeCount:
+            supportingAffordanceSampleCount:
               snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
-                .surfaceRouting.stepSupportedProbeCount
+                .surfaceRouting.supportingAffordanceSampleCount
           })
         }),
         issuedTraversalIntent:
           snapshot.worldSnapshot.surfaceRouting.issuedTraversalIntent === null
             ? null
-            : Object.freeze({
-                actionIntent:
-                  snapshot.worldSnapshot.surfaceRouting.issuedTraversalIntent
-                    .actionIntent,
-                bodyControl:
-                  snapshot.worldSnapshot.surfaceRouting.issuedTraversalIntent
-                    .bodyControl,
-                inputSequence:
-                  snapshot.worldSnapshot.surfaceRouting.issuedTraversalIntent
-                    .inputSequence,
-                locomotionMode:
-                  snapshot.worldSnapshot.surfaceRouting.issuedTraversalIntent
-                    .locomotionMode
-              }),
+            : freezeIssuedTraversalIntentSnapshot(
+                snapshot.worldSnapshot.surfaceRouting.issuedTraversalIntent
+              ),
         local: Object.freeze({
           autostepHeightMeters:
             snapshot.worldSnapshot.surfaceRouting.local.autostepHeightMeters,
-          blockerOverlap: snapshot.worldSnapshot.surfaceRouting.local.blockerOverlap,
+          blockingAffordanceDetected:
+            snapshot.worldSnapshot.surfaceRouting.local
+              .blockingAffordanceDetected,
           decisionReason: snapshot.worldSnapshot.surfaceRouting.local.decisionReason,
           jumpDebug: Object.freeze({
             groundedBodyGrounded:
@@ -417,8 +530,9 @@ function freezeTelemetrySnapshot(
             snapshot.worldSnapshot.surfaceRouting.local.locomotionMode,
           resolvedSupportHeightMeters:
             snapshot.worldSnapshot.surfaceRouting.local.resolvedSupportHeightMeters,
-          stepSupportedProbeCount:
-            snapshot.worldSnapshot.surfaceRouting.local.stepSupportedProbeCount,
+          supportingAffordanceSampleCount:
+            snapshot.worldSnapshot.surfaceRouting.local
+              .supportingAffordanceSampleCount,
           traversalAuthority: Object.freeze({
             currentActionKind:
               snapshot.worldSnapshot.surfaceRouting.local.traversalAuthority
@@ -677,16 +791,17 @@ export class MetaverseRuntimeHudTelemetryState {
                   .phaseStartedAtTick
         }),
         surfaceRouting: Object.freeze({
-          blockerOverlap:
-            authoritativeLocalPlayerSurfaceRouting?.debug.blockerOverlap ?? null,
+          blockingAffordanceDetected:
+            authoritativeLocalPlayerSurfaceRouting?.debug
+              .blockingAffordanceDetected ?? null,
           decisionReason:
             authoritativeLocalPlayerSurfaceRouting?.debug.reason ?? null,
           resolvedSupportHeightMeters:
             authoritativeLocalPlayerSurfaceRouting?.debug
               .resolvedSupportHeightMeters ?? null,
-          stepSupportedProbeCount:
-            authoritativeLocalPlayerSurfaceRouting?.debug.stepSupportedProbeCount ??
-            null
+          supportingAffordanceSampleCount:
+            authoritativeLocalPlayerSurfaceRouting?.debug
+              .supportingAffordanceSampleCount ?? null
         })
       }),
       issuedTraversalIntent:
@@ -820,6 +935,8 @@ export class MetaverseRuntimeHudTelemetryState {
     return Object.freeze({
       lastLocalAuthorityPoseCorrectionDetail:
         this.#traversalRuntime.lastLocalAuthorityPoseCorrectionDetail,
+      lastLocalAuthorityPoseCorrectionSnapshot:
+        this.#traversalRuntime.lastLocalAuthorityPoseCorrectionSnapshot,
       lastLocalAuthorityPoseCorrectionReason:
         this.#traversalRuntime.lastLocalAuthorityPoseCorrectionReason,
       lastCorrectionAgeMs:

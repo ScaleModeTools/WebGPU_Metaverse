@@ -1,10 +1,5 @@
-import {
-  Group,
-  Matrix4,
-  Mesh,
-  Quaternion,
-  Vector3
-} from "three/webgpu";
+import { resolveMetaverseWorldSurfaceScaleVector } from "@webgpu-metaverse/shared/metaverse/world";
+import { Group, Matrix4, Mesh, Quaternion, Vector3 } from "three/webgpu";
 
 import type {
   PhysicsQuaternionSnapshot,
@@ -18,13 +13,16 @@ import type {
 } from "../types/metaverse-runtime";
 
 export interface MetaversePlacedCuboidColliderSnapshot {
+  readonly shape?: "box" | "trimesh";
   readonly ownerEnvironmentAssetId: string | null;
   readonly rotationYRadians: number;
   readonly traversalAffordance:
     MetaverseEnvironmentPhysicsColliderProofConfig["traversalAffordance"];
   readonly halfExtents: PhysicsVector3Snapshot;
+  readonly indices?: Uint32Array;
   readonly rotation: PhysicsQuaternionSnapshot;
   readonly translation: PhysicsVector3Snapshot;
+  readonly vertices?: Float32Array;
 }
 
 export interface MetaverseTriMeshColliderSnapshot {
@@ -83,9 +81,10 @@ function applyPlacementToLocalCenter(
   localCenter: MetaverseEnvironmentColliderProofConfig["center"],
   placement: MetaverseEnvironmentPlacementProofConfig
 ): PhysicsVector3Snapshot {
-  const scaledCenterX = localCenter.x * placement.scale;
-  const scaledCenterY = localCenter.y * placement.scale;
-  const scaledCenterZ = localCenter.z * placement.scale;
+  const scaleVector = resolveMetaverseWorldSurfaceScaleVector(placement.scale);
+  const scaledCenterX = localCenter.x * scaleVector.x;
+  const scaledCenterY = localCenter.y * scaleVector.y;
+  const scaledCenterZ = localCenter.z * scaleVector.z;
   const sine = Math.sin(placement.rotationYRadians);
   const cosine = Math.cos(placement.rotationYRadians);
 
@@ -139,17 +138,20 @@ export function resolvePlacedCuboidColliders(
   const colliders: MetaversePlacedCuboidColliderSnapshot[] = [];
 
   for (const placement of environmentAsset.placements) {
+    const scaleVector = resolveMetaverseWorldSurfaceScaleVector(placement.scale);
+
     for (const collider of environmentAsset.physicsColliders) {
       colliders.push(
         Object.freeze({
           halfExtents: freezeVector3(
-            Math.abs(collider.size.x * placement.scale) * 0.5,
-            Math.abs(collider.size.y * placement.scale) * 0.5,
-            Math.abs(collider.size.z * placement.scale) * 0.5
+            Math.abs(collider.size.x * scaleVector.x) * 0.5,
+            Math.abs(collider.size.y * scaleVector.y) * 0.5,
+            Math.abs(collider.size.z * scaleVector.z) * 0.5
           ),
           ownerEnvironmentAssetId: environmentAsset.environmentAssetId,
           rotationYRadians: placement.rotationYRadians,
           rotation: createPlacementQuaternion(placement.rotationYRadians),
+          shape: "box",
           translation: applyPlacementToLocalCenter(collider.center, placement),
           traversalAffordance: collider.traversalAffordance
         })
@@ -183,23 +185,28 @@ export function resolveDynamicEnvironmentCuboidColliders(
   }
 
   return Object.freeze(
-    environmentAsset.physicsColliders.map((collider) =>
-      Object.freeze({
+    environmentAsset.physicsColliders.map((collider) => {
+      const scaleVector = resolveMetaverseWorldSurfaceScaleVector(
+        dynamicPlacement.scale
+      );
+
+      return Object.freeze({
         halfExtents: freezeVector3(
-          Math.abs(collider.size.x * dynamicPlacement.scale) * 0.5,
-          Math.abs(collider.size.y * dynamicPlacement.scale) * 0.5,
-          Math.abs(collider.size.z * dynamicPlacement.scale) * 0.5
+          Math.abs(collider.size.x * scaleVector.x) * 0.5,
+          Math.abs(collider.size.y * scaleVector.y) * 0.5,
+          Math.abs(collider.size.z * scaleVector.z) * 0.5
         ),
         ownerEnvironmentAssetId: environmentAsset.environmentAssetId,
         rotationYRadians: dynamicPlacement.rotationYRadians,
         rotation: createPlacementQuaternion(dynamicPlacement.rotationYRadians),
+        shape: "box",
         translation: applyPlacementToLocalCenter(
           collider.center,
           dynamicPlacement
         ),
         traversalAffordance: collider.traversalAffordance
-      })
-    )
+      });
+    })
   );
 }
 
@@ -253,6 +260,8 @@ function appendMeshTriangles(
 function createPlacementMatrix(
   placement: MetaverseEnvironmentPlacementProofConfig
 ): Matrix4 {
+  const scaleVector = resolveMetaverseWorldSurfaceScaleVector(placement.scale);
+
   return new Matrix4().compose(
     new Vector3(
       placement.position.x,
@@ -263,21 +272,17 @@ function createPlacementMatrix(
       new Vector3(0, 1, 0),
       placement.rotationYRadians
     ),
-    new Vector3(placement.scale, placement.scale, placement.scale)
+    new Vector3(scaleVector.x, scaleVector.y, scaleVector.z)
   );
 }
 
-export function resolvePlacedCollisionTriMeshes(
-  environmentAsset: MetaverseEnvironmentAssetProofConfig,
+function resolveCollisionTriMeshesForPlacements(
+  placements: readonly MetaverseEnvironmentPlacementProofConfig[],
   collisionScene: Group
 ): readonly MetaverseTriMeshColliderSnapshot[] {
-  if (environmentAsset.placement === "dynamic") {
-    return Object.freeze([]);
-  }
-
   collisionScene.updateMatrixWorld(true);
 
-  const meshColliders = environmentAsset.placements.map((placement) => {
+  const meshColliders = placements.map((placement) => {
     const vertices: number[] = [];
     const indices: number[] = [];
     const placementMatrix = createPlacementMatrix(placement);
@@ -298,5 +303,61 @@ export function resolvePlacedCollisionTriMeshes(
     meshColliders.filter(
       (collider) => collider.vertices.length > 0 && collider.indices.length > 0
     )
+  );
+}
+
+export function resolveScaledCollisionTriMeshes(
+  scale: MetaverseEnvironmentPlacementProofConfig["scale"],
+  collisionScene: Group
+): readonly MetaverseTriMeshColliderSnapshot[] {
+  return resolveCollisionTriMeshesForPlacements(
+    Object.freeze([
+      Object.freeze({
+        position: freezeVector3(0, 0, 0),
+        rotationYRadians: 0,
+        scale
+      } satisfies MetaverseEnvironmentPlacementProofConfig)
+    ]),
+    collisionScene
+  );
+}
+
+export function resolvePlacedCollisionTriMeshes(
+  environmentAsset: MetaverseEnvironmentAssetProofConfig,
+  collisionScene: Group
+): readonly MetaverseTriMeshColliderSnapshot[] {
+  if (environmentAsset.placement === "dynamic") {
+    return Object.freeze([]);
+  }
+
+  return resolveCollisionTriMeshesForPlacements(
+    environmentAsset.placements,
+    collisionScene
+  );
+}
+
+export function resolveDynamicCollisionTriMeshes(
+  environmentAsset: Pick<
+    MetaverseEnvironmentAssetProofConfig,
+    "placement" | "placements"
+  >,
+  collisionScene: Group
+): readonly MetaverseTriMeshColliderSnapshot[] {
+  if (
+    environmentAsset.placement !== "dynamic" ||
+    environmentAsset.placements.length !== 1
+  ) {
+    return Object.freeze([]);
+  }
+
+  return resolveCollisionTriMeshesForPlacements(
+    Object.freeze([
+      Object.freeze({
+        position: freezeVector3(0, 0, 0),
+        rotationYRadians: 0,
+        scale: environmentAsset.placements[0]!.scale
+      } satisfies MetaverseEnvironmentPlacementProofConfig)
+    ]),
+    collisionScene
   );
 }

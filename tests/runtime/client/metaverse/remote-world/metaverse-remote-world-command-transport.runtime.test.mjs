@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
-import { createMetaversePlayerId, createUsername } from "@webgpu-metaverse/shared";
+import {
+  createMetaverseGameplayTraversalIntentSnapshotInput,
+  createMetaversePlayerId,
+  createUsername
+} from "@webgpu-metaverse/shared";
 
 import { createClientModuleLoader } from "../../load-client-module.mjs";
 import { FakeMetaverseWorldClient } from "../runtime/fixtures/fake-world-client.mjs";
@@ -33,32 +37,28 @@ test("MetaverseRemoteWorldCommandTransport adapts grounded traversal, look, moun
   });
 
   const previewSnapshot = commandTransport.previewLocalTraversalIntent(
-    {
+    createMetaverseGameplayTraversalIntentSnapshotInput({
       boost: true,
       jump: true,
+      locomotionMode: "grounded",
       moveAxis: 1,
-      strafeAxis: -0.25,
-      yawAxis: 0.5
-    },
-    {
       pitchRadians: 0.2,
+      strafeAxis: -0.25,
+      turnAxis: 0.5,
       yawRadians: 1.3
-    },
-    "grounded"
+    })
   );
   const syncedSnapshot = commandTransport.syncLocalTraversalIntent(
-    {
+    createMetaverseGameplayTraversalIntentSnapshotInput({
       boost: true,
       jump: true,
+      locomotionMode: "grounded",
       moveAxis: 1,
-      strafeAxis: -0.25,
-      yawAxis: 0.5
-    },
-    {
       pitchRadians: 0.2,
+      strafeAxis: -0.25,
+      turnAxis: 0.5,
       yawRadians: 1.3
-    },
-    "grounded"
+    })
   );
 
   commandTransport.syncLocalPlayerLook({
@@ -126,18 +126,16 @@ test("MetaverseRemoteWorldCommandTransport clears traversal/look lanes when the 
 
   assert.equal(
     commandTransport.syncLocalTraversalIntent(
-      {
+      createMetaverseGameplayTraversalIntentSnapshotInput({
         boost: false,
         jump: true,
+        locomotionMode: null,
         moveAxis: 1,
-        strafeAxis: 0,
-        yawAxis: 0
-      },
-      {
         pitchRadians: 0,
+        strafeAxis: 0,
+        turnAxis: 0,
         yawRadians: 0
-      },
-      "mounted"
+      })
     ),
     null
   );

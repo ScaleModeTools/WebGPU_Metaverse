@@ -126,6 +126,8 @@ export const metaverseWorldCadenceConfig = Object.freeze({
     metaverseRealtimeWorldCadenceConfig.authoritativeTickIntervalMs,
   localAuthoritativeFreshnessMaxAgeMs: 66,
   maxBufferedSnapshots: 6,
+  remoteCharacterRootInterpolationDelayMs: 0,
+  remoteCharacterRootMaxExtrapolationMs: 0,
   maxExtrapolationMs: 66,
   remoteInterpolationDelayMs: 66
 });
@@ -150,6 +152,10 @@ export const metaverseRealtimeMigrationConfig = Object.freeze({
 export const metaverseRemoteWorldSamplingConfig = Object.freeze({
   clockOffsetCorrectionAlpha: 0.2,
   clockOffsetMaxStepMs: 32,
+  remoteCharacterRootInterpolationDelayMs:
+    metaverseWorldCadenceConfig.remoteCharacterRootInterpolationDelayMs,
+  remoteCharacterRootMaxExtrapolationMs:
+    metaverseWorldCadenceConfig.remoteCharacterRootMaxExtrapolationMs,
   interpolationDelayMs: metaverseWorldCadenceConfig.remoteInterpolationDelayMs,
   maxExtrapolationMs: metaverseWorldCadenceConfig.maxExtrapolationMs
 });

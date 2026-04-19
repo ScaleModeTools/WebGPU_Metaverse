@@ -216,6 +216,41 @@ export function isMetaversePresenceMountedCompatibilityLocomotionMode(
   return locomotionMode === "mounted";
 }
 
+export function shouldKeepMetaverseMountedOccupancyFreeRoam(
+  mountedOccupancy:
+    | Pick<
+        MetaversePresenceMountedOccupancySnapshot,
+        "occupancyKind" | "occupantRole"
+      >
+    | null
+    | undefined
+): boolean {
+  return (
+    mountedOccupancy !== null &&
+    mountedOccupancy !== undefined &&
+    mountedOccupancy.occupancyKind === "entry" &&
+    mountedOccupancy.occupantRole !== "driver"
+  );
+}
+
+export function shouldTreatMetaversePlayerPoseAsTraversalBlocker(
+  locomotionMode: MetaversePresenceLocomotionModeId,
+  mountedOccupancy:
+    | Pick<
+        MetaversePresenceMountedOccupancySnapshot,
+        "occupancyKind" | "occupantRole"
+      >
+    | null
+    | undefined
+): boolean {
+  return (
+    locomotionMode !== "swim" &&
+    (mountedOccupancy === null ||
+      mountedOccupancy === undefined ||
+      shouldKeepMetaverseMountedOccupancyFreeRoam(mountedOccupancy))
+  );
+}
+
 const metaversePlayerIdPattern = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
 
 function normalizeFiniteNumber(value: number): number {
@@ -373,6 +408,27 @@ export function createMetaversePresenceMountedOccupancySnapshot({
     occupantRole: resolveMountedOccupantRole(occupantRole),
     seatId: normalizedSeatId
   });
+}
+
+export function createMetaverseMountedOccupancyIdentityKey(
+  mountedOccupancy:
+    | Pick<
+        MetaversePresenceMountedOccupancySnapshot,
+        "environmentAssetId" | "entryId" | "occupancyKind" | "seatId"
+      >
+    | null
+    | undefined
+): string | null {
+  if (mountedOccupancy === null || mountedOccupancy === undefined) {
+    return null;
+  }
+
+  return [
+    mountedOccupancy.environmentAssetId,
+    mountedOccupancy.occupancyKind,
+    mountedOccupancy.entryId ?? "",
+    mountedOccupancy.seatId ?? ""
+  ].join(":");
 }
 
 export function createMetaversePresenceLookSnapshot({

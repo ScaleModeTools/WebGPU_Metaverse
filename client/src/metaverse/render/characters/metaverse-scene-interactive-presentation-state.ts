@@ -21,8 +21,10 @@ import {
 import type {
   MetaverseAttachmentProofConfig,
   MetaverseCharacterProofConfig,
-  MountedEnvironmentSnapshot
 } from "../../types/metaverse-runtime";
+import type {
+  MetaverseMountedOccupancyPresentationStateSnapshot
+} from "../../states/mounted-occupancy";
 
 export interface MetaverseSceneAsset {
   readonly animations: readonly AnimationClip[];
@@ -151,10 +153,9 @@ export class MetaverseSceneInteractivePresentationState {
   }
 
   syncAttachmentMount(
-    mountedEnvironment: Pick<
-      MountedEnvironmentSnapshot,
-      "occupancyKind" | "occupantRole"
-    > | null
+    mountedOccupancyPresentationState:
+      | MetaverseMountedOccupancyPresentationStateSnapshot
+      | null
   ): void {
     if (
       this.attachmentProofRuntime === null ||
@@ -166,7 +167,7 @@ export class MetaverseSceneInteractivePresentationState {
     syncAttachmentProofRuntimeMount(
       this.attachmentProofRuntime,
       this.characterProofRuntime,
-      mountedEnvironment,
+      mountedOccupancyPresentationState,
       this.#dependencies.attachmentRuntimeNodeResolvers
     );
   }

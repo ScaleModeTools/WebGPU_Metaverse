@@ -79,6 +79,7 @@ function createGroundColliderConfig(config) {
 function createAuthoritativeLocalPlayerPoseSnapshot(input) {
   const {
     jumpAuthorityState = "grounded",
+    lastProcessedInputSequence = 0,
     lastAcceptedJumpActionSequence = 0,
     lastProcessedJumpActionSequence = 0,
     pendingActionSequence: pendingActionSequenceOverride = 0,
@@ -101,6 +102,7 @@ function createAuthoritativeLocalPlayerPoseSnapshot(input) {
 
   return Object.freeze({
     ...authoritativeSnapshot,
+    lastProcessedInputSequence,
     traversalAuthority:
       authoritativeSnapshot.traversalAuthority ??
       resolveMetaverseTraversalAuthoritySnapshotInput({
@@ -142,7 +144,7 @@ export async function createTraversalFixtureContext() {
   async function createShippedSurfaceColliderSnapshots() {
     const [{ metaverseEnvironmentProofConfig }, { resolvePlacedCuboidColliders }] =
       await Promise.all([
-        clientLoader.load("/src/app/states/metaverse-asset-proof.ts"),
+        clientLoader.load("/src/metaverse/world/proof/index.ts"),
         clientLoader.load("/src/metaverse/states/metaverse-environment-collision.ts")
       ]);
 
@@ -251,14 +253,21 @@ export async function createTraversalFixtureContext() {
     await groundedBodyRuntime.init(config.camera.initialYawRadians);
 
     const dynamicPoseWrites = [];
-    const dynamicPoseMap = new Map(
+    const dynamicPresentationPoseMap = new Map(
       Object.entries(options.dynamicEnvironmentPoses ?? {})
+    );
+    const dynamicCollisionPoseMap = new Map(
+      Object.entries(
+        options.dynamicEnvironmentCollisionPoses ?? options.dynamicEnvironmentPoses ?? {}
+      )
     );
     const mountedEnvironmentAnchorSnapshotsByKey = new Map(
       Object.entries(options.mountedEnvironmentAnchorSnapshots ?? {})
     );
     const mountableEnvironmentConfigById = new Map(
-      Object.keys(options.dynamicEnvironmentPoses ?? {}).map((environmentAssetId) => [
+      Object.keys(
+        options.dynamicEnvironmentCollisionPoses ?? options.dynamicEnvironmentPoses ?? {}
+      ).map((environmentAssetId) => [
         environmentAssetId,
         Object.freeze({
           collider: Object.freeze({
@@ -311,8 +320,8 @@ export async function createTraversalFixtureContext() {
     const traversalRuntime = new MetaverseTraversalRuntime(config, {
       groundedBodyRuntime,
       physicsRuntime,
-      readDynamicEnvironmentPose(environmentAssetId) {
-        return dynamicPoseMap.get(environmentAssetId) ?? null;
+      readDynamicEnvironmentCollisionPose(environmentAssetId) {
+        return dynamicCollisionPoseMap.get(environmentAssetId) ?? null;
       },
       readMountedEnvironmentAnchorSnapshot(mountedEnvironment) {
         const anchorSnapshot =
@@ -328,7 +337,7 @@ export async function createTraversalFixtureContext() {
           return anchorSnapshot;
         }
 
-        const dynamicPose = dynamicPoseMap.get(
+        const dynamicPose = dynamicPresentationPoseMap.get(
           mountedEnvironment.environmentAssetId
         );
 
@@ -377,11 +386,13 @@ export async function createTraversalFixtureContext() {
         });
 
         if (poseSnapshot === null) {
-          dynamicPoseMap.delete(environmentAssetId);
+          dynamicCollisionPoseMap.delete(environmentAssetId);
+          dynamicPresentationPoseMap.delete(environmentAssetId);
           return;
         }
 
-        dynamicPoseMap.set(environmentAssetId, poseSnapshot);
+        dynamicCollisionPoseMap.set(environmentAssetId, poseSnapshot);
+        dynamicPresentationPoseMap.set(environmentAssetId, poseSnapshot);
       },
       surfaceColliderSnapshots
     });

@@ -14,11 +14,18 @@ after(async () => {
 });
 
 test("MetaverseSceneLocalCharacterPresentationState owns local animation advance, mounted sync, and attachment mount reset", async () => {
-  const [{ Group }, { MetaverseSceneLocalCharacterPresentationState }] =
+  const [
+    { Group },
+    { MetaverseSceneLocalCharacterPresentationState },
+    { createMetaverseSceneMountedPresentationSnapshot }
+  ] =
     await Promise.all([
       import("three/webgpu"),
       clientLoader.load(
         "/src/metaverse/render/characters/metaverse-scene-local-character-presentation-state.ts"
+      ),
+      clientLoader.load(
+        "/src/metaverse/render/mounts/metaverse-scene-mounted-presentation-snapshot.ts"
       )
     ]);
   const calls = [];
@@ -38,12 +45,35 @@ test("MetaverseSceneLocalCharacterPresentationState owns local animation advance
     yawRadians: 0.25
   });
   const mountedEnvironment = Object.freeze({
+    cameraPolicyId: "vehicle-follow",
+    controlRoutingPolicyId: "vehicle-surface-drive",
+    directSeatTargets: Object.freeze([]),
     environmentAssetId: "metaverse-hub-skiff-v1",
     entryId: null,
+    label: "Metaverse hub skiff",
+    lookLimitPolicyId: "driver-forward",
+    occupancyAnimationId: "seated",
     occupancyKind: "seat",
     occupantRole: "driver",
-    seatId: "driver_seat"
+    occupantLabel: "Take helm",
+    seatId: "driver_seat",
+    seatTargets: Object.freeze([])
   });
+  const mountedOccupancyPresentationState = Object.freeze({
+    constrainToAnchor: true,
+    holsterHeldAttachment: true,
+    keepFreeRoam: false,
+    lookConstraintBounds: Object.freeze({
+      maxPitchRadians: 0.6,
+      maxYawOffsetRadians: 0,
+      minPitchRadians: -0.6
+    }),
+    mountedCharacterAnimationVocabulary: "seated",
+    usesMountedAnchorCamera: false,
+    usesVehicleFollowCamera: true
+  });
+  const mountedPresentationSnapshot =
+    createMetaverseSceneMountedPresentationSnapshot(mountedEnvironment);
   const characterRuntime = {
     activeAnimationActionSetId: "full-body",
     activeAnimationVocabulary: "idle",
@@ -95,10 +125,14 @@ test("MetaverseSceneLocalCharacterPresentationState owns local animation advance
           calls.push("read-mounted-character-runtime");
           return null;
         },
-        syncMountedCharacterRuntime(nextMountedEnvironment) {
+        syncMountedCharacterRuntime(
+          nextMountedEnvironment,
+          nextMountedOccupancyPresentationState
+        ) {
           calls.push([
             "sync-mounted-character-runtime",
-            nextMountedEnvironment
+            nextMountedEnvironment,
+            nextMountedOccupancyPresentationState
           ]);
         }
       }
@@ -108,15 +142,19 @@ test("MetaverseSceneLocalCharacterPresentationState owns local animation advance
     cameraSnapshot,
     1 / 60,
     characterPresentation,
-    mountedEnvironment
+    mountedPresentationSnapshot
   );
 
   assert.equal(presentedCameraSnapshot, cameraSnapshot);
   assert.deepEqual(calls, [
     "read-mounted-character-runtime",
     ["mixer-update", 1 / 60],
-    ["sync-mounted-character-runtime", mountedEnvironment],
-    ["sync-attachment-mount", mountedEnvironment],
+    [
+      "sync-mounted-character-runtime",
+      mountedEnvironment,
+      mountedOccupancyPresentationState
+    ],
+    ["sync-attachment-mount", mountedOccupancyPresentationState],
     "read-mounted-character-runtime"
   ]);
   assert.equal(characterRuntime.anchorGroup.position.x, 1);

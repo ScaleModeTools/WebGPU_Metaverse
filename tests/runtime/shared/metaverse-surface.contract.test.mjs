@@ -165,7 +165,10 @@ test("shared traversal state resolver keeps range support, open water, and bay-e
   assert.equal(openWaterDecision.decision.locomotionMode, "swim");
   assert.equal(openWaterDecision.decision.capabilityId, "swim");
   assert.equal(openWaterDecision.debug.reason, "capability-maintained");
-  assert.equal(openWaterDecision.debug.blockerOverlap, false);
+  assert.equal(
+    openWaterDecision.debug.blockingAffordanceDetected,
+    false
+  );
 
   assert.equal(bayEdgeExitDecision.decision.locomotionMode, "grounded");
   assert.equal(bayEdgeExitDecision.decision.capabilityId, "grounded");

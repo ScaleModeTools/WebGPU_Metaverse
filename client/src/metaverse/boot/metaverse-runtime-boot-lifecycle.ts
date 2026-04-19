@@ -1,16 +1,14 @@
 import type { Camera, Scene } from "three/webgpu";
 
-import {
-  resolveMetaverseBootCinematicPresentationSnapshot,
-  type MetaverseBootCinematicPresentationSnapshot
-} from "../states/metaverse-boot-cinematic";
+import type { MetaverseRuntimeCameraPhaseState } from "../classes/metaverse-runtime-camera-phase-state";
 import type { MetaverseSceneRendererHost } from "../render/webgpu-metaverse-scene";
 import type {
   FocusedExperiencePortalSnapshot,
   MetaverseCameraSnapshot,
-  MetaversePortalConfig
+  MetaverseCharacterPresentationSnapshot,
+  MetaverseRemoteCharacterPresentationSnapshot,
+  MountedEnvironmentSnapshot
 } from "../types/metaverse-runtime";
-import type { MetaverseBootCinematicConfig } from "../types/metaverse-boot-cinematic";
 
 const emptyRemoteCharacterPresentations = Object.freeze([]);
 
@@ -40,9 +38,9 @@ interface MetaverseRuntimeBootSceneRuntime {
     focusedPortal: FocusedExperiencePortalSnapshot | null,
     nowMs: number,
     deltaSeconds: number,
-    localCharacterPresentation: null,
-    remoteCharacterPresentations: typeof emptyRemoteCharacterPresentations,
-    mountedEnvironment: null
+    localCharacterPresentation: MetaverseCharacterPresentationSnapshot | null,
+    remoteCharacterPresentations: readonly MetaverseRemoteCharacterPresentationSnapshot[],
+    mountedEnvironment: MountedEnvironmentSnapshot | null
   ): void;
   syncViewport(
     renderer: MetaverseRuntimeBootRendererHost,
@@ -52,9 +50,8 @@ interface MetaverseRuntimeBootSceneRuntime {
 }
 
 interface MetaverseRuntimeBootLifecycleDependencies {
-  readonly bootCinematicConfig: MetaverseBootCinematicConfig;
+  readonly cameraPhaseState: MetaverseRuntimeCameraPhaseState;
   readonly devicePixelRatio: number;
-  readonly portals: readonly MetaversePortalConfig[];
   readonly readNowMs: () => number;
   readonly sceneRuntime: MetaverseRuntimeBootSceneRuntime;
 }
@@ -66,28 +63,23 @@ interface MetaverseRuntimeBootRequest {
 }
 
 export class MetaverseRuntimeBootLifecycle {
-  readonly #bootCinematicConfig: MetaverseBootCinematicConfig;
+  readonly #cameraPhaseState: MetaverseRuntimeCameraPhaseState;
   readonly #devicePixelRatio: number;
-  readonly #portals: readonly MetaversePortalConfig[];
   readonly #readNowMs: () => number;
   readonly #sceneRuntime: MetaverseRuntimeBootSceneRuntime;
 
-  #bootCinematicLiveReadyAtMs: number | null = null;
-  #bootCinematicStartedAtMs: number | null = null;
   #bootRendererInitialized = false;
   #bootScenePrewarmed = false;
   #runtimeInputInstalled = false;
 
   constructor({
-    bootCinematicConfig,
+    cameraPhaseState,
     devicePixelRatio,
-    portals,
     readNowMs,
     sceneRuntime
   }: MetaverseRuntimeBootLifecycleDependencies) {
-    this.#bootCinematicConfig = bootCinematicConfig;
+    this.#cameraPhaseState = cameraPhaseState;
     this.#devicePixelRatio = devicePixelRatio;
-    this.#portals = portals;
     this.#readNowMs = readNowMs;
     this.#sceneRuntime = sceneRuntime;
   }
@@ -98,18 +90,6 @@ export class MetaverseRuntimeBootLifecycle {
 
   get bootScenePrewarmed(): boolean {
     return this.#bootScenePrewarmed;
-  }
-
-  get bootCinematicEnabled(): boolean {
-    return this.#bootCinematicConfig.enabled;
-  }
-
-  reset(): void {
-    this.#bootCinematicLiveReadyAtMs = null;
-    this.#bootCinematicStartedAtMs = null;
-    this.#bootRendererInitialized = false;
-    this.#bootScenePrewarmed = false;
-    this.#runtimeInputInstalled = false;
   }
 
   ensureRuntimeInputInstalled(
@@ -124,40 +104,31 @@ export class MetaverseRuntimeBootLifecycle {
     this.#runtimeInputInstalled = true;
   }
 
-  isBootCinematicActive(nowMs: number): boolean {
-    if (
-      !this.#bootCinematicConfig.enabled ||
-      this.#bootCinematicStartedAtMs === null
-    ) {
-      return false;
-    }
-
-    if (this.#bootCinematicLiveReadyAtMs === null) {
-      return true;
-    }
-
-    return (
-      nowMs - this.#bootCinematicLiveReadyAtMs <
-      this.#bootCinematicConfig.minimumDwellMs
-    );
+  setDeathCameraSnapshot(snapshot: MetaverseCameraSnapshot | null): void {
+    this.#cameraPhaseState.setDeathCameraSnapshot(snapshot);
   }
 
-  resolveBootCinematicPresentationSnapshot(
-    nowMs: number,
-    environmentReady: boolean = this.#bootScenePrewarmed
-  ): MetaverseBootCinematicPresentationSnapshot | null {
-    if (this.#bootCinematicStartedAtMs === null) {
-      return null;
-    }
+  setGameplayControlLocked(locked: boolean): void {
+    this.#cameraPhaseState.setGameplayControlLocked(locked);
+  }
 
-    return resolveMetaverseBootCinematicPresentationSnapshot(
-      this.#bootCinematicConfig,
-      nowMs - this.#bootCinematicStartedAtMs,
-      {
-        environmentReady
-      },
-      this.#portals
-    );
+  setRespawnControlLocked(locked: boolean): void {
+    this.#cameraPhaseState.setRespawnControlLocked(locked);
+  }
+
+  resolveRuntimeCameraPhaseState(
+    input: Parameters<
+      MetaverseRuntimeCameraPhaseState["resolveRuntimeCameraPhaseState"]
+    >[0]
+  ): ReturnType<MetaverseRuntimeCameraPhaseState["resolveRuntimeCameraPhaseState"]> {
+    return this.#cameraPhaseState.resolveRuntimeCameraPhaseState(input);
+  }
+
+  reset(): void {
+    this.#cameraPhaseState.reset();
+    this.#bootRendererInitialized = false;
+    this.#bootScenePrewarmed = false;
+    this.#runtimeInputInstalled = false;
   }
 
   async bootRuntime({
@@ -170,20 +141,21 @@ export class MetaverseRuntimeBootLifecycle {
     await renderer.init();
     this.#bootRendererInitialized = true;
 
-    if (this.#bootCinematicConfig.enabled) {
-      this.#bootCinematicStartedAtMs = this.#readNowMs();
-      this.#renderBootCinematicFrame(renderer, canvas, this.#bootCinematicStartedAtMs, false);
+    const entryPreviewEnabled = this.#cameraPhaseState.entryPreviewEnabled;
+
+    if (entryPreviewEnabled) {
+      this.#cameraPhaseState.startEntryPreview(this.#readNowMs());
       await this.#sceneRuntime.bootScenicEnvironment();
       this.#sceneRuntime.syncViewport(renderer, canvas, this.#devicePixelRatio);
-      this.#renderBootCinematicFrame(renderer, canvas, this.#readNowMs(), true);
+      this.#renderEntryPreviewFrame(renderer, canvas, this.#readNowMs());
       await this.#sceneRuntime.prewarm(renderer);
-      this.#renderBootCinematicFrame(renderer, canvas, this.#readNowMs(), true);
+      this.#renderEntryPreviewFrame(renderer, canvas, this.#readNowMs());
       await bootGroundedRuntime();
       await this.#sceneRuntime.bootInteractivePresentation();
       this.#sceneRuntime.syncViewport(renderer, canvas, this.#devicePixelRatio);
       await this.#sceneRuntime.prewarm(renderer);
-      this.#renderBootCinematicFrame(renderer, canvas, this.#readNowMs(), true);
-      this.#bootCinematicLiveReadyAtMs = this.#readNowMs();
+      this.#renderEntryPreviewFrame(renderer, canvas, this.#readNowMs());
+      this.#cameraPhaseState.markEntryPreviewLiveReady(this.#readNowMs());
     } else {
       await this.#sceneRuntime.boot();
       await bootGroundedRuntime();
@@ -194,29 +166,22 @@ export class MetaverseRuntimeBootLifecycle {
     this.#bootScenePrewarmed = true;
   }
 
-  #renderBootCinematicFrame(
+  #renderEntryPreviewFrame(
     renderer: MetaverseRuntimeBootRendererHost,
     canvas: MetaverseRuntimeBootCanvasHost,
-    nowMs: number,
-    environmentReady: boolean
+    nowMs: number
   ): void {
-    if (this.#bootCinematicStartedAtMs === null) {
-      return;
-    }
+    const previewSnapshot =
+      this.#cameraPhaseState.resolveBootPresentationSnapshot(nowMs);
 
-    const bootCinematicSnapshot = this.resolveBootCinematicPresentationSnapshot(
-      nowMs,
-      environmentReady
-    );
-
-    if (bootCinematicSnapshot === null) {
+    if (previewSnapshot === null) {
       return;
     }
 
     this.#sceneRuntime.syncViewport(renderer, canvas, this.#devicePixelRatio);
     this.#sceneRuntime.syncPresentation(
-      bootCinematicSnapshot.cameraSnapshot,
-      bootCinematicSnapshot.focusedPortal,
+      previewSnapshot.cameraSnapshot,
+      previewSnapshot.focusedPortal,
       nowMs,
       0,
       null,

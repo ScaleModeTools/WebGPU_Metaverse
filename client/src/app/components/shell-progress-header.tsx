@@ -42,8 +42,9 @@ export function ShellProgressHeader({
                 WebGPU Metaverse
               </p>
               <h1 className="type-display max-w-4xl">
-                Login confirms the local profile, setup prepares the controller
-                path, and the ocean hub launches named experiences.
+                Entry can use a saved local profile or fall back to Unknown,
+                setup prepares the controller path, and the ocean hub launches
+                named experiences.
               </h1>
               <p className="type-lead max-w-3xl">
                 Hub traversal uses standard keyboard + mouse FPS controls with

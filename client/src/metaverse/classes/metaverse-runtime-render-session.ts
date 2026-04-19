@@ -3,9 +3,8 @@ import type { Camera, Scene } from "three/webgpu";
 import type { MetaverseSceneCanvasHost } from "../render/webgpu-metaverse-scene";
 import type {
   FocusedExperiencePortalSnapshot,
-  FocusedMountableSnapshot,
   MetaverseHudSnapshot,
-  MountedEnvironmentSnapshot
+  MetaverseMountedInteractionSnapshot
 } from "../types/metaverse-runtime";
 
 interface MetaverseRuntimeRenderSessionRendererHost {
@@ -28,11 +27,10 @@ interface MetaverseRuntimeRenderSessionBootLifecycle {
 }
 
 interface MetaverseRuntimeRenderSessionFrameLoop {
-  readonly focusedMountable: FocusedMountableSnapshot | null;
   readonly focusedPortal: FocusedExperiencePortalSnapshot | null;
   readonly frameDeltaMs: number;
   readonly frameRate: number;
-  readonly mountedEnvironment: MountedEnvironmentSnapshot | null;
+  readonly mountedInteraction: MetaverseMountedInteractionSnapshot;
   readonly renderedFrameCount: number;
   syncFrame(input: {
     readonly canvas: MetaverseSceneCanvasHost;
@@ -49,12 +47,11 @@ interface MetaverseRuntimeRenderSessionHudPublisher {
       readonly bootScenePrewarmed: boolean;
       readonly controlMode: MetaverseHudSnapshot["controlMode"];
       readonly failureReason: string | null;
-      readonly focusedMountable: FocusedMountableSnapshot | null;
       readonly focusedPortal: FocusedExperiencePortalSnapshot | null;
       readonly frameDeltaMs: number;
       readonly frameRate: number;
       readonly lifecycle: MetaverseHudSnapshot["lifecycle"];
-      readonly mountedEnvironment: MountedEnvironmentSnapshot | null;
+      readonly mountedInteraction: MetaverseMountedInteractionSnapshot;
       readonly renderedFrameCount: number;
       readonly renderer: MetaverseRuntimeRenderSessionRendererHost | null;
     },
@@ -200,12 +197,11 @@ export class MetaverseRuntimeRenderSession {
         bootScenePrewarmed: this.#bootLifecycle.bootScenePrewarmed,
         controlMode: this.#readControlMode(),
         failureReason,
-        focusedMountable: this.#frameLoop.focusedMountable,
         focusedPortal: this.#frameLoop.focusedPortal,
         frameDeltaMs: this.#frameLoop.frameDeltaMs,
         frameRate: this.#frameLoop.frameRate,
         lifecycle,
-        mountedEnvironment: this.#frameLoop.mountedEnvironment,
+        mountedInteraction: this.#frameLoop.mountedInteraction,
         renderedFrameCount: this.#frameLoop.renderedFrameCount,
         renderer: this.#renderer
       },

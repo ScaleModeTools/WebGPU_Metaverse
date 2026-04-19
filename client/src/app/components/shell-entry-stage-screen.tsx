@@ -2,6 +2,7 @@ import type { FormEvent } from "react";
 
 import type { GameplayInputModeId } from "@webgpu-metaverse/shared";
 
+import { EngineToolLauncher } from "../../engine-tool";
 import type { WebGpuMetaverseCapabilitySnapshot } from "../../metaverse/types/webgpu-capability";
 import type { MetaverseEntryStepId } from "../../navigation";
 import { StableInlineText } from "@/components/text-stability";
@@ -26,6 +27,7 @@ interface ShellEntryStageScreenProps {
   readonly onClearProfile: () => void;
   readonly onEditProfile: () => void;
   readonly onEnterMetaverse: () => void;
+  readonly onOpenToolRequest: () => void;
   readonly onRequestPermission: () => void;
   readonly onRecalibrationRequest: () => void;
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -34,8 +36,8 @@ interface ShellEntryStageScreenProps {
 }
 
 const profileSubmitLabels = [
-  "Resume local profile",
-  "Create local profile"
+  "Save local profile",
+  "Update local profile"
 ] as const;
 const launchActionLabels = [
   "Start",
@@ -73,7 +75,7 @@ function resolveStageDescription(
   nextMetaverseStep: MetaverseEntryStepId | null
 ): string {
   if (!hasConfirmedProfile) {
-    return "Choose a username to continue.";
+    return "Start with a stored profile, type a name to save locally, or continue as Unknown.";
   }
 
   if (nextMetaverseStep === "permissions") {
@@ -97,6 +99,7 @@ export function ShellEntryStageScreen({
   onClearProfile,
   onEditProfile,
   onEnterMetaverse,
+  onOpenToolRequest,
   onRequestPermission,
   onRecalibrationRequest,
   onSubmit,
@@ -104,8 +107,8 @@ export function ShellEntryStageScreen({
   usernameDraft
 }: ShellEntryStageScreenProps) {
   const profileSubmitLabel = hasStoredProfile
-    ? "Resume local profile"
-    : "Create local profile";
+    ? "Update local profile"
+    : "Save local profile";
   const launchActionLabel = resolveLaunchActionLabel(
     capabilityStatus,
     nextMetaverseStep
@@ -115,6 +118,7 @@ export function ShellEntryStageScreen({
     hasConfirmedProfile &&
     inputMode === "camera-thumb-trigger" &&
     nextMetaverseStep === "metaverse";
+  const showToolLauncher = import.meta.env.DEV;
   const onPrimaryAction =
     nextMetaverseStep === "permissions"
       ? onRequestPermission
@@ -143,64 +147,60 @@ export function ShellEntryStageScreen({
               <CardTitle className="font-heading text-2xl font-semibold tracking-tight text-game-foreground">
                 {hasConfirmedProfile
                   ? usernameDraft
-                  : hasStoredProfile
-                    ? "Resume profile"
-                    : "Create profile"}
+                  : "Continue"}
               </CardTitle>
               <CardDescription className="text-sm leading-6 text-game-muted">
                 {hasConfirmedProfile
                   ? "Primary actions only."
-                  : "Local profile only."}
+                  : "Start immediately or save a local name first."}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
+              <Button
+                className="w-full"
+                disabled={!canLaunch}
+                onClick={onPrimaryAction}
+                size="lg"
+                type="button"
+              >
+                <StableInlineText
+                  reserveTexts={launchActionLabels}
+                  text={launchActionLabel}
+                />
+              </Button>
+
               {hasConfirmedProfile ? (
-                <>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {showRecalibrationButton ? (
+                    <Button
+                      className="w-full"
+                      onClick={onRecalibrationRequest}
+                      size="lg"
+                      type="button"
+                      variant="outline"
+                    >
+                      Recalibrate
+                    </Button>
+                  ) : null}
                   <Button
                     className="w-full"
-                    disabled={!canLaunch}
-                    onClick={onPrimaryAction}
+                    onClick={onEditProfile}
                     size="lg"
                     type="button"
+                    variant="outline"
                   >
-                    <StableInlineText
-                      reserveTexts={launchActionLabels}
-                      text={launchActionLabel}
-                    />
+                    Change name
                   </Button>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {showRecalibrationButton ? (
-                      <Button
-                        className="w-full"
-                        onClick={onRecalibrationRequest}
-                        size="lg"
-                        type="button"
-                        variant="outline"
-                      >
-                        Recalibrate
-                      </Button>
-                    ) : null}
-                    <Button
-                      className="w-full"
-                      onClick={onEditProfile}
-                      size="lg"
-                      type="button"
-                      variant="outline"
-                    >
-                      Change name
-                    </Button>
-                    <Button
-                      className="w-full"
-                      onClick={onClearProfile}
-                      size="lg"
-                      type="button"
-                      variant="outline"
-                    >
-                      Clear local profile
-                    </Button>
-                  </div>
-                </>
+                  <Button
+                    className="w-full"
+                    onClick={onClearProfile}
+                    size="lg"
+                    type="button"
+                    variant="outline"
+                  >
+                    Clear local profile
+                  </Button>
+                </div>
               ) : (
                 <form className="flex flex-col gap-4" onSubmit={onSubmit}>
                   <div className="flex flex-col gap-2">
@@ -213,9 +213,12 @@ export function ShellEntryStageScreen({
                       className="h-11"
                       id="login-username"
                       onChange={(event) => setUsernameDraft(event.target.value)}
-                      placeholder="Enter username"
+                      placeholder="Optional local profile name"
                       value={usernameDraft}
                     />
+                    <p className="text-sm leading-6 text-game-muted">
+                      Leave it blank to launch as Unknown.
+                    </p>
                     {loginError !== null ? (
                       <div className="surface-game-danger rounded-xl px-3 py-3 text-sm leading-6">
                         {loginError}
@@ -223,26 +226,35 @@ export function ShellEntryStageScreen({
                     ) : null}
                   </div>
 
-                  <Button className="w-full" size="lg" type="submit">
-                    <StableInlineText
-                      reserveTexts={profileSubmitLabels}
-                      text={profileSubmitLabel}
-                    />
-                  </Button>
-
-                  {hasStoredProfile ? (
-                    <Button
-                      className="w-full"
-                      onClick={onClearProfile}
-                      size="lg"
-                      type="button"
-                      variant="outline"
-                    >
-                      Clear local profile
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Button className="w-full" size="lg" type="submit" variant="outline">
+                      <StableInlineText
+                        reserveTexts={profileSubmitLabels}
+                        text={profileSubmitLabel}
+                      />
                     </Button>
-                  ) : null}
+
+                    {hasStoredProfile ? (
+                      <Button
+                        className="w-full"
+                        onClick={onClearProfile}
+                        size="lg"
+                        type="button"
+                        variant="outline"
+                      >
+                        Clear local profile
+                      </Button>
+                    ) : null}
+                  </div>
                 </form>
               )}
+
+              {showToolLauncher ? (
+                <EngineToolLauncher
+                  className="w-full"
+                  onOpenToolRequest={onOpenToolRequest}
+                />
+              ) : null}
             </CardContent>
           </Card>
         </div>

@@ -1,24 +1,18 @@
 import {
-  metaverseGroundedBodyTraversalCoreConfig,
   resolveMetaverseTraversalKinematicActionSnapshot,
-  metaverseSwimSurfaceTraversalConfig,
-  metaverseTraversalWorldRadius,
-  metaverseVehicleSurfaceTraversalConfig,
   type MetaverseTraversalActiveActionSnapshot,
   type MetaverseSurfaceTraversalConfig,
-  metaverseGroundedSurfacePolicyConfig
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 import {
-  metaverseWorldGroundedSpawnPosition,
-  metaverseWorldInitialYawRadians,
   type MetaverseWorldSurfacePolicyConfig
 } from "@webgpu-metaverse/shared/metaverse/world";
-import type {
-  MetaversePlayerId,
-  MetaversePresenceCommand,
-  MetaversePresencePoseSnapshot,
-  MetaversePresenceRosterEvent,
-  MetaversePresenceRosterSnapshot
+import {
+  shouldTreatMetaversePlayerPoseAsTraversalBlocker,
+  type MetaversePlayerId,
+  type MetaversePresenceCommand,
+  type MetaversePresencePoseSnapshot,
+  type MetaversePresenceRosterEvent,
+  type MetaversePresenceRosterSnapshot
 } from "@webgpu-metaverse/shared/metaverse/presence";
 import type {
   MetaverseRealtimeWorldClientCommand,
@@ -27,9 +21,6 @@ import type {
   MetaverseVehicleId
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
-import {
-  metaverseAuthoritativeWaterRegionSnapshots
-} from "../config/metaverse-authoritative-world-surface.js";
 import { metaverseAuthoritativeWorldRuntimeConfig } from "../config/metaverse-authoritative-world-runtime.js";
 import {
   MetaverseAuthoritativeGroundedBodyRuntime,
@@ -37,6 +28,9 @@ import {
 } from "./metaverse-authoritative-grounded-body-runtime.js";
 import { MetaverseAuthoritativeRapierPhysicsRuntime } from "./metaverse-authoritative-rapier-physics-runtime.js";
 import { MetaverseAuthoritativeSurfaceDriveRuntime } from "./metaverse-authoritative-surface-drive-runtime.js";
+import {
+  MetaverseAuthoritativeDynamicCuboidBodyRuntime
+} from "./metaverse-authoritative-dynamic-cuboid-body-runtime.js";
 import {
   MetaverseAuthoritativePlayerStateSync,
   type MetaverseAuthoritativePlayerStateSyncRuntimeState
@@ -64,10 +58,14 @@ import {
 import { MetaverseAuthoritativeWorldCommandIntake } from "../authority/commands/metaverse-authoritative-world-command-intake.js";
 import type {
   PhysicsVector3Snapshot,
-  RapierColliderHandle
+  RapierColliderHandle,
+  RapierQueryFilterPredicate
 } from "../types/metaverse-authoritative-rapier.js";
 import type { MetaverseAuthoritativeWorldRuntimeConfig } from "../types/metaverse-authoritative-world-runtime.js";
 import type { MetaverseAuthoritativeMountedOccupancyRuntimeState } from "../authority/mounted/metaverse-authoritative-mounted-occupancy-authority.js";
+import { createMetaverseAuthoritativeWorldBundleInputs } from "../world/map-bundles/metaverse-authoritative-world-bundle-inputs.js";
+import { resolveDefaultAuthoritativeMetaverseMapBundleId } from "../world/map-bundles/load-authoritative-metaverse-map-bundle.js";
+import type { MetaverseAuthoritativeWorldRuntimeOwner } from "../types/metaverse-authoritative-world-runtime-owner.js";
 
 interface MetaversePlayerWorldRuntimeState
   extends MetaverseAuthoritativePlayerStateSyncRuntimeState<
@@ -83,6 +81,18 @@ type MetaverseVehicleSeatRuntimeState =
 type MetaverseVehicleWorldRuntimeState =
   MetaverseAuthoritativeVehicleRuntimeRegistryRuntimeState<MetaverseVehicleSeatRuntimeState>;
 
+interface MetaverseEnvironmentBodyWorldRuntimeState {
+  readonly bodyRuntime: MetaverseAuthoritativeDynamicCuboidBodyRuntime;
+  readonly environmentAssetId: string;
+  linearVelocityX: number;
+  linearVelocityY: number;
+  linearVelocityZ: number;
+  positionX: number;
+  positionY: number;
+  positionZ: number;
+  yawRadians: number;
+}
+
 interface MetaverseDriverVehicleControlRuntimeState {
   readonly environmentAssetId: string;
   boost: boolean;
@@ -97,27 +107,40 @@ interface MetaverseAuthoritativeSurfaceTraversalConfig
   readonly worldRadius: number;
 }
 
-const metaverseAuthoritativeVehicleSurfaceDriveConfig = Object.freeze({
-  ...metaverseVehicleSurfaceTraversalConfig,
-  worldRadius: metaverseTraversalWorldRadius
-} satisfies MetaverseAuthoritativeSurfaceTraversalConfig);
-
-const metaverseAuthoritativeSwimTraversalConfig = Object.freeze({
-  ...metaverseSwimSurfaceTraversalConfig,
-  worldRadius: metaverseTraversalWorldRadius
-} satisfies MetaverseAuthoritativeSurfaceTraversalConfig);
-
-const metaverseAuthoritativeGroundedBodyConfig = Object.freeze({
-  ...metaverseGroundedSurfacePolicyConfig
-} satisfies MetaverseWorldSurfacePolicyConfig);
-const metaverseAuthoritativeGroundedBodyRuntimeConfig = Object.freeze({
-  ...metaverseGroundedBodyTraversalCoreConfig,
-  spawnPosition: metaverseWorldGroundedSpawnPosition,
-  worldRadius: metaverseTraversalWorldRadius
-} satisfies MetaverseAuthoritativeGroundedBodyConfig);
-const metaverseAuthoritativeCapsuleControllerOffsetMeters =
-  metaverseGroundedBodyTraversalCoreConfig.controllerOffsetMeters;
-const metaverseAuthoritativeGroundedJumpSupportVerticalSpeedTolerance = 0.5;
+function createMetaverseAuthoritativeGroundedBodyRuntimeConfig(
+  gameplayProfile: {
+    readonly groundedBodyTraversal: {
+      readonly accelerationCurveExponent: number;
+      readonly accelerationUnitsPerSecondSquared: number;
+      readonly airborneMovementDampingFactor: number;
+      readonly baseSpeedUnitsPerSecond: number;
+      readonly boostCurveExponent: number;
+      readonly boostMultiplier: number;
+      readonly capsuleHalfHeightMeters: number;
+      readonly capsuleRadiusMeters: number;
+      readonly controllerOffsetMeters: number;
+      readonly decelerationUnitsPerSecondSquared: number;
+      readonly dragCurveExponent: number;
+      readonly gravityUnitsPerSecond: number;
+      readonly jumpGroundContactGraceSeconds: number;
+      readonly jumpImpulseUnitsPerSecond: number;
+      readonly maxSlopeClimbAngleRadians: number;
+      readonly maxTurnSpeedRadiansPerSecond: number;
+      readonly minSlopeSlideAngleRadians: number;
+      readonly snapToGroundDistanceMeters: number;
+      readonly stepHeightMeters: number;
+      readonly stepWidthMeters: number;
+    };
+    readonly worldRadius: number;
+  },
+  spawnPosition: PhysicsVector3Snapshot
+): MetaverseAuthoritativeGroundedBodyConfig {
+  return Object.freeze({
+    ...gameplayProfile.groundedBodyTraversal,
+    spawnPosition,
+    worldRadius: gameplayProfile.worldRadius
+  } satisfies MetaverseAuthoritativeGroundedBodyConfig);
+}
 
 function normalizeNowMs(nowMs: number): number {
   if (!Number.isFinite(nowMs)) {
@@ -154,7 +177,27 @@ function createPhysicsVector3Snapshot(
   });
 }
 
-export class MetaverseAuthoritativeWorldRuntime {
+function createEnvironmentBodyWorldRuntimeState(
+  bodyRuntime: MetaverseAuthoritativeDynamicCuboidBodyRuntime,
+  environmentAssetId: string
+): MetaverseEnvironmentBodyWorldRuntimeState {
+  const snapshot = bodyRuntime.syncSnapshot();
+
+  return {
+    bodyRuntime,
+    environmentAssetId,
+    linearVelocityX: snapshot.linearVelocity.x,
+    linearVelocityY: snapshot.linearVelocity.y,
+    linearVelocityZ: snapshot.linearVelocity.z,
+    positionX: snapshot.position.x,
+    positionY: snapshot.position.y,
+    positionZ: snapshot.position.z,
+    yawRadians: snapshot.yawRadians
+  };
+}
+
+export class MetaverseAuthoritativeWorldRuntime
+  implements MetaverseAuthoritativeWorldRuntimeOwner {
   readonly #config: MetaverseAuthoritativeWorldRuntimeConfig;
   readonly #driverVehicleControlsByPlayerId = new Map<
     MetaversePlayerId,
@@ -165,11 +208,19 @@ export class MetaverseAuthoritativeWorldRuntime {
     MetaversePlayerId,
     MetaverseAuthoritativePlayerTraversalIntentRuntimeState
   >();
+  readonly #playerTraversalColliderOwnerByHandle = new Map<
+    RapierColliderHandle,
+    MetaversePlayerId
+  >();
   readonly #playerTraversalColliderHandles = new Set<RapierColliderHandle>();
   readonly #playersById = new Map<MetaversePlayerId, MetaversePlayerWorldRuntimeState>();
+  readonly #environmentBodiesByEnvironmentAssetId = new Map<
+    string,
+    MetaverseEnvironmentBodyWorldRuntimeState
+  >();
   readonly #surfaceState: MetaverseAuthoritativeWorldSurfaceState<
     MetaversePlayerWorldRuntimeState,
-    MetaverseVehicleWorldRuntimeState
+    MetaverseVehicleWorldRuntimeState | MetaverseEnvironmentBodyWorldRuntimeState
   >;
   readonly #vehicleDriveColliderHandles = new Set<RapierColliderHandle>();
   readonly #vehiclesById = new Map<MetaverseVehicleId, MetaverseVehicleWorldRuntimeState>();
@@ -219,11 +270,33 @@ export class MetaverseAuthoritativeWorldRuntime {
   readonly #commandIntake: MetaverseAuthoritativeWorldCommandIntake;
   readonly #readState: MetaverseAuthoritativeWorldReadState<
     MetaversePlayerWorldRuntimeState,
+    MetaverseEnvironmentBodyWorldRuntimeState,
     MetaverseVehicleWorldRuntimeState
   >;
   readonly #tickState: MetaverseAuthoritativeWorldTickState;
 
-  constructor(config: Partial<MetaverseAuthoritativeWorldRuntimeConfig> = {}) {
+  constructor(
+    config: Partial<MetaverseAuthoritativeWorldRuntimeConfig> = {},
+    bundleId = resolveDefaultAuthoritativeMetaverseMapBundleId()
+  ) {
+    const bundleInputs = createMetaverseAuthoritativeWorldBundleInputs(bundleId);
+    const groundedBodyConfig = Object.freeze({
+      ...bundleInputs.gameplayProfile.groundedSurfacePolicy
+    } satisfies MetaverseWorldSurfacePolicyConfig);
+    const vehicleSurfaceDriveConfig = Object.freeze({
+      ...bundleInputs.gameplayProfile.vehicleTraversal,
+      worldRadius: bundleInputs.gameplayProfile.worldRadius
+    } satisfies MetaverseAuthoritativeSurfaceTraversalConfig);
+    const swimTraversalConfig = Object.freeze({
+      ...bundleInputs.gameplayProfile.swimTraversal,
+      worldRadius: bundleInputs.gameplayProfile.worldRadius
+    } satisfies MetaverseAuthoritativeSurfaceTraversalConfig);
+    const groundedBodyRuntimeConfig =
+      createMetaverseAuthoritativeGroundedBodyRuntimeConfig(
+        bundleInputs.gameplayProfile,
+        bundleInputs.defaultSpawn.position
+      );
+
     this.#config = {
       playerInactivityTimeoutMs:
         config.playerInactivityTimeoutMs ??
@@ -232,6 +305,7 @@ export class MetaverseAuthoritativeWorldRuntime {
         config.tickIntervalMs ??
         metaverseAuthoritativeWorldRuntimeConfig.tickIntervalMs
     };
+    this.#bootEnvironmentBodies(bundleInputs.environmentBodySeedSnapshots);
     this.#playerLifecycleAuthority =
       new MetaverseAuthoritativePlayerLifecycleAuthority({
         driverVehicleControlsByPlayerId: this.#driverVehicleControlsByPlayerId,
@@ -239,66 +313,86 @@ export class MetaverseAuthoritativeWorldRuntime {
           this.#tickState.incrementSnapshotSequence();
         },
         playerInactivityTimeoutMs: Number(this.#config.playerInactivityTimeoutMs),
-        playerTraversalColliderHandles: this.#playerTraversalColliderHandles,
+        removePlayerTraversalColliderHandle: (handle) => {
+          this.#playerTraversalColliderHandles.delete(handle);
+          this.#playerTraversalColliderOwnerByHandle.delete(handle);
+        },
         playerTraversalIntentsByPlayerId: this.#playerTraversalIntentsByPlayerId,
         playersById: this.#playersById,
         vehiclesById: this.#vehiclesById
       });
     this.#surfaceState = new MetaverseAuthoritativeWorldSurfaceState({
-      groundedBodyConfig: metaverseAuthoritativeGroundedBodyConfig,
+      dynamicCollisionMeshSeedSnapshots:
+        bundleInputs.dynamicCollisionMeshSeedSnapshots,
+      dynamicSurfaceSeedSnapshots: bundleInputs.dynamicSurfaceSeedSnapshots,
+      groundedBodyConfig,
       physicsRuntime: this.#physicsRuntime,
       playerTraversalColliderHandles: this.#playerTraversalColliderHandles,
+      resolveDynamicSurfaceColliders:
+        bundleInputs.resolveDynamicSurfaceColliders,
+      staticCollisionMeshSeedSnapshots:
+        bundleInputs.staticCollisionMeshSeedSnapshots,
+      staticSurfaceColliders: bundleInputs.staticSurfaceColliders,
       syncPlayerTraversalBodyRuntimes: (playerRuntime, grounded) =>
         this.#playerStateSync.syncPlayerTraversalBodyRuntimes(
           playerRuntime,
           grounded
         ),
-      vehicleDriveColliderHandles: this.#vehicleDriveColliderHandles
+      vehicleDriveColliderHandles: this.#vehicleDriveColliderHandles,
+      waterRegionSnapshots: bundleInputs.waterRegionSnapshots
     });
     this.#vehicleRuntimeRegistry =
       new MetaverseAuthoritativeVehicleRuntimeRegistry({
         controllerOffsetMeters:
-          metaverseAuthoritativeCapsuleControllerOffsetMeters,
+          groundedBodyRuntimeConfig.controllerOffsetMeters,
         physicsRuntime: this.#physicsRuntime,
+        readSurfaceAsset: bundleInputs.readSurfaceAsset,
         syncVehicleDynamicSurfaceColliders: (vehicleRuntime) =>
-          this.#surfaceState.syncVehicleDynamicSurfaceColliders(vehicleRuntime),
+          this.#surfaceState.syncDynamicSurfaceColliders(vehicleRuntime),
         vehicleDriveColliderHandles: this.#vehicleDriveColliderHandles,
-        vehicleSurfaceWorldRadius:
-          metaverseAuthoritativeVehicleSurfaceDriveConfig.worldRadius,
+        vehicleSurfaceWorldRadius: vehicleSurfaceDriveConfig.worldRadius,
         vehiclesById: this.#vehiclesById
       });
     this.#playerStateSync = new MetaverseAuthoritativePlayerStateSync({
-      addPlayerTraversalColliderHandle: (handle) => {
+      addPlayerTraversalColliderHandle: (playerId, handle) => {
         this.#playerTraversalColliderHandles.add(handle);
+        this.#playerTraversalColliderOwnerByHandle.set(handle, playerId);
       },
-      createGroundedBodyRuntime: () =>
-        new MetaverseAuthoritativeGroundedBodyRuntime(
-          metaverseAuthoritativeGroundedBodyRuntimeConfig,
+      createGroundedBodyRuntime: () => {
+        const groundedBodyRuntime = new MetaverseAuthoritativeGroundedBodyRuntime(
+          groundedBodyRuntimeConfig,
           this.#physicsRuntime
-        ),
+        );
+
+        groundedBodyRuntime.setApplyImpulsesToDynamicBodies(
+          this.#environmentBodiesByEnvironmentAssetId.size > 0
+        );
+
+        return groundedBodyRuntime;
+      },
       createSwimBodyRuntime: () =>
         new MetaverseAuthoritativeSurfaceDriveRuntime(
           {
             controllerOffsetMeters:
-              metaverseAuthoritativeCapsuleControllerOffsetMeters,
+              groundedBodyRuntimeConfig.controllerOffsetMeters,
             shape: {
               halfHeightMeters:
-                metaverseAuthoritativeGroundedBodyConfig.capsuleHalfHeightMeters,
+                groundedBodyConfig.capsuleHalfHeightMeters,
               kind: "capsule",
               radiusMeters:
-                metaverseAuthoritativeGroundedBodyConfig.capsuleRadiusMeters
+                groundedBodyConfig.capsuleRadiusMeters
             },
             spawnPosition: createPhysicsVector3Snapshot(
-              metaverseWorldGroundedSpawnPosition.x,
-              metaverseWorldGroundedSpawnPosition.y,
-              metaverseWorldGroundedSpawnPosition.z
+              bundleInputs.defaultSpawn.position.x,
+              bundleInputs.defaultSpawn.position.y,
+              bundleInputs.defaultSpawn.position.z
             ),
-            spawnYawRadians: metaverseWorldInitialYawRadians,
-            worldRadius: metaverseAuthoritativeSwimTraversalConfig.worldRadius
+            spawnYawRadians: bundleInputs.defaultSpawn.yawRadians,
+            worldRadius: swimTraversalConfig.worldRadius
           },
           this.#physicsRuntime
       ),
-      initialYawRadians: metaverseWorldInitialYawRadians,
+      initialYawRadians: bundleInputs.defaultSpawn.yawRadians,
       readCurrentTick: () => this.#tickState.currentTick,
       resolvePlayerActiveTraversalAction: (playerRuntime) =>
         resolvePlayerActiveTraversalAction(playerRuntime)
@@ -320,6 +414,16 @@ export class MetaverseAuthoritativeWorldRuntime {
           this.#tickState.incrementSnapshotSequence();
         },
         playersById: this.#playersById,
+        readMountedEntryAuthoring: (environmentAssetId, entryId) =>
+          this.#vehicleRuntimeRegistry.readMountedEntryAuthoring(
+            environmentAssetId,
+            entryId
+          ),
+        readMountedSeatAuthoring: (environmentAssetId, seatId) =>
+          this.#vehicleRuntimeRegistry.readMountedSeatAuthoring(
+            environmentAssetId,
+            seatId
+          ),
         resolveAuthoritativeSurfaceColliders: () =>
           this.#surfaceState.resolveAuthoritativeSurfaceColliders(),
         resolveVehicleId: (environmentAssetId) =>
@@ -450,34 +554,42 @@ export class MetaverseAuthoritativeWorldRuntime {
     this.#unmountedPlayerSimulation =
       new MetaverseAuthoritativeUnmountedPlayerSimulation({
         createWaterborneTraversalColliderPredicate: (
+          playerRuntime,
           excludedOwnerEnvironmentAssetId,
           excludedColliders
         ) =>
-          this.#surfaceState.createWaterborneTraversalColliderPredicate(
+          this.#createPlayerWaterborneTraversalColliderPredicate(
+            playerRuntime,
             excludedOwnerEnvironmentAssetId,
             excludedColliders
           ),
-        groundedBodyConfig: metaverseAuthoritativeGroundedBodyConfig,
+        createGroundedTraversalColliderPredicate: (
+          playerRuntime,
+          excludedColliders
+        ) =>
+          this.#createPlayerGroundedTraversalColliderPredicate(
+            playerRuntime,
+            excludedColliders
+          ),
+        groundedBodyConfig,
         groundedBodyRuntimeConfig: {
           controllerOffsetMeters:
-            metaverseAuthoritativeGroundedBodyRuntimeConfig.controllerOffsetMeters,
+            groundedBodyRuntimeConfig.controllerOffsetMeters,
           maxTurnSpeedRadiansPerSecond:
-            metaverseAuthoritativeGroundedBodyRuntimeConfig.maxTurnSpeedRadiansPerSecond,
+            groundedBodyRuntimeConfig.maxTurnSpeedRadiansPerSecond,
           snapToGroundDistanceMeters:
-            metaverseAuthoritativeGroundedBodyRuntimeConfig.snapToGroundDistanceMeters,
-          stepHeightMeters: metaverseAuthoritativeGroundedBodyConfig.stepHeightMeters
+            groundedBodyRuntimeConfig.snapToGroundDistanceMeters,
+          stepHeightMeters: groundedBodyConfig.stepHeightMeters
         },
         groundedJumpSupportVerticalSpeedTolerance:
-          metaverseAuthoritativeGroundedJumpSupportVerticalSpeedTolerance,
+          bundleInputs.gameplayProfile.groundedJumpSupportVerticalSpeedTolerance,
         playerStateSync: this.#playerStateSync,
         playerTraversalIntentsByPlayerId: this.#playerTraversalIntentsByPlayerId,
         playersById: this.#playersById,
         resolveAuthoritativeSurfaceColliders: () =>
           this.#surfaceState.resolveAuthoritativeSurfaceColliders(),
-        shouldConsiderTraversalCollider: (collider) =>
-          this.#surfaceState.shouldConsiderTraversalCollider(collider),
-        swimTraversalConfig: metaverseAuthoritativeSwimTraversalConfig,
-        waterRegionSnapshots: metaverseAuthoritativeWaterRegionSnapshots
+        swimTraversalConfig,
+        waterRegionSnapshots: bundleInputs.waterRegionSnapshots
       });
     this.#vehicleDriveAuthority = new MetaverseAuthoritativeVehicleDriveAuthority({
       createWaterborneTraversalColliderPredicate: (
@@ -488,6 +600,9 @@ export class MetaverseAuthoritativeWorldRuntime {
         ),
       driverVehicleControlsByPlayerId: this.#driverVehicleControlsByPlayerId,
       playersById: this.#playersById,
+      resolveAuthoritativeSurfaceColliders: () =>
+        this.#surfaceState.resolveAuthoritativeSurfaceColliders(),
+      surfacePolicyConfig: groundedBodyConfig,
       syncMountedPlayerPoseFromVehicle: (playerRuntime, vehicleRuntime, nowMs) =>
         this.#playerStateSync.syncMountedPlayerPoseFromVehicle(
           playerRuntime,
@@ -495,10 +610,10 @@ export class MetaverseAuthoritativeWorldRuntime {
           nowMs
         ),
       syncVehicleDynamicSurfaceColliders: (vehicleRuntime) =>
-        this.#surfaceState.syncVehicleDynamicSurfaceColliders(vehicleRuntime),
-      vehicleSurfaceTraversalConfig:
-        metaverseAuthoritativeVehicleSurfaceDriveConfig,
-      vehiclesById: this.#vehiclesById
+        this.#surfaceState.syncDynamicSurfaceColliders(vehicleRuntime),
+      vehicleSurfaceTraversalConfig: vehicleSurfaceDriveConfig,
+      vehiclesById: this.#vehiclesById,
+      waterRegionSnapshots: bundleInputs.waterRegionSnapshots
     });
     this.#tickState = new MetaverseAuthoritativeWorldTickState({
       physicsRuntime: this.#physicsRuntime,
@@ -519,6 +634,8 @@ export class MetaverseAuthoritativeWorldRuntime {
         )
     });
     this.#readState = new MetaverseAuthoritativeWorldReadState({
+      environmentBodiesByEnvironmentAssetId:
+        this.#environmentBodiesByEnvironmentAssetId,
       playersById: this.#playersById,
       readCurrentTick: () => this.#tickState.currentTick,
       readLastAdvancedAtMs: () => this.#tickState.lastAdvancedAtMs,
@@ -541,6 +658,7 @@ export class MetaverseAuthoritativeWorldRuntime {
     this.#physicsRuntime.stepSimulation(
       Number(this.#config.tickIntervalMs) / 1_000
     );
+    this.#syncEnvironmentBodyWorldRuntimeStates();
   }
 
   get tickIntervalMs(): number {
@@ -572,6 +690,7 @@ export class MetaverseAuthoritativeWorldRuntime {
     const normalizedNowMs = normalizeNowMs(nowMs);
 
     this.#tickState.advanceToTime(normalizedNowMs);
+    this.#syncEnvironmentBodyWorldRuntimeStates();
     this.#pruneInactivePlayers(normalizedNowMs);
   }
 
@@ -596,8 +715,143 @@ export class MetaverseAuthoritativeWorldRuntime {
     return this.#commandIntake.acceptWorldCommand(command, nowMs);
   }
 
+  #createPlayerGroundedTraversalColliderPredicate(
+    playerRuntime: MetaversePlayerWorldRuntimeState,
+    excludedColliders: readonly RapierColliderHandle[] = Object.freeze([])
+  ): RapierQueryFilterPredicate {
+    const excludedColliderSet = new Set<RapierColliderHandle>([
+      playerRuntime.groundedBodyRuntime.colliderHandle,
+      playerRuntime.swimBodyRuntime.colliderHandle,
+      ...this.#vehicleDriveColliderHandles,
+      ...excludedColliders
+    ]);
+
+    return (collider) => {
+      if (excludedColliderSet.has(collider)) {
+        return false;
+      }
+
+      const ownerPlayerId =
+        this.#playerTraversalColliderOwnerByHandle.get(collider);
+
+      if (ownerPlayerId === undefined) {
+        return true;
+      }
+
+      const ownerPlayerRuntime = this.#playersById.get(ownerPlayerId);
+
+      return (
+        ownerPlayerRuntime !== undefined &&
+        ownerPlayerRuntime.playerId !== playerRuntime.playerId &&
+        shouldTreatMetaversePlayerPoseAsTraversalBlocker(
+          ownerPlayerRuntime.locomotionMode,
+          ownerPlayerRuntime.mountedOccupancy
+        )
+      );
+    };
+  }
+
+  #createPlayerWaterborneTraversalColliderPredicate(
+    playerRuntime: MetaversePlayerWorldRuntimeState,
+    excludedOwnerEnvironmentAssetId: string | null = null,
+    excludedColliders: readonly RapierColliderHandle[] = Object.freeze([])
+  ): RapierQueryFilterPredicate {
+    const basePredicate = this.#surfaceState.createWaterborneTraversalColliderPredicate(
+      excludedOwnerEnvironmentAssetId,
+      [
+        playerRuntime.groundedBodyRuntime.colliderHandle,
+        playerRuntime.swimBodyRuntime.colliderHandle,
+        ...excludedColliders
+      ]
+    );
+
+    return (collider) => {
+      if (!basePredicate(collider)) {
+        return false;
+      }
+
+      const ownerPlayerId =
+        this.#playerTraversalColliderOwnerByHandle.get(collider);
+
+      if (ownerPlayerId === undefined) {
+        return true;
+      }
+
+      const ownerPlayerRuntime = this.#playersById.get(ownerPlayerId);
+
+      return (
+        ownerPlayerRuntime !== undefined &&
+        ownerPlayerRuntime.playerId !== playerRuntime.playerId &&
+        shouldTreatMetaversePlayerPoseAsTraversalBlocker(
+          ownerPlayerRuntime.locomotionMode,
+          ownerPlayerRuntime.mountedOccupancy
+        )
+      );
+    };
+  }
+
   #pruneInactivePlayers(nowMs: number): void {
     this.#playerLifecycleAuthority.pruneInactivePlayers(nowMs);
+  }
+
+  #bootEnvironmentBodies(
+    environmentBodySeedSnapshots: readonly {
+      readonly colliderCenter: PhysicsVector3Snapshot;
+      readonly dynamicBody: {
+        readonly additionalMass: number;
+        readonly angularDamping: number;
+        readonly gravityScale: number;
+        readonly linearDamping: number;
+        readonly lockRotations: boolean;
+      };
+      readonly environmentAssetId: string;
+      readonly halfExtents: PhysicsVector3Snapshot;
+      readonly position: PhysicsVector3Snapshot;
+      readonly yawRadians: number;
+    }[]
+  ): void {
+    for (const environmentBodySeedSnapshot of environmentBodySeedSnapshots) {
+      const bodyRuntime = new MetaverseAuthoritativeDynamicCuboidBodyRuntime(
+        {
+          additionalMass: environmentBodySeedSnapshot.dynamicBody.additionalMass,
+          angularDamping:
+            environmentBodySeedSnapshot.dynamicBody.angularDamping,
+          colliderCenter: environmentBodySeedSnapshot.colliderCenter,
+          gravityScale: environmentBodySeedSnapshot.dynamicBody.gravityScale,
+          halfExtents: environmentBodySeedSnapshot.halfExtents,
+          linearDamping:
+            environmentBodySeedSnapshot.dynamicBody.linearDamping,
+          lockRotations:
+            environmentBodySeedSnapshot.dynamicBody.lockRotations,
+          spawnPosition: environmentBodySeedSnapshot.position,
+          spawnYawRadians: environmentBodySeedSnapshot.yawRadians
+        },
+        this.#physicsRuntime
+      );
+
+      this.#environmentBodiesByEnvironmentAssetId.set(
+        environmentBodySeedSnapshot.environmentAssetId,
+        createEnvironmentBodyWorldRuntimeState(
+          bodyRuntime,
+          environmentBodySeedSnapshot.environmentAssetId
+        )
+      );
+    }
+  }
+
+  #syncEnvironmentBodyWorldRuntimeStates(): void {
+    for (const environmentBodyRuntime of this.#environmentBodiesByEnvironmentAssetId.values()) {
+      const snapshot = environmentBodyRuntime.bodyRuntime.syncSnapshot();
+
+      environmentBodyRuntime.linearVelocityX = snapshot.linearVelocity.x;
+      environmentBodyRuntime.linearVelocityY = snapshot.linearVelocity.y;
+      environmentBodyRuntime.linearVelocityZ = snapshot.linearVelocity.z;
+      environmentBodyRuntime.positionX = snapshot.position.x;
+      environmentBodyRuntime.positionY = snapshot.position.y;
+      environmentBodyRuntime.positionZ = snapshot.position.z;
+      environmentBodyRuntime.yawRadians = snapshot.yawRadians;
+      this.#surfaceState.syncDynamicSurfaceColliders(environmentBodyRuntime);
+    }
   }
 
 }

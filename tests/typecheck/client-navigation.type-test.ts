@@ -7,8 +7,8 @@ import {
 import type { AssertTrue, IsAssignable, IsEqual } from "./type-assertions";
 
 type ExpectedNavigationStepId =
-  | "login"
   | "main-menu"
+  | "tool"
   | "permissions"
   | "calibration"
   | "metaverse"
@@ -27,13 +27,15 @@ type NavigationFlowMatchesPublicContract = AssertTrue<
 type FlowStepIdsMatchUnion = AssertTrue<
   IsEqual<(typeof navigationFlow.steps)[number]["id"], NavigationStepId>
 >;
-type MainMenuRequiresLogin = AssertTrue<
+type MainMenuIsEntryStep = AssertTrue<
   IsEqual<
     Extract<
       (typeof navigationFlow.steps)[number],
       { readonly id: "main-menu" }
-    >["requiresPrevious"],
-    readonly ["login"]
+    > extends { readonly requiresPrevious: readonly NavigationStepId[] }
+      ? true
+      : false,
+    false
   >
 >;
 type PermissionsRequireMainMenu = AssertTrue<
@@ -75,7 +77,7 @@ export type ClientNavigationTypeTests =
   | NavigationStepCatalogMatches
   | NavigationFlowMatchesPublicContract
   | FlowStepIdsMatchUnion
-  | MainMenuRequiresLogin
+  | MainMenuIsEntryStep
   | PermissionsRequireMainMenu
   | CalibrationRequiresPermissions
   | MetaverseRequiresMainMenu

@@ -153,9 +153,11 @@ test("resolveMountedEnvironmentAnchorSnapshot projects the selected seat anchor 
 
   const environmentAnchor = new Group();
   const seatAnchor = new Group();
+  const passengerSeatAnchor = new Group();
   seatAnchor.position.set(1.25, 0.9, -0.4);
   seatAnchor.rotation.y = Math.PI * 0.25;
-  environmentAnchor.add(seatAnchor);
+  passengerSeatAnchor.position.set(-0.8, 0.9, 0.2);
+  environmentAnchor.add(seatAnchor, passengerSeatAnchor);
   environmentAnchor.updateMatrixWorld(true);
 
   const environmentRuntime = {
@@ -171,6 +173,15 @@ test("resolveMountedEnvironmentAnchorSnapshot projects the selected seat anchor 
       {
         anchorGroup: seatAnchor,
         seat: createSeatConfig()
+      },
+      {
+        anchorGroup: passengerSeatAnchor,
+        seat: createSeatConfig({
+          directEntryEnabled: false,
+          label: "Starboard bench",
+          seatId: "starboard-bench-seat",
+          seatRole: "passenger"
+        })
       }
     ],
     traversalAffordance: "mount"
@@ -190,6 +201,26 @@ test("resolveMountedEnvironmentAnchorSnapshot projects the selected seat anchor 
       seatId: "driver-seat"
     }
   );
+
+  assert.deepEqual(mountedEnvironment.directSeatTargets, [
+    {
+      label: "Take helm",
+      seatId: "driver-seat",
+      seatRole: "driver"
+    }
+  ]);
+  assert.deepEqual(mountedEnvironment.seatTargets, [
+    {
+      label: "Take helm",
+      seatId: "driver-seat",
+      seatRole: "driver"
+    },
+    {
+      label: "Starboard bench",
+      seatId: "starboard-bench-seat",
+      seatRole: "passenger"
+    }
+  ]);
 
   const expectedAnchorPosition = new Vector3();
   const expectedAnchorQuaternion = new Quaternion();
@@ -237,5 +268,70 @@ test("resolveMountedEnvironmentAnchorSnapshot projects the selected seat anchor 
     Math.atan2(expectedForward.x, -expectedForward.z),
     1e-6,
     "mounted anchor yaw"
+  );
+});
+
+test("resolveMetaverseSceneMountedSelectionSnapshot reuses mounted seat selection resolution on one render-local path", async () => {
+  const [{ Group }, mountSnapshots] = await Promise.all([
+    import("three/webgpu"),
+    clientLoader.load(
+      "/src/metaverse/render/mounts/metaverse-scene-mount-snapshots.ts"
+    )
+  ]);
+  const environmentAnchor = new Group();
+  const driverSeatAnchor = new Group();
+  const passengerSeatAnchor = new Group();
+
+  environmentAnchor.add(driverSeatAnchor, passengerSeatAnchor);
+
+  const environmentRuntime = {
+    anchorGroup: environmentAnchor,
+    collider: {
+      center: { x: 0, y: 0, z: 0 },
+      size: { x: 6, y: 3, z: 4 }
+    },
+    entries: null,
+    environmentAssetId: "skiff-v1",
+    label: "Skiff",
+    seats: [
+      {
+        anchorGroup: driverSeatAnchor,
+        seat: createSeatConfig()
+      },
+      {
+        anchorGroup: passengerSeatAnchor,
+        seat: createSeatConfig({
+          directEntryEnabled: false,
+          label: "Starboard bench",
+          seatId: "starboard-bench-seat",
+          seatRole: "passenger"
+        })
+      }
+    ],
+    traversalAffordance: "mount"
+  };
+
+  const mountedSelectionSnapshot =
+    mountSnapshots.resolveMetaverseSceneMountedSelectionSnapshot(
+      Object.freeze({
+        environmentAssetId: "skiff-v1",
+        entryId: null,
+        occupancyKind: "seat",
+        occupantRole: "passenger",
+        seatId: "starboard-bench-seat"
+      }),
+      (environmentAssetId) =>
+        environmentAssetId === "skiff-v1" ? environmentRuntime : null
+    );
+
+  assert.ok(mountedSelectionSnapshot !== null);
+  assert.equal(mountedSelectionSnapshot.environmentAsset, environmentRuntime);
+  assert.equal(
+    mountedSelectionSnapshot.occupiedSelection.anchorGroup,
+    passengerSeatAnchor
+  );
+  assert.equal(
+    mountedSelectionSnapshot.occupiedSelection.occupantLabel,
+    "Starboard bench"
   );
 });

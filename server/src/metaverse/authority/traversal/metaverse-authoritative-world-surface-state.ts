@@ -7,6 +7,7 @@ import {
   type MetaverseUnmountedTraversalStateSnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 import {
+  createMetaverseWorldPlacedSurfaceTriMeshSupportSnapshot,
   type MetaverseWorldSurfacePolicyConfig
 } from "@webgpu-metaverse/shared/metaverse/world";
 import type {
@@ -14,11 +15,10 @@ import type {
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import {
-  metaverseAuthoritativeDynamicSurfaceSeedSnapshots,
-  metaverseAuthoritativeStaticSurfaceColliders,
-  metaverseAuthoritativeWaterRegionSnapshots,
+  type MetaverseAuthoritativeCollisionMeshSeedSnapshot,
+  type MetaverseAuthoritativeDynamicSurfaceSeedSnapshot,
   type MetaverseAuthoritativeSurfaceColliderSnapshot
-} from "../../config/metaverse-authoritative-world-surface.js";
+} from "../../world/map-bundles/metaverse-authoritative-world-bundle-inputs.js";
 import { MetaverseAuthoritativeDynamicSurfaceColliderRuntime } from "../../classes/metaverse-authoritative-dynamic-surface-collider-runtime.js";
 import { MetaverseAuthoritativeRapierPhysicsRuntime } from "../../classes/metaverse-authoritative-rapier-physics-runtime.js";
 import type {
@@ -37,7 +37,7 @@ interface MetaverseAuthoritativeSurfaceStatePlayerRuntime {
   yawRadians: number;
 }
 
-interface MetaverseAuthoritativeSurfaceStateVehicleRuntime {
+interface MetaverseAuthoritativeDynamicSurfaceRuntime {
   readonly environmentAssetId: string;
   positionX: number;
   positionY: number;
@@ -48,14 +48,35 @@ interface MetaverseAuthoritativeSurfaceStateVehicleRuntime {
 interface MetaverseAuthoritativeWorldSurfaceStateDependencies<
   PlayerRuntime extends MetaverseAuthoritativeSurfaceStatePlayerRuntime
 > {
+  readonly dynamicCollisionMeshSeedSnapshots:
+    readonly MetaverseAuthoritativeCollisionMeshSeedSnapshot[];
+  readonly dynamicSurfaceSeedSnapshots:
+    readonly MetaverseAuthoritativeDynamicSurfaceSeedSnapshot[];
   readonly groundedBodyConfig: MetaverseWorldSurfacePolicyConfig;
   readonly physicsRuntime: MetaverseAuthoritativeRapierPhysicsRuntime;
   readonly playerTraversalColliderHandles: ReadonlySet<RapierColliderHandle>;
+  readonly resolveDynamicSurfaceColliders: (
+    environmentAssetId: string,
+    poseSnapshot: {
+      readonly position: PhysicsVector3Snapshot;
+      readonly yawRadians: number;
+    }
+  ) => readonly MetaverseAuthoritativeSurfaceColliderSnapshot[];
+  readonly staticSurfaceColliders:
+    readonly MetaverseAuthoritativeSurfaceColliderSnapshot[];
+  readonly staticCollisionMeshSeedSnapshots:
+    readonly MetaverseAuthoritativeCollisionMeshSeedSnapshot[];
   readonly syncPlayerTraversalBodyRuntimes: (
     playerRuntime: PlayerRuntime,
     grounded: boolean
   ) => void;
   readonly vehicleDriveColliderHandles: ReadonlySet<RapierColliderHandle>;
+  readonly waterRegionSnapshots: readonly {
+    readonly halfExtents: PhysicsVector3Snapshot;
+    readonly rotationYRadians: number;
+    readonly translation: PhysicsVector3Snapshot;
+    readonly waterRegionId: string;
+  }[];
 }
 
 function createPhysicsVector3Snapshot(
@@ -70,16 +91,131 @@ function createPhysicsVector3Snapshot(
   });
 }
 
+function createYawQuaternion(yawRadians: number) {
+  const halfAngle = yawRadians * 0.5;
+
+  return Object.freeze({
+    x: 0,
+    y: Math.sin(halfAngle),
+    z: 0,
+    w: Math.cos(halfAngle)
+  });
+}
+
+class MetaverseAuthoritativeDynamicSurfaceCollisionMeshRuntime {
+  readonly #environmentAssetId: string;
+  readonly #physicsRuntime: MetaverseAuthoritativeRapierPhysicsRuntime;
+  readonly #triMeshes: MetaverseAuthoritativeCollisionMeshSeedSnapshot["triMeshes"];
+
+  #colliders: RapierColliderHandle[] = [];
+  #surfaceColliderSnapshots:
+    readonly MetaverseAuthoritativeSurfaceColliderSnapshot[] = Object.freeze([]);
+
+  constructor(
+    seedSnapshot: MetaverseAuthoritativeCollisionMeshSeedSnapshot,
+    physicsRuntime: MetaverseAuthoritativeRapierPhysicsRuntime
+  ) {
+    this.#environmentAssetId = seedSnapshot.environmentAssetId;
+    this.#triMeshes = seedSnapshot.triMeshes;
+    this.#physicsRuntime = physicsRuntime;
+  }
+
+  get colliders(): readonly RapierColliderHandle[] {
+    return this.#colliders;
+  }
+
+  get environmentAssetId(): string {
+    return this.#environmentAssetId;
+  }
+
+  get surfaceColliderSnapshots():
+    readonly MetaverseAuthoritativeSurfaceColliderSnapshot[] {
+    return this.#surfaceColliderSnapshots;
+  }
+
+  syncPose(poseSnapshot: {
+    readonly position: PhysicsVector3Snapshot;
+    readonly yawRadians: number;
+  }): void {
+    if (this.#triMeshes.length === 0) {
+      this.dispose();
+      return;
+    }
+
+    const rotation = createYawQuaternion(poseSnapshot.yawRadians);
+    this.#surfaceColliderSnapshots = Object.freeze(
+      this.#triMeshes.flatMap((triMesh) => {
+        const supportSnapshot =
+          createMetaverseWorldPlacedSurfaceTriMeshSupportSnapshot(
+            this.#environmentAssetId,
+            triMesh,
+            {
+              position: poseSnapshot.position,
+              yawRadians: poseSnapshot.yawRadians
+            }
+          );
+
+        return supportSnapshot === null ? [] : [supportSnapshot];
+      })
+    );
+
+    if (this.#colliders.length === 0) {
+      this.#colliders = this.#triMeshes.map((triMesh) =>
+        this.#physicsRuntime.createTriMeshCollider(
+          triMesh.vertices,
+          triMesh.indices,
+          poseSnapshot.position,
+          rotation
+        )
+      );
+
+      return;
+    }
+
+    if (this.#colliders.length !== this.#triMeshes.length) {
+      throw new Error(
+        `Metaverse authoritative dynamic collision mesh count drifted for ${this.#environmentAssetId}.`
+      );
+    }
+
+    for (const collider of this.#colliders) {
+      collider.setTranslation(
+        this.#physicsRuntime.createVector3(
+          poseSnapshot.position.x,
+          poseSnapshot.position.y,
+          poseSnapshot.position.z
+        )
+      );
+      collider.setRotation(rotation);
+    }
+  }
+
+  dispose(): void {
+    for (const collider of this.#colliders) {
+      this.#physicsRuntime.removeCollider(collider);
+    }
+
+    this.#colliders = [];
+    this.#surfaceColliderSnapshots = Object.freeze([]);
+  }
+}
+
 export class MetaverseAuthoritativeWorldSurfaceState<
   PlayerRuntime extends MetaverseAuthoritativeSurfaceStatePlayerRuntime,
-  VehicleRuntime extends MetaverseAuthoritativeSurfaceStateVehicleRuntime
+  DynamicSurfaceRuntime extends MetaverseAuthoritativeDynamicSurfaceRuntime
 > {
   readonly #dependencies:
     MetaverseAuthoritativeWorldSurfaceStateDependencies<PlayerRuntime>;
+  readonly #dynamicSurfaceCollisionMeshRuntimesByEnvironmentAssetId = new Map<
+    string,
+    MetaverseAuthoritativeDynamicSurfaceCollisionMeshRuntime
+  >();
   readonly #dynamicSurfaceColliderRuntimesByEnvironmentAssetId = new Map<
     string,
     MetaverseAuthoritativeDynamicSurfaceColliderRuntime
   >();
+  readonly #staticSurfaceColliderSnapshots:
+    MetaverseAuthoritativeSurfaceColliderSnapshot[];
   readonly #surfaceColliderMetadataByHandle = new Map<
     RapierColliderHandle,
     ReturnType<typeof createMetaverseTraversalColliderMetadataSnapshot>
@@ -89,8 +225,11 @@ export class MetaverseAuthoritativeWorldSurfaceState<
     dependencies: MetaverseAuthoritativeWorldSurfaceStateDependencies<PlayerRuntime>
   ) {
     this.#dependencies = dependencies;
+    this.#staticSurfaceColliderSnapshots = [
+      ...this.#dependencies.staticSurfaceColliders
+    ];
 
-    for (const staticSurfaceCollider of metaverseAuthoritativeStaticSurfaceColliders) {
+    for (const staticSurfaceCollider of this.#dependencies.staticSurfaceColliders) {
       const collider = this.#dependencies.physicsRuntime.createCuboidCollider(
         staticSurfaceCollider.halfExtents,
         staticSurfaceCollider.translation,
@@ -103,7 +242,9 @@ export class MetaverseAuthoritativeWorldSurfaceState<
       );
     }
 
+    this.#bootStaticCollisionMeshColliders();
     this.#bootDynamicSurfaceColliderRuntimes();
+    this.#bootDynamicCollisionMeshRuntimes();
   }
 
   createWaterborneTraversalColliderPredicate(
@@ -111,7 +252,6 @@ export class MetaverseAuthoritativeWorldSurfaceState<
     excludedColliders: readonly RapierColliderHandle[] = Object.freeze([])
   ): RapierQueryFilterPredicate {
     const excludedColliderSet = new Set<RapierColliderHandle>([
-      ...this.#dependencies.playerTraversalColliderHandles,
       ...this.#dependencies.vehicleDriveColliderHandles,
       ...excludedColliders
     ]);
@@ -131,7 +271,7 @@ export class MetaverseAuthoritativeWorldSurfaceState<
   resolveAuthoritativeSurfaceColliders():
     readonly MetaverseAuthoritativeSurfaceColliderSnapshot[] {
     const surfaceColliders: MetaverseAuthoritativeSurfaceColliderSnapshot[] = [
-      ...metaverseAuthoritativeStaticSurfaceColliders
+      ...this.#staticSurfaceColliderSnapshots
     ];
 
     for (const colliderRuntime of this
@@ -139,14 +279,16 @@ export class MetaverseAuthoritativeWorldSurfaceState<
       surfaceColliders.push(...colliderRuntime.surfaceColliderSnapshots);
     }
 
+    for (const collisionMeshRuntime of this
+      .#dynamicSurfaceCollisionMeshRuntimesByEnvironmentAssetId.values()) {
+      surfaceColliders.push(...collisionMeshRuntime.surfaceColliderSnapshots);
+    }
+
     return surfaceColliders;
   }
 
   shouldConsiderTraversalCollider(collider: RapierColliderHandle): boolean {
-    return (
-      !this.#dependencies.playerTraversalColliderHandles.has(collider) &&
-      !this.#dependencies.vehicleDriveColliderHandles.has(collider)
-    );
+    return !this.#dependencies.vehicleDriveColliderHandles.has(collider);
   }
 
   syncUnmountedPlayerToAuthoritativeSurface(
@@ -164,7 +306,7 @@ export class MetaverseAuthoritativeWorldSurfaceState<
               excludedOwnerEnvironmentAssetId
           );
     const waterlineHeightMeters = resolveMetaverseTraversalWaterlineHeightMeters(
-      metaverseAuthoritativeWaterRegionSnapshots,
+      this.#dependencies.waterRegionSnapshots,
       {
         x: playerRuntime.positionX,
         y: playerRuntime.positionY,
@@ -174,7 +316,7 @@ export class MetaverseAuthoritativeWorldSurfaceState<
     const locomotionDecision = resolveMetaverseTraversalStateFromWorldAffordances(
       this.#dependencies.groundedBodyConfig,
       filteredSurfaceColliders,
-      metaverseAuthoritativeWaterRegionSnapshots,
+      this.#dependencies.waterRegionSnapshots,
       {
         x: playerRuntime.positionX,
         y: playerRuntime.positionY,
@@ -212,33 +354,90 @@ export class MetaverseAuthoritativeWorldSurfaceState<
     this.#dependencies.syncPlayerTraversalBodyRuntimes(playerRuntime, false);
   }
 
-  syncVehicleDynamicSurfaceColliders(vehicleRuntime: VehicleRuntime): void {
+  syncDynamicSurfaceColliders(dynamicSurfaceRuntime: DynamicSurfaceRuntime): void {
     const colliderRuntime =
       this.#dynamicSurfaceColliderRuntimesByEnvironmentAssetId.get(
-        vehicleRuntime.environmentAssetId
+        dynamicSurfaceRuntime.environmentAssetId
       );
 
     if (colliderRuntime === undefined) {
-      return;
+      const collisionMeshRuntime =
+        this.#dynamicSurfaceCollisionMeshRuntimesByEnvironmentAssetId.get(
+          dynamicSurfaceRuntime.environmentAssetId
+        );
+
+      if (collisionMeshRuntime === undefined) {
+        return;
+      }
     }
 
-    colliderRuntime.syncPose({
+    const poseSnapshot = Object.freeze({
       position: createPhysicsVector3Snapshot(
-        vehicleRuntime.positionX,
-        vehicleRuntime.positionY,
-        vehicleRuntime.positionZ
+        dynamicSurfaceRuntime.positionX,
+        dynamicSurfaceRuntime.positionY,
+        dynamicSurfaceRuntime.positionZ
       ),
-      yawRadians: vehicleRuntime.yawRadians
+      yawRadians: dynamicSurfaceRuntime.yawRadians
     });
-    this.#syncDynamicSurfaceColliderMetadata(colliderRuntime);
+
+    colliderRuntime?.syncPose(poseSnapshot);
+
+    if (colliderRuntime !== undefined) {
+      this.#syncDynamicSurfaceColliderMetadata(colliderRuntime);
+    }
+
+    const collisionMeshRuntime =
+      this.#dynamicSurfaceCollisionMeshRuntimesByEnvironmentAssetId.get(
+        dynamicSurfaceRuntime.environmentAssetId
+      );
+
+    collisionMeshRuntime?.syncPose(poseSnapshot);
+
+    if (collisionMeshRuntime !== undefined) {
+      this.#syncDynamicCollisionMeshMetadata(collisionMeshRuntime);
+    }
+  }
+
+  #bootStaticCollisionMeshColliders(): void {
+    for (const seedSnapshot of this.#dependencies.staticCollisionMeshSeedSnapshots) {
+      const rotation = createYawQuaternion(seedSnapshot.yawRadians);
+
+      for (const triMesh of seedSnapshot.triMeshes) {
+        const collider = this.#dependencies.physicsRuntime.createTriMeshCollider(
+          triMesh.vertices,
+          triMesh.indices,
+          seedSnapshot.position,
+          rotation
+        );
+
+        this.#surfaceColliderMetadataByHandle.set(collider, {
+          ownerEnvironmentAssetId: seedSnapshot.environmentAssetId,
+          traversalAffordance: "blocker"
+        });
+        const supportSnapshot =
+          createMetaverseWorldPlacedSurfaceTriMeshSupportSnapshot(
+            seedSnapshot.environmentAssetId,
+            triMesh,
+            {
+              position: seedSnapshot.position,
+              yawRadians: seedSnapshot.yawRadians
+            }
+          );
+
+        if (supportSnapshot !== null) {
+          this.#staticSurfaceColliderSnapshots.push(supportSnapshot);
+        }
+      }
+    }
   }
 
   #bootDynamicSurfaceColliderRuntimes(): void {
-    for (const seedSnapshot of metaverseAuthoritativeDynamicSurfaceSeedSnapshots) {
+    for (const seedSnapshot of this.#dependencies.dynamicSurfaceSeedSnapshots) {
       const colliderRuntime =
         new MetaverseAuthoritativeDynamicSurfaceColliderRuntime(
           seedSnapshot.environmentAssetId,
-          this.#dependencies.physicsRuntime
+          this.#dependencies.physicsRuntime,
+          this.#dependencies.resolveDynamicSurfaceColliders
         );
 
       colliderRuntime.syncPose({
@@ -250,6 +449,27 @@ export class MetaverseAuthoritativeWorldSurfaceState<
         colliderRuntime
       );
       this.#syncDynamicSurfaceColliderMetadata(colliderRuntime);
+    }
+  }
+
+  #bootDynamicCollisionMeshRuntimes(): void {
+    for (const seedSnapshot of this
+      .#dependencies.dynamicCollisionMeshSeedSnapshots) {
+      const collisionMeshRuntime =
+        new MetaverseAuthoritativeDynamicSurfaceCollisionMeshRuntime(
+          seedSnapshot,
+          this.#dependencies.physicsRuntime
+        );
+
+      collisionMeshRuntime.syncPose({
+        position: seedSnapshot.position,
+        yawRadians: seedSnapshot.yawRadians
+      });
+      this.#dynamicSurfaceCollisionMeshRuntimesByEnvironmentAssetId.set(
+        collisionMeshRuntime.environmentAssetId,
+        collisionMeshRuntime
+      );
+      this.#syncDynamicCollisionMeshMetadata(collisionMeshRuntime);
     }
   }
 
@@ -269,6 +489,17 @@ export class MetaverseAuthoritativeWorldSurfaceState<
         collider,
         createMetaverseTraversalColliderMetadataSnapshot(colliderSnapshot)
       );
+    }
+  }
+
+  #syncDynamicCollisionMeshMetadata(
+    collisionMeshRuntime: MetaverseAuthoritativeDynamicSurfaceCollisionMeshRuntime
+  ): void {
+    for (const collider of collisionMeshRuntime.colliders) {
+      this.#surfaceColliderMetadataByHandle.set(collider, {
+        ownerEnvironmentAssetId: collisionMeshRuntime.environmentAssetId,
+        traversalAffordance: "blocker"
+      });
     }
   }
 }

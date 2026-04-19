@@ -21,10 +21,21 @@ import {
   resolveFocusedMountableEnvironmentRuntime,
   resolveMountedEnvironmentSelectionByRequest
 } from "./metaverse-scene-mount-runtime-resolution";
+import {
+  createMetaverseMountedEnvironmentSnapshot
+} from "../../states/metaverse-mounted-environment-snapshot";
 
 const mountedEnvironmentAnchorForwardScratch = new Vector3();
 const mountedEnvironmentAnchorPositionScratch = new Vector3();
 const mountedEnvironmentAnchorQuaternionScratch = new Quaternion();
+
+export interface MetaverseSceneMountedSelectionSnapshot<
+  TEnvironmentRuntime extends MetaverseSceneMountableEnvironmentRuntime = MetaverseSceneMountableEnvironmentRuntime
+> {
+  readonly environmentAsset: TEnvironmentRuntime;
+  readonly mountedEnvironment: MountedEnvironmentSelectionReference;
+  readonly occupiedSelection: ResolvedMountedEnvironmentSelection;
+}
 
 function resolveDirectSeatTargetSnapshots(
   environmentAsset: MetaverseSceneMountableEnvironmentRuntime
@@ -39,20 +50,6 @@ function resolveDirectSeatTargetSnapshots(
           seatRole: seat.seat.seatRole
         })
       )
-  );
-}
-
-function resolveSeatTargetSnapshots(
-  environmentAsset: MetaverseSceneMountableEnvironmentRuntime
-): readonly MountableSeatSelectionSnapshot[] {
-  return Object.freeze(
-    environmentAsset.seats.map((seat) =>
-      Object.freeze({
-        label: seat.seat.label,
-        seatId: seat.seat.seatId,
-        seatRole: seat.seat.seatRole
-      })
-    )
   );
 }
 
@@ -81,12 +78,10 @@ function resolveMetaverseYawFromObjectQuaternion(object: Object3D): number {
 }
 
 export function createMetaverseSceneInteractionSnapshot(
-  focusedMountable: FocusedMountableSnapshot | null,
-  mountedEnvironment: MountedEnvironmentSnapshot | null
+  focusedMountable: FocusedMountableSnapshot | null
 ): MetaverseSceneInteractionSnapshot {
   return Object.freeze({
-    focusedMountable,
-    mountedEnvironment
+    focusedMountable
   });
 }
 
@@ -154,26 +149,65 @@ export function resolveMountedEnvironmentSelectionFromSnapshot<
   return null;
 }
 
+export function createMetaverseSceneMountedSelectionSnapshot<
+  TEnvironmentRuntime extends MetaverseSceneMountableEnvironmentRuntime
+>(
+  environmentAsset: TEnvironmentRuntime,
+  mountedEnvironment: MountedEnvironmentSelectionReference
+): MetaverseSceneMountedSelectionSnapshot<TEnvironmentRuntime> | null {
+  const occupiedSelection = resolveMountedEnvironmentSelectionFromSnapshot(
+    environmentAsset,
+    mountedEnvironment
+  );
+
+  if (occupiedSelection === null) {
+    return null;
+  }
+
+  return Object.freeze({
+    environmentAsset,
+    mountedEnvironment,
+    occupiedSelection
+  });
+}
+
+export function resolveMetaverseSceneMountedSelectionSnapshot<
+  TEnvironmentRuntime extends MetaverseSceneMountableEnvironmentRuntime
+>(
+  mountedEnvironment: MountedEnvironmentSelectionReference | null | undefined,
+  resolveMountedEnvironmentRuntime: (
+    environmentAssetId: string
+  ) => TEnvironmentRuntime | null
+): MetaverseSceneMountedSelectionSnapshot<TEnvironmentRuntime> | null {
+  if (mountedEnvironment === null || mountedEnvironment === undefined) {
+    return null;
+  }
+
+  const environmentAsset = resolveMountedEnvironmentRuntime(
+    mountedEnvironment.environmentAssetId
+  );
+
+  if (environmentAsset === null) {
+    return null;
+  }
+
+  return createMetaverseSceneMountedSelectionSnapshot(
+    environmentAsset,
+    mountedEnvironment
+  );
+}
+
 export function createMountedEnvironmentSnapshot<
   TEnvironmentRuntime extends MetaverseSceneMountableEnvironmentRuntime
 >(
   environmentAsset: TEnvironmentRuntime,
   occupiedSelection: Omit<ResolvedMountedEnvironmentSelection, "anchorGroup">
 ): MountedEnvironmentSnapshot {
-  return Object.freeze({
-    cameraPolicyId: occupiedSelection.cameraPolicyId,
-    controlRoutingPolicyId: occupiedSelection.controlRoutingPolicyId,
-    directSeatTargets: resolveDirectSeatTargetSnapshots(environmentAsset),
-    entryId: occupiedSelection.entryId,
+  return createMetaverseMountedEnvironmentSnapshot({
     environmentAssetId: environmentAsset.environmentAssetId,
     label: environmentAsset.label,
-    lookLimitPolicyId: occupiedSelection.lookLimitPolicyId,
-    occupancyAnimationId: occupiedSelection.occupancyAnimationId,
-    occupancyKind: occupiedSelection.occupancyKind,
-    occupantLabel: occupiedSelection.occupantLabel,
-    occupantRole: occupiedSelection.occupantRole,
-    seatTargets: resolveSeatTargetSnapshots(environmentAsset),
-    seatId: occupiedSelection.seatId
+    occupancyPolicy: occupiedSelection,
+    seats: environmentAsset.seats.map(({ seat }) => seat)
   });
 }
 
@@ -193,20 +227,22 @@ export function resolveMountedEnvironmentAnchorSnapshot<
     ) => void;
   }
 ): MountedEnvironmentAnchorSnapshot | null {
-  const occupiedSelection = resolveMountedEnvironmentSelectionFromSnapshot(
-    environmentAsset,
-    mountedEnvironment
-  );
+  const mountedSelectionSnapshot =
+    createMetaverseSceneMountedSelectionSnapshot(
+      environmentAsset,
+      mountedEnvironment
+    );
 
-  if (occupiedSelection === null) {
+  if (mountedSelectionSnapshot === null) {
     return null;
   }
 
   dependencies.syncDynamicEnvironmentSimulationPose(environmentAsset);
   environmentAsset.anchorGroup.updateMatrixWorld(true);
-  const anchorWorldPosition = occupiedSelection.anchorGroup.getWorldPosition(
-    mountedEnvironmentAnchorPositionScratch
-  );
+  const anchorWorldPosition =
+    mountedSelectionSnapshot.occupiedSelection.anchorGroup.getWorldPosition(
+      mountedEnvironmentAnchorPositionScratch
+    );
 
   return Object.freeze({
     position: dependencies.createPositionSnapshot(
@@ -215,7 +251,7 @@ export function resolveMountedEnvironmentAnchorSnapshot<
       anchorWorldPosition.z
     ),
     yawRadians: resolveMetaverseYawFromObjectQuaternion(
-      occupiedSelection.anchorGroup
+      mountedSelectionSnapshot.occupiedSelection.anchorGroup
     )
   });
 }

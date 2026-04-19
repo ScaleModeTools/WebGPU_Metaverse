@@ -32,7 +32,6 @@ import {
   vec3
 } from "three/tsl";
 import {
-  metaverseWorldPlacedWaterRegions,
   resolveMetaverseWorldWaterRegionFloorHeightMeters,
   resolveMetaverseWorldWaterRegionSurfaceHeightMeters,
   type MetaverseWorldPlacedWaterRegionSnapshot
@@ -229,7 +228,7 @@ function createWaterRegionSurfaceMesh(
 function createWaterGroup(config: MetaverseRuntimeConfig): Group {
   const waterGroup = new Group();
 
-  for (const waterRegion of metaverseWorldPlacedWaterRegions) {
+  for (const waterRegion of config.waterRegionSnapshots) {
     waterGroup.add(createWaterRegionFloorMesh(waterRegion));
     waterGroup.add(createWaterRegionSurfaceMesh(config, waterRegion));
   }

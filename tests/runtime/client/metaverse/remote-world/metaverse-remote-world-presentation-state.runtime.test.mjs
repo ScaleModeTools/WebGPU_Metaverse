@@ -46,7 +46,7 @@ function createSampledFrame({
   });
 }
 
-test("MetaverseRemoteWorldPresentationState interpolates remote character and vehicle presentation from authoritative samples", async () => {
+test("MetaverseRemoteWorldPresentationState interpolates remote character, vehicle, and environment-body presentation from authoritative samples", async () => {
   const presentationState = await createPresentationState();
   const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
   const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
@@ -60,6 +60,9 @@ test("MetaverseRemoteWorldPresentationState interpolates remote character and ve
 
   const baseSnapshot = createRealtimeWorldSnapshot({
     currentTick: 10,
+    environmentBodyX: 4,
+    environmentBodyYawRadians: -0.2,
+    includeEnvironmentBody: true,
     localPlayerId,
     localUsername,
     remoteLookPitchRadians: -0.3,
@@ -75,6 +78,9 @@ test("MetaverseRemoteWorldPresentationState interpolates remote character and ve
   });
   const nextSnapshot = createRealtimeWorldSnapshot({
     currentTick: 11,
+    environmentBodyX: 7,
+    environmentBodyYawRadians: 0.2,
+    includeEnvironmentBody: true,
     localPlayerId,
     localUsername,
     remoteLookPitchRadians: 0.1,
@@ -91,6 +97,11 @@ test("MetaverseRemoteWorldPresentationState interpolates remote character and ve
   const extrapolationMs = presentationState.syncAuthoritativeSample({
     deltaSeconds: 0.05,
     localPlayerId,
+    remoteCharacterRootFrame: createSampledFrame({
+      alpha: 1,
+      baseSnapshot,
+      nextSnapshot
+    }),
     sampledFrame: createSampledFrame({
       alpha: 0.5,
       baseSnapshot,
@@ -107,7 +118,7 @@ test("MetaverseRemoteWorldPresentationState interpolates remote character and ve
   assert.ok(
     Math.abs(
       presentationState.remoteCharacterPresentations[0]?.presentation.position.x -
-        9.5
+        11
     ) < 0.000001
   );
   assert.equal(
@@ -136,6 +147,71 @@ test("MetaverseRemoteWorldPresentationState interpolates remote character and ve
     Math.abs(
       presentationState.remoteVehiclePresentations[0]?.yawRadians - 0.1
     ) < 0.000001
+  );
+  assert.equal(presentationState.remoteEnvironmentBodyPresentations.length, 1);
+  assert.ok(
+    Math.abs(
+      presentationState.remoteEnvironmentBodyPresentations[0]?.position.x - 5.5
+    ) < 0.000001
+  );
+  assert.ok(
+    Math.abs(
+      presentationState.remoteEnvironmentBodyPresentations[0]?.yawRadians
+    ) < 0.000001
+  );
+});
+
+test("MetaverseRemoteWorldPresentationState keeps remote character root on freshest authority while sampled look stays smoothed", async () => {
+  const presentationState = await createPresentationState();
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const latestSnapshot = createRealtimeWorldSnapshot({
+    currentTick: 10,
+    includeVehicle: false,
+    localPlayerId,
+    localUsername,
+    remoteLookPitchRadians: -0.25,
+    remoteLookYawRadians: 0.4,
+    remotePlayerAngularVelocityRadiansPerSecond: 1,
+    remotePlayerId,
+    remotePlayerX: 8,
+    remoteUsername,
+    serverTimeMs: 1_000,
+    snapshotSequence: 1,
+    yawRadians: 0
+  });
+
+  presentationState.syncAuthoritativeSample({
+    deltaSeconds: 0.06,
+    localPlayerId,
+    remoteCharacterRootFrame: createSampledFrame({
+      baseSnapshot: latestSnapshot
+    }),
+    sampledFrame: createSampledFrame({
+      baseSnapshot: latestSnapshot,
+      extrapolationSeconds: 0.06
+    })
+  });
+
+  assert.equal(
+    presentationState.remoteCharacterPresentations[0]?.presentation.position.x,
+    8
+  );
+  assert.equal(
+    presentationState.remoteCharacterPresentations[0]?.look.pitchRadians,
+    -0.25
+  );
+  assert.equal(
+    presentationState.remoteCharacterPresentations[0]?.look.yawRadians,
+    0.4
   );
 });
 
@@ -396,6 +472,8 @@ test("MetaverseRemoteWorldPresentationState reuses owner snapshots and drops sta
     sampledFrame: createSampledFrame({
       baseSnapshot: createRealtimeWorldSnapshot({
         currentTick: 10,
+        environmentBodyX: 4,
+        includeEnvironmentBody: true,
         localPlayerId,
         localUsername,
         remotePlayerAngularVelocityRadiansPerSecond: 1,
@@ -414,6 +492,8 @@ test("MetaverseRemoteWorldPresentationState reuses owner snapshots and drops sta
     presentationState.remoteCharacterPresentations;
   const initialVehiclePresentations =
     presentationState.remoteVehiclePresentations;
+  const initialEnvironmentBodyPresentations =
+    presentationState.remoteEnvironmentBodyPresentations;
   const initialCharacterPresentation =
     initialCharacterPresentations[0] ?? null;
   const initialCharacterPosition =
@@ -422,11 +502,17 @@ test("MetaverseRemoteWorldPresentationState reuses owner snapshots and drops sta
     initialVehiclePresentations[0] ?? null;
   const initialVehiclePosition =
     initialVehiclePresentation?.position ?? null;
+  const initialEnvironmentBodyPresentation =
+    initialEnvironmentBodyPresentations[0] ?? null;
+  const initialEnvironmentBodyPosition =
+    initialEnvironmentBodyPresentation?.position ?? null;
 
   assert.notEqual(initialCharacterPresentation, null);
   assert.notEqual(initialCharacterPosition, null);
   assert.notEqual(initialVehiclePresentation, null);
   assert.notEqual(initialVehiclePosition, null);
+  assert.notEqual(initialEnvironmentBodyPresentation, null);
+  assert.notEqual(initialEnvironmentBodyPosition, null);
 
   presentationState.syncAuthoritativeSample({
     deltaSeconds: 0.06,
@@ -434,6 +520,8 @@ test("MetaverseRemoteWorldPresentationState reuses owner snapshots and drops sta
     sampledFrame: createSampledFrame({
       baseSnapshot: createRealtimeWorldSnapshot({
         currentTick: 11,
+        environmentBodyX: 4,
+        includeEnvironmentBody: true,
         localPlayerId,
         localUsername,
         remotePlayerAngularVelocityRadiansPerSecond: 1,
@@ -473,6 +561,18 @@ test("MetaverseRemoteWorldPresentationState reuses owner snapshots and drops sta
     presentationState.remoteVehiclePresentations[0]?.position,
     initialVehiclePosition
   );
+  assert.strictEqual(
+    presentationState.remoteEnvironmentBodyPresentations,
+    initialEnvironmentBodyPresentations
+  );
+  assert.strictEqual(
+    presentationState.remoteEnvironmentBodyPresentations[0],
+    initialEnvironmentBodyPresentation
+  );
+  assert.strictEqual(
+    presentationState.remoteEnvironmentBodyPresentations[0]?.position,
+    initialEnvironmentBodyPosition
+  );
 
   presentationState.syncAuthoritativeSample({
     deltaSeconds: 0.05,
@@ -480,6 +580,7 @@ test("MetaverseRemoteWorldPresentationState reuses owner snapshots and drops sta
     sampledFrame: createSampledFrame({
       baseSnapshot: createRealtimeWorldSnapshot({
         currentTick: 12,
+        includeEnvironmentBody: false,
         includeRemotePlayer: false,
         includeVehicle: false,
         localPlayerId,
@@ -496,4 +597,5 @@ test("MetaverseRemoteWorldPresentationState reuses owner snapshots and drops sta
 
   assert.equal(presentationState.remoteCharacterPresentations.length, 0);
   assert.equal(presentationState.remoteVehiclePresentations.length, 0);
+  assert.equal(presentationState.remoteEnvironmentBodyPresentations.length, 0);
 });

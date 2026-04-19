@@ -1,15 +1,19 @@
 import {
   clamp,
+  createMetaverseTraversalKinematicStateSnapshot,
   createMetaverseTraversalAuthoritySnapshot,
-  createMetaverseTraversalActiveActionSnapshot,
   createMetaverseUnmountedTraversalStateSnapshot,
   metaverseUnmountedPlayerLookConstraintBounds,
-  resolveMetaverseMountedOccupantRoleLookConstraintBounds,
+  resolveMetaverseMountedLookConstraintBounds,
+  resolveMetaverseTraversalAngularVelocityRadiansPerSecond,
   resolveMetaverseTraversalAuthoritySnapshotForActionState,
+  resolveMetaverseTraversalKinematicState,
   wrapRadians,
+  type MetaverseMountedLookLimitPolicyId,
   type MetaversePlayerLookConstraintBounds,
   type MetaverseTraversalActiveActionSnapshot,
   type MetaverseTraversalAuthoritySnapshot,
+  type MetaverseTraversalKinematicStateSnapshot,
   type MetaverseUnmountedTraversalStateSnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 import type {
@@ -21,9 +25,6 @@ import type {
 import type {
   MetaversePlayerTraversalIntentSnapshot,
 } from "@webgpu-metaverse/shared/metaverse/realtime";
-import type {
-  MetaverseTraversalActionPhaseId
-} from "@webgpu-metaverse/shared/metaverse/traversal";
 
 import type { PhysicsVector3Snapshot, RapierColliderHandle } from "../../types/metaverse-authoritative-rapier.js";
 
@@ -62,6 +63,7 @@ export interface MetaverseAuthoritativePlayerStateSyncSurfaceDriveRuntime {
 }
 
 export interface MetaverseAuthoritativePlayerStateSyncMountedOccupancyRuntimeState {
+  readonly lookLimitPolicyId: MetaverseMountedLookLimitPolicyId;
   readonly occupantRole: MetaversePresenceMountedOccupantRoleId;
 }
 
@@ -131,6 +133,7 @@ interface MetaverseAuthoritativePlayerStateSyncDependencies<
   VehicleRuntime extends MetaverseAuthoritativePlayerStateSyncVehicleRuntimeState
 > {
   readonly addPlayerTraversalColliderHandle: (
+    playerId: MetaversePlayerId,
     handle: RapierColliderHandle
   ) => void;
   readonly createGroundedBodyRuntime: () => GroundedBodyRuntime;
@@ -167,11 +170,27 @@ function createPlayerLinearVelocitySnapshot(
   );
 }
 
-function normalizeAngularDeltaRadians(rawValue: number): number {
-  return wrapRadians(rawValue);
-}
-
 const groundedSnapToleranceMeters = 0.0001;
+
+function createVehicleTraversalKinematicStateSnapshot(
+  vehicleRuntime: MetaverseAuthoritativePlayerStateSyncVehicleRuntimeState
+): MetaverseTraversalKinematicStateSnapshot {
+  return createMetaverseTraversalKinematicStateSnapshot({
+    angularVelocityRadiansPerSecond:
+      vehicleRuntime.angularVelocityRadiansPerSecond,
+    linearVelocity: createPhysicsVector3Snapshot(
+      vehicleRuntime.linearVelocityX,
+      vehicleRuntime.linearVelocityY,
+      vehicleRuntime.linearVelocityZ
+    ),
+    position: createPhysicsVector3Snapshot(
+      vehicleRuntime.positionX,
+      vehicleRuntime.positionY,
+      vehicleRuntime.positionZ
+    ),
+    yawRadians: vehicleRuntime.yawRadians
+  });
+}
 
 export class MetaverseAuthoritativePlayerStateSync<
   PlayerRuntime extends MetaverseAuthoritativePlayerStateSyncRuntimeState<
@@ -214,9 +233,11 @@ export class MetaverseAuthoritativePlayerStateSync<
     const swimBodyRuntime = this.#dependencies.createSwimBodyRuntime();
 
     this.#dependencies.addPlayerTraversalColliderHandle(
+      playerId,
       groundedBodyRuntime.colliderHandle
     );
     this.#dependencies.addPlayerTraversalColliderHandle(
+      playerId,
       swimBodyRuntime.colliderHandle
     );
 
@@ -292,24 +313,15 @@ export class MetaverseAuthoritativePlayerStateSync<
     nowMs: number,
     previousFacingYawRadians: number = playerRuntime.yawRadians
   ): void {
-    playerRuntime.positionX = vehicleRuntime.positionX;
-    playerRuntime.positionY = vehicleRuntime.positionY;
-    playerRuntime.positionZ = vehicleRuntime.positionZ;
-    playerRuntime.yawRadians = vehicleRuntime.yawRadians;
+    this.#applyTraversalKinematicStateToPlayerRuntime(
+      playerRuntime,
+      createVehicleTraversalKinematicStateSnapshot(vehicleRuntime)
+    );
     this.#syncAuthoritativePlayerLookForFacingChange(
       playerRuntime,
       previousFacingYawRadians,
       vehicleRuntime.yawRadians
     );
-    playerRuntime.angularVelocityRadiansPerSecond =
-      vehicleRuntime.angularVelocityRadiansPerSecond;
-    playerRuntime.forwardSpeedUnitsPerSecond =
-      vehicleRuntime.forwardSpeedUnitsPerSecond;
-    playerRuntime.linearVelocityX = vehicleRuntime.linearVelocityX;
-    playerRuntime.linearVelocityY = vehicleRuntime.linearVelocityY;
-    playerRuntime.linearVelocityZ = vehicleRuntime.linearVelocityZ;
-    playerRuntime.strafeSpeedUnitsPerSecond =
-      vehicleRuntime.strafeSpeedUnitsPerSecond;
     playerRuntime.lastPoseAtMs = nowMs;
     this.syncPlayerTraversalBodyRuntimes(playerRuntime);
     this.syncPlayerTraversalAuthorityState(playerRuntime);
@@ -334,31 +346,26 @@ export class MetaverseAuthoritativePlayerStateSync<
     groundedBodySnapshot: GroundedBodyRuntime["snapshot"],
     deltaSeconds: number
   ): void {
-    const previousYawRadians = playerRuntime.yawRadians;
-    const nextPosition = groundedBodySnapshot.position;
-    const deltaX = nextPosition.x - playerRuntime.positionX;
-    const deltaY = nextPosition.y - playerRuntime.positionY;
-    const deltaZ = nextPosition.z - playerRuntime.positionZ;
-    const forwardX = Math.sin(groundedBodySnapshot.yawRadians);
-    const forwardZ = -Math.cos(groundedBodySnapshot.yawRadians);
-    const rightX = Math.cos(groundedBodySnapshot.yawRadians);
-    const rightZ = Math.sin(groundedBodySnapshot.yawRadians);
+    const nextKinematicStateSnapshot = resolveMetaverseTraversalKinematicState(
+      {
+        position: createPhysicsVector3Snapshot(
+          playerRuntime.positionX,
+          playerRuntime.positionY,
+          playerRuntime.positionZ
+        ),
+        yawRadians: playerRuntime.yawRadians
+      },
+      {
+        position: groundedBodySnapshot.position,
+        yawRadians: groundedBodySnapshot.yawRadians
+      },
+      deltaSeconds
+    );
 
-    playerRuntime.positionX = nextPosition.x;
-    playerRuntime.positionY = nextPosition.y;
-    playerRuntime.positionZ = nextPosition.z;
-    playerRuntime.yawRadians = groundedBodySnapshot.yawRadians;
-    playerRuntime.angularVelocityRadiansPerSecond =
-      normalizeAngularDeltaRadians(
-        groundedBodySnapshot.yawRadians - previousYawRadians
-      ) / deltaSeconds;
-    playerRuntime.forwardSpeedUnitsPerSecond =
-      deltaSeconds > 0 ? (deltaX * forwardX + deltaZ * forwardZ) / deltaSeconds : 0;
-    playerRuntime.linearVelocityX = deltaSeconds > 0 ? deltaX / deltaSeconds : 0;
-    playerRuntime.linearVelocityY = deltaSeconds > 0 ? deltaY / deltaSeconds : 0;
-    playerRuntime.linearVelocityZ = deltaSeconds > 0 ? deltaZ / deltaSeconds : 0;
-    playerRuntime.strafeSpeedUnitsPerSecond =
-      deltaSeconds > 0 ? (deltaX * rightX + deltaZ * rightZ) / deltaSeconds : 0;
+    this.#applyTraversalKinematicStateToPlayerRuntime(
+      playerRuntime,
+      nextKinematicStateSnapshot
+    );
   }
 
   applySurfaceDriveSnapshotToPlayerRuntime(
@@ -367,30 +374,23 @@ export class MetaverseAuthoritativePlayerStateSync<
     deltaSeconds: number
   ): void {
     const previousYawRadians = playerRuntime.yawRadians;
-    const nextPosition = surfaceDriveSnapshot.position;
-    const deltaX = nextPosition.x - playerRuntime.positionX;
-    const deltaY = nextPosition.y - playerRuntime.positionY;
-    const deltaZ = nextPosition.z - playerRuntime.positionZ;
-    const forwardX = Math.sin(surfaceDriveSnapshot.yawRadians);
-    const forwardZ = -Math.cos(surfaceDriveSnapshot.yawRadians);
-    const rightX = Math.cos(surfaceDriveSnapshot.yawRadians);
-    const rightZ = Math.sin(surfaceDriveSnapshot.yawRadians);
+    const nextKinematicStateSnapshot =
+      createMetaverseTraversalKinematicStateSnapshot({
+        angularVelocityRadiansPerSecond:
+          resolveMetaverseTraversalAngularVelocityRadiansPerSecond(
+            previousYawRadians,
+            surfaceDriveSnapshot.yawRadians,
+            deltaSeconds
+          ),
+        linearVelocity: surfaceDriveSnapshot.linearVelocity,
+        position: surfaceDriveSnapshot.position,
+        yawRadians: surfaceDriveSnapshot.yawRadians
+      });
 
-    playerRuntime.positionX = nextPosition.x;
-    playerRuntime.positionY = nextPosition.y;
-    playerRuntime.positionZ = nextPosition.z;
-    playerRuntime.yawRadians = surfaceDriveSnapshot.yawRadians;
-    playerRuntime.angularVelocityRadiansPerSecond =
-      normalizeAngularDeltaRadians(
-        surfaceDriveSnapshot.yawRadians - previousYawRadians
-      ) / deltaSeconds;
-    playerRuntime.forwardSpeedUnitsPerSecond =
-      deltaSeconds > 0 ? (deltaX * forwardX + deltaZ * forwardZ) / deltaSeconds : 0;
-    playerRuntime.linearVelocityX = surfaceDriveSnapshot.linearVelocity.x;
-    playerRuntime.linearVelocityY = surfaceDriveSnapshot.linearVelocity.y;
-    playerRuntime.linearVelocityZ = surfaceDriveSnapshot.linearVelocity.z;
-    playerRuntime.strafeSpeedUnitsPerSecond =
-      deltaSeconds > 0 ? (deltaX * rightX + deltaZ * rightZ) / deltaSeconds : 0;
+    this.#applyTraversalKinematicStateToPlayerRuntime(
+      playerRuntime,
+      nextKinematicStateSnapshot
+    );
   }
 
   syncImplicitPlayerLookFromBodyYaw(playerRuntime: PlayerRuntime): void {
@@ -435,7 +435,7 @@ export class MetaverseAuthoritativePlayerStateSync<
     }
 
     const constrainedYawOffsetRadians = clamp(
-      normalizeAngularDeltaRadians(yawRadians - playerRuntime.yawRadians),
+      wrapRadians(yawRadians - playerRuntime.yawRadians),
       -bounds.maxYawOffsetRadians,
       bounds.maxYawOffsetRadians
     );
@@ -463,8 +463,8 @@ export class MetaverseAuthoritativePlayerStateSync<
       return metaverseUnmountedPlayerLookConstraintBounds;
     }
 
-    return resolveMetaverseMountedOccupantRoleLookConstraintBounds(
-      playerRuntime.mountedOccupancy.occupantRole
+    return resolveMetaverseMountedLookConstraintBounds(
+      playerRuntime.mountedOccupancy.lookLimitPolicyId
     );
   }
 
@@ -494,7 +494,7 @@ export class MetaverseAuthoritativePlayerStateSync<
     }
 
     const constrainedYawOffsetRadians = clamp(
-      normalizeAngularDeltaRadians(
+      wrapRadians(
         playerRuntime.lookYawRadians - previousFacingYawRadians
       ),
       -bounds.maxYawOffsetRadians,
@@ -512,5 +512,24 @@ export class MetaverseAuthoritativePlayerStateSync<
         groundedSnapToleranceMeters &&
       Math.abs(playerRuntime.linearVelocityY) <= groundedSnapToleranceMeters
     );
+  }
+
+  #applyTraversalKinematicStateToPlayerRuntime(
+    playerRuntime: PlayerRuntime,
+    kinematicStateSnapshot: MetaverseTraversalKinematicStateSnapshot
+  ): void {
+    playerRuntime.positionX = kinematicStateSnapshot.position.x;
+    playerRuntime.positionY = kinematicStateSnapshot.position.y;
+    playerRuntime.positionZ = kinematicStateSnapshot.position.z;
+    playerRuntime.yawRadians = kinematicStateSnapshot.yawRadians;
+    playerRuntime.angularVelocityRadiansPerSecond =
+      kinematicStateSnapshot.angularVelocityRadiansPerSecond;
+    playerRuntime.forwardSpeedUnitsPerSecond =
+      kinematicStateSnapshot.forwardSpeedUnitsPerSecond;
+    playerRuntime.linearVelocityX = kinematicStateSnapshot.linearVelocity.x;
+    playerRuntime.linearVelocityY = kinematicStateSnapshot.linearVelocity.y;
+    playerRuntime.linearVelocityZ = kinematicStateSnapshot.linearVelocity.z;
+    playerRuntime.strafeSpeedUnitsPerSecond =
+      kinematicStateSnapshot.strafeSpeedUnitsPerSecond;
   }
 }

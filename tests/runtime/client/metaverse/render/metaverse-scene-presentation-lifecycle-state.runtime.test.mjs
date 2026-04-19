@@ -33,7 +33,7 @@ test("MetaverseScenePresentationLifecycleState boots scenic state once before in
     cameraPresentationState: {
       syncSceneInteractionSnapshot(snapshot, mountedEnvironment) {
         calls.push(["scene-interaction-sync", snapshot, mountedEnvironment]);
-        return Object.freeze({ mountedEnvironmentAssetId: null });
+        return Object.freeze({ focusedMountable: null });
       }
     },
     createCurrentCameraSnapshot: () => cameraSnapshot,
@@ -86,7 +86,7 @@ test("MetaverseScenePresentationLifecycleState resets presentation owners and pr
     camera,
     cameraPresentationState: {
       syncSceneInteractionSnapshot() {
-        return Object.freeze({ mountedEnvironmentAssetId: null });
+        return Object.freeze({ focusedMountable: null });
       }
     },
     createCurrentCameraSnapshot: () =>

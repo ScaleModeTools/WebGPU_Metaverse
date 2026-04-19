@@ -218,7 +218,22 @@ export interface MetaverseRealtimeVehicleSnapshotInput {
   readonly yawRadians: number;
 }
 
+export interface MetaverseRealtimeEnvironmentBodySnapshot {
+  readonly environmentAssetId: string;
+  readonly linearVelocity: MetaverseRealtimeVector3Snapshot;
+  readonly position: MetaverseRealtimeVector3Snapshot;
+  readonly yawRadians: Radians;
+}
+
+export interface MetaverseRealtimeEnvironmentBodySnapshotInput {
+  readonly environmentAssetId: string;
+  readonly linearVelocity: MetaverseRealtimeVector3SnapshotInput;
+  readonly position: MetaverseRealtimeVector3SnapshotInput;
+  readonly yawRadians: number;
+}
+
 export interface MetaverseRealtimeWorldSnapshot {
+  readonly environmentBodies: readonly MetaverseRealtimeEnvironmentBodySnapshot[];
   readonly players: readonly MetaverseRealtimePlayerSnapshot[];
   readonly snapshotSequence: number;
   readonly tick: MetaverseRealtimeTickSnapshot;
@@ -226,6 +241,8 @@ export interface MetaverseRealtimeWorldSnapshot {
 }
 
 export interface MetaverseRealtimeWorldSnapshotInput {
+  readonly environmentBodies?:
+    readonly MetaverseRealtimeEnvironmentBodySnapshotInput[];
   readonly players: readonly MetaverseRealtimePlayerSnapshotInput[];
   readonly snapshotSequence?: number;
   readonly tick: MetaverseRealtimeTickSnapshotInput;
@@ -335,7 +352,7 @@ function normalizeCharacterId(characterId: string): string {
   );
 }
 
-function normalizeVehicleAssetId(environmentAssetId: string): string {
+function normalizeEnvironmentAssetId(environmentAssetId: string): string {
   return normalizeRequiredIdentifier(
     environmentAssetId,
     "Metaverse realtime environmentAssetId"
@@ -428,7 +445,7 @@ function freezeMountedOccupancySnapshot(
 
   return Object.freeze({
     entryId,
-    environmentAssetId: normalizeVehicleAssetId(input.environmentAssetId),
+    environmentAssetId: normalizeEnvironmentAssetId(input.environmentAssetId),
     occupancyKind,
     occupantRole: resolveOccupantRole(input.occupantRole),
     seatId,
@@ -516,11 +533,22 @@ function freezeVehicleSnapshot(
     angularVelocityRadiansPerSecond: normalizeFiniteNumber(
       input.angularVelocityRadiansPerSecond
     ),
-    environmentAssetId: normalizeVehicleAssetId(input.environmentAssetId),
+    environmentAssetId: normalizeEnvironmentAssetId(input.environmentAssetId),
     linearVelocity: createMetaversePresenceVector3Snapshot(input.linearVelocity),
     position: createMetaversePresenceVector3Snapshot(input.position),
     seats: Object.freeze(input.seats.map(freezeVehicleSeatSnapshot)),
     vehicleId: input.vehicleId,
+    yawRadians: createRadians(input.yawRadians)
+  });
+}
+
+function freezeEnvironmentBodySnapshot(
+  input: MetaverseRealtimeEnvironmentBodySnapshotInput
+): MetaverseRealtimeEnvironmentBodySnapshot {
+  return Object.freeze({
+    environmentAssetId: normalizeEnvironmentAssetId(input.environmentAssetId),
+    linearVelocity: createMetaversePresenceVector3Snapshot(input.linearVelocity),
+    position: createMetaversePresenceVector3Snapshot(input.position),
     yawRadians: createRadians(input.yawRadians)
   });
 }
@@ -671,11 +699,24 @@ export function createMetaverseRealtimeVehicleSnapshot(
   return freezeVehicleSnapshot(input);
 }
 
+export function createMetaverseRealtimeEnvironmentBodySnapshot(
+  input: MetaverseRealtimeEnvironmentBodySnapshotInput
+): MetaverseRealtimeEnvironmentBodySnapshot {
+  return freezeEnvironmentBodySnapshot(input);
+}
+
 export function createMetaverseRealtimeWorldSnapshot(
   input: MetaverseRealtimeWorldSnapshotInput
 ): MetaverseRealtimeWorldSnapshot {
   const tick = createMetaverseRealtimeTickSnapshot(input.tick);
+  const environmentBodies = (input.environmentBodies ?? []).map(
+    freezeEnvironmentBodySnapshot
+  );
   const vehicles = input.vehicles.map(freezeVehicleSnapshot);
+  const environmentBodySnapshotByEnvironmentAssetId = new Map<
+    string,
+    MetaverseRealtimeEnvironmentBodySnapshot
+  >();
   const vehicleSnapshotById = new Map<
     MetaverseVehicleId,
     MetaverseRealtimeVehicleSnapshot
@@ -684,6 +725,23 @@ export function createMetaverseRealtimeWorldSnapshot(
     MetaversePlayerId,
     MetaverseRealtimeMountedOccupancySnapshot
   >();
+
+  for (const environmentBody of environmentBodies) {
+    if (
+      environmentBodySnapshotByEnvironmentAssetId.has(
+        environmentBody.environmentAssetId
+      )
+    ) {
+      throw new Error(
+        `Metaverse realtime world snapshot includes duplicate environment body environmentAssetId ${environmentBody.environmentAssetId}.`
+      );
+    }
+
+    environmentBodySnapshotByEnvironmentAssetId.set(
+      environmentBody.environmentAssetId,
+      environmentBody
+    );
+  }
 
   for (const vehicle of vehicles) {
     if (vehicleSnapshotById.has(vehicle.vehicleId)) {
@@ -752,6 +810,7 @@ export function createMetaverseRealtimeWorldSnapshot(
   }
 
   return Object.freeze({
+    environmentBodies: Object.freeze(environmentBodies),
     players: Object.freeze(players),
     snapshotSequence: normalizeFiniteNonNegativeInteger(input.snapshotSequence ?? 0),
     tick,

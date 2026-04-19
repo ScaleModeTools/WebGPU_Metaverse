@@ -18,7 +18,7 @@ test("shell audio policy resolves shell and gameplay tracks from navigation stat
     "/src/app/states/metaverse-shell-audio-policy.ts"
   );
 
-  assert.equal(resolveShellBackgroundTrack("login"), "shell-attract-loop");
+  assert.equal(resolveShellBackgroundTrack("main-menu"), "shell-attract-loop");
   assert.equal(resolveShellBackgroundTrack("calibration"), "shell-attract-loop");
   assert.equal(resolveShellBackgroundTrack("gameplay"), "birds-arena-loop");
 });

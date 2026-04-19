@@ -24,6 +24,7 @@ import {
 import {
   createMetaverseRealtimeWorldEvent,
   createMetaverseRealtimeWorldSnapshot,
+  type MetaverseRealtimeEnvironmentBodySnapshotInput,
   type MetaverseRealtimeMountedOccupancySnapshotInput,
   type MetaverseRealtimePlayerObservedTraversalSnapshot,
   type MetaverseRealtimeWorldEvent,
@@ -96,6 +97,17 @@ export interface MetaverseAuthoritativeSnapshotVehicleRuntimeState {
   yawRadians: number;
 }
 
+export interface MetaverseAuthoritativeSnapshotEnvironmentBodyRuntimeState {
+  readonly environmentAssetId: string;
+  linearVelocityX: number;
+  linearVelocityY: number;
+  linearVelocityZ: number;
+  positionX: number;
+  positionY: number;
+  positionZ: number;
+  yawRadians: number;
+}
+
 export interface MetaverseAuthoritativeWorldSnapshotAssemblyConfig {
   readonly currentTick: number;
   readonly lastAdvancedAtMs: number | null;
@@ -150,9 +162,11 @@ function createMountedOccupancySnapshot(
 
 export function createMetaverseAuthoritativeWorldSnapshot<
   PlayerRuntime extends MetaverseAuthoritativeSnapshotPlayerRuntimeState,
+  EnvironmentBodyRuntime extends MetaverseAuthoritativeSnapshotEnvironmentBodyRuntimeState,
   VehicleRuntime extends MetaverseAuthoritativeSnapshotVehicleRuntimeState
 >(
   config: MetaverseAuthoritativeWorldSnapshotAssemblyConfig & {
+    readonly environmentBodies: Iterable<EnvironmentBodyRuntime>;
     readonly players: Iterable<PlayerRuntime>;
     readonly traversalIntentsByPlayerId: ReadonlyMap<
       MetaversePlayerId,
@@ -249,6 +263,29 @@ export function createMetaverseAuthoritativeWorldSnapshot<
         yawRadians: playerRuntime.yawRadians
       };
     });
+  const environmentBodies = [...config.environmentBodies]
+    .sort((leftEnvironmentBody, rightEnvironmentBody) =>
+      leftEnvironmentBody.environmentAssetId.localeCompare(
+        rightEnvironmentBody.environmentAssetId
+      )
+    )
+    .map(
+      (environmentBodyRuntime) =>
+        ({
+          environmentAssetId: environmentBodyRuntime.environmentAssetId,
+          linearVelocity: {
+            x: environmentBodyRuntime.linearVelocityX,
+            y: environmentBodyRuntime.linearVelocityY,
+            z: environmentBodyRuntime.linearVelocityZ
+          },
+          position: {
+            x: environmentBodyRuntime.positionX,
+            y: environmentBodyRuntime.positionY,
+            z: environmentBodyRuntime.positionZ
+          },
+          yawRadians: environmentBodyRuntime.yawRadians
+        }) satisfies MetaverseRealtimeEnvironmentBodySnapshotInput
+    );
   const vehicles = [...config.vehicles]
     .sort((leftVehicle, rightVehicle) =>
       leftVehicle.vehicleId < rightVehicle.vehicleId
@@ -283,6 +320,7 @@ export function createMetaverseAuthoritativeWorldSnapshot<
     }));
 
   return createMetaverseRealtimeWorldSnapshot({
+    environmentBodies,
     players,
     snapshotSequence: config.snapshotSequence,
     tick: {

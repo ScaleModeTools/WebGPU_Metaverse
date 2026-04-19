@@ -3,15 +3,15 @@ import type {
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 import type { MetaversePlayerId } from "@webgpu-metaverse/shared/metaverse/presence";
 
-import { MetaverseAuthoritativeWorldRuntime } from "../classes/metaverse-authoritative-world-runtime.js";
+import type { MetaverseAuthoritativeWorldRuntimeOwner } from "../types/metaverse-authoritative-world-runtime-owner.js";
 
 export class MetaverseRealtimeWorldWebTransportDatagramSession {
-  readonly #runtime: MetaverseAuthoritativeWorldRuntime;
+  readonly #runtime: MetaverseAuthoritativeWorldRuntimeOwner;
 
   #boundPlayerId: MetaversePlayerId | null = null;
   #disposed = false;
 
-  constructor(runtime: MetaverseAuthoritativeWorldRuntime) {
+  constructor(runtime: MetaverseAuthoritativeWorldRuntimeOwner) {
     this.#runtime = runtime;
   }
 
@@ -48,9 +48,9 @@ export class MetaverseRealtimeWorldWebTransportDatagramSession {
 }
 
 export class MetaverseRealtimeWorldWebTransportDatagramAdapter {
-  readonly #runtime: MetaverseAuthoritativeWorldRuntime;
+  readonly #runtime: MetaverseAuthoritativeWorldRuntimeOwner;
 
-  constructor(runtime: MetaverseAuthoritativeWorldRuntime) {
+  constructor(runtime: MetaverseAuthoritativeWorldRuntimeOwner) {
     this.#runtime = runtime;
   }
 

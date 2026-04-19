@@ -14,10 +14,17 @@ after(async () => {
 });
 
 test("MetaverseScenePresentationState resets presentation state and syncs a null-character scene without inventing presentation owners", async () => {
-  const [{ Scene }, { MetaverseScenePresentationState }] =
+  const [
+    { Scene },
+    { MetaverseScenePresentationState },
+    { createMetaverseSceneMountedPresentationSnapshot }
+  ] =
     await Promise.all([
       import("three/webgpu"),
-      clientLoader.load("/src/metaverse/render/metaverse-scene-presentation-state.ts")
+      clientLoader.load("/src/metaverse/render/metaverse-scene-presentation-state.ts"),
+      clientLoader.load(
+        "/src/metaverse/render/mounts/metaverse-scene-mounted-presentation-snapshot.ts"
+      )
     ]);
   const calls = [];
   const cameraSnapshot = Object.freeze({
@@ -34,8 +41,10 @@ test("MetaverseScenePresentationState resets presentation state and syncs a null
     seatId: "driver_seat"
   });
   const sceneInteractionSnapshot = Object.freeze({
-    mountedEnvironmentAssetId: "metaverse-hub-skiff-v1"
+    focusedMountable: null
   });
+  const mountedPresentationSnapshot =
+    createMetaverseSceneMountedPresentationSnapshot(mountedEnvironment);
   const presentationState = new MetaverseScenePresentationState({
     cameraPresentationState: {
       syncPresentedCamera(snapshot, nowMs) {
@@ -106,12 +115,12 @@ test("MetaverseScenePresentationState resets presentation state and syncs a null
       cameraSnapshot,
       1 / 60,
       null,
-      mountedEnvironment
+      mountedPresentationSnapshot
     ],
     ["sync-camera-presentation", cameraSnapshot, 123],
     ["sync-remote-character-presentation", [], 1 / 60],
     ["sync-portal-presentation", null, 123],
-    ["sync-scene-interaction", cameraSnapshot, mountedEnvironment]
+    ["sync-scene-interaction", cameraSnapshot, mountedPresentationSnapshot]
   ]);
   presentationState.resetPresentation();
 
@@ -128,7 +137,7 @@ test("MetaverseScenePresentationState delegates lifecycle entrypoints to the pre
     cameraPresentationState: {
       syncPresentedCamera() {},
       syncSceneInteractionSnapshot() {
-        return Object.freeze({ mountedEnvironmentAssetId: null });
+        return Object.freeze({ focusedMountable: null });
       }
     },
     lifecycleState: {

@@ -36,6 +36,25 @@ test("resolveShellNavigation keeps completed setup in the pre-metaverse screen u
   });
 });
 
+test("resolveShellNavigation keeps unconfirmed users on the main entry screen instead of a separate login route", async () => {
+  const { resolveShellNavigation } = await clientLoader.load(
+    "/src/navigation/guards/resolve-shell-navigation.ts"
+  );
+
+  const snapshot = resolveShellNavigation({
+    hasConfirmedProfile: false,
+    inputMode: "mouse",
+    webcamPermission: "prompt",
+    gameplayCapability: "supported",
+    calibrationShell: "pending",
+    shellStage: "main-menu"
+  });
+
+  assert.equal(snapshot.activeStep, "main-menu");
+  assert.equal(snapshot.canEnterMetaverse, true);
+  assert.equal(snapshot.nextMetaverseStep, "metaverse");
+});
+
 test("resolveShellNavigation enters the metaverse only after an explicit hub request", async () => {
   const { resolveShellNavigation } = await clientLoader.load(
     "/src/navigation/guards/resolve-shell-navigation.ts"

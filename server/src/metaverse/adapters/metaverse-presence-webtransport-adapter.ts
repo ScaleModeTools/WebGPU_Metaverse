@@ -7,14 +7,14 @@ import {
   createMetaversePresenceWebTransportServerEventMessage
 } from "@webgpu-metaverse/shared/metaverse/presence";
 
-import { MetaverseAuthoritativeWorldRuntime } from "../classes/metaverse-authoritative-world-runtime.js";
+import type { MetaverseAuthoritativeWorldRuntimeOwner } from "../types/metaverse-authoritative-world-runtime-owner.js";
 
 export class MetaversePresenceWebTransportSession {
-  readonly #runtime: MetaverseAuthoritativeWorldRuntime;
+  readonly #runtime: MetaverseAuthoritativeWorldRuntimeOwner;
 
   #disposed = false;
 
-  constructor(runtime: MetaverseAuthoritativeWorldRuntime) {
+  constructor(runtime: MetaverseAuthoritativeWorldRuntimeOwner) {
     this.#runtime = runtime;
   }
 
@@ -68,9 +68,9 @@ export class MetaversePresenceWebTransportSession {
 }
 
 export class MetaversePresenceWebTransportAdapter {
-  readonly #runtime: MetaverseAuthoritativeWorldRuntime;
+  readonly #runtime: MetaverseAuthoritativeWorldRuntimeOwner;
 
-  constructor(runtime: MetaverseAuthoritativeWorldRuntime) {
+  constructor(runtime: MetaverseAuthoritativeWorldRuntimeOwner) {
     this.#runtime = runtime;
   }
 

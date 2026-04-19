@@ -1,7 +1,4 @@
 import {
-  resolveMetaverseMountedLookConstraintBounds
-} from "@webgpu-metaverse/shared";
-import {
   type MetaverseGroundedBodySnapshot,
   type PhysicsVector3Snapshot
 } from "@/physics";
@@ -11,6 +8,9 @@ import {
   advanceMetaverseYawRadians,
   directionFromYawPitch
 } from "../../states/metaverse-flight";
+import type {
+  MetaverseMountedOccupancyPresentationStateSnapshot
+} from "../../states/mounted-occupancy";
 import type { MetaverseFlightInputSnapshot } from "../../types/metaverse-control-mode";
 import type { MetaverseCameraSnapshot } from "../../types/presentation";
 import type { MetaverseRuntimeConfig } from "../../types/runtime-config";
@@ -58,23 +58,20 @@ function createMountedAnchorCameraPresentationSnapshot(
 export function advanceTraversalMountedOccupancyLookYawRadians(
   yawOffsetRadians: number,
   movementInput: Pick<MetaverseFlightInputSnapshot, "yawAxis">,
-  mountedVehicleSnapshot: TraversalMountedVehicleSnapshot,
-  config: MetaverseRuntimeConfig,
+  mountedOccupancyPresentationState:
+    | MetaverseMountedOccupancyPresentationStateSnapshot
+    | null,
+  config: Pick<MetaverseRuntimeConfig, "orientation">,
   deltaSeconds: number
 ): number {
-  const occupancy = mountedVehicleSnapshot.occupancy;
-
   if (
-    occupancy === null ||
-    occupancy.cameraPolicyId === "vehicle-follow" ||
+    mountedOccupancyPresentationState === null ||
+    mountedOccupancyPresentationState.usesVehicleFollowCamera ||
     deltaSeconds <= 0
   ) {
     return 0;
   }
 
-  const lookLimitBounds = resolveMetaverseMountedLookConstraintBounds(
-    occupancy.lookLimitPolicyId
-  );
   const nextYawOffsetRadians = advanceMetaverseYawRadians(
     yawOffsetRadians,
     movementInput.yawAxis,
@@ -84,31 +81,25 @@ export function advanceTraversalMountedOccupancyLookYawRadians(
 
   return clamp(
     nextYawOffsetRadians,
-    -lookLimitBounds.maxYawOffsetRadians,
-    lookLimitBounds.maxYawOffsetRadians
+    -mountedOccupancyPresentationState.lookConstraintBounds.maxYawOffsetRadians,
+    mountedOccupancyPresentationState.lookConstraintBounds.maxYawOffsetRadians
   );
 }
 
 export function clampTraversalMountedOccupancyPitchRadians(
   pitchRadians: number,
-  mountedVehicleSnapshot: TraversalMountedVehicleSnapshot,
-  config: MetaverseRuntimeConfig
+  mountedOccupancyPresentationState:
+    | MetaverseMountedOccupancyPresentationStateSnapshot
+    | null
 ): number {
-  void config;
-  const occupancy = mountedVehicleSnapshot.occupancy;
-
-  if (occupancy === null) {
+  if (mountedOccupancyPresentationState === null) {
     return pitchRadians;
   }
 
-  const lookLimitBounds = resolveMetaverseMountedLookConstraintBounds(
-    occupancy.lookLimitPolicyId
-  );
-
   return clamp(
     pitchRadians,
-    lookLimitBounds.minPitchRadians,
-    lookLimitBounds.maxPitchRadians
+    mountedOccupancyPresentationState.lookConstraintBounds.minPitchRadians,
+    mountedOccupancyPresentationState.lookConstraintBounds.maxPitchRadians
   );
 }
 
@@ -173,13 +164,13 @@ export function createTraversalMountedVehicleCameraPresentationSnapshot(
   pitchRadians: number,
   config: MetaverseRuntimeConfig,
   mountedEnvironmentAnchorSnapshot: MountedEnvironmentAnchorSnapshot | null,
+  mountedOccupancyPresentationState:
+    | MetaverseMountedOccupancyPresentationStateSnapshot
+    | null,
   lookYawOffsetRadians = 0
 ): MetaverseCameraSnapshot {
-  const occupancy = mountedVehicleSnapshot.occupancy;
-
   if (
-    occupancy !== null &&
-    occupancy.cameraPolicyId !== "vehicle-follow" &&
+    mountedOccupancyPresentationState?.usesMountedAnchorCamera === true &&
     mountedEnvironmentAnchorSnapshot !== null
   ) {
     return createMountedAnchorCameraPresentationSnapshot(

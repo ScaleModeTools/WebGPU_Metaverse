@@ -10,14 +10,15 @@ export function MetaverseShell() {
   const activeStep = controller.navigationSnapshot.activeStep;
   const isImmersiveStage =
     activeStep === "calibration" ||
+    activeStep === "tool" ||
     activeStep === "metaverse" ||
     activeStep === "gameplay";
-  const isMinimalEntryStage =
-    activeStep === "login" || activeStep === "main-menu";
+  const isMinimalEntryStage = activeStep === "main-menu";
   const showDeveloperUi = import.meta.env.DEV;
   const stageRouter = (
     <ShellStageRouter
       activeExperienceId={controller.activeExperienceId}
+      activeMetaverseBundleId={controller.activeMetaverseBundleId}
       activeStep={activeStep}
       audioStatusLabel={controller.shellView.audioStatusLabel}
       bestScore={controller.profile?.snapshot.bestScore ?? 0}
@@ -49,7 +50,10 @@ export function MetaverseShell() {
       onInputModeChange={controller.onInputModeChange}
       onLoginSubmit={controller.onLoginSubmit}
       metaverseControlMode={controller.metaverseControlMode}
+      onCloseToolRequest={controller.onCloseToolRequest}
       onOpenGameplayMenu={() => controller.onGameplayMenuOpen(true)}
+      onOpenToolRequest={controller.onOpenToolRequest}
+      onRunToolPreviewRequest={controller.onRunToolPreviewRequest}
       onMetaverseControlModeChange={controller.onMetaverseControlModeChange}
       onRequestPermission={controller.onRequestPermission}
       onRecalibrationRequest={controller.onRecalibrationRequest}
@@ -65,7 +69,7 @@ export function MetaverseShell() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgb(14_165_233/0.12),transparent_30%),radial-gradient(circle_at_bottom_right,rgb(251_146_60/0.14),transparent_32%)]" />
 
       {isImmersiveStage ? (
-        <main className="relative min-h-dvh">{stageRouter}</main>
+        <main className="relative h-dvh overflow-hidden">{stageRouter}</main>
       ) : isMinimalEntryStage ? (
         <main className="relative min-h-dvh overflow-y-auto">{stageRouter}</main>
       ) : (

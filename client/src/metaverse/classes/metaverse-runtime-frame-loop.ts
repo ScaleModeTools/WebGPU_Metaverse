@@ -1,6 +1,16 @@
 import type { Camera, Scene } from "three/webgpu";
+import type {
+  MetaversePlayerTraversalIntentSnapshotInput,
+  MetaverseRealtimePlayerSnapshot
+} from "@webgpu-metaverse/shared";
 
+import {
+  metaverseLocalAuthorityReconciliationConfig
+} from "../config/metaverse-world-network";
 import { resolveFocusedPortalSnapshot } from "../states/metaverse-flight";
+import {
+  createMetaverseMountedInteractionSnapshot
+} from "../states/metaverse-mounted-interaction-snapshot";
 import type {
   FocusedExperiencePortalSnapshot,
   FocusedMountableSnapshot,
@@ -8,6 +18,7 @@ import type {
   MetaverseCharacterPresentationSnapshot,
   MetaverseFlightInputSnapshot,
   MetaverseHudSnapshot,
+  MetaverseMountedInteractionSnapshot,
   MetaverseRemoteCharacterPresentationSnapshot,
   MountedEnvironmentSnapshot,
   MetaversePortalConfig
@@ -37,11 +48,21 @@ interface MetaverseRuntimeFrameRendererHost {
 }
 
 interface MetaverseRuntimeFrameBootLifecycle {
-  isBootCinematicActive(nowMs: number): boolean;
-  resolveBootCinematicPresentationSnapshot(nowMs: number): {
-    readonly cameraSnapshot: MetaverseCameraSnapshot;
-    readonly focusedPortal: FocusedExperiencePortalSnapshot | null;
-  } | null;
+  resolveRuntimeCameraPhaseState(input: {
+    readonly liveCameraSnapshot: MetaverseCameraSnapshot;
+    readonly liveFocusedPortal: FocusedExperiencePortalSnapshot | null;
+    readonly nowMs: number;
+    readonly presenceReady: boolean;
+    readonly worldReady: boolean;
+  }): {
+    readonly blocksMovementInput: boolean;
+    readonly hidesLocalCharacter: boolean;
+    readonly presentationSnapshot: {
+      readonly cameraSnapshot: MetaverseCameraSnapshot;
+      readonly focusedPortal: FocusedExperiencePortalSnapshot | null;
+    } | null;
+    readonly suppressesInteractionFocus: boolean;
+  };
 }
 
 interface MetaverseRuntimeFrameAuthoritativeWorldSync {
@@ -50,9 +71,9 @@ interface MetaverseRuntimeFrameAuthoritativeWorldSync {
 
 interface MetaverseRuntimeFrameEnvironmentPhysicsRuntime {
   syncDebugPresentation(): void;
-  syncPushableBodyPresentations(): void;
-  syncRemoteCharacterBlockers(
-    remoteCharacterPresentations: readonly MetaverseRemoteCharacterPresentationSnapshot[]
+  syncDynamicEnvironmentBodyPresentations(): void;
+  syncAuthoritativeRemotePlayerBlockers(
+    remotePlayerSnapshots: readonly MetaverseRealtimePlayerSnapshot[]
   ): void;
 }
 
@@ -69,6 +90,7 @@ interface MetaverseRuntimeFrameHudPublisher {
 }
 
 interface MetaverseRuntimeFramePresenceRuntime {
+  readonly connectionRequired: boolean;
   readonly isJoined: boolean;
   syncPresencePose(
     characterPresentationSnapshot: MetaverseCharacterPresentationSnapshot | null,
@@ -80,15 +102,15 @@ interface MetaverseRuntimeFramePresenceRuntime {
 }
 
 interface MetaverseRuntimeFrameRemoteWorldRuntime {
+  readonly connectionRequired: boolean;
+  readonly isConnected: boolean;
   readonly remoteCharacterPresentations:
     readonly MetaverseRemoteCharacterPresentationSnapshot[];
+  readFreshAuthoritativeRemotePlayerSnapshots(
+    maxAuthoritativeSnapshotAgeMs: number
+  ): readonly MetaverseRealtimePlayerSnapshot[];
   previewLocalTraversalIntent(
-    movementInput: Pick<
-      MetaverseFlightInputSnapshot,
-      "boost" | "jump" | "moveAxis" | "strafeAxis" | "yawAxis"
-    >,
-    traversalFacing: Pick<MetaverseCameraSnapshot, "pitchRadians" | "yawRadians">,
-    locomotionMode: MetaverseHudSnapshot["locomotionMode"]
+    traversalIntentInput: MetaversePlayerTraversalIntentSnapshotInput | null
   ): unknown;
   sampleRemoteWorld(): void;
   syncConnection(presenceJoined: boolean): void;
@@ -101,12 +123,7 @@ interface MetaverseRuntimeFrameRemoteWorldRuntime {
       | null
   ): void;
   syncLocalTraversalIntent(
-    movementInput: Pick<
-      MetaverseFlightInputSnapshot,
-      "boost" | "jump" | "moveAxis" | "strafeAxis" | "yawAxis"
-    >,
-    traversalFacing: Pick<MetaverseCameraSnapshot, "pitchRadians" | "yawRadians">,
-    locomotionMode: MetaverseHudSnapshot["locomotionMode"]
+    traversalIntentInput: MetaversePlayerTraversalIntentSnapshotInput | null
   ): unknown;
 }
 
@@ -139,9 +156,17 @@ interface MetaverseRuntimeFrameTraversalRuntime {
   readonly routedDriverVehicleControlIntentSnapshot:
     | RoutedDriverVehicleControlIntentSnapshot
     | null;
+  resolveLocalTraversalIntentInput(
+    movementInput: Pick<
+      MetaverseFlightInputSnapshot,
+      "boost" | "jump" | "moveAxis" | "pitchAxis" | "strafeAxis" | "yawAxis"
+    >,
+    deltaSeconds: number
+  ): MetaversePlayerTraversalIntentSnapshotInput | null;
   advance(
     movementInput: MetaverseFlightInputSnapshot,
-    deltaSeconds: number
+    deltaSeconds: number,
+    traversalIntentInput: MetaversePlayerTraversalIntentSnapshotInput | null
   ): void;
   syncIssuedTraversalIntentSnapshot(intentSnapshot: unknown): void;
 }
@@ -179,12 +204,11 @@ export class MetaverseRuntimeFrameLoop {
   readonly #sceneRuntime: MetaverseRuntimeFrameSceneRuntime;
   readonly #traversalRuntime: MetaverseRuntimeFrameTraversalRuntime;
 
-  #focusedMountable: FocusedMountableSnapshot | null = null;
   #focusedPortal: FocusedExperiencePortalSnapshot | null = null;
   #frameDeltaMs = 0;
   #frameRate = 0;
   #lastFrameAtMs: number | null = null;
-  #mountedEnvironment: MountedEnvironmentSnapshot | null = null;
+  #mountedInteraction = createMetaverseMountedInteractionSnapshot(null, null);
   #renderedFrameCount = 0;
 
   constructor({
@@ -213,10 +237,6 @@ export class MetaverseRuntimeFrameLoop {
     this.#traversalRuntime = traversalRuntime;
   }
 
-  get focusedMountable(): FocusedMountableSnapshot | null {
-    return this.#focusedMountable;
-  }
-
   get focusedPortal(): FocusedExperiencePortalSnapshot | null {
     return this.#focusedPortal;
   }
@@ -229,8 +249,8 @@ export class MetaverseRuntimeFrameLoop {
     return this.#frameRate;
   }
 
-  get mountedEnvironment(): MountedEnvironmentSnapshot | null {
-    return this.#mountedEnvironment;
+  get mountedInteraction(): MetaverseMountedInteractionSnapshot {
+    return this.#mountedInteraction;
   }
 
   get renderedFrameCount(): number {
@@ -238,12 +258,14 @@ export class MetaverseRuntimeFrameLoop {
   }
 
   reset(): void {
-    this.#focusedMountable = null;
     this.#focusedPortal = null;
     this.#frameDeltaMs = 0;
     this.#frameRate = 0;
     this.#lastFrameAtMs = null;
-    this.#mountedEnvironment = null;
+    this.#mountedInteraction = createMetaverseMountedInteractionSnapshot(
+      null,
+      null
+    );
     this.#renderedFrameCount = 0;
   }
 
@@ -252,7 +274,6 @@ export class MetaverseRuntimeFrameLoop {
     nowMs,
     renderer
   }: MetaverseRuntimeFrameSyncRequest): void {
-    const bootCinematicActive = this.#bootLifecycle.isBootCinematicActive(nowMs);
     const deltaSeconds =
       this.#lastFrameAtMs === null
         ? 0
@@ -261,7 +282,13 @@ export class MetaverseRuntimeFrameLoop {
     this.#frameDeltaMs = deltaSeconds * 1000;
     this.#frameRate = deltaSeconds > 0 ? 1 / deltaSeconds : 0;
     this.#lastFrameAtMs = nowMs;
-    this.#remoteWorldRuntime.syncConnection(this.#presenceRuntime.isJoined);
+    const presenceReady =
+      !this.#presenceRuntime.connectionRequired || this.#presenceRuntime.isJoined;
+    const worldReady =
+      !this.#remoteWorldRuntime.connectionRequired ||
+      this.#remoteWorldRuntime.isConnected;
+
+    this.#remoteWorldRuntime.syncConnection(presenceReady);
     this.#remoteWorldRuntime.sampleRemoteWorld();
     this.#presenceRuntime.syncRemoteCharacterPresentations();
     this.#authoritativeWorldSync.syncAuthoritativeWorldSnapshots();
@@ -269,32 +296,53 @@ export class MetaverseRuntimeFrameLoop {
     const remoteCharacterPresentations =
       this.#remoteWorldRuntime.remoteCharacterPresentations;
 
-    this.#environmentPhysicsRuntime.syncRemoteCharacterBlockers(
-      remoteCharacterPresentations
+    this.#environmentPhysicsRuntime.syncAuthoritativeRemotePlayerBlockers(
+      this.#remoteWorldRuntime.readFreshAuthoritativeRemotePlayerSnapshots(
+        metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
+      )
     );
 
-    const movementInput = bootCinematicActive
+    const preAdvanceCameraSnapshot = this.#traversalRuntime.cameraSnapshot;
+    const preAdvanceFocusedPortal = resolveFocusedPortalSnapshot(
+      preAdvanceCameraSnapshot,
+      this.#portals
+    );
+    const preAdvanceCameraPhaseState =
+      this.#bootLifecycle.resolveRuntimeCameraPhaseState({
+        liveCameraSnapshot: preAdvanceCameraSnapshot,
+        liveFocusedPortal: preAdvanceFocusedPortal,
+        nowMs,
+        presenceReady,
+        worldReady
+      });
+    const movementInput = preAdvanceCameraPhaseState.blocksMovementInput
       ? neutralMetaverseFlightInputSnapshot
       : this.#flightInputRuntime.readSnapshot();
-    const issuedTraversalFacingSnapshot = this.#traversalRuntime.cameraSnapshot;
+    const localTraversalIntentInput =
+      this.#traversalRuntime.resolveLocalTraversalIntentInput(
+        movementInput,
+        deltaSeconds
+      );
 
     this.#traversalRuntime.syncIssuedTraversalIntentSnapshot(
       this.#remoteWorldRuntime.previewLocalTraversalIntent(
-        movementInput,
-        issuedTraversalFacingSnapshot,
-        this.#traversalRuntime.locomotionMode
+        localTraversalIntentInput
       )
     );
-    this.#traversalRuntime.advance(movementInput, deltaSeconds);
+    this.#traversalRuntime.advance(
+      movementInput,
+      deltaSeconds,
+      localTraversalIntentInput
+    );
 
     const cameraSnapshot = this.#traversalRuntime.cameraSnapshot;
-    this.#mountedEnvironment = this.#traversalRuntime.mountedEnvironmentSnapshot;
+    const mountedEnvironment = this.#traversalRuntime.mountedEnvironmentSnapshot;
 
     this.#presenceRuntime.syncPresencePose(
       this.#traversalRuntime.characterPresentationSnapshot,
       cameraSnapshot,
       this.#traversalRuntime.locomotionMode,
-      this.#mountedEnvironment
+      mountedEnvironment
     );
 
     this.#remoteWorldRuntime.syncLocalPlayerLook(
@@ -305,26 +353,27 @@ export class MetaverseRuntimeFrameLoop {
     this.#remoteWorldRuntime.syncLocalDriverVehicleControl(
       this.#traversalRuntime.routedDriverVehicleControlIntentSnapshot
     );
-    this.#environmentPhysicsRuntime.syncPushableBodyPresentations();
+    this.#environmentPhysicsRuntime.syncDynamicEnvironmentBodyPresentations();
     this.#traversalRuntime.syncIssuedTraversalIntentSnapshot(
-      this.#remoteWorldRuntime.syncLocalTraversalIntent(
-        movementInput,
-        cameraSnapshot,
-        this.#traversalRuntime.locomotionMode
-      )
+      this.#remoteWorldRuntime.syncLocalTraversalIntent(localTraversalIntentInput)
     );
 
     const liveFocusedPortal = resolveFocusedPortalSnapshot(
       cameraSnapshot,
       this.#portals
     );
-    const bootCinematicSnapshot = bootCinematicActive
-      ? this.#bootLifecycle.resolveBootCinematicPresentationSnapshot(nowMs)
-      : null;
+    const cameraPhaseState = this.#bootLifecycle.resolveRuntimeCameraPhaseState({
+      liveCameraSnapshot: cameraSnapshot,
+      liveFocusedPortal,
+      nowMs,
+      presenceReady,
+      worldReady
+    });
+    const presentationSnapshot = cameraPhaseState.presentationSnapshot;
     const presentationCameraSnapshot =
-      bootCinematicSnapshot?.cameraSnapshot ?? cameraSnapshot;
+      presentationSnapshot?.cameraSnapshot ?? cameraSnapshot;
     const presentationFocusedPortal =
-      bootCinematicSnapshot?.focusedPortal ?? liveFocusedPortal;
+      presentationSnapshot?.focusedPortal ?? liveFocusedPortal;
 
     this.#sceneRuntime.syncViewport(renderer, canvas, this.#devicePixelRatio);
     const sceneInteractionSnapshot = this.#sceneRuntime.syncPresentation(
@@ -332,11 +381,11 @@ export class MetaverseRuntimeFrameLoop {
       presentationFocusedPortal,
       nowMs,
       deltaSeconds,
-      bootCinematicActive
+      cameraPhaseState.hidesLocalCharacter
         ? null
         : this.#traversalRuntime.characterPresentationSnapshot,
       remoteCharacterPresentations,
-      this.#mountedEnvironment
+      mountedEnvironment
     );
 
     this.#hudPublisher.trackFrameTelemetry(
@@ -346,11 +395,15 @@ export class MetaverseRuntimeFrameLoop {
     );
     this.#environmentPhysicsRuntime.syncDebugPresentation();
 
-    this.#focusedPortal = bootCinematicActive ? null : liveFocusedPortal;
-    this.#focusedMountable = bootCinematicActive
+    this.#focusedPortal = cameraPhaseState.suppressesInteractionFocus
       ? null
-      : sceneInteractionSnapshot.focusedMountable;
-    this.#mountedEnvironment = this.#traversalRuntime.mountedEnvironmentSnapshot;
+      : liveFocusedPortal;
+    this.#mountedInteraction = createMetaverseMountedInteractionSnapshot(
+      cameraPhaseState.suppressesInteractionFocus
+        ? null
+        : sceneInteractionSnapshot.focusedMountable,
+      mountedEnvironment
+    );
     renderer.render(this.#sceneRuntime.scene, this.#sceneRuntime.camera);
     this.#renderedFrameCount += 1;
   }

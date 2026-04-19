@@ -22,7 +22,7 @@ import {
   createRealtimeWorldSnapshot,
   createSkiffBoardingRuntimeConfig,
   createStartedWebGpuMetaverseRuntimeHarness,
-  disabledBootCinematicConfig,
+  disabledRuntimeCameraPhaseConfig,
   FakeMetaversePresenceClient,
   FakeMetaverseRenderer,
   FakeMetaverseWorldClient
@@ -293,7 +293,7 @@ test("WebGpuMetaverseRuntime waits for authoritative world snapshots before rend
     );
     const fakeWorldClient = new FakeMetaverseWorldClient();
     const runtime = new WebGpuMetaverseRuntime(undefined, {
-      bootCinematicConfig: disabledBootCinematicConfig,
+      runtimeCameraPhaseConfig: disabledRuntimeCameraPhaseConfig,
       cancelAnimationFrame:
         globalThis.window.cancelAnimationFrame.bind(globalThis.window),
       characterProofConfig,
@@ -479,7 +479,7 @@ test("WebGpuMetaverseRuntime starts in swim locomotion over open water and advan
     const runtime = new WebGpuMetaverseRuntime(
       createOpenWaterSpawnRuntimeConfig(metaverseRuntimeConfig),
       {
-      bootCinematicConfig: disabledBootCinematicConfig,
+      runtimeCameraPhaseConfig: disabledRuntimeCameraPhaseConfig,
       cancelAnimationFrame: globalThis.window.cancelAnimationFrame.bind(globalThis.window),
       createRenderer: () => renderer,
       physicsRuntime: createFakePhysicsRuntime(RapierPhysicsRuntime),
@@ -631,7 +631,7 @@ test("WebGpuMetaverseRuntime stamps and syncs a grounded jump intent before loca
       },
       {
         authoritativePlayerMovementEnabled: true,
-        bootCinematicConfig: disabledBootCinematicConfig,
+        runtimeCameraPhaseConfig: disabledRuntimeCameraPhaseConfig,
         cancelAnimationFrame:
           globalThis.window.cancelAnimationFrame.bind(globalThis.window),
         createMetaversePresenceClient: () => fakePresenceClient,
@@ -770,7 +770,7 @@ test("WebGpuMetaverseRuntime keeps swim jump input off the authoritative travers
       createOpenWaterSpawnRuntimeConfig(metaverseRuntimeConfig),
       {
         authoritativePlayerMovementEnabled: true,
-        bootCinematicConfig: disabledBootCinematicConfig,
+        runtimeCameraPhaseConfig: disabledRuntimeCameraPhaseConfig,
         cancelAnimationFrame:
           globalThis.window.cancelAnimationFrame.bind(globalThis.window),
         createMetaversePresenceClient: () => fakePresenceClient,
@@ -875,7 +875,7 @@ test("WebGpuMetaverseRuntime keeps the held-weapon render camera traversal-owned
       },
       {
         attachmentProofConfig,
-        bootCinematicConfig: disabledBootCinematicConfig,
+        runtimeCameraPhaseConfig: disabledRuntimeCameraPhaseConfig,
         cancelAnimationFrame:
           globalThis.window.cancelAnimationFrame.bind(globalThis.window),
         characterProofConfig,
@@ -983,7 +983,7 @@ test("WebGpuMetaverseRuntime routes an authored dock entry into sustained swim i
     clientLoader.load("/src/metaverse/classes/webgpu-metaverse-runtime.ts"),
     clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
     clientLoader.load("/src/physics/index.ts"),
-    clientLoader.load("/src/app/states/metaverse-asset-proof.ts"),
+    clientLoader.load("/src/metaverse/world/proof/index.ts"),
     createEmptySceneAssetLoader()
   ]);
   const renderer = new FakeMetaverseRenderer();
@@ -1026,7 +1026,7 @@ test("WebGpuMetaverseRuntime routes an authored dock entry into sustained swim i
 
   try {
     const runtime = new WebGpuMetaverseRuntime(dockEntryRuntimeConfig, {
-      bootCinematicConfig: disabledBootCinematicConfig,
+      runtimeCameraPhaseConfig: disabledRuntimeCameraPhaseConfig,
       cancelAnimationFrame:
         globalThis.window.cancelAnimationFrame.bind(globalThis.window),
       createRenderer: () => renderer,
@@ -1166,7 +1166,7 @@ test("WebGpuMetaverseRuntime derives authoritative surface-routing telemetry fro
     ]);
     const runtime = new WebGpuMetaverseRuntime(undefined, {
       authoritativePlayerMovementEnabled: true,
-      bootCinematicConfig: disabledBootCinematicConfig,
+      runtimeCameraPhaseConfig: disabledRuntimeCameraPhaseConfig,
       cancelAnimationFrame:
         globalThis.window.cancelAnimationFrame.bind(globalThis.window),
       characterProofConfig,
@@ -1202,7 +1202,12 @@ test("WebGpuMetaverseRuntime derives authoritative surface-routing telemetry fro
     assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
         .surfaceRouting.decisionReason,
-      "capability-transition-blocked"
+      "capability-maintained"
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
+        .surfaceRouting.blockingAffordanceDetected,
+      false
     );
     assert.notEqual(
       runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
@@ -1211,7 +1216,7 @@ test("WebGpuMetaverseRuntime derives authoritative surface-routing telemetry fro
     );
     assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
-        .surfaceRouting.stepSupportedProbeCount,
+        .surfaceRouting.supportingAffordanceSampleCount,
       0
     );
     assert.equal(
@@ -1318,11 +1323,17 @@ test("WebGpuMetaverseRuntime routes mounted hub input through skiff locomotion a
     }
 
     assert.equal(
-      runtime.hudSnapshot.mountedEnvironment?.environmentAssetId,
+      runtime.hudSnapshot.mountedInteraction.mountedEnvironment?.environmentAssetId,
       "metaverse-hub-skiff-v1"
     );
-    assert.equal(runtime.hudSnapshot.mountedEnvironment?.occupancyKind, "seat");
-    assert.equal(runtime.hudSnapshot.mountedEnvironment?.seatId, "driver-seat");
+    assert.equal(
+      runtime.hudSnapshot.mountedInteraction.mountedEnvironment?.occupancyKind,
+      "seat"
+    );
+    assert.equal(
+      runtime.hudSnapshot.mountedInteraction.mountedEnvironment?.seatId,
+      "driver-seat"
+    );
     assert.equal(runtime.hudSnapshot.locomotionMode, "mounted");
 
     const mountedCamera = runtime.hudSnapshot.camera;
@@ -1341,8 +1352,14 @@ test("WebGpuMetaverseRuntime routes mounted hub input through skiff locomotion a
       Math.abs(runtime.hudSnapshot.camera.yawRadians - mountedCamera.yawRadians) >
         0.01
     );
-    assert.equal(runtime.hudSnapshot.mountedEnvironment?.occupancyKind, "seat");
-    assert.equal(runtime.hudSnapshot.mountedEnvironment?.seatId, "driver-seat");
+    assert.equal(
+      runtime.hudSnapshot.mountedInteraction.mountedEnvironment?.occupancyKind,
+      "seat"
+    );
+    assert.equal(
+      runtime.hudSnapshot.mountedInteraction.mountedEnvironment?.seatId,
+      "driver-seat"
+    );
     assert.equal(runtime.hudSnapshot.locomotionMode, "mounted");
 
     const mountedDriverCamera = runtime.hudSnapshot.camera;
@@ -1363,7 +1380,7 @@ test("WebGpuMetaverseRuntime routes mounted hub input through skiff locomotion a
 
     runtime.leaveMountedEnvironment();
 
-    assert.equal(runtime.hudSnapshot.mountedEnvironment, null);
+    assert.equal(runtime.hudSnapshot.mountedInteraction.mountedEnvironment, null);
     assert.equal(runtime.hudSnapshot.locomotionMode, "swim");
 
   } finally {
@@ -1430,7 +1447,10 @@ test("WebGpuMetaverseRuntime publishes reliable mounted occupancy changes and ro
       windowHarness.advanceFrame(nowMs);
     }
 
-    assert.equal(runtime.hudSnapshot.mountedEnvironment?.seatId, "driver-seat");
+    assert.equal(
+      runtime.hudSnapshot.mountedInteraction.mountedEnvironment?.seatId,
+      "driver-seat"
+    );
 
     windowHarness.dispatch("keydown", {
       code: "KeyW"

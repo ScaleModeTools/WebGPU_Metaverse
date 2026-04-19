@@ -1,13 +1,15 @@
 import type { NavigationFlow } from "../types/navigation-flow";
 
 export const navigationFlow = {
-  initialStep: "login",
+  initialStep: "main-menu",
   steps: [
-    { id: "login", label: "Enter username" },
     {
       id: "main-menu",
-      label: "Review profile, choose input, and launch gameplay",
-      requiresPrevious: ["login"]
+      label: "Review shell options, choose input, and launch gameplay"
+    },
+    {
+      id: "tool",
+      label: "Open the full-screen map editor suite from the dev shell"
     },
     {
       id: "permissions",

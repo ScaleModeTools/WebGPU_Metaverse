@@ -1,4 +1,7 @@
 import { Group, Object3D, Quaternion, Vector3 } from "three/webgpu";
+import type {
+  MetaverseWorldMountedOccupancyPolicySnapshot
+} from "@webgpu-metaverse/shared/metaverse/world";
 
 import type {
   FocusedMountableSnapshot,
@@ -47,17 +50,9 @@ export interface MetaverseSceneMountedCharacterPresentationRuntime {
   readonly seatSocketNode: Object3D;
 }
 
-export interface ResolvedMountedEnvironmentSelection {
+export interface ResolvedMountedEnvironmentSelection
+  extends MetaverseWorldMountedOccupancyPolicySnapshot {
   readonly anchorGroup: Object3D;
-  readonly cameraPolicyId: MountedEnvironmentSnapshot["cameraPolicyId"];
-  readonly controlRoutingPolicyId: MountedEnvironmentSnapshot["controlRoutingPolicyId"];
-  readonly entryId: string | null;
-  readonly lookLimitPolicyId: MountedEnvironmentSnapshot["lookLimitPolicyId"];
-  readonly occupancyAnimationId: MountedEnvironmentSnapshot["occupancyAnimationId"];
-  readonly occupancyKind: MountedEnvironmentSnapshot["occupancyKind"];
-  readonly occupantLabel: MountedEnvironmentSnapshot["occupantLabel"];
-  readonly occupantRole: MountedEnvironmentSnapshot["occupantRole"];
-  readonly seatId: string | null;
 }
 
 export interface MountedCharacterRuntime<
@@ -90,7 +85,6 @@ export interface MountedEnvironmentSelectionReference {
 
 export interface MetaverseSceneInteractionSnapshot {
   readonly focusedMountable: FocusedMountableSnapshot | null;
-  readonly mountedEnvironment: MountedEnvironmentSnapshot | null;
 }
 
 export interface FocusedMountableEnvironmentRuntime<

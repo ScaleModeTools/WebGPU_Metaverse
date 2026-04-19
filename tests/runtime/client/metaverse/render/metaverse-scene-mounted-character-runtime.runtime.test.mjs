@@ -76,12 +76,14 @@ function createEnvironmentAsset(threeModule, seatAnchorGroup) {
 test("syncMountedCharacterRuntimeFromSelectionReference mounts, follows the seat anchor, and restores the prior parent on dismount", async () => {
   const [
     threeModule,
+    mountedOccupancyStateModule,
     {
       applyCharacterMountedAnchorTransform,
       syncMountedCharacterRuntimeFromSelectionReference
     }
   ] = await Promise.all([
     import("three/webgpu"),
+    clientLoader.load("/src/metaverse/states/mounted-occupancy.ts"),
     clientLoader.load(
       "/src/metaverse/render/mounts/metaverse-scene-mounted-character-runtime.ts"
     )
@@ -97,6 +99,15 @@ test("syncMountedCharacterRuntimeFromSelectionReference mounts, follows the seat
   const originalWorldPosition = characterAnchor.getWorldPosition(new Vector3());
   const originalWorldQuaternion = characterAnchor.getWorldQuaternion(new Quaternion());
   const environmentAsset = createEnvironmentAsset(threeModule, seatAnchor);
+  const mountedOccupancyPresentationState =
+    mountedOccupancyStateModule
+      .resolveMetaverseMountedOccupancyPresentationStateSnapshot({
+        cameraPolicyId: "vehicle-follow",
+        lookLimitPolicyId: "driver-forward",
+        occupancyAnimationId: "seated",
+        occupancyKind: "seat",
+        occupantRole: "driver"
+      });
   let mountedCharacterRuntime = syncMountedCharacterRuntimeFromSelectionReference(
     characterRuntime,
     null,
@@ -107,6 +118,7 @@ test("syncMountedCharacterRuntimeFromSelectionReference mounts, follows the seat
       occupantRole: "driver",
       seatId: "driver-seat"
     }),
+    mountedOccupancyPresentationState,
     () => environmentAsset
   );
 
@@ -132,6 +144,7 @@ test("syncMountedCharacterRuntimeFromSelectionReference mounts, follows the seat
   mountedCharacterRuntime = syncMountedCharacterRuntimeFromSelectionReference(
     characterRuntime,
     mountedCharacterRuntime,
+    null,
     null,
     () => environmentAsset
   );

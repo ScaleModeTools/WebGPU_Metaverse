@@ -5,7 +5,9 @@ import {
 } from "@/physics";
 import {
   createMetaverseUnmountedTraversalStateSnapshot,
+  metaverseRealtimeWorldCadenceConfig,
   type MetaversePlayerTraversalIntentSnapshot,
+  type MetaversePlayerTraversalIntentSnapshotInput,
   type MetaverseTraversalAuthoritySnapshot,
   type MetaverseUnmountedTraversalStateSnapshot
 } from "@webgpu-metaverse/shared";
@@ -22,10 +24,6 @@ import type {
 } from "../types/presentation";
 import type { MetaverseRuntimeConfig } from "../types/runtime-config";
 import type { MetaverseTelemetrySnapshot } from "../types/telemetry";
-import {
-  shouldConstrainMountedOccupancyToAnchor,
-  shouldKeepMountedOccupancyFreeRoam
-} from "../states/mounted-occupancy";
 import { MetaverseTraversalCharacterPresentationState } from "../traversal/presentation/metaverse-traversal-character-presentation-state";
 import {
   freezeVector3,
@@ -40,6 +38,7 @@ import { MetaverseTraversalTelemetryState } from "../traversal/classes/metaverse
 import {
   type AuthoritativeCorrectionTelemetrySnapshot,
   type LocalAuthorityPoseCorrectionDetailSnapshot,
+  type LocalAuthorityPoseCorrectionSnapshot,
   type LocalAuthorityPoseCorrectionReason,
   type LocalTraversalPoseSnapshot
 } from "../traversal/reconciliation/local-authority-pose-correction";
@@ -60,6 +59,10 @@ type LocalJumpGateTelemetrySnapshot =
   MetaverseTelemetrySnapshot["worldSnapshot"]["surfaceRouting"]["local"]["jumpDebug"];
 type LocalReconciliationCorrectionSource =
   MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"]["lastCorrectionSource"];
+
+const authoritativeTraversalFixedStepSeconds =
+  Number(metaverseRealtimeWorldCadenceConfig.authoritativeTickIntervalMs) /
+  1_000;
 
 function createIdleGroundedBodyIntentSnapshot() {
   return Object.freeze({
@@ -93,7 +96,8 @@ export class MetaverseTraversalRuntime {
   readonly #config: MetaverseRuntimeConfig;
   readonly #groundedBodyRuntime: MetaverseGroundedBodyRuntime;
   readonly #physicsRuntime: RapierPhysicsRuntime;
-  readonly #readDynamicEnvironmentPose: MetaverseTraversalRuntimeDependencies["readDynamicEnvironmentPose"];
+  readonly #readDynamicEnvironmentCollisionPose:
+    MetaverseTraversalRuntimeDependencies["readDynamicEnvironmentCollisionPose"];
   readonly #readMountedEnvironmentAnchorSnapshot: MetaverseTraversalRuntimeDependencies["readMountedEnvironmentAnchorSnapshot"];
   readonly #readMountableEnvironmentConfig: MetaverseTraversalRuntimeDependencies["readMountableEnvironmentConfig"];
   readonly #resolveGroundedTraversalFilterPredicate: MetaverseTraversalRuntimeDependencies["resolveGroundedTraversalFilterPredicate"];
@@ -120,7 +124,8 @@ export class MetaverseTraversalRuntime {
     this.#config = config;
     this.#groundedBodyRuntime = dependencies.groundedBodyRuntime;
     this.#physicsRuntime = dependencies.physicsRuntime;
-    this.#readDynamicEnvironmentPose = dependencies.readDynamicEnvironmentPose;
+    this.#readDynamicEnvironmentCollisionPose =
+      dependencies.readDynamicEnvironmentCollisionPose;
     this.#readMountedEnvironmentAnchorSnapshot =
       dependencies.readMountedEnvironmentAnchorSnapshot;
     this.#readMountableEnvironmentConfig =
@@ -224,6 +229,8 @@ export class MetaverseTraversalRuntime {
         localAuthorityReconciliationState: this.#localAuthorityReconciliationState,
         localTraversalAuthorityState: this.#localTraversalAuthorityState,
         readLocomotionMode: () => this.#locomotionMode,
+        readMountedOccupancyPresentationState: () =>
+          this.#mountedVehicleState.mountedOccupancyPresentationState,
         readMountedVehicleSnapshot: () =>
           this.#mountedVehicleState.mountedVehicleSnapshot,
         readTraversalState: () => this.#unmountedTraversalState,
@@ -288,6 +295,10 @@ export class MetaverseTraversalRuntime {
     return this.#telemetryState.lastLocalAuthorityPoseCorrectionDetail;
   }
 
+  get lastLocalAuthorityPoseCorrectionSnapshot(): LocalAuthorityPoseCorrectionSnapshot {
+    return this.#telemetryState.lastLocalAuthorityPoseCorrectionSnapshot;
+  }
+
   get mountedVehicleAuthorityCorrectionCount(): number {
     return this.#telemetryState.mountedVehicleAuthorityCorrectionCount;
   }
@@ -342,6 +353,19 @@ export class MetaverseTraversalRuntime {
       .syncIssuedTraversalIntentSnapshot(traversalIntentSnapshot);
   }
 
+  resolveLocalTraversalIntentInput(
+    movementInput: Pick<
+      MetaverseFlightInputSnapshot,
+      "boost" | "jump" | "moveAxis" | "pitchAxis" | "strafeAxis" | "yawAxis"
+    >,
+    deltaSeconds: number
+  ): MetaversePlayerTraversalIntentSnapshotInput | null {
+    return this.#unmountedTraversalMotionState.resolvePredictedTraversalIntentInput(
+      movementInput,
+      deltaSeconds
+    );
+  }
+
   boot(): void {
     this.#cameraSnapshot = this.#unmountedTraversalOrchestrationState.boot(
       this.#cameraSnapshot
@@ -382,15 +406,19 @@ export class MetaverseTraversalRuntime {
 
   advance(
     movementInput: MetaverseFlightInputSnapshot,
-    deltaSeconds: number
+    deltaSeconds: number,
+    traversalIntentInput: MetaversePlayerTraversalIntentSnapshotInput | null =
+      null
   ): MetaverseCameraSnapshot {
     const jumpPressedThisFrame =
       this.#unmountedTraversalOrchestrationState.captureJumpPressedThisFrame(
-        movementInput
+        movementInput,
+        traversalIntentInput
       );
     const constrainedMountedOccupancy =
       this.#mountedVehicleState.mountedVehicleSnapshot !== null &&
-      shouldConstrainMountedOccupancyToAnchor(this.#mountedVehicleOccupancy());
+      this.#mountedVehicleState.mountedOccupancyPresentationState
+        ?.constrainToAnchor === true;
 
     if (constrainedMountedOccupancy) {
       this.#unmountedTraversalOrchestrationState.clearGroundedPredictionAccumulator();
@@ -403,7 +431,8 @@ export class MetaverseTraversalRuntime {
         this.#cameraSnapshot,
         movementInput,
         deltaSeconds,
-        jumpPressedThisFrame
+        jumpPressedThisFrame,
+        traversalIntentInput
       );
     }
     this.#unmountedTraversalOrchestrationState.syncCharacterPresentationSnapshot(
@@ -487,12 +516,8 @@ export class MetaverseTraversalRuntime {
     }
   }
 
-  #mountedVehicleOccupancy() {
-    return this.#mountedVehicleState.occupancy;
-  }
-
   #mountedOccupancyKeepsFreeRoam(): boolean {
-    return shouldKeepMountedOccupancyFreeRoam(this.#mountedVehicleOccupancy());
+    return this.#mountedVehicleState.keepsFreeRoam;
   }
 
   #carryFreeRoamMountedOccupancyWithVehicle(
@@ -529,10 +554,10 @@ export class MetaverseTraversalRuntime {
       ),
       wrapRadians(groundedBodySnapshot.yawRadians + deltaYawRadians)
     );
-    this.#physicsRuntime.stepSimulation(1 / 60);
+    this.#physicsRuntime.stepSimulation(authoritativeTraversalFixedStepSeconds);
     this.#groundedBodyRuntime.advance(
       createIdleGroundedBodyIntentSnapshot(),
-      1 / 60,
+      authoritativeTraversalFixedStepSeconds,
       this.#resolveGroundedTraversalFilterPredicate(
         this.#surfaceLocomotionState.readGroundedTraversalExcludedColliders()
       ),

@@ -2,7 +2,6 @@ import type { PhysicsVector3Snapshot } from "@/physics";
 import {
   constrainMetaverseWorldPlanarPositionAgainstBlockers,
   isMetaverseWorldWaterbornePosition,
-  metaverseWorldPlacedWaterRegions,
   resolveMetaverseTraversalStateFromWorldAffordances,
   resolveMetaverseWorldGroundedAutostepHeightMeters,
   resolveMetaverseWorldSurfaceHeightMeters,
@@ -23,7 +22,6 @@ const surfacePolicyConfigByRuntimeConfig = new WeakMap<
   MetaverseRuntimeConfig,
   MetaverseWorldSurfacePolicyConfig
 >();
-const metaverseWaterRegionSnapshots = metaverseWorldPlacedWaterRegions;
 
 export function readMetaverseSurfacePolicyConfig(
   config: MetaverseRuntimeConfig
@@ -63,7 +61,7 @@ export function resolveSurfaceHeightMeters(
   return resolveMetaverseWorldSurfaceHeightMeters(
     readMetaverseSurfacePolicyConfig(config),
     surfaceColliderSnapshots,
-    metaverseWaterRegionSnapshots,
+    config.waterRegionSnapshots,
     x,
     z,
     excludedOwnerEnvironmentAssetId
@@ -78,7 +76,7 @@ export function resolveWaterSurfaceHeightMeters(
   void config;
 
   return resolveMetaverseWorldWaterSurfaceHeightMeters(
-    metaverseWaterRegionSnapshots,
+    config.waterRegionSnapshots,
     position.x,
     position.z,
     paddingMeters
@@ -166,7 +164,7 @@ export function resolveAutomaticSurfaceLocomotionSnapshot(
   return resolveMetaverseTraversalStateFromWorldAffordances(
     readMetaverseSurfacePolicyConfig(config),
     surfaceColliderSnapshots,
-    metaverseWaterRegionSnapshots,
+    config.waterRegionSnapshots,
     position,
     yawRadians,
     currentLocomotionMode,
@@ -202,7 +200,7 @@ export function isWaterbornePosition(
   return isMetaverseWorldWaterbornePosition(
     readMetaverseSurfacePolicyConfig(config),
     surfaceColliderSnapshots,
-    metaverseWaterRegionSnapshots,
+    config.waterRegionSnapshots,
     position,
     paddingMeters,
     excludedOwnerEnvironmentAssetId

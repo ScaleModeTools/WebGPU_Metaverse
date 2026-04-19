@@ -133,6 +133,8 @@ export function useMetaverseShellController(): MetaverseShellController {
 
   return {
     activeExperienceId: state.activeExperienceId,
+    activeMetaverseBundleId: state.activeMetaverseBundleId,
+    activeMetaverseLaunchVariationId: state.activeMetaverseLaunchVariationId,
     capabilityStatus: state.capabilitySnapshot.status,
     coopRoomIdDraft: state.coopRoomIdDraft,
     controllerActionMatrix,
@@ -180,6 +182,9 @@ export function useMetaverseShellController(): MetaverseShellController {
     onGlobalControllerBindingPresetChange:
       flowPolicy.onGlobalControllerBindingPresetChange,
     onInputModeChange: flowPolicy.onInputModeChange,
+    onOpenToolRequest: flowPolicy.onOpenToolRequest,
+    onCloseToolRequest: flowPolicy.onCloseToolRequest,
+    onRunToolPreviewRequest: flowPolicy.onRunToolPreviewRequest,
     onMetaverseControlModeChange: flowPolicy.onMetaverseControlModeChange,
     onMetaverseControllerSchemeChange:
       flowPolicy.onMetaverseControllerSchemeChange,

@@ -85,7 +85,9 @@ test("MetaverseRemoteWorldSamplingState samples buffered snapshots against targe
       }
     },
     readWallClockMs: () => 1_100,
-    readWorldClient: () => fakeWorldClient
+    readWorldClient: () => fakeWorldClient,
+    remoteCharacterRootInterpolationDelayMs: 0,
+    remoteCharacterRootMaxExtrapolationMs: 0
   });
 
   samplingState.sampleRemoteWorld();
@@ -96,6 +98,15 @@ test("MetaverseRemoteWorldSamplingState samples buffered snapshots against targe
   assert.equal(sampledInputs[0].sampledFrame.alpha, 0.5);
   assert.equal(sampledInputs[0].sampledFrame.baseSnapshot.snapshotSequence, 1);
   assert.equal(sampledInputs[0].sampledFrame.nextSnapshot?.snapshotSequence, 2);
+  assert.equal(sampledInputs[0].remoteCharacterRootFrame.alpha, 1);
+  assert.equal(
+    sampledInputs[0].remoteCharacterRootFrame.baseSnapshot.snapshotSequence,
+    1
+  );
+  assert.equal(
+    sampledInputs[0].remoteCharacterRootFrame.nextSnapshot?.snapshotSequence,
+    2
+  );
   assert.equal(samplingState.latestAuthoritativeTickIntervalMs, 50);
   assert.equal(samplingState.samplingTelemetrySnapshot.bufferDepth, 2);
   assert.equal(samplingState.samplingTelemetrySnapshot.currentExtrapolationMs, 0);
@@ -173,7 +184,9 @@ test("MetaverseRemoteWorldSamplingState tracks extrapolation and datagram teleme
       }
     },
     readWallClockMs: () => currentWallClockMs,
-    readWorldClient: () => fakeWorldClient
+    readWorldClient: () => fakeWorldClient,
+    remoteCharacterRootInterpolationDelayMs: 0,
+    remoteCharacterRootMaxExtrapolationMs: 0
   });
 
   samplingState.sampleRemoteWorld();

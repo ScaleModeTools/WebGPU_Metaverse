@@ -2,9 +2,13 @@ import type {
   MetaverseRealtimePlayerSnapshot,
   MetaverseRealtimeWorldSnapshot
 } from "@webgpu-metaverse/shared/metaverse/realtime";
+import {
+  createMetaverseMountedOccupancyIdentityKey
+} from "@webgpu-metaverse/shared/metaverse/presence";
 
 export type AckedAuthoritativeLocalPlayerPose = Pick<
   MetaverseRealtimePlayerSnapshot,
+  | "lastProcessedInputSequence"
   | "linearVelocity"
   | "locomotionMode"
   | "mountedOccupancy"
@@ -35,16 +39,7 @@ export interface FreshAckedAuthoritativeLocalPlayerSnapshot {
 function createMountedOccupancyDeliveryKey(
   mountedOccupancy: MetaverseRealtimePlayerSnapshot["mountedOccupancy"]
 ): string {
-  if (mountedOccupancy === null) {
-    return "unmounted";
-  }
-
-  return [
-    mountedOccupancy.environmentAssetId,
-    mountedOccupancy.occupancyKind,
-    mountedOccupancy.entryId ?? "",
-    mountedOccupancy.seatId ?? ""
-  ].join(":");
+  return createMetaverseMountedOccupancyIdentityKey(mountedOccupancy) ?? "unmounted";
 }
 
 export function createAckedAuthoritativeLocalPlayerDeliveryKey(
@@ -80,6 +75,7 @@ export function readAckedAuthoritativeLocalPlayerPose(
   playerSnapshot: AckedAuthoritativeLocalPlayerSnapshot
 ): AckedAuthoritativeLocalPlayerPose {
   return {
+    lastProcessedInputSequence: playerSnapshot.lastProcessedInputSequence,
     linearVelocity: playerSnapshot.linearVelocity,
     locomotionMode: playerSnapshot.locomotionMode,
     mountedOccupancy: playerSnapshot.mountedOccupancy,

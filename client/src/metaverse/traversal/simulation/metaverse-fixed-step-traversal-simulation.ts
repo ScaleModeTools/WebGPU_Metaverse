@@ -7,9 +7,8 @@ import {
   type RapierPhysicsRuntime
 } from "@/physics";
 import {
-  metaverseWorldPlacedWaterRegions,
-  prepareMetaverseUnmountedTraversalStep,
-  resolveMetaverseUnmountedTraversalStep,
+  advanceMetaverseUnmountedTraversalBodyStep,
+  type MetaverseUnmountedTraversalTransitionSnapshot,
   type MetaverseTraversalStateResolutionSnapshot,
   type MetaverseUnmountedTraversalStateSnapshot
 } from "@webgpu-metaverse/shared";
@@ -32,9 +31,6 @@ import type {
   SurfaceLocomotionSnapshot
 } from "../types/traversal";
 
-const metaverseFixedStepSimulationWaterRegionSnapshots =
-  metaverseWorldPlacedWaterRegions;
-
 export interface MetaverseGroundedTraversalStepResult {
   readonly automaticSurfaceSnapshot: MetaverseTraversalStateResolutionSnapshot;
   readonly autostepHeightMeters: number | null;
@@ -42,6 +38,7 @@ export interface MetaverseGroundedTraversalStepResult {
   readonly locomotionMode: "grounded" | "swim";
   readonly nextTraversalState: MetaverseUnmountedTraversalStateSnapshot;
   readonly supportHeightMeters: number | null;
+  readonly transitionSnapshot: MetaverseUnmountedTraversalTransitionSnapshot;
   readonly waterlineHeightMeters: number;
 }
 
@@ -52,6 +49,7 @@ export interface MetaverseSwimTraversalStepResult {
   readonly nextSwimSnapshot: SurfaceLocomotionSnapshot;
   readonly nextTraversalState: MetaverseUnmountedTraversalStateSnapshot;
   readonly supportHeightMeters: number | null;
+  readonly transitionSnapshot: MetaverseUnmountedTraversalTransitionSnapshot;
 }
 
 interface MetaverseGroundedTraversalStepInput {
@@ -167,16 +165,32 @@ export class MetaverseFixedStepTraversalSimulation {
     readWaterSurfaceHeightMeters: (
       position: Pick<PhysicsVector3Snapshot, "x" | "y" | "z">,
       paddingMeters?: number
-    ) => number
+    ) => number,
+    linearVelocity: PhysicsVector3Snapshot | null = null
   ): SurfaceLocomotionSnapshot {
     const swimBodyRuntime = this.ensureSwimBodyRuntime(readWaterSurfaceHeightMeters);
+    const waterlinePosition = freezeVector3(
+      position.x,
+      readWaterSurfaceHeightMeters(position),
+      position.z
+    );
+
+    if (linearVelocity !== null) {
+      swimBodyRuntime.syncAuthoritativeState({
+        linearVelocity: freezeVector3(
+          linearVelocity.x,
+          linearVelocity.y,
+          linearVelocity.z
+        ),
+        position: waterlinePosition,
+        yawRadians
+      });
+
+      return swimBodyRuntime.snapshot;
+    }
 
     swimBodyRuntime.teleport(
-      freezeVector3(
-        position.x,
-        readWaterSurfaceHeightMeters(position),
-        position.z
-      ),
+      waterlinePosition,
       yawRadians
     );
 
@@ -241,7 +255,32 @@ export class MetaverseFixedStepTraversalSimulation {
   }: MetaverseGroundedTraversalStepInput): MetaverseGroundedTraversalStepResult {
     const currentBodySnapshot = groundedBodyRuntime.snapshot;
     const surfacePolicyConfig = readMetaverseSurfacePolicyConfig(this.#config);
-    const groundedTraversalStep = prepareMetaverseUnmountedTraversalStep({
+    const traversalBodyStep = advanceMetaverseUnmountedTraversalBodyStep({
+      advanceGroundedBodySnapshot: ({
+        autostepHeightMeters,
+        bodyIntent,
+        preferredLookYawRadians: resolvedLookYawRadians
+      }) => {
+        groundedBodyRuntime.setAutostepEnabled(
+          autostepHeightMeters !== null,
+          autostepHeightMeters ?? this.#config.groundedBody.stepHeightMeters
+        );
+        this.#dependencies.physicsRuntime.stepSimulation(deltaSeconds);
+
+        return groundedBodyRuntime.advance(
+          bodyIntent,
+          deltaSeconds,
+          this.#dependencies.resolveGroundedTraversalFilterPredicate(
+            readGroundedTraversalExcludedColliders()
+          ),
+          resolvedLookYawRadians
+        );
+      },
+      advanceSwimBodySnapshot: () => {
+        throw new Error(
+          "advanceMetaverseUnmountedTraversalBodyStep returned a swim step while grounded"
+        );
+      },
       bodyControl: Object.freeze({
         boost: movementInput.boost,
         moveAxis: movementInput.moveAxis,
@@ -258,45 +297,27 @@ export class MetaverseFixedStepTraversalSimulation {
           this.#config.groundedBody.snapToGroundDistanceMeters
       }),
       groundedBodySnapshot: currentBodySnapshot,
-      jumpSupportVerticalSpeedTolerance: 0.5,
+      jumpSupportVerticalSpeedTolerance:
+        this.#config.traversal.groundedJumpSupportVerticalSpeedTolerance,
       preferredLookYawRadians,
       surfaceColliderSnapshots: this.#dependencies.surfaceColliderSnapshots,
       surfacePolicyConfig,
       swimBodySnapshot: null,
       traversalState,
-      waterRegionSnapshots: metaverseFixedStepSimulationWaterRegionSnapshots
+      waterRegionSnapshots: this.#config.waterRegionSnapshots
     });
+    const bodySnapshot = traversalBodyStep.groundedBodySnapshot;
+    const groundedTraversalStep = traversalBodyStep.preparedTraversalStep;
+    const locomotionOutcome = traversalBodyStep.locomotionOutcome;
 
-    if (groundedTraversalStep.locomotionMode !== "grounded") {
+    if (
+      groundedTraversalStep.locomotionMode !== "grounded" ||
+      bodySnapshot === null
+    ) {
       throw new Error(
-        "prepareMetaverseUnmountedTraversalStep returned a swim step while grounded"
+        "advanceMetaverseUnmountedTraversalBodyStep returned a swim step while grounded"
       );
     }
-
-    groundedBodyRuntime.setAutostepEnabled(
-      groundedTraversalStep.autostepHeightMeters !== null,
-      groundedTraversalStep.autostepHeightMeters ??
-        this.#config.groundedBody.stepHeightMeters
-    );
-    this.#dependencies.physicsRuntime.stepSimulation(deltaSeconds);
-
-    const bodySnapshot = groundedBodyRuntime.advance(
-      groundedTraversalStep.bodyIntent,
-      deltaSeconds,
-      this.#dependencies.resolveGroundedTraversalFilterPredicate(
-        readGroundedTraversalExcludedColliders()
-      ),
-      preferredLookYawRadians
-    );
-
-    const locomotionOutcome = resolveMetaverseUnmountedTraversalStep({
-      groundedBodySnapshot: bodySnapshot,
-      preparedTraversalStep: groundedTraversalStep,
-      surfaceColliderSnapshots: this.#dependencies.surfaceColliderSnapshots,
-      surfacePolicyConfig,
-      swimBodySnapshot: null,
-      waterRegionSnapshots: metaverseFixedStepSimulationWaterRegionSnapshots
-    });
 
     return Object.freeze({
       automaticSurfaceSnapshot: locomotionOutcome.automaticSurfaceSnapshot,
@@ -311,6 +332,7 @@ export class MetaverseFixedStepTraversalSimulation {
       locomotionMode: locomotionOutcome.locomotionMode,
       nextTraversalState: locomotionOutcome.traversalState,
       supportHeightMeters: locomotionOutcome.supportHeightMeters,
+      transitionSnapshot: traversalBodyStep.transitionSnapshot,
       waterlineHeightMeters: locomotionOutcome.waterlineHeightMeters
     });
   }
@@ -327,7 +349,36 @@ export class MetaverseFixedStepTraversalSimulation {
     const swimBodyRuntime = this.ensureSwimBodyRuntime(
       readWaterSurfaceHeightMeters
     );
-    const preparedTraversalStep = prepareMetaverseUnmountedTraversalStep({
+    const traversalBodyStep = advanceMetaverseUnmountedTraversalBodyStep({
+      advanceGroundedBodySnapshot: () => {
+        throw new Error(
+          "advanceMetaverseUnmountedTraversalBodyStep returned a grounded step while swimming"
+        );
+      },
+      advanceSwimBodySnapshot: ({
+        bodyControl,
+        preferredLookYawRadians: resolvedLookYawRadians,
+        waterlineHeightMeters
+      }) =>
+        swimBodyRuntime.advance(
+          Object.freeze({
+            boost: bodyControl.boost,
+            moveAxis: bodyControl.moveAxis,
+            strafeAxis: bodyControl.strafeAxis,
+            yawAxis: bodyControl.turnAxis
+          }),
+          this.#config.swim,
+          deltaSeconds,
+          waterlineHeightMeters,
+          resolvedLookYawRadians,
+          this.#dependencies.resolveWaterborneTraversalFilterPredicate(
+            null,
+            readWaterborneTraversalExcludedColliders(swimBodyRuntime.colliderHandle)
+          ),
+          Object.freeze({
+            surfaceColliderSnapshots: this.#dependencies.surfaceColliderSnapshots
+          })
+        ),
       bodyControl: Object.freeze({
         boost: movementInput.boost,
         moveAxis: movementInput.moveAxis,
@@ -344,49 +395,27 @@ export class MetaverseFixedStepTraversalSimulation {
           this.#config.groundedBody.snapToGroundDistanceMeters
       }),
       groundedBodySnapshot: null,
-      jumpSupportVerticalSpeedTolerance: 0.5,
+      jumpSupportVerticalSpeedTolerance:
+        this.#config.traversal.groundedJumpSupportVerticalSpeedTolerance,
       preferredLookYawRadians,
       surfaceColliderSnapshots: this.#dependencies.surfaceColliderSnapshots,
       surfacePolicyConfig: readMetaverseSurfacePolicyConfig(this.#config),
       swimBodySnapshot: swimBodyRuntime.snapshot,
       traversalState,
-      waterRegionSnapshots: metaverseFixedStepSimulationWaterRegionSnapshots
+      waterRegionSnapshots: this.#config.waterRegionSnapshots
     });
+    const preparedTraversalStep = traversalBodyStep.preparedTraversalStep;
+    const nextSwimSnapshot = traversalBodyStep.swimBodySnapshot;
+    const locomotionOutcome = traversalBodyStep.locomotionOutcome;
 
-    if (preparedTraversalStep.locomotionMode !== "swim") {
+    if (
+      preparedTraversalStep.locomotionMode !== "swim" ||
+      nextSwimSnapshot === null
+    ) {
       throw new Error(
-        "prepareMetaverseUnmountedTraversalStep returned a grounded step while swimming"
+        "advanceMetaverseUnmountedTraversalBodyStep returned a grounded step while swimming"
       );
     }
-
-    const nextSwimSnapshot = swimBodyRuntime.advance(
-      Object.freeze({
-        boost: preparedTraversalStep.bodyControl.boost,
-        moveAxis: preparedTraversalStep.bodyControl.moveAxis,
-        strafeAxis: preparedTraversalStep.bodyControl.strafeAxis,
-        yawAxis: preparedTraversalStep.bodyControl.turnAxis
-      }),
-      this.#config.swim,
-      deltaSeconds,
-      preparedTraversalStep.waterlineHeightMeters,
-      preferredLookYawRadians,
-      this.#dependencies.resolveWaterborneTraversalFilterPredicate(
-        null,
-        readWaterborneTraversalExcludedColliders(swimBodyRuntime.colliderHandle)
-      ),
-      Object.freeze({
-        surfaceColliderSnapshots: this.#dependencies.surfaceColliderSnapshots
-      })
-    );
-
-    const locomotionOutcome = resolveMetaverseUnmountedTraversalStep({
-      groundedBodySnapshot: null,
-      preparedTraversalStep,
-      surfaceColliderSnapshots: this.#dependencies.surfaceColliderSnapshots,
-      surfacePolicyConfig: readMetaverseSurfacePolicyConfig(this.#config),
-      swimBodySnapshot: nextSwimSnapshot,
-      waterRegionSnapshots: metaverseFixedStepSimulationWaterRegionSnapshots
-    });
 
     return Object.freeze({
       automaticSurfaceSnapshot: locomotionOutcome.automaticSurfaceSnapshot,
@@ -400,7 +429,8 @@ export class MetaverseFixedStepTraversalSimulation {
       locomotionMode: locomotionOutcome.locomotionMode,
       nextSwimSnapshot,
       nextTraversalState: locomotionOutcome.traversalState,
-      supportHeightMeters: locomotionOutcome.supportHeightMeters
+      supportHeightMeters: locomotionOutcome.supportHeightMeters,
+      transitionSnapshot: traversalBodyStep.transitionSnapshot
     });
   }
 }

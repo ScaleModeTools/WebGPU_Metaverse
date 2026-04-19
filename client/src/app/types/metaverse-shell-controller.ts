@@ -19,6 +19,7 @@ import type {
   MetaverseControllerSchemeId
 } from "../../input";
 import type { MetaverseControlModeId } from "../../metaverse";
+import type { MetaverseWorldPreviewLaunchSelectionSnapshot } from "../../metaverse/world/map-bundles";
 import type { WebGpuMetaverseCapabilitySnapshot } from "../../metaverse";
 import type {
   ShellStageState,
@@ -35,6 +36,8 @@ import type { MetaverseShellViewModel } from "./metaverse-shell";
 
 export interface MetaverseShellController {
   readonly activeExperienceId: ExperienceId | null;
+  readonly activeMetaverseBundleId: string;
+  readonly activeMetaverseLaunchVariationId: string | null;
   readonly capabilityStatus: WebGpuMetaverseCapabilitySnapshot["status"];
   readonly coopRoomIdDraft: string;
   readonly controllerActionMatrix: ControllerActionMatrix;
@@ -77,6 +80,11 @@ export interface MetaverseShellController {
   readonly onExperienceLaunchRequest: (experienceId: ExperienceId) => void;
   readonly onGameplayMenuOpen: (open: boolean) => void;
   readonly onInputModeChange: (inputMode: GameplayInputModeId) => void;
+  readonly onOpenToolRequest: () => void;
+  readonly onCloseToolRequest: () => void;
+  readonly onRunToolPreviewRequest: (
+    launchSelection: MetaverseWorldPreviewLaunchSelectionSnapshot
+  ) => void;
   readonly onMetaverseControlModeChange: (
     controlMode: MetaverseControlModeId
   ) => void;
@@ -96,6 +104,8 @@ export interface MetaverseShellController {
 
 export interface MetaverseShellControllerState {
   readonly activeExperienceId: ExperienceId | null;
+  readonly activeMetaverseBundleId: string;
+  readonly activeMetaverseLaunchVariationId: string | null;
   readonly audioSnapshot: AudioSessionSnapshot;
   readonly capabilitySnapshot: WebGpuMetaverseCapabilitySnapshot;
   readonly coopRoomIdDraft: string;
@@ -154,6 +164,16 @@ export type MetaverseShellControllerAction =
   | {
       readonly type: "experienceLaunchRequested";
       readonly experienceId: ExperienceId;
+    }
+  | {
+      readonly type: "toolEditorRequested";
+    }
+  | {
+      readonly type: "toolEditorExited";
+    }
+  | {
+      readonly launchSelection: MetaverseWorldPreviewLaunchSelectionSnapshot;
+      readonly type: "toolPreviewRequested";
     }
   | {
       readonly type: "metaverseEntryRequested";

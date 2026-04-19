@@ -14,11 +14,13 @@ import {
   createAuthoritativeCorrectionTelemetrySnapshot,
   createDefaultAuthoritativeCorrectionTelemetrySnapshot,
   createDefaultLocalAuthorityPoseCorrectionDetailSnapshot,
+  createDefaultLocalAuthorityPoseCorrectionSnapshot,
   createLocalAuthorityPoseCorrectionDetailSnapshot,
   resolveLocalAuthorityPoseCorrectionDecision,
   resolveLocalAuthorityPoseCorrectionReason,
   shouldSuppressRoutineGroundedCorrectionForIssuedTraversalAction,
   type AuthoritativeCorrectionTelemetrySnapshot,
+  type LocalAuthorityPoseCorrectionSnapshot,
   type LocalAuthorityPoseCorrectionDetailSnapshot,
   type LocalAuthorityPoseCorrectionReason,
   type LocalTraversalPoseSnapshot
@@ -34,6 +36,7 @@ interface TraversalStateLike
 export interface AuthoritativeLocalPlayerPoseSnapshot
   extends Pick<
     MetaverseRealtimePlayerSnapshot,
+    | "lastProcessedInputSequence"
     | "linearVelocity"
     | "locomotionMode"
     | "mountedOccupancy"
@@ -53,6 +56,10 @@ export interface SyncAuthoritativeLocalPlayerPoseInput {
     input: ApplyAuthoritativeUnmountedPoseInput
   ) => void;
   readonly authoritativePlayerSnapshot: AuthoritativeLocalPlayerPoseSnapshot;
+  readonly createLocalAuthorityPoseCorrectionSnapshot: (input: {
+    readonly authoritativePlayerSnapshot: AuthoritativeLocalPlayerPoseSnapshot;
+    readonly localTraversalPose: LocalTraversalPoseSnapshot;
+  }) => LocalAuthorityPoseCorrectionSnapshot;
   readonly currentTick: number;
   readonly hardSnapDistanceMeters: number;
   readonly latestIssuedTraversalActionSequence: number;
@@ -69,6 +76,8 @@ export class MetaverseLocalAuthorityReconciliationState {
   #localAuthorityPoseCorrectionCount = 0;
   #lastLocalAuthorityPoseCorrectionDetail =
     createDefaultLocalAuthorityPoseCorrectionDetailSnapshot();
+  #lastLocalAuthorityPoseCorrectionSnapshot =
+    createDefaultLocalAuthorityPoseCorrectionSnapshot();
   #lastLocalAuthorityPoseCorrectionReason: LocalAuthorityPoseCorrectionReason =
     "none";
 
@@ -84,6 +93,10 @@ export class MetaverseLocalAuthorityReconciliationState {
     return this.#lastLocalAuthorityPoseCorrectionDetail;
   }
 
+  get lastLocalAuthorityPoseCorrectionSnapshot(): LocalAuthorityPoseCorrectionSnapshot {
+    return this.#lastLocalAuthorityPoseCorrectionSnapshot;
+  }
+
   get lastLocalAuthorityPoseCorrectionReason(): LocalAuthorityPoseCorrectionReason {
     return this.#lastLocalAuthorityPoseCorrectionReason;
   }
@@ -94,12 +107,15 @@ export class MetaverseLocalAuthorityReconciliationState {
     this.#localAuthorityPoseCorrectionCount = 0;
     this.#lastLocalAuthorityPoseCorrectionDetail =
       createDefaultLocalAuthorityPoseCorrectionDetailSnapshot();
+    this.#lastLocalAuthorityPoseCorrectionSnapshot =
+      createDefaultLocalAuthorityPoseCorrectionSnapshot();
     this.#lastLocalAuthorityPoseCorrectionReason = "none";
   }
 
   syncAuthoritativeLocalPlayerPose({
     applyAuthoritativeUnmountedPose,
     authoritativePlayerSnapshot,
+    createLocalAuthorityPoseCorrectionSnapshot,
     currentTick,
     hardSnapDistanceMeters,
     latestIssuedTraversalActionSequence,
@@ -117,9 +133,8 @@ export class MetaverseLocalAuthorityReconciliationState {
       return false;
     }
 
-    const positionDistance = Math.hypot(
+    const planarDistance = Math.hypot(
       authoritativePlayerSnapshot.position.x - localTraversalPose.position.x,
-      authoritativePlayerSnapshot.position.y - localTraversalPose.position.y,
       authoritativePlayerSnapshot.position.z - localTraversalPose.position.z
     );
     const verticalDistance = Math.abs(
@@ -138,7 +153,7 @@ export class MetaverseLocalAuthorityReconciliationState {
       authoritativeLocomotionMode: authoritativePlayerSnapshot.locomotionMode,
       hardSnapDistanceMeters,
       localLocomotionMode: localTraversalPose.locomotionMode,
-      positionDistance,
+      planarDistance,
       verticalDistance
     });
 
@@ -155,6 +170,8 @@ export class MetaverseLocalAuthorityReconciliationState {
       shouldSuppressRoutineGroundedCorrectionForIssuedTraversalAction({
         actionState: traversalState.actionState,
         authoritativeGrounded,
+        authoritativeTraversalAuthority:
+          authoritativePlayerSnapshot.traversalAuthority,
         currentTick,
         hardSnapDistanceMeters,
         issuedTraversalActionSequence: latestIssuedTraversalActionSequence,
@@ -162,7 +179,7 @@ export class MetaverseLocalAuthorityReconciliationState {
         localTraversalActionAuthority: localTraversalAuthority,
         localTraversalAction: localPredictedTraversalAction,
         locomotionMismatch: correctionDecision.locomotionMismatch,
-        positionDistance
+        planarDistance
       })
     ) {
       return false;
@@ -182,6 +199,11 @@ export class MetaverseLocalAuthorityReconciliationState {
           ? authoritativeGrounded
           : null
       );
+    this.#lastLocalAuthorityPoseCorrectionSnapshot =
+      createLocalAuthorityPoseCorrectionSnapshot({
+        authoritativePlayerSnapshot,
+        localTraversalPose
+      });
     this.#lastLocalAuthorityPoseCorrectionReason =
       resolveLocalAuthorityPoseCorrectionReason({
         grossPositionDivergence: correctionDecision.grossPositionDivergence

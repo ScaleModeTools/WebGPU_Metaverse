@@ -6,6 +6,10 @@ import {
   defaultMountedVehicleOccupancyAnimationId
 } from "../types/environment-seat";
 import {
+  metaverseBuilderBlockTileEnvironmentAssetId as sharedMetaverseBuilderBlockTileEnvironmentAssetId,
+  metaverseBuilderFloorTileEnvironmentAssetId as sharedMetaverseBuilderFloorTileEnvironmentAssetId,
+  metaverseBuilderStepTileEnvironmentAssetId as sharedMetaverseBuilderStepTileEnvironmentAssetId,
+  metaverseBuilderWallTileEnvironmentAssetId as sharedMetaverseBuilderWallTileEnvironmentAssetId,
   metaverseHubDockEnvironmentAssetId as sharedMetaverseHubDockEnvironmentAssetId,
   metaverseHubDiveBoatEnvironmentAssetId as sharedMetaverseHubDiveBoatEnvironmentAssetId,
   metaverseHubPushableCrateEnvironmentAssetId as sharedMetaverseHubPushableCrateEnvironmentAssetId,
@@ -45,6 +49,18 @@ export const metaversePlaygroundRangeBarrierEnvironmentAssetId =
   createEnvironmentAssetId(
     sharedMetaversePlaygroundRangeBarrierEnvironmentAssetId
   );
+
+export const metaverseBuilderFloorTileEnvironmentAssetId =
+  createEnvironmentAssetId(sharedMetaverseBuilderFloorTileEnvironmentAssetId);
+
+export const metaverseBuilderWallTileEnvironmentAssetId =
+  createEnvironmentAssetId(sharedMetaverseBuilderWallTileEnvironmentAssetId);
+
+export const metaverseBuilderStepTileEnvironmentAssetId =
+  createEnvironmentAssetId(sharedMetaverseBuilderStepTileEnvironmentAssetId);
+
+export const metaverseBuilderBlockTileEnvironmentAssetId =
+  createEnvironmentAssetId(sharedMetaverseBuilderBlockTileEnvironmentAssetId);
 
 export const metaverseHubPushableCrateEnvironmentAssetId = createEnvironmentAssetId(
   sharedMetaverseHubPushableCrateEnvironmentAssetId
@@ -127,6 +143,126 @@ export const environmentPropManifest = defineEnvironmentAssetManifest([
     seats: null
   },
   {
+    id: metaverseBuilderFloorTileEnvironmentAssetId,
+    label: "Metaverse build floor tile",
+    placement: "instanced",
+    traversalAffordance: "support",
+    physicsColliders: resolveSurfaceColliders(
+      sharedMetaverseBuilderFloorTileEnvironmentAssetId
+    ),
+    renderModel: {
+      defaultTier: "high",
+      lods: [
+        {
+          kind: "procedural-box",
+          materialPreset: "training-range-surface",
+          maxDistanceMeters: null,
+          size: {
+            x: 4,
+            y: 0.5,
+            z: 4
+          },
+          tier: "high"
+        }
+      ]
+    },
+    orientation: null,
+    collider: null,
+    collisionPath: null,
+    entries: null,
+    seats: null
+  },
+  {
+    id: metaverseBuilderWallTileEnvironmentAssetId,
+    label: "Metaverse build wall tile",
+    placement: "instanced",
+    traversalAffordance: "blocker",
+    physicsColliders: resolveSurfaceColliders(
+      sharedMetaverseBuilderWallTileEnvironmentAssetId
+    ),
+    renderModel: {
+      defaultTier: "high",
+      lods: [
+        {
+          kind: "procedural-box",
+          materialPreset: "training-range-accent",
+          maxDistanceMeters: null,
+          size: {
+            x: 4,
+            y: 4,
+            z: 0.5
+          },
+          tier: "high"
+        }
+      ]
+    },
+    orientation: null,
+    collider: null,
+    collisionPath: null,
+    entries: null,
+    seats: null
+  },
+  {
+    id: metaverseBuilderStepTileEnvironmentAssetId,
+    label: "Metaverse build step tile",
+    placement: "instanced",
+    traversalAffordance: "support",
+    physicsColliders: resolveSurfaceColliders(
+      sharedMetaverseBuilderStepTileEnvironmentAssetId
+    ),
+    renderModel: {
+      defaultTier: "high",
+      lods: [
+        {
+          kind: "procedural-box",
+          materialPreset: "training-range-surface",
+          maxDistanceMeters: null,
+          size: {
+            x: 4,
+            y: 1,
+            z: 4
+          },
+          tier: "high"
+        }
+      ]
+    },
+    orientation: null,
+    collider: null,
+    collisionPath: null,
+    entries: null,
+    seats: null
+  },
+  {
+    id: metaverseBuilderBlockTileEnvironmentAssetId,
+    label: "Metaverse build block tile",
+    placement: "instanced",
+    traversalAffordance: "support",
+    physicsColliders: resolveSurfaceColliders(
+      sharedMetaverseBuilderBlockTileEnvironmentAssetId
+    ),
+    renderModel: {
+      defaultTier: "high",
+      lods: [
+        {
+          kind: "procedural-box",
+          materialPreset: "training-range-surface",
+          maxDistanceMeters: null,
+          size: {
+            x: 4,
+            y: 4,
+            z: 4
+          },
+          tier: "high"
+        }
+      ]
+    },
+    orientation: null,
+    collider: null,
+    collisionPath: null,
+    entries: null,
+    seats: null
+  },
+  {
     id: metaverseHubDockEnvironmentAssetId,
     label: "Metaverse hub dock",
     placement: "static",
@@ -159,7 +295,7 @@ export const environmentPropManifest = defineEnvironmentAssetManifest([
     id: metaverseHubPushableCrateEnvironmentAssetId,
     label: "Metaverse hub pushable crate",
     placement: "dynamic",
-    traversalAffordance: "pushable",
+    traversalAffordance: "blocker",
     physicsColliders: null,
     renderModel: {
       defaultTier: "high",
@@ -172,6 +308,14 @@ export const environmentPropManifest = defineEnvironmentAssetManifest([
       ]
     },
     orientation: null,
+    dynamicBody: {
+      additionalMass: 12,
+      angularDamping: 10,
+      gravityScale: 1,
+      kind: "dynamic-rigid-body",
+      linearDamping: 4.5,
+      lockRotations: true
+    },
     collider: {
       center: {
         x: 0,

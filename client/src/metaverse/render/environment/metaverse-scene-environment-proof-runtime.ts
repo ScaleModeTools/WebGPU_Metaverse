@@ -1,3 +1,4 @@
+import { resolveMetaverseWorldSurfaceScaleVector } from "@webgpu-metaverse/shared/metaverse/world";
 import {
   Group,
   Quaternion,
@@ -259,8 +260,14 @@ export function syncDynamicEnvironmentSimulationPose(
     basePose.position.z
   );
   dynamicAssetRuntime.anchorGroup.rotation.set(0, renderYawRadians, 0);
-  dynamicAssetRuntime.anchorGroup.scale.setScalar(
+  const scaleVector = resolveMetaverseWorldSurfaceScaleVector(
     dynamicAssetRuntime.basePlacement.scale
+  );
+
+  dynamicAssetRuntime.anchorGroup.scale.set(
+    scaleVector.x,
+    scaleVector.y,
+    scaleVector.z
   );
 }
 

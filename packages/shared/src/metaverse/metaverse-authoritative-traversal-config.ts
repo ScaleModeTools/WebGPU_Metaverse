@@ -17,6 +17,12 @@ export interface MetaverseGroundedBodyTraversalCoreConfig
   readonly stepWidthMeters: number;
 }
 
+export interface MetaverseVehicleTraversalConfig
+  extends MetaverseSurfaceTraversalConfig {
+  readonly waterContactProbeRadiusMeters: number;
+  readonly waterlineHeightMeters: number;
+}
+
 export const metaverseTraversalWorldRadius = 110;
 
 export const metaverseVehicleSurfaceTraversalConfig = Object.freeze({
@@ -27,8 +33,10 @@ export const metaverseVehicleSurfaceTraversalConfig = Object.freeze({
   boostMultiplier: 1.55,
   decelerationUnitsPerSecondSquared: 14,
   dragCurveExponent: 1.3,
-  maxTurnSpeedRadiansPerSecond: 0.95
-} as const satisfies MetaverseSurfaceTraversalConfig);
+  maxTurnSpeedRadiansPerSecond: 0.95,
+  waterContactProbeRadiusMeters: 1.75,
+  waterlineHeightMeters: 0.12
+} as const satisfies MetaverseVehicleTraversalConfig);
 
 export const metaverseGroundedSurfaceTraversalConfig = Object.freeze({
   accelerationCurveExponent: 1.22,

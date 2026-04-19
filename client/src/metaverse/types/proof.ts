@@ -102,6 +102,15 @@ export interface MetaverseEnvironmentColliderProofConfig {
   readonly size: MetaverseVector3Snapshot;
 }
 
+export interface MetaverseEnvironmentDynamicBodyProofConfig {
+  readonly additionalMass: number;
+  readonly angularDamping: number;
+  readonly gravityScale: number;
+  readonly kind: "dynamic-rigid-body";
+  readonly linearDamping: number;
+  readonly lockRotations: boolean;
+}
+
 export interface MetaverseEnvironmentPhysicsColliderProofConfig
   extends MetaverseEnvironmentColliderProofConfig {
   readonly traversalAffordance: "blocker" | "support";
@@ -136,10 +145,12 @@ export interface MetaverseEnvironmentOrientationProofConfig {
   readonly forwardModelYawRadians: number;
 }
 
+import type { MetaverseWorldSurfaceScaleSnapshot } from "@webgpu-metaverse/shared/metaverse/world";
+
 export interface MetaverseEnvironmentPlacementProofConfig {
   readonly position: MetaverseVector3Snapshot;
   readonly rotationYRadians: number;
-  readonly scale: number;
+  readonly scale: MetaverseWorldSurfaceScaleSnapshot;
 }
 
 export interface MetaverseEnvironmentModelLodProofConfig {
@@ -163,12 +174,12 @@ export type MetaverseEnvironmentLodProofConfig =
 export type MetaverseEnvironmentTraversalAffordanceId =
   | "support"
   | "blocker"
-  | "mount"
-  | "pushable";
+  | "mount";
 
 export interface MetaverseEnvironmentAssetProofConfig {
   readonly collisionPath: string | null;
   readonly collider: MetaverseEnvironmentColliderProofConfig | null;
+  readonly dynamicBody: MetaverseEnvironmentDynamicBodyProofConfig | null;
   readonly entries: readonly MetaverseEnvironmentEntryProofConfig[] | null;
   readonly environmentAssetId: string;
   readonly label: string;

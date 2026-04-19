@@ -8,16 +8,22 @@ import type {
   MetaverseFlightInputSnapshot
 } from "../../types/metaverse-control-mode";
 import type {
-  MountableSeatSelectionSnapshot,
   MountedEnvironmentSnapshot
 } from "../../types/mounted";
 import type { MetaverseEnvironmentAssetProofConfig } from "../../types/proof";
 import type { MetaverseRuntimeConfig } from "../../types/runtime-config";
 import {
+  canMetaverseMountedOccupancyRouteSurfaceDrive,
+  resolveMetaverseMountedVehicleSurfaceDriveControlIntent
+} from "@webgpu-metaverse/shared/metaverse/traversal";
+import {
+  createMetaverseMountedEnvironmentSnapshot
+} from "../../states/metaverse-mounted-environment-snapshot";
+import {
   MetaverseVehicleRuntime,
   type MountedVehicleControlIntent
 } from "../../vehicles";
-import { clamp, freezeVector3, toFiniteNumber } from "../policies/surface-locomotion";
+import { freezeVector3 } from "../policies/surface-locomotion";
 import type {
   DynamicEnvironmentPoseSnapshot,
   RoutedDriverVehicleControlIntentSnapshot,
@@ -38,7 +44,7 @@ interface CreateMountedVehicleRuntimeContextInput {
   readonly environmentAssetId: string;
   readonly excludedColliders: readonly RapierColliderHandle[];
   readonly physicsRuntime: RapierPhysicsRuntime;
-  readonly readDynamicEnvironmentPose: (
+  readonly readDynamicEnvironmentCollisionPose: (
     environmentAssetId: string
   ) => DynamicEnvironmentPoseSnapshot | null;
   readonly readMountableEnvironmentConfig: (
@@ -52,45 +58,6 @@ interface CreateMountedVehicleRuntimeContextInput {
     excludedColliders?: readonly RapierColliderHandle[]
   ) => RapierQueryFilterPredicate;
   readonly surfaceColliderSnapshots: readonly MetaversePlacedCuboidColliderSnapshot[];
-}
-
-function createMountedVehicleIdleControlIntent(): MountedVehicleControlIntent {
-  return Object.freeze({
-    boost: false,
-    moveAxis: 0,
-    strafeAxis: 0,
-    yawAxis: 0
-  });
-}
-
-function resolveMountedEnvironmentDirectSeatTargets(
-  mountableEnvironmentConfig: Pick<MetaverseEnvironmentAssetProofConfig, "seats">
-): MountedEnvironmentSnapshot["directSeatTargets"] {
-  return Object.freeze(
-    (mountableEnvironmentConfig.seats ?? [])
-      .filter((seat) => seat.directEntryEnabled)
-      .map((seat) =>
-        Object.freeze({
-          label: seat.label,
-          seatId: seat.seatId,
-          seatRole: seat.seatRole
-        } satisfies MountableSeatSelectionSnapshot)
-      )
-  );
-}
-
-function resolveMountedEnvironmentSeatTargets(
-  mountableEnvironmentConfig: Pick<MetaverseEnvironmentAssetProofConfig, "seats">
-): MountedEnvironmentSnapshot["seatTargets"] {
-  return Object.freeze(
-    (mountableEnvironmentConfig.seats ?? []).map((seat) =>
-      Object.freeze({
-        label: seat.label,
-        seatId: seat.seatId,
-        seatRole: seat.seatRole
-      } satisfies MountableSeatSelectionSnapshot)
-    )
-  );
 }
 
 export function didMountedVehiclePoseChange(
@@ -126,24 +93,11 @@ export function resolveMountedEnvironmentSnapshot(
     return null;
   }
 
-  return Object.freeze({
-    cameraPolicyId: occupancy.cameraPolicyId,
-    controlRoutingPolicyId: occupancy.controlRoutingPolicyId,
-    directSeatTargets: resolveMountedEnvironmentDirectSeatTargets(
-      mountableEnvironmentConfig
-    ),
-    entryId: occupancy.entryId,
+  return createMetaverseMountedEnvironmentSnapshot({
     environmentAssetId: mountedVehicleSnapshot.environmentAssetId,
     label: mountedVehicleSnapshot.label,
-    lookLimitPolicyId: occupancy.lookLimitPolicyId,
-    occupancyAnimationId: occupancy.occupancyAnimationId,
-    occupancyKind: occupancy.occupancyKind,
-    occupantLabel: occupancy.occupantLabel,
-    occupantRole: occupancy.occupantRole,
-    seatId: occupancy.seatId,
-    seatTargets: resolveMountedEnvironmentSeatTargets(
-      mountableEnvironmentConfig
-    )
+    occupancyPolicy: occupancy,
+    seats: mountableEnvironmentConfig.seats ?? []
   });
 }
 
@@ -152,14 +106,15 @@ export function createMountedVehicleRuntimeContext({
   environmentAssetId,
   excludedColliders,
   physicsRuntime,
-  readDynamicEnvironmentPose,
+  readDynamicEnvironmentCollisionPose,
   readMountableEnvironmentConfig,
   resolveWaterborneTraversalFilterPredicate,
   surfaceColliderSnapshots
 }: CreateMountedVehicleRuntimeContextInput): MountedVehicleRuntimeContext | null {
   const mountableEnvironmentConfig =
     readMountableEnvironmentConfig(environmentAssetId);
-  const dynamicEnvironmentPose = readDynamicEnvironmentPose(environmentAssetId);
+  const dynamicEnvironmentPose =
+    readDynamicEnvironmentCollisionPose(environmentAssetId);
 
   if (
     dynamicEnvironmentPose === null ||
@@ -207,6 +162,7 @@ export function createMountedVehicleRuntimeContext({
         ),
       seats: mountableEnvironmentConfig.seats,
       surfaceColliderSnapshots,
+      waterRegionSnapshots: config.waterRegionSnapshots,
       waterContactProbeRadiusMeters:
         config.skiff.waterContactProbeRadiusMeters,
       waterlineHeightMeters: config.skiff.waterlineHeightMeters,
@@ -223,23 +179,28 @@ export function resolveMountedVehicleControlIntent(
 
   if (
     occupancy === null ||
-    occupancy.controlRoutingPolicyId !== "vehicle-surface-drive" ||
-    occupancy.occupantRole !== "driver" ||
-    !mountedVehicleState.waterborne
+    !canMetaverseMountedOccupancyRouteSurfaceDrive({
+      controlRoutingPolicyId: occupancy.controlRoutingPolicyId,
+      occupantRole: occupancy.occupantRole
+    })
   ) {
-    return createMountedVehicleIdleControlIntent();
+    return resolveMetaverseMountedVehicleSurfaceDriveControlIntent({
+      boost: false,
+      moveAxis: 0,
+      occupantRole: null,
+      strafeAxis: 0,
+      waterborne: false,
+      yawAxis: 0
+    });
   }
 
-  return Object.freeze({
+  return resolveMetaverseMountedVehicleSurfaceDriveControlIntent({
     boost: movementInput.boost,
     moveAxis: movementInput.moveAxis,
-    strafeAxis: 0,
-    yawAxis: clamp(
-      toFiniteNumber(movementInput.yawAxis, 0) +
-        toFiniteNumber(movementInput.strafeAxis, 0),
-      -1,
-      1
-    )
+    occupantRole: occupancy.occupantRole,
+    strafeAxis: movementInput.strafeAxis,
+    waterborne: mountedVehicleState.waterborne,
+    yawAxis: movementInput.yawAxis
   });
 }
 
@@ -251,8 +212,10 @@ export function resolveRoutedDriverVehicleControlIntentSnapshot(
 
   if (
     occupancy === null ||
-    occupancy.controlRoutingPolicyId !== "vehicle-surface-drive" ||
-    occupancy.occupantRole !== "driver"
+    !canMetaverseMountedOccupancyRouteSurfaceDrive({
+      controlRoutingPolicyId: occupancy.controlRoutingPolicyId,
+      occupantRole: occupancy.occupantRole
+    })
   ) {
     return null;
   }

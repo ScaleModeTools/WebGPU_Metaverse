@@ -17,7 +17,7 @@ test("metaverse asset proof resolves a socket-compatible attachment config from 
   const {
     metaverseAttachmentProofConfig,
     metaverseCharacterProofConfig
-  } = await clientLoader.load("/src/app/states/metaverse-asset-proof.ts");
+  } = await clientLoader.load("/src/metaverse/world/proof/index.ts");
 
   assert.equal(
     metaverseAttachmentProofConfig.attachmentId,
@@ -62,7 +62,7 @@ test("metaverse asset proof resolves the active full-body humanoid character fro
     clientLoader.load("/src/assets/config/character-model-manifest.ts"),
     clientLoader.load("/src/assets/config/animation-clip-manifest.ts"),
     clientLoader.load("/src/assets/types/animation-clip-manifest.ts"),
-    clientLoader.load("/src/app/states/metaverse-asset-proof.ts")
+    clientLoader.load("/src/metaverse/world/proof/index.ts")
   ]);
 
   const activeCharacter =
@@ -99,7 +99,7 @@ test("metaverse asset proof resolves the active full-body humanoid character fro
 
 test("metaverse asset proof resolves static, instanced, and dynamic environment config from manifests", async () => {
   const { metaverseEnvironmentProofConfig } = await clientLoader.load(
-    "/src/app/states/metaverse-asset-proof.ts"
+    "/src/metaverse/world/proof/index.ts"
   );
 
   assert.equal(metaverseEnvironmentProofConfig.assets.length, 6);
@@ -162,21 +162,32 @@ test("metaverse asset proof resolves static, instanced, and dynamic environment 
   });
 
   assert.ok(dockAsset);
-  assert.equal(dockAsset.collisionPath, null);
+  assert.equal(
+    dockAsset.collisionPath,
+    "/models/metaverse/environment/metaverse-hub-dock-high.gltf"
+  );
   assert.equal(dockAsset.placement, "static");
   assert.equal(dockAsset.traversalAffordance, "support");
   assert.ok(dockAsset.lods.length >= 2);
   assert.equal(dockAsset.placements.length, 2);
-  assert.equal(dockAsset.physicsColliders?.length, 1);
+  assert.equal(dockAsset.physicsColliders, null);
 
   assert.ok(pushableCrateAsset);
   assert.equal(pushableCrateAsset.collisionPath, null);
   assert.equal(pushableCrateAsset.placement, "dynamic");
-  assert.equal(pushableCrateAsset.traversalAffordance, "pushable");
+  assert.equal(pushableCrateAsset.traversalAffordance, "blocker");
   assert.equal(pushableCrateAsset.lods.length, 1);
   assert.equal(pushableCrateAsset.placements.length, 1);
+  assert.deepEqual(pushableCrateAsset.dynamicBody, {
+    additionalMass: 12,
+    angularDamping: 10,
+    gravityScale: 1,
+    kind: "dynamic-rigid-body",
+    linearDamping: 4.5,
+    lockRotations: true
+  });
   assert.equal(pushableCrateAsset.entries, null);
-  assert.equal(pushableCrateAsset.physicsColliders, null);
+  assert.deepEqual(pushableCrateAsset.physicsColliders, []);
   assert.equal(pushableCrateAsset.seats, null);
   assert.equal(pushableCrateAsset.collider?.shape, "box");
 
@@ -187,19 +198,7 @@ test("metaverse asset proof resolves static, instanced, and dynamic environment 
   assert.equal(skiffAsset.placements.length, 1);
   assert.equal(skiffAsset.entries?.length, 1);
   assert.equal(skiffAsset.entries?.[0]?.entryNodeName, "deck_entry");
-  assert.equal(skiffAsset.physicsColliders?.length, 8);
-  assert.equal(
-    skiffAsset.physicsColliders?.filter(
-      (collider) => collider.traversalAffordance === "support"
-    ).length,
-    4
-  );
-  assert.equal(
-    skiffAsset.physicsColliders?.filter(
-      (collider) => collider.traversalAffordance === "blocker"
-    ).length,
-    4
-  );
+  assert.equal(skiffAsset.physicsColliders, null);
   assert.equal(skiffAsset.seats?.length, 5);
   assert.equal(skiffAsset.seats?.[0]?.seatNodeName, "driver_seat");
   assert.equal(skiffAsset.seats?.[1]?.seatNodeName, "port_bench_seat");
@@ -214,19 +213,7 @@ test("metaverse asset proof resolves static, instanced, and dynamic environment 
   assert.equal(diveBoatAsset.entries?.length, 2);
   assert.equal(diveBoatAsset.entries?.[0]?.entryNodeName, "stern_port_entry");
   assert.equal(diveBoatAsset.entries?.[1]?.entryNodeName, "stern_starboard_entry");
-  assert.equal(diveBoatAsset.physicsColliders?.length, 9);
-  assert.equal(
-    diveBoatAsset.physicsColliders?.filter(
-      (collider) => collider.traversalAffordance === "support"
-    ).length,
-    5
-  );
-  assert.equal(
-    diveBoatAsset.physicsColliders?.filter(
-      (collider) => collider.traversalAffordance === "blocker"
-    ).length,
-    4
-  );
+  assert.equal(diveBoatAsset.physicsColliders, null);
   assert.equal(diveBoatAsset.seats?.length, 7);
   assert.equal(diveBoatAsset.seats?.[0]?.seatNodeName, "helm_seat");
   assert.equal(diveBoatAsset.orientation?.forwardModelYawRadians, Math.PI * 0.5);

@@ -40,6 +40,81 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
       planarMagnitudeMeters: 1.2,
       verticalMagnitudeMeters: 0.3
     });
+  dependencies.traversalRuntime.lastLocalAuthorityPoseCorrectionSnapshot =
+    Object.freeze({
+      authoritative: Object.freeze({
+        lastProcessedInputSequence: 24,
+        linearVelocity: Object.freeze({
+          x: 2.4,
+          y: 0,
+          z: -0.7
+        }),
+        locomotionMode: "swim",
+        position: Object.freeze({
+          x: 1.1,
+          y: 0.8,
+          z: -4.2
+        }),
+        surfaceRouting: Object.freeze({
+          blockingAffordanceDetected: false,
+          decisionReason: "capability-transition-validated",
+          resolvedSupportHeightMeters: null,
+          supportingAffordanceSampleCount: 0
+        })
+      }),
+      local: Object.freeze({
+        issuedTraversalIntent: Object.freeze({
+          actionIntent: Object.freeze({
+            kind: "none",
+            pressed: false,
+            sequence: 0
+          }),
+          bodyControl: Object.freeze({
+            boost: true,
+            moveAxis: 1,
+            strafeAxis: -0.25,
+            turnAxis: 0.5
+          }),
+          inputSequence: 25,
+          locomotionMode: "swim"
+        }),
+        linearVelocity: Object.freeze({
+          x: 2.2,
+          y: 0,
+          z: -0.5
+        }),
+        locomotionMode: "grounded",
+        position: Object.freeze({
+          x: 0.4,
+          y: 1.1,
+          z: -3.6
+        }),
+        surfaceRouting: Object.freeze({
+          autostepHeightMeters: 0.2,
+          blockingAffordanceDetected: false,
+          decisionReason: "capability-maintained",
+          jumpDebug: Object.freeze({
+            groundedBodyGrounded: false,
+            groundedBodyJumpReady: true,
+            surfaceJumpSupported: false,
+            supported: true,
+            verticalSpeedUnitsPerSecond: -0.4
+          }),
+          locomotionMode: "grounded",
+          resolvedSupportHeightMeters: 0.6,
+          supportingAffordanceSampleCount: 2,
+          traversalAuthority: Object.freeze({
+            currentActionKind: "none",
+            currentActionPhase: "idle",
+            currentActionSequence: 0,
+            lastConsumedActionSequence: 0,
+            lastRejectedActionReason: "none",
+            lastRejectedActionSequence: 0,
+            phaseStartedAtTick: 0
+          })
+        })
+      })
+    });
   dependencies.traversalRuntime.lastLocalAuthorityPoseCorrectionReason =
     "gross-position-divergence";
   dependencies.traversalRuntime.lastLocalReconciliationCorrectionSource =
@@ -87,6 +162,84 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
     telemetrySnapshot.worldSnapshot.localReconciliation
       .lastLocalAuthorityPoseCorrectionReason,
     "gross-position-divergence"
+  );
+  assert.deepEqual(
+    telemetrySnapshot.worldSnapshot.localReconciliation
+      .lastLocalAuthorityPoseCorrectionSnapshot,
+    {
+      authoritative: {
+        lastProcessedInputSequence: 24,
+        linearVelocity: {
+          x: 2.4,
+          y: 0,
+          z: -0.7
+        },
+        locomotionMode: "swim",
+        position: {
+          x: 1.1,
+          y: 0.8,
+          z: -4.2
+        },
+        surfaceRouting: {
+          blockingAffordanceDetected: false,
+          decisionReason: "capability-transition-validated",
+          resolvedSupportHeightMeters: null,
+          supportingAffordanceSampleCount: 0
+        }
+      },
+      local: {
+        issuedTraversalIntent: {
+          actionIntent: {
+            kind: "none",
+            pressed: false,
+            sequence: 0
+          },
+          bodyControl: {
+            boost: true,
+            moveAxis: 1,
+            strafeAxis: -0.25,
+            turnAxis: 0.5
+          },
+          inputSequence: 25,
+          locomotionMode: "swim"
+        },
+        linearVelocity: {
+          x: 2.2,
+          y: 0,
+          z: -0.5
+        },
+        locomotionMode: "grounded",
+        position: {
+          x: 0.4,
+          y: 1.1,
+          z: -3.6
+        },
+        surfaceRouting: {
+          autostepHeightMeters: 0.2,
+          blockingAffordanceDetected: false,
+          decisionReason: "capability-maintained",
+          jumpDebug: {
+            groundedBodyGrounded: false,
+            groundedBodyJumpReady: true,
+            surfaceJumpSupported: false,
+            supported: true,
+            verticalSpeedUnitsPerSecond: -0.4
+          },
+          locomotionMode: "grounded",
+          resolvedSupportHeightMeters: 0.6,
+          supportingAffordanceSampleCount: 2,
+          traversalAuthority: {
+            currentActionKind: "none",
+            currentActionPhase: "idle",
+            currentActionSequence: 0,
+            lastConsumedActionSequence: 0,
+            lastRejectedActionReason: "none",
+            lastRejectedActionSequence: 0,
+            phaseStartedAtTick: 0
+          }
+        }
+      }
+    }
   );
   assert.equal(telemetrySnapshot.renderer.drawCallCount, 7);
   assert.equal(telemetrySnapshot.renderer.triangleCount, 42);

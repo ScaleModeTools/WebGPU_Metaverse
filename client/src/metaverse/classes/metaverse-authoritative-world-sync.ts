@@ -1,21 +1,23 @@
 import type {
+  MetaverseRealtimeEnvironmentBodySnapshot,
   MetaverseRealtimePlayerSnapshot,
   MetaverseRealtimeVehicleSnapshot
+} from "@webgpu-metaverse/shared";
+import {
+  createMetaverseMountedOccupancyIdentityKey
 } from "@webgpu-metaverse/shared";
 
 import { metaverseLocalAuthorityReconciliationConfig } from "../config/metaverse-world-network";
 import type { MountedEnvironmentSnapshot } from "../types/mounted";
-import type { MetaverseRemoteVehiclePresentationSnapshot } from "../types/presentation";
+import type {
+  MetaverseRemoteEnvironmentBodyPresentationSnapshot,
+  MetaverseRemoteVehiclePresentationSnapshot
+} from "../types/presentation";
 import type { AckedAuthoritativeLocalPlayerPose } from "../traversal/reconciliation/authoritative-local-player-reconciliation";
 
-type MountedOccupancyAuthoritySnapshot = {
-  readonly entryId: string | null;
-  readonly environmentAssetId: string;
-  readonly occupancyKind: "entry" | "seat";
-  readonly seatId: string | null;
-};
-
 interface MetaverseAuthoritativeWorldSyncRemoteWorldRuntime {
+  readonly remoteEnvironmentBodyPresentations:
+    readonly MetaverseRemoteEnvironmentBodyPresentationSnapshot[];
   readonly remoteVehiclePresentations:
     readonly MetaverseRemoteVehiclePresentationSnapshot[];
   consumeFreshAckedAuthoritativeLocalPlayerPose(
@@ -28,6 +30,9 @@ interface MetaverseAuthoritativeWorldSyncRemoteWorldRuntime {
     environmentAssetId: string,
     maxAuthoritativeSnapshotAgeMs: number
   ): MetaverseRealtimeVehicleSnapshot | null;
+  readFreshAuthoritativeEnvironmentBodySnapshots(
+    maxAuthoritativeSnapshotAgeMs: number
+  ): readonly MetaverseRealtimeEnvironmentBodySnapshot[];
 }
 
 interface MetaverseAuthoritativeWorldSyncTraversalRuntime {
@@ -56,40 +61,81 @@ interface MetaverseAuthoritativeWorldSyncTraversalRuntime {
 
 interface MetaverseAuthoritativeWorldSyncDependencies {
   readonly authoritativePlayerMovementEnabled: boolean;
+  readonly dynamicEnvironmentPresentationRuntime: {
+    syncRemoteVehiclePresentationPose(
+      environmentAssetId: string,
+      poseSnapshot: {
+        readonly position: MetaverseRemoteVehiclePresentationSnapshot["position"];
+        readonly yawRadians: number;
+      }
+    ): void;
+    syncRemoteEnvironmentBodyPresentationPose(
+      environmentAssetId: string,
+      poseSnapshot: {
+        readonly position:
+          MetaverseRemoteEnvironmentBodyPresentationSnapshot["position"];
+        readonly yawRadians: number;
+      }
+    ): void;
+  };
+  readonly environmentBodyCollisionRuntime: {
+    beginAuthoritativeEnvironmentBodyCollisionSync(): void;
+    syncAuthoritativeEnvironmentBodyCollisionPose(
+      environmentAssetId: string,
+      poseSnapshot: {
+        readonly linearVelocity: MetaverseRealtimeEnvironmentBodySnapshot["linearVelocity"];
+        readonly position: MetaverseRealtimeEnvironmentBodySnapshot["position"];
+        readonly yawRadians: number;
+      }
+    ): void;
+  };
   readonly readWallClockMs: () => number;
   readonly remoteWorldRuntime: MetaverseAuthoritativeWorldSyncRemoteWorldRuntime;
   readonly traversalRuntime: MetaverseAuthoritativeWorldSyncTraversalRuntime;
-}
-
-function createMountedOccupancyAuthorityKey(
-  mountedOccupancy: MountedOccupancyAuthoritySnapshot | null | undefined
-): string | null {
-  if (mountedOccupancy === null || mountedOccupancy === undefined) {
-    return null;
-  }
-
-  return `${mountedOccupancy.environmentAssetId}:${mountedOccupancy.occupancyKind}:${mountedOccupancy.seatId ?? ""}:${mountedOccupancy.entryId ?? ""}`;
+  readonly vehicleCollisionRuntime: {
+    syncAuthoritativeVehicleCollisionPose(
+      environmentAssetId: string,
+      poseSnapshot: {
+        readonly linearVelocity?: MetaverseRealtimeVehicleSnapshot["linearVelocity"] | null;
+        readonly position: MetaverseRealtimeVehicleSnapshot["position"];
+        readonly yawRadians: number;
+      }
+    ): void;
+  };
 }
 
 export class MetaverseAuthoritativeWorldSync {
   readonly #authoritativePlayerMovementEnabled: boolean;
+  readonly #dynamicEnvironmentPresentationRuntime:
+    MetaverseAuthoritativeWorldSyncDependencies["dynamicEnvironmentPresentationRuntime"];
+  readonly #environmentBodyCollisionRuntime:
+    MetaverseAuthoritativeWorldSyncDependencies["environmentBodyCollisionRuntime"];
   readonly #readWallClockMs: () => number;
   readonly #remoteWorldRuntime: MetaverseAuthoritativeWorldSyncRemoteWorldRuntime;
   readonly #traversalRuntime: MetaverseAuthoritativeWorldSyncTraversalRuntime;
+  readonly #vehicleCollisionRuntime:
+    MetaverseAuthoritativeWorldSyncDependencies["vehicleCollisionRuntime"];
 
   #mountedEnvironmentAuthorityMismatchKey: string | null = null;
   #mountedEnvironmentAuthorityMismatchSinceMs: number | null = null;
 
   constructor({
     authoritativePlayerMovementEnabled,
+    dynamicEnvironmentPresentationRuntime,
+    environmentBodyCollisionRuntime,
     readWallClockMs,
     remoteWorldRuntime,
-    traversalRuntime
+    traversalRuntime,
+    vehicleCollisionRuntime
   }: MetaverseAuthoritativeWorldSyncDependencies) {
     this.#authoritativePlayerMovementEnabled = authoritativePlayerMovementEnabled;
+    this.#dynamicEnvironmentPresentationRuntime =
+      dynamicEnvironmentPresentationRuntime;
+    this.#environmentBodyCollisionRuntime = environmentBodyCollisionRuntime;
     this.#readWallClockMs = readWallClockMs;
     this.#remoteWorldRuntime = remoteWorldRuntime;
     this.#traversalRuntime = traversalRuntime;
+    this.#vehicleCollisionRuntime = vehicleCollisionRuntime;
   }
 
   reset(): void {
@@ -100,6 +146,7 @@ export class MetaverseAuthoritativeWorldSync {
   syncAuthoritativeWorldSnapshots(): void {
     this.#syncMountedOccupancyAuthorityFromWorldSnapshots();
     this.#syncVehicleAuthorityFromWorldSnapshots();
+    this.#syncEnvironmentBodyAuthorityFromWorldSnapshots();
     this.#syncLocalPlayerAuthorityFromWorldSnapshots();
   }
 
@@ -118,13 +165,30 @@ export class MetaverseAuthoritativeWorldSync {
         continue;
       }
 
-      this.#traversalRuntime.syncAuthoritativeVehiclePose(
+      this.#dynamicEnvironmentPresentationRuntime.syncRemoteVehiclePresentationPose(
         remoteVehiclePresentation.environmentAssetId,
         {
           position: remoteVehiclePresentation.position,
           yawRadians: remoteVehiclePresentation.yawRadians
         }
       );
+
+      const authoritativeRemoteVehicleSnapshot =
+        this.#remoteWorldRuntime.readFreshAuthoritativeVehicleSnapshot(
+          remoteVehiclePresentation.environmentAssetId,
+          metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
+        );
+
+      if (authoritativeRemoteVehicleSnapshot !== null) {
+        this.#vehicleCollisionRuntime.syncAuthoritativeVehicleCollisionPose(
+          remoteVehiclePresentation.environmentAssetId,
+          {
+            linearVelocity: authoritativeRemoteVehicleSnapshot.linearVelocity,
+            position: authoritativeRemoteVehicleSnapshot.position,
+            yawRadians: authoritativeRemoteVehicleSnapshot.yawRadians
+          }
+        );
+      }
     }
 
     if (localMountedEnvironmentAssetId === null) {
@@ -149,6 +213,36 @@ export class MetaverseAuthoritativeWorldSync {
         yawRadians: localMountedVehicleAuthority.yawRadians
       }
     );
+  }
+
+  #syncEnvironmentBodyAuthorityFromWorldSnapshots(): void {
+    this.#environmentBodyCollisionRuntime.beginAuthoritativeEnvironmentBodyCollisionSync();
+    for (const remoteEnvironmentBodyPresentation of this.#remoteWorldRuntime
+      .remoteEnvironmentBodyPresentations) {
+      this.#dynamicEnvironmentPresentationRuntime.syncRemoteEnvironmentBodyPresentationPose(
+        remoteEnvironmentBodyPresentation.environmentAssetId,
+        {
+          position: remoteEnvironmentBodyPresentation.position,
+          yawRadians: remoteEnvironmentBodyPresentation.yawRadians
+        }
+      );
+    }
+
+    const environmentBodySnapshots =
+      this.#remoteWorldRuntime.readFreshAuthoritativeEnvironmentBodySnapshots(
+        metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
+      );
+
+    for (const environmentBodySnapshot of environmentBodySnapshots) {
+      this.#environmentBodyCollisionRuntime.syncAuthoritativeEnvironmentBodyCollisionPose(
+        environmentBodySnapshot.environmentAssetId,
+        {
+          linearVelocity: environmentBodySnapshot.linearVelocity,
+          position: environmentBodySnapshot.position,
+          yawRadians: environmentBodySnapshot.yawRadians
+        }
+      );
+    }
   }
 
   #syncLocalPlayerAuthorityFromWorldSnapshots(): void {
@@ -181,12 +275,13 @@ export class MetaverseAuthoritativeWorldSync {
       return;
     }
 
-    const localMountedOccupancyKey = createMountedOccupancyAuthorityKey(
+    const localMountedOccupancyKey = createMetaverseMountedOccupancyIdentityKey(
       this.#traversalRuntime.mountedEnvironmentSnapshot
     );
-    const authoritativeMountedOccupancyKey = createMountedOccupancyAuthorityKey(
-      authoritativeLocalPlayerSnapshot.mountedOccupancy
-    );
+    const authoritativeMountedOccupancyKey =
+      createMetaverseMountedOccupancyIdentityKey(
+        authoritativeLocalPlayerSnapshot.mountedOccupancy
+      );
 
     if (localMountedOccupancyKey === authoritativeMountedOccupancyKey) {
       this.reset();

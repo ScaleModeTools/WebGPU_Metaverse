@@ -1,8 +1,5 @@
-import {
-  resolveMetaverseAuthoritativeDynamicSurfaceColliders,
-  type MetaverseAuthoritativeSurfaceColliderSnapshot
-} from "../config/metaverse-authoritative-world-surface.js";
 import { MetaverseAuthoritativeRapierPhysicsRuntime } from "./metaverse-authoritative-rapier-physics-runtime.js";
+import type { MetaverseAuthoritativeSurfaceColliderSnapshot } from "../world/map-bundles/metaverse-authoritative-world-bundle-inputs.js";
 import type {
   PhysicsVector3Snapshot,
   RapierColliderHandle
@@ -11,6 +8,13 @@ import type {
 export class MetaverseAuthoritativeDynamicSurfaceColliderRuntime {
   readonly #environmentAssetId: string;
   readonly #physicsRuntime: MetaverseAuthoritativeRapierPhysicsRuntime;
+  readonly #resolveDynamicSurfaceColliders: (
+    environmentAssetId: string,
+    poseSnapshot: {
+      readonly position: PhysicsVector3Snapshot;
+      readonly yawRadians: number;
+    }
+  ) => readonly MetaverseAuthoritativeSurfaceColliderSnapshot[];
 
   #colliders: RapierColliderHandle[] = [];
   #surfaceColliderSnapshots:
@@ -19,10 +23,18 @@ export class MetaverseAuthoritativeDynamicSurfaceColliderRuntime {
 
   constructor(
     environmentAssetId: string,
-    physicsRuntime: MetaverseAuthoritativeRapierPhysicsRuntime
+    physicsRuntime: MetaverseAuthoritativeRapierPhysicsRuntime,
+    resolveDynamicSurfaceColliders: (
+      environmentAssetId: string,
+      poseSnapshot: {
+        readonly position: PhysicsVector3Snapshot;
+        readonly yawRadians: number;
+      }
+    ) => readonly MetaverseAuthoritativeSurfaceColliderSnapshot[]
   ) {
     this.#environmentAssetId = environmentAssetId;
     this.#physicsRuntime = physicsRuntime;
+    this.#resolveDynamicSurfaceColliders = resolveDynamicSurfaceColliders;
   }
 
   get colliders(): readonly RapierColliderHandle[] {
@@ -42,11 +54,10 @@ export class MetaverseAuthoritativeDynamicSurfaceColliderRuntime {
     readonly position: PhysicsVector3Snapshot;
     readonly yawRadians: number;
   }): void {
-    const nextColliderSnapshots =
-      resolveMetaverseAuthoritativeDynamicSurfaceColliders(
-        this.#environmentAssetId,
-        poseSnapshot
-      );
+    const nextColliderSnapshots = this.#resolveDynamicSurfaceColliders(
+      this.#environmentAssetId,
+      poseSnapshot
+    );
 
     if (nextColliderSnapshots.length === 0) {
       this.dispose();

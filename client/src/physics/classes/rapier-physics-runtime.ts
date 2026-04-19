@@ -33,6 +33,12 @@ const defaultGravity = Object.freeze({
   y: -9.81,
   z: 0
 });
+const identityQuaternion = Object.freeze({
+  x: 0,
+  y: 0,
+  z: 0,
+  w: 1
+});
 
 function toFiniteNumber(value: number, fallback = 0): number {
   return Number.isFinite(value) ? value : fallback;
@@ -195,8 +201,28 @@ export class RapierPhysicsRuntime {
     vertices: Float32Array,
     indices: Uint32Array
   ): RapierColliderHandle {
+    return this.createTriMeshCollider(vertices, indices);
+  }
+
+  createTriMeshCollider(
+    vertices: Float32Array,
+    indices: Uint32Array,
+    translation: PhysicsVector3Snapshot = Object.freeze({
+      x: 0,
+      y: 0,
+      z: 0
+    }),
+    rotation: PhysicsQuaternionSnapshot = identityQuaternion
+  ): RapierColliderHandle {
     const addon = this.#requireAddon();
     const colliderDesc = addon.RAPIER.ColliderDesc.trimesh(vertices, indices);
+
+    colliderDesc.setTranslation(
+      toFiniteNumber(translation.x),
+      toFiniteNumber(translation.y),
+      toFiniteNumber(translation.z)
+    );
+    colliderDesc.setRotation(sanitizeQuaternion(rotation));
 
     return addon.world.createCollider(colliderDesc);
   }
@@ -220,12 +246,7 @@ export class RapierPhysicsRuntime {
     rigidBodyDesc.setRotation(
       sanitizeQuaternion(
         options.rotation ??
-          Object.freeze({
-            x: 0,
-            y: 0,
-            z: 0,
-            w: 1
-          })
+          identityQuaternion
       )
     );
     rigidBodyDesc.setGravityScale(

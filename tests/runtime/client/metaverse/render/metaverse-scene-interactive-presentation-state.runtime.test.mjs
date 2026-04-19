@@ -236,9 +236,11 @@ test("MetaverseSceneInteractivePresentationState boots manifest-driven character
       SkinnedMesh,
       Uint16BufferAttribute
     },
+    mountedOccupancyStateModule,
     { MetaverseSceneInteractivePresentationState }
   ] = await Promise.all([
     import("three/webgpu"),
+    clientLoader.load("/src/metaverse/states/mounted-occupancy.ts"),
     clientLoader.load(
       "/src/metaverse/render/characters/metaverse-scene-interactive-presentation-state.ts"
     )
@@ -381,10 +383,16 @@ test("MetaverseSceneInteractivePresentationState boots manifest-driven character
   );
   assert.equal(attachmentRoot.parent?.name, "hand_r_socket");
 
-  interactivePresentationState.syncAttachmentMount({
-    occupancyKind: "seat",
-    occupantRole: "driver"
-  });
+  interactivePresentationState.syncAttachmentMount(
+    mountedOccupancyStateModule
+      .resolveMetaverseMountedOccupancyPresentationStateSnapshot({
+        cameraPolicyId: "vehicle-follow",
+        lookLimitPolicyId: "driver-forward",
+        occupancyAnimationId: "seated",
+        occupancyKind: "seat",
+        occupantRole: "driver"
+      })
+  );
 
   assert.equal(attachmentRoot.parent?.name, "back_socket");
 

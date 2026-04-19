@@ -64,6 +64,55 @@ export interface MetaverseTelemetrySnapshot {
         readonly planarMagnitudeMeters: number | null;
         readonly verticalMagnitudeMeters: number | null;
       };
+      readonly lastLocalAuthorityPoseCorrectionSnapshot: {
+        readonly authoritative: {
+          readonly lastProcessedInputSequence: number;
+          readonly linearVelocity: MetaverseVector3Snapshot;
+          readonly locomotionMode: MetaverseLocomotionModeId;
+          readonly position: MetaverseVector3Snapshot;
+          readonly surfaceRouting: {
+            readonly blockingAffordanceDetected: boolean;
+            readonly decisionReason: MetaverseTraversalStateResolutionReasonId;
+            readonly resolvedSupportHeightMeters: number | null;
+            readonly supportingAffordanceSampleCount: number;
+          };
+        };
+        readonly local: {
+          readonly issuedTraversalIntent: {
+            readonly actionIntent: MetaversePlayerTraversalActionIntentSnapshot;
+            readonly bodyControl: MetaversePlayerTraversalBodyControlSnapshot;
+            readonly inputSequence: number;
+            readonly locomotionMode: "grounded" | "swim";
+          } | null;
+          readonly linearVelocity: MetaverseVector3Snapshot;
+          readonly locomotionMode: MetaverseLocomotionModeId;
+          readonly position: MetaverseVector3Snapshot;
+          readonly surfaceRouting: {
+            readonly autostepHeightMeters: number | null;
+            readonly blockingAffordanceDetected: boolean;
+            readonly decisionReason: MetaverseTraversalStateResolutionReasonId;
+            readonly jumpDebug: {
+              readonly groundedBodyGrounded: boolean | null;
+              readonly groundedBodyJumpReady: boolean | null;
+              readonly surfaceJumpSupported: boolean | null;
+              readonly supported: boolean | null;
+              readonly verticalSpeedUnitsPerSecond: number | null;
+            };
+            readonly locomotionMode: MetaverseLocomotionModeId;
+            readonly resolvedSupportHeightMeters: number;
+            readonly supportingAffordanceSampleCount: number;
+            readonly traversalAuthority: {
+              readonly currentActionKind: MetaverseRealtimePlayerTraversalActionKindId;
+              readonly currentActionPhase: MetaverseRealtimePlayerTraversalActionPhaseId;
+              readonly currentActionSequence: number;
+              readonly lastConsumedActionSequence: number;
+              readonly lastRejectedActionReason: MetaverseRealtimePlayerTraversalActionRejectionReasonId;
+              readonly lastRejectedActionSequence: number;
+              readonly phaseStartedAtTick: number;
+            };
+          };
+        };
+      } | null;
       readonly lastLocalAuthorityPoseCorrectionReason:
         | "none"
         | "gross-position-divergence";
@@ -113,15 +162,15 @@ export interface MetaverseTelemetrySnapshot {
           readonly phaseStartedAtTick: number | null;
         };
         readonly surfaceRouting: {
-          readonly blockerOverlap: boolean | null;
+          readonly blockingAffordanceDetected: boolean | null;
           readonly decisionReason: MetaverseTraversalStateResolutionReasonId | null;
           readonly resolvedSupportHeightMeters: number | null;
-          readonly stepSupportedProbeCount: number | null;
+          readonly supportingAffordanceSampleCount: number | null;
         };
       };
       readonly local: {
         readonly autostepHeightMeters: number | null;
-        readonly blockerOverlap: boolean;
+        readonly blockingAffordanceDetected: boolean;
         readonly decisionReason: MetaverseTraversalStateResolutionReasonId;
         readonly jumpDebug: {
           readonly groundedBodyGrounded: boolean | null;
@@ -132,7 +181,7 @@ export interface MetaverseTelemetrySnapshot {
         };
         readonly locomotionMode: MetaverseLocomotionModeId;
         readonly resolvedSupportHeightMeters: number;
-        readonly stepSupportedProbeCount: number;
+        readonly supportingAffordanceSampleCount: number;
         readonly traversalAuthority: {
           readonly currentActionKind: MetaverseRealtimePlayerTraversalActionKindId;
           readonly currentActionPhase: MetaverseRealtimePlayerTraversalActionPhaseId;

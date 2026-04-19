@@ -1,4 +1,8 @@
 import {
+  metaverseBuilderBlockTileEnvironmentAssetId,
+  metaverseBuilderFloorTileEnvironmentAssetId,
+  metaverseBuilderStepTileEnvironmentAssetId,
+  metaverseBuilderWallTileEnvironmentAssetId,
   metaverseWorldSurfaceAssets,
   metaverseWorldWaterRegions,
   metaverseHubDockEnvironmentAssetId,
@@ -10,6 +14,8 @@ import {
 } from "./metaverse-world-surface-authoring-data.js";
 import {
   resolveMetaverseWorldDynamicSurfaceCollidersForAsset,
+  readMetaverseWorldMountedEntryAuthoring,
+  readMetaverseWorldMountedSeatAuthoring,
   resolveMetaverseWorldPlacedWaterRegions,
   type MetaverseWorldPlacedWaterRegionSnapshot,
   type MetaverseWorldPlacedSurfaceColliderSnapshot,
@@ -19,6 +25,10 @@ import {
 } from "./metaverse-world-surface-query.js";
 
 export {
+  metaverseBuilderBlockTileEnvironmentAssetId,
+  metaverseBuilderFloorTileEnvironmentAssetId,
+  metaverseBuilderStepTileEnvironmentAssetId,
+  metaverseBuilderWallTileEnvironmentAssetId,
   metaverseHubDockEnvironmentAssetId,
   metaverseHubDiveBoatEnvironmentAssetId,
   metaverseHubPushableCrateEnvironmentAssetId,
@@ -29,6 +39,12 @@ export {
   metaverseWorldWaterRegions
 } from "./metaverse-world-surface-authoring-data.js";
 export type {
+  MetaverseWorldEnvironmentColliderAuthoring,
+  MetaverseWorldEnvironmentDynamicBodyAuthoring,
+  MetaverseWorldEnvironmentDynamicBodyKindId,
+  MetaverseWorldMountedEntryAuthoring,
+  MetaverseWorldMountedSeatAuthoring,
+  MetaverseWorldEnvironmentTraversalAffordanceId,
   MetaverseWorldPlacedSurfaceColliderSnapshot,
   MetaverseWorldPlacedWaterRegionSnapshot,
   MetaverseWorldSurfaceAssetAuthoring,
@@ -84,6 +100,26 @@ export function readMetaverseWorldPlacedWaterRegionSnapshot(
   waterRegionId: string
 ): MetaverseWorldPlacedWaterRegionSnapshot | null {
   return metaverseWorldPlacedWaterRegionsById.get(waterRegionId) ?? null;
+}
+
+export function readMetaverseWorldMountedSeatAuthoringForAsset(
+  environmentAssetId: string,
+  seatId: string
+) {
+  return readMetaverseWorldMountedSeatAuthoring(
+    metaverseWorldSurfaceAssetsById.get(environmentAssetId),
+    seatId
+  );
+}
+
+export function readMetaverseWorldMountedEntryAuthoringForAsset(
+  environmentAssetId: string,
+  entryId: string
+) {
+  return readMetaverseWorldMountedEntryAuthoring(
+    metaverseWorldSurfaceAssetsById.get(environmentAssetId),
+    entryId
+  );
 }
 
 export function resolveMetaverseWorldDynamicSurfaceColliders(

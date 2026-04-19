@@ -1,4 +1,5 @@
 import type { ExperienceId } from "@webgpu-metaverse/shared";
+import type { MetaverseWorldPlacedWaterRegionSnapshot } from "@webgpu-metaverse/shared/metaverse/world";
 
 import type { MetaverseVector3Snapshot } from "./presentation";
 
@@ -70,6 +71,8 @@ export interface MetaverseRuntimeConfig {
     readonly minAltitude: number;
     readonly worldRadius: number;
   };
+  readonly waterRegionSnapshots:
+    readonly MetaverseWorldPlacedWaterRegionSnapshot[];
   readonly ocean: {
     readonly emissiveColor: readonly [number, number, number];
     readonly farColor: readonly [number, number, number];
@@ -101,6 +104,9 @@ export interface MetaverseRuntimeConfig {
     };
   };
   readonly portals: readonly MetaversePortalConfig[];
+  readonly traversal: {
+    readonly groundedJumpSupportVerticalSpeedTolerance: number;
+  };
   readonly skiff: {
     readonly accelerationCurveExponent: number;
     readonly accelerationUnitsPerSecondSquared: number;

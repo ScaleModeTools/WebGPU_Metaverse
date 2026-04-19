@@ -66,7 +66,7 @@ export function useMetaverseShellEntryPolicy({
     if (username === null) {
       dispatch({
         type: "loginRejected",
-        loginError: "Enter a non-empty username to create the local profile."
+        loginError: "Enter a non-empty username to save the local profile."
       });
       return;
     }

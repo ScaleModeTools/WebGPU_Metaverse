@@ -14,11 +14,18 @@ after(async () => {
 });
 
 test("MetaverseSceneCameraPresentationState syncs environment, camera, and interaction snapshots from the presented view", async () => {
-  const [{ PerspectiveCamera }, { MetaverseSceneCameraPresentationState }] =
+  const [
+    { PerspectiveCamera },
+    { MetaverseSceneCameraPresentationState },
+    { createMetaverseSceneMountedPresentationSnapshot }
+  ] =
     await Promise.all([
       import("three/webgpu"),
       clientLoader.load(
         "/src/metaverse/render/camera/metaverse-scene-camera-presentation-state.ts"
+      ),
+      clientLoader.load(
+        "/src/metaverse/render/mounts/metaverse-scene-mounted-presentation-snapshot.ts"
       )
     ]);
   const camera = new PerspectiveCamera();
@@ -37,8 +44,10 @@ test("MetaverseSceneCameraPresentationState syncs environment, camera, and inter
     seatId: "driver_seat"
   });
   const interactionSnapshot = Object.freeze({
-    mountedEnvironmentAssetId: "metaverse-hub-skiff-v1"
+    focusedMountable: null
   });
+  const mountedPresentationSnapshot =
+    createMetaverseSceneMountedPresentationSnapshot(mountedEnvironment);
   const cameraPresentationState = new MetaverseSceneCameraPresentationState({
     camera,
     environmentProofState: {
@@ -62,7 +71,7 @@ test("MetaverseSceneCameraPresentationState syncs environment, camera, and inter
   const returnedInteractionSnapshot =
     cameraPresentationState.syncSceneInteractionSnapshot(
       cameraSnapshot,
-      mountedEnvironment
+      mountedPresentationSnapshot
     );
 
   assert.equal(returnedInteractionSnapshot, interactionSnapshot);

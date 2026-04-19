@@ -210,6 +210,27 @@ function createStableTextValues(
   );
 }
 
+export function createStableCountReserveTexts(
+  singularLabel: string,
+  pluralLabel: string,
+  maxDigits: number = 3
+): readonly string[] {
+  const reserveTexts = [`0 ${pluralLabel}`];
+
+  for (let digitCount = 1; digitCount <= maxDigits; digitCount += 1) {
+    const digits = "8".repeat(digitCount);
+
+    reserveTexts.push(`${digits} ${singularLabel}`);
+    reserveTexts.push(`${digits} ${pluralLabel}`);
+  }
+
+  return Object.freeze(
+    reserveTexts.filter(
+      (value, index) => reserveTexts.indexOf(value) === index
+    )
+  );
+}
+
 const preWrapLineStyle: CSSProperties = {
   display: "block",
   whiteSpace: "pre-wrap"

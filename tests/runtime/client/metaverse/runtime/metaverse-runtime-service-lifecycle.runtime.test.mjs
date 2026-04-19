@@ -54,7 +54,7 @@ after(async () => {
   await clientLoader?.close();
 });
 
-test("MetaverseRuntimeServiceLifecycle resets stale services and runs non-cinematic boot sequencing outside the shell runtime", async () => {
+test("MetaverseRuntimeServiceLifecycle resets stale services and runs direct boot sequencing outside the shell runtime", async () => {
   const { MetaverseRuntimeServiceLifecycle } = await clientLoader.load(
     "/src/metaverse/classes/metaverse-runtime-service-lifecycle.ts"
   );
@@ -66,7 +66,6 @@ test("MetaverseRuntimeServiceLifecycle resets stale services and runs non-cinema
       }
     },
     bootLifecycle: {
-      bootCinematicEnabled: false,
       async bootRuntime(request) {
         callLog.push("bootLifecycle:bootRuntime");
         await request.bootGroundedRuntime();
@@ -74,9 +73,6 @@ test("MetaverseRuntimeServiceLifecycle resets stale services and runs non-cinema
       ensureRuntimeInputInstalled(canvas, flightInputRuntime) {
         callLog.push(`bootLifecycle:install:${canvas.clientWidth}x${canvas.clientHeight}`);
         flightInputRuntime.install(canvas);
-      },
-      isBootCinematicActive() {
-        return false;
       },
       reset() {
         callLog.push("bootLifecycle:reset");
@@ -191,17 +187,12 @@ test("MetaverseRuntimeServiceLifecycle activates the booted runtime without movi
       }
     },
     bootLifecycle: {
-      bootCinematicEnabled: true,
       async bootRuntime() {
         callLog.push("bootLifecycle:bootRuntime");
       },
       ensureRuntimeInputInstalled(canvas, flightInputRuntime) {
         callLog.push(`bootLifecycle:install:${canvas.clientWidth}x${canvas.clientHeight}`);
         flightInputRuntime.install(canvas);
-      },
-      isBootCinematicActive(nowMs) {
-        callLog.push(`bootLifecycle:isActive:${nowMs}`);
-        return false;
       },
       reset() {
         callLog.push("bootLifecycle:reset");
@@ -294,9 +285,6 @@ test("MetaverseRuntimeServiceLifecycle activates the booted runtime without movi
   });
 
   assert.deepEqual(callLog, [
-    "bootLifecycle:isActive:4321",
-    "bootLifecycle:install:1280x720",
-    "flightInput:install",
     "presence:boot",
     "remoteWorld:boot",
     "frame:sync:4321:true",
@@ -316,15 +304,11 @@ test("MetaverseRuntimeServiceLifecycle owns boot-attempt cleanup and runtime tea
       }
     },
     bootLifecycle: {
-      bootCinematicEnabled: false,
       async bootRuntime() {
         callLog.push("bootLifecycle:bootRuntime");
       },
       ensureRuntimeInputInstalled() {
         callLog.push("bootLifecycle:install");
-      },
-      isBootCinematicActive() {
-        return false;
       },
       reset() {
         callLog.push("bootLifecycle:reset");

@@ -81,10 +81,13 @@ test("MetaverseSurfaceDriveBodyRuntime syncs authoritative cuboid vehicle state 
     assert.equal(runtime.snapshot.linearVelocity.x, 4);
     assert.equal(runtime.snapshot.linearVelocity.y, 1);
     assert.equal(runtime.snapshot.linearVelocity.z, 2);
+    assertApprox(runtime.snapshot.angularVelocityRadiansPerSecond, 0);
+    assertApprox(runtime.snapshot.forwardSpeedUnitsPerSecond, 4);
     assertApprox(
       runtime.snapshot.planarSpeedUnitsPerSecond,
       Math.hypot(4, 2)
     );
+    assertApprox(runtime.snapshot.strafeSpeedUnitsPerSecond, 2);
     assertApprox(runtime.snapshot.yawRadians, Math.PI * 0.5);
     assertApprox(stateSnapshot.forwardSpeedUnitsPerSecond, 4);
     assertApprox(stateSnapshot.strafeSpeedUnitsPerSecond, 2);
@@ -171,6 +174,9 @@ test("MetaverseSurfaceDriveBodyRuntime restores a captured cuboid state without 
       restoredStateSnapshot.strafeSpeedUnitsPerSecond,
       capturedStateSnapshot.strafeSpeedUnitsPerSecond
     );
+    assertApprox(runtime.snapshot.angularVelocityRadiansPerSecond, 0);
+    assertApprox(runtime.snapshot.forwardSpeedUnitsPerSecond, -3);
+    assertApprox(runtime.snapshot.strafeSpeedUnitsPerSecond, -1.5);
     assertApprox(runtime.snapshot.position.x, 5);
     assertApprox(runtime.snapshot.position.y, 0.75);
     assertApprox(runtime.snapshot.position.z, -6);
@@ -218,7 +224,7 @@ test("MetaverseSurfaceDriveBodyRuntime resolves swim blocker overlap against sha
     translation: Object.freeze({
       x: 0,
       y: 0.9,
-      z: -1.2
+      z: -4
     }),
     traversalAffordance: "blocker"
   });

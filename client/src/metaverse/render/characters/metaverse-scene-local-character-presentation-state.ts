@@ -16,6 +16,9 @@ import type {
   MetaverseSceneMountInteractionState
 } from "../mounts/metaverse-scene-mount-interaction-state";
 import type {
+  MetaverseSceneMountedPresentationSnapshot
+} from "../mounts/metaverse-scene-mounted-presentation-snapshot";
+import type {
   MountedCharacterRuntime
 } from "../mounts/metaverse-scene-mounts";
 import type {
@@ -25,7 +28,6 @@ import type {
 import type {
   MetaverseCameraSnapshot,
   MetaverseCharacterPresentationSnapshot,
-  MountedEnvironmentSnapshot,
   MetaverseRuntimeConfig
 } from "../../types/metaverse-runtime";
 
@@ -75,7 +77,8 @@ export class MetaverseSceneLocalCharacterPresentationState {
     cameraSnapshot: MetaverseCameraSnapshot,
     deltaSeconds: number,
     characterPresentation: MetaverseCharacterPresentationSnapshot | null = null,
-    mountedEnvironment: MountedEnvironmentSnapshot | null = null
+    mountedPresentationSnapshot: MetaverseSceneMountedPresentationSnapshot | null =
+      null
   ): MetaverseCameraSnapshot {
     const {
       config,
@@ -83,6 +86,10 @@ export class MetaverseSceneLocalCharacterPresentationState {
       localCharacterPresentationDependencies,
       mountInteractionState
     } = this.#dependencies;
+    const mountedEnvironment =
+      mountedPresentationSnapshot?.mountedEnvironment ?? null;
+    const mountedOccupancyPresentationState =
+      mountedPresentationSnapshot?.mountedOccupancyPresentationState ?? null;
 
     if (interactivePresentationState.characterProofRuntime !== null) {
       advanceLocalCharacterAnimation(
@@ -96,8 +103,13 @@ export class MetaverseSceneLocalCharacterPresentationState {
       );
     }
 
-    mountInteractionState.syncMountedCharacterRuntime(mountedEnvironment);
-    interactivePresentationState.syncAttachmentMount(mountedEnvironment);
+    mountInteractionState.syncMountedCharacterRuntime(
+      mountedEnvironment,
+      mountedOccupancyPresentationState
+    );
+    interactivePresentationState.syncAttachmentMount(
+      mountedOccupancyPresentationState
+    );
 
     return interactivePresentationState.characterProofRuntime === null
       ? cameraSnapshot

@@ -24,6 +24,9 @@ import {
   syncCharacterPresentation,
   syncHumanoidV2PistolPoseWeights
 } from "./metaverse-scene-character-animation";
+import {
+  resolveMetaverseMountedOccupancyPresentationStateSnapshot
+} from "../../states/mounted-occupancy";
 
 import type {
   MetaverseMountableEnvironmentDynamicAssetRuntime
@@ -89,13 +92,29 @@ export function createMetaverseSceneRemoteCharacterPresentationDependencies({
       syncAttachmentProofRuntimeMount(
         attachmentRuntime,
         characterRuntime,
-        mountedOccupancy,
+        resolveMetaverseMountedOccupancyPresentationStateSnapshot(
+          mountedOccupancy
+        ),
         attachmentRuntimeNodeResolvers
       ),
     syncCharacterAnimation,
     syncCharacterPresentation,
     syncHeldWeaponPose: syncHumanoidV2HeldWeaponPose,
-    syncMountedCharacterRuntime: syncMountedCharacterRuntimeFromSelectionReference,
+    syncMountedCharacterRuntime: (
+      characterRuntime,
+      mountedCharacterRuntime,
+      mountedOccupancy,
+      resolveMountedEnvironmentRuntime
+    ) =>
+      syncMountedCharacterRuntimeFromSelectionReference(
+        characterRuntime,
+        mountedCharacterRuntime,
+        mountedOccupancy,
+        resolveMetaverseMountedOccupancyPresentationStateSnapshot(
+          mountedOccupancy
+        ),
+        resolveMountedEnvironmentRuntime
+      ),
     syncPistolPoseWeights: syncHumanoidV2PistolPoseWeights
   };
 }

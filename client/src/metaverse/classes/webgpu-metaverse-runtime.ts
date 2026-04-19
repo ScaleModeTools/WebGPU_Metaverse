@@ -13,8 +13,8 @@ import {
 } from "@/physics";
 import { MetaverseRuntimeStartCoordinator } from "../boot/metaverse-runtime-start-coordinator";
 import { MetaverseRuntimeBootLifecycle } from "../boot/metaverse-runtime-boot-lifecycle";
-import { metaverseBootCinematicConfig } from "../config/metaverse-boot-cinematic";
 import { defaultMetaverseControlMode } from "../config/metaverse-control-modes";
+import { metaverseRuntimeCameraPhaseConfig } from "../config/metaverse-runtime-camera-phase";
 import { metaverseRuntimeConfig } from "../config/metaverse-runtime";
 import {
   metaverseRealtimeMigrationConfig,
@@ -25,10 +25,11 @@ import {
   createMetaverseScene,
   type SceneAssetLoader
 } from "../render/webgpu-metaverse-scene";
-import type { MetaverseBootCinematicConfig } from "../types/metaverse-boot-cinematic";
 import type { MetaverseControlModeId } from "../types/metaverse-control-mode";
+import type { MetaverseRuntimeCameraPhaseConfig } from "../types/metaverse-runtime-camera-phase";
 import type {
   MetaverseAttachmentProofConfig,
+  MetaverseCameraSnapshot,
   MetaverseCharacterProofConfig,
   MetaverseEnvironmentProofConfig,
   MetaverseHudSnapshot,
@@ -38,6 +39,7 @@ import { MetaverseAuthoritativeWorldSync } from "./metaverse-authoritative-world
 import { MetaverseEnvironmentPhysicsRuntime } from "./metaverse-environment-physics-runtime";
 import { MetaverseFlightInputRuntime } from "./metaverse-flight-input-runtime";
 import { MetaverseMountedInteractionRuntime } from "./metaverse-mounted-interaction-runtime";
+import { MetaverseRuntimeCameraPhaseState } from "./metaverse-runtime-camera-phase-state";
 import {
   MetaversePresenceRuntime,
   type MetaverseLocalPlayerIdentity,
@@ -77,7 +79,6 @@ interface MetaverseRendererTuningHandle {
 interface MetaverseRuntimeDependencies {
   readonly attachmentProofConfig?: MetaverseAttachmentProofConfig | null;
   readonly authoritativePlayerMovementEnabled?: boolean;
-  readonly bootCinematicConfig?: MetaverseBootCinematicConfig;
   readonly cancelAnimationFrame?: typeof globalThis.cancelAnimationFrame;
   readonly characterProofConfig?: MetaverseCharacterProofConfig | null;
   readonly createMetaversePresenceClient?: (() => MetaversePresenceClientRuntime) | null;
@@ -93,6 +94,7 @@ interface MetaverseRuntimeDependencies {
   readonly readNowMs?: () => number;
   readonly readWallClockMs?: () => number;
   readonly requestAnimationFrame?: typeof globalThis.requestAnimationFrame;
+  readonly runtimeCameraPhaseConfig?: MetaverseRuntimeCameraPhaseConfig;
   readonly showPhysicsDebug?: boolean;
   readonly showSocketDebug?: boolean;
 }
@@ -138,6 +140,7 @@ function readNowMs(): number {
 }
 
 export class WebGpuMetaverseRuntime {
+  readonly #bootLifecycle: MetaverseRuntimeBootLifecycle;
   readonly #flightInputRuntime = new MetaverseFlightInputRuntime();
   readonly #hudPublisher: MetaverseRuntimeHudPublisher;
   readonly #mountedInteractionRuntime: MetaverseMountedInteractionRuntime;
@@ -150,8 +153,6 @@ export class WebGpuMetaverseRuntime {
     config: MetaverseRuntimeConfig = metaverseRuntimeConfig,
     dependencies: MetaverseRuntimeDependencies = {}
   ) {
-    const bootCinematicConfig =
-      dependencies.bootCinematicConfig ?? metaverseBootCinematicConfig;
     const createRenderer = dependencies.createRenderer ?? createDefaultRenderer;
     const createSceneAssetLoader =
       dependencies.createSceneAssetLoader ?? createDefaultSceneAssetLoader;
@@ -175,6 +176,8 @@ export class WebGpuMetaverseRuntime {
       dependencies.cancelAnimationFrame ?? cancelBrowserAnimationFrame;
     const readNowMsImpl = dependencies.readNowMs ?? readNowMs;
     const readWallClockMsImpl = dependencies.readWallClockMs ?? Date.now;
+    const runtimeCameraPhaseConfig =
+      dependencies.runtimeCameraPhaseConfig ?? metaverseRuntimeCameraPhaseConfig;
 
     const sceneRuntime = createMetaverseScene(config, {
       attachmentProofConfig: dependencies.attachmentProofConfig ?? null,
@@ -197,8 +200,10 @@ export class WebGpuMetaverseRuntime {
     const traversalRuntime = new MetaverseTraversalRuntime(config, {
       groundedBodyRuntime,
       physicsRuntime,
-      readDynamicEnvironmentPose: (environmentAssetId) =>
-        sceneRuntime.readDynamicEnvironmentPose(environmentAssetId),
+      readDynamicEnvironmentCollisionPose: (environmentAssetId) =>
+        environmentPhysicsRuntime.readDynamicEnvironmentCollisionPose(
+          environmentAssetId
+        ),
       readMountedEnvironmentAnchorSnapshot: (mountedEnvironment) =>
         sceneRuntime.readMountedEnvironmentAnchorSnapshot(mountedEnvironment),
       readMountableEnvironmentConfig: (environmentAssetId) =>
@@ -245,7 +250,9 @@ export class WebGpuMetaverseRuntime {
         dependencies.createMetaversePresenceClient ?? null,
       localPlayerIdentity: dependencies.localPlayerIdentity ?? null,
       onPresenceUpdate: () => {
-        remoteWorldRuntime.syncConnection(presenceRuntime.isJoined);
+        remoteWorldRuntime.syncConnection(
+          !presenceRuntime.connectionRequired || presenceRuntime.isJoined
+        );
         this.#renderSession.publishRuntimeHudSnapshot(false);
       }
     });
@@ -253,17 +260,50 @@ export class WebGpuMetaverseRuntime {
       authoritativePlayerMovementEnabled:
         dependencies.authoritativePlayerMovementEnabled ??
         metaverseRealtimeMigrationConfig.metaverseAuthoritativePlayerMovementEnabled,
+      dynamicEnvironmentPresentationRuntime: {
+        syncRemoteVehiclePresentationPose: (environmentAssetId, poseSnapshot) =>
+          sceneRuntime.setDynamicEnvironmentPose(environmentAssetId, poseSnapshot),
+        syncRemoteEnvironmentBodyPresentationPose: (
+          environmentAssetId,
+          poseSnapshot
+        ) => sceneRuntime.setDynamicEnvironmentPose(environmentAssetId, poseSnapshot)
+      },
+      environmentBodyCollisionRuntime: {
+        beginAuthoritativeEnvironmentBodyCollisionSync: () =>
+          environmentPhysicsRuntime.beginAuthoritativeEnvironmentBodyCollisionSync(),
+        syncAuthoritativeEnvironmentBodyCollisionPose: (
+          environmentAssetId,
+          poseSnapshot
+        ) =>
+          environmentPhysicsRuntime.syncAuthoritativeEnvironmentBodyCollisionPose(
+            environmentAssetId,
+            poseSnapshot
+          )
+      },
       readWallClockMs: readWallClockMsImpl,
       remoteWorldRuntime,
-      traversalRuntime
+      traversalRuntime,
+      vehicleCollisionRuntime: {
+        syncAuthoritativeVehicleCollisionPose: (environmentAssetId, poseSnapshot) =>
+          environmentPhysicsRuntime.setDynamicEnvironmentPose(
+            environmentAssetId,
+            poseSnapshot
+          )
+      }
+    });
+    const cameraPhaseState = new MetaverseRuntimeCameraPhaseState({
+      cameraConfig: config.camera,
+      config: runtimeCameraPhaseConfig,
+      environmentProofConfig,
+      portals: config.portals
     });
     const bootLifecycle = new MetaverseRuntimeBootLifecycle({
-      bootCinematicConfig,
+      cameraPhaseState,
       devicePixelRatio,
-      portals: config.portals,
       readNowMs: readNowMsImpl,
       sceneRuntime
     });
+    this.#bootLifecycle = bootLifecycle;
 
     this.#hudPublisher = new MetaverseRuntimeHudPublisher({
       config,
@@ -365,6 +405,21 @@ export class WebGpuMetaverseRuntime {
 
   leaveMountedEnvironment(): void {
     this.#mountedInteractionRuntime.leaveMountedEnvironment();
+    this.#renderSession.syncOrPublishRuntimeState(true);
+  }
+
+  setDeathCameraSnapshot(snapshot: MetaverseCameraSnapshot | null): void {
+    this.#bootLifecycle.setDeathCameraSnapshot(snapshot);
+    this.#renderSession.syncOrPublishRuntimeState(true);
+  }
+
+  setGameplayControlLocked(locked: boolean): void {
+    this.#bootLifecycle.setGameplayControlLocked(locked);
+    this.#renderSession.syncOrPublishRuntimeState(true);
+  }
+
+  setRespawnControlLocked(locked: boolean): void {
+    this.#bootLifecycle.setRespawnControlLocked(locked);
     this.#renderSession.syncOrPublishRuntimeState(true);
   }
 

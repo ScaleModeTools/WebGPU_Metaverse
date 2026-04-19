@@ -1,10 +1,19 @@
 import {
+  defaultMetaverseMountedVehicleCameraPolicyId,
+  defaultMetaverseMountedVehicleControlRoutingPolicyId,
+  defaultMetaverseMountedVehicleOccupancyAnimationId,
   defaultMetaverseMountedLookLimitPolicyId,
+  metaverseMountedVehicleCameraPolicyIds,
+  metaverseMountedVehicleControlRoutingPolicyIds,
+  metaverseMountedVehicleOccupancyAnimationIds,
   metaverseMountedLookLimitPolicyIds,
   metaversePresenceMountedOccupantRoleIds
 } from "@webgpu-metaverse/shared";
 import type {
   MetaverseMountedLookLimitPolicyId,
+  MetaverseMountedVehicleCameraPolicyId,
+  MetaverseMountedVehicleControlRoutingPolicyId,
+  MetaverseMountedVehicleOccupancyAnimationId,
   MetaversePresenceMountedOccupantRoleId
 } from "@webgpu-metaverse/shared";
 
@@ -13,45 +22,37 @@ export const mountedVehicleSeatRoleIds =
 
 export type MountedVehicleSeatRoleId = MetaversePresenceMountedOccupantRoleId;
 
-export const mountedVehicleControlRoutingPolicyIds = [
-  "vehicle-surface-drive",
-  "look-only",
-  "turret-station"
-] as const;
+export const mountedVehicleControlRoutingPolicyIds =
+  metaverseMountedVehicleControlRoutingPolicyIds;
 
 export type MountedVehicleControlRoutingPolicyId =
-  (typeof mountedVehicleControlRoutingPolicyIds)[number];
+  MetaverseMountedVehicleControlRoutingPolicyId;
 
-export const mountedVehicleCameraPolicyIds = [
-  "vehicle-follow",
-  "seat-follow",
-  "turret-follow"
-] as const;
+export const mountedVehicleCameraPolicyIds =
+  metaverseMountedVehicleCameraPolicyIds;
 
 export type MountedVehicleCameraPolicyId =
-  (typeof mountedVehicleCameraPolicyIds)[number];
+  MetaverseMountedVehicleCameraPolicyId;
 
 export const mountedVehicleLookLimitPolicyIds =
   metaverseMountedLookLimitPolicyIds;
 
 export type MountedVehicleLookLimitPolicyId = MetaverseMountedLookLimitPolicyId;
 
-export const mountedVehicleOccupancyAnimationIds = [
-  "seated",
-  "standing"
-] as const;
+export const mountedVehicleOccupancyAnimationIds =
+  metaverseMountedVehicleOccupancyAnimationIds;
 
 export type MountedVehicleOccupancyAnimationId =
-  (typeof mountedVehicleOccupancyAnimationIds)[number];
+  MetaverseMountedVehicleOccupancyAnimationId;
 
 export const defaultMountedVehicleSeatId = "driver-seat";
 export const defaultMountedVehicleSeatRole =
   "driver" satisfies MountedVehicleSeatRoleId;
 export const defaultMountedVehicleControlRoutingPolicyId =
-  "vehicle-surface-drive" satisfies MountedVehicleControlRoutingPolicyId;
+  defaultMetaverseMountedVehicleControlRoutingPolicyId;
 export const defaultMountedVehicleCameraPolicyId =
-  "vehicle-follow" satisfies MountedVehicleCameraPolicyId;
+  defaultMetaverseMountedVehicleCameraPolicyId;
 export const defaultMountedVehicleLookLimitPolicyId =
   defaultMetaverseMountedLookLimitPolicyId;
 export const defaultMountedVehicleOccupancyAnimationId =
-  "seated" satisfies MountedVehicleOccupancyAnimationId;
+  defaultMetaverseMountedVehicleOccupancyAnimationId;

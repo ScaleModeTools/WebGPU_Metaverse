@@ -48,9 +48,10 @@ test("WebGpuMetaverseRuntime starts from an idle snapshot and rejects missing na
   const runtime = new WebGpuMetaverseRuntime();
 
   assert.equal(runtime.hudSnapshot.lifecycle, "idle");
-  assert.equal(runtime.hudSnapshot.focusedMountable, null);
+  assert.equal(runtime.hudSnapshot.mountedInteraction.focusedMountable, null);
+  assert.equal(runtime.hudSnapshot.mountedInteractionHud.visible, false);
   assert.equal(runtime.hudSnapshot.focusedPortal, null);
-  assert.equal(runtime.hudSnapshot.mountedEnvironment, null);
+  assert.equal(runtime.hudSnapshot.mountedInteraction.mountedEnvironment, null);
   assert.equal(runtime.hudSnapshot.controlMode, "keyboard");
   assert.equal(runtime.hudSnapshot.locomotionMode, "grounded");
   assert.equal(runtime.hudSnapshot.boot.phase, "idle");
@@ -95,6 +96,7 @@ test("WebGpuMetaverseRuntime starts from an idle snapshot and rejects missing na
         planarMagnitudeMeters: null,
         verticalMagnitudeMeters: null
       }),
+      lastLocalAuthorityPoseCorrectionSnapshot: null,
       lastLocalAuthorityPoseCorrectionReason: "none",
       lastCorrectionAgeMs: null,
       lastCorrectionSource: "none",
@@ -120,12 +122,13 @@ test("WebGpuMetaverseRuntime starts from an idle snapshot and rejects missing na
     0.6
   );
   assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.blockerOverlap,
+    runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local
+      .blockingAffordanceDetected,
     false
   );
   assert.equal(
     runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local
-      .stepSupportedProbeCount,
+      .supportingAffordanceSampleCount,
     0
   );
   assert.equal(
@@ -158,12 +161,12 @@ test("WebGpuMetaverseRuntime starts from an idle snapshot and rejects missing na
   );
   assert.equal(
     runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
-      .surfaceRouting.stepSupportedProbeCount,
+      .surfaceRouting.supportingAffordanceSampleCount,
     null
   );
   assert.equal(
     runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
-      .surfaceRouting.blockerOverlap,
+      .surfaceRouting.blockingAffordanceDetected,
     null
   );
   assert.equal(
@@ -212,7 +215,7 @@ test("default metaverse staging-ground spawn resolves to grounded floor support 
     }
   ] = await Promise.all([
     clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
-    clientLoader.load("/src/app/states/metaverse-asset-proof.ts"),
+    clientLoader.load("/src/metaverse/world/proof/index.ts"),
     clientLoader.load("/src/metaverse/states/metaverse-environment-collision.ts"),
     clientLoader.load("/src/metaverse/traversal/policies/surface-routing.ts")
   ]);
@@ -643,12 +646,14 @@ test("WebGpuMetaverseRuntime prewarms the booted scene before the first render w
     assert.equal(startSnapshot.telemetry.renderer.label, "WebGPU");
     assert.equal(startSnapshot.telemetry.renderedFrameCount, 1);
     assert.equal(renderer.initCalls, 1);
-    assert.equal(renderer.compileAsyncCalls.length, 1);
-    assert.equal(renderer.renderCalls, 1);
+    assert.equal(renderer.compileAsyncCalls.length, 2);
+    assert.equal(renderer.renderCalls, 4);
     assert.equal(renderer.pixelRatio, 1.5);
     assert.deepEqual(renderer.sizes.at(0), [1280, 720]);
     assert.equal(renderer.compileAsyncCalls[0]?.scene?.isScene, true);
     assert.equal(renderer.compileAsyncCalls[0]?.camera?.isPerspectiveCamera, true);
+    assert.equal(renderer.compileAsyncCalls[1]?.scene?.isScene, true);
+    assert.equal(renderer.compileAsyncCalls[1]?.camera?.isPerspectiveCamera, true);
     assert.ok(
       Math.abs(
         startSnapshot.camera.position.y -

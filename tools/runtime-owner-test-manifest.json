@@ -44,6 +44,42 @@
       ]
     },
     {
+      "ownerPath": "client/src/metaverse/hud/profiles/index.ts",
+      "testPaths": [
+        "tests/runtime/client/engine-tool/map-editor.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/hud/profiles/shell-default-hud-profile.ts",
+      "testPaths": [
+        "tests/runtime/client/engine-tool/map-editor.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/engine-tool/project/map-editor-project-launch-variations.ts",
+      "testPaths": [
+        "tests/runtime/client/engine-tool/map-editor.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/engine-tool/project/map-editor-project-state.ts",
+      "testPaths": [
+        "tests/runtime/client/engine-tool/map-editor.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/engine-tool/project/map-editor-project-scene-drafts.ts",
+      "testPaths": [
+        "tests/runtime/client/engine-tool/map-editor.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/engine-tool/project/map-editor-project-storage.ts",
+      "testPaths": [
+        "tests/runtime/client/engine-tool/map-editor.runtime.test.mjs"
+      ]
+    },
+    {
       "ownerPath": "client/src/metaverse/hud/debug/metaverse-runtime-hud-telemetry-state.ts",
       "testPaths": [
         "tests/runtime/client/metaverse/runtime/metaverse-runtime-hud-telemetry-state.runtime.test.mjs"
@@ -53,6 +89,12 @@
       "ownerPath": "client/src/metaverse/boot/metaverse-runtime-boot-lifecycle.ts",
       "testPaths": [
         "tests/runtime/client/metaverse/boot/metaverse-runtime-boot-lifecycle.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/classes/metaverse-runtime-camera-phase-state.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/runtime/metaverse-runtime-camera-phase-state.runtime.test.mjs"
       ]
     },
     {
@@ -480,6 +522,12 @@
       ]
     },
     {
+      "ownerPath": "server/src/metaverse/classes/metaverse-authoritative-world-runtime-host.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse/authoritative-world-preview-registration.test.mjs"
+      ]
+    },
+    {
       "ownerPath": "server/src/metaverse/authority/mounted/metaverse-authoritative-mounted-occupancy-authority.ts",
       "testPaths": [
         "tests/runtime/server/metaverse/authoritative-world-mounted-occupancy.test.mjs"
@@ -584,6 +632,12 @@
       ]
     },
     {
+      "ownerPath": "server/src/metaverse/classes/metaverse-authoritative-dynamic-cuboid-body-runtime.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse/authoritative-dynamic-cuboid-body-runtime.test.mjs"
+      ]
+    },
+    {
       "ownerPath": "server/src/metaverse/classes/metaverse-authoritative-surface-drive-runtime.ts",
       "testPaths": [
         "tests/runtime/server/metaverse/authoritative-world-runtime.integration.test.mjs"
@@ -617,6 +671,12 @@
       "ownerPath": "server/src/metaverse/adapters/metaverse-world-http-adapter.ts",
       "testPaths": [
         "tests/runtime/server/metaverse-world-http-adapter.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/adapters/metaverse-world-preview-http-adapter.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse/authoritative-world-preview-registration.test.mjs"
       ]
     },
     {

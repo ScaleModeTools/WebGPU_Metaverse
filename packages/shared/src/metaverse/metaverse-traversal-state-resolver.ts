@@ -34,14 +34,10 @@ export interface MetaverseTraversalStateDecision {
 }
 
 export interface MetaverseTraversalStateResolutionDebugSnapshot {
-  readonly blockerOverlap: boolean;
-  readonly centerStepBlocked: boolean;
-  readonly centerStepSupportHeightMeters: number | null;
-  readonly forwardStepBlocked: boolean;
-  readonly forwardStepSupportHeightMeters: number | null;
+  readonly blockingAffordanceDetected: boolean;
   readonly reason: MetaverseTraversalStateResolutionReasonId;
   readonly resolvedSupportHeightMeters: number;
-  readonly stepSupportedProbeCount: number;
+  readonly supportingAffordanceSampleCount: number;
 }
 
 export interface MetaverseTraversalStateResolutionSnapshot {
@@ -96,17 +92,12 @@ export function resolveMetaverseTraversalStateFromWorldAffordances(
 
   return Object.freeze({
     debug: Object.freeze({
-      blockerOverlap: automaticSurfaceSnapshot.debug.blockerOverlap,
-      centerStepBlocked: automaticSurfaceSnapshot.debug.centerStepBlocked,
-      centerStepSupportHeightMeters:
-        automaticSurfaceSnapshot.debug.centerStepSupportHeightMeters,
-      forwardStepBlocked: automaticSurfaceSnapshot.debug.forwardStepBlocked,
-      forwardStepSupportHeightMeters:
-        automaticSurfaceSnapshot.debug.forwardStepSupportHeightMeters,
+      blockingAffordanceDetected:
+        automaticSurfaceSnapshot.debug.blockerOverlap,
       reason: resolutionReason,
       resolvedSupportHeightMeters:
         automaticSurfaceSnapshot.debug.resolvedSupportHeightMeters,
-      stepSupportedProbeCount:
+      supportingAffordanceSampleCount:
         automaticSurfaceSnapshot.debug.stepSupportedProbeCount
     }),
     decision: Object.freeze({

@@ -5,6 +5,34 @@ import { createClientModuleLoader } from "../../load-client-module.mjs";
 
 let clientLoader;
 
+function createMountedInteractionSnapshot({
+  focusedMountable = null,
+  mountedEnvironment = null
+} = {}) {
+  return Object.freeze({
+    boardingEntries:
+      mountedEnvironment === null
+        ? focusedMountable?.boardingEntries ?? Object.freeze([])
+        : Object.freeze([]),
+    focusedMountable,
+    mountedEnvironment,
+    seatTargetEnvironmentAssetId:
+      mountedEnvironment?.environmentAssetId ??
+      focusedMountable?.environmentAssetId ??
+      null,
+    selectableSeatTargets:
+      mountedEnvironment === null
+        ? focusedMountable?.directSeatTargets ?? Object.freeze([])
+        : mountedEnvironment.seatId === null
+          ? mountedEnvironment.seatTargets
+          : Object.freeze(
+              mountedEnvironment.seatTargets.filter(
+                (seatTarget) => seatTarget.seatId !== mountedEnvironment.seatId
+              )
+            )
+  });
+}
+
 before(async () => {
   clientLoader = await createClientModuleLoader();
 });
@@ -32,17 +60,18 @@ test("MetaverseRuntimeRenderSession syncs the active frame loop and publishes ru
     },
     cancelAnimationFrame() {},
     frameLoop: {
-      focusedMountable: Object.freeze({
-        boardingEntries: Object.freeze([]),
-        directSeatTargets: Object.freeze([]),
-        distanceFromCamera: 1,
-        environmentAssetId: "harbor-skiff",
-        label: "Harbor Skiff"
-      }),
       focusedPortal: null,
       frameDeltaMs: 16.6,
       frameRate: 60,
-      mountedEnvironment: null,
+      mountedInteraction: createMountedInteractionSnapshot({
+        focusedMountable: Object.freeze({
+          boardingEntries: Object.freeze([]),
+          directSeatTargets: Object.freeze([]),
+          distanceFromCamera: 1,
+          environmentAssetId: "harbor-skiff",
+          label: "Harbor Skiff"
+        })
+      }),
       renderedFrameCount: 4,
       syncFrame(input) {
         frameSyncCalls.push(input);
@@ -58,6 +87,7 @@ test("MetaverseRuntimeRenderSession syncs the active frame loop and publishes ru
         focusedPortal: null,
         lifecycle: "idle",
         locomotionMode: "grounded",
+        mountedInteraction: createMountedInteractionSnapshot(),
         mountedEnvironment: null,
         presence: Object.freeze({}),
         telemetry: Object.freeze({}),
@@ -101,7 +131,7 @@ test("MetaverseRuntimeRenderSession syncs the active frame loop and publishes ru
   assert.equal(publishCalls[0]?.input.bootScenePrewarmed, true);
   assert.equal(publishCalls[0]?.input.renderedFrameCount, 4);
   assert.equal(
-    publishCalls[0]?.input.focusedMountable?.environmentAssetId,
+    publishCalls[0]?.input.mountedInteraction.focusedMountable?.environmentAssetId,
     "harbor-skiff"
   );
   assert.equal(publishCalls[0]?.input.renderer, renderer);
@@ -121,11 +151,10 @@ test("MetaverseRuntimeRenderSession publishes the current HUD lifecycle when no 
     },
     cancelAnimationFrame() {},
     frameLoop: {
-      focusedMountable: null,
       focusedPortal: null,
       frameDeltaMs: 0,
       frameRate: 0,
-      mountedEnvironment: null,
+      mountedInteraction: createMountedInteractionSnapshot(),
       renderedFrameCount: 0,
       syncFrame() {
         throw new Error("not expected");
@@ -141,6 +170,7 @@ test("MetaverseRuntimeRenderSession publishes the current HUD lifecycle when no 
         focusedPortal: null,
         lifecycle: "booting",
         locomotionMode: "grounded",
+        mountedInteraction: createMountedInteractionSnapshot(),
         mountedEnvironment: null,
         presence: Object.freeze({}),
         telemetry: Object.freeze({}),
@@ -207,11 +237,10 @@ test("MetaverseRuntimeRenderSession owns active-surface matching, frame scheduli
       cancelCalls.push(handle);
     },
     frameLoop: {
-      focusedMountable: null,
       focusedPortal: null,
       frameDeltaMs: 16.6,
       frameRate: 60,
-      mountedEnvironment: null,
+      mountedInteraction: createMountedInteractionSnapshot(),
       renderedFrameCount: 1,
       syncFrame(input) {
         frameSyncCalls.push(input.nowMs);
@@ -227,6 +256,7 @@ test("MetaverseRuntimeRenderSession owns active-surface matching, frame scheduli
         focusedPortal: null,
         lifecycle: "running",
         locomotionMode: "grounded",
+        mountedInteraction: createMountedInteractionSnapshot(),
         mountedEnvironment: null,
         presence: Object.freeze({}),
         telemetry: Object.freeze({}),

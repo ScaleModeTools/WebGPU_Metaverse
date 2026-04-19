@@ -57,6 +57,9 @@ test("MetaverseRemoteWorldRuntime samples buffered authoritative world snapshots
   const fakeWorldClient = new FakeMetaverseWorldClient([
     createRealtimeWorldSnapshot({
       currentTick: 10,
+      environmentBodyX: 4,
+      environmentBodyYawRadians: -0.2,
+      includeEnvironmentBody: true,
       localPlayerId,
       localUsername,
       remoteLookPitchRadians: -0.3,
@@ -72,6 +75,9 @@ test("MetaverseRemoteWorldRuntime samples buffered authoritative world snapshots
     }),
     createRealtimeWorldSnapshot({
       currentTick: 11,
+      environmentBodyX: 7,
+      environmentBodyYawRadians: 0.2,
+      includeEnvironmentBody: true,
       localPlayerId,
       localUsername,
       remoteLookPitchRadians: 0.1,
@@ -98,7 +104,9 @@ test("MetaverseRemoteWorldRuntime samples buffered authoritative world snapshots
       clockOffsetCorrectionAlpha: 1,
       clockOffsetMaxStepMs: 1_000,
       interpolationDelayMs: 75,
-      maxExtrapolationMs: 120
+      maxExtrapolationMs: 120,
+      remoteCharacterRootInterpolationDelayMs: 0,
+      remoteCharacterRootMaxExtrapolationMs: 0
     }
   });
 
@@ -114,7 +122,7 @@ test("MetaverseRemoteWorldRuntime samples buffered authoritative world snapshots
   assert.ok(
     Math.abs(
       remoteWorldRuntime.remoteCharacterPresentations[0]?.presentation.position.x -
-        9.5
+        11
     ) < 0.000001
   );
   assert.equal(
@@ -141,6 +149,17 @@ test("MetaverseRemoteWorldRuntime samples buffered authoritative world snapshots
   assert.ok(
     Math.abs(remoteWorldRuntime.remoteVehiclePresentations[0]?.yawRadians - 0.1) <
       0.000001
+  );
+  assert.equal(remoteWorldRuntime.remoteEnvironmentBodyPresentations.length, 1);
+  assert.ok(
+    Math.abs(
+      remoteWorldRuntime.remoteEnvironmentBodyPresentations[0]?.position.x - 5.5
+    ) < 0.000001
+  );
+  assert.ok(
+    Math.abs(
+      remoteWorldRuntime.remoteEnvironmentBodyPresentations[0]?.yawRadians
+    ) < 0.000001
   );
 
   remoteWorldRuntime.dispose();
@@ -193,7 +212,9 @@ test("MetaverseRemoteWorldRuntime extrapolates from the latest authoritative sna
       clockOffsetCorrectionAlpha: 1,
       clockOffsetMaxStepMs: 1_000,
       interpolationDelayMs: 0,
-      maxExtrapolationMs: 120
+      maxExtrapolationMs: 120,
+      remoteCharacterRootInterpolationDelayMs: 0,
+      remoteCharacterRootMaxExtrapolationMs: 0
     }
   });
 
@@ -207,7 +228,7 @@ test("MetaverseRemoteWorldRuntime extrapolates from the latest authoritative sna
   assert.ok(
     Math.abs(
       remoteWorldRuntime.remoteCharacterPresentations[0]?.presentation.position.x -
-        9.2
+        8
     ) < 0.000001
   );
   assert.ok(
@@ -302,7 +323,9 @@ test("MetaverseRemoteWorldRuntime exposes authoritative snapshot timing telemetr
       clockOffsetCorrectionAlpha: 1,
       clockOffsetMaxStepMs: 1_000,
       interpolationDelayMs: 0,
-      maxExtrapolationMs: 120
+      maxExtrapolationMs: 120,
+      remoteCharacterRootInterpolationDelayMs: 0,
+      remoteCharacterRootMaxExtrapolationMs: 0
     }
   });
 

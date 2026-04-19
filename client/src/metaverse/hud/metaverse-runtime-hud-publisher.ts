@@ -3,11 +3,16 @@ import { type Camera } from "three/webgpu";
 import type { MetaverseControlModeId } from "../types/metaverse-control-mode";
 import type {
   FocusedExperiencePortalSnapshot,
-  FocusedMountableSnapshot,
   MetaverseHudSnapshot,
+  MetaverseMountedInteractionSnapshot,
   MetaverseRuntimeConfig,
-  MountedEnvironmentSnapshot
 } from "../types/metaverse-runtime";
+import {
+  createMetaverseMountedInteractionHudSnapshot
+} from "../states/metaverse-mounted-interaction-hud-snapshot";
+import {
+  createMetaverseMountedInteractionSnapshot
+} from "../states/metaverse-mounted-interaction-snapshot";
 import { MetaverseEnvironmentPhysicsRuntime } from "../classes/metaverse-environment-physics-runtime";
 import { MetaversePresenceRuntime } from "../classes/metaverse-presence-runtime";
 import { MetaverseRemoteWorldRuntime } from "../classes/metaverse-remote-world-runtime";
@@ -33,12 +38,11 @@ interface PublishRuntimeHudSnapshotInput {
   readonly bootScenePrewarmed: boolean;
   readonly controlMode: MetaverseControlModeId;
   readonly failureReason: string | null;
-  readonly focusedMountable: FocusedMountableSnapshot | null;
   readonly focusedPortal: FocusedExperiencePortalSnapshot | null;
   readonly frameDeltaMs: number;
   readonly frameRate: number;
   readonly lifecycle: MetaverseHudSnapshot["lifecycle"];
-  readonly mountedEnvironment: MountedEnvironmentSnapshot | null;
+  readonly mountedInteraction: MetaverseMountedInteractionSnapshot;
   readonly renderedFrameCount: number;
   readonly renderer: MetaverseRendererTelemetrySource | null;
 }
@@ -51,8 +55,7 @@ function freezeHudSnapshot(
   boot: MetaverseHudSnapshot["boot"],
   camera: MetaverseHudSnapshot["camera"],
   focusedPortal: FocusedExperiencePortalSnapshot | null,
-  focusedMountable: FocusedMountableSnapshot | null,
-  mountedEnvironment: MountedEnvironmentSnapshot | null,
+  mountedInteraction: MetaverseMountedInteractionSnapshot,
   controlMode: MetaverseHudSnapshot["controlMode"],
   locomotionMode: MetaverseHudSnapshot["locomotionMode"],
   presence: MetaverseHudSnapshot["presence"],
@@ -64,11 +67,12 @@ function freezeHudSnapshot(
     camera,
     controlMode,
     failureReason,
-    focusedMountable,
     focusedPortal,
     lifecycle,
     locomotionMode,
-    mountedEnvironment,
+    mountedInteraction,
+    mountedInteractionHud:
+      createMetaverseMountedInteractionHudSnapshot(mountedInteraction),
     presence,
     telemetry,
     transport
@@ -119,8 +123,7 @@ export class MetaverseRuntimeHudPublisher {
       }),
       this.#traversalRuntime.cameraSnapshot,
       null,
-      null,
-      null,
+      createMetaverseMountedInteractionSnapshot(null, null),
       initialControlMode,
       this.#traversalRuntime.locomotionMode,
       this.#presenceRuntime.resolveHudSnapshot(),
@@ -180,8 +183,7 @@ export class MetaverseRuntimeHudPublisher {
       ),
       this.#traversalRuntime.cameraSnapshot,
       input.focusedPortal,
-      input.focusedMountable,
-      input.mountedEnvironment,
+      input.mountedInteraction,
       input.controlMode,
       this.#traversalRuntime.locomotionMode,
       this.#presenceRuntime.resolveHudSnapshot(),
@@ -215,6 +217,11 @@ export class MetaverseRuntimeHudPublisher {
   ): MetaverseHudSnapshot["boot"] {
     const presenceJoined = this.#presenceRuntime.isJoined;
     const authoritativeWorldConnected = this.#remoteWorldRuntime.isConnected;
+    const presenceReady =
+      !this.#presenceRuntime.connectionRequired || presenceJoined;
+    const authoritativeWorldReady =
+      !this.#remoteWorldRuntime.connectionRequired ||
+      authoritativeWorldConnected;
     let phase: MetaverseHudSnapshot["boot"]["phase"];
 
     if (lifecycle === "failed") {
@@ -225,9 +232,9 @@ export class MetaverseRuntimeHudPublisher {
       phase = "renderer-init";
     } else if (!bootScenePrewarmed) {
       phase = "scene-prewarm";
-    } else if (!presenceJoined) {
+    } else if (!presenceReady) {
       phase = "presence-joining";
-    } else if (!authoritativeWorldConnected) {
+    } else if (!authoritativeWorldReady) {
       phase = "world-connecting";
     } else {
       phase = "ready";

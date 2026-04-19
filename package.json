@@ -21,7 +21,6 @@
     "dev": "./tools/dev",
     "dev:client": "./tools/dev-client",
     "dev:server": "./tools/dev-server",
-    "editor": "./tools/editor",
     "start:server": "npm run start --workspace server",
     "watch:server": "npm run watch:build --workspace server",
     "start:server:watch": "npm run start:watch --workspace server",

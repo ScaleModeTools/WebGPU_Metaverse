@@ -1,3 +1,4 @@
+import { resolveMetaverseWorldSurfaceScaleVector } from "@webgpu-metaverse/shared/metaverse/world";
 import {
   BoxGeometry,
   BundleGroup,
@@ -169,13 +170,15 @@ function applyPlacementTransform(
   object: Object3D,
   placement: MetaverseEnvironmentPlacementProofConfig
 ): void {
+  const scaleVector = resolveMetaverseWorldSurfaceScaleVector(placement.scale);
+
   object.position.set(
     placement.position.x,
     placement.position.y,
     placement.position.z
   );
   object.rotation.y = placement.rotationYRadians;
-  object.scale.setScalar(placement.scale);
+  object.scale.set(scaleVector.x, scaleVector.y, scaleVector.z);
   object.updateMatrix();
   object.updateMatrixWorld(true);
 }
@@ -362,15 +365,6 @@ async function loadDynamicEnvironmentAssetProofRuntime(
   ) => Object3D,
   showSocketDebug: boolean
 ): Promise<MetaverseEnvironmentDynamicAssetRuntime> {
-  if (
-    environmentAssetProofConfig.traversalAffordance !== "mount" &&
-    environmentAssetProofConfig.traversalAffordance !== "pushable"
-  ) {
-    throw new Error(
-      `Metaverse dynamic environment asset ${environmentAssetProofConfig.label} must use mount or pushable affordance.`
-    );
-  }
-
   if (environmentAssetProofConfig.placements.length !== 1) {
     throw new Error(
       `Metaverse dynamic environment asset ${environmentAssetProofConfig.label} requires exactly one placement.`
@@ -504,7 +498,7 @@ async function loadDynamicEnvironmentAssetProofRuntime(
     environmentAssetProofConfig.entries !== null
   ) {
     throw new Error(
-      `Metaverse pushable environment asset ${environmentAssetProofConfig.label} cannot expose mount metadata.`
+      `Metaverse non-mounted dynamic environment asset ${environmentAssetProofConfig.label} cannot expose mount metadata.`
     );
   }
 

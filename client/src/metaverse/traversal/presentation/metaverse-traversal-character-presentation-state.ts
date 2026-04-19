@@ -8,6 +8,9 @@ import type {
   MetaverseCharacterPresentationSnapshot
 } from "../../types/presentation";
 import type { MetaverseRuntimeConfig } from "../../types/runtime-config";
+import type {
+  MetaverseMountedOccupancyPresentationStateSnapshot
+} from "../../states/mounted-occupancy";
 import { createSurfaceLocomotionSnapshot, freezeVector3 } from "../policies/surface-locomotion";
 import {
   projectGroundedTraversalPresentationPosition,
@@ -28,6 +31,9 @@ interface MetaverseTraversalCharacterPresentationStateInput {
   readonly groundedSpawnPosition: PhysicsVector3Snapshot;
   readonly latestMovementInputMagnitude: number;
   readonly locomotionMode: MetaverseLocomotionModeId;
+  readonly mountedOccupancyPresentationState:
+    | MetaverseMountedOccupancyPresentationStateSnapshot
+    | null;
   readonly mountedVehicleSnapshot: TraversalMountedVehicleSnapshot | null;
   readonly presentationYawRadians: number | null;
   readonly readGroundedSupportHeightMeters: (
@@ -71,6 +77,7 @@ export class MetaverseTraversalCharacterPresentationState {
     groundedSpawnPosition,
     latestMovementInputMagnitude,
     locomotionMode,
+    mountedOccupancyPresentationState,
     mountedVehicleSnapshot,
     presentationYawRadians,
     readGroundedSupportHeightMeters,
@@ -109,6 +116,7 @@ export class MetaverseTraversalCharacterPresentationState {
               readGroundedSupportHeightMeters
             ),
       locomotionMode,
+      mountedOccupancyPresentationState,
       mountedVehicleSnapshot,
       presentationYawRadians,
       swimPresentationPosition:

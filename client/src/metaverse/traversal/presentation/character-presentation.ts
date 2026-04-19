@@ -6,7 +6,9 @@ import {
 import type { MetaverseLocomotionModeId } from "../../types/metaverse-locomotion-mode";
 import type { MetaverseCharacterPresentationSnapshot } from "../../types/presentation";
 import type { MetaverseRuntimeConfig } from "../../types/runtime-config";
-import { shouldConstrainMountedOccupancyToAnchor } from "../../states/mounted-occupancy";
+import type {
+  MetaverseMountedOccupancyPresentationStateSnapshot
+} from "../../states/mounted-occupancy";
 import { freezeVector3, wrapRadians } from "../policies/surface-locomotion";
 import type {
   SurfaceLocomotionSnapshot,
@@ -19,6 +21,9 @@ interface TraversalCharacterPresentationInput {
   readonly groundedBodySnapshot: MetaverseGroundedBodySnapshot | null;
   readonly groundedPresentationPosition?: PhysicsVector3Snapshot | null;
   readonly locomotionMode: MetaverseLocomotionModeId;
+  readonly mountedOccupancyPresentationState:
+    | MetaverseMountedOccupancyPresentationStateSnapshot
+    | null;
   readonly mountedVehicleSnapshot: TraversalMountedVehicleSnapshot | null;
   readonly presentationYawRadians?: number | null;
   readonly swimSnapshot: SurfaceLocomotionSnapshot;
@@ -95,6 +100,7 @@ export function createTraversalCharacterPresentationSnapshot({
   groundedBodySnapshot,
   groundedPresentationPosition,
   locomotionMode,
+  mountedOccupancyPresentationState,
   mountedVehicleSnapshot,
   presentationYawRadians,
   swimSnapshot,
@@ -102,17 +108,12 @@ export function createTraversalCharacterPresentationSnapshot({
 }: TraversalCharacterPresentationInput): MetaverseCharacterPresentationSnapshot | null {
   if (
     mountedVehicleSnapshot !== null &&
-    shouldConstrainMountedOccupancyToAnchor(mountedVehicleSnapshot.occupancy)
+    mountedOccupancyPresentationState?.constrainToAnchor === true
   ) {
-    const mountedAnimationVocabulary =
-      mountedVehicleSnapshot.occupancy?.occupancyAnimationId === "standing"
-        ? "idle"
-        : mountedVehicleSnapshot.occupancy?.occupancyAnimationId ?? "seated";
-
     return createFixedCharacterPresentationSnapshot(
       mountedVehicleSnapshot.position,
       mountedVehicleSnapshot.yawRadians,
-      mountedAnimationVocabulary
+      mountedOccupancyPresentationState.mountedCharacterAnimationVocabulary
     );
   }
 

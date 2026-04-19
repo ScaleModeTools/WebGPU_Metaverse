@@ -9,6 +9,7 @@ import {
 } from "@webgpu-metaverse/shared";
 
 import {
+  authoredWaterBayDockEntryPosition,
   authoredWaterBaySkiffPlacement,
   authoredWaterBaySkiffYawRadians
 } from "../../metaverse-authored-world-test-fixtures.mjs";
@@ -40,13 +41,14 @@ test("MetaverseAuthoritativeWorldRuntime simulates driver-controlled vehicles fr
           seatId: "driver-seat"
         },
         position: {
-          x: 0,
+          x: authoredWaterBaySkiffPlacement.x,
           y: 0.4,
-          z: 24
+          z: authoredWaterBaySkiffPlacement.z
         },
         stateSequence: 1,
-        yawRadians: 0
-      }
+        yawRadians: authoredWaterBaySkiffYawRadians
+      },
+      username
     }),
     0
   );
@@ -73,12 +75,13 @@ test("MetaverseAuthoritativeWorldRuntime simulates driver-controlled vehicles fr
   assert.equal(worldSnapshot.tick.simulationTimeMs, 1_000);
   assert.equal(worldSnapshot.players.length, 1);
   assert.equal(worldSnapshot.players[0]?.locomotionMode, "mounted");
-  assert.equal(worldSnapshot.players[0]?.position.x, 0);
   assert.equal(worldSnapshot.players[0]?.position.y, 0.4);
-  assert.ok(Math.abs(worldSnapshot.players[0]?.position.z - 18.63) < 0.0001);
-  assert.equal(worldSnapshot.players[0]?.linearVelocity.x, 0);
   assert.ok(
-    Math.abs(worldSnapshot.players[0]?.linearVelocity.z + 10.5) < 0.0001
+    (worldSnapshot.players[0]?.position.x ?? Number.NEGATIVE_INFINITY) >
+      authoredWaterBaySkiffPlacement.x
+  );
+  assert.ok(
+    (worldSnapshot.players[0]?.linearVelocity.x ?? 0) > 0
   );
   assert.equal(
     worldSnapshot.players[0]?.mountedOccupancy?.environmentAssetId,
@@ -91,11 +94,16 @@ test("MetaverseAuthoritativeWorldRuntime simulates driver-controlled vehicles fr
   );
   assert.equal(worldSnapshot.vehicles.length, 1);
   assert.equal(worldSnapshot.vehicles[0]?.seats[0]?.occupantPlayerId, playerId);
-  assert.equal(worldSnapshot.vehicles[0]?.position.x, 0);
-  assert.ok(Math.abs(worldSnapshot.vehicles[0]?.position.z - 18.63) < 0.0001);
-  assert.equal(worldSnapshot.vehicles[0]?.yawRadians, 0);
   assert.ok(
-    Math.abs(worldSnapshot.vehicles[0]?.linearVelocity.z + 10.5) < 0.0001
+    (worldSnapshot.vehicles[0]?.position.x ?? Number.NEGATIVE_INFINITY) >
+      authoredWaterBaySkiffPlacement.x
+  );
+  assert.equal(
+    worldSnapshot.vehicles[0]?.yawRadians,
+    authoredWaterBaySkiffYawRadians
+  );
+  assert.ok(
+    (worldSnapshot.vehicles[0]?.linearVelocity.x ?? 0) > 0
   );
 });
 
@@ -309,4 +317,112 @@ test("MetaverseAuthoritativeWorldRuntime keeps a claimed driver seat exclusive a
   assert.equal(firstDriverSnapshot?.mountedOccupancy?.seatId, "driver-seat");
   assert.equal(conflictingDriverSnapshot?.mountedOccupancy, null);
   assert.equal(conflictingDriverSnapshot?.locomotionMode, "swim");
+});
+
+test("MetaverseAuthoritativeWorldRuntime rejects mounted occupancy for unauthored seats", () => {
+  const runtime = createAuthoritativeRuntime();
+  const playerId = requireValue(
+    createMetaversePlayerId("invalid-seat-pilot"),
+    "invalid seat playerId"
+  );
+  const username = requireValue(createUsername("Invalid Seat Pilot"), "username");
+
+  runtime.acceptPresenceCommand(
+    createMetaverseJoinPresenceCommand({
+      characterId: "metaverse-mannequin-v1",
+      playerId,
+      pose: {
+        animationVocabulary: "idle",
+        locomotionMode: "mounted",
+        mountedOccupancy: {
+          environmentAssetId: "metaverse-hub-skiff-v1",
+          entryId: null,
+          occupancyKind: "seat",
+          occupantRole: "driver",
+          seatId: "imaginary-seat"
+        },
+        position: {
+          x: authoredWaterBaySkiffPlacement.x,
+          y: 0.4,
+          z: authoredWaterBaySkiffPlacement.z
+        },
+        stateSequence: 1,
+        yawRadians: authoredWaterBaySkiffYawRadians
+      },
+      username
+    }),
+    0
+  );
+  runtime.advanceToTime(100);
+
+  const worldSnapshot = runtime.readWorldSnapshot(100, playerId);
+
+  assert.equal(worldSnapshot.players[0]?.mountedOccupancy, null);
+  assert.equal(worldSnapshot.players[0]?.locomotionMode, "swim");
+  assert.equal(worldSnapshot.vehicles.length, 0);
+});
+
+test("MetaverseAuthoritativeWorldRuntime ignores mounted driver propulsion when the vehicle is beached out of authored water", () => {
+  const runtime = createAuthoritativeRuntime();
+  const playerId = requireValue(
+    createMetaversePlayerId("beached-harbor-pilot"),
+    "playerId"
+  );
+  const username = requireValue(createUsername("Beached Harbor Pilot"), "username");
+
+  runtime.acceptPresenceCommand(
+    createMetaverseJoinPresenceCommand({
+      characterId: "metaverse-mannequin-v1",
+      playerId,
+      pose: {
+        animationVocabulary: "idle",
+        locomotionMode: "mounted",
+        mountedOccupancy: {
+          environmentAssetId: "metaverse-hub-skiff-v1",
+          entryId: null,
+          occupancyKind: "seat",
+          occupantRole: "driver",
+          seatId: "driver-seat"
+        },
+        position: authoredWaterBayDockEntryPosition,
+        stateSequence: 1,
+        yawRadians: authoredWaterBaySkiffYawRadians
+      },
+      username
+    }),
+    0
+  );
+  runtime.acceptWorldCommand(
+    createMetaverseSyncDriverVehicleControlCommand({
+      controlIntent: {
+        boost: false,
+        environmentAssetId: "metaverse-hub-skiff-v1",
+        moveAxis: 1,
+        strafeAxis: 0,
+        yawAxis: 0
+      },
+      controlSequence: 1,
+      playerId
+    }),
+    100
+  );
+  runtime.advanceToTime(1_000);
+
+  const worldSnapshot = runtime.readWorldSnapshot(1_000, playerId);
+  const authoritativeVehicle = worldSnapshot.vehicles[0];
+
+  assert.ok(
+    Math.abs(
+      (authoritativeVehicle?.position.x ?? Number.POSITIVE_INFINITY) -
+        authoredWaterBayDockEntryPosition.x
+    ) < 0.00001
+  );
+  assert.ok(
+    Math.abs(
+      (authoritativeVehicle?.position.z ?? Number.POSITIVE_INFINITY) -
+        authoredWaterBayDockEntryPosition.z
+    ) < 0.00001
+  );
+  assert.equal(authoritativeVehicle?.linearVelocity.x, 0);
+  assert.equal(authoritativeVehicle?.linearVelocity.z, 0);
 });

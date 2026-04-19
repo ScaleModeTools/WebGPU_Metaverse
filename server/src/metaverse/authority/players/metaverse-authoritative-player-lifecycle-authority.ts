@@ -43,7 +43,9 @@ interface MetaverseAuthoritativePlayerLifecycleAuthorityDependencies<
 > {
   readonly driverVehicleControlsByPlayerId: Map<MetaversePlayerId, unknown>;
   readonly incrementSnapshotSequence: () => void;
-  readonly playerTraversalColliderHandles: Set<RapierColliderHandle>;
+  readonly removePlayerTraversalColliderHandle: (
+    handle: RapierColliderHandle
+  ) => void;
   readonly playerTraversalIntentsByPlayerId: Map<MetaversePlayerId, unknown>;
   readonly playersById: Map<MetaversePlayerId, PlayerRuntime>;
   readonly playerInactivityTimeoutMs: number;
@@ -137,10 +139,10 @@ export class MetaverseAuthoritativePlayerLifecycleAuthority<
   }
 
   disposePlayerTraversalRuntimes(playerRuntime: PlayerRuntime): void {
-    this.#dependencies.playerTraversalColliderHandles.delete(
+    this.#dependencies.removePlayerTraversalColliderHandle(
       playerRuntime.groundedBodyRuntime.colliderHandle
     );
-    this.#dependencies.playerTraversalColliderHandles.delete(
+    this.#dependencies.removePlayerTraversalColliderHandle(
       playerRuntime.swimBodyRuntime.colliderHandle
     );
     playerRuntime.groundedBodyRuntime.dispose();

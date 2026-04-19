@@ -19,7 +19,7 @@ import {
 } from "@webgpu-metaverse/shared/metaverse/presence";
 import { createUsername } from "@webgpu-metaverse/shared";
 
-import { MetaverseAuthoritativeWorldRuntime } from "../classes/metaverse-authoritative-world-runtime.js";
+import type { MetaverseAuthoritativeWorldRuntimeOwner } from "../types/metaverse-authoritative-world-runtime-owner.js";
 
 function writeCorsHeaders(
   response: ServerResponse<IncomingMessage>
@@ -332,9 +332,11 @@ function isMetaversePresenceCommandPath(pathname: string): boolean {
 }
 
 export class MetaversePresenceHttpAdapter {
-  readonly #metaverseAuthoritativeWorldRuntime: MetaverseAuthoritativeWorldRuntime;
+  readonly #metaverseAuthoritativeWorldRuntime: MetaverseAuthoritativeWorldRuntimeOwner;
 
-  constructor(metaverseAuthoritativeWorldRuntime: MetaverseAuthoritativeWorldRuntime) {
+  constructor(
+    metaverseAuthoritativeWorldRuntime: MetaverseAuthoritativeWorldRuntimeOwner
+  ) {
     this.#metaverseAuthoritativeWorldRuntime = metaverseAuthoritativeWorldRuntime;
   }
 

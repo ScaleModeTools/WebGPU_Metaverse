@@ -6,6 +6,7 @@ import type {
   RapierApiHandle,
   RapierCharacterControllerHandle,
   RapierColliderHandle,
+  RapierRigidBodyHandle,
   RapierVectorLike,
   RapierWorldHandle
 } from "../types/metaverse-authoritative-rapier.js";
@@ -26,6 +27,21 @@ const identityQuaternion = Object.freeze({
   z: 0,
   w: 1
 });
+const zeroVector = Object.freeze({
+  x: 0,
+  y: 0,
+  z: 0
+});
+
+interface DynamicCuboidBodyOptions {
+  readonly additionalMass?: number;
+  readonly angularDamping?: number;
+  readonly colliderTranslation?: PhysicsVector3Snapshot;
+  readonly gravityScale?: number;
+  readonly linearDamping?: number;
+  readonly lockRotations?: boolean;
+  readonly rotation?: PhysicsQuaternionSnapshot;
+}
 
 function toFiniteNumber(value: number, fallback = 0): number {
   return Number.isFinite(value) ? value : fallback;
@@ -117,6 +133,81 @@ export class MetaverseAuthoritativeRapierPhysicsRuntime {
     return this.#world.createCollider(colliderDesc);
   }
 
+  createTriMeshCollider(
+    vertices: Float32Array,
+    indices: Uint32Array,
+    translation: PhysicsVector3Snapshot = zeroVector,
+    rotation: PhysicsQuaternionSnapshot = identityQuaternion
+  ): RapierColliderHandle {
+    const colliderDesc = RAPIER.ColliderDesc.trimesh(vertices, indices);
+
+    colliderDesc.setTranslation(
+      toFiniteNumber(translation.x),
+      toFiniteNumber(translation.y),
+      toFiniteNumber(translation.z)
+    );
+    colliderDesc.setRotation(sanitizeQuaternion(rotation));
+
+    return this.#world.createCollider(colliderDesc);
+  }
+
+  createDynamicCuboidBody(
+    halfExtents: PhysicsVector3Snapshot,
+    translation: PhysicsVector3Snapshot,
+    options: DynamicCuboidBodyOptions = {}
+  ): {
+    readonly body: RapierRigidBodyHandle;
+    readonly collider: RapierColliderHandle;
+  } {
+    const rigidBodyDesc = RAPIER.RigidBodyDesc.dynamic();
+
+    rigidBodyDesc.setTranslation(
+      toFiniteNumber(translation.x),
+      toFiniteNumber(translation.y),
+      toFiniteNumber(translation.z)
+    );
+    rigidBodyDesc.setRotation(
+      sanitizeQuaternion(options.rotation ?? identityQuaternion)
+    );
+    rigidBodyDesc.setGravityScale(
+      Math.max(0, toFiniteNumber(options.gravityScale ?? 1))
+    );
+    rigidBodyDesc.setAdditionalMass(
+      Math.max(0, toFiniteNumber(options.additionalMass ?? 0))
+    );
+    rigidBodyDesc.setLinearDamping(
+      Math.max(0, toFiniteNumber(options.linearDamping ?? 0))
+    );
+    rigidBodyDesc.setAngularDamping(
+      Math.max(0, toFiniteNumber(options.angularDamping ?? 0))
+    );
+
+    if (options.lockRotations ?? false) {
+      rigidBodyDesc.lockRotations();
+    }
+
+    const body = this.#world.createRigidBody(rigidBodyDesc);
+    const colliderDesc = RAPIER.ColliderDesc.cuboid(
+      Math.max(0.01, toFiniteNumber(halfExtents.x, 0.5)),
+      Math.max(0.01, toFiniteNumber(halfExtents.y, 0.5)),
+      Math.max(0.01, toFiniteNumber(halfExtents.z, 0.5))
+    );
+    const colliderTranslation = options.colliderTranslation;
+
+    if (colliderTranslation !== undefined) {
+      colliderDesc.setTranslation(
+        toFiniteNumber(colliderTranslation.x),
+        toFiniteNumber(colliderTranslation.y),
+        toFiniteNumber(colliderTranslation.z)
+      );
+    }
+
+    return Object.freeze({
+      body,
+      collider: this.#world.createCollider(colliderDesc, body)
+    });
+  }
+
   stepSimulation(deltaSeconds: number): void {
     this.#world.timestep =
       Number.isFinite(deltaSeconds) && deltaSeconds > 0 ? deltaSeconds : 1 / 60;
@@ -125,5 +216,9 @@ export class MetaverseAuthoritativeRapierPhysicsRuntime {
 
   removeCollider(collider: RapierColliderHandle): void {
     this.#world.removeCollider(collider, true);
+  }
+
+  removeRigidBody(body: RapierRigidBodyHandle): void {
+    this.#world.removeRigidBody(body);
   }
 }

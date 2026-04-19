@@ -9,12 +9,12 @@ import {
 import {
   createMetaverseTraversalAuthoritySnapshot,
   createMetaverseUnmountedTraversalStateSnapshot,
-  wrapRadians,
+  resolveMetaverseTraversalPoseKinematics,
   type MetaverseTraversalAuthoritySnapshot,
   type MetaverseUnmountedTraversalStateSnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 
-import type { MetaverseAuthoritativeSurfaceColliderSnapshot } from "../../config/metaverse-authoritative-world-surface.js";
+import type { MetaverseAuthoritativeSurfaceColliderSnapshot } from "../../world/map-bundles/metaverse-authoritative-world-bundle-inputs.js";
 import type { MetaverseAuthoritativeMountedOccupancyRuntimeState } from "../mounted/metaverse-authoritative-mounted-occupancy-authority.js";
 
 export interface MetaverseAuthoritativePlayerPoseRuntimeState<
@@ -149,10 +149,6 @@ function computeSecondsBetween(
   return deltaSeconds;
 }
 
-function normalizeAngularDeltaRadians(rawValue: number): number {
-  return wrapRadians(rawValue);
-}
-
 export class MetaverseAuthoritativePlayerPoseAuthority<
   PlayerRuntime extends MetaverseAuthoritativePlayerPoseRuntimeState<MountedOccupancy>,
   MountedOccupancy extends MetaverseAuthoritativeMountedOccupancyRuntimeState,
@@ -254,6 +250,8 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
     nowMs: number,
     lookProvided: boolean
   ): void {
+    const requestedMountedEnvironmentAssetId =
+      nextPose.mountedOccupancy?.environmentAssetId ?? null;
     const requestedMountedOccupancy =
       this.#dependencies.mountedOccupancyAuthority.resolveMountedOccupancyRuntimeState(
         nextPose.mountedOccupancy
@@ -281,7 +279,8 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
     playerRuntime.lastSurfaceJumpSupported = false;
     playerRuntime.lastGroundedPositionY = nextPose.position.y;
     playerRuntime.locomotionMode =
-      acceptedMountedOccupancy === null && requestedMountedOccupancy !== null
+      acceptedMountedOccupancy === null &&
+      requestedMountedEnvironmentAssetId !== null
         ? "grounded"
         : nextPose.locomotionMode;
 
@@ -310,7 +309,13 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
         this.#dependencies.syncUnmountedPlayerToAuthoritativeSurface(
           playerRuntime,
           this.#dependencies.resolveAuthoritativeSurfaceColliders(),
-          requestedMountedOccupancy.environmentAssetId
+          requestedMountedEnvironmentAssetId
+        );
+      } else if (requestedMountedEnvironmentAssetId !== null) {
+        this.#dependencies.syncUnmountedPlayerToAuthoritativeSurface(
+          playerRuntime,
+          this.#dependencies.resolveAuthoritativeSurfaceColliders(),
+          requestedMountedEnvironmentAssetId
         );
       }
 
@@ -357,6 +362,21 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
     const previousPositionY = playerRuntime.positionY;
     const previousPositionZ = playerRuntime.positionZ;
     const previousYawRadians = playerRuntime.yawRadians;
+    const kinematicSnapshot = resolveMetaverseTraversalPoseKinematics(
+      {
+        position: {
+          x: previousPositionX,
+          y: previousPositionY,
+          z: previousPositionZ
+        },
+        yawRadians: previousYawRadians
+      },
+      {
+        position: nextPose.position,
+        yawRadians: nextPose.yawRadians
+      },
+      deltaSeconds
+    );
 
     playerRuntime.positionX = nextPose.position.x;
     playerRuntime.positionY = nextPose.position.y;
@@ -367,36 +387,15 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
       playerRuntime.lastGroundedPositionY = nextPose.position.y;
     }
 
-    if (deltaSeconds === null) {
-      playerRuntime.angularVelocityRadiansPerSecond = 0;
-      playerRuntime.forwardSpeedUnitsPerSecond = 0;
-      playerRuntime.linearVelocityX = 0;
-      playerRuntime.linearVelocityY = 0;
-      playerRuntime.linearVelocityZ = 0;
-      playerRuntime.strafeSpeedUnitsPerSecond = 0;
-    } else {
-      playerRuntime.angularVelocityRadiansPerSecond =
-        normalizeAngularDeltaRadians(
-          playerRuntime.yawRadians - previousYawRadians
-        ) / deltaSeconds;
-      playerRuntime.linearVelocityX =
-        (playerRuntime.positionX - previousPositionX) / deltaSeconds;
-      playerRuntime.linearVelocityY =
-        (playerRuntime.positionY - previousPositionY) / deltaSeconds;
-      playerRuntime.linearVelocityZ =
-        (playerRuntime.positionZ - previousPositionZ) / deltaSeconds;
-      const forwardX = Math.sin(playerRuntime.yawRadians);
-      const forwardZ = -Math.cos(playerRuntime.yawRadians);
-      const rightX = Math.cos(playerRuntime.yawRadians);
-      const rightZ = Math.sin(playerRuntime.yawRadians);
-
-      playerRuntime.forwardSpeedUnitsPerSecond =
-        playerRuntime.linearVelocityX * forwardX +
-        playerRuntime.linearVelocityZ * forwardZ;
-      playerRuntime.strafeSpeedUnitsPerSecond =
-        playerRuntime.linearVelocityX * rightX +
-        playerRuntime.linearVelocityZ * rightZ;
-    }
+    playerRuntime.angularVelocityRadiansPerSecond =
+      kinematicSnapshot.angularVelocityRadiansPerSecond;
+    playerRuntime.forwardSpeedUnitsPerSecond =
+      kinematicSnapshot.forwardSpeedUnitsPerSecond;
+    playerRuntime.linearVelocityX = kinematicSnapshot.linearVelocity.x;
+    playerRuntime.linearVelocityY = kinematicSnapshot.linearVelocity.y;
+    playerRuntime.linearVelocityZ = kinematicSnapshot.linearVelocity.z;
+    playerRuntime.strafeSpeedUnitsPerSecond =
+      kinematicSnapshot.strafeSpeedUnitsPerSecond;
 
     playerRuntime.lastPoseAtMs = nowMs;
     this.#dependencies.syncPlayerTraversalBodyRuntimes(playerRuntime);

@@ -37,8 +37,37 @@ function createFakeRenderedCamera() {
   };
 }
 
+function createMountedInteractionSnapshot({
+  focusedMountable = null,
+  mountedEnvironment = null
+} = {}) {
+  return Object.freeze({
+    boardingEntries:
+      mountedEnvironment === null
+        ? focusedMountable?.boardingEntries ?? Object.freeze([])
+        : Object.freeze([]),
+    focusedMountable,
+    mountedEnvironment,
+    seatTargetEnvironmentAssetId:
+      mountedEnvironment?.environmentAssetId ??
+      focusedMountable?.environmentAssetId ??
+      null,
+    selectableSeatTargets:
+      mountedEnvironment === null
+        ? focusedMountable?.directSeatTargets ?? Object.freeze([])
+        : mountedEnvironment.seatId === null
+          ? mountedEnvironment.seatTargets
+          : Object.freeze(
+              mountedEnvironment.seatTargets.filter(
+                (seatTarget) => seatTarget.seatId !== mountedEnvironment.seatId
+              )
+            )
+  });
+}
+
 function createFakeHudPublisherDependencies(readNowMs) {
   const presenceRuntime = {
+    connectionRequired: true,
     isJoined: false,
     reliableTransportStatusSnapshot: Object.freeze({
       enabled: false
@@ -53,6 +82,7 @@ function createFakeHudPublisherDependencies(readNowMs) {
     }
   };
   const remoteWorldRuntime = {
+    connectionRequired: true,
     currentPollIntervalMs: 33,
     driverVehicleControlDatagramStatusSnapshot: Object.freeze({
       enabled: true,
@@ -99,6 +129,7 @@ function createFakeHudPublisherDependencies(readNowMs) {
       planarMagnitudeMeters: null,
       verticalMagnitudeMeters: null
     }),
+    lastLocalAuthorityPoseCorrectionSnapshot: null,
     lastLocalAuthorityPoseCorrectionReason: "none",
     lastLocalReconciliationCorrectionSource: "none",
     localAuthorityPoseCorrectionCount: 0,
@@ -114,7 +145,7 @@ function createFakeHudPublisherDependencies(readNowMs) {
     mountedVehicleAuthorityCorrectionCount: 0,
     surfaceRoutingLocalTelemetrySnapshot: Object.freeze({
       autostepHeightMeters: null,
-      blockerOverlap: false,
+      blockingAffordanceDetected: false,
       decisionReason: "capability-maintained",
       jumpDebug: Object.freeze({
         groundedBodyGrounded: null,
@@ -125,7 +156,7 @@ function createFakeHudPublisherDependencies(readNowMs) {
       }),
       locomotionMode: "grounded",
       resolvedSupportHeightMeters: 0.6,
-      stepSupportedProbeCount: 0,
+      supportingAffordanceSampleCount: 0,
       traversalAuthority: Object.freeze({
         currentActionKind: "none",
         currentActionPhase: "idle",
@@ -160,12 +191,11 @@ function createPublishInput(overrides = {}) {
     bootScenePrewarmed: true,
     controlMode: "keyboard",
     failureReason: null,
-    focusedMountable: null,
     focusedPortal: null,
     frameDeltaMs: 16,
     frameRate: 60,
     lifecycle: "running",
-    mountedEnvironment: null,
+    mountedInteraction: createMountedInteractionSnapshot(),
     renderedFrameCount: 4,
     renderer: Object.freeze({
       info: Object.freeze({
@@ -183,5 +213,6 @@ export {
   createFakeCameraSnapshot,
   createFakeHudPublisherDependencies,
   createFakeRenderedCamera,
+  createMountedInteractionSnapshot,
   createPublishInput
 };

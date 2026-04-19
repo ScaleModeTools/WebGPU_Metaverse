@@ -8,6 +8,8 @@ import {
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 import {
   metaverseRealtimeWorldCadenceConfig,
+  createMetaverseGameplayTraversalIntentSnapshotInput,
+  type MetaversePlayerTraversalIntentSnapshotInput
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import type { PhysicsVector3Snapshot, MetaverseGroundedBodyRuntime } from "@/physics";
@@ -59,6 +61,7 @@ export interface AdvanceUnmountedTraversalInput {
   readonly cameraSnapshot: MetaverseCameraSnapshot;
   readonly deltaSeconds: number;
   readonly movementInput: MetaverseFlightInputSnapshot;
+  readonly traversalIntentInput?: MetaversePlayerTraversalIntentSnapshotInput | null;
   readonly traversalState: MetaverseUnmountedTraversalStateSnapshot;
 }
 
@@ -122,6 +125,42 @@ export class MetaverseUnmountedTraversalMotionState {
 
   setTraversalCameraPitchRadians(pitchRadians: number): void {
     this.#traversalCameraPitchRadians = pitchRadians;
+  }
+
+  resolvePredictedTraversalIntentInput(
+    movementInput: Pick<
+      MetaverseFlightInputSnapshot,
+      "boost" | "jump" | "moveAxis" | "pitchAxis" | "strafeAxis" | "yawAxis"
+    >,
+    deltaSeconds: number
+  ): MetaversePlayerTraversalIntentSnapshotInput | null {
+    const locomotionMode = this.#dependencies.readLocomotionMode();
+
+    if (locomotionMode !== "grounded" && locomotionMode !== "swim") {
+      return null;
+    }
+
+    return createMetaverseGameplayTraversalIntentSnapshotInput({
+      boost: movementInput.boost,
+      jump: movementInput.jump,
+      locomotionMode,
+      moveAxis: movementInput.moveAxis,
+      pitchRadians: advanceTraversalCameraPresentationPitchRadians(
+        this.#traversalCameraPitchRadians,
+        movementInput,
+        this.#dependencies.config,
+        deltaSeconds
+      ),
+      strafeAxis: movementInput.strafeAxis,
+      turnAxis: movementInput.yawAxis,
+      yawRadians: this.#resolvePredictedLookYawRadians(
+        movementInput,
+        deltaSeconds,
+        locomotionMode === "swim"
+          ? this.#dependencies.config.swim.maxTurnSpeedRadiansPerSecond
+          : this.#dependencies.config.groundedBody.maxTurnSpeedRadiansPerSecond
+      )
+    });
   }
 
   resolveLocalPredictedTraversalAction(): MetaverseTraversalActiveActionSnapshot {
@@ -238,11 +277,16 @@ export class MetaverseUnmountedTraversalMotionState {
     deltaSeconds,
     jumpPressedThisFrame,
     movementInput,
+    traversalIntentInput,
     traversalState
   }: AdvanceUnmountedTraversalInput & {
     readonly jumpPressedThisFrame: boolean;
   }): AdvanceUnmountedTraversalResult {
     let nextTraversalState = traversalState;
+    const resolvedMovementInput =
+      traversalIntentInput === null || traversalIntentInput === undefined
+        ? movementInput
+        : createMovementInputFromTraversalIntent(traversalIntentInput);
 
     if (jumpPressedThisFrame) {
       nextTraversalState = queueMetaverseUnmountedTraversalAction(
@@ -269,18 +313,12 @@ export class MetaverseUnmountedTraversalMotionState {
       this.#dependencies.syncLocalTraversalAuthorityState(false);
     }
 
-    this.#advanceUnmountedLookYawRadians(
+    this.#syncPredictedTraversalFacing(
+      traversalIntentInput ?? null,
       movementInput,
       deltaSeconds,
       this.#dependencies.config.groundedBody.maxTurnSpeedRadiansPerSecond
     );
-    this.#traversalCameraPitchRadians =
-      advanceTraversalCameraPresentationPitchRadians(
-        this.#traversalCameraPitchRadians,
-        movementInput,
-        this.#dependencies.config,
-        deltaSeconds
-      );
     this.#groundedLocomotionAccumulatorSeconds += Math.max(
       0,
       toFiniteNumber(deltaSeconds, 0)
@@ -295,7 +333,7 @@ export class MetaverseUnmountedTraversalMotionState {
       const groundedLocomotionResult = this.#dependencies.surfaceLocomotionState.advanceGroundedStep(
         {
           deltaSeconds: authoritativeTraversalFixedStepSeconds,
-          movementInput,
+          movementInput: resolvedMovementInput,
           preferredLookYawRadians: this.#unmountedLookYawRadians,
           resolveGroundedPresentationPosition: (bodyPosition) => bodyPosition,
           traversalCameraPitchRadians: this.#traversalCameraPitchRadians,
@@ -339,22 +377,21 @@ export class MetaverseUnmountedTraversalMotionState {
     cameraSnapshot,
     deltaSeconds,
     movementInput,
+    traversalIntentInput,
     traversalState
   }: AdvanceUnmountedTraversalInput): AdvanceUnmountedTraversalResult {
     let nextTraversalState = traversalState;
+    const resolvedMovementInput =
+      traversalIntentInput === null || traversalIntentInput === undefined
+        ? movementInput
+        : createMovementInputFromTraversalIntent(traversalIntentInput);
 
-    this.#advanceUnmountedLookYawRadians(
+    this.#syncPredictedTraversalFacing(
+      traversalIntentInput ?? null,
       movementInput,
       deltaSeconds,
       this.#dependencies.config.swim.maxTurnSpeedRadiansPerSecond
     );
-    this.#traversalCameraPitchRadians =
-      advanceTraversalCameraPresentationPitchRadians(
-        this.#traversalCameraPitchRadians,
-        movementInput,
-        this.#dependencies.config,
-        deltaSeconds
-      );
     this.#swimLocomotionAccumulatorSeconds += Math.max(
       0,
       toFiniteNumber(deltaSeconds, 0)
@@ -369,7 +406,7 @@ export class MetaverseUnmountedTraversalMotionState {
       const swimLocomotionResult = this.#dependencies.surfaceLocomotionState.advanceSwimStep(
         {
           deltaSeconds: authoritativeTraversalFixedStepSeconds,
-          movementInput,
+          movementInput: resolvedMovementInput,
           preferredLookYawRadians: this.#unmountedLookYawRadians,
           resolveSwimPresentationPosition: (swimSnapshot) =>
             this.resolveSwimPresentationPosition(swimSnapshot),
@@ -445,7 +482,19 @@ export class MetaverseUnmountedTraversalMotionState {
     deltaSeconds: number,
     maxTurnSpeedRadiansPerSecond: number
   ): void {
-    this.#unmountedLookYawRadians = wrapRadians(
+    this.#unmountedLookYawRadians = this.#resolvePredictedLookYawRadians(
+      movementInput,
+      deltaSeconds,
+      maxTurnSpeedRadiansPerSecond
+    );
+  }
+
+  #resolvePredictedLookYawRadians(
+    movementInput: Pick<MetaverseFlightInputSnapshot, "yawAxis">,
+    deltaSeconds: number,
+    maxTurnSpeedRadiansPerSecond: number
+  ): number {
+    return wrapRadians(
       this.#unmountedLookYawRadians +
         clamp(toFiniteNumber(movementInput.yawAxis, 0), -1, 1) *
           Math.max(0, toFiniteNumber(maxTurnSpeedRadiansPerSecond, 0)) *
@@ -453,12 +502,42 @@ export class MetaverseUnmountedTraversalMotionState {
     );
   }
 
+  #syncPredictedTraversalFacing(
+    traversalIntentInput: MetaversePlayerTraversalIntentSnapshotInput | null,
+    movementInput: Pick<MetaverseFlightInputSnapshot, "pitchAxis" | "yawAxis">,
+    deltaSeconds: number,
+    maxTurnSpeedRadiansPerSecond: number
+  ): void {
+    if (traversalIntentInput?.facing !== undefined) {
+      this.#traversalCameraPitchRadians =
+        traversalIntentInput.facing.pitchRadians ??
+        this.#traversalCameraPitchRadians;
+      this.#unmountedLookYawRadians = wrapRadians(
+        traversalIntentInput.facing.yawRadians ?? this.#unmountedLookYawRadians
+      );
+      return;
+    }
+
+    this.#advanceUnmountedLookYawRadians(
+      movementInput,
+      deltaSeconds,
+      maxTurnSpeedRadiansPerSecond
+    );
+    this.#traversalCameraPitchRadians =
+      advanceTraversalCameraPresentationPitchRadians(
+        this.#traversalCameraPitchRadians,
+        movementInput,
+        this.#dependencies.config,
+        deltaSeconds
+      );
+  }
+
   #resolveGroundedLocomotionStepCameraSnapshot(
     groundedLocomotionResult: ReturnType<
       MetaverseUnmountedSurfaceLocomotionState["advanceGroundedStep"]
     >
   ): MetaverseCameraSnapshot {
-    if (groundedLocomotionResult.locomotionMode === "swim") {
+    if (groundedLocomotionResult.transitionSnapshot.enteredSwim) {
       const groundedBodySnapshot = this.#dependencies.groundedBodyRuntime.snapshot;
 
       if (this.#dependencies.readMountedOccupancyKeepsFreeRoam()) {
@@ -473,6 +552,11 @@ export class MetaverseUnmountedTraversalMotionState {
 
       const nextCameraSnapshot =
         this.#dependencies.surfaceLocomotionState.enterSwimLocomotion({
+          linearVelocity: freezeVector3(
+            this.#dependencies.groundedBodyRuntime.linearVelocitySnapshot.x,
+            0,
+            this.#dependencies.groundedBodyRuntime.linearVelocitySnapshot.z
+          ),
           lookYawRadians: this.#unmountedLookYawRadians,
           position: freezeVector3(
             groundedBodySnapshot.position.x,
@@ -501,9 +585,17 @@ export class MetaverseUnmountedTraversalMotionState {
       MetaverseUnmountedSurfaceLocomotionState["advanceSwimStep"]
     >
   ): MetaverseCameraSnapshot {
-    if (swimLocomotionResult.locomotionMode === "grounded") {
+    if (swimLocomotionResult.transitionSnapshot.enteredGrounded) {
+      const groundedEntryLinearVelocity =
+        swimLocomotionResult.nextSwimSnapshot.linearVelocity ??
+        freezeVector3(0, 0, 0);
       const groundedCameraSnapshot =
         this.#dependencies.surfaceLocomotionState.enterGroundedLocomotion({
+          linearVelocity: freezeVector3(
+            groundedEntryLinearVelocity.x,
+            0,
+            groundedEntryLinearVelocity.z
+          ),
           lookYawRadians: this.#unmountedLookYawRadians,
           position: swimLocomotionResult.nextSwimSnapshot.position,
           resolveGroundedPresentationPosition: () =>
@@ -522,4 +614,21 @@ export class MetaverseUnmountedTraversalMotionState {
 
     return swimLocomotionResult.cameraSnapshot;
   }
+}
+
+function createMovementInputFromTraversalIntent(
+  traversalIntentInput: MetaversePlayerTraversalIntentSnapshotInput
+): MetaverseFlightInputSnapshot {
+  return Object.freeze({
+    boost: traversalIntentInput.bodyControl?.boost === true,
+    jump:
+      traversalIntentInput.actionIntent?.kind === "jump" &&
+      traversalIntentInput.actionIntent.pressed === true,
+    moveAxis: traversalIntentInput.bodyControl?.moveAxis ?? 0,
+    primaryAction: false,
+    pitchAxis: 0,
+    secondaryAction: false,
+    strafeAxis: traversalIntentInput.bodyControl?.strafeAxis ?? 0,
+    yawAxis: traversalIntentInput.bodyControl?.turnAxis ?? 0
+  });
 }
