@@ -25,7 +25,7 @@ test("MetaversePresenceWebTransportAdapter serves presence commands and roster r
   const joinResponse = session.receiveClientMessage(
     createMetaversePresenceWebTransportCommandRequest({
       command: createMetaverseJoinPresenceCommand({
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         playerId,
         pose: {
           look: {

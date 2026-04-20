@@ -293,7 +293,7 @@ test("MetaverseTraversalRuntime ignores routine authoritative airborne pose chan
         y: 1.2,
         z: 23.4
       }),
-      yawRadians: Math.PI * 0.14
+      yawRadians: 0.05
     });
 
     assert.equal(traversalRuntime.locomotionMode, "grounded");
@@ -1321,7 +1321,7 @@ test("MetaverseTraversalRuntime records body-state mismatch when gross grounded 
   }
 });
 
-test("MetaverseTraversalRuntime ignores moderate grounded authoritative divergence without counting convergence", async () => {
+test("MetaverseTraversalRuntime converges moderate grounded authoritative divergence without a hard snap", async () => {
   const { groundedBodyRuntime, traversalRuntime } =
     await createFlatGroundedTraversalHarness();
 
@@ -1330,30 +1330,37 @@ test("MetaverseTraversalRuntime ignores moderate grounded authoritative divergen
     assert.equal(traversalRuntime.locomotionMode, "grounded");
 
     const groundedSnapshot = groundedBodyRuntime.snapshot;
+    const authoritativePosition = freezeVector3(
+      groundedSnapshot.position.x + 1.8,
+      groundedSnapshot.position.y,
+      groundedSnapshot.position.z
+    );
+    const authoritativeGroundedBody = Object.freeze({
+      ...groundedSnapshot,
+      position: authoritativePosition
+    });
 
     syncAuthoritativeLocalPlayerPose(traversalRuntime, {
+      groundedBody: authoritativeGroundedBody,
       jumpAuthorityState: "grounded",
       lastAcceptedJumpActionSequence: 0,
       lastProcessedJumpActionSequence: 0,
       linearVelocity: freezeVector3(0, 0, 0),
       locomotionMode: "grounded",
       mountedOccupancy: null,
-      position: freezeVector3(
-        groundedSnapshot.position.x + 1.8,
-        groundedSnapshot.position.y,
-        groundedSnapshot.position.z
-      ),
+      position: authoritativePosition,
       yawRadians: groundedSnapshot.yawRadians
     });
 
-    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 0);
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
     assert.equal(
       traversalRuntime.lastLocalAuthorityPoseCorrectionReason,
-      "none"
+      "gross-position-divergence"
     );
     assert.ok(
       Math.abs(
-        groundedBodyRuntime.snapshot.position.x - groundedSnapshot.position.x
+        groundedBodyRuntime.snapshot.position.x -
+          (groundedSnapshot.position.x + 0.2)
       ) < 0.0001
     );
   } finally {
@@ -1361,7 +1368,7 @@ test("MetaverseTraversalRuntime ignores moderate grounded authoritative divergen
   }
 });
 
-test("MetaverseTraversalRuntime ignores moderate swim authoritative divergence without counting convergence", async () => {
+test("MetaverseTraversalRuntime converges moderate swim authoritative divergence without a hard snap", async () => {
   const { groundedBodyRuntime, traversalRuntime } =
     await fixtureContext.createOpenWaterTraversalHarness();
 
@@ -1392,13 +1399,15 @@ test("MetaverseTraversalRuntime ignores moderate swim authoritative divergence w
     const blendedSwimSnapshot = traversalRuntime.localTraversalPoseSnapshot;
 
     assert.notEqual(blendedSwimSnapshot, null);
-    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 0);
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
     assert.equal(
       traversalRuntime.lastLocalAuthorityPoseCorrectionReason,
-      "none"
+      "gross-position-divergence"
     );
     assert.ok(
-      Math.abs(blendedSwimSnapshot.position.x - swimSnapshot.position.x) < 0.0001
+      Math.abs(
+        blendedSwimSnapshot.position.x - (swimSnapshot.position.x + 0.2)
+      ) < 0.0001
     );
   } finally {
     groundedBodyRuntime.dispose();

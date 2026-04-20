@@ -28,7 +28,7 @@ test("MetaverseAuthoritativeWorldRuntime preserves explicit mounted passenger lo
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         animationVocabulary: "seated",
@@ -76,7 +76,7 @@ test("MetaverseAuthoritativeWorldRuntime accepts mounted occupancy updates throu
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         position: {

@@ -94,7 +94,7 @@ test("MetaverseRemoteWorldRuntime samples buffered authoritative world snapshots
   const remoteWorldRuntime = new MetaverseRemoteWorldRuntime({
     createMetaverseWorldClient: () => fakeWorldClient,
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username: localUsername
     },
@@ -202,7 +202,7 @@ test("MetaverseRemoteWorldRuntime extrapolates from the latest authoritative sna
   const remoteWorldRuntime = new MetaverseRemoteWorldRuntime({
     createMetaverseWorldClient: () => fakeWorldClient,
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username: localUsername
     },
@@ -313,7 +313,7 @@ test("MetaverseRemoteWorldRuntime exposes authoritative snapshot timing telemetr
   const remoteWorldRuntime = new MetaverseRemoteWorldRuntime({
     createMetaverseWorldClient: () => fakeWorldClient,
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username: localUsername
     },

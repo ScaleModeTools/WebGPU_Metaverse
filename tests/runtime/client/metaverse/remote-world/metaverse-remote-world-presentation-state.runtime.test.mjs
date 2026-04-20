@@ -384,7 +384,7 @@ test("MetaverseRemoteWorldPresentationState derives remote jump presentation fro
     players: [
       {
         animationVocabulary: "idle",
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         jumpAuthorityState: "grounded",
         linearVelocity: {
           x: 0,
@@ -403,7 +403,7 @@ test("MetaverseRemoteWorldPresentationState derives remote jump presentation fro
       },
       {
         animationVocabulary: "idle",
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         jumpDebug: {
           resolvedActionSequence: 2,
           resolvedActionState: "accepted"

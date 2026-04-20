@@ -104,7 +104,7 @@ test("MetaverseSceneRemoteCharacterPresentationState owns remote runtime sync an
     [
       Object.freeze({
         aimCamera: null,
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         look: Object.freeze({
           pitchRadians: 0,
           yawRadians: 0

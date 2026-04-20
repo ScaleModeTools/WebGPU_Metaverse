@@ -3,19 +3,17 @@ import {
   authoredWaterBaySkiffYawRadians
 } from "../metaverse-authored-world-test-fixtures.mjs";
 
-export async function createSkiffMountProofSlice() {
-  const {
-    AnimationClip,
-    Bone,
-    BoxGeometry,
-    Float32BufferAttribute,
-    Group,
-    Mesh,
-    MeshStandardMaterial,
-    Skeleton,
-    SkinnedMesh,
-    Uint16BufferAttribute
-  } = await import("three/webgpu");
+export function createHumanoidV2CharacterScene({
+  Bone,
+  BoxGeometry,
+  Float32BufferAttribute,
+  Group,
+  MeshStandardMaterial,
+  Skeleton,
+  SkinnedMesh,
+  Uint16BufferAttribute,
+  Vector3
+}) {
   const bodyGeometry = new BoxGeometry(0.4, 1.2, 0.3);
   const vertexCount = bodyGeometry.attributes.position.count;
   const skinIndices = new Uint16Array(vertexCount * 4);
@@ -29,52 +27,61 @@ export async function createSkiffMountProofSlice() {
   bodyGeometry.setAttribute("skinIndex", new Uint16BufferAttribute(skinIndices, 4));
   bodyGeometry.setAttribute("skinWeight", new Float32BufferAttribute(skinWeights, 4));
 
-  const rootBone = new Bone();
+  const bonesByName = new Map();
+  const addBone = (boneName, parentBone = null, position = null) => {
+    const bone = new Bone();
 
-  rootBone.name = "humanoid_root";
+    bone.name = boneName;
+    if (position !== null) {
+      bone.position.copy(position);
+    }
 
-  const hipsBone = new Bone();
+    bonesByName.set(boneName, bone);
+    parentBone?.add(bone);
 
-  hipsBone.name = "hips";
-  hipsBone.position.y = 0.32;
-  rootBone.add(hipsBone);
+    return bone;
+  };
 
-  const spineBone = new Bone();
+  const rootBone = addBone("root");
+  const pelvisBone = addBone("pelvis", rootBone, new Vector3(0, 0.92, 0));
+  const spine01Bone = addBone("spine_01", pelvisBone, new Vector3(0, 0.18, 0));
+  const spine02Bone = addBone("spine_02", spine01Bone, new Vector3(0, 0.18, 0));
+  const spine03Bone = addBone("spine_03", spine02Bone, new Vector3(0, 0.18, 0));
+  const neckBone = addBone("neck_01", spine03Bone, new Vector3(0, 0.16, 0));
+  const headBone = addBone("head", neckBone, new Vector3(0, 0.14, 0));
+  const clavicleLBone = addBone("clavicle_l", spine03Bone, new Vector3(-0.12, 0.1, 0));
+  const upperarmLBone = addBone("upperarm_l", clavicleLBone, new Vector3(-0.18, 0, 0));
+  const lowerarmLBone = addBone("lowerarm_l", upperarmLBone, new Vector3(-0.22, 0, 0));
+  const handLBone = addBone("hand_l", lowerarmLBone, new Vector3(-0.18, 0, 0));
+  const clavicleRBone = addBone("clavicle_r", spine03Bone, new Vector3(0.12, 0.1, 0));
+  const upperarmRBone = addBone("upperarm_r", clavicleRBone, new Vector3(0.18, 0, 0));
+  const lowerarmRBone = addBone("lowerarm_r", upperarmRBone, new Vector3(0.22, 0, 0));
+  const handRBone = addBone("hand_r", lowerarmRBone, new Vector3(0.18, 0, 0));
+  const thighLBone = addBone("thigh_l", pelvisBone, new Vector3(-0.1, -0.26, 0));
+  const calfLBone = addBone("calf_l", thighLBone, new Vector3(0, -0.42, 0));
+  const footLBone = addBone("foot_l", calfLBone, new Vector3(0, -0.4, 0.06));
+  const ballLBone = addBone("ball_l", footLBone, new Vector3(0, 0, 0.12));
+  const thighRBone = addBone("thigh_r", pelvisBone, new Vector3(0.1, -0.26, 0));
+  const calfRBone = addBone("calf_r", thighRBone, new Vector3(0, -0.42, 0));
+  const footRBone = addBone("foot_r", calfRBone, new Vector3(0, -0.4, 0.06));
+  const ballRBone = addBone("ball_r", footRBone, new Vector3(0, 0, 0.12));
 
-  spineBone.name = "spine";
-  spineBone.position.y = 0.32;
-  hipsBone.add(spineBone);
+  addBone("thumb_01_l", handLBone, new Vector3(-0.04, -0.02, 0.06));
+  addBone("index_01_l", handLBone, new Vector3(-0.1, 0, 0.03));
+  addBone("middle_01_l", handLBone, new Vector3(-0.11, 0, 0));
+  addBone("ring_01_l", handLBone, new Vector3(-0.1, 0, -0.03));
+  addBone("pinky_01_l", handLBone, new Vector3(-0.08, 0, -0.05));
+  addBone("thumb_01_r", handRBone, new Vector3(0.04, -0.02, 0.06));
+  addBone("index_01_r", handRBone, new Vector3(0.1, 0, 0.03));
+  addBone("middle_01_r", handRBone, new Vector3(0.11, 0, 0));
+  addBone("ring_01_r", handRBone, new Vector3(0.1, 0, -0.03));
+  addBone("pinky_01_r", handRBone, new Vector3(0.08, 0, -0.05));
 
-  const chestBone = new Bone();
-
-  chestBone.name = "chest";
-  chestBone.position.y = 0.24;
-  spineBone.add(chestBone);
-
-  const neckBone = new Bone();
-
-  neckBone.name = "neck";
-  neckBone.position.y = 0.14;
-  chestBone.add(neckBone);
-
-  const socketNames = ["head_socket", "hand_l_socket", "hand_r_socket", "hip_socket", "seat_socket"];
-  const socketBones = socketNames.map((socketName) => {
-    const socketBone = new Bone();
-
-    socketBone.name = socketName;
-
-    return socketBone;
-  });
-
-  neckBone.add(socketBones[0]);
-  chestBone.add(socketBones[1], socketBones[2]);
-  hipsBone.add(socketBones[3], socketBones[4]);
-  socketBones[0].position.y = 0.12;
-  socketBones[1].position.x = -0.35;
-  socketBones[2].position.x = 0.35;
-  socketBones[3].position.set(0.2, -0.08, -0.08);
-  socketBones[4].position.set(0, 0, -0.08);
-
+  const headSocketBone = addBone("head_socket", headBone, new Vector3(0, 0.12, 0));
+  const handLSocketBone = addBone("hand_l_socket", handLBone, new Vector3(-0.05, 0, 0));
+  const handRSocketBone = addBone("hand_r_socket", handRBone, new Vector3(0.05, 0, 0));
+  const hipSocketBone = addBone("hip_socket", pelvisBone, new Vector3(0.16, -0.08, -0.06));
+  const seatSocketBone = addBone("seat_socket", pelvisBone, new Vector3(0, -0.02, -0.08));
   const skinnedMesh = new SkinnedMesh(
     bodyGeometry,
     new MeshStandardMaterial({ color: 0xa8b8d1 })
@@ -82,16 +89,86 @@ export async function createSkiffMountProofSlice() {
   const characterScene = new Group();
   const skeleton = new Skeleton([
     rootBone,
-    hipsBone,
-    spineBone,
-    chestBone,
+    pelvisBone,
+    spine01Bone,
+    spine02Bone,
+    spine03Bone,
     neckBone,
-    ...socketBones
+    headBone,
+    clavicleLBone,
+    upperarmLBone,
+    lowerarmLBone,
+    handLBone,
+    clavicleRBone,
+    upperarmRBone,
+    lowerarmRBone,
+    handRBone,
+    thighLBone,
+    calfLBone,
+    footLBone,
+    ballLBone,
+    thighRBone,
+    calfRBone,
+    footRBone,
+    ballRBone,
+    bonesByName.get("thumb_01_l"),
+    bonesByName.get("index_01_l"),
+    bonesByName.get("middle_01_l"),
+    bonesByName.get("ring_01_l"),
+    bonesByName.get("pinky_01_l"),
+    bonesByName.get("thumb_01_r"),
+    bonesByName.get("index_01_r"),
+    bonesByName.get("middle_01_r"),
+    bonesByName.get("ring_01_r"),
+    bonesByName.get("pinky_01_r"),
+    headSocketBone,
+    handLSocketBone,
+    handRSocketBone,
+    hipSocketBone,
+    seatSocketBone
   ]);
 
   skinnedMesh.add(rootBone);
   skinnedMesh.bind(skeleton);
   characterScene.add(skinnedMesh);
+
+  return {
+    characterScene,
+    socketNames: [
+      "hand_r_socket",
+      "hand_l_socket",
+      "head_socket",
+      "hip_socket",
+      "seat_socket"
+    ]
+  };
+}
+
+export async function createSkiffMountProofSlice() {
+  const {
+    AnimationClip,
+    Bone,
+    BoxGeometry,
+    Float32BufferAttribute,
+    Group,
+    Mesh,
+    MeshStandardMaterial,
+    Skeleton,
+    SkinnedMesh,
+    Uint16BufferAttribute,
+    Vector3
+  } = await import("three/webgpu");
+  const { characterScene, socketNames } = createHumanoidV2CharacterScene({
+    Bone,
+    BoxGeometry,
+    Float32BufferAttribute,
+    Group,
+    MeshStandardMaterial,
+    Skeleton,
+    SkinnedMesh,
+    Uint16BufferAttribute,
+    Vector3
+  });
 
   const idleClip = new AnimationClip("idle", -1, []);
   const walkClip = new AnimationClip("walk", -1, []);
@@ -139,19 +216,19 @@ export async function createSkiffMountProofSlice() {
       animationClips: [
         {
           clipName: "idle",
-          sourcePath: "/models/metaverse/characters/metaverse-mannequin.gltf",
+          sourcePath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
           vocabulary: "idle"
         },
         {
           clipName: "walk",
-          sourcePath: "/models/metaverse/characters/metaverse-mannequin.gltf",
+          sourcePath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
           vocabulary: "walk"
         }
       ],
-      characterId: "metaverse-mannequin-v1",
-      label: "Metaverse mannequin",
-      modelPath: "/models/metaverse/characters/metaverse-mannequin.gltf",
-      skeletonId: "humanoid_v1",
+      characterId: "mesh2motion-humanoid-v1",
+      label: "Mesh2Motion humanoid",
+      modelPath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
+      skeletonId: "humanoid_v2",
       socketNames
     },
     createSceneAssetLoader: () => ({
@@ -490,10 +567,11 @@ export async function createHeldWeaponProofSlice() {
       attachmentId: "metaverse-service-pistol-v1",
       heldMount: {
         attachmentSocketNodeName: "metaverse_service_pistol_trigger_hand_r_socket",
-        socketName: "hand_r_socket"
+        socketName: "grip_r_socket"
       },
       label: "Metaverse service pistol",
       modelPath: "/models/metaverse/attachments/metaverse-service-pistol.gltf",
+      modules: [],
       mountedHolsterMount: null,
       supportPoints: null
     },

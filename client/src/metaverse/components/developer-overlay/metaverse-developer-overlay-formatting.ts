@@ -40,14 +40,20 @@ function formatCount(value: number): string {
   return value.toLocaleString();
 }
 
+function formatOptionalCount(value: number | null): string {
+  return value === null ? "n/a" : formatCount(value);
+}
+
 function formatCorrectionSource(
   source: MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["localReconciliation"]["lastCorrectionSource"]
 ): string {
   switch (source) {
     case "mounted-vehicle-authority":
       return "mounted";
-    case "local-authority-convergence":
-      return "body";
+    case "local-authority-convergence-episode":
+      return "body episode";
+    case "local-authority-convergence-step":
+      return "body step";
     default:
       return "none";
   }
@@ -80,6 +86,8 @@ function formatPoseCorrectionReason(
       return "gross body divergence";
     case "gross-position-divergence":
       return "gross position divergence";
+    case "gross-yaw-divergence":
+      return "gross yaw divergence";
     default:
       return "none";
   }
@@ -301,6 +309,14 @@ function formatOptionalMeters(value: number | null): string {
   return formatMeters(value);
 }
 
+function formatOptionalRadians(value: number | null): string {
+  if (value === null) {
+    return "n/a";
+  }
+
+  return `${value.toFixed(3)} rad`;
+}
+
 function formatPercentage(value: number): string {
   return `${value.toFixed(1)}%`;
 }
@@ -316,7 +332,25 @@ function formatPoseCorrectionDetailValue(
 ): string {
   return `${formatOptionalMeters(detail.planarMagnitudeMeters)} planar · ${formatOptionalMeters(
     detail.verticalMagnitudeMeters
-  )} vertical · ${formatOptionalVelocityUnitsPerSecond(
+  )} vertical · episode ${
+    detail.convergenceEpisodeStarted ? "start" : "step"
+  } ${formatOptionalMeters(
+    detail.convergenceEpisodeStartPlanarMagnitudeMeters
+  )}/${formatOptionalMeters(
+    detail.convergenceEpisodeStartVerticalMagnitudeMeters
+  )}/${formatOptionalRadians(
+    detail.convergenceEpisodeStartYawMagnitudeRadians
+  )} · age ${formatOptionalMilliseconds(
+    detail.authoritativeSnapshotAgeMs
+  )} · ack ${formatOptionalCount(
+    detail.lastProcessedInputSequence
+  )}/${formatOptionalCount(
+    detail.lastProcessedTraversalOrientationSequence
+  )} · tick ${formatOptionalCount(
+    detail.authoritativeTick
+  )} · seq ${formatOptionalCount(
+    detail.authoritativeSnapshotSequence
+  )} · ${formatOptionalVelocityUnitsPerSecond(
     detail.planarVelocityMagnitudeUnitsPerSecond
   )} planar vel · ${formatOptionalVelocityUnitsPerSecond(
     detail.verticalVelocityMagnitudeUnitsPerSecond
@@ -808,7 +842,7 @@ function createDeveloperReport(hudSnapshot: MetaverseHudSnapshot): string {
         `Tick / poll: ${formatOptionalMilliseconds(hudSnapshot.telemetry.worldCadence.authoritativeTickIntervalMs)} · ${formatOptionalMilliseconds(hudSnapshot.telemetry.worldCadence.worldPollIntervalMs)}`,
         `Snapshot path: ${formatSnapshotStreamPath(hudSnapshot.transport.worldSnapshotStream.path)} · ${formatSnapshotStreamLiveness(hudSnapshot.transport.worldSnapshotStream.liveness)} · ${formatCount(hudSnapshot.telemetry.worldSnapshot.bufferDepth)} buffered · ${formatOptionalRateHz(hudSnapshot.telemetry.worldSnapshot.latestSnapshotUpdateRateHz)}`,
         `Age / offset: ${formatOptionalMilliseconds(hudSnapshot.telemetry.worldSnapshot.latestSimulationAgeMs)} · ${formatOptionalMilliseconds(hudSnapshot.telemetry.worldSnapshot.clockOffsetEstimateMs)}`,
-        `Reconciliation: ${formatCount(hudSnapshot.telemetry.worldSnapshot.localReconciliation.totalCorrectionCount)} total · ${formatCount(hudSnapshot.telemetry.worldSnapshot.localReconciliation.recentCorrectionCountPast5Seconds)} recent/5s · last ${formatOptionalMilliseconds(hudSnapshot.telemetry.worldSnapshot.localReconciliation.lastCorrectionAgeMs)} · pose ${formatCount(hudSnapshot.telemetry.worldSnapshot.localReconciliation.localAuthorityPoseCorrectionCount)}`
+        `Reconciliation: ${formatCount(hudSnapshot.telemetry.worldSnapshot.localReconciliation.totalCorrectionCount)} total · ${formatCount(hudSnapshot.telemetry.worldSnapshot.localReconciliation.recentCorrectionCountPast5Seconds)} recent/5s · last ${formatOptionalMilliseconds(hudSnapshot.telemetry.worldSnapshot.localReconciliation.lastCorrectionAgeMs)} · episodes ${formatCount(hudSnapshot.telemetry.worldSnapshot.localReconciliation.localAuthorityPoseConvergenceEpisodeCount)} · steps ${formatCount(hudSnapshot.telemetry.worldSnapshot.localReconciliation.localAuthorityPoseConvergenceStepCount)}`
       ]
     },
     {

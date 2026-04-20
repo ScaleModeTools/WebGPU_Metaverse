@@ -234,6 +234,7 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
       },
       label: "Metaverse service pistol",
       modelPath: "/models/metaverse/attachments/metaverse-service-pistol.gltf",
+      modules: [],
       mountedHolsterMount: null,
       supportPoints: null
     },

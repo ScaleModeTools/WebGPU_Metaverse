@@ -21,25 +21,38 @@ test("metaverse asset proof resolves a socket-compatible attachment config from 
 
   assert.equal(
     metaverseAttachmentProofConfig.attachmentId,
-    "metaverse-service-pistol-v1"
+    "metaverse-service-pistol-v2"
   );
   assert.equal(metaverseAttachmentProofConfig.heldMount.socketName, "grip_r_socket");
   assert.equal(
     metaverseAttachmentProofConfig.heldMount.offHandSupportPointId,
-    "grip-support-right"
+    "pistol-support-left"
   );
   assert.equal(
     metaverseAttachmentProofConfig.heldMount.attachmentSocketNodeName,
-    "metaverse_service_pistol_trigger_hand_r_socket"
+    "metaverse_service_pistol_grip_hand_r_socket"
+  );
+  assert.equal(
+    metaverseAttachmentProofConfig.heldMount.forwardReferenceNodeName,
+    "metaverse_service_pistol_forward_marker"
   );
   assert.deepEqual(metaverseAttachmentProofConfig.mountedHolsterMount, {
     attachmentSocketNodeName: "metaverse_service_pistol_back_socket",
     socketName: "back_socket"
   });
+  assert.deepEqual(
+    metaverseAttachmentProofConfig.modules.map((module) => module.moduleId),
+    [
+      "metaverse-low-profile-front-sight-v1",
+      "metaverse-notch-rear-sight-v1",
+      "metaverse-pistol-compensator-v1"
+    ]
+  );
   assert.deepEqual(metaverseAttachmentProofConfig.supportPoints, [
     {
-      localPosition: { x: 0.04, y: 0, z: -0.025 },
-      supportPointId: "grip-support-right"
+      authoringNodeName: "metaverse_service_pistol_support_grip_marker",
+      localPosition: { x: 0.04, y: -0.01, z: 0.025 },
+      supportPointId: "pistol-support-left"
     }
   ]);
   assert.equal(metaverseCharacterProofConfig.skeletonId, "humanoid_v2");

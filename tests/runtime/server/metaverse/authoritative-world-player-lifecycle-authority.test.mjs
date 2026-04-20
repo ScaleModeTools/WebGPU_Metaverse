@@ -25,7 +25,7 @@ test("MetaverseAuthoritativeWorldRuntime prunes inactive players while keeping v
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         animationVocabulary: "idle",
@@ -76,7 +76,7 @@ test("MetaverseAuthoritativeWorldRuntime removes a leaving player and clears cla
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         animationVocabulary: "idle",

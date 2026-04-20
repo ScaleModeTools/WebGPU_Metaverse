@@ -32,10 +32,7 @@ export interface MetaverseHumanoidV2PistolPoseProofConfig {
   readonly sourcePath: string;
 }
 
-export const metaverseCharacterSkeletonIds = [
-  "humanoid_v1",
-  "humanoid_v2"
-] as const;
+export const metaverseCharacterSkeletonIds = ["humanoid_v2"] as const;
 
 export type MetaverseCharacterSkeletonId =
   (typeof metaverseCharacterSkeletonIds)[number];
@@ -80,6 +77,7 @@ export type MetaverseAttachmentSocketName =
 
 export interface MetaverseAttachmentMountProofConfig {
   readonly attachmentSocketNodeName: string;
+  readonly forwardReferenceNodeName?: string | null;
   readonly offHandSupportPointId?: string | null;
   readonly socketName: MetaverseAttachmentSocketName;
 }
@@ -89,11 +87,20 @@ export interface MetaverseAttachmentProofConfig {
   readonly heldMount: MetaverseAttachmentMountProofConfig;
   readonly label: string;
   readonly modelPath: string;
+  readonly modules: readonly MetaverseAttachmentModuleProofConfig[];
   readonly mountedHolsterMount: MetaverseAttachmentMountProofConfig | null;
   readonly supportPoints: readonly {
+    readonly authoringNodeName: string | null;
     readonly localPosition: MetaverseVector3Snapshot;
     readonly supportPointId: string;
   }[] | null;
+}
+
+export interface MetaverseAttachmentModuleProofConfig {
+  readonly label: string;
+  readonly modelPath: string;
+  readonly moduleId: string;
+  readonly socketNodeName: string;
 }
 
 export interface MetaverseEnvironmentColliderProofConfig {

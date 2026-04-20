@@ -9,7 +9,8 @@ import type {
 import {
   createAckedAuthoritativeLocalPlayerDeliveryKey,
   readAckedAuthoritativeLocalPlayerPose,
-  type AckedAuthoritativeLocalPlayerPose
+  type AckedAuthoritativeLocalPlayerPose,
+  type ConsumedAckedAuthoritativeLocalPlayerSample
 } from "../traversal/reconciliation/authoritative-local-player-reconciliation";
 import {
   readMetaverseWorldPlayerSnapshotByPlayerId,
@@ -118,9 +119,25 @@ export class MetaverseRemoteWorldAuthoritativeSnapshotState {
     );
   }
 
-  consumeFreshAckedAuthoritativeLocalPlayerPose(
+  readFreshAckedAuthoritativeLocalPlayerSample(
     maxAuthoritativeSnapshotAgeMs: number
-  ): AckedAuthoritativeLocalPlayerPose | null {
+  ): ConsumedAckedAuthoritativeLocalPlayerSample | null {
+    const freshAckedLocalPlayerSnapshot = this.#readFreshAckedLocalPlayerSnapshot(
+      maxAuthoritativeSnapshotAgeMs
+    );
+
+    if (freshAckedLocalPlayerSnapshot === null) {
+      return null;
+    }
+
+    return this.#createConsumedAckedAuthoritativeLocalPlayerSample(
+      freshAckedLocalPlayerSnapshot
+    );
+  }
+
+  consumeFreshAckedAuthoritativeLocalPlayerSample(
+    maxAuthoritativeSnapshotAgeMs: number
+  ): ConsumedAckedAuthoritativeLocalPlayerSample | null {
     const freshAckedLocalPlayerSnapshot = this.#readFreshAckedLocalPlayerSnapshot(
       maxAuthoritativeSnapshotAgeMs
     );
@@ -140,8 +157,18 @@ export class MetaverseRemoteWorldAuthoritativeSnapshotState {
 
     this.#lastConsumedAckedLocalPlayerPoseDeliveryKey = poseDeliveryKey;
 
-    return readAckedAuthoritativeLocalPlayerPose(
-      freshAckedLocalPlayerSnapshot.playerSnapshot
+    return this.#createConsumedAckedAuthoritativeLocalPlayerSample(
+      freshAckedLocalPlayerSnapshot
+    );
+  }
+
+  consumeFreshAckedAuthoritativeLocalPlayerPose(
+    maxAuthoritativeSnapshotAgeMs: number
+  ): AckedAuthoritativeLocalPlayerPose | null {
+    return (
+      this.consumeFreshAckedAuthoritativeLocalPlayerSample(
+        maxAuthoritativeSnapshotAgeMs
+      )?.pose ?? null
     );
   }
 
@@ -274,6 +301,32 @@ export class MetaverseRemoteWorldAuthoritativeSnapshotState {
     }
 
     return freshLocalPlayerSnapshot;
+  }
+
+  #createConsumedAckedAuthoritativeLocalPlayerSample({
+    latestWorldSnapshot,
+    playerSnapshot
+  }: FreshLocalPlayerSnapshot): ConsumedAckedAuthoritativeLocalPlayerSample {
+    const receivedAtWallClockMs = this.#readWallClockMs();
+    const estimatedServerTimeMs =
+      this.#authoritativeServerClock.readEstimatedServerTimeMs(
+        receivedAtWallClockMs
+      );
+    const authoritativeSnapshotAgeMs = Math.max(
+      0,
+      estimatedServerTimeMs - Number(latestWorldSnapshot.tick.simulationTimeMs)
+    );
+
+    return Object.freeze({
+      authoritativeSnapshotAgeMs,
+      authoritativeTick: latestWorldSnapshot.tick.currentTick,
+      lastProcessedInputSequence: playerSnapshot.lastProcessedInputSequence,
+      lastProcessedTraversalOrientationSequence:
+        playerSnapshot.lastProcessedTraversalOrientationSequence,
+      pose: readAckedAuthoritativeLocalPlayerPose(playerSnapshot),
+      receivedAtWallClockMs,
+      snapshotSequence: latestWorldSnapshot.snapshotSequence
+    });
   }
 
   #syncLatestWorldSnapshotIndexes(

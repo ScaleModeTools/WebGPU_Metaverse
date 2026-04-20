@@ -42,6 +42,7 @@ export interface MountedEnvironmentAnchorSnapshot {
 export interface MetaverseTraversalRuntimeDependencies {
   readonly groundedBodyRuntime: MetaverseGroundedBodyRuntime;
   readonly physicsRuntime: RapierPhysicsRuntime;
+  readonly readWallClockMs?: (() => number) | undefined;
   readonly readDynamicEnvironmentCollisionPose: (
     environmentAssetId: string
   ) => DynamicEnvironmentPoseSnapshot | null;

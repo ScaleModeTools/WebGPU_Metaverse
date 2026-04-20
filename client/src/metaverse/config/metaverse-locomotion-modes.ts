@@ -12,7 +12,7 @@ export const metaversePrimaryLocomotionModes = [
     id: "grounded",
     label: "Grounded",
     description:
-      "Use a capsule-backed grounded body on solid support. Camera height derives from the body, and the mannequin follows the same runtime truth.",
+      "Use a capsule-backed grounded body on solid support. Camera height derives from the body, and the character follows the same runtime truth.",
     controlsSummary: [
       "W/S forward and backward, A/D strafe",
       "Move mouse to turn and look",

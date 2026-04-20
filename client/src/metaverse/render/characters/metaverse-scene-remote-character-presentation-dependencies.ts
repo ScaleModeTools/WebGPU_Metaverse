@@ -73,9 +73,8 @@ export function createMetaverseSceneRemoteCharacterPresentationDependencies({
       ),
     cloneCharacterRuntime: (sourceCharacterRuntime, playerId) =>
       cloneMetaverseCharacterProofRuntime(sourceCharacterRuntime, playerId, {
-        createHeldWeaponPoseRuntime: (skeletonId, characterScene) =>
+        createHeldWeaponPoseRuntime: (characterScene) =>
           createHeldWeaponPoseRuntime(
-            skeletonId,
             characterScene,
             heldWeaponPoseRuntimeNodeResolvers
           ),

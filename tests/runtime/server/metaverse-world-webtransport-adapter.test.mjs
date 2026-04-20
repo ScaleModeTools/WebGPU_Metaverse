@@ -48,7 +48,7 @@ test("MetaverseWorldWebTransportAdapter serves authoritative world snapshots thr
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         locomotionMode: "mounted",
@@ -95,7 +95,7 @@ test("MetaverseWorldWebTransportAdapter accepts typed driver vehicle control req
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         locomotionMode: "mounted",
@@ -151,7 +151,7 @@ test("MetaverseWorldWebTransportAdapter accepts typed mounted occupancy requests
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         position: {
@@ -224,7 +224,7 @@ test("MetaverseWorldWebTransportAdapter keeps a persistent snapshot subscription
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         position: {
@@ -292,7 +292,7 @@ test("MetaverseWorldWebTransportAdapter binds stream subscriptions to one player
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         position: {

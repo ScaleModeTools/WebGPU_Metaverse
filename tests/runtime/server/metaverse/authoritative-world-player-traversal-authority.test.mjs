@@ -267,7 +267,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps mounted driver look constrained t
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         animationVocabulary: "idle",
@@ -350,7 +350,7 @@ test("MetaverseAuthoritativeWorldRuntime clamps mounted passenger look arc and p
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         animationVocabulary: "idle",

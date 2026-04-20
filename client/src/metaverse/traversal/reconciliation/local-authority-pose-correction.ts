@@ -1,5 +1,8 @@
 import type { PhysicsVector3Snapshot } from "@/physics";
-import type { MetaverseRealtimePlayerSnapshot } from "@webgpu-metaverse/shared/metaverse/realtime";
+import type {
+  MetaversePlayerTraversalIntentSnapshot,
+  MetaverseRealtimePlayerSnapshot
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import type { MetaverseTelemetrySnapshot } from "../../types/telemetry";
 
@@ -31,6 +34,18 @@ export interface LocalTraversalPoseSnapshot {
   readonly yawRadians: number;
 }
 
+export interface PredictedLocalReconciliationSample {
+  readonly groundedBody: CorrectionGroundedBodySnapshot | null;
+  readonly inputSequence: number;
+  readonly issuedTraversalIntent: MetaversePlayerTraversalIntentSnapshot | null;
+  readonly localGrounded: boolean | null;
+  readonly localPredictionTick: number;
+  readonly localWallClockMs: number;
+  readonly pose: LocalTraversalPoseSnapshot;
+  readonly swimBody: CorrectionSwimBodySnapshot | null;
+  readonly traversalOrientationSequence: number;
+}
+
 export interface CorrectionTargetPoseSnapshot {
   readonly locomotionMode: MetaverseRealtimePlayerSnapshot["locomotionMode"];
   readonly position: PhysicsVector3Snapshot;
@@ -57,20 +72,27 @@ export interface LocalAuthorityPoseDivergenceDiagnostics {
 
 export interface ResolveLocalAuthorityPoseConvergenceDecisionInput {
   readonly convergenceActive: boolean;
-  readonly convergenceSettleDistanceMeters: number;
-  readonly convergenceStartDistanceMeters: number;
+  readonly convergenceSettlePlanarDistanceMeters: number;
+  readonly convergenceSettleVerticalDistanceMeters: number;
+  readonly convergenceSettleYawRadians: number;
+  readonly convergenceStartPlanarDistanceMeters: number;
+  readonly convergenceStartVerticalDistanceMeters: number;
+  readonly convergenceStartYawRadians: number;
   readonly planarDistance: number;
   readonly verticalDistance: number;
+  readonly yawDistance: number;
 }
 
 export interface LocalAuthorityPoseConvergenceDecision {
   readonly grossPositionDivergence: boolean;
+  readonly grossYawDivergence: boolean;
   readonly shouldConvergePose: boolean;
 }
 
 interface LocalAuthorityPoseCorrectionReasonFlags {
   readonly bodyStateDivergence: boolean;
   readonly grossPositionDivergence: boolean;
+  readonly grossYawDivergence: boolean;
 }
 
 export function createDefaultAuthoritativeCorrectionTelemetrySnapshot(): AuthoritativeCorrectionTelemetrySnapshot {
@@ -84,9 +106,18 @@ export function createDefaultAuthoritativeCorrectionTelemetrySnapshot(): Authori
 
 export function createDefaultLocalAuthorityPoseCorrectionDetailSnapshot(): LocalAuthorityPoseCorrectionDetailSnapshot {
   return Object.freeze({
+    authoritativeSnapshotAgeMs: null,
+    authoritativeSnapshotSequence: null,
+    authoritativeTick: null,
     authoritativeGrounded: null,
     bodyStateDivergence: null,
+    convergenceEpisodeStarted: false,
+    convergenceEpisodeStartPlanarMagnitudeMeters: null,
+    convergenceEpisodeStartVerticalMagnitudeMeters: null,
+    convergenceEpisodeStartYawMagnitudeRadians: null,
     groundedBodyStateDivergence: null,
+    lastProcessedInputSequence: null,
+    lastProcessedTraversalOrientationSequence: null,
     localGrounded: null,
     planarMagnitudeMeters: null,
     planarVelocityMagnitudeUnitsPerSecond: null,
@@ -118,19 +149,54 @@ export function createAuthoritativeCorrectionTelemetrySnapshot(
   });
 }
 
-export function createLocalAuthorityPoseCorrectionDetailSnapshot(
-  localTraversalPose: LocalTraversalPoseSnapshot,
-  authoritativePosition: PhysicsVector3Snapshot,
-  localGrounded: boolean | null,
-  authoritativeGrounded: boolean | null,
-  authoritativeLinearVelocity: CorrectionLinearVelocitySnapshot,
-  groundedBodyStateDivergence: boolean,
-  bodyStateDivergence: boolean
-): LocalAuthorityPoseCorrectionDetailSnapshot {
+export function createLocalAuthorityPoseCorrectionDetailSnapshot({
+  authoritativeGrounded,
+  authoritativeLinearVelocity,
+  authoritativePosition,
+  authoritativeSnapshotAgeMs,
+  authoritativeSnapshotSequence,
+  authoritativeTick,
+  bodyStateDivergence,
+  convergenceEpisodeStarted,
+  convergenceEpisodeStartPlanarMagnitudeMeters,
+  convergenceEpisodeStartVerticalMagnitudeMeters,
+  convergenceEpisodeStartYawMagnitudeRadians,
+  groundedBodyStateDivergence,
+  lastProcessedInputSequence,
+  lastProcessedTraversalOrientationSequence,
+  localGrounded,
+  localTraversalPose
+}: {
+  readonly authoritativeGrounded: boolean | null;
+  readonly authoritativeLinearVelocity: CorrectionLinearVelocitySnapshot;
+  readonly authoritativePosition: PhysicsVector3Snapshot;
+  readonly authoritativeSnapshotAgeMs: number | null;
+  readonly authoritativeSnapshotSequence: number | null;
+  readonly authoritativeTick: number | null;
+  readonly bodyStateDivergence: boolean;
+  readonly convergenceEpisodeStarted: boolean;
+  readonly convergenceEpisodeStartPlanarMagnitudeMeters: number | null;
+  readonly convergenceEpisodeStartVerticalMagnitudeMeters: number | null;
+  readonly convergenceEpisodeStartYawMagnitudeRadians: number | null;
+  readonly groundedBodyStateDivergence: boolean;
+  readonly lastProcessedInputSequence: number | null;
+  readonly lastProcessedTraversalOrientationSequence: number | null;
+  readonly localGrounded: boolean | null;
+  readonly localTraversalPose: LocalTraversalPoseSnapshot;
+}): LocalAuthorityPoseCorrectionDetailSnapshot {
   return Object.freeze({
+    authoritativeSnapshotAgeMs,
+    authoritativeSnapshotSequence,
+    authoritativeTick,
     authoritativeGrounded,
     bodyStateDivergence,
+    convergenceEpisodeStarted,
+    convergenceEpisodeStartPlanarMagnitudeMeters,
+    convergenceEpisodeStartVerticalMagnitudeMeters,
+    convergenceEpisodeStartYawMagnitudeRadians,
     groundedBodyStateDivergence,
+    lastProcessedInputSequence,
+    lastProcessedTraversalOrientationSequence,
     localGrounded,
     planarMagnitudeMeters: Math.hypot(
       authoritativePosition.x - localTraversalPose.position.x,
@@ -151,7 +217,8 @@ export function createLocalAuthorityPoseCorrectionDetailSnapshot(
 
 export function resolveLocalAuthorityPoseCorrectionReason({
   bodyStateDivergence,
-  grossPositionDivergence
+  grossPositionDivergence,
+  grossYawDivergence
 }: LocalAuthorityPoseCorrectionReasonFlags): LocalAuthorityPoseCorrectionReason {
   if (bodyStateDivergence) {
     return "gross-body-divergence";
@@ -159,6 +226,10 @@ export function resolveLocalAuthorityPoseCorrectionReason({
 
   if (grossPositionDivergence) {
     return "gross-position-divergence";
+  }
+
+  if (grossYawDivergence) {
+    return "gross-yaw-divergence";
   }
 
   return "none";
@@ -286,20 +357,34 @@ export function resolveLocalAuthorityPoseDivergenceDiagnostics({
 
 export function resolveLocalAuthorityPoseConvergenceDecision({
   convergenceActive,
-  convergenceSettleDistanceMeters,
-  convergenceStartDistanceMeters,
+  convergenceSettlePlanarDistanceMeters,
+  convergenceSettleVerticalDistanceMeters,
+  convergenceSettleYawRadians,
+  convergenceStartPlanarDistanceMeters,
+  convergenceStartVerticalDistanceMeters,
+  convergenceStartYawRadians,
   planarDistance,
-  verticalDistance
+  verticalDistance,
+  yawDistance
 }: ResolveLocalAuthorityPoseConvergenceDecisionInput): LocalAuthorityPoseConvergenceDecision {
-  const positionDistance = Math.hypot(planarDistance, verticalDistance);
+  const grossPlanarDivergence =
+    planarDistance >= convergenceStartPlanarDistanceMeters;
+  const grossVerticalDivergence =
+    verticalDistance >= convergenceStartVerticalDistanceMeters;
   const grossPositionDivergence =
-    positionDistance >= convergenceStartDistanceMeters;
+    grossPlanarDivergence || grossVerticalDivergence;
+  const grossYawDivergence = yawDistance >= convergenceStartYawRadians;
   const shouldConvergePose =
     grossPositionDivergence ||
-    (convergenceActive && positionDistance > convergenceSettleDistanceMeters);
+    grossYawDivergence ||
+    (convergenceActive &&
+      (planarDistance > convergenceSettlePlanarDistanceMeters ||
+        verticalDistance > convergenceSettleVerticalDistanceMeters ||
+        yawDistance > convergenceSettleYawRadians));
 
   return Object.freeze({
     grossPositionDivergence,
+    grossYawDivergence,
     shouldConvergePose
   });
 }

@@ -28,7 +28,7 @@ function createPresenceRosterEvent(playerId) {
   return createMetaversePresenceRosterEvent({
     players: [
       {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         playerId,
         pose: {
           animationVocabulary: "idle",
@@ -59,7 +59,7 @@ function createRealtimeWorldEvent(playerId, snapshotSequence = 1) {
       players: [
         {
           animationVocabulary: "idle",
-          characterId: "metaverse-mannequin-v1",
+          characterId: "mesh2motion-humanoid-v1",
           linearVelocity: {
             x: 0,
             y: 0,
@@ -337,7 +337,7 @@ test("createMetaversePresenceClient reports runtime fallback after a configured 
     const client = createMetaversePresenceClient();
 
     await client.ensureJoined({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         animationVocabulary: "idle",

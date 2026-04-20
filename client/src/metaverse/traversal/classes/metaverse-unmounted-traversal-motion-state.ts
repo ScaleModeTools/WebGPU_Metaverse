@@ -19,7 +19,10 @@ import type { MetaverseLocomotionModeId } from "../../types/metaverse-locomotion
 import type { MetaverseRuntimeConfig } from "../../types/runtime-config";
 import type { MetaverseCameraSnapshot } from "../../types/presentation";
 import type { ApplyAuthoritativeUnmountedPoseInput } from "../reconciliation/classes/metaverse-local-authority-reconciliation-state";
-import type { LocalTraversalPoseSnapshot } from "../reconciliation/local-authority-pose-correction";
+import type {
+  LocalTraversalPoseSnapshot,
+  PredictedLocalReconciliationSample
+} from "../reconciliation/local-authority-pose-correction";
 import type { MetaverseTraversalCharacterPresentationState } from "../presentation/metaverse-traversal-character-presentation-state";
 import {
   advanceTraversalCameraPresentationPitchRadians,
@@ -41,12 +44,14 @@ const authoritativeTraversalFixedStepSeconds =
   Number(metaverseRealtimeWorldCadenceConfig.authoritativeTickIntervalMs) /
   1_000;
 const authoritativeTraversalFixedStepEpsilon = 0.000001;
+const predictedLocalReconciliationSampleCapacity = 180;
 
 interface MetaverseUnmountedTraversalMotionStateDependencies {
   readonly characterPresentationState: MetaverseTraversalCharacterPresentationState;
   readonly config: MetaverseRuntimeConfig;
   readonly groundedBodyRuntime: MetaverseGroundedBodyRuntime;
   readonly localTraversalAuthorityState: MetaverseLocalTraversalAuthorityState;
+  readonly readWallClockMs: () => number;
   readonly readLocomotionMode: () => MetaverseLocomotionModeId;
   readonly readMountedOccupancyKeepsFreeRoam: () => boolean;
   readonly readMountedVehicleActive: () => boolean;
@@ -75,6 +80,10 @@ export class MetaverseUnmountedTraversalMotionState {
   readonly #dependencies: MetaverseUnmountedTraversalMotionStateDependencies;
 
   #groundedLocomotionAccumulatorSeconds = 0;
+  #predictedReconciliationSampleCount = 0;
+  readonly #predictedReconciliationSamples:
+    PredictedLocalReconciliationSample[] = [];
+  #predictedReconciliationSampleWriteIndex = 0;
   #swimLocomotionAccumulatorSeconds = 0;
   #traversalCameraPitchRadians: number;
   #unmountedLookYawRadians: number;
@@ -105,6 +114,9 @@ export class MetaverseUnmountedTraversalMotionState {
 
   reset(): void {
     this.#groundedLocomotionAccumulatorSeconds = 0;
+    this.#predictedReconciliationSampleCount = 0;
+    this.#predictedReconciliationSamples.length = 0;
+    this.#predictedReconciliationSampleWriteIndex = 0;
     this.#swimLocomotionAccumulatorSeconds = 0;
     this.#traversalCameraPitchRadians =
       this.#dependencies.config.camera.initialPitchRadians;
@@ -222,6 +234,79 @@ export class MetaverseUnmountedTraversalMotionState {
       position: this.#dependencies.groundedBodyRuntime.snapshot.position,
       yawRadians: this.#dependencies.groundedBodyRuntime.snapshot.yawRadians
     };
+  }
+
+  readPredictedLocalReconciliationSample({
+    authoritativeSnapshotAgeMs,
+    authoritativeTick,
+    lastProcessedInputSequence,
+    lastProcessedTraversalOrientationSequence,
+    receivedAtWallClockMs
+  }: {
+    readonly authoritativeSnapshotAgeMs: number | null;
+    readonly authoritativeTick: number | null;
+    readonly lastProcessedInputSequence: number;
+    readonly lastProcessedTraversalOrientationSequence: number;
+    readonly receivedAtWallClockMs: number | null;
+  }): PredictedLocalReconciliationSample | null {
+    const targetWallClockMs =
+      receivedAtWallClockMs !== null &&
+      Number.isFinite(receivedAtWallClockMs) &&
+      authoritativeSnapshotAgeMs !== null &&
+      Number.isFinite(authoritativeSnapshotAgeMs)
+        ? receivedAtWallClockMs - Math.max(0, authoritativeSnapshotAgeMs)
+        : null;
+    let newestMatchingSample: PredictedLocalReconciliationSample | null = null;
+    let nearestTimedSample: PredictedLocalReconciliationSample | null = null;
+    let nearestTimedSampleDistanceMs = Number.POSITIVE_INFINITY;
+
+    for (
+      let sampleOffset = 0;
+      sampleOffset < this.#predictedReconciliationSampleCount;
+      sampleOffset += 1
+    ) {
+      const sampleIndex =
+        (this.#predictedReconciliationSampleWriteIndex -
+          1 -
+          sampleOffset +
+          predictedLocalReconciliationSampleCapacity) %
+        predictedLocalReconciliationSampleCapacity;
+      const sample = this.#predictedReconciliationSamples[sampleIndex];
+
+      if (
+        sample === undefined ||
+        sample.inputSequence !== lastProcessedInputSequence ||
+        sample.traversalOrientationSequence !==
+          lastProcessedTraversalOrientationSequence
+      ) {
+        continue;
+      }
+
+      newestMatchingSample ??= sample;
+
+      if (
+        authoritativeTick !== null &&
+        Number.isFinite(authoritativeTick) &&
+        sample.localPredictionTick === authoritativeTick
+      ) {
+        return sample;
+      }
+
+      if (targetWallClockMs === null) {
+        continue;
+      }
+
+      const sampleDistanceMs = Math.abs(
+        sample.localWallClockMs - targetWallClockMs
+      );
+
+      if (sampleDistanceMs < nearestTimedSampleDistanceMs) {
+        nearestTimedSample = sample;
+        nearestTimedSampleDistanceMs = sampleDistanceMs;
+      }
+    }
+
+    return nearestTimedSample ?? newestMatchingSample;
   }
 
   applyAuthoritativeUnmountedPose({
@@ -358,6 +443,7 @@ export class MetaverseUnmountedTraversalMotionState {
       this.#dependencies.writeTraversalState(nextTraversalState);
       cameraSnapshot =
         this.#resolveGroundedLocomotionStepCameraSnapshot(groundedLocomotionResult);
+      this.#recordPredictedLocalReconciliationSample();
 
       this.#groundedLocomotionAccumulatorSeconds = Math.max(
         0,
@@ -434,6 +520,7 @@ export class MetaverseUnmountedTraversalMotionState {
         cameraSnapshot,
         swimLocomotionResult
       );
+      this.#recordPredictedLocalReconciliationSample();
 
       this.#swimLocomotionAccumulatorSeconds = Math.max(
         0,
@@ -543,6 +630,62 @@ export class MetaverseUnmountedTraversalMotionState {
         this.#dependencies.config,
         deltaSeconds
       );
+  }
+
+  #recordPredictedLocalReconciliationSample(): void {
+    const sample = this.#createPredictedLocalReconciliationSample();
+
+    if (sample === null) {
+      return;
+    }
+
+    this.#predictedReconciliationSamples[
+      this.#predictedReconciliationSampleWriteIndex
+    ] = sample;
+    this.#predictedReconciliationSampleWriteIndex =
+      (this.#predictedReconciliationSampleWriteIndex + 1) %
+      predictedLocalReconciliationSampleCapacity;
+    this.#predictedReconciliationSampleCount = Math.min(
+      predictedLocalReconciliationSampleCapacity,
+      this.#predictedReconciliationSampleCount + 1
+    );
+  }
+
+  #createPredictedLocalReconciliationSample():
+    | PredictedLocalReconciliationSample
+    | null {
+    const pose = this.readLocalTraversalPoseForReconciliation();
+
+    if (pose === null) {
+      return null;
+    }
+
+    const issuedTraversalIntent =
+      this.#dependencies.localTraversalAuthorityState
+        .latestIssuedTraversalIntentSnapshot;
+    const groundedBody =
+      pose.locomotionMode === "grounded" &&
+      this.#dependencies.groundedBodyRuntime.isInitialized
+        ? this.#dependencies.groundedBodyRuntime.snapshot
+        : null;
+    const swimBody =
+      pose.locomotionMode === "swim"
+        ? this.#dependencies.surfaceLocomotionState.readSwimSnapshot()
+        : null;
+
+    return Object.freeze({
+      groundedBody,
+      inputSequence: issuedTraversalIntent?.inputSequence ?? 0,
+      issuedTraversalIntent,
+      localGrounded: groundedBody?.grounded ?? null,
+      localPredictionTick:
+        this.#dependencies.localTraversalAuthorityState.currentTick,
+      localWallClockMs: this.#dependencies.readWallClockMs(),
+      pose,
+      swimBody,
+      traversalOrientationSequence:
+        issuedTraversalIntent?.orientationSequence ?? 0
+    });
   }
 
   #resolveGroundedLocomotionStepCameraSnapshot(

@@ -76,9 +76,18 @@ export interface MetaverseTelemetrySnapshot {
     readonly extrapolatedFramePercent: number;
     readonly localReconciliation: {
       readonly lastLocalAuthorityPoseCorrectionDetail: {
+        readonly authoritativeSnapshotAgeMs: number | null;
+        readonly authoritativeSnapshotSequence: number | null;
+        readonly authoritativeTick: number | null;
         readonly authoritativeGrounded: boolean | null;
         readonly bodyStateDivergence: boolean | null;
+        readonly convergenceEpisodeStarted: boolean;
+        readonly convergenceEpisodeStartPlanarMagnitudeMeters: number | null;
+        readonly convergenceEpisodeStartVerticalMagnitudeMeters: number | null;
+        readonly convergenceEpisodeStartYawMagnitudeRadians: number | null;
         readonly groundedBodyStateDivergence: boolean | null;
+        readonly lastProcessedInputSequence: number | null;
+        readonly lastProcessedTraversalOrientationSequence: number | null;
         readonly localGrounded: boolean | null;
         readonly planarMagnitudeMeters: number | null;
         readonly planarVelocityMagnitudeUnitsPerSecond: number | null;
@@ -89,6 +98,7 @@ export interface MetaverseTelemetrySnapshot {
         readonly authoritative: {
           readonly groundedBody: MetaverseTelemetryGroundedBodySnapshot | null;
           readonly lastProcessedInputSequence: number;
+          readonly lastProcessedTraversalOrientationSequence: number;
           readonly linearVelocity: MetaverseVector3Snapshot;
           readonly locomotionMode: MetaverseLocomotionModeId;
           readonly position: MetaverseVector3Snapshot;
@@ -140,16 +150,22 @@ export interface MetaverseTelemetrySnapshot {
       readonly lastLocalAuthorityPoseCorrectionReason:
         | "none"
         | "gross-body-divergence"
-        | "gross-position-divergence";
+        | "gross-position-divergence"
+        | "gross-yaw-divergence";
       readonly lastCorrectionSource:
         | "none"
         | "mounted-vehicle-authority"
-        | "local-authority-convergence";
+        | "local-authority-convergence-episode"
+        | "local-authority-convergence-step";
       readonly lastCorrectionAgeMs: number | null;
       readonly localAuthorityPoseCorrectionCount: number;
+      readonly localAuthorityPoseConvergenceEpisodeCount: number;
+      readonly localAuthorityPoseConvergenceStepCount: number;
       readonly mountedVehicleAuthorityCorrectionCount: number;
       readonly recentCorrectionCountPast5Seconds: number;
       readonly recentLocalAuthorityPoseCorrectionCountPast5Seconds: number;
+      readonly recentLocalAuthorityPoseConvergenceEpisodeCountPast5Seconds: number;
+      readonly recentLocalAuthorityPoseConvergenceStepCountPast5Seconds: number;
       readonly recentMountedVehicleAuthorityCorrectionCountPast5Seconds: number;
       readonly totalCorrectionCount: number;
     };

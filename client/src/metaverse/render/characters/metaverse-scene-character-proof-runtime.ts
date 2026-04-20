@@ -31,7 +31,6 @@ const humanoidV2GripSocketBlendAlpha = 0.72;
 const humanoidV2PalmSocketBlendAlpha = 0.45;
 const humanoidV2BackSocketLowerOffsetMeters = 0.02;
 const humanoidV2BackSocketRearwardScale = 0.7;
-const humanoidV1BackSocketLocalPosition = new Vector3(0, 0.14, -0.08);
 const metaverseCharacterAnchorPosition = Object.freeze({
   x: 11,
   y: 0,
@@ -296,29 +295,7 @@ function synthesizeHumanoidV2BackSocket(
   );
 }
 
-function synthesizeHumanoidV1BackSocket(
-  characterScene: Group,
-  showSocketDebug: boolean,
-  nodeResolvers: Pick<
-    MetaverseCharacterProofRuntimeNodeResolvers,
-    "findBoneNode" | "upsertSyntheticSocketNode"
-  >
-): void {
-  nodeResolvers.upsertSyntheticSocketNode(
-    characterScene,
-    nodeResolvers.findBoneNode(
-      characterScene,
-      "chest",
-      "Metaverse humanoid_v1 back socket synthesis"
-    ),
-    "back_socket",
-    humanoidV1BackSocketLocalPosition,
-    showSocketDebug
-  );
-}
-
 function synthesizeRuntimeSocketNodes(
-  characterProofConfig: MetaverseCharacterProofConfig,
   characterScene: Group,
   showSocketDebug: boolean,
   heldWeaponSolveDirectionEpsilon: number,
@@ -329,28 +306,17 @@ function synthesizeRuntimeSocketNodes(
 ): void {
   characterScene.updateMatrixWorld(true);
 
-  switch (characterProofConfig.skeletonId) {
-    case "humanoid_v1":
-      synthesizeHumanoidV1BackSocket(
-        characterScene,
-        showSocketDebug,
-        nodeResolvers
-      );
-      break;
-    case "humanoid_v2":
-      synthesizeHumanoidV2PalmSockets(
-        characterScene,
-        showSocketDebug,
-        heldWeaponSolveDirectionEpsilon,
-        nodeResolvers
-      );
-      synthesizeHumanoidV2BackSocket(
-        characterScene,
-        showSocketDebug,
-        nodeResolvers
-      );
-      break;
-  }
+  synthesizeHumanoidV2PalmSockets(
+    characterScene,
+    showSocketDebug,
+    heldWeaponSolveDirectionEpsilon,
+    nodeResolvers
+  );
+  synthesizeHumanoidV2BackSocket(
+    characterScene,
+    showSocketDebug,
+    nodeResolvers
+  );
 
   characterScene.updateMatrixWorld(true);
 }
@@ -394,7 +360,6 @@ function createCharacterProofRuntime<THeldWeaponPoseRuntime>(
     | null,
   dependencies: {
     readonly createHeldWeaponPoseRuntime: (
-      skeletonId: MetaverseCharacterProofConfig["skeletonId"],
       characterScene: Group
     ) => THeldWeaponPoseRuntime | null;
   } & Pick<
@@ -404,19 +369,12 @@ function createCharacterProofRuntime<THeldWeaponPoseRuntime>(
 ): LoadedMetaverseCharacterProofRuntime<THeldWeaponPoseRuntime> {
   const anchorGroup = new Group();
   const firstPersonHeadAnchorNodes = Object.freeze(
-    (
-      skeletonId === "humanoid_v2"
-        ? [
-            dependencies.findSocketNode(characterScene, "head_socket"),
-            dependencies.findOptionalNode(characterScene, "head"),
-            dependencies.findOptionalNode(characterScene, "head_leaf"),
-            dependencies.findOptionalNode(characterScene, "neck_01")
-          ]
-        : [
-            dependencies.findSocketNode(characterScene, "head_socket"),
-            dependencies.findOptionalNode(characterScene, "neck")
-          ]
-    ).filter((node): node is Object3D => node !== null)
+    [
+      dependencies.findSocketNode(characterScene, "head_socket"),
+      dependencies.findOptionalNode(characterScene, "head"),
+      dependencies.findOptionalNode(characterScene, "head_leaf"),
+      dependencies.findOptionalNode(characterScene, "neck_01")
+    ].filter((node): node is Object3D => node !== null)
   );
   const seatSocketNode = dependencies.findSocketNode(characterScene, "seat_socket");
   const mixer = new AnimationMixer(characterScene);
@@ -441,7 +399,7 @@ function createCharacterProofRuntime<THeldWeaponPoseRuntime>(
 
   const idleAction = actionsByVocabulary.get("idle");
   const humanoidV2PistolLowerBodyActionsByVocabulary =
-    skeletonId === "humanoid_v2" && humanoidV2PistolPoseClipsByPoseId !== null
+    humanoidV2PistolPoseClipsByPoseId !== null
       ? createHumanoidV2PistolLowerBodyActionsByVocabulary(
           mixer,
           clipsByVocabulary
@@ -464,13 +422,10 @@ function createCharacterProofRuntime<THeldWeaponPoseRuntime>(
     characterId,
     clipsByVocabulary,
     firstPersonHeadAnchorNodes,
-    heldWeaponPoseRuntime: dependencies.createHeldWeaponPoseRuntime(
-      skeletonId,
-      characterScene
-    ),
+    heldWeaponPoseRuntime: dependencies.createHeldWeaponPoseRuntime(characterScene),
     humanoidV2PistolLowerBodyActionsByVocabulary,
     humanoidV2PistolPoseRuntime:
-      skeletonId === "humanoid_v2" && humanoidV2PistolPoseClipsByPoseId !== null
+      humanoidV2PistolPoseClipsByPoseId !== null
         ? createHumanoidV2PistolPoseRuntime(
             mixer,
             humanoidV2PistolPoseClipsByPoseId
@@ -488,7 +443,6 @@ export function cloneMetaverseCharacterProofRuntime<THeldWeaponPoseRuntime>(
   playerId: string,
   dependencies: {
     readonly createHeldWeaponPoseRuntime: (
-      skeletonId: MetaverseCharacterProofConfig["skeletonId"],
       characterScene: Group
     ) => THeldWeaponPoseRuntime | null;
   } & Pick<
@@ -516,7 +470,6 @@ export async function loadMetaverseCharacterProofRuntime<
   characterProofConfig: MetaverseCharacterProofConfig,
   dependencies: {
     readonly createHeldWeaponPoseRuntime: (
-      skeletonId: MetaverseCharacterProofConfig["skeletonId"],
       characterScene: Group
     ) => THeldWeaponPoseRuntime | null;
     readonly createSceneAssetLoader: () => SceneAssetLoaderLike;
@@ -542,7 +495,6 @@ export async function loadMetaverseCharacterProofRuntime<
   }
 
   synthesizeRuntimeSocketNodes(
-    characterProofConfig,
     characterAsset.scene,
     dependencies.showSocketDebug,
     dependencies.heldWeaponSolveDirectionEpsilon,
@@ -592,7 +544,6 @@ export async function loadMetaverseCharacterProofRuntime<
     | null = null;
 
   if (
-    characterProofConfig.skeletonId === "humanoid_v2" &&
     characterProofConfig.humanoidV2PistolPoseProofConfig !== null &&
     characterProofConfig.humanoidV2PistolPoseProofConfig !== undefined
   ) {

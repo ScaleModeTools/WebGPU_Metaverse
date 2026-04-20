@@ -41,6 +41,7 @@ import {
   MetaverseLocalAuthorityReconciliationState,
   type AuthoritativeLocalPlayerPoseSnapshot
 } from "../traversal/reconciliation/classes/metaverse-local-authority-reconciliation-state";
+import type { ConsumedAckedAuthoritativeLocalPlayerSample } from "../traversal/reconciliation/authoritative-local-player-reconciliation";
 import { MetaverseUnmountedSurfaceLocomotionState } from "../traversal/surface/metaverse-unmounted-surface-locomotion-state";
 import type {
   MetaverseTraversalRuntimeDependencies,
@@ -121,6 +122,7 @@ export class MetaverseTraversalRuntime {
       config,
       groundedBodyRuntime: this.#groundedBodyRuntime,
       localTraversalAuthorityState: this.#localTraversalAuthorityState,
+      readWallClockMs: dependencies.readWallClockMs ?? Date.now,
       readLocomotionMode: () => this.#locomotionMode,
       readMountedOccupancyKeepsFreeRoam: () =>
         this.#mountedOccupancyKeepsFreeRoam(),
@@ -247,6 +249,14 @@ export class MetaverseTraversalRuntime {
 
   get localAuthorityPoseCorrectionCount(): number {
     return this.#telemetryState.localAuthorityPoseCorrectionCount;
+  }
+
+  get localAuthorityPoseConvergenceEpisodeCount(): number {
+    return this.#telemetryState.localAuthorityPoseConvergenceEpisodeCount;
+  }
+
+  get localAuthorityPoseConvergenceStepCount(): number {
+    return this.#telemetryState.localAuthorityPoseConvergenceStepCount;
   }
 
   get lastLocalAuthorityPoseCorrectionReason(): LocalAuthorityPoseCorrectionReason {
@@ -464,7 +474,9 @@ export class MetaverseTraversalRuntime {
   }
 
   syncAuthoritativeLocalPlayerPose(
-    authoritativePlayerSnapshot: AuthoritativeLocalPlayerPoseSnapshot
+    authoritativePlayerSnapshot:
+      | AuthoritativeLocalPlayerPoseSnapshot
+      | ConsumedAckedAuthoritativeLocalPlayerSample
   ): void {
     this.#cameraSnapshot =
       this.#unmountedTraversalOrchestrationState

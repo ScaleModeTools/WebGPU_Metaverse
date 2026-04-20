@@ -78,7 +78,7 @@ test("createMetaversePresenceHttpTransport serializes commands and polls typed r
 
   await transport.sendCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         animationVocabulary: "idle",
@@ -106,7 +106,7 @@ test("createMetaversePresenceHttpTransport serializes commands and polls typed r
   assert.deepEqual(
     JSON.parse(String(requests[0]?.body)),
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         animationVocabulary: "idle",

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
 import { createClientModuleLoader } from "../../load-client-module.mjs";
+import { createHumanoidV2CharacterScene } from "../../metaverse-runtime-proof-slice-fixtures.mjs";
 
 let clientLoader;
 
@@ -84,87 +85,28 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
   ]);
 
   const authoredAnimationPackPath =
-    "/models/metaverse/characters/metaverse-mannequin-canonical-animations.glb";
+    "/models/metaverse/characters/mesh2motion-humanoid-canonical-animations.glb";
   const loadPaths = [];
   const warnings = [];
-  const bodyGeometry = new BoxGeometry(0.4, 1.8, 0.3);
-  const vertexCount = bodyGeometry.attributes.position.count;
-  const skinIndices = new Uint16Array(vertexCount * 4);
-  const skinWeights = new Float32Array(vertexCount * 4);
-
-  for (let index = 0; index < vertexCount; index += 1) {
-    skinIndices[index * 4] = 0;
-    skinWeights[index * 4] = 1;
-  }
-
-  bodyGeometry.setAttribute("skinIndex", new Uint16BufferAttribute(skinIndices, 4));
-  bodyGeometry.setAttribute("skinWeight", new Float32BufferAttribute(skinWeights, 4));
-
-  const rootBone = new Bone();
-  rootBone.name = "humanoid_root";
-  const hipsBone = new Bone();
-  hipsBone.name = "hips";
-  hipsBone.position.y = 0.45;
-  rootBone.add(hipsBone);
-  const spineBone = new Bone();
-  spineBone.name = "spine";
-  spineBone.position.y = 0.45;
-  hipsBone.add(spineBone);
-  const chestBone = new Bone();
-  chestBone.name = "chest";
-  chestBone.position.y = 0.45;
-  spineBone.add(chestBone);
-  const neckBone = new Bone();
-  neckBone.name = "neck";
-  neckBone.position.y = 0.25;
-  chestBone.add(neckBone);
-  const socketNames = [
-    "head_socket",
-    "hand_l_socket",
-    "hand_r_socket",
-    "hip_socket",
-    "seat_socket"
-  ];
-  const socketBones = socketNames.map((socketName) => {
-    const socketBone = new Bone();
-    socketBone.name = socketName;
-    return socketBone;
+  const { characterScene, socketNames } = createHumanoidV2CharacterScene({
+    Bone,
+    BoxGeometry,
+    Float32BufferAttribute,
+    Group,
+    MeshStandardMaterial,
+    Skeleton,
+    SkinnedMesh,
+    Uint16BufferAttribute,
+    Vector3
   });
 
-  neckBone.add(socketBones[0]);
-  chestBone.add(socketBones[1], socketBones[2]);
-  hipsBone.add(socketBones[3], socketBones[4]);
-  socketBones[0].position.y = 0.18;
-  socketBones[1].position.x = -0.35;
-  socketBones[2].position.x = 0.35;
-  socketBones[3].position.set(0.2, -0.08, -0.08);
-  socketBones[4].position.set(0, 0, -0.08);
-
-  const skinnedMesh = new SkinnedMesh(
-    bodyGeometry,
-    new MeshStandardMaterial({ color: 0xa8b8d1 })
-  );
-  const characterScene = new Group();
-  const skeleton = new Skeleton([
-    rootBone,
-    hipsBone,
-    spineBone,
-    chestBone,
-    neckBone,
-    ...socketBones
-  ]);
-
-  skinnedMesh.add(rootBone);
-  skinnedMesh.bind(skeleton);
-  characterScene.add(skinnedMesh);
-
   const idleClip = new AnimationClip("idle", -1, [
-    new VectorKeyframeTrack("humanoid_root.position", [0, 1], [0, 0, 0, 0, 0.05, 0]),
-    new QuaternionKeyframeTrack("chest.quaternion", [0, 1], [
+    new VectorKeyframeTrack("root.position", [0, 1], [0, 0, 0, 0, 0.05, 0]),
+    new QuaternionKeyframeTrack("spine_03.quaternion", [0, 1], [
       ...new Quaternion().toArray(),
       ...new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), 0.08).toArray()
     ]),
-    new QuaternionKeyframeTrack("hand_r_socket.quaternion", [0, 1], [
+    new QuaternionKeyframeTrack("hand_r.quaternion", [0, 1], [
       ...new Quaternion().toArray(),
       ...new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), 0.3).toArray()
     ])
@@ -197,20 +139,23 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
       heldMount: {
         attachmentSocketNodeName: "metaverse_service_pistol_trigger_hand_r_socket",
         offHandSupportPointId: "hand_l_support",
-        socketName: "hand_r_socket"
+        socketName: "grip_r_socket"
       },
       label: "Metaverse service pistol",
       modelPath: "/models/metaverse/attachments/metaverse-service-pistol.gltf",
+      modules: [],
       mountedHolsterMount: {
         attachmentSocketNodeName: "metaverse_service_pistol_back_socket",
         socketName: "back_socket"
       },
       supportPoints: [
         {
+          authoringNodeName: null,
           localPosition: { x: 0.02, y: -0.08, z: 0.01 },
           supportPointId: "hand_l_support"
         },
         {
+          authoringNodeName: null,
           localPosition: { x: 0.02, y: -0.08, z: -0.01 },
           supportPointId: "hand_r_support"
         }
@@ -244,10 +189,10 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
           vocabulary: "seated"
         }
       ],
-      characterId: "metaverse-mannequin-v1",
-      label: "Metaverse mannequin",
-      modelPath: "/models/metaverse/characters/metaverse-mannequin.gltf",
-      skeletonId: "humanoid_v1",
+      characterId: "mesh2motion-humanoid-v1",
+      label: "Mesh2Motion humanoid",
+      modelPath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
+      skeletonId: "humanoid_v2",
       socketNames
     },
     createSceneAssetLoader: () => ({
@@ -282,11 +227,11 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
   await sceneRuntime.boot();
 
   const characterRoot = sceneRuntime.scene.getObjectByName(
-    "metaverse_character/metaverse-mannequin-v1"
+    "metaverse_character/mesh2motion-humanoid-v1"
   );
 
   assert.deepEqual(loadPaths, [
-    "/models/metaverse/characters/metaverse-mannequin.gltf",
+    "/models/metaverse/characters/mesh2motion-humanoid.glb",
     authoredAnimationPackPath,
     "/models/metaverse/attachments/metaverse-service-pistol.gltf"
   ]);
@@ -315,8 +260,12 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
     },
     [
       {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
+        aimCamera: null,
+        look: { pitchRadians: 0, yawRadians: 0 },
+        mountedOccupancy: null,
         playerId: "remote-pilot-2",
+        poseSyncMode: "scene-arrival-smoothed",
         presentation: {
           animationVocabulary: "walk",
           position: { x: -1.5, y: 0, z: -6.2 },
@@ -342,7 +291,7 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
   );
 
   assert.ok(attachmentRoot);
-  assert.equal(attachmentRoot.parent?.name, "hand_r_socket");
+  assert.equal(attachmentRoot.parent?.name, "grip_r_socket");
   assert.ok(
     attachmentRoot.position.distanceTo(new Vector3(0.01, -0.02, 0.03)) < 0.000001
   );
@@ -391,8 +340,12 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
     },
     [
       {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
+        aimCamera: null,
+        look: { pitchRadians: 0, yawRadians: 0 },
+        mountedOccupancy: null,
         playerId: "remote-pilot-2",
+        poseSyncMode: "scene-arrival-smoothed",
         presentation: {
           animationVocabulary: "walk",
           position: { x: -1.5, y: 0, z: -6.2 },
@@ -439,8 +392,12 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
     },
     [
       {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
+        aimCamera: null,
+        look: { pitchRadians: 0, yawRadians: 0 },
+        mountedOccupancy: null,
         playerId: "remote-pilot-2",
+        poseSyncMode: "scene-arrival-smoothed",
         presentation: {
           animationVocabulary: "walk",
           position: { x: -1.5, y: 0, z: -6.2 },
@@ -465,7 +422,7 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
     }
   );
 
-  assert.equal(attachmentRoot.parent?.name, "hand_r_socket");
+  assert.equal(attachmentRoot.parent?.name, "grip_r_socket");
   assert.ok(
     attachmentRoot.position.distanceTo(new Vector3(0.01, -0.02, 0.03)) < 0.000001
   );
@@ -487,8 +444,12 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
     },
     [
       {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
+        aimCamera: null,
+        look: { pitchRadians: 0, yawRadians: 0 },
+        mountedOccupancy: null,
         playerId: "remote-pilot-2",
+        poseSyncMode: "scene-arrival-smoothed",
         presentation: {
           animationVocabulary: "walk",
           position: { x: -1.5, y: 0, z: -6.2 },
@@ -498,13 +459,13 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
     ]
   );
 
-  assert.equal(attachmentRoot.parent?.name, "hand_r_socket");
+  assert.equal(attachmentRoot.parent?.name, "grip_r_socket");
   assert.ok(
     attachmentRoot.position.distanceTo(new Vector3(0.01, -0.02, 0.03)) < 0.000001
   );
 
   const remoteCharacterRoot = sceneRuntime.scene.getObjectByName(
-    "metaverse_character/metaverse-mannequin-v1/remote-pilot-2"
+    "metaverse_character/mesh2motion-humanoid-v1/remote-pilot-2"
   );
 
   assert.ok(remoteCharacterRoot);
@@ -534,8 +495,12 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
     },
     [
       {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
+        aimCamera: null,
+        look: { pitchRadians: 0, yawRadians: 0 },
+        mountedOccupancy: null,
         playerId: "remote-pilot-2",
+        poseSyncMode: "scene-arrival-smoothed",
         presentation: {
           animationVocabulary: "walk",
           position: { x: 1.2, y: 0, z: -4.8 },
@@ -581,8 +546,12 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
       },
       [
         {
-          characterId: "metaverse-mannequin-v1",
-          playerId: "remote-pilot-2",
+          characterId: "mesh2motion-humanoid-v1",
+          aimCamera: null,
+        look: { pitchRadians: 0, yawRadians: 0 },
+        mountedOccupancy: null,
+        playerId: "remote-pilot-2",
+        poseSyncMode: "scene-arrival-smoothed",
           presentation: {
             animationVocabulary: "walk",
             position: { x: 1.2, y: 0, z: -4.8 },
@@ -603,13 +572,13 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
 
   sceneRuntime.scene.updateMatrixWorld(true);
 
-  const handSocket = sceneRuntime.scene.getObjectByName("hand_r_socket");
-  assert.ok(handSocket);
+  const gripSocket = sceneRuntime.scene.getObjectByName("grip_r_socket");
+  assert.ok(gripSocket);
   const initialAttachmentQuaternion = attachmentRoot.getWorldQuaternion(
     new Quaternion()
   );
 
-  handSocket.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), 0.3);
+  gripSocket.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), 0.3);
   sceneRuntime.scene.updateMatrixWorld(true);
 
   const nextAttachmentQuaternion = attachmentRoot.getWorldQuaternion(
@@ -631,7 +600,7 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
   );
 
   assert.equal(characterRoot.visible, false);
-  assert.equal(attachmentRoot.parent?.name, "hand_r_socket");
+  assert.equal(attachmentRoot.parent?.name, "grip_r_socket");
   assert.ok(
     attachmentRoot.position.distanceTo(new Vector3(0.01, -0.02, 0.03)) < 0.000001
   );
@@ -644,7 +613,7 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
   assert.ok(initialAttachmentQuaternion.angleTo(nextAttachmentQuaternion) > 0.001);
   assert.equal(
     sceneRuntime.scene.getObjectByName(
-      "metaverse_character/metaverse-mannequin-v1/remote-pilot-2"
+      "metaverse_character/mesh2motion-humanoid-v1/remote-pilot-2"
     ),
     undefined
   );

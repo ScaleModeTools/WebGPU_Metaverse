@@ -50,7 +50,7 @@ export class FakeMetaversePresenceClient {
           username: this.localUsername
         },
         {
-          characterId: "metaverse-mannequin-v1",
+          characterId: "mesh2motion-humanoid-v1",
           playerId: this.remotePlayerId,
           pose: {
             animationVocabulary: "walk",

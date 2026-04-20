@@ -74,7 +74,7 @@ test("MetaverseAuthoritativeWorldRuntime simulates unmounted grounded and swim t
 
   swimRuntime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: swimPlayerId,
       pose: {
         position: authoredWaterBayOpenWaterSpawn,

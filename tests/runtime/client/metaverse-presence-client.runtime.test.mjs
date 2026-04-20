@@ -41,7 +41,7 @@ function createRosterEvent({
   return createMetaversePresenceRosterEvent({
     players: [
       {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         playerId: localPlayerId,
         pose: {
           animationVocabulary: x === 0 ? "idle" : "walk",
@@ -60,7 +60,7 @@ function createRosterEvent({
         ? []
         : [
             {
-              characterId: "metaverse-mannequin-v1",
+              characterId: "mesh2motion-humanoid-v1",
               playerId: remotePlayerId,
               pose: {
                 animationVocabulary: "walk",
@@ -166,7 +166,7 @@ test("MetaversePresenceClient joins, polls roster snapshots, syncs pose, and lea
   );
 
   const joinedSnapshot = await client.ensureJoined({
-    characterId: "metaverse-mannequin-v1",
+    characterId: "mesh2motion-humanoid-v1",
     playerId,
     pose: {
       animationVocabulary: "idle",
@@ -188,7 +188,7 @@ test("MetaversePresenceClient joins, polls roster snapshots, syncs pose, and lea
   assert.deepEqual(
     requests[0]?.command,
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         animationVocabulary: "idle",
@@ -317,7 +317,7 @@ test("MetaversePresenceClient marks membership loss when the local player disapp
   );
 
   await client.ensureJoined({
-    characterId: "metaverse-mannequin-v1",
+    characterId: "mesh2motion-humanoid-v1",
     playerId,
     pose: {
       animationVocabulary: "idle",
@@ -441,7 +441,7 @@ test("MetaversePresenceClient rejoins automatically after an unknown-player poll
   );
 
   await client.ensureJoined({
-    characterId: "metaverse-mannequin-v1",
+    characterId: "mesh2motion-humanoid-v1",
     playerId,
     pose: {
       animationVocabulary: "idle",
@@ -467,7 +467,7 @@ test("MetaversePresenceClient rejoins automatically after an unknown-player poll
   assert.deepEqual(
     requests[2]?.command,
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         animationVocabulary: "idle",

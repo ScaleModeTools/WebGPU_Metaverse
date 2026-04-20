@@ -13,16 +13,18 @@ import type {
   MetaverseRemoteEnvironmentBodyPresentationSnapshot,
   MetaverseRemoteVehiclePresentationSnapshot
 } from "../types/presentation";
-import type { AckedAuthoritativeLocalPlayerPose } from "../traversal/reconciliation/authoritative-local-player-reconciliation";
+import type {
+  ConsumedAckedAuthoritativeLocalPlayerSample
+} from "../traversal/reconciliation/authoritative-local-player-reconciliation";
 
 interface MetaverseAuthoritativeWorldSyncRemoteWorldRuntime {
   readonly remoteEnvironmentBodyPresentations:
     readonly MetaverseRemoteEnvironmentBodyPresentationSnapshot[];
   readonly remoteVehiclePresentations:
     readonly MetaverseRemoteVehiclePresentationSnapshot[];
-  consumeFreshAckedAuthoritativeLocalPlayerPose(
+  consumeFreshAckedAuthoritativeLocalPlayerSample(
     maxAuthoritativeSnapshotAgeMs: number
-  ): AckedAuthoritativeLocalPlayerPose | null;
+  ): ConsumedAckedAuthoritativeLocalPlayerSample | null;
   readFreshAuthoritativeLocalPlayerSnapshot(
     maxAuthoritativeSnapshotAgeMs: number
   ): MetaverseRealtimePlayerSnapshot | null;
@@ -47,7 +49,7 @@ interface MetaverseAuthoritativeWorldSyncTraversalRuntime {
     seatId: string
   ): MountedEnvironmentSnapshot | null;
   syncAuthoritativeLocalPlayerPose(
-    authoritativePlayerSnapshot: AckedAuthoritativeLocalPlayerPose
+    authoritativePlayerSnapshot: ConsumedAckedAuthoritativeLocalPlayerSample
   ): void;
   syncAuthoritativeVehiclePose(
     environmentAssetId: string,
@@ -251,7 +253,7 @@ export class MetaverseAuthoritativeWorldSync {
     }
 
     const authoritativeLocalPlayerPose =
-      this.#remoteWorldRuntime.consumeFreshAckedAuthoritativeLocalPlayerPose(
+      this.#remoteWorldRuntime.consumeFreshAckedAuthoritativeLocalPlayerSample(
         metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
       );
 

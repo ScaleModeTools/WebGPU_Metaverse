@@ -51,7 +51,7 @@ test("createMetaverseWorldWebTransportTransport sends explicit realtime world sn
               world: {
                 players: [
                   {
-                    characterId: "metaverse-mannequin-v1",
+                    characterId: "mesh2motion-humanoid-v1",
                     linearVelocity: {
                       x: 0,
                       y: 0,

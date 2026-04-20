@@ -91,6 +91,20 @@ function createCorrectionSnapshotStub() {
   });
 }
 
+function createConvergenceConfig(overrides = {}) {
+  return {
+    convergenceMaxPositionStepMeters: 0.2,
+    convergenceMaxYawStepRadians: 0.08,
+    convergenceSettlePlanarDistanceMeters: 0.05,
+    convergenceSettleVerticalDistanceMeters: 0.05,
+    convergenceSettleYawRadians: 0.02,
+    convergenceStartPlanarDistanceMeters: 1.25,
+    convergenceStartVerticalDistanceMeters: 1.5,
+    convergenceStartYawRadians: 0.12,
+    ...overrides
+  };
+}
+
 before(async () => {
   clientLoader = await createClientModuleLoader();
 });
@@ -126,10 +140,7 @@ test("MetaverseLocalAuthorityReconciliationState ignores routine grounded drift"
     createLocalAuthorityPoseCorrectionSnapshot() {
       return createCorrectionSnapshotStub();
     },
-    convergenceMaxPositionStepMeters: 0.2,
-    convergenceMaxYawStepRadians: 0.08,
-    convergenceSettleDistanceMeters: 0.05,
-    convergenceStartDistanceMeters: 2.5,
+    ...createConvergenceConfig(),
     localGroundedBodySnapshot: createGroundedBodySnapshot(),
     localSwimBodySnapshot: null,
     localTraversalPose: Object.freeze({
@@ -182,10 +193,7 @@ test("MetaverseLocalAuthorityReconciliationState preserves a locally predicted a
     createLocalAuthorityPoseCorrectionSnapshot() {
       return createCorrectionSnapshotStub();
     },
-    convergenceMaxPositionStepMeters: 0.2,
-    convergenceMaxYawStepRadians: 0.08,
-    convergenceSettleDistanceMeters: 0.05,
-    convergenceStartDistanceMeters: 2.5,
+    ...createConvergenceConfig(),
     localGroundedBodySnapshot: createGroundedBodySnapshot({
       grounded: false,
       position: freezeVector3(0, 1.2, 24)
@@ -236,10 +244,7 @@ test("MetaverseLocalAuthorityReconciliationState starts bounded convergence on g
     createLocalAuthorityPoseCorrectionSnapshot() {
       return createCorrectionSnapshotStub();
     },
-    convergenceMaxPositionStepMeters: 0.2,
-    convergenceMaxYawStepRadians: 0.08,
-    convergenceSettleDistanceMeters: 0.05,
-    convergenceStartDistanceMeters: 2.5,
+    ...createConvergenceConfig(),
     localGroundedBodySnapshot: createGroundedBodySnapshot(),
     localSwimBodySnapshot: null,
     localGrounded: true,
@@ -276,7 +281,58 @@ test("MetaverseLocalAuthorityReconciliationState starts bounded convergence on g
   );
 });
 
-test("MetaverseLocalAuthorityReconciliationState leaves mixed planar and vertical drift below the convergence start threshold alone", async () => {
+test("MetaverseLocalAuthorityReconciliationState starts bounded convergence on gross yaw-only divergence", async () => {
+  const { MetaverseLocalAuthorityReconciliationState } = await clientLoader.load(
+    "/src/metaverse/traversal/reconciliation/classes/metaverse-local-authority-reconciliation-state.ts"
+  );
+  const reconciliationState =
+    new MetaverseLocalAuthorityReconciliationState();
+  const appliedInputs = [];
+  const authoritativeYawRadians = 0.3;
+
+  const appliedCorrection = reconciliationState.syncAuthoritativeLocalPlayerPose({
+    applyAuthoritativeUnmountedPose(input) {
+      appliedInputs.push(input);
+    },
+    authoritativePlayerSnapshot: Object.freeze({
+      groundedBody: createGroundedBodySnapshot({
+        yawRadians: authoritativeYawRadians
+      }),
+      lastProcessedInputSequence: 7,
+      linearVelocity: freezeVector3(0, 0, 0),
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: freezeVector3(0, 0, 24),
+      traversalAuthority: createGroundedTraversalAuthoritySnapshot(),
+      yawRadians: authoritativeYawRadians
+    }),
+    createLocalAuthorityPoseCorrectionSnapshot() {
+      return createCorrectionSnapshotStub();
+    },
+    ...createConvergenceConfig(),
+    localGroundedBodySnapshot: createGroundedBodySnapshot(),
+    localSwimBodySnapshot: null,
+    localGrounded: true,
+    localTraversalPose: Object.freeze({
+      linearVelocity: freezeVector3(0, 0, 0),
+      locomotionMode: "grounded",
+      position: freezeVector3(0, 0, 24),
+      yawRadians: 0
+    })
+  });
+
+  assert.equal(appliedCorrection, true);
+  assert.equal(appliedInputs.length, 1);
+  assert.equal(appliedInputs[0]?.positionBlendAlpha, 1);
+  assert.ok(appliedInputs[0]?.yawBlendAlpha < 0.3);
+  assert.equal(reconciliationState.localAuthorityPoseCorrectionCount, 1);
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionReason,
+    "gross-yaw-divergence"
+  );
+});
+
+test("MetaverseLocalAuthorityReconciliationState leaves routine planar and vertical drift below the convergence start thresholds alone", async () => {
   const { MetaverseLocalAuthorityReconciliationState } = await clientLoader.load(
     "/src/metaverse/traversal/reconciliation/classes/metaverse-local-authority-reconciliation-state.ts"
   );
@@ -290,23 +346,20 @@ test("MetaverseLocalAuthorityReconciliationState leaves mixed planar and vertica
     },
     authoritativePlayerSnapshot: Object.freeze({
       groundedBody: createGroundedBodySnapshot({
-        position: freezeVector3(1, 1.78, 24)
+        position: freezeVector3(0.2, 1.2, 24)
       }),
       lastProcessedInputSequence: 0,
       linearVelocity: freezeVector3(0, 0, 0),
       locomotionMode: "grounded",
       mountedOccupancy: null,
-      position: freezeVector3(1, 1.78, 24),
+      position: freezeVector3(0.2, 1.2, 24),
       traversalAuthority: createGroundedTraversalAuthoritySnapshot(),
       yawRadians: 0
     }),
     createLocalAuthorityPoseCorrectionSnapshot() {
       return createCorrectionSnapshotStub();
     },
-    convergenceMaxPositionStepMeters: 0.2,
-    convergenceMaxYawStepRadians: 0.08,
-    convergenceSettleDistanceMeters: 0.05,
-    convergenceStartDistanceMeters: 2.5,
+    ...createConvergenceConfig(),
     localGroundedBodySnapshot: createGroundedBodySnapshot(),
     localSwimBodySnapshot: null,
     localTraversalPose: Object.freeze({
@@ -391,10 +444,7 @@ test("MetaverseLocalAuthorityReconciliationState converges only on gross diverge
     createLocalAuthorityPoseCorrectionSnapshot() {
       return correctionSnapshot;
     },
-    convergenceMaxPositionStepMeters: 0.2,
-    convergenceMaxYawStepRadians: 0.08,
-    convergenceSettleDistanceMeters: 0.05,
-    convergenceStartDistanceMeters: 2.5,
+    ...createConvergenceConfig(),
     localGroundedBodySnapshot: createGroundedBodySnapshot(),
     localSwimBodySnapshot: null,
     localTraversalPose: Object.freeze({
@@ -469,10 +519,7 @@ test("MetaverseLocalAuthorityReconciliationState converges gross swim divergence
     createLocalAuthorityPoseCorrectionSnapshot() {
       return createCorrectionSnapshotStub();
     },
-    convergenceMaxPositionStepMeters: 0.2,
-    convergenceMaxYawStepRadians: 0.08,
-    convergenceSettleDistanceMeters: 0.05,
-    convergenceStartDistanceMeters: 2.5,
+    ...createConvergenceConfig(),
     localGroundedBodySnapshot: null,
     localSwimBodySnapshot: createSwimBodySnapshot({
       contact: Object.freeze({

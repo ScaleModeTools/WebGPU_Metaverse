@@ -85,7 +85,7 @@ function createAuthoritativeRuntime() {
 function joinSurfacePlayer(runtime, playerId, username, poseOverrides = {}) {
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         position: {
@@ -427,7 +427,7 @@ test("MetaverseAuthoritativeWorldRuntime simulates grounded jump ascent, descent
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         position: {
@@ -611,7 +611,7 @@ test("MetaverseAuthoritativeWorldRuntime does not let snap-to-ground clip the fi
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         position: {
@@ -673,7 +673,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps a grounded-spawn jump airborne be
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         position: {
@@ -840,7 +840,7 @@ test("MetaverseAuthoritativeWorldRuntime accepts a grounded jump when shared spa
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         position: {
@@ -896,7 +896,7 @@ test("MetaverseAuthoritativeWorldRuntime briefly buffers an airborne jump edge b
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         position: {

@@ -61,7 +61,7 @@ test("createMetaversePresenceWebTransportTransport sends explicit presence reque
 
   await transport.sendCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         position: {

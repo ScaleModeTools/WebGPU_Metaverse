@@ -89,9 +89,8 @@ export class MetaverseSceneInteractivePresentationState {
         const loadedCharacterProofRuntime = await loadMetaverseCharacterProofRuntime(
           characterProofConfig,
           {
-            createHeldWeaponPoseRuntime: (skeletonId, characterScene) =>
+            createHeldWeaponPoseRuntime: (characterScene) =>
               createHeldWeaponPoseRuntime(
-                skeletonId,
                 characterScene,
                 heldWeaponPoseRuntimeNodeResolvers
               ),
@@ -118,9 +117,8 @@ export class MetaverseSceneInteractivePresentationState {
         const loadedCharacterProofRuntime = await loadMetaverseCharacterProofRuntime(
           characterProofConfig,
           {
-            createHeldWeaponPoseRuntime: (skeletonId, characterScene) =>
+            createHeldWeaponPoseRuntime: (characterScene) =>
               createHeldWeaponPoseRuntime(
-                skeletonId,
                 characterScene,
                 heldWeaponPoseRuntimeNodeResolvers
               ),

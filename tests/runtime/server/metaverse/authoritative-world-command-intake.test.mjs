@@ -83,7 +83,7 @@ test("MetaverseAuthoritativeWorldCommandIntake routes presence commands through 
   assert.equal(
     commandIntake.acceptPresenceCommand(
       createMetaverseJoinPresenceCommand({
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         playerId,
         pose: {
           animationVocabulary: "idle",

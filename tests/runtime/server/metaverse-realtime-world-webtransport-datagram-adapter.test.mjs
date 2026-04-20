@@ -42,7 +42,7 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards driver-control 
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         animationVocabulary: "idle",
@@ -148,7 +148,7 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards traversal-inten
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         position: {
@@ -218,7 +218,7 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards player-look dat
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         locomotionMode: "mounted",
@@ -284,7 +284,7 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter binds the session to the
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: firstPlayerId,
       pose: {
         position: {

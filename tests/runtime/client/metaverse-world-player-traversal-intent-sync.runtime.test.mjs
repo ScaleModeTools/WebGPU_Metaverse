@@ -176,7 +176,7 @@ function createWorldEvent({
     world: {
       players: [
         {
-          characterId: "metaverse-mannequin-v1",
+          characterId: "mesh2motion-humanoid-v1",
           jumpDebug:
             authoritativeJumpActionSequence > 0
               ? {

@@ -15,6 +15,7 @@ import type {
   GameplaySessionMode
 } from "@webgpu-metaverse/shared";
 
+import { metaverseActiveFullBodyCharacterAssetId } from "@/assets/config/character-model-manifest";
 import { DuckHuntLaunchPanel } from "../../experiences/duck-hunt/components/duck-hunt-launch-panel";
 import { ImmersiveStageFrame } from "../../ui/components/immersive-stage-frame";
 import { Button } from "@/components/ui/button";
@@ -140,7 +141,7 @@ export function MetaverseStageScreen({
     () => {
       const localPlayerIdentity = createMetaverseLocalPlayerIdentity(
         username,
-        characterProofConfig?.characterId ?? "metaverse-mannequin-v1"
+        characterProofConfig?.characterId ?? metaverseActiveFullBodyCharacterAssetId
       );
 
       return new WebGpuMetaverseRuntime(createMetaverseRuntimeConfig(bundleId), {

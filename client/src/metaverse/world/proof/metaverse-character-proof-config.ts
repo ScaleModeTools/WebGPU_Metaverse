@@ -11,16 +11,23 @@ import {
   characterModelManifest,
   metaverseActiveFullBodyCharacterAssetId
 } from "@/assets/config/character-model-manifest";
+import { weaponArchetypeManifest } from "@/assets/config/weapon-archetype-manifest";
+import { weaponModuleManifest } from "@/assets/config/weapon-module-manifest";
 import {
   animationVocabularyIds,
   canonicalAnimationClipNamesByVocabulary
 } from "@/assets/types/animation-clip-manifest";
-import type { SkeletonId, SocketId } from "@/assets/types/asset-socket";
+import type { SocketId } from "@/assets/types/asset-socket";
 import type {
   AttachmentMountSocketDescriptor,
   AttachmentOffHandSupportPointIdBySocketId,
   AttachmentSupportPointDescriptor
 } from "@/assets/types/attachment-asset-manifest";
+import type {
+  WeaponArchetypeDescriptor,
+  WeaponModuleAssetDescriptor,
+  WeaponModuleSlotId
+} from "@/assets/types/weapon-builder-manifest";
 import type {
   MetaverseAttachmentProofConfig,
   MetaverseCharacterProofConfig
@@ -28,32 +35,17 @@ import type {
 
 import { resolveMetaverseProofLodModelPath } from "./resolve-metaverse-proof-lod-model-path";
 
-function isSupportedFullBodySkeleton(skeleton: SkeletonId): boolean {
-  switch (skeleton) {
-    case "humanoid_v1":
-    case "humanoid_v2":
-      return true;
-  }
-
-  return false;
-}
-
 function resolveHeldAttachmentSocketName(
-  skeletonId: SkeletonId,
   socketId: SocketId
 ): MetaverseAttachmentProofConfig["heldMount"]["socketName"] {
-  if (skeletonId === "humanoid_v2") {
-    switch (socketId) {
-      case "hand_l_socket":
-        return "grip_l_socket";
-      case "hand_r_socket":
-        return "grip_r_socket";
-      default:
-        return socketId;
-    }
+  switch (socketId) {
+    case "hand_l_socket":
+      return "grip_l_socket";
+    case "hand_r_socket":
+      return "grip_r_socket";
+    default:
+      return socketId;
   }
-
-  return socketId;
 }
 
 function resolveAttachmentSupportPoints(
@@ -86,7 +78,18 @@ function resolveAttachmentSupportPoints(
         );
       }
 
+      const authoringNodeName =
+        supportPoint.authoringNodeName === null ||
+        supportPoint.authoringNodeName === undefined
+          ? null
+          : resolveAttachmentNodeName(
+              attachmentLabel,
+              supportPoint.authoringNodeName,
+              `support point ${supportPoint.supportPointId} authoring node name`
+            );
+
       return Object.freeze({
+        authoringNodeName,
         localPosition: Object.freeze({
           x: supportPoint.localPosition.x,
           y: supportPoint.localPosition.y,
@@ -96,6 +99,79 @@ function resolveAttachmentSupportPoints(
       });
     })
   );
+}
+
+function resolveWeaponDefaultModuleProofConfigs(
+  weaponDescriptor: WeaponArchetypeDescriptor
+): MetaverseAttachmentProofConfig["modules"] {
+  const moduleSocketsBySlotId = new Map<
+    WeaponModuleSlotId,
+    WeaponArchetypeDescriptor["moduleSockets"][number]
+  >();
+
+  for (const moduleSocket of weaponDescriptor.moduleSockets) {
+    if (moduleSocketsBySlotId.has(moduleSocket.slotId)) {
+      throw new Error(
+        `Metaverse weapon ${weaponDescriptor.label} has duplicate module socket ${moduleSocket.slotId}.`
+      );
+    }
+
+    if (moduleSocket.required && moduleSocket.defaultModuleId === null) {
+      throw new Error(
+        `Metaverse weapon ${weaponDescriptor.label} requires a default module for ${moduleSocket.slotId}.`
+      );
+    }
+
+    moduleSocketsBySlotId.set(moduleSocket.slotId, moduleSocket);
+  }
+
+  const defaultModuleProofConfigs: MetaverseAttachmentProofConfig["modules"][number][] =
+    [];
+
+  for (const moduleSocket of weaponDescriptor.moduleSockets) {
+    const defaultModuleId = moduleSocket.defaultModuleId;
+
+    if (defaultModuleId === null) {
+      continue;
+    }
+
+    const moduleDescriptor = weaponModuleManifest.modules.find(
+      (module) => module.id === defaultModuleId
+    ) as WeaponModuleAssetDescriptor | undefined;
+
+    if (moduleDescriptor === undefined) {
+      throw new Error(
+        `Metaverse weapon ${weaponDescriptor.label} references unknown default module ${defaultModuleId}.`
+      );
+    }
+
+    if (!moduleDescriptor.compatibleFamilies.includes(weaponDescriptor.family)) {
+      throw new Error(
+        `Metaverse weapon ${weaponDescriptor.label} default module ${moduleDescriptor.label} is incompatible with ${weaponDescriptor.family}.`
+      );
+    }
+
+    if (moduleDescriptor.slotId !== moduleSocket.slotId) {
+      throw new Error(
+        `Metaverse weapon ${weaponDescriptor.label} default module ${moduleDescriptor.label} targets ${moduleDescriptor.slotId}, not ${moduleSocket.slotId}.`
+      );
+    }
+
+    defaultModuleProofConfigs.push(
+      Object.freeze({
+        label: moduleDescriptor.label,
+        modelPath: resolveMetaverseProofLodModelPath(moduleDescriptor.model),
+        moduleId: moduleDescriptor.id,
+        socketNodeName: resolveAttachmentNodeName(
+          weaponDescriptor.label,
+          moduleSocket.socketNodeName,
+          `module socket ${moduleSocket.slotId} node name`
+        )
+      })
+    );
+  }
+
+  return Object.freeze(defaultModuleProofConfigs);
 }
 
 function resolveAttachmentNodeName(
@@ -194,12 +270,6 @@ function resolveMetaverseCharacterProofConfig(): MetaverseCharacterProofConfig {
     );
   }
 
-  if (!isSupportedFullBodySkeleton(characterDescriptor.skeleton)) {
-    throw new Error(
-      `Metaverse full-body proof character ${characterDescriptor.label} must use a supported humanoid skeleton.`
-    );
-  }
-
   if (!characterDescriptor.presentationModes.some((mode) => mode === "full-body")) {
     throw new Error(
       `Metaverse full-body proof character ${characterDescriptor.label} must expose full-body presentation mode.`
@@ -274,13 +344,10 @@ function resolveMetaverseCharacterProofConfig(): MetaverseCharacterProofConfig {
       })
     ),
     characterId: characterDescriptor.id,
-    humanoidV2PistolPoseProofConfig:
-      characterDescriptor.skeleton === "humanoid_v2"
-        ? Object.freeze({
-            clipNamesByPoseId: humanoidV2PistolAimClipNamesByPoseId,
-            sourcePath: humanoidV2PistolAnimationSourcePath
-          })
-        : null,
+    humanoidV2PistolPoseProofConfig: Object.freeze({
+      clipNamesByPoseId: humanoidV2PistolAimClipNamesByPoseId,
+      sourcePath: humanoidV2PistolAnimationSourcePath
+    }),
     label: characterDescriptor.label,
     modelPath: resolveMetaverseProofLodModelPath(characterDescriptor.renderModel),
     skeletonId: characterDescriptor.skeleton,
@@ -329,6 +396,16 @@ function resolveMetaverseAttachmentProofConfig(
     );
   }
 
+  const weaponDescriptor = weaponArchetypeManifest.archetypes.find(
+    (weapon) => weapon.id === attachmentDescriptor.id
+  ) as WeaponArchetypeDescriptor | undefined;
+
+  if (weaponDescriptor === undefined) {
+    throw new Error(
+      `Metaverse weapon manifest is missing attachment ${attachmentDescriptor.id}.`
+    );
+  }
+
   const resolvedSupportPoints = resolveAttachmentSupportPoints(
     attachmentDescriptor.label,
     attachmentDescriptor.supportPoints
@@ -342,6 +419,15 @@ function resolveMetaverseAttachmentProofConfig(
         attachmentDescriptor.heldMount,
         attachmentDescriptor.defaultSocketId
       ),
+      forwardReferenceNodeName:
+        attachmentDescriptor.heldMount.forwardReferenceNodeName === null ||
+        attachmentDescriptor.heldMount.forwardReferenceNodeName === undefined
+          ? null
+          : resolveAttachmentNodeName(
+              attachmentDescriptor.label,
+              attachmentDescriptor.heldMount.forwardReferenceNodeName,
+              "held forward reference node name"
+            ),
       offHandSupportPointId: resolveOffHandSupportPointId(
         attachmentDescriptor.label,
         resolvedSupportPoints,
@@ -349,12 +435,12 @@ function resolveMetaverseAttachmentProofConfig(
         attachmentDescriptor.defaultSocketId
       ),
       socketName: resolveHeldAttachmentSocketName(
-        characterDescriptor.skeleton,
         attachmentDescriptor.defaultSocketId
       )
     }),
     label: attachmentDescriptor.label,
     modelPath: resolveMetaverseProofLodModelPath(attachmentDescriptor.renderModel),
+    modules: resolveWeaponDefaultModuleProofConfigs(weaponDescriptor),
     mountedHolsterMount:
       attachmentDescriptor.mountedHolster === null
         ? null

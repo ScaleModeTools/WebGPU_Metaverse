@@ -41,7 +41,7 @@ test("MetaverseRemoteWorldConnectionLifecycle swaps client subscriptions cleanly
       return nextClient;
     },
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username
     },
@@ -97,7 +97,7 @@ test("MetaverseRemoteWorldConnectionLifecycle only connects once until the activ
   const lifecycle = new MetaverseRemoteWorldConnectionLifecycle({
     createMetaverseWorldClient: () => worldClient,
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username
     },

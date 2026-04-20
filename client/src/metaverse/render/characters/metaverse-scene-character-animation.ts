@@ -222,7 +222,6 @@ export function resolveHeldCharacterAnimationVocabulary(
     mountedCharacterRuntime !== null ||
     attachmentRuntime === null ||
     attachmentRuntime.activeMountKind !== "held" ||
-    characterRuntime.skeletonId !== "humanoid_v2" ||
     targetVocabulary !== "idle" ||
     !characterRuntime.actionsByVocabulary.has("aim")
   ) {

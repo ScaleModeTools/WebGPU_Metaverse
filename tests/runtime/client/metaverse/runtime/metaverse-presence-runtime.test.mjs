@@ -36,7 +36,7 @@ test("MetaversePresenceRuntime detects roster object mutations without relying o
   const rosterSnapshot = {
     players: [
       {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         playerId: localPlayerId,
         pose: {
           animationVocabulary: "idle",
@@ -56,7 +56,7 @@ test("MetaversePresenceRuntime detects roster object mutations without relying o
         username: localUsername
       },
       {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         playerId: remotePlayerId,
         pose: {
           animationVocabulary: "walk",
@@ -110,7 +110,7 @@ test("MetaversePresenceRuntime detects roster object mutations without relying o
   const presenceRuntime = new MetaversePresenceRuntime({
     createMetaversePresenceClient: () => fakePresenceClient,
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username: localUsername
     },
@@ -239,7 +239,7 @@ test("MetaversePresenceRuntime syncs canonical mounted occupancy through the pre
   const presenceRuntime = new MetaversePresenceRuntime({
     createMetaversePresenceClient: () => fakePresenceClient,
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username: localUsername
     },

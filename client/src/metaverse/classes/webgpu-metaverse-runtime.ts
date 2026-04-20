@@ -200,6 +200,7 @@ export class WebGpuMetaverseRuntime {
     const traversalRuntime = new MetaverseTraversalRuntime(config, {
       groundedBodyRuntime,
       physicsRuntime,
+      readWallClockMs: readWallClockMsImpl,
       readDynamicEnvironmentCollisionPose: (environmentAssetId) =>
         environmentPhysicsRuntime.readDynamicEnvironmentCollisionPose(
           environmentAssetId

@@ -345,7 +345,7 @@ test("metaverse presence contracts freeze roster and normalize ids", () => {
 
   const rosterInput = [
     {
-      characterId: " metaverse-mannequin-v1 ",
+      characterId: " mesh2motion-humanoid-v1 ",
       playerId,
       pose: {
         animationVocabulary: "walk",
@@ -378,7 +378,7 @@ test("metaverse presence contracts freeze roster and normalize ids", () => {
     tickIntervalMs: 120
   });
   const joinCommand = createMetaverseJoinPresenceCommand({
-    characterId: " metaverse-mannequin-v1 ",
+    characterId: " mesh2motion-humanoid-v1 ",
     playerId,
     pose: {
       position: {
@@ -401,7 +401,7 @@ test("metaverse presence contracts freeze roster and normalize ids", () => {
   rosterInput.push(rosterInput[0]);
 
   assert.equal(rosterSnapshot.players.length, 1);
-  assert.equal(rosterSnapshot.players[0]?.characterId, "metaverse-mannequin-v1");
+  assert.equal(rosterSnapshot.players[0]?.characterId, "mesh2motion-humanoid-v1");
   assert.equal(rosterSnapshot.players[0]?.pose.stateSequence, 3);
   assert.equal(rosterSnapshot.players[0]?.pose.look.pitchRadians, -0.25);
   assert.equal(rosterSnapshot.players[0]?.pose.look.yawRadians, 0.75);
@@ -438,7 +438,7 @@ test("metaverse realtime world contracts freeze snapshots and derive seated occu
   const playerInputs = [
     {
       angularVelocityRadiansPerSecond: 1.25,
-      characterId: " metaverse-mannequin-v1 ",
+      characterId: " mesh2motion-humanoid-v1 ",
       lastProcessedTraversalOrientationSequence: 9.3,
       linearVelocity: {
         x: 0,
@@ -516,7 +516,7 @@ test("metaverse realtime world contracts freeze snapshots and derive seated occu
   assert.equal(worldSnapshot.tick.serverTimeMs, 7_650.75);
   assert.equal(worldSnapshot.tick.simulationTimeMs, 7_500.25);
   assert.equal(worldSnapshot.players.length, 1);
-  assert.equal(worldSnapshot.players[0]?.characterId, "metaverse-mannequin-v1");
+  assert.equal(worldSnapshot.players[0]?.characterId, "mesh2motion-humanoid-v1");
   assert.equal(worldSnapshot.players[0]?.angularVelocityRadiansPerSecond, 1.25);
   assert.equal(
     worldSnapshot.players[0]?.lastProcessedTraversalOrientationSequence,
@@ -611,7 +611,7 @@ test("metaverse realtime world contracts derive traversal authority from accepte
   const worldSnapshot = createMetaverseRealtimeWorldSnapshot({
     players: [
       {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         jumpDebug: {
           resolvedActionSequence: 7,
           resolvedActionState: "accepted"
@@ -673,7 +673,7 @@ test("metaverse realtime world contracts prefer shared grounded jump body over f
   const worldSnapshot = createMetaverseRealtimeWorldSnapshot({
     players: [
       {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         groundedBody: {
           jumpBody: {
             grounded: false,
@@ -749,7 +749,7 @@ test("metaverse realtime world contracts derive traversal startup from buffered 
   const worldSnapshot = createMetaverseRealtimeWorldSnapshot({
     players: [
       {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         jumpDebug: {
           pendingActionSequence: 4
         },
@@ -806,7 +806,7 @@ test("metaverse realtime world contracts carry a shared swim body owner for swim
   const worldSnapshot = createMetaverseRealtimeWorldSnapshot({
     players: [
       {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         linearVelocity: {
           x: 1.5,
           y: 0,
@@ -859,7 +859,7 @@ test("metaverse realtime world contracts reject seat occupancy that disagrees wi
       createMetaverseRealtimeWorldSnapshot({
         players: [
           {
-            characterId: "metaverse-mannequin-v1",
+            characterId: "mesh2motion-humanoid-v1",
             linearVelocity: {
               x: 0,
               y: 0,
@@ -1180,7 +1180,7 @@ test("webtransport shared contracts wrap presence, world, and Duck Hunt room mes
       roster: createMetaversePresenceRosterSnapshot({
         players: [
           {
-            characterId: "metaverse-mannequin-v1",
+            characterId: "mesh2motion-humanoid-v1",
             playerId: metaversePlayerId,
             pose: {
               position: {
@@ -1204,7 +1204,7 @@ test("webtransport shared contracts wrap presence, world, and Duck Hunt room mes
       world: {
         players: [
           {
-            characterId: "metaverse-mannequin-v1",
+            characterId: "mesh2motion-humanoid-v1",
             linearVelocity: {
               x: 0,
               y: 0,
@@ -1275,7 +1275,7 @@ test("webtransport shared contracts wrap presence, world, and Duck Hunt room mes
 
   const presenceCommandRequest = createMetaversePresenceWebTransportCommandRequest({
     command: createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: metaversePlayerId,
       pose: {
         position: {

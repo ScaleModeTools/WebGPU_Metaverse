@@ -46,7 +46,7 @@ test("MetaverseWorldHttpAdapter serves authoritative metaverse world snapshots",
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         animationVocabulary: "idle",
@@ -104,7 +104,7 @@ test("MetaverseWorldHttpAdapter accepts driver vehicle control commands on the e
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         locomotionMode: "mounted",
@@ -175,7 +175,7 @@ test("MetaverseWorldHttpAdapter accepts traversal intent commands on the explici
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         position: {
@@ -258,7 +258,7 @@ test("MetaverseWorldHttpAdapter accepts explicit player look commands on the exp
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         locomotionMode: "mounted",
@@ -330,7 +330,7 @@ test("MetaverseWorldHttpAdapter accepts reliable mounted occupancy commands on t
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         position: {

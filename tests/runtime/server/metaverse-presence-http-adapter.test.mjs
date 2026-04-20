@@ -59,7 +59,7 @@ test("MetaversePresenceHttpAdapter handles nested pose join, sync, and snapshot 
   assert.notEqual(username, null);
 
   const joinRequest = createRequest("POST", createMetaverseJoinPresenceCommand({
-    characterId: "metaverse-mannequin-v1",
+    characterId: "mesh2motion-humanoid-v1",
     playerId,
       pose: {
         animationVocabulary: "idle",

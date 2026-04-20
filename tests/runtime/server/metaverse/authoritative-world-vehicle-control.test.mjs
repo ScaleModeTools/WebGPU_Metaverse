@@ -28,7 +28,7 @@ test("MetaverseAuthoritativeWorldRuntime simulates driver-controlled vehicles fr
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         animationVocabulary: "idle",
@@ -117,7 +117,7 @@ test("MetaverseAuthoritativeWorldRuntime coalesces driver control per tick and r
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         animationVocabulary: "idle",
@@ -236,7 +236,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps a claimed driver seat exclusive a
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: firstDriverPlayerId,
       pose: {
         animationVocabulary: "idle",
@@ -262,7 +262,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps a claimed driver seat exclusive a
   );
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: conflictingDriverPlayerId,
       pose: {
         animationVocabulary: "idle",
@@ -329,7 +329,7 @@ test("MetaverseAuthoritativeWorldRuntime rejects mounted occupancy for unauthore
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         animationVocabulary: "idle",
@@ -372,7 +372,7 @@ test("MetaverseAuthoritativeWorldRuntime ignores mounted driver propulsion when 
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         animationVocabulary: "idle",

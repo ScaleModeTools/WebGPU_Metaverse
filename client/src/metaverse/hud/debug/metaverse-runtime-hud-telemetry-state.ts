@@ -275,6 +275,8 @@ function freezeLocalAuthorityPoseCorrectionSnapshot(
               snapshot.authoritative.groundedBody
             ),
       lastProcessedInputSequence: snapshot.authoritative.lastProcessedInputSequence,
+      lastProcessedTraversalOrientationSequence:
+        snapshot.authoritative.lastProcessedTraversalOrientationSequence,
       linearVelocity: freezeVector3Snapshot(
         snapshot.authoritative.linearVelocity
       ),
@@ -513,16 +515,50 @@ function freezeTelemetrySnapshot(
         snapshot.worldSnapshot.extrapolatedFramePercent,
       localReconciliation: Object.freeze({
         lastLocalAuthorityPoseCorrectionDetail: Object.freeze({
+          authoritativeSnapshotAgeMs:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail.authoritativeSnapshotAgeMs,
+          authoritativeSnapshotSequence:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail
+              .authoritativeSnapshotSequence,
+          authoritativeTick:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail.authoritativeTick,
           authoritativeGrounded:
             snapshot.worldSnapshot.localReconciliation
               .lastLocalAuthorityPoseCorrectionDetail.authoritativeGrounded,
           bodyStateDivergence:
             snapshot.worldSnapshot.localReconciliation
               .lastLocalAuthorityPoseCorrectionDetail.bodyStateDivergence,
+          convergenceEpisodeStarted:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail
+              .convergenceEpisodeStarted,
+          convergenceEpisodeStartPlanarMagnitudeMeters:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail
+              .convergenceEpisodeStartPlanarMagnitudeMeters,
+          convergenceEpisodeStartVerticalMagnitudeMeters:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail
+              .convergenceEpisodeStartVerticalMagnitudeMeters,
+          convergenceEpisodeStartYawMagnitudeRadians:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail
+              .convergenceEpisodeStartYawMagnitudeRadians,
           groundedBodyStateDivergence:
             snapshot.worldSnapshot.localReconciliation
               .lastLocalAuthorityPoseCorrectionDetail
               .groundedBodyStateDivergence,
+          lastProcessedInputSequence:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail
+              .lastProcessedInputSequence,
+          lastProcessedTraversalOrientationSequence:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail
+              .lastProcessedTraversalOrientationSequence,
           localGrounded:
             snapshot.worldSnapshot.localReconciliation
               .lastLocalAuthorityPoseCorrectionDetail.localGrounded,
@@ -556,6 +592,12 @@ function freezeTelemetrySnapshot(
         localAuthorityPoseCorrectionCount:
           snapshot.worldSnapshot.localReconciliation
             .localAuthorityPoseCorrectionCount,
+        localAuthorityPoseConvergenceEpisodeCount:
+          snapshot.worldSnapshot.localReconciliation
+            .localAuthorityPoseConvergenceEpisodeCount,
+        localAuthorityPoseConvergenceStepCount:
+          snapshot.worldSnapshot.localReconciliation
+            .localAuthorityPoseConvergenceStepCount,
         mountedVehicleAuthorityCorrectionCount:
           snapshot.worldSnapshot.localReconciliation
             .mountedVehicleAuthorityCorrectionCount,
@@ -565,6 +607,12 @@ function freezeTelemetrySnapshot(
         recentLocalAuthorityPoseCorrectionCountPast5Seconds:
           snapshot.worldSnapshot.localReconciliation
             .recentLocalAuthorityPoseCorrectionCountPast5Seconds,
+        recentLocalAuthorityPoseConvergenceEpisodeCountPast5Seconds:
+          snapshot.worldSnapshot.localReconciliation
+            .recentLocalAuthorityPoseConvergenceEpisodeCountPast5Seconds,
+        recentLocalAuthorityPoseConvergenceStepCountPast5Seconds:
+          snapshot.worldSnapshot.localReconciliation
+            .recentLocalAuthorityPoseConvergenceStepCountPast5Seconds,
         recentMountedVehicleAuthorityCorrectionCountPast5Seconds:
           snapshot.worldSnapshot.localReconciliation
             .recentMountedVehicleAuthorityCorrectionCountPast5Seconds,
@@ -1135,12 +1183,19 @@ export class MetaverseRuntimeHudTelemetryState {
     nowMs: number
   ): MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"] {
     let recentLocalAuthorityPoseCorrectionCountPast5Seconds = 0;
+    let recentLocalAuthorityPoseConvergenceEpisodeCountPast5Seconds = 0;
+    let recentLocalAuthorityPoseConvergenceStepCountPast5Seconds = 0;
     let recentMountedVehicleAuthorityCorrectionCountPast5Seconds = 0;
 
     for (const correctionEvent of this.#recentLocalReconciliationEvents) {
       switch (correctionEvent.source) {
-        case "local-authority-convergence":
+        case "local-authority-convergence-episode":
           recentLocalAuthorityPoseCorrectionCountPast5Seconds += 1;
+          recentLocalAuthorityPoseConvergenceEpisodeCountPast5Seconds += 1;
+          break;
+        case "local-authority-convergence-step":
+          recentLocalAuthorityPoseCorrectionCountPast5Seconds += 1;
+          recentLocalAuthorityPoseConvergenceStepCountPast5Seconds += 1;
           break;
         case "mounted-vehicle-authority":
           recentMountedVehicleAuthorityCorrectionCountPast5Seconds += 1;
@@ -1163,11 +1218,17 @@ export class MetaverseRuntimeHudTelemetryState {
         this.#traversalRuntime.lastLocalReconciliationCorrectionSource,
       localAuthorityPoseCorrectionCount:
         this.#traversalRuntime.localAuthorityPoseCorrectionCount,
+      localAuthorityPoseConvergenceEpisodeCount:
+        this.#traversalRuntime.localAuthorityPoseConvergenceEpisodeCount,
+      localAuthorityPoseConvergenceStepCount:
+        this.#traversalRuntime.localAuthorityPoseConvergenceStepCount,
       mountedVehicleAuthorityCorrectionCount:
         this.#traversalRuntime.mountedVehicleAuthorityCorrectionCount,
       recentCorrectionCountPast5Seconds:
         this.#recentLocalReconciliationEvents.length,
       recentLocalAuthorityPoseCorrectionCountPast5Seconds,
+      recentLocalAuthorityPoseConvergenceEpisodeCountPast5Seconds,
+      recentLocalAuthorityPoseConvergenceStepCountPast5Seconds,
       recentMountedVehicleAuthorityCorrectionCountPast5Seconds,
       totalCorrectionCount:
         this.#traversalRuntime.localReconciliationCorrectionCount

@@ -29,7 +29,10 @@ import type {
 import { metaverseRuntimeConfig } from "../config/metaverse-runtime";
 import type { MetaverseLocalPlayerIdentity } from "./metaverse-presence-runtime";
 import type { RoutedDriverVehicleControlIntentSnapshot } from "../traversal/types/traversal";
-import type { AckedAuthoritativeLocalPlayerPose } from "../traversal/reconciliation/authoritative-local-player-reconciliation";
+import type {
+  AckedAuthoritativeLocalPlayerPose,
+  ConsumedAckedAuthoritativeLocalPlayerSample
+} from "../traversal/reconciliation/authoritative-local-player-reconciliation";
 import {
   resolveMetaverseRemoteWorldSampledFrame
 } from "../remote-world/metaverse-remote-world-sampling";
@@ -214,6 +217,22 @@ export class MetaverseRemoteWorldRuntime {
     maxAuthoritativeSnapshotAgeMs: number
   ): AckedAuthoritativeLocalPlayerPose | null {
     return this.#remoteWorldAuthoritativeSnapshotState.readFreshAckedAuthoritativeLocalPlayerPose(
+      maxAuthoritativeSnapshotAgeMs
+    );
+  }
+
+  readFreshAckedAuthoritativeLocalPlayerSample(
+    maxAuthoritativeSnapshotAgeMs: number
+  ): ConsumedAckedAuthoritativeLocalPlayerSample | null {
+    return this.#remoteWorldAuthoritativeSnapshotState.readFreshAckedAuthoritativeLocalPlayerSample(
+      maxAuthoritativeSnapshotAgeMs
+    );
+  }
+
+  consumeFreshAckedAuthoritativeLocalPlayerSample(
+    maxAuthoritativeSnapshotAgeMs: number
+  ): ConsumedAckedAuthoritativeLocalPlayerSample | null {
+    return this.#remoteWorldAuthoritativeSnapshotState.consumeFreshAckedAuthoritativeLocalPlayerSample(
       maxAuthoritativeSnapshotAgeMs
     );
   }

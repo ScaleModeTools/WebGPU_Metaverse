@@ -70,7 +70,7 @@ test("MetaverseRemoteWorldSamplingState samples buffered snapshots against targe
     }),
     interpolationDelayMs: 75,
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username: localUsername
     },
@@ -170,7 +170,7 @@ test("MetaverseRemoteWorldSamplingState tracks extrapolation and datagram teleme
     }),
     interpolationDelayMs: 0,
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username: localUsername
     },

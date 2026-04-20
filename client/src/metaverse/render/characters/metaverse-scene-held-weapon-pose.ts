@@ -9,10 +9,7 @@ import {
 
 import type { MetaverseAttachmentProofRuntime } from "../attachments/metaverse-scene-attachment-runtime";
 
-import type {
-  MetaverseCameraSnapshot,
-  MetaverseCharacterProofConfig
-} from "../../types/metaverse-runtime";
+import type { MetaverseCameraSnapshot } from "../../types/metaverse-runtime";
 
 interface HeldWeaponSolveChainLink {
   readonly bone: Bone;
@@ -218,16 +215,10 @@ export function restoreHumanoidV2HeldWeaponPoseRuntime(
 }
 
 export function createHeldWeaponPoseRuntime(
-  skeletonId: MetaverseCharacterProofConfig["skeletonId"],
   characterScene: Group,
   nodeResolvers: MetaverseHeldWeaponPoseRuntimeNodeResolvers
-): HumanoidV2HeldWeaponPoseRuntime | null {
-  switch (skeletonId) {
-    case "humanoid_v1":
-      return null;
-    case "humanoid_v2":
-      return createHumanoidV2HeldWeaponPoseRuntime(characterScene, nodeResolvers);
-  }
+): HumanoidV2HeldWeaponPoseRuntime {
+  return createHumanoidV2HeldWeaponPoseRuntime(characterScene, nodeResolvers);
 }
 
 function solveBoneChainTowardWorldTarget(
@@ -790,7 +781,7 @@ export function syncHumanoidV2HeldWeaponPose<
     heldWeaponPoseRuntime.rightGripSocketNode,
     heldWeaponTargetWorldQuaternionScratch
   );
-  attachmentRuntime.heldTriggerHandSocketNode.getWorldPosition(
+  attachmentRuntime.heldRightHandGripSocketNode.getWorldPosition(
     heldWeaponGripSocketWorldPositionScratch
   );
   resolveHandWorldTargetPosition(
@@ -927,7 +918,7 @@ export function syncHumanoidV2HeldWeaponPose<
       heldWeaponPoseRuntime.rightGripSocketNode,
       heldWeaponTargetWorldQuaternionScratch
     );
-    attachmentRuntime.heldTriggerHandSocketNode.getWorldPosition(
+    attachmentRuntime.heldRightHandGripSocketNode.getWorldPosition(
       heldWeaponGripSocketWorldPositionScratch
     );
     resolveHandWorldTargetPosition(

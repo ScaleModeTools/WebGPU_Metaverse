@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
 import { createClientModuleLoader } from "../../load-client-module.mjs";
-import { createSkiffMountProofSlice } from "../../metaverse-runtime-proof-slice-fixtures.mjs";
+import {
+  createHumanoidV2CharacterScene,
+  createSkiffMountProofSlice
+} from "../../metaverse-runtime-proof-slice-fixtures.mjs";
 
 let clientLoader;
 
@@ -202,6 +205,7 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
       },
       label: "Metaverse service pistol",
       modelPath: "/models/metaverse/attachments/metaverse-service-pistol.gltf",
+      modules: [],
       mountedHolsterMount: null,
       supportPoints: null
     },
@@ -434,7 +438,8 @@ test("createMetaverseScene requires an authored walk clip when walk vocabulary i
       MeshStandardMaterial,
       Skeleton,
       SkinnedMesh,
-      Uint16BufferAttribute
+      Uint16BufferAttribute,
+      Vector3
     },
     { createMetaverseScene },
     { metaverseRuntimeConfig }
@@ -444,95 +449,41 @@ test("createMetaverseScene requires an authored walk clip when walk vocabulary i
     clientLoader.load("/src/metaverse/config/metaverse-runtime.ts")
   ]);
 
-  const bodyGeometry = new BoxGeometry(0.4, 1.8, 0.3);
-  const vertexCount = bodyGeometry.attributes.position.count;
-  const skinIndices = new Uint16Array(vertexCount * 4);
-  const skinWeights = new Float32Array(vertexCount * 4);
-
-  for (let index = 0; index < vertexCount; index += 1) {
-    skinIndices[index * 4] = 0;
-    skinWeights[index * 4] = 1;
-  }
-
-  bodyGeometry.setAttribute("skinIndex", new Uint16BufferAttribute(skinIndices, 4));
-  bodyGeometry.setAttribute("skinWeight", new Float32BufferAttribute(skinWeights, 4));
-
-  const rootBone = new Bone();
-  rootBone.name = "humanoid_root";
-  const hipsBone = new Bone();
-  hipsBone.name = "hips";
-  hipsBone.position.y = 0.45;
-  rootBone.add(hipsBone);
-  const spineBone = new Bone();
-  spineBone.name = "spine";
-  spineBone.position.y = 0.45;
-  hipsBone.add(spineBone);
-  const chestBone = new Bone();
-  chestBone.name = "chest";
-  chestBone.position.y = 0.45;
-  spineBone.add(chestBone);
-  const neckBone = new Bone();
-  neckBone.name = "neck";
-  neckBone.position.y = 0.25;
-  chestBone.add(neckBone);
-  const socketNames = [
-    "head_socket",
-    "hand_l_socket",
-    "hand_r_socket",
-    "hip_socket",
-    "seat_socket"
-  ];
-  const socketBones = socketNames.map((socketName) => {
-    const socketBone = new Bone();
-    socketBone.name = socketName;
-    return socketBone;
+  const { characterScene, socketNames } = createHumanoidV2CharacterScene({
+    Bone,
+    BoxGeometry,
+    Float32BufferAttribute,
+    Group,
+    MeshStandardMaterial,
+    Skeleton,
+    SkinnedMesh,
+    Uint16BufferAttribute,
+    Vector3
   });
-
-  neckBone.add(socketBones[0]);
-  chestBone.add(socketBones[1], socketBones[2]);
-  hipsBone.add(socketBones[3], socketBones[4]);
-
-  const skinnedMesh = new SkinnedMesh(
-    bodyGeometry,
-    new MeshStandardMaterial({ color: 0xa8b8d1 })
-  );
-  const characterScene = new Group();
-  const skeleton = new Skeleton([
-    rootBone,
-    hipsBone,
-    spineBone,
-    chestBone,
-    neckBone,
-    ...socketBones
-  ]);
-
-  skinnedMesh.add(rootBone);
-  skinnedMesh.bind(skeleton);
-  characterScene.add(skinnedMesh);
 
   const sceneRuntime = createMetaverseScene(metaverseRuntimeConfig, {
     characterProofConfig: {
       animationClips: [
         {
           clipName: "idle",
-          sourcePath: "/models/metaverse/characters/metaverse-mannequin-canonical-animations.glb",
+          sourcePath: "/models/metaverse/characters/mesh2motion-humanoid-canonical-animations.glb",
           vocabulary: "idle"
         },
         {
           clipName: "walk",
-          sourcePath: "/models/metaverse/characters/metaverse-mannequin-canonical-animations.glb",
+          sourcePath: "/models/metaverse/characters/mesh2motion-humanoid-canonical-animations.glb",
           vocabulary: "walk"
         }
       ],
-      characterId: "metaverse-mannequin-v1",
-      label: "Metaverse mannequin",
-      modelPath: "/models/metaverse/characters/metaverse-mannequin.gltf",
-      skeletonId: "humanoid_v1",
+      characterId: "mesh2motion-humanoid-v1",
+      label: "Mesh2Motion humanoid",
+      modelPath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
+      skeletonId: "humanoid_v2",
       socketNames
     },
     createSceneAssetLoader: () => ({
       async loadAsync(path) {
-        if (path === "/models/metaverse/characters/metaverse-mannequin.gltf") {
+        if (path === "/models/metaverse/characters/mesh2motion-humanoid.glb") {
           return {
             animations: [],
             scene: characterScene
@@ -554,7 +505,7 @@ test("createMetaverseScene requires an authored walk clip when walk vocabulary i
 
   await assert.rejects(
     sceneRuntime.boot(),
-    /Metaverse character metaverse-mannequin-v1 is missing animation walk\./
+    /Metaverse character mesh2motion-humanoid-v1 is missing animation walk\./
   );
   assert.equal(
     warnings.some((message) => message.includes("missing authored walk animation")),

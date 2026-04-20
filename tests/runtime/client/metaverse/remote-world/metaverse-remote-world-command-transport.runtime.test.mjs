@@ -29,7 +29,7 @@ test("MetaverseRemoteWorldCommandTransport adapts grounded traversal, look, moun
   const worldClient = new FakeMetaverseWorldClient();
   const commandTransport = new MetaverseRemoteWorldCommandTransport({
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username
     },
@@ -117,7 +117,7 @@ test("MetaverseRemoteWorldCommandTransport clears traversal/look lanes when the 
   const worldClient = new FakeMetaverseWorldClient();
   const commandTransport = new MetaverseRemoteWorldCommandTransport({
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username
     },

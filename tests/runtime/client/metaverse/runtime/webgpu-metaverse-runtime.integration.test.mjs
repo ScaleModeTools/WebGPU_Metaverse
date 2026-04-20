@@ -128,7 +128,7 @@ test("WebGpuMetaverseRuntime boots metaverse presence without moving traversal p
       createMetaverseWorldClient: () => fakeWorldClient,
       createRenderer: () => renderer,
       localPlayerIdentity: {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         playerId: localPlayerId,
         username
       },
@@ -227,7 +227,7 @@ test("WebGpuMetaverseRuntime starts authoritative world polling after local pres
       createMetaverseWorldClient: () => fakeWorldClient,
       createRenderer: () => renderer,
       localPlayerIdentity: {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         playerId: localPlayerId,
         username
       },
@@ -303,7 +303,7 @@ test("WebGpuMetaverseRuntime waits for authoritative world snapshots before rend
       createSceneAssetLoader,
       environmentProofConfig,
       localPlayerIdentity: {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         playerId: localPlayerId,
         username
       },
@@ -321,7 +321,7 @@ test("WebGpuMetaverseRuntime waits for authoritative world snapshots before rend
     assert.equal(runtime.hudSnapshot.presence.remotePlayerCount, 1);
     assert.equal(
       renderer.lastScene?.getObjectByName(
-        `metaverse_character/metaverse-mannequin-v1/${remotePlayerId}`
+        `metaverse_character/mesh2motion-humanoid-v1/${remotePlayerId}`
       ),
       undefined
     );
@@ -345,7 +345,7 @@ test("WebGpuMetaverseRuntime waits for authoritative world snapshots before rend
 
     assert.ok(
       renderer.lastScene?.getObjectByName(
-        `metaverse_character/metaverse-mannequin-v1/${remotePlayerId}`
+        `metaverse_character/mesh2motion-humanoid-v1/${remotePlayerId}`
       )
     );
 
@@ -640,7 +640,7 @@ test("WebGpuMetaverseRuntime stamps and syncs a grounded jump intent before loca
         createSceneAssetLoader,
         environmentProofConfig,
         localPlayerIdentity: {
-          characterId: "metaverse-mannequin-v1",
+          characterId: "mesh2motion-humanoid-v1",
           playerId: localPlayerId,
           username
         },
@@ -777,7 +777,7 @@ test("WebGpuMetaverseRuntime keeps swim jump input off the authoritative travers
         createMetaverseWorldClient: () => fakeWorldClient,
         createRenderer: () => renderer,
         localPlayerIdentity: {
-          characterId: "metaverse-mannequin-v1",
+          characterId: "mesh2motion-humanoid-v1",
           playerId: localPlayerId,
           username
         },
@@ -1175,7 +1175,7 @@ test("WebGpuMetaverseRuntime derives authoritative surface-routing telemetry fro
       createSceneAssetLoader,
       environmentProofConfig,
       localPlayerIdentity: {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         playerId: localPlayerId,
         username
       },
@@ -1309,7 +1309,7 @@ test("WebGpuMetaverseRuntime routes mounted hub input through skiff locomotion a
     createMetaversePresenceClient: () => fakePresenceClient,
     createMetaverseWorldClient: () => fakeWorldClient,
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username
     },
@@ -1434,7 +1434,7 @@ test("WebGpuMetaverseRuntime publishes reliable mounted occupancy changes and ro
     createMetaversePresenceClient: () => fakePresenceClient,
     createMetaverseWorldClient: () => fakeWorldClient,
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username
     },
@@ -1523,7 +1523,7 @@ test("WebGpuMetaverseRuntime converges acked pose-only traversal drift without h
     createMetaversePresenceClient: () => fakePresenceClient,
     createMetaverseWorldClient: () => fakeWorldClient,
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username
     },
@@ -1710,7 +1710,7 @@ test("WebGpuMetaverseRuntime keeps neutral authoritative local updates correctio
     createMetaversePresenceClient: () => fakePresenceClient,
     createMetaverseWorldClient: () => fakeWorldClient,
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username
     },
@@ -1833,7 +1833,7 @@ test("WebGpuMetaverseRuntime keeps local traversal client-owned under routine ac
     createMetaversePresenceClient: () => fakePresenceClient,
     createMetaverseWorldClient: () => fakeWorldClient,
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username
     },
@@ -1950,7 +1950,7 @@ test("WebGpuMetaverseRuntime does not run a full frame when authoritative world 
     createMetaversePresenceClient: () => fakePresenceClient,
     createMetaverseWorldClient: () => fakeWorldClient,
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username
     },
@@ -2040,7 +2040,7 @@ test("WebGpuMetaverseRuntime keeps fully acknowledged held traversal intent corr
     createMetaversePresenceClient: () => fakePresenceClient,
     createMetaverseWorldClient: () => fakeWorldClient,
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username
     },
@@ -2161,7 +2161,7 @@ test("WebGpuMetaverseRuntime keeps sustained swim correction-free under delayed 
     createMetaversePresenceClient: () => fakePresenceClient,
     createMetaverseWorldClient: () => fakeWorldClient,
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username
     },
@@ -2323,7 +2323,7 @@ test("WebGpuMetaverseRuntime ignores acked authoritative local yaw drift while u
     createMetaversePresenceClient: () => fakePresenceClient,
     createMetaverseWorldClient: () => fakeWorldClient,
     localPlayerIdentity: {
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
       username
     },

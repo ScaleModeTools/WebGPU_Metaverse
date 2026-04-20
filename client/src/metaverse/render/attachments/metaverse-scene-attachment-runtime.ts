@@ -26,7 +26,7 @@ export interface MetaverseAttachmentProofRuntime {
   readonly attachmentRoot: Group;
   readonly heldForwardReferenceNode: Object3D | null;
   readonly heldMount: MetaverseAttachmentMountRuntime;
-  readonly heldTriggerHandSocketNode: Object3D;
+  readonly heldRightHandGripSocketNode: Object3D;
   implicitOffHandGripLocalPosition: Vector3 | null;
   implicitOffHandGripLocalQuaternion: Quaternion | null;
   readonly mountedHolsterMount: MetaverseAttachmentMountRuntime | null;
@@ -47,14 +47,25 @@ export interface MetaverseAttachmentRuntimeNodeResolvers {
   ) => Object3D;
 }
 
-function createHeldForwardReferenceNode(
-  attachmentSocketNodeName: MetaverseAttachmentProofConfig["heldMount"]["attachmentSocketNodeName"],
+function resolveHeldForwardReferenceNode(
+  mountConfig: MetaverseAttachmentProofConfig["heldMount"],
   attachmentScene: Group,
   nodeResolvers: Pick<MetaverseAttachmentRuntimeNodeResolvers, "findNamedNode">
 ): Object3D {
+  if (
+    mountConfig.forwardReferenceNodeName !== null &&
+    mountConfig.forwardReferenceNodeName !== undefined
+  ) {
+    return nodeResolvers.findNamedNode(
+      attachmentScene,
+      mountConfig.forwardReferenceNodeName,
+      "Metaverse attachment forward reference"
+    );
+  }
+
   const attachmentSocketNode = nodeResolvers.findNamedNode(
     attachmentScene,
-    attachmentSocketNodeName,
+    mountConfig.attachmentSocketNodeName,
     "Metaverse attachment mount"
   );
   const forwardReferenceNode = new Group();
@@ -220,9 +231,9 @@ export function cloneMetaverseAttachmentProofRuntime<
             cloneLabel
           ),
     heldMount: cloneMetaverseAttachmentMountRuntime(sourceRuntime.heldMount),
-    heldTriggerHandSocketNode: nodeResolvers.findNamedNode(
+    heldRightHandGripSocketNode: nodeResolvers.findNamedNode(
       characterProofRuntime.scene,
-      sourceRuntime.heldTriggerHandSocketNode.name,
+      sourceRuntime.heldRightHandGripSocketNode.name,
       cloneLabel
     ),
     implicitOffHandGripLocalPosition: null,
@@ -261,6 +272,25 @@ export async function loadMetaverseAttachmentProofRuntime<
   const attachmentAsset = await sceneAssetLoader.loadAsync(
     attachmentProofConfig.modelPath
   );
+
+  for (const moduleProofConfig of attachmentProofConfig.modules) {
+    const moduleSocketNode = dependencies.findNamedNode(
+      attachmentAsset.scene,
+      moduleProofConfig.socketNodeName,
+      "Metaverse attachment module socket"
+    );
+    const moduleAsset = await sceneAssetLoader.loadAsync(moduleProofConfig.modelPath);
+
+    moduleAsset.scene.name = [
+      "metaverse_attachment_module",
+      attachmentProofConfig.attachmentId,
+      moduleProofConfig.moduleId
+    ].join("/");
+    moduleAsset.scene.position.set(0, 0, 0);
+    moduleAsset.scene.quaternion.identity();
+    moduleSocketNode.add(moduleAsset.scene);
+  }
+
   const attachmentRoot = new Group();
   const attachmentPresentationGroup = new Group();
   const heldMount = createAttachmentMountRuntime(
@@ -269,13 +299,13 @@ export async function loadMetaverseAttachmentProofRuntime<
     dependencies.heldWeaponSolveDirectionEpsilon,
     dependencies
   );
-  const heldTriggerHandSocketNode = dependencies.findNamedNode(
+  const heldRightHandGripSocketNode = dependencies.findNamedNode(
     attachmentAsset.scene,
     attachmentProofConfig.heldMount.attachmentSocketNodeName,
     "Metaverse attachment mount"
   );
-  const heldForwardReferenceNode = createHeldForwardReferenceNode(
-    attachmentProofConfig.heldMount.attachmentSocketNodeName,
+  const heldForwardReferenceNode = resolveHeldForwardReferenceNode(
+    attachmentProofConfig.heldMount,
     attachmentAsset.scene,
     dependencies
   );
@@ -296,6 +326,23 @@ export async function loadMetaverseAttachmentProofRuntime<
   attachmentPresentationGroup.name = `${attachmentRoot.name}/presentation`;
   attachmentPresentationGroup.add(attachmentAsset.scene);
   for (const supportPoint of attachmentProofConfig.supportPoints ?? []) {
+    const supportPointNode =
+      supportPoint.authoringNodeName === null
+        ? null
+        : dependencies.findNamedNode(
+            attachmentAsset.scene,
+            supportPoint.authoringNodeName,
+            "Metaverse attachment support point"
+          );
+
+    if (supportPointNode !== null) {
+      if (heldOffHandSupportPointId === supportPoint.supportPointId) {
+        offHandSupportNode = supportPointNode;
+      }
+
+      continue;
+    }
+
     const supportPointAnchor = new Group();
 
     supportPointAnchor.name = [
@@ -327,7 +374,7 @@ export async function loadMetaverseAttachmentProofRuntime<
     attachmentRoot,
     heldForwardReferenceNode,
     heldMount,
-    heldTriggerHandSocketNode,
+    heldRightHandGripSocketNode,
     implicitOffHandGripLocalPosition: null,
     implicitOffHandGripLocalQuaternion: null,
     mountedHolsterMount,

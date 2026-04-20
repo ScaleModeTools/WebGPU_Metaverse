@@ -333,7 +333,7 @@ test("WebGpuMetaverseRuntime publishes boot-phase progression and per-lane trans
               username
             },
             {
-              characterId: "metaverse-mannequin-v1",
+              characterId: "mesh2motion-humanoid-v1",
               playerId: remotePlayerId,
               pose: {
                 animationVocabulary: "walk",
@@ -515,7 +515,7 @@ test("WebGpuMetaverseRuntime publishes boot-phase progression and per-lane trans
       createMetaverseWorldClient: () => fakeWorldClient,
       createRenderer: () => renderer,
       localPlayerIdentity: {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         playerId: localPlayerId,
         username
       },

@@ -46,7 +46,7 @@ test("createMetaverseScene mounts remote metaverse presence avatars from shared 
   };
   const remoteCharacterPresentation = Object.freeze({
     aimCamera: null,
-    characterId: "metaverse-mannequin-v1",
+    characterId: "mesh2motion-humanoid-v1",
     look: Object.freeze({
       pitchRadians: 0,
       yawRadians: 0
@@ -83,7 +83,7 @@ test("createMetaverseScene mounts remote metaverse presence avatars from shared 
   sceneRuntime.scene.updateMatrixWorld(true);
 
   const remoteCharacterRoot = sceneRuntime.scene.getObjectByName(
-    "metaverse_character/metaverse-mannequin-v1/remote-sailor-2"
+    "metaverse_character/mesh2motion-humanoid-v1/remote-sailor-2"
   );
   const remoteSeatAnchor = remoteCharacterRoot?.parent ?? null;
   const remoteSeatSocket = remoteCharacterRoot?.getObjectByName("seat_socket") ?? null;

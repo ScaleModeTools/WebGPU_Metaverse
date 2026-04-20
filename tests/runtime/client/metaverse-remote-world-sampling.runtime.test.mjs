@@ -26,7 +26,7 @@ function createWorldSnapshot({
     players: [
       {
         angularVelocityRadiansPerSecond: 0,
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         jumpAuthorityState: "grounded",
         linearVelocity: {
           x: 2,

@@ -5,23 +5,20 @@ export {
   mesh2motionHumanoidIdleAnimationClipId,
   mesh2motionHumanoidInteractAnimationClipId,
   mesh2motionHumanoidSeatedAnimationClipId,
-  mesh2motionHumanoidWalkAnimationClipId,
-  metaverseMannequinAimAnimationClipId,
-  metaverseMannequinCanonicalAnimationPackSourcePath,
-  metaverseMannequinIdleAnimationClipId,
-  metaverseMannequinInteractAnimationClipId,
-  metaverseMannequinSeatedAnimationClipId,
-  metaverseMannequinWalkAnimationClipId
+  mesh2motionHumanoidWalkAnimationClipId
 } from "./config/animation-clip-manifest";
 export {
   attachmentModelManifest,
+  metaverseBattleRifleAttachmentAssetId,
+  metaverseBreacherShotgunAttachmentAssetId,
+  metaverseCompactSmgAttachmentAssetId,
+  metaverseLongshotSniperAttachmentAssetId,
+  metaverseRocketLauncherAttachmentAssetId,
   metaverseServicePistolAttachmentAssetId
 } from "./config/attachment-model-manifest";
 export {
   characterModelManifest,
-  mesh2motionHumanoidCharacterAssetId,
-  metaverseMannequinArmsCharacterAssetId,
-  metaverseMannequinCharacterAssetId
+  mesh2motionHumanoidCharacterAssetId
 } from "./config/character-model-manifest";
 export {
   environmentPropManifest,
@@ -33,6 +30,21 @@ export {
 } from "./config/environment-prop-manifest";
 export { reticleManifest } from "./config/reticle-manifest";
 export {
+  metaverseBattleRifleWeaponAssetId,
+  metaverseBreacherShotgunWeaponAssetId,
+  metaverseCompactSmgWeaponAssetId,
+  metaverseLongshotSniperWeaponAssetId,
+  metaverseRocketLauncherWeaponAssetId,
+  metaverseServicePistolV2WeaponAssetId,
+  weaponArchetypeManifest
+} from "./config/weapon-archetype-manifest";
+export { weaponModuleManifest } from "./config/weapon-module-manifest";
+export { weaponProgressionManifest } from "./config/weapon-progression-manifest";
+export {
+  readDefaultWeaponModuleIds,
+  resolveWeaponLoadout
+} from "./runtime/resolve-weapon-loadout";
+export {
   createAnimationClipId,
   createAttachmentAssetId,
   createCharacterAssetId,
@@ -43,9 +55,6 @@ export {
   humanoidV2BoneNames,
   humanoidV2BoneParentByName,
   humanoidV2SocketParentById,
-  humanoidV1BoneNames,
-  humanoidV1BoneParentByName,
-  humanoidV1SocketParentById,
   skeletonBoneNamesById,
   skeletonBoneParentByNameById,
   skeletonIds,
@@ -74,6 +83,14 @@ export {
 export {
   defineReticleManifest
 } from "./types/asset-manifest";
+export {
+  buildAttachmentAssetFromWeaponArchetype,
+  defineWeaponArchetypeManifest,
+  defineWeaponModuleManifest,
+  weaponFamilyIds,
+  weaponModuleSlotIds,
+  weaponPoseProfileIds
+} from "./types/weapon-builder-manifest";
 export type {
   AnimationClipId,
   AttachmentAssetId,
@@ -86,7 +103,6 @@ export type {
   LodTierId
 } from "./types/asset-lod";
 export type {
-  HumanoidV1BoneName,
   HumanoidV2BoneName,
   SkeletonBoneName,
   SkeletonBoneParentByName,
@@ -103,7 +119,13 @@ export type {
 export type {
   AttachmentAssetDescriptor,
   AttachmentAssetManifest,
-  AttachmentCategoryId
+  AttachmentCategoryId,
+  AttachmentMountSocketDescriptor,
+  AttachmentMountTargetSocketName,
+  AttachmentMountedHolsterDescriptor,
+  AttachmentOffHandSupportPointIdBySocketId,
+  AttachmentSupportPointDescriptor,
+  AttachmentVector3Descriptor
 } from "./types/attachment-asset-manifest";
 export type {
   CharacterAssetDescriptor,
@@ -147,3 +169,33 @@ export type {
   ReticleDescriptor,
   ReticleManifest
 } from "./types/asset-manifest";
+export type {
+  NumericStatModifierDescriptor,
+  ResolvedWeaponLoadoutDescriptor,
+  WeaponAccuracyStatsDescriptor,
+  WeaponAimProfileDescriptor,
+  WeaponArchetypeDescriptor,
+  WeaponArchetypeManifest,
+  WeaponBallisticsKind,
+  WeaponBallisticsStatsDescriptor,
+  WeaponDamageStatsDescriptor,
+  WeaponFamilyId,
+  WeaponFireControlStatsDescriptor,
+  WeaponFireMode,
+  WeaponHandlingStatsDescriptor,
+  WeaponMagazineStatsDescriptor,
+  WeaponModuleAimOverridesDescriptor,
+  WeaponModuleAssetDescriptor,
+  WeaponModuleManifest,
+  WeaponModuleSlotId,
+  WeaponModuleSocketDescriptor,
+  WeaponNodeDescriptor,
+  WeaponPoseProfileId,
+  WeaponRangeStatsDescriptor,
+  WeaponReloadStyle,
+  WeaponStatBlockDescriptor,
+  WeaponStatModifierDescriptor,
+  WeaponSupportPointDescriptor,
+  WeaponUnlockDescriptor,
+  WeaponZoomLevelDescriptor
+} from "./types/weapon-builder-manifest";

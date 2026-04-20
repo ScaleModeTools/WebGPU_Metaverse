@@ -241,7 +241,7 @@ export function createRealtimeWorldSnapshot({
       {
         angularVelocityRadiansPerSecond: 0,
         animationVocabulary: localAnimationVocabulary,
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         ...(localGroundedBody === undefined
           ? {}
           : { groundedBody: localGroundedBody }),
@@ -295,7 +295,7 @@ export function createRealtimeWorldSnapshot({
               angularVelocityRadiansPerSecond:
                 remotePlayerAngularVelocityRadiansPerSecond,
               animationVocabulary: resolvedRemoteAnimationVocabulary,
-              characterId: "metaverse-mannequin-v1",
+              characterId: "mesh2motion-humanoid-v1",
               linearVelocity: resolvedRemoteLinearVelocity,
               look: {
                 pitchRadians: remoteLookPitchRadians,

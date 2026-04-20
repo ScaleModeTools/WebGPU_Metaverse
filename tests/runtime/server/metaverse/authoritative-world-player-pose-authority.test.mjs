@@ -94,7 +94,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps presence resyncs from overriding 
 
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         animationVocabulary: "swim",

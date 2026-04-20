@@ -1,16 +1,6 @@
-export const skeletonIds = ["humanoid_v1", "humanoid_v2"] as const;
+export const skeletonIds = ["humanoid_v2"] as const;
 
 export type SkeletonId = (typeof skeletonIds)[number];
-
-export const humanoidV1BoneNames = [
-  "humanoid_root",
-  "hips",
-  "spine",
-  "chest",
-  "neck"
-] as const;
-
-export type HumanoidV1BoneName = (typeof humanoidV1BoneNames)[number];
 
 export const humanoidV2BoneNames = [
   "root",
@@ -40,12 +30,7 @@ export const humanoidV2BoneNames = [
 
 export type HumanoidV2BoneName = (typeof humanoidV2BoneNames)[number];
 
-export type SkeletonBoneName<TSkeletonId extends SkeletonId> =
-  TSkeletonId extends "humanoid_v1"
-    ? HumanoidV1BoneName
-    : TSkeletonId extends "humanoid_v2"
-      ? HumanoidV2BoneName
-      : never;
+export type SkeletonBoneName<TSkeletonId extends SkeletonId> = HumanoidV2BoneName;
 
 export const socketIds = [
   "hand_r_socket",
@@ -56,24 +41,6 @@ export const socketIds = [
 ] as const;
 
 export type SocketId = (typeof socketIds)[number];
-
-export const humanoidV1BoneParentByName = Object.freeze({
-  humanoid_root: null,
-  hips: "humanoid_root",
-  spine: "hips",
-  chest: "spine",
-  neck: "chest"
-} as const satisfies Readonly<
-  Record<HumanoidV1BoneName, HumanoidV1BoneName | null>
->);
-
-export const humanoidV1SocketParentById = Object.freeze({
-  hand_r_socket: "chest",
-  hand_l_socket: "chest",
-  head_socket: "neck",
-  hip_socket: "hips",
-  seat_socket: "hips"
-} as const satisfies Readonly<Record<SocketId, HumanoidV1BoneName>>);
 
 export const humanoidV2BoneParentByName = Object.freeze({
   root: null,
@@ -120,21 +87,18 @@ export type SkeletonSocketParentById<TSkeletonId extends SkeletonId> = Readonly<
 >;
 
 export const skeletonBoneNamesById = Object.freeze({
-  humanoid_v1: humanoidV1BoneNames,
   humanoid_v2: humanoidV2BoneNames
 } as const satisfies {
   readonly [TSkeletonId in SkeletonId]: readonly SkeletonBoneName<TSkeletonId>[];
 });
 
 export const skeletonBoneParentByNameById = Object.freeze({
-  humanoid_v1: humanoidV1BoneParentByName,
   humanoid_v2: humanoidV2BoneParentByName
 } as const satisfies {
   readonly [TSkeletonId in SkeletonId]: SkeletonBoneParentByName<TSkeletonId>;
 });
 
 export const skeletonSocketParentById = Object.freeze({
-  humanoid_v1: humanoidV1SocketParentById,
   humanoid_v2: humanoidV2SocketParentById
 } as const satisfies {
   readonly [TSkeletonId in SkeletonId]: SkeletonSocketParentById<TSkeletonId>;

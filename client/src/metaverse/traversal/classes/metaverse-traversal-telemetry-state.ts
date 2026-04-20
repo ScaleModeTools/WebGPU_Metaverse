@@ -242,6 +242,16 @@ export class MetaverseTraversalTelemetryState {
       .localAuthorityPoseCorrectionCount;
   }
 
+  get localAuthorityPoseConvergenceEpisodeCount(): number {
+    return this.#dependencies.localAuthorityReconciliationState
+      .localAuthorityPoseConvergenceEpisodeCount;
+  }
+
+  get localAuthorityPoseConvergenceStepCount(): number {
+    return this.#dependencies.localAuthorityReconciliationState
+      .localAuthorityPoseConvergenceStepCount;
+  }
+
   get localGroundedJumpGateTelemetrySnapshot(): LocalJumpGateTelemetrySnapshot {
     if (
       !this.#dependencies.groundedBodyRuntime.isInitialized ||
@@ -333,21 +343,23 @@ export class MetaverseTraversalTelemetryState {
 
   createLocalAuthorityPoseCorrectionSnapshot({
     authoritativePlayerSnapshot,
+    localGroundedBodySnapshot,
+    localIssuedTraversalIntentSnapshot,
+    localSwimBodySnapshot,
     localTraversalPose
   }: {
     readonly authoritativePlayerSnapshot: AuthoritativeLocalPlayerPoseSnapshot;
+    readonly localGroundedBodySnapshot: AuthoritativeLocalPlayerPoseSnapshot["groundedBody"] | null;
+    readonly localIssuedTraversalIntentSnapshot: MetaversePlayerTraversalIntentSnapshot | null;
+    readonly localSwimBodySnapshot: AuthoritativeLocalPlayerPoseSnapshot["swimBody"] | null;
     readonly localTraversalPose: LocalTraversalPoseSnapshot;
   }): NonNullable<LocalAuthorityPoseCorrectionSnapshot> {
-    const localSwimSnapshot =
-      localTraversalPose.locomotionMode === "swim"
-        ? this.#dependencies.surfaceLocomotionState.readSwimSnapshot()
-        : null;
     const localLinearVelocity =
       localTraversalPose.locomotionMode === "swim"
-        ? localSwimSnapshot?.linearVelocity ?? Object.freeze({ x: 0, y: 0, z: 0 })
-        : this.#dependencies.groundedBodyRuntime.isInitialized
-          ? this.#dependencies.groundedBodyRuntime.snapshot.linearVelocity
-          : Object.freeze({ x: 0, y: 0, z: 0 });
+        ? localSwimBodySnapshot?.linearVelocity ??
+          Object.freeze({ x: 0, y: 0, z: 0 })
+        : localGroundedBodySnapshot?.linearVelocity ??
+          Object.freeze({ x: 0, y: 0, z: 0 });
     const authoritativeSwimSnapshot =
       authoritativePlayerSnapshot.locomotionMode === "swim"
         ? authoritativePlayerSnapshot.swimBody
@@ -381,7 +393,10 @@ export class MetaverseTraversalTelemetryState {
               )
             : null,
         lastProcessedInputSequence:
-          authoritativePlayerSnapshot.lastProcessedInputSequence,
+          authoritativePlayerSnapshot.lastProcessedInputSequence ?? 0,
+        lastProcessedTraversalOrientationSequence:
+          authoritativePlayerSnapshot
+            .lastProcessedTraversalOrientationSequence ?? 0,
         linearVelocity: freezeVector3Snapshot(
           authoritativeActiveBodySnapshot.linearVelocity
         ),
@@ -404,41 +419,43 @@ export class MetaverseTraversalTelemetryState {
       local: Object.freeze({
         groundedBody:
           localTraversalPose.locomotionMode === "grounded" &&
-          this.#dependencies.groundedBodyRuntime.isInitialized
+          localGroundedBodySnapshot !== null
             ? freezeGroundedBodyTelemetrySnapshot({
                 contact:
-                  this.#dependencies.groundedBodyRuntime.snapshot.contact ?? {
+                  localGroundedBodySnapshot.contact ?? {
                     supportingContactDetected:
-                      this.#dependencies.groundedBodyRuntime.snapshot.grounded
+                      localGroundedBodySnapshot.grounded
                   },
-                driveTarget: this.#dependencies.groundedBodyRuntime.snapshot
-                  .driveTarget,
-                interaction: this.#dependencies.groundedBodyRuntime.snapshot
-                  .interaction,
-                jumpBody: this.#dependencies.groundedBodyRuntime.snapshot
-                  .jumpBody
+                driveTarget: localGroundedBodySnapshot.driveTarget,
+                interaction: localGroundedBodySnapshot.interaction,
+                jumpBody: localGroundedBodySnapshot.jumpBody
               })
             : null,
         issuedTraversalIntent: freezeIssuedTraversalIntentSnapshot(
-          this.#dependencies.localTraversalAuthorityState
-            .latestIssuedTraversalIntentSnapshot
+          localIssuedTraversalIntentSnapshot
         ),
         linearVelocity: freezeVector3Snapshot(localLinearVelocity),
         locomotionMode: localTraversalPose.locomotionMode,
         position: freezeVector3Snapshot(localTraversalPose.position),
         swimBody:
-          localSwimSnapshot === null
+          localSwimBodySnapshot === null
             ? null
-            : freezeSwimBodyTelemetrySnapshot(localSwimSnapshot),
+            : freezeSwimBodyTelemetrySnapshot(localSwimBodySnapshot),
         surfaceRouting: this.surfaceRoutingLocalTelemetrySnapshot
       })
     });
   }
 
-  recordLocalAuthorityConvergence(): void {
+  recordLocalAuthorityConvergence({
+    episodeStarted
+  }: {
+    readonly episodeStarted: boolean;
+  }): void {
     this.#localReconciliationCorrectionCount += 1;
     this.#lastLocalReconciliationCorrectionSource =
-      "local-authority-convergence";
+      episodeStarted
+        ? "local-authority-convergence-episode"
+        : "local-authority-convergence-step";
   }
 
   recordMountedVehicleAuthorityCorrection(): void {

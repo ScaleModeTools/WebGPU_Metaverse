@@ -30,7 +30,7 @@ export function createAuthoritativeRuntime() {
 export function joinSurfacePlayer(runtime, playerId, username, poseOverrides = {}) {
   runtime.acceptPresenceCommand(
     createMetaverseJoinPresenceCommand({
-      characterId: "metaverse-mannequin-v1",
+      characterId: "mesh2motion-humanoid-v1",
       playerId,
       pose: {
         position: {

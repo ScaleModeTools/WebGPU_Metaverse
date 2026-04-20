@@ -7,7 +7,7 @@ import { createClientModuleLoader } from "./load-client-module.mjs";
 let clientLoader;
 
 const metaverseDeliveryPathPattern =
-  /^\/models\/metaverse\/(?:attachments|characters|environment)\/[a-z0-9]+(?:-[a-z0-9]+)*(?:-(?:high|medium|low|collision))?\.(?:glb|gltf)$/;
+  /^\/models\/metaverse\/(?:attachments(?:\/modules)?|characters|environment)\/[a-z0-9]+(?:-[a-z0-9]+)*(?:-(?:high|medium|low|collision))?\.(?:glb|gltf)$/;
 
 async function loadMetaverseAssetBuffer(assetPath) {
   return readFile(new URL(`../../../client/public${assetPath}`, import.meta.url));
@@ -51,7 +51,11 @@ function collectNamedNodeDescriptors(document) {
           {
             children: node.children ?? [],
             rotation: node.rotation ?? [0, 0, 0, 1],
-            translation: node.translation ?? [0, 0, 0]
+            translation:
+              node.translation ??
+              (Array.isArray(node.matrix) && node.matrix.length === 16
+                ? [node.matrix[12], node.matrix[13], node.matrix[14]]
+                : [0, 0, 0])
           }
         ];
       })
@@ -147,7 +151,8 @@ function collectMetaverseDeliveryPaths({
   animationClipManifest,
   attachmentModelManifest,
   characterModelManifest,
-  environmentPropManifest
+  environmentPropManifest,
+  weaponModuleManifest
 }) {
   const deliveryPaths = new Set();
 
@@ -171,6 +176,12 @@ function collectMetaverseDeliveryPaths({
 
   for (const attachment of attachmentModelManifest.attachments) {
     for (const lod of attachment.renderModel.lods) {
+      addPath(lod.modelPath);
+    }
+  }
+
+  for (const module of weaponModuleManifest?.modules ?? []) {
+    for (const lod of module.model.lods) {
       addPath(lod.modelPath);
     }
   }
@@ -200,9 +211,6 @@ after(async () => {
 
 test("canonical humanoid rig definitions keep stable bone and socket parentage", async () => {
   const {
-    humanoidV1BoneNames,
-    humanoidV1BoneParentByName,
-    humanoidV1SocketParentById,
     humanoidV2BoneNames,
     humanoidV2BoneParentByName,
     humanoidV2SocketParentById,
@@ -213,30 +221,7 @@ test("canonical humanoid rig definitions keep stable bone and socket parentage",
     socketIds
   } = await clientLoader.load("/src/assets/types/asset-socket.ts");
 
-  assert.deepEqual(skeletonIds, ["humanoid_v1", "humanoid_v2"]);
-  assert.deepEqual(humanoidV1BoneNames, [
-    "humanoid_root",
-    "hips",
-    "spine",
-    "chest",
-    "neck"
-  ]);
-  assert.deepEqual(humanoidV1BoneParentByName, {
-    humanoid_root: null,
-    hips: "humanoid_root",
-    spine: "hips",
-    chest: "spine",
-    neck: "chest"
-  });
-  assert.deepEqual(humanoidV1SocketParentById, {
-    hand_r_socket: "chest",
-    hand_l_socket: "chest",
-    head_socket: "neck",
-    hip_socket: "hips",
-    seat_socket: "hips"
-  });
-  assert.deepEqual(Object.keys(humanoidV1SocketParentById).sort(), [...socketIds].sort());
-
+  assert.deepEqual(skeletonIds, ["humanoid_v2"]);
   assert.deepEqual(humanoidV2BoneNames, [
     "root",
     "pelvis",
@@ -295,17 +280,11 @@ test("canonical humanoid rig definitions keep stable bone and socket parentage",
     seat_socket: "pelvis"
   });
   assert.deepEqual(Object.keys(humanoidV2SocketParentById).sort(), [...socketIds].sort());
-  assert.deepEqual(skeletonBoneNamesById.humanoid_v1, humanoidV1BoneNames);
   assert.deepEqual(skeletonBoneNamesById.humanoid_v2, humanoidV2BoneNames);
-  assert.deepEqual(
-    skeletonBoneParentByNameById.humanoid_v1,
-    humanoidV1BoneParentByName
-  );
   assert.deepEqual(
     skeletonBoneParentByNameById.humanoid_v2,
     humanoidV2BoneParentByName
   );
-  assert.deepEqual(skeletonSocketParentById.humanoid_v1, humanoidV1SocketParentById);
   assert.deepEqual(skeletonSocketParentById.humanoid_v2, humanoidV2SocketParentById);
 });
 
@@ -356,19 +335,16 @@ test("humanoid_v2 rig metadata keeps arm-only aim layering and head anchors expl
   }
 });
 
-test("character manifests expose dual humanoid skeletons on the same vocabulary", async () => {
+test("character manifests expose the active humanoid_v2 skeleton on the canonical vocabulary", async () => {
   const [
     {
       mesh2motionHumanoidCharacterAssetId,
       metaverseActiveFullBodyCharacterAssetId,
-      metaverseMannequinArmsCharacterAssetId,
-      metaverseMannequinCharacterAssetId,
       characterModelManifest
     },
     {
       animationClipManifest,
-      mesh2motionHumanoidCanonicalAnimationPackSourcePath,
-      metaverseMannequinCanonicalAnimationPackSourcePath
+      mesh2motionHumanoidCanonicalAnimationPackSourcePath
     },
     { animationVocabularyIds, canonicalAnimationClipNamesByVocabulary },
     { socketIds }
@@ -381,10 +357,8 @@ test("character manifests expose dual humanoid skeletons on the same vocabulary"
 
   const characterIds = characterModelManifest.characters.map((character) => character.id);
 
-  assert.ok(characterIds.includes(mesh2motionHumanoidCharacterAssetId));
-  assert.ok(characterIds.includes(metaverseMannequinCharacterAssetId));
-  assert.ok(characterIds.includes(metaverseMannequinArmsCharacterAssetId));
-  assert.ok(characterIds.includes(metaverseActiveFullBodyCharacterAssetId));
+  assert.deepEqual(characterIds, [mesh2motionHumanoidCharacterAssetId]);
+  assert.equal(metaverseActiveFullBodyCharacterAssetId, mesh2motionHumanoidCharacterAssetId);
 
   const activeFullBodyCharacter =
     characterModelManifest.byId[metaverseActiveFullBodyCharacterAssetId];
@@ -394,18 +368,8 @@ test("character manifests expose dual humanoid skeletons on the same vocabulary"
   assert.equal(activeFullBodyCharacter.skeleton, "humanoid_v2");
   assert.ok(activeFullBodyCharacter.presentationModes.includes("full-body"));
 
-  const v1HumanoidCharacters = characterModelManifest.characters.filter(
-    (character) => character.skeleton === "humanoid_v1"
-  );
-  const v2HumanoidCharacters = characterModelManifest.characters.filter(
-    (character) => character.skeleton === "humanoid_v2"
-  );
-  const humanoidCharacters = [...v1HumanoidCharacters, ...v2HumanoidCharacters];
-
-  assert.ok(v1HumanoidCharacters.length >= 2);
-  assert.ok(v2HumanoidCharacters.length >= 1);
-
-  for (const character of humanoidCharacters) {
+  for (const character of characterModelManifest.characters) {
+    assert.equal(character.skeleton, "humanoid_v2");
     assert.deepEqual(character.socketIds, socketIds);
 
     const clipVocabularies = character.animationClipIds.map((clipId) => {
@@ -442,12 +406,9 @@ test("character manifests expose dual humanoid skeletons on the same vocabulary"
     [...activeClipSourcePaths],
     [mesh2motionHumanoidCanonicalAnimationPackSourcePath]
   );
-  assert.ok(
-    animationClipManifest.clips.some(
-      (clip) =>
-        clip.sourcePath === metaverseMannequinCanonicalAnimationPackSourcePath &&
-        clip.targetSkeleton === "humanoid_v1"
-    )
+  assert.deepEqual(
+    [...new Set(animationClipManifest.clips.map((clip) => clip.targetSkeleton))],
+    ["humanoid_v2"]
   );
 });
 
@@ -456,20 +417,23 @@ test("metaverse asset manifests keep stable shipped delivery paths and LOD namin
     clientLoader.load("/src/assets/config/animation-clip-manifest.ts"),
     clientLoader.load("/src/assets/config/attachment-model-manifest.ts"),
     clientLoader.load("/src/assets/config/character-model-manifest.ts"),
-    clientLoader.load("/src/assets/config/environment-prop-manifest.ts")
+    clientLoader.load("/src/assets/config/environment-prop-manifest.ts"),
+    clientLoader.load("/src/assets/config/weapon-module-manifest.ts")
   ]);
   const [
     { animationClipManifest },
     { attachmentModelManifest },
     { characterModelManifest },
-    { environmentPropManifest }
+    { environmentPropManifest },
+    { weaponModuleManifest }
   ] = manifests;
 
   const deliveryPaths = collectMetaverseDeliveryPaths({
     animationClipManifest,
     attachmentModelManifest,
     characterModelManifest,
-    environmentPropManifest
+    environmentPropManifest,
+    weaponModuleManifest
   });
 
   assert.ok(deliveryPaths.length >= 8);
@@ -514,13 +478,11 @@ test("attachment manifests keep explicit attachment socket ownership for held an
   assert.ok(pistolAttachment);
   assert.equal(pistolAttachment.defaultSocketId, "hand_r_socket");
   assert.deepEqual(pistolAttachment.heldMount, {
-    attachmentSocketNodeNameBySocketId: {
-      hand_l_socket: "metaverse_service_pistol_trigger_hand_l_socket",
-      hand_r_socket: "metaverse_service_pistol_trigger_hand_r_socket"
-    }
+    attachmentSocketNodeName: "metaverse_service_pistol_grip_hand_r_socket",
+    forwardReferenceNodeName: "metaverse_service_pistol_forward_marker"
   });
   assert.deepEqual(pistolAttachment.offHandSupportPointIdBySocketId, {
-    hand_r_socket: "grip-support-right"
+    hand_r_socket: "pistol-support-left"
   });
   assert.deepEqual(pistolAttachment.mountedHolster, {
     attachmentSocketNodeName: "metaverse_service_pistol_back_socket",
@@ -528,33 +490,38 @@ test("attachment manifests keep explicit attachment socket ownership for held an
   });
   assert.deepEqual(pistolAttachment.supportPoints, [
     {
-      localPosition: { x: 0.04, y: 0, z: -0.025 },
-      supportPointId: "grip-support-right"
+      authoringNodeName: "metaverse_service_pistol_support_grip_marker",
+      localPosition: { x: 0.04, y: -0.01, z: 0.025 },
+      supportPointId: "pistol-support-left"
     }
   ]);
 });
 
-test("pistol proof asset keeps explicit trigger-hand and holster socket nodes", async () => {
+test("pistol proof asset keeps explicit grip, sighting, and holster socket nodes", async () => {
   const document = await loadMetaverseAssetDocument(
     "/models/metaverse/attachments/metaverse-service-pistol.gltf"
   );
   const nodesByName = collectNamedNodeDescriptors(document);
 
   assert.deepEqual(
-    nodesByName.get("metaverse_service_pistol_trigger_hand_l_socket")?.translation,
-    [0.04, -0.045, -0.025]
+    nodesByName.get("metaverse_service_pistol_grip_hand_r_socket")?.translation,
+    [0.052, -0.055, 0]
   );
   assert.deepEqual(
-    nodesByName.get("metaverse_service_pistol_trigger_hand_r_socket")?.translation,
-    [0.04, -0.045, 0.025]
+    nodesByName.get("metaverse_service_pistol_trigger_marker")?.translation,
+    [0.088, -0.032, 0]
+  );
+  assert.deepEqual(
+    nodesByName.get("metaverse_service_pistol_muzzle_socket")?.translation,
+    [0.312, 0.03, 0]
+  );
+  assert.deepEqual(
+    nodesByName.get("metaverse_service_pistol_ads_camera_anchor")?.translation,
+    [0.016, 0.059, 0]
   );
   assert.deepEqual(
     nodesByName.get("metaverse_service_pistol_back_socket")?.translation,
-    [0.16, -0.04, -0.02]
-  );
-  assert.deepEqual(
-    nodesByName.get("metaverse_service_pistol_back_socket")?.rotation,
-    [0, 0.7071067811865475, -0.7071067811865476, 0]
+    [0.072, 0.012, 0]
   );
 });
 
@@ -563,20 +530,23 @@ test("current proof-slice gltf assets keep embedded payloads and normalized node
     clientLoader.load("/src/assets/config/animation-clip-manifest.ts"),
     clientLoader.load("/src/assets/config/attachment-model-manifest.ts"),
     clientLoader.load("/src/assets/config/character-model-manifest.ts"),
-    clientLoader.load("/src/assets/config/environment-prop-manifest.ts")
+    clientLoader.load("/src/assets/config/environment-prop-manifest.ts"),
+    clientLoader.load("/src/assets/config/weapon-module-manifest.ts")
   ]);
   const [
     { animationClipManifest },
     { attachmentModelManifest },
     { characterModelManifest },
-    { environmentPropManifest }
+    { environmentPropManifest },
+    { weaponModuleManifest }
   ] = manifests;
 
   const proofGltfPaths = collectMetaverseDeliveryPaths({
     animationClipManifest,
     attachmentModelManifest,
     characterModelManifest,
-    environmentPropManifest
+    environmentPropManifest,
+    weaponModuleManifest
   }).filter((assetPath) => assetPath.endsWith(".gltf"));
 
   const proofDocuments = await Promise.all(
@@ -619,20 +589,23 @@ test("shipped metaverse glb assets keep normalized node scale", async () => {
     clientLoader.load("/src/assets/config/animation-clip-manifest.ts"),
     clientLoader.load("/src/assets/config/attachment-model-manifest.ts"),
     clientLoader.load("/src/assets/config/character-model-manifest.ts"),
-    clientLoader.load("/src/assets/config/environment-prop-manifest.ts")
+    clientLoader.load("/src/assets/config/environment-prop-manifest.ts"),
+    clientLoader.load("/src/assets/config/weapon-module-manifest.ts")
   ]);
   const [
     { animationClipManifest },
     { attachmentModelManifest },
     { characterModelManifest },
-    { environmentPropManifest }
+    { environmentPropManifest },
+    { weaponModuleManifest }
   ] = manifests;
 
   const proofGlbPaths = collectMetaverseDeliveryPaths({
     animationClipManifest,
     attachmentModelManifest,
     characterModelManifest,
-    environmentPropManifest
+    environmentPropManifest,
+    weaponModuleManifest
   }).filter((assetPath) => assetPath.endsWith(".glb"));
 
   const proofDocuments = await Promise.all(

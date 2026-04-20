@@ -106,7 +106,7 @@ test("resolveMetaversePresenceRosterSyncChange detects roster mutations without 
   const rosterSnapshot = {
     players: [
       {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         playerId: localPlayerId,
         pose: {
           animationVocabulary: "idle",
@@ -126,7 +126,7 @@ test("resolveMetaversePresenceRosterSyncChange detects roster mutations without 
         username: localUsername
       },
       {
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         playerId: remotePlayerId,
         pose: {
           animationVocabulary: "walk",

@@ -23,9 +23,11 @@ export interface AttachmentMountSocketDescriptor {
   readonly attachmentSocketNodeNameBySocketId?: Partial<
     Record<SocketId, string | null>
   >;
+  readonly forwardReferenceNodeName?: string | null;
 }
 
 export interface AttachmentSupportPointDescriptor {
+  readonly authoringNodeName?: string | null;
   readonly localPosition: AttachmentVector3Descriptor;
   readonly supportPointId: string;
 }
@@ -34,9 +36,17 @@ export type AttachmentOffHandSupportPointIdBySocketId = Partial<
   Record<SocketId, string | null>
 >;
 
+export type AttachmentMountTargetSocketName =
+  | SocketId
+  | "back_socket"
+  | "grip_l_socket"
+  | "grip_r_socket"
+  | "palm_l_socket"
+  | "palm_r_socket";
+
 export interface AttachmentMountedHolsterDescriptor {
   readonly attachmentSocketNodeName: string;
-  readonly socketName: string;
+  readonly socketName: AttachmentMountTargetSocketName;
 }
 
 export interface AttachmentAssetDescriptor<

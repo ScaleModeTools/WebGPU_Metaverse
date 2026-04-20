@@ -280,7 +280,7 @@ function createMetaverseBenchmarkWorldSnapshot({
     players: [
       {
         angularVelocityRadiansPerSecond: 0,
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         linearVelocity: {
           x: 0,
           y: 0,
@@ -300,7 +300,7 @@ function createMetaverseBenchmarkWorldSnapshot({
       {
         angularVelocityRadiansPerSecond: 0.9,
         animationVocabulary: "walk",
-        characterId: "metaverse-mannequin-v1",
+        characterId: "mesh2motion-humanoid-v1",
         linearVelocity: {
           x: Math.cos(simulationSeconds * 1.2) * 7.2,
           y: 0,
@@ -385,7 +385,7 @@ function createMetaverseRemoteWorldCadenceBenchmarkSuite(
       const runtime = new MetaverseRemoteWorldRuntime({
         createMetaverseWorldClient: () => fakeWorldClient,
         localPlayerIdentity: {
-          characterId: "metaverse-mannequin-v1",
+          characterId: "mesh2motion-humanoid-v1",
           playerId: localPlayerId,
           username: localUsername
         },

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
 import { createClientModuleLoader } from "../../load-client-module.mjs";
+import { createHumanoidV2CharacterScene } from "../../metaverse-runtime-proof-slice-fixtures.mjs";
 
 let clientLoader;
 
@@ -55,76 +56,17 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
     clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
     clientLoader.load("/src/metaverse/traversal/presentation/mount-presentation.ts")
   ]);
-  const bodyGeometry = new BoxGeometry(0.42, 1.82, 0.24);
-  const vertexCount = bodyGeometry.attributes.position.count;
-  const skinIndices = new Uint16Array(vertexCount * 4);
-  const skinWeights = new Float32Array(vertexCount * 4);
-
-  for (let index = 0; index < vertexCount; index += 1) {
-    skinIndices[index * 4] = 0;
-    skinWeights[index * 4] = 1;
-  }
-
-  bodyGeometry.setAttribute("skinIndex", new Uint16BufferAttribute(skinIndices, 4));
-  bodyGeometry.setAttribute("skinWeight", new Float32BufferAttribute(skinWeights, 4));
-  const rootBone = new Bone();
-
-  rootBone.name = "root";
-  const hipsBone = new Bone();
-  hipsBone.name = "hips";
-  hipsBone.position.y = 0.45;
-  rootBone.add(hipsBone);
-  const spineBone = new Bone();
-  spineBone.name = "spine";
-  spineBone.position.y = 0.45;
-  hipsBone.add(spineBone);
-  const chestBone = new Bone();
-  chestBone.name = "chest";
-  chestBone.position.y = 0.45;
-  spineBone.add(chestBone);
-  const neckBone = new Bone();
-  neckBone.name = "neck";
-  neckBone.position.y = 0.25;
-  chestBone.add(neckBone);
-  const socketNames = [
-    "head_socket",
-    "hand_l_socket",
-    "hand_r_socket",
-    "hip_socket",
-    "seat_socket"
-  ];
-  const socketBones = socketNames.map((socketName) => {
-    const socketBone = new Bone();
-    socketBone.name = socketName;
-    return socketBone;
+  const { characterScene, socketNames } = createHumanoidV2CharacterScene({
+    Bone,
+    BoxGeometry,
+    Float32BufferAttribute,
+    Group,
+    MeshStandardMaterial,
+    Skeleton,
+    SkinnedMesh,
+    Uint16BufferAttribute,
+    Vector3
   });
-
-  neckBone.add(socketBones[0]);
-  chestBone.add(socketBones[1], socketBones[2]);
-  hipsBone.add(socketBones[3], socketBones[4]);
-  socketBones[0].position.y = 0.18;
-  socketBones[1].position.x = -0.35;
-  socketBones[2].position.x = 0.35;
-  socketBones[3].position.set(0.2, -0.08, -0.08);
-  socketBones[4].position.set(0, 0, -0.08);
-
-  const skinnedMesh = new SkinnedMesh(
-    bodyGeometry,
-    new MeshStandardMaterial({ color: 0xa8b8d1 })
-  );
-  const characterScene = new Group();
-  const skeleton = new Skeleton([
-    rootBone,
-    hipsBone,
-    spineBone,
-    chestBone,
-    neckBone,
-    ...socketBones
-  ]);
-
-  skinnedMesh.add(rootBone);
-  skinnedMesh.bind(skeleton);
-  characterScene.add(skinnedMesh);
 
   const idleClip = new AnimationClip("idle", -1, []);
   const walkClip = new AnimationClip("walk", -1, []);
@@ -172,19 +114,19 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
       animationClips: [
         {
           clipName: "idle",
-          sourcePath: "/models/metaverse/characters/metaverse-mannequin.gltf",
+          sourcePath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
           vocabulary: "idle"
         },
         {
           clipName: "walk",
-          sourcePath: "/models/metaverse/characters/metaverse-mannequin.gltf",
+          sourcePath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
           vocabulary: "walk"
         }
       ],
-      characterId: "metaverse-mannequin-v1",
-      label: "Metaverse mannequin",
-      modelPath: "/models/metaverse/characters/metaverse-mannequin.gltf",
-      skeletonId: "humanoid_v1",
+      characterId: "mesh2motion-humanoid-v1",
+      label: "Mesh2Motion humanoid",
+      modelPath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
+      skeletonId: "humanoid_v2",
       socketNames
     },
     createSceneAssetLoader: () => ({
@@ -323,7 +265,7 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
     yawRadians: 0
   };
   const characterRoot = sceneRuntime.scene.getObjectByName(
-    "metaverse_character/metaverse-mannequin-v1"
+    "metaverse_character/mesh2motion-humanoid-v1"
   );
   const originalParent = characterRoot.parent;
   const originalWorldPosition = characterRoot.getWorldPosition(new Vector3());
