@@ -54,7 +54,7 @@ export interface MetaverseRuntimeConfig {
     readonly dragCurveExponent: number;
     readonly eyeHeightMeters: number;
     readonly gravityUnitsPerSecond: number;
-    readonly jumpGroundContactGraceSeconds?: number;
+    readonly jumpGroundContactGraceSeconds: number;
     readonly jumpImpulseUnitsPerSecond: number;
     readonly maxSlopeClimbAngleRadians: number;
     readonly maxTurnSpeedRadiansPerSecond: number;

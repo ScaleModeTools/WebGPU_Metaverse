@@ -16,15 +16,17 @@ import {
 
 import type { MetaverseAuthoritativeSurfaceColliderSnapshot } from "../../world/map-bundles/metaverse-authoritative-world-bundle-inputs.js";
 import type { MetaverseAuthoritativeMountedOccupancyRuntimeState } from "../mounted/metaverse-authoritative-mounted-occupancy-authority.js";
+import {
+  createMetaverseAuthoritativeLastGroundedBodySnapshot,
+  type MetaverseAuthoritativeLastGroundedBodySnapshot
+} from "./metaverse-authoritative-last-grounded-body-snapshot.js";
 
 export interface MetaverseAuthoritativePlayerPoseRuntimeState<
   MountedOccupancy extends MetaverseAuthoritativeMountedOccupancyRuntimeState = MetaverseAuthoritativeMountedOccupancyRuntimeState
 > {
   angularVelocityRadiansPerSecond: number;
-  forwardSpeedUnitsPerSecond: number;
-  lastGroundedBodyJumpReady: boolean;
+  lastGroundedBodySnapshot: MetaverseAuthoritativeLastGroundedBodySnapshot;
   lastGroundedJumpSupported: boolean;
-  lastGroundedPositionY: number;
   lastPoseAtMs: number | null;
   lastProcessedInputSequence: number;
   lastProcessedLookSequence: number;
@@ -44,7 +46,6 @@ export interface MetaverseAuthoritativePlayerPoseRuntimeState<
   presenceAnimationVocabulary: MetaversePresencePoseSnapshot["animationVocabulary"];
   realtimeWorldAuthorityActive: boolean;
   stateSequence: number;
-  strafeSpeedUnitsPerSecond: number;
   traversalAuthorityState: MetaverseTraversalAuthoritySnapshot;
   unmountedTraversalState: MetaverseUnmountedTraversalStateSnapshot;
   yawRadians: number;
@@ -267,17 +268,30 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
     this.#dependencies.clearPlayerTraversalIntent(playerRuntime.playerId);
 
     playerRuntime.presenceAnimationVocabulary = nextPose.animationVocabulary;
-    playerRuntime.forwardSpeedUnitsPerSecond = 0;
     playerRuntime.unmountedTraversalState =
       createMetaverseUnmountedTraversalStateSnapshot({
         locomotionMode:
           nextPose.locomotionMode === "swim" ? "swim" : "grounded"
       });
-    playerRuntime.lastGroundedBodyJumpReady = false;
+    playerRuntime.lastGroundedBodySnapshot =
+      createMetaverseAuthoritativeLastGroundedBodySnapshot({
+        contact: {
+          supportingContactDetected: nextPose.locomotionMode === "grounded"
+        },
+        interaction: playerRuntime.lastGroundedBodySnapshot.interaction,
+        ...(nextPose.locomotionMode === "grounded"
+          ? {
+              jumpBody: {
+                grounded: true,
+                jumpReady: true
+              }
+            }
+          : {}),
+        positionYMeters: nextPose.position.y
+      });
     playerRuntime.lastGroundedJumpSupported = false;
     playerRuntime.lastProcessedInputSequence = nextPose.stateSequence;
     playerRuntime.lastSurfaceJumpSupported = false;
-    playerRuntime.lastGroundedPositionY = nextPose.position.y;
     playerRuntime.locomotionMode =
       acceptedMountedOccupancy === null &&
       requestedMountedEnvironmentAssetId !== null
@@ -296,7 +310,6 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
     }
 
     playerRuntime.stateSequence = nextPose.stateSequence;
-    playerRuntime.strafeSpeedUnitsPerSecond = 0;
     playerRuntime.mountedOccupancy = acceptedMountedOccupancy;
     playerRuntime.traversalAuthorityState =
       createMetaverseTraversalAuthoritySnapshot();
@@ -384,18 +397,18 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
     playerRuntime.yawRadians = nextPose.yawRadians;
 
     if (playerRuntime.locomotionMode === "grounded") {
-      playerRuntime.lastGroundedPositionY = nextPose.position.y;
+      playerRuntime.lastGroundedBodySnapshot =
+        createMetaverseAuthoritativeLastGroundedBodySnapshot({
+          ...playerRuntime.lastGroundedBodySnapshot,
+          positionYMeters: nextPose.position.y
+        });
     }
 
     playerRuntime.angularVelocityRadiansPerSecond =
       kinematicSnapshot.angularVelocityRadiansPerSecond;
-    playerRuntime.forwardSpeedUnitsPerSecond =
-      kinematicSnapshot.forwardSpeedUnitsPerSecond;
     playerRuntime.linearVelocityX = kinematicSnapshot.linearVelocity.x;
     playerRuntime.linearVelocityY = kinematicSnapshot.linearVelocity.y;
     playerRuntime.linearVelocityZ = kinematicSnapshot.linearVelocity.z;
-    playerRuntime.strafeSpeedUnitsPerSecond =
-      kinematicSnapshot.strafeSpeedUnitsPerSecond;
 
     playerRuntime.lastPoseAtMs = nowMs;
     this.#dependencies.syncPlayerTraversalBodyRuntimes(playerRuntime);

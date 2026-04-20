@@ -2,7 +2,7 @@ import {
   clearMetaverseUnmountedTraversalPendingActions,
   metaverseTraversalActionBufferSeconds,
   queueMetaverseUnmountedTraversalAction,
-  resolveMetaverseTraversalKinematicActionSnapshot,
+  resolveMetaverseGroundedJumpBodyTraversalActionSnapshot,
   type MetaverseTraversalActiveActionSnapshot,
   type MetaverseUnmountedTraversalStateSnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
@@ -28,6 +28,7 @@ import {
 } from "../presentation/camera-presentation";
 import {
   clamp,
+  createSurfaceLocomotionSnapshot,
   freezeVector3,
   toFiniteNumber,
   wrapRadians
@@ -176,13 +177,16 @@ export class MetaverseUnmountedTraversalMotionState {
     const groundedBodySnapshot =
       this.#dependencies.groundedBodyRuntime.snapshot;
 
-    return resolveMetaverseTraversalKinematicActionSnapshot({
-      grounded: groundedBodySnapshot.grounded,
-      locomotionMode: locomotionMode === "swim" ? "swim" : "grounded",
-      mounted: locomotionMode === "mounted",
-      verticalSpeedUnitsPerSecond:
-        groundedBodySnapshot.verticalSpeedUnitsPerSecond
-    });
+    if (locomotionMode !== "grounded") {
+      return Object.freeze({
+        kind: "none",
+        phase: "idle"
+      });
+    }
+
+    return resolveMetaverseGroundedJumpBodyTraversalActionSnapshot(
+      groundedBodySnapshot.jumpBody
+    );
   }
 
   readLocalTraversalPoseForReconciliation(): LocalTraversalPoseSnapshot | null {
@@ -201,6 +205,7 @@ export class MetaverseUnmountedTraversalMotionState {
       }
 
       return {
+        linearVelocity: swimSnapshot.linearVelocity,
         locomotionMode: "swim",
         position: swimSnapshot.position,
         yawRadians: swimSnapshot.yawRadians
@@ -212,6 +217,7 @@ export class MetaverseUnmountedTraversalMotionState {
     }
 
     return {
+      linearVelocity: this.#dependencies.groundedBodyRuntime.snapshot.linearVelocity,
       locomotionMode: "grounded",
       position: this.#dependencies.groundedBodyRuntime.snapshot.position,
       yawRadians: this.#dependencies.groundedBodyRuntime.snapshot.yawRadians
@@ -221,23 +227,30 @@ export class MetaverseUnmountedTraversalMotionState {
   applyAuthoritativeUnmountedPose({
     authoritativeGrounded,
     authoritativePlayerSnapshot,
-    localTraversalPose
+    localTraversalPose,
+    positionBlendAlpha,
+    yawBlendAlpha
   }: ApplyAuthoritativeUnmountedPoseInput): MetaverseCameraSnapshot {
     const correctionLinearVelocity = authoritativePlayerSnapshot.linearVelocity;
 
     if (authoritativePlayerSnapshot.locomotionMode === "swim") {
+      const authoritativeSwimSnapshot =
+        authoritativePlayerSnapshot.swimBody ??
+        createSurfaceLocomotionSnapshot({
+          linearVelocity: correctionLinearVelocity,
+          position: authoritativePlayerSnapshot.position,
+          yawRadians: authoritativePlayerSnapshot.yawRadians
+        });
       const cameraSnapshot =
         this.#dependencies.surfaceLocomotionState.syncAuthoritativeSwimLocomotion(
           {
-            linearVelocity: correctionLinearVelocity,
             lookYawRadians: this.#unmountedLookYawRadians,
-            position: authoritativePlayerSnapshot.position,
-            positionBlendAlpha: 1,
+            positionBlendAlpha,
             resolveSwimPresentationPosition: (swimSnapshot) =>
               this.resolveSwimPresentationPosition(swimSnapshot),
+            swimSnapshot: authoritativeSwimSnapshot,
             traversalCameraPitchRadians: this.#traversalCameraPitchRadians,
-            yawBlendAlpha: 1,
-            yawRadians: localTraversalPose.yawRadians
+            yawBlendAlpha
           }
         );
       this.#dependencies.setLocomotionMode("swim");
@@ -249,15 +262,16 @@ export class MetaverseUnmountedTraversalMotionState {
       this.#dependencies.surfaceLocomotionState.syncAuthoritativeGroundedLocomotion(
         {
           grounded: authoritativeGrounded,
-          linearVelocity: correctionLinearVelocity,
+          interaction: authoritativePlayerSnapshot.groundedBody.interaction,
+          linearVelocity: authoritativePlayerSnapshot.groundedBody.linearVelocity,
           lookYawRadians: this.#unmountedLookYawRadians,
-          position: authoritativePlayerSnapshot.position,
-          positionBlendAlpha: 1,
+          position: authoritativePlayerSnapshot.groundedBody.position,
+          positionBlendAlpha,
           resolveGroundedPresentationPosition: () =>
             this.resolveGroundedPresentationPosition(),
           traversalCameraPitchRadians: this.#traversalCameraPitchRadians,
-          yawBlendAlpha: 1,
-          yawRadians: localTraversalPose.yawRadians
+          yawBlendAlpha,
+          yawRadians: authoritativePlayerSnapshot.groundedBody.yawRadians
         }
       );
 
@@ -454,7 +468,6 @@ export class MetaverseUnmountedTraversalMotionState {
   resolveGroundedPresentationPosition(): PhysicsVector3Snapshot {
     return this.#dependencies.characterPresentationState.resolveGroundedPresentationPosition(
       this.#dependencies.groundedBodyRuntime.snapshot,
-      this.#dependencies.groundedBodyRuntime.linearVelocitySnapshot,
       this.#groundedLocomotionAccumulatorSeconds,
       (position) =>
         this.#dependencies.surfaceLocomotionState.readGroundedSupportHeightMeters(
@@ -553,9 +566,9 @@ export class MetaverseUnmountedTraversalMotionState {
       const nextCameraSnapshot =
         this.#dependencies.surfaceLocomotionState.enterSwimLocomotion({
           linearVelocity: freezeVector3(
-            this.#dependencies.groundedBodyRuntime.linearVelocitySnapshot.x,
+            groundedBodySnapshot.linearVelocity.x,
             0,
-            this.#dependencies.groundedBodyRuntime.linearVelocitySnapshot.z
+            groundedBodySnapshot.linearVelocity.z
           ),
           lookYawRadians: this.#unmountedLookYawRadians,
           position: freezeVector3(
@@ -600,7 +613,10 @@ export class MetaverseUnmountedTraversalMotionState {
           position: swimLocomotionResult.nextSwimSnapshot.position,
           resolveGroundedPresentationPosition: () =>
             this.resolveGroundedPresentationPosition(),
-          supportHeightMeters: swimLocomotionResult.supportHeightMeters,
+          supportHeightMeters:
+            swimLocomotionResult.transitionSnapshot.positionYSource === "support"
+              ? swimLocomotionResult.transitionSnapshot.positionYMeters
+              : null,
           traversalCameraPitchRadians: this.#traversalCameraPitchRadians,
           yawRadians: swimLocomotionResult.nextSwimSnapshot.yawRadians
         });

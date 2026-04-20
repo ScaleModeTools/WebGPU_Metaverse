@@ -1,9 +1,16 @@
 import {
+  createMetaverseGroundedBodyContactSnapshot,
+  createMetaverseGroundedBodyInteractionSnapshot,
+  createMetaverseSurfaceDriveBodyRuntimeSnapshot,
+  createMetaverseSurfaceTraversalDriveTargetSnapshot,
   resolveMetaverseUnmountedGroundedJumpSupport,
   type MetaverseTraversalAuthoritySnapshot
 } from "@webgpu-metaverse/shared";
 import type {
   MetaversePlayerTraversalIntentSnapshot
+} from "@webgpu-metaverse/shared/metaverse/realtime";
+import {
+  readMetaverseRealtimePlayerActiveBodyKinematicSnapshot
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import type { MetaverseGroundedBodyRuntime } from "@/physics";
@@ -19,13 +26,20 @@ import type { MetaverseLocalTraversalAuthorityState } from "./metaverse-local-tr
 import type { MetaverseLocalAuthorityReconciliationState } from "../reconciliation/classes/metaverse-local-authority-reconciliation-state";
 import type { AuthoritativeLocalPlayerPoseSnapshot } from "../reconciliation/classes/metaverse-local-authority-reconciliation-state";
 import type { LocalTraversalPoseSnapshot } from "../reconciliation/local-authority-pose-correction";
-import type { MetaverseTraversalRuntimeDependencies } from "../types/traversal";
+import type {
+  MetaverseTraversalRuntimeDependencies,
+  SurfaceLocomotionSnapshot
+} from "../types/traversal";
 import type { MetaverseUnmountedSurfaceLocomotionState } from "../surface/metaverse-unmounted-surface-locomotion-state";
 
 type LocalSurfaceRoutingTelemetrySnapshot =
   MetaverseTelemetrySnapshot["worldSnapshot"]["surfaceRouting"]["local"];
 type LocalJumpGateTelemetrySnapshot =
   MetaverseTelemetrySnapshot["worldSnapshot"]["surfaceRouting"]["local"]["jumpDebug"];
+type LocalGroundedBodyTelemetrySnapshot =
+  NonNullable<LocalSurfaceRoutingTelemetrySnapshot["groundedBody"]>;
+type LocalGroundedJumpBodyTelemetrySnapshot =
+  LocalGroundedBodyTelemetrySnapshot["jumpBody"];
 type LocalReconciliationCorrectionSource =
   MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"]["lastCorrectionSource"];
 type LocalAuthorityPoseCorrectionSnapshot =
@@ -64,6 +78,117 @@ function freezeIssuedTraversalIntentSnapshot(
   });
 }
 
+function freezeGroundedJumpBodyTelemetrySnapshot(
+  snapshot: {
+    readonly grounded: boolean;
+    readonly jumpGroundContactGraceSecondsRemaining: number;
+    readonly jumpReady: boolean;
+    readonly jumpSnapSuppressionActive: boolean;
+    readonly verticalSpeedUnitsPerSecond: number;
+  }
+): LocalGroundedJumpBodyTelemetrySnapshot {
+  return Object.freeze({
+    grounded: snapshot.grounded,
+    jumpGroundContactGraceSecondsRemaining:
+      snapshot.jumpGroundContactGraceSecondsRemaining,
+    jumpReady: snapshot.jumpReady,
+    jumpSnapSuppressionActive: snapshot.jumpSnapSuppressionActive,
+    verticalSpeedUnitsPerSecond: snapshot.verticalSpeedUnitsPerSecond
+  });
+}
+
+function freezeGroundedBodyContactTelemetrySnapshot(snapshot: {
+  readonly appliedMovementDelta?: {
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+  };
+  readonly blockedPlanarMovement?: boolean;
+  readonly blockedVerticalMovement?: boolean;
+  readonly desiredMovementDelta?: {
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+  };
+  readonly supportingContactDetected: boolean;
+}) {
+  return createMetaverseGroundedBodyContactSnapshot(snapshot);
+}
+
+function freezeGroundedBodyDriveTargetTelemetrySnapshot(snapshot: {
+  readonly boost: boolean;
+  readonly moveAxis: number;
+  readonly movementMagnitude: number;
+  readonly strafeAxis: number;
+  readonly targetForwardSpeedUnitsPerSecond: number;
+  readonly targetPlanarSpeedUnitsPerSecond: number;
+  readonly targetStrafeSpeedUnitsPerSecond: number;
+}) {
+  return createMetaverseSurfaceTraversalDriveTargetSnapshot(snapshot);
+}
+
+function freezeGroundedBodyInteractionTelemetrySnapshot(snapshot: {
+  readonly applyImpulsesToDynamicBodies: boolean;
+}) {
+  return createMetaverseGroundedBodyInteractionSnapshot(snapshot);
+}
+
+function freezeGroundedBodyTelemetrySnapshot(snapshot: {
+  readonly contact: {
+    readonly appliedMovementDelta?: {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+    };
+    readonly blockedPlanarMovement?: boolean;
+    readonly blockedVerticalMovement?: boolean;
+    readonly desiredMovementDelta?: {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+    };
+    readonly supportingContactDetected: boolean;
+  };
+  readonly driveTarget: {
+    readonly boost: boolean;
+    readonly moveAxis: number;
+    readonly movementMagnitude: number;
+    readonly strafeAxis: number;
+    readonly targetForwardSpeedUnitsPerSecond: number;
+    readonly targetPlanarSpeedUnitsPerSecond: number;
+    readonly targetStrafeSpeedUnitsPerSecond: number;
+  };
+  readonly interaction: {
+    readonly applyImpulsesToDynamicBodies: boolean;
+  };
+  readonly jumpBody: {
+    readonly grounded: boolean;
+    readonly jumpGroundContactGraceSecondsRemaining: number;
+    readonly jumpReady: boolean;
+    readonly jumpSnapSuppressionActive: boolean;
+    readonly verticalSpeedUnitsPerSecond: number;
+  };
+}): LocalGroundedBodyTelemetrySnapshot {
+  return Object.freeze({
+    contact: freezeGroundedBodyContactTelemetrySnapshot(snapshot.contact),
+    driveTarget: freezeGroundedBodyDriveTargetTelemetrySnapshot(
+      snapshot.driveTarget
+    ),
+    interaction: freezeGroundedBodyInteractionTelemetrySnapshot(
+      snapshot.interaction
+    ),
+    jumpBody: freezeGroundedJumpBodyTelemetrySnapshot(snapshot.jumpBody)
+  });
+}
+
+function freezeSwimBodyTelemetrySnapshot(
+  snapshot: SurfaceLocomotionSnapshot
+): NonNullable<
+  NonNullable<LocalAuthorityPoseCorrectionSnapshot>["authoritative"]["swimBody"]
+> {
+  return createMetaverseSurfaceDriveBodyRuntimeSnapshot(snapshot);
+}
+
 interface MetaverseTraversalTelemetryStateDependencies {
   readonly config: MetaverseRuntimeConfig;
   readonly groundedBodyRuntime: MetaverseGroundedBodyRuntime;
@@ -74,14 +199,6 @@ interface MetaverseTraversalTelemetryStateDependencies {
     MetaverseTraversalRuntimeDependencies["surfaceColliderSnapshots"];
   readonly surfaceLocomotionState: MetaverseUnmountedSurfaceLocomotionState;
 }
-
-type SwimVelocitySnapshot = {
-  readonly linearVelocity?: {
-    readonly x: number;
-    readonly y: number;
-    readonly z: number;
-  };
-};
 
 export class MetaverseTraversalTelemetryState {
   readonly #dependencies: MetaverseTraversalTelemetryStateDependencies;
@@ -131,11 +248,8 @@ export class MetaverseTraversalTelemetryState {
       this.#dependencies.readLocomotionMode() !== "grounded"
     ) {
       return Object.freeze({
-        groundedBodyGrounded: null,
-        groundedBodyJumpReady: null,
         surfaceJumpSupported: null,
-        supported: null,
-        verticalSpeedUnitsPerSecond: null
+        supported: null
       });
     }
 
@@ -158,12 +272,8 @@ export class MetaverseTraversalTelemetryState {
     });
 
     return Object.freeze({
-      groundedBodyGrounded: groundedBodySnapshot.grounded,
-      groundedBodyJumpReady: groundedBodySnapshot.jumpReady,
       surfaceJumpSupported: groundedJumpSupport.surfaceJumpSupported,
-      supported: groundedJumpSupport.groundedJumpSupported,
-      verticalSpeedUnitsPerSecond:
-        groundedBodySnapshot.verticalSpeedUnitsPerSecond
+      supported: groundedJumpSupport.groundedJumpSupported
     });
   }
 
@@ -176,23 +286,47 @@ export class MetaverseTraversalTelemetryState {
   }
 
   get surfaceRoutingLocalTelemetrySnapshot(): LocalSurfaceRoutingTelemetrySnapshot {
+    const automaticSurfaceTelemetrySnapshot =
+      this.#dependencies.surfaceLocomotionState
+        .latestAutomaticSurfaceTelemetrySnapshot;
+    const automaticSurfaceDebug =
+      automaticSurfaceTelemetrySnapshot.automaticSurfaceSnapshot.debug;
+    const localSwimSnapshot =
+      this.#dependencies.readLocomotionMode() === "swim"
+        ? this.#dependencies.surfaceLocomotionState.readSwimSnapshot()
+        : null;
+
     return Object.freeze({
-      autostepHeightMeters:
-        this.#dependencies.surfaceLocomotionState.latestAutostepHeightMeters,
+      autostepHeightMeters: automaticSurfaceTelemetrySnapshot.autostepHeightMeters,
       blockingAffordanceDetected:
-        this.#dependencies.surfaceLocomotionState
-          .latestBlockingAffordanceDetected,
-      decisionReason:
-        this.#dependencies.surfaceLocomotionState
-          .latestAutomaticSurfaceDecisionReason,
+        automaticSurfaceDebug.blockingAffordanceDetected,
+      decisionReason: automaticSurfaceDebug.reason,
+      groundedBody:
+        this.#dependencies.groundedBodyRuntime.isInitialized &&
+        this.#dependencies.readLocomotionMode() === "grounded"
+          ? freezeGroundedBodyTelemetrySnapshot({
+              contact:
+                this.#dependencies.groundedBodyRuntime.snapshot.contact ?? {
+                  supportingContactDetected:
+                    this.#dependencies.groundedBodyRuntime.snapshot.grounded
+                },
+              driveTarget: this.#dependencies.groundedBodyRuntime.snapshot
+                .driveTarget,
+              interaction: this.#dependencies.groundedBodyRuntime.snapshot
+                .interaction,
+              jumpBody: this.#dependencies.groundedBodyRuntime.snapshot.jumpBody
+            })
+          : null,
       jumpDebug: this.localGroundedJumpGateTelemetrySnapshot,
       locomotionMode: this.#dependencies.readLocomotionMode(),
       resolvedSupportHeightMeters:
-        this.#dependencies.surfaceLocomotionState
-          .latestResolvedSupportHeightMeters,
+        automaticSurfaceDebug.resolvedSupportHeightMeters,
+      swimBody:
+        localSwimSnapshot === null
+          ? null
+          : freezeSwimBodyTelemetrySnapshot(localSwimSnapshot),
       supportingAffordanceSampleCount:
-        this.#dependencies.surfaceLocomotionState
-          .latestSupportingAffordanceSampleCount,
+        automaticSurfaceDebug.supportingAffordanceSampleCount,
       traversalAuthority: this.#readLocalTraversalAuthoritySnapshot()
     });
   }
@@ -204,24 +338,34 @@ export class MetaverseTraversalTelemetryState {
     readonly authoritativePlayerSnapshot: AuthoritativeLocalPlayerPoseSnapshot;
     readonly localTraversalPose: LocalTraversalPoseSnapshot;
   }): NonNullable<LocalAuthorityPoseCorrectionSnapshot> {
-    const localSwimLinearVelocity =
-      (
-        this.#dependencies.surfaceLocomotionState.readSwimSnapshot() as
-          | SwimVelocitySnapshot
-          | null
-      )?.linearVelocity ?? Object.freeze({ x: 0, y: 0, z: 0 });
+    const localSwimSnapshot =
+      localTraversalPose.locomotionMode === "swim"
+        ? this.#dependencies.surfaceLocomotionState.readSwimSnapshot()
+        : null;
     const localLinearVelocity =
       localTraversalPose.locomotionMode === "swim"
-        ? localSwimLinearVelocity
+        ? localSwimSnapshot?.linearVelocity ?? Object.freeze({ x: 0, y: 0, z: 0 })
         : this.#dependencies.groundedBodyRuntime.isInitialized
-          ? this.#dependencies.groundedBodyRuntime.linearVelocitySnapshot
+          ? this.#dependencies.groundedBodyRuntime.snapshot.linearVelocity
           : Object.freeze({ x: 0, y: 0, z: 0 });
+    const authoritativeSwimSnapshot =
+      authoritativePlayerSnapshot.locomotionMode === "swim"
+        ? authoritativePlayerSnapshot.swimBody
+        : null;
+    const authoritativeActiveBodySnapshot =
+      readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(
+        authoritativePlayerSnapshot
+      );
+    const authoritativeSurfaceRoutingPosition =
+      authoritativeActiveBodySnapshot.position;
+    const authoritativeSurfaceRoutingYawRadians =
+      authoritativeActiveBodySnapshot.yawRadians;
     const authoritativeSurfaceRouting =
       resolveAutomaticSurfaceLocomotionSnapshot(
         this.#dependencies.config,
         this.#dependencies.surfaceColliderSnapshots,
-        authoritativePlayerSnapshot.position,
-        authoritativePlayerSnapshot.yawRadians,
+        authoritativeSurfaceRoutingPosition,
+        authoritativeSurfaceRoutingYawRadians,
         authoritativePlayerSnapshot.locomotionMode === "swim"
           ? "swim"
           : "grounded"
@@ -229,13 +373,24 @@ export class MetaverseTraversalTelemetryState {
 
     return Object.freeze({
       authoritative: Object.freeze({
+        groundedBody:
+          authoritativePlayerSnapshot.locomotionMode === "grounded" &&
+          authoritativePlayerSnapshot.groundedBody != null
+            ? freezeGroundedBodyTelemetrySnapshot(
+                authoritativePlayerSnapshot.groundedBody
+              )
+            : null,
         lastProcessedInputSequence:
           authoritativePlayerSnapshot.lastProcessedInputSequence,
         linearVelocity: freezeVector3Snapshot(
-          authoritativePlayerSnapshot.linearVelocity
+          authoritativeActiveBodySnapshot.linearVelocity
         ),
         locomotionMode: authoritativePlayerSnapshot.locomotionMode,
-        position: freezeVector3Snapshot(authoritativePlayerSnapshot.position),
+        position: freezeVector3Snapshot(authoritativeActiveBodySnapshot.position),
+        swimBody:
+          authoritativeSwimSnapshot === null
+            ? null
+            : freezeSwimBodyTelemetrySnapshot(authoritativeSwimSnapshot),
         surfaceRouting: Object.freeze({
           blockingAffordanceDetected:
             authoritativeSurfaceRouting.debug.blockingAffordanceDetected,
@@ -247,6 +402,23 @@ export class MetaverseTraversalTelemetryState {
         })
       }),
       local: Object.freeze({
+        groundedBody:
+          localTraversalPose.locomotionMode === "grounded" &&
+          this.#dependencies.groundedBodyRuntime.isInitialized
+            ? freezeGroundedBodyTelemetrySnapshot({
+                contact:
+                  this.#dependencies.groundedBodyRuntime.snapshot.contact ?? {
+                    supportingContactDetected:
+                      this.#dependencies.groundedBodyRuntime.snapshot.grounded
+                  },
+                driveTarget: this.#dependencies.groundedBodyRuntime.snapshot
+                  .driveTarget,
+                interaction: this.#dependencies.groundedBodyRuntime.snapshot
+                  .interaction,
+                jumpBody: this.#dependencies.groundedBodyRuntime.snapshot
+                  .jumpBody
+              })
+            : null,
         issuedTraversalIntent: freezeIssuedTraversalIntentSnapshot(
           this.#dependencies.localTraversalAuthorityState
             .latestIssuedTraversalIntentSnapshot
@@ -254,14 +426,19 @@ export class MetaverseTraversalTelemetryState {
         linearVelocity: freezeVector3Snapshot(localLinearVelocity),
         locomotionMode: localTraversalPose.locomotionMode,
         position: freezeVector3Snapshot(localTraversalPose.position),
+        swimBody:
+          localSwimSnapshot === null
+            ? null
+            : freezeSwimBodyTelemetrySnapshot(localSwimSnapshot),
         surfaceRouting: this.surfaceRoutingLocalTelemetrySnapshot
       })
     });
   }
 
-  recordLocalAuthoritySnap(): void {
+  recordLocalAuthorityConvergence(): void {
     this.#localReconciliationCorrectionCount += 1;
-    this.#lastLocalReconciliationCorrectionSource = "local-authority-snap";
+    this.#lastLocalReconciliationCorrectionSource =
+      "local-authority-convergence";
   }
 
   recordMountedVehicleAuthorityCorrection(): void {

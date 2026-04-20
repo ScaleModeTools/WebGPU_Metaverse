@@ -13,6 +13,12 @@ export interface MetaverseTraversalPlanarDirectionalSpeedSnapshot {
   readonly strafeSpeedUnitsPerSecond: number;
 }
 
+export interface MetaverseTraversalLinearVelocitySnapshotInput {
+  readonly forwardSpeedUnitsPerSecond: number;
+  readonly strafeSpeedUnitsPerSecond: number;
+  readonly verticalSpeedUnitsPerSecond?: number;
+}
+
 export interface MetaverseTraversalKinematicPoseSnapshot {
   readonly position: Pick<MetaverseWorldSurfaceVector3Snapshot, "x" | "y" | "z">;
   readonly yawRadians: number;
@@ -130,6 +136,32 @@ export function resolveMetaverseTraversalPlanarDirectionalSpeeds(
     strafeSpeedUnitsPerSecond:
       linearVelocityX * rightX + linearVelocityZ * rightZ
   });
+}
+
+export function resolveMetaverseTraversalLinearVelocitySnapshot(
+  directionalSpeeds: MetaverseTraversalLinearVelocitySnapshotInput,
+  yawRadians: number
+): MetaverseWorldSurfaceVector3Snapshot {
+  const forwardX = Math.sin(yawRadians);
+  const forwardZ = -Math.cos(yawRadians);
+  const rightX = Math.cos(yawRadians);
+  const rightZ = Math.sin(yawRadians);
+  const forwardSpeedUnitsPerSecond = toFiniteNumber(
+    directionalSpeeds.forwardSpeedUnitsPerSecond
+  );
+  const strafeSpeedUnitsPerSecond = toFiniteNumber(
+    directionalSpeeds.strafeSpeedUnitsPerSecond
+  );
+
+  return createMetaverseSurfaceTraversalVector3Snapshot(
+    forwardSpeedUnitsPerSecond * forwardX +
+      strafeSpeedUnitsPerSecond * rightX,
+    directionalSpeeds.verticalSpeedUnitsPerSecond === undefined
+      ? 0
+      : toFiniteNumber(directionalSpeeds.verticalSpeedUnitsPerSecond),
+    forwardSpeedUnitsPerSecond * forwardZ +
+      strafeSpeedUnitsPerSecond * rightZ
+  );
 }
 
 export function resolveMetaverseTraversalPoseKinematics(

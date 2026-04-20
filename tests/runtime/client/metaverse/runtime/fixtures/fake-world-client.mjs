@@ -74,6 +74,7 @@ export function createRealtimeWorldSnapshot({
   localAnimationVocabulary = "idle",
   localJumpAuthorityState,
   localJumpDebug,
+  localGroundedBody,
   localLastAcceptedJumpActionSequence = 0,
   localLastProcessedInputSequence,
   localLastProcessedJumpActionSequence = 0,
@@ -205,8 +206,17 @@ export function createRealtimeWorldSnapshot({
     localJumpAuthorityState === undefined
       ? undefined
       : resolveMetaverseTraversalAuthoritySnapshotInput({
+          activeAction:
+            localJumpAuthorityState === "none"
+              ? {
+                  kind: "none",
+                  phase: "idle"
+                }
+              : {
+                  kind: "jump",
+                  phase: localJumpAuthorityState
+                },
           currentTick,
-          jumpAuthorityState: localJumpAuthorityState,
           locomotionMode:
             localMountedOccupancy === null && localLocomotionMode === "swim"
               ? "swim"
@@ -232,6 +242,9 @@ export function createRealtimeWorldSnapshot({
         angularVelocityRadiansPerSecond: 0,
         animationVocabulary: localAnimationVocabulary,
         characterId: "metaverse-mannequin-v1",
+        ...(localGroundedBody === undefined
+          ? {}
+          : { groundedBody: localGroundedBody }),
         jumpDebug: resolvedLocalJumpDebug,
         linearVelocity: localLinearVelocity,
         look: {

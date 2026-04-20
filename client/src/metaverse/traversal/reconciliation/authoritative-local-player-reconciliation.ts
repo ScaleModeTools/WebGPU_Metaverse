@@ -2,28 +2,36 @@ import type {
   MetaverseRealtimePlayerSnapshot,
   MetaverseRealtimeWorldSnapshot
 } from "@webgpu-metaverse/shared/metaverse/realtime";
+import { createRadians } from "@webgpu-metaverse/shared";
+import {
+  readMetaverseRealtimePlayerActiveBodyKinematicSnapshot
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 import {
   createMetaverseMountedOccupancyIdentityKey
 } from "@webgpu-metaverse/shared/metaverse/presence";
 
 export type AckedAuthoritativeLocalPlayerPose = Pick<
   MetaverseRealtimePlayerSnapshot,
+  | "groundedBody"
   | "lastProcessedInputSequence"
   | "linearVelocity"
   | "locomotionMode"
   | "mountedOccupancy"
   | "position"
+  | "swimBody"
   | "traversalAuthority"
   | "yawRadians"
 >;
 
 type AckedAuthoritativeLocalPlayerSnapshot = Pick<
   MetaverseRealtimePlayerSnapshot,
+  | "groundedBody"
   | "lastProcessedInputSequence"
   | "linearVelocity"
   | "locomotionMode"
   | "mountedOccupancy"
   | "position"
+  | "swimBody"
   | "traversalAuthority"
   | "yawRadians"
 >;
@@ -46,6 +54,8 @@ export function createAckedAuthoritativeLocalPlayerDeliveryKey(
   freshAckedLocalPlayerSnapshot: FreshAckedAuthoritativeLocalPlayerSnapshot
 ): string {
   const { latestWorldSnapshot, playerSnapshot } = freshAckedLocalPlayerSnapshot;
+  const activeBodySnapshot =
+    readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(playerSnapshot);
 
   return [
     latestWorldSnapshot.snapshotSequence,
@@ -53,13 +63,13 @@ export function createAckedAuthoritativeLocalPlayerDeliveryKey(
     playerSnapshot.lastProcessedInputSequence,
     playerSnapshot.locomotionMode,
     createMountedOccupancyDeliveryKey(playerSnapshot.mountedOccupancy),
-    playerSnapshot.position.x,
-    playerSnapshot.position.y,
-    playerSnapshot.position.z,
-    playerSnapshot.yawRadians,
-    playerSnapshot.linearVelocity.x,
-    playerSnapshot.linearVelocity.y,
-    playerSnapshot.linearVelocity.z,
+    activeBodySnapshot.position.x,
+    activeBodySnapshot.position.y,
+    activeBodySnapshot.position.z,
+    activeBodySnapshot.yawRadians,
+    activeBodySnapshot.linearVelocity.x,
+    activeBodySnapshot.linearVelocity.y,
+    activeBodySnapshot.linearVelocity.z,
     playerSnapshot.traversalAuthority.currentActionKind,
     playerSnapshot.traversalAuthority.currentActionPhase,
     playerSnapshot.traversalAuthority.currentActionSequence,
@@ -74,13 +84,18 @@ export function createAckedAuthoritativeLocalPlayerDeliveryKey(
 export function readAckedAuthoritativeLocalPlayerPose(
   playerSnapshot: AckedAuthoritativeLocalPlayerSnapshot
 ): AckedAuthoritativeLocalPlayerPose {
+  const activeBodySnapshot =
+    readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(playerSnapshot);
+
   return {
+    groundedBody: playerSnapshot.groundedBody,
     lastProcessedInputSequence: playerSnapshot.lastProcessedInputSequence,
-    linearVelocity: playerSnapshot.linearVelocity,
+    linearVelocity: activeBodySnapshot.linearVelocity,
     locomotionMode: playerSnapshot.locomotionMode,
     mountedOccupancy: playerSnapshot.mountedOccupancy,
-    position: playerSnapshot.position,
+    position: activeBodySnapshot.position,
+    swimBody: playerSnapshot.swimBody,
     traversalAuthority: playerSnapshot.traversalAuthority,
-    yawRadians: playerSnapshot.yawRadians
+    yawRadians: createRadians(activeBodySnapshot.yawRadians)
   };
 }

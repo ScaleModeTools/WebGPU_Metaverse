@@ -26,9 +26,14 @@ import type {
   RapierColliderHandle,
   RapierQueryFilterPredicate
 } from "../../types/metaverse-authoritative-rapier.js";
+import {
+  createMetaverseAuthoritativeLastGroundedBodySnapshot
+} from "../players/metaverse-authoritative-last-grounded-body-snapshot.js";
 
 interface MetaverseAuthoritativeSurfaceStatePlayerRuntime {
-  lastGroundedPositionY: number;
+  lastGroundedBodySnapshot: {
+    readonly positionYMeters: number;
+  };
   locomotionMode: MetaverseRealtimePlayerSnapshot["locomotionMode"];
   positionX: number;
   positionY: number;
@@ -332,8 +337,11 @@ export class MetaverseAuthoritativeWorldSurfaceState<
       locomotionDecision.supportHeightMeters !== null
     ) {
       playerRuntime.positionY = locomotionDecision.supportHeightMeters;
-      playerRuntime.lastGroundedPositionY =
-        locomotionDecision.supportHeightMeters;
+      playerRuntime.lastGroundedBodySnapshot =
+        createMetaverseAuthoritativeLastGroundedBodySnapshot({
+          ...playerRuntime.lastGroundedBodySnapshot,
+          positionYMeters: locomotionDecision.supportHeightMeters
+        });
       playerRuntime.locomotionMode = "grounded";
       playerRuntime.unmountedTraversalState =
         createMetaverseUnmountedTraversalStateSnapshot({

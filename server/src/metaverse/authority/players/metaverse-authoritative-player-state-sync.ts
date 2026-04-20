@@ -1,5 +1,8 @@
 import {
   clamp,
+  type MetaverseGroundedBodyInteractionSnapshot,
+  type MetaverseGroundedBodyRuntimeSnapshot,
+  type MetaverseSurfaceDriveBodyRuntimeSnapshot,
   createMetaverseTraversalKinematicStateSnapshot,
   createMetaverseTraversalAuthoritySnapshot,
   createMetaverseUnmountedTraversalStateSnapshot,
@@ -27,34 +30,35 @@ import type {
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import type { PhysicsVector3Snapshot, RapierColliderHandle } from "../../types/metaverse-authoritative-rapier.js";
+import {
+  captureMetaverseAuthoritativeLastGroundedBodySnapshot,
+  type MetaverseAuthoritativeLastGroundedBodySnapshot
+} from "./metaverse-authoritative-last-grounded-body-snapshot.js";
 
-export interface MetaverseAuthoritativePlayerStateSyncGroundedBodySnapshot {
-  readonly grounded: boolean;
-  readonly jumpReady: boolean;
-  readonly position: PhysicsVector3Snapshot;
-  readonly verticalSpeedUnitsPerSecond: number;
-  readonly yawRadians: number;
-}
+export type MetaverseAuthoritativePlayerStateSyncGroundedBodySnapshot =
+  MetaverseGroundedBodyRuntimeSnapshot;
 
 export interface MetaverseAuthoritativePlayerStateSyncGroundedBodyRuntime {
   readonly colliderHandle: RapierColliderHandle;
   readonly snapshot: MetaverseAuthoritativePlayerStateSyncGroundedBodySnapshot;
   syncAuthoritativeState(snapshot: {
+    readonly driveTarget?:
+      | MetaverseGroundedBodyRuntimeSnapshot["driveTarget"]
+      | null;
     readonly grounded: boolean;
+    readonly interaction?: MetaverseGroundedBodyInteractionSnapshot | null;
     readonly linearVelocity: PhysicsVector3Snapshot;
     readonly position: PhysicsVector3Snapshot;
     readonly yawRadians: number;
   }): void;
 }
 
-export interface MetaverseAuthoritativePlayerStateSyncSurfaceDriveSnapshot {
-  readonly linearVelocity: PhysicsVector3Snapshot;
-  readonly position: PhysicsVector3Snapshot;
-  readonly yawRadians: number;
-}
+export type MetaverseAuthoritativePlayerStateSyncSurfaceDriveSnapshot =
+  MetaverseSurfaceDriveBodyRuntimeSnapshot;
 
 export interface MetaverseAuthoritativePlayerStateSyncSurfaceDriveRuntime {
   readonly colliderHandle: RapierColliderHandle;
+  readonly snapshot: MetaverseAuthoritativePlayerStateSyncSurfaceDriveSnapshot;
   syncAuthoritativeState(snapshot: {
     readonly linearVelocity: PhysicsVector3Snapshot;
     readonly position: PhysicsVector3Snapshot;
@@ -88,11 +92,9 @@ export interface MetaverseAuthoritativePlayerStateSyncRuntimeState<
 > {
   angularVelocityRadiansPerSecond: number;
   readonly characterId: string;
-  forwardSpeedUnitsPerSecond: number;
   readonly groundedBodyRuntime: GroundedBodyRuntime;
-  lastGroundedBodyJumpReady: boolean;
+  lastGroundedBodySnapshot: MetaverseAuthoritativeLastGroundedBodySnapshot;
   lastGroundedJumpSupported: boolean;
-  lastGroundedPositionY: number;
   lastPoseAtMs: number | null;
   lastProcessedInputSequence: number;
   lastProcessedLookSequence: number;
@@ -113,7 +115,6 @@ export interface MetaverseAuthoritativePlayerStateSyncRuntimeState<
   presenceAnimationVocabulary: MetaversePresencePoseSnapshot["animationVocabulary"];
   realtimeWorldAuthorityActive: boolean;
   stateSequence: number;
-  strafeSpeedUnitsPerSecond: number;
   traversalAuthorityState: MetaverseTraversalAuthoritySnapshot;
   unmountedTraversalState: MetaverseUnmountedTraversalStateSnapshot;
   readonly swimBodyRuntime: SwimBodyRuntime;
@@ -244,15 +245,16 @@ export class MetaverseAuthoritativePlayerStateSync<
     return {
       angularVelocityRadiansPerSecond: 0,
       characterId,
-      forwardSpeedUnitsPerSecond: 0,
       groundedBodyRuntime,
-      lastGroundedBodyJumpReady: false,
+      lastGroundedBodySnapshot:
+        captureMetaverseAuthoritativeLastGroundedBodySnapshot(
+          groundedBodyRuntime.snapshot
+        ),
       lastGroundedJumpSupported: false,
       lastProcessedInputSequence: 0,
       lastProcessedLookSequence: 0,
       lastProcessedTraversalOrientationSequence: 0,
       lastSurfaceJumpSupported: false,
-      lastGroundedPositionY: 0,
       lastPoseAtMs: null,
       lastSeenAtMs: nowMs,
       linearVelocityX: 0,
@@ -269,7 +271,6 @@ export class MetaverseAuthoritativePlayerStateSync<
       presenceAnimationVocabulary: "idle",
       realtimeWorldAuthorityActive: false,
       stateSequence: 0,
-      strafeSpeedUnitsPerSecond: 0,
       traversalAuthorityState: createMetaverseTraversalAuthoritySnapshot(),
       unmountedTraversalState: createMetaverseUnmountedTraversalStateSnapshot({
         locomotionMode: "grounded"
@@ -295,7 +296,9 @@ export class MetaverseAuthoritativePlayerStateSync<
     const linearVelocity = createPlayerLinearVelocitySnapshot(playerRuntime);
 
     playerRuntime.groundedBodyRuntime.syncAuthoritativeState({
+      driveTarget: playerRuntime.lastGroundedBodySnapshot.driveTarget,
       grounded,
+      interaction: playerRuntime.lastGroundedBodySnapshot.interaction,
       linearVelocity,
       position,
       yawRadians: playerRuntime.yawRadians
@@ -346,26 +349,27 @@ export class MetaverseAuthoritativePlayerStateSync<
     groundedBodySnapshot: GroundedBodyRuntime["snapshot"],
     deltaSeconds: number
   ): void {
-    const nextKinematicStateSnapshot = resolveMetaverseTraversalKinematicState(
-      {
-        position: createPhysicsVector3Snapshot(
-          playerRuntime.positionX,
-          playerRuntime.positionY,
-          playerRuntime.positionZ
-        ),
-        yawRadians: playerRuntime.yawRadians
-      },
-      {
+    const nextKinematicStateSnapshot =
+      createMetaverseTraversalKinematicStateSnapshot({
+        angularVelocityRadiansPerSecond:
+          resolveMetaverseTraversalAngularVelocityRadiansPerSecond(
+            playerRuntime.yawRadians,
+            groundedBodySnapshot.yawRadians,
+            deltaSeconds
+          ),
+        linearVelocity: groundedBodySnapshot.linearVelocity,
         position: groundedBodySnapshot.position,
         yawRadians: groundedBodySnapshot.yawRadians
-      },
-      deltaSeconds
-    );
+      });
 
     this.#applyTraversalKinematicStateToPlayerRuntime(
       playerRuntime,
       nextKinematicStateSnapshot
     );
+    playerRuntime.lastGroundedBodySnapshot =
+      captureMetaverseAuthoritativeLastGroundedBodySnapshot(
+        groundedBodySnapshot
+      );
   }
 
   applySurfaceDriveSnapshotToPlayerRuntime(
@@ -508,7 +512,10 @@ export class MetaverseAuthoritativePlayerStateSync<
 
   #isGroundedUnmountedPlayerRuntime(playerRuntime: PlayerRuntime): boolean {
     return (
-      Math.abs(playerRuntime.positionY - playerRuntime.lastGroundedPositionY) <=
+      Math.abs(
+        playerRuntime.positionY -
+          playerRuntime.lastGroundedBodySnapshot.positionYMeters
+      ) <=
         groundedSnapToleranceMeters &&
       Math.abs(playerRuntime.linearVelocityY) <= groundedSnapToleranceMeters
     );
@@ -524,12 +531,8 @@ export class MetaverseAuthoritativePlayerStateSync<
     playerRuntime.yawRadians = kinematicStateSnapshot.yawRadians;
     playerRuntime.angularVelocityRadiansPerSecond =
       kinematicStateSnapshot.angularVelocityRadiansPerSecond;
-    playerRuntime.forwardSpeedUnitsPerSecond =
-      kinematicStateSnapshot.forwardSpeedUnitsPerSecond;
     playerRuntime.linearVelocityX = kinematicStateSnapshot.linearVelocity.x;
     playerRuntime.linearVelocityY = kinematicStateSnapshot.linearVelocity.y;
     playerRuntime.linearVelocityZ = kinematicStateSnapshot.linearVelocity.z;
-    playerRuntime.strafeSpeedUnitsPerSecond =
-      kinematicStateSnapshot.strafeSpeedUnitsPerSecond;
   }
 }

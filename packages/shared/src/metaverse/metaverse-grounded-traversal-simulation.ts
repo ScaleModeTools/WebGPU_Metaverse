@@ -4,14 +4,18 @@ import {
   constrainMetaverseSurfaceTraversalPositionToWorldRadius,
   createMetaverseSurfaceTraversalVector3Snapshot,
   toFiniteNumber,
-  type MetaverseSurfaceTraversalConfig
+  type MetaverseSurfaceTraversalConfig,
+  type MetaverseSurfaceTraversalDriveTargetSnapshot
 } from "./metaverse-surface-traversal-simulation.js";
+import {
+  resolveMetaverseGroundedJumpMovementDampingFactor,
+  resolveMetaverseGroundedJumpVerticalSpeedUnitsPerSecond,
+  type MetaverseGroundedJumpPhysicsConfigSnapshot
+} from "./metaverse-grounded-jump-physics.js";
 
 export interface MetaverseGroundedTraversalConfig
-  extends MetaverseSurfaceTraversalConfig {
-  readonly airborneMovementDampingFactor: number;
-  readonly gravityUnitsPerSecond: number;
-  readonly jumpImpulseUnitsPerSecond: number;
+  extends MetaverseSurfaceTraversalConfig,
+    MetaverseGroundedJumpPhysicsConfigSnapshot {
   readonly worldRadius: number;
 }
 
@@ -34,6 +38,7 @@ export interface MetaverseGroundedTraversalStateSnapshot {
 }
 
 export interface MetaverseGroundedTraversalPreparedStepSnapshot {
+  readonly driveTarget: MetaverseSurfaceTraversalDriveTargetSnapshot;
   readonly desiredMovementDelta: MetaverseWorldSurfaceVector3Snapshot;
   readonly jumpRequested: boolean;
   readonly verticalSpeedUnitsPerSecond: number;
@@ -88,7 +93,10 @@ export function prepareMetaverseGroundedTraversalStep(
   yawTargetRadians: number | null = null
 ): MetaverseGroundedTraversalPreparedStepSnapshot {
   const movementDampingFactor =
-    stateSnapshot.grounded ? 1 : config.airborneMovementDampingFactor;
+    resolveMetaverseGroundedJumpMovementDampingFactor(
+      stateSnapshot.grounded,
+      config
+    );
   const motionSnapshot = advanceMetaverseSurfaceTraversalMotion(
     stateSnapshot.yawRadians,
     {
@@ -110,15 +118,16 @@ export function prepareMetaverseGroundedTraversalStep(
   const jumpRequested =
     intentSnapshot.jump === true && stateSnapshot.jumpReady;
   const verticalSpeedUnitsPerSecond =
-    (jumpRequested
-      ? Math.max(
-          stateSnapshot.verticalSpeedUnitsPerSecond,
-          config.jumpImpulseUnitsPerSecond
-        )
-      : stateSnapshot.verticalSpeedUnitsPerSecond) -
-    config.gravityUnitsPerSecond * deltaSeconds;
+    resolveMetaverseGroundedJumpVerticalSpeedUnitsPerSecond({
+      config,
+      currentVerticalSpeedUnitsPerSecond:
+        stateSnapshot.verticalSpeedUnitsPerSecond,
+      deltaSeconds,
+      jumpRequested
+    });
 
   return Object.freeze({
+    driveTarget: motionSnapshot.driveTarget,
     desiredMovementDelta: createMetaverseSurfaceTraversalVector3Snapshot(
       motionSnapshot.velocityX * deltaSeconds,
       verticalSpeedUnitsPerSecond * deltaSeconds,

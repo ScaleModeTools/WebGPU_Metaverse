@@ -81,6 +81,17 @@ test("MetaverseSurfaceDriveBodyRuntime syncs authoritative cuboid vehicle state 
     assert.equal(runtime.snapshot.linearVelocity.x, 4);
     assert.equal(runtime.snapshot.linearVelocity.y, 1);
     assert.equal(runtime.snapshot.linearVelocity.z, 2);
+    assert.equal(runtime.snapshot.contact.blockedPlanarMovement, false);
+    assert.deepEqual(runtime.snapshot.contact.desiredMovementDelta, {
+      x: 0,
+      y: 0,
+      z: 0
+    });
+    assert.deepEqual(runtime.snapshot.contact.appliedMovementDelta, {
+      x: 0,
+      y: 0,
+      z: 0
+    });
     assertApprox(runtime.snapshot.angularVelocityRadiansPerSecond, 0);
     assertApprox(runtime.snapshot.forwardSpeedUnitsPerSecond, 4);
     assertApprox(
@@ -89,6 +100,7 @@ test("MetaverseSurfaceDriveBodyRuntime syncs authoritative cuboid vehicle state 
     );
     assertApprox(runtime.snapshot.strafeSpeedUnitsPerSecond, 2);
     assertApprox(runtime.snapshot.yawRadians, Math.PI * 0.5);
+    assert.equal(stateSnapshot, runtime.snapshot);
     assertApprox(stateSnapshot.forwardSpeedUnitsPerSecond, 4);
     assertApprox(stateSnapshot.strafeSpeedUnitsPerSecond, 2);
     assertApprox(colliderTranslation.x, 8);
@@ -165,15 +177,9 @@ test("MetaverseSurfaceDriveBodyRuntime restores a captured cuboid state without 
     const restoredStateSnapshot = runtime.captureStateSnapshot();
     const colliderTranslation = runtime.colliderHandle.translation();
 
-    assert.equal(runtime.snapshot, capturedStateSnapshot.snapshot);
-    assert.equal(
-      restoredStateSnapshot.forwardSpeedUnitsPerSecond,
-      capturedStateSnapshot.forwardSpeedUnitsPerSecond
-    );
-    assert.equal(
-      restoredStateSnapshot.strafeSpeedUnitsPerSecond,
-      capturedStateSnapshot.strafeSpeedUnitsPerSecond
-    );
+    assert.equal(runtime.snapshot, capturedStateSnapshot);
+    assert.equal(restoredStateSnapshot, capturedStateSnapshot);
+    assert.equal(runtime.snapshot.contact.blockedPlanarMovement, false);
     assertApprox(runtime.snapshot.angularVelocityRadiansPerSecond, 0);
     assertApprox(runtime.snapshot.forwardSpeedUnitsPerSecond, -3);
     assertApprox(runtime.snapshot.strafeSpeedUnitsPerSecond, -1.5);

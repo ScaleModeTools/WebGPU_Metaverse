@@ -1,4 +1,14 @@
 import { type Camera, Vector3 } from "three/webgpu";
+import type {
+  MetaverseGroundedBodyContactSnapshot,
+  MetaverseGroundedBodyInteractionSnapshot,
+  MetaverseGroundedJumpBodySnapshot,
+  MetaverseSurfaceDriveBodyRuntimeSnapshot,
+  MetaverseSurfaceTraversalDriveTargetSnapshot
+} from "@webgpu-metaverse/shared/metaverse/traversal";
+import {
+  readMetaverseRealtimePlayerActiveBodyKinematicSnapshot
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import {
   metaverseLocalAuthorityReconciliationConfig,
@@ -64,6 +74,126 @@ interface RenderedCameraOffsetDeltaEventSnapshot {
   readonly lookAngleRadians: number;
   readonly planarMagnitudeMeters: number;
   readonly verticalMagnitudeMeters: number;
+}
+
+function freezeGroundedJumpBodyTelemetrySnapshot(
+  snapshot: MetaverseGroundedJumpBodySnapshot
+): MetaverseGroundedJumpBodySnapshot {
+  return Object.freeze({
+    grounded: snapshot.grounded,
+    jumpGroundContactGraceSecondsRemaining:
+      snapshot.jumpGroundContactGraceSecondsRemaining,
+    jumpReady: snapshot.jumpReady,
+    jumpSnapSuppressionActive: snapshot.jumpSnapSuppressionActive,
+    verticalSpeedUnitsPerSecond: snapshot.verticalSpeedUnitsPerSecond
+  });
+}
+
+function freezeGroundedBodyContactTelemetrySnapshot(
+  snapshot: MetaverseGroundedBodyContactSnapshot
+): MetaverseGroundedBodyContactSnapshot {
+  return Object.freeze({
+    appliedMovementDelta: Object.freeze({
+      x: snapshot.appliedMovementDelta.x,
+      y: snapshot.appliedMovementDelta.y,
+      z: snapshot.appliedMovementDelta.z
+    }),
+    blockedPlanarMovement: snapshot.blockedPlanarMovement,
+    blockedVerticalMovement: snapshot.blockedVerticalMovement,
+    desiredMovementDelta: Object.freeze({
+      x: snapshot.desiredMovementDelta.x,
+      y: snapshot.desiredMovementDelta.y,
+      z: snapshot.desiredMovementDelta.z
+    }),
+    supportingContactDetected: snapshot.supportingContactDetected
+  });
+}
+
+function freezeGroundedBodyDriveTargetTelemetrySnapshot(
+  snapshot: MetaverseSurfaceTraversalDriveTargetSnapshot
+): MetaverseSurfaceTraversalDriveTargetSnapshot {
+  return Object.freeze({
+    boost: snapshot.boost,
+    moveAxis: snapshot.moveAxis,
+    movementMagnitude: snapshot.movementMagnitude,
+    strafeAxis: snapshot.strafeAxis,
+    targetForwardSpeedUnitsPerSecond:
+      snapshot.targetForwardSpeedUnitsPerSecond,
+    targetPlanarSpeedUnitsPerSecond:
+      snapshot.targetPlanarSpeedUnitsPerSecond,
+    targetStrafeSpeedUnitsPerSecond:
+      snapshot.targetStrafeSpeedUnitsPerSecond
+  });
+}
+
+function freezeGroundedBodyInteractionTelemetrySnapshot(
+  snapshot: MetaverseGroundedBodyInteractionSnapshot
+): MetaverseGroundedBodyInteractionSnapshot {
+  return Object.freeze({
+    applyImpulsesToDynamicBodies: snapshot.applyImpulsesToDynamicBodies
+  });
+}
+
+function freezeGroundedBodyTelemetrySnapshot(
+  snapshot:
+    | NonNullable<
+        MetaverseTelemetrySnapshot["worldSnapshot"]["surfaceRouting"]["local"]["groundedBody"]
+      >
+    | NonNullable<
+        MetaverseTelemetrySnapshot["worldSnapshot"]["surfaceRouting"]["authoritativeLocalPlayer"]["groundedBody"]
+      >
+    | NonNullable<
+        NonNullable<
+          MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionSnapshot"]
+        >["local"]["groundedBody"]
+      >
+    | NonNullable<
+        NonNullable<
+          MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionSnapshot"]
+        >["authoritative"]["groundedBody"]
+      >
+): NonNullable<
+  MetaverseTelemetrySnapshot["worldSnapshot"]["surfaceRouting"]["local"]["groundedBody"]
+> {
+  return Object.freeze({
+    contact: freezeGroundedBodyContactTelemetrySnapshot(snapshot.contact),
+    driveTarget: freezeGroundedBodyDriveTargetTelemetrySnapshot(
+      snapshot.driveTarget
+    ),
+    interaction: freezeGroundedBodyInteractionTelemetrySnapshot(
+      snapshot.interaction
+    ),
+    jumpBody: freezeGroundedJumpBodyTelemetrySnapshot(snapshot.jumpBody)
+  });
+}
+
+function freezeSwimBodyTelemetrySnapshot(
+  snapshot: MetaverseSurfaceDriveBodyRuntimeSnapshot
+): NonNullable<
+  MetaverseTelemetrySnapshot["worldSnapshot"]["surfaceRouting"]["authoritativeLocalPlayer"]["swimBody"]
+> {
+  return Object.freeze({
+    angularVelocityRadiansPerSecond:
+      snapshot.angularVelocityRadiansPerSecond,
+    contact: Object.freeze({
+      appliedMovementDelta: freezeVector3Snapshot(
+        snapshot.contact.appliedMovementDelta
+      ),
+      blockedPlanarMovement: snapshot.contact.blockedPlanarMovement,
+      desiredMovementDelta: freezeVector3Snapshot(
+        snapshot.contact.desiredMovementDelta
+      )
+    }),
+    driveTarget: freezeGroundedBodyDriveTargetTelemetrySnapshot(
+      snapshot.driveTarget
+    ),
+    forwardSpeedUnitsPerSecond: snapshot.forwardSpeedUnitsPerSecond,
+    linearVelocity: freezeVector3Snapshot(snapshot.linearVelocity),
+    planarSpeedUnitsPerSecond: snapshot.planarSpeedUnitsPerSecond,
+    position: freezeVector3Snapshot(snapshot.position),
+    strafeSpeedUnitsPerSecond: snapshot.strafeSpeedUnitsPerSecond,
+    yawRadians: snapshot.yawRadians
+  });
 }
 
 function freezeRendererTelemetrySnapshot(
@@ -138,12 +268,22 @@ function freezeLocalAuthorityPoseCorrectionSnapshot(
 
   return Object.freeze({
     authoritative: Object.freeze({
+      groundedBody:
+        snapshot.authoritative.groundedBody == null
+          ? null
+          : freezeGroundedBodyTelemetrySnapshot(
+              snapshot.authoritative.groundedBody
+            ),
       lastProcessedInputSequence: snapshot.authoritative.lastProcessedInputSequence,
       linearVelocity: freezeVector3Snapshot(
         snapshot.authoritative.linearVelocity
       ),
       locomotionMode: snapshot.authoritative.locomotionMode,
       position: freezeVector3Snapshot(snapshot.authoritative.position),
+      swimBody:
+        snapshot.authoritative.swimBody == null
+          ? null
+          : freezeSwimBodyTelemetrySnapshot(snapshot.authoritative.swimBody),
       surfaceRouting: Object.freeze({
         blockingAffordanceDetected:
           snapshot.authoritative.surfaceRouting.blockingAffordanceDetected,
@@ -155,6 +295,10 @@ function freezeLocalAuthorityPoseCorrectionSnapshot(
       })
     }),
     local: Object.freeze({
+      groundedBody:
+        snapshot.local.groundedBody == null
+          ? null
+          : freezeGroundedBodyTelemetrySnapshot(snapshot.local.groundedBody),
       issuedTraversalIntent:
         snapshot.local.issuedTraversalIntent === null
           ? null
@@ -164,25 +308,35 @@ function freezeLocalAuthorityPoseCorrectionSnapshot(
       linearVelocity: freezeVector3Snapshot(snapshot.local.linearVelocity),
       locomotionMode: snapshot.local.locomotionMode,
       position: freezeVector3Snapshot(snapshot.local.position),
+      swimBody:
+        snapshot.local.swimBody == null
+          ? null
+          : freezeSwimBodyTelemetrySnapshot(snapshot.local.swimBody),
       surfaceRouting: Object.freeze({
         autostepHeightMeters: snapshot.local.surfaceRouting.autostepHeightMeters,
         blockingAffordanceDetected:
           snapshot.local.surfaceRouting.blockingAffordanceDetected,
         decisionReason: snapshot.local.surfaceRouting.decisionReason,
+        groundedBody:
+          snapshot.local.surfaceRouting.groundedBody == null
+            ? null
+            : freezeGroundedBodyTelemetrySnapshot(
+                snapshot.local.surfaceRouting.groundedBody
+              ),
         jumpDebug: Object.freeze({
-          groundedBodyGrounded:
-            snapshot.local.surfaceRouting.jumpDebug.groundedBodyGrounded,
-          groundedBodyJumpReady:
-            snapshot.local.surfaceRouting.jumpDebug.groundedBodyJumpReady,
           surfaceJumpSupported:
             snapshot.local.surfaceRouting.jumpDebug.surfaceJumpSupported,
-          supported: snapshot.local.surfaceRouting.jumpDebug.supported,
-          verticalSpeedUnitsPerSecond:
-            snapshot.local.surfaceRouting.jumpDebug.verticalSpeedUnitsPerSecond
+          supported: snapshot.local.surfaceRouting.jumpDebug.supported
         }),
         locomotionMode: snapshot.local.surfaceRouting.locomotionMode,
         resolvedSupportHeightMeters:
           snapshot.local.surfaceRouting.resolvedSupportHeightMeters,
+        swimBody:
+          snapshot.local.surfaceRouting.swimBody == null
+            ? null
+            : freezeSwimBodyTelemetrySnapshot(
+                snapshot.local.surfaceRouting.swimBody
+              ),
         supportingAffordanceSampleCount:
           snapshot.local.surfaceRouting.supportingAffordanceSampleCount,
         traversalAuthority: Object.freeze({
@@ -362,15 +516,30 @@ function freezeTelemetrySnapshot(
           authoritativeGrounded:
             snapshot.worldSnapshot.localReconciliation
               .lastLocalAuthorityPoseCorrectionDetail.authoritativeGrounded,
+          bodyStateDivergence:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail.bodyStateDivergence,
+          groundedBodyStateDivergence:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail
+              .groundedBodyStateDivergence,
           localGrounded:
             snapshot.worldSnapshot.localReconciliation
               .lastLocalAuthorityPoseCorrectionDetail.localGrounded,
           planarMagnitudeMeters:
             snapshot.worldSnapshot.localReconciliation
               .lastLocalAuthorityPoseCorrectionDetail.planarMagnitudeMeters,
+          planarVelocityMagnitudeUnitsPerSecond:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail
+              .planarVelocityMagnitudeUnitsPerSecond,
           verticalMagnitudeMeters:
             snapshot.worldSnapshot.localReconciliation
-              .lastLocalAuthorityPoseCorrectionDetail.verticalMagnitudeMeters
+              .lastLocalAuthorityPoseCorrectionDetail.verticalMagnitudeMeters,
+          verticalVelocityMagnitudeUnitsPerSecond:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail
+              .verticalVelocityMagnitudeUnitsPerSecond
         }),
         lastLocalAuthorityPoseCorrectionSnapshot:
           freezeLocalAuthorityPoseCorrectionSnapshot(
@@ -424,10 +593,15 @@ function freezeTelemetrySnapshot(
           correctionVerticalMagnitudeMeters:
             snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
               .correctionVerticalMagnitudeMeters,
+          groundedBody:
+            snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
+              .groundedBody == null
+              ? null
+              : freezeGroundedBodyTelemetrySnapshot(
+                  snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
+                    .groundedBody
+                ),
           jumpDebug: Object.freeze({
-            groundedBodyJumpReady:
-              snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
-                .jumpDebug.groundedBodyJumpReady,
             pendingActionSequence:
               snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
                 .jumpDebug.pendingActionSequence,
@@ -456,6 +630,14 @@ function freezeTelemetrySnapshot(
           locomotionMode:
             snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
               .locomotionMode,
+          swimBody:
+            snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
+              .swimBody == null
+              ? null
+              : freezeSwimBodyTelemetrySnapshot(
+                  snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
+                    .swimBody
+                ),
           position: freezeOptionalVector3Snapshot(
             snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer.position
           ),
@@ -510,29 +692,32 @@ function freezeTelemetrySnapshot(
             snapshot.worldSnapshot.surfaceRouting.local
               .blockingAffordanceDetected,
           decisionReason: snapshot.worldSnapshot.surfaceRouting.local.decisionReason,
+          groundedBody:
+            snapshot.worldSnapshot.surfaceRouting.local.groundedBody == null
+              ? null
+              : freezeGroundedBodyTelemetrySnapshot(
+                  snapshot.worldSnapshot.surfaceRouting.local.groundedBody
+                ),
           jumpDebug: Object.freeze({
-            groundedBodyGrounded:
-              snapshot.worldSnapshot.surfaceRouting.local.jumpDebug
-                .groundedBodyGrounded,
-            groundedBodyJumpReady:
-              snapshot.worldSnapshot.surfaceRouting.local.jumpDebug
-                .groundedBodyJumpReady,
             surfaceJumpSupported:
               snapshot.worldSnapshot.surfaceRouting.local.jumpDebug
                 .surfaceJumpSupported,
             supported:
-              snapshot.worldSnapshot.surfaceRouting.local.jumpDebug.supported,
-            verticalSpeedUnitsPerSecond:
-              snapshot.worldSnapshot.surfaceRouting.local.jumpDebug
-                .verticalSpeedUnitsPerSecond
+              snapshot.worldSnapshot.surfaceRouting.local.jumpDebug.supported
           }),
-          locomotionMode:
-            snapshot.worldSnapshot.surfaceRouting.local.locomotionMode,
-          resolvedSupportHeightMeters:
-            snapshot.worldSnapshot.surfaceRouting.local.resolvedSupportHeightMeters,
-          supportingAffordanceSampleCount:
-            snapshot.worldSnapshot.surfaceRouting.local
-              .supportingAffordanceSampleCount,
+        locomotionMode:
+          snapshot.worldSnapshot.surfaceRouting.local.locomotionMode,
+        resolvedSupportHeightMeters:
+          snapshot.worldSnapshot.surfaceRouting.local.resolvedSupportHeightMeters,
+        swimBody:
+          snapshot.worldSnapshot.surfaceRouting.local.swimBody == null
+            ? null
+            : freezeSwimBodyTelemetrySnapshot(
+                snapshot.worldSnapshot.surfaceRouting.local.swimBody
+              ),
+        supportingAffordanceSampleCount:
+          snapshot.worldSnapshot.surfaceRouting.local
+            .supportingAffordanceSampleCount,
           traversalAuthority: Object.freeze({
             currentActionKind:
               snapshot.worldSnapshot.surfaceRouting.local.traversalAuthority
@@ -682,31 +867,40 @@ export class MetaverseRuntimeHudTelemetryState {
       );
     const localTraversalPose = this.#traversalRuntime.localTraversalPoseSnapshot;
     const localLocomotionMode = this.#traversalRuntime.locomotionMode;
+    const authoritativeActiveBodySnapshot =
+      authoritativeLocalPlayerSnapshot === null
+        ? null
+        : readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(
+            authoritativeLocalPlayerSnapshot
+          );
     const authoritativeLocalPlayerCorrectionPlanarMagnitudeMeters =
-      authoritativeLocalPlayerSnapshot !== null && localTraversalPose !== null
+      authoritativeActiveBodySnapshot !== null && localTraversalPose !== null
         ? Math.hypot(
-            authoritativeLocalPlayerSnapshot.position.x -
+            authoritativeActiveBodySnapshot.position.x -
               localTraversalPose.position.x,
-            authoritativeLocalPlayerSnapshot.position.z -
+            authoritativeActiveBodySnapshot.position.z -
               localTraversalPose.position.z
           )
         : null;
     const authoritativeLocalPlayerCorrectionVerticalMagnitudeMeters =
-      authoritativeLocalPlayerSnapshot !== null && localTraversalPose !== null
+      authoritativeActiveBodySnapshot !== null && localTraversalPose !== null
         ? Math.abs(
-            authoritativeLocalPlayerSnapshot.position.y -
+            authoritativeActiveBodySnapshot.position.y -
               localTraversalPose.position.y
           )
         : null;
+    const authoritativeLocalPlayerGroundedBodyActive =
+      authoritativeLocalPlayerSnapshot?.locomotionMode === "grounded";
     const authoritativeLocalPlayerSurfaceRouting =
       authoritativeLocalPlayerSnapshot !== null &&
+      authoritativeActiveBodySnapshot !== null &&
       (authoritativeLocalPlayerSnapshot.locomotionMode === "grounded" ||
         authoritativeLocalPlayerSnapshot.locomotionMode === "swim")
         ? resolveAutomaticSurfaceLocomotionSnapshot(
             this.#config,
             this.#environmentPhysicsRuntime.surfaceColliderSnapshots,
-            authoritativeLocalPlayerSnapshot.position,
-            authoritativeLocalPlayerSnapshot.yawRadians,
+            authoritativeActiveBodySnapshot.position,
+            authoritativeActiveBodySnapshot.yawRadians,
             authoritativeLocalPlayerSnapshot.locomotionMode
           )
         : null;
@@ -719,31 +913,47 @@ export class MetaverseRuntimeHudTelemetryState {
           authoritativeLocalPlayerCorrectionPlanarMagnitudeMeters,
         correctionVerticalMagnitudeMeters:
           authoritativeLocalPlayerCorrectionVerticalMagnitudeMeters,
+        groundedBody:
+          !authoritativeLocalPlayerGroundedBodyActive ||
+          authoritativeLocalPlayerSnapshot?.groundedBody == null
+            ? null
+            : freezeGroundedBodyTelemetrySnapshot(
+                authoritativeLocalPlayerSnapshot.groundedBody
+              ),
         jumpDebug: Object.freeze({
-          groundedBodyJumpReady:
-            authoritativeLocalPlayerSnapshot?.jumpDebug.groundedBodyJumpReady ??
-            null,
           pendingActionSequence:
+            !authoritativeLocalPlayerGroundedBodyActive ||
             authoritativeLocalPlayerSnapshot === null
               ? null
               : authoritativeLocalPlayerSnapshot.jumpDebug
                   .pendingActionSequence,
           pendingActionBufferAgeMs:
-            authoritativeLocalPlayerSnapshot?.jumpDebug.pendingActionBufferAgeMs ??
+            !authoritativeLocalPlayerGroundedBodyActive
+              ? null
+              : authoritativeLocalPlayerSnapshot?.jumpDebug
+                  .pendingActionBufferAgeMs ??
             null,
           resolvedActionSequence:
+            !authoritativeLocalPlayerGroundedBodyActive ||
             authoritativeLocalPlayerSnapshot === null
               ? null
               : authoritativeLocalPlayerSnapshot.jumpDebug
                   .resolvedActionSequence,
           resolvedActionState:
-            authoritativeLocalPlayerSnapshot?.jumpDebug.resolvedActionState ??
+            !authoritativeLocalPlayerGroundedBodyActive
+              ? null
+              : authoritativeLocalPlayerSnapshot?.jumpDebug.resolvedActionState ??
             null,
           surfaceJumpSupported:
-            authoritativeLocalPlayerSnapshot?.jumpDebug.surfaceJumpSupported ??
+            !authoritativeLocalPlayerGroundedBodyActive
+              ? null
+              : authoritativeLocalPlayerSnapshot?.jumpDebug
+                  .surfaceJumpSupported ??
             null,
           supported:
-            authoritativeLocalPlayerSnapshot?.jumpDebug.supported ?? null
+            !authoritativeLocalPlayerGroundedBodyActive
+              ? null
+              : authoritativeLocalPlayerSnapshot?.jumpDebug.supported ?? null
         }),
         lastProcessedInputSequence:
           authoritativeLocalPlayerSnapshot?.lastProcessedInputSequence ?? null,
@@ -751,13 +961,19 @@ export class MetaverseRuntimeHudTelemetryState {
           authoritativeLocalPlayerSnapshot?.locomotionMode !== undefined &&
           authoritativeLocalPlayerSnapshot.locomotionMode !== localLocomotionMode,
         locomotionMode: authoritativeLocalPlayerSnapshot?.locomotionMode ?? null,
+        swimBody:
+          authoritativeLocalPlayerSnapshot?.swimBody == null
+            ? null
+            : freezeSwimBodyTelemetrySnapshot(
+                authoritativeLocalPlayerSnapshot.swimBody
+              ),
         position:
-          authoritativeLocalPlayerSnapshot === null
+          authoritativeActiveBodySnapshot === null
             ? null
             : Object.freeze({
-                x: authoritativeLocalPlayerSnapshot.position.x,
-                y: authoritativeLocalPlayerSnapshot.position.y,
-                z: authoritativeLocalPlayerSnapshot.position.z
+                x: authoritativeActiveBodySnapshot.position.x,
+                y: authoritativeActiveBodySnapshot.position.y,
+                z: authoritativeActiveBodySnapshot.position.z
               }),
         traversalAuthority: Object.freeze({
           currentActionKind:
@@ -923,7 +1139,7 @@ export class MetaverseRuntimeHudTelemetryState {
 
     for (const correctionEvent of this.#recentLocalReconciliationEvents) {
       switch (correctionEvent.source) {
-        case "local-authority-snap":
+        case "local-authority-convergence":
           recentLocalAuthorityPoseCorrectionCountPast5Seconds += 1;
           break;
         case "mounted-vehicle-authority":

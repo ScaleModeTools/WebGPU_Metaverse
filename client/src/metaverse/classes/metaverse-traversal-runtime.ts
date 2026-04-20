@@ -5,7 +5,6 @@ import {
 } from "@/physics";
 import {
   createMetaverseUnmountedTraversalStateSnapshot,
-  metaverseRealtimeWorldCadenceConfig,
   type MetaversePlayerTraversalIntentSnapshot,
   type MetaversePlayerTraversalIntentSnapshotInput,
   type MetaverseTraversalAuthoritySnapshot,
@@ -25,10 +24,6 @@ import type {
 import type { MetaverseRuntimeConfig } from "../types/runtime-config";
 import type { MetaverseTelemetrySnapshot } from "../types/telemetry";
 import { MetaverseTraversalCharacterPresentationState } from "../traversal/presentation/metaverse-traversal-character-presentation-state";
-import {
-  freezeVector3,
-  wrapRadians
-} from "../traversal/policies/surface-locomotion";
 import { MetaverseMountedVehicleTraversalState } from "../traversal/mounted/metaverse-mounted-vehicle-traversal-state";
 import { MetaverseMountedTraversalTransitionState } from "../traversal/mounted/metaverse-mounted-traversal-transition-state";
 import { MetaverseLocalTraversalAuthorityState } from "../traversal/classes/metaverse-local-traversal-authority-state";
@@ -50,7 +45,6 @@ import { MetaverseUnmountedSurfaceLocomotionState } from "../traversal/surface/m
 import type {
   MetaverseTraversalRuntimeDependencies,
   RoutedDriverVehicleControlIntentSnapshot,
-  TraversalMountedVehicleSnapshot,
 } from "../traversal/types/traversal";
 
 type LocalSurfaceRoutingTelemetrySnapshot =
@@ -59,38 +53,6 @@ type LocalJumpGateTelemetrySnapshot =
   MetaverseTelemetrySnapshot["worldSnapshot"]["surfaceRouting"]["local"]["jumpDebug"];
 type LocalReconciliationCorrectionSource =
   MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"]["lastCorrectionSource"];
-
-const authoritativeTraversalFixedStepSeconds =
-  Number(metaverseRealtimeWorldCadenceConfig.authoritativeTickIntervalMs) /
-  1_000;
-
-function createIdleGroundedBodyIntentSnapshot() {
-  return Object.freeze({
-    boost: false,
-    jump: false,
-    moveAxis: 0,
-    strafeAxis: 0,
-    turnAxis: 0
-  });
-}
-
-function createVehicleDeltaCarriedPosition(
-  currentPosition: PhysicsVector3Snapshot,
-  previousVehiclePosition: PhysicsVector3Snapshot,
-  nextVehiclePosition: PhysicsVector3Snapshot,
-  deltaYawRadians: number
-): PhysicsVector3Snapshot {
-  const cosYaw = Math.cos(deltaYawRadians);
-  const sinYaw = Math.sin(deltaYawRadians);
-  const relativeX = currentPosition.x - previousVehiclePosition.x;
-  const relativeZ = currentPosition.z - previousVehiclePosition.z;
-
-  return freezeVector3(
-    nextVehiclePosition.x + relativeX * cosYaw + relativeZ * sinYaw,
-    currentPosition.y + (nextVehiclePosition.y - previousVehiclePosition.y),
-    nextVehiclePosition.z - relativeX * sinYaw + relativeZ * cosYaw
-  );
-}
 
 export class MetaverseTraversalRuntime {
   readonly #config: MetaverseRuntimeConfig;
@@ -467,10 +429,29 @@ export class MetaverseTraversalRuntime {
           authoritativeSyncResult.previousMountedVehicleSnapshot !== null &&
           authoritativeSyncResult.nextMountedVehicleSnapshot !== null
         ) {
-          this.#carryFreeRoamMountedOccupancyWithVehicle(
-            authoritativeSyncResult.previousMountedVehicleSnapshot,
-            authoritativeSyncResult.nextMountedVehicleSnapshot
-          );
+          const groundedCameraSnapshot =
+            this.#surfaceLocomotionState.syncGroundedMovingSupportCarry({
+              currentLocomotionMode: this.#locomotionMode,
+              lookYawRadians:
+                this.#unmountedTraversalMotionState.unmountedLookYawRadians,
+              nextSupportPosition:
+                authoritativeSyncResult.nextMountedVehicleSnapshot.position,
+              nextSupportYawRadians:
+                authoritativeSyncResult.nextMountedVehicleSnapshot.yawRadians,
+              previousSupportPosition:
+                authoritativeSyncResult.previousMountedVehicleSnapshot.position,
+              previousSupportYawRadians:
+                authoritativeSyncResult.previousMountedVehicleSnapshot.yawRadians,
+              resolveGroundedPresentationPosition: () =>
+                this.#unmountedTraversalMotionState.resolveGroundedPresentationPosition(),
+              traversalCameraPitchRadians:
+                this.#unmountedTraversalMotionState.traversalCameraPitchRadians
+            });
+
+          if (groundedCameraSnapshot !== null) {
+            this.#syncLocalTraversalAuthorityState(false);
+            this.#cameraSnapshot = groundedCameraSnapshot;
+          }
         }
       } else if (authoritativeSyncResult.presentationCameraSnapshot !== null) {
         this.#cameraSnapshot =
@@ -518,65 +499,6 @@ export class MetaverseTraversalRuntime {
 
   #mountedOccupancyKeepsFreeRoam(): boolean {
     return this.#mountedVehicleState.keepsFreeRoam;
-  }
-
-  #carryFreeRoamMountedOccupancyWithVehicle(
-    previousMountedVehicleState: TraversalMountedVehicleSnapshot,
-    nextMountedVehicleState: TraversalMountedVehicleSnapshot
-  ): void {
-    if (
-      !this.#mountedOccupancyKeepsFreeRoam() ||
-      !this.#groundedBodyRuntime.isInitialized ||
-      this.#locomotionMode !== "grounded"
-    ) {
-      return;
-    }
-
-    const groundedBodySnapshot = this.#groundedBodyRuntime.snapshot;
-    const deltaYawRadians = wrapRadians(
-      nextMountedVehicleState.yawRadians - previousMountedVehicleState.yawRadians
-    );
-    const carriedPosition = createVehicleDeltaCarriedPosition(
-      groundedBodySnapshot.position,
-      previousMountedVehicleState.position,
-      nextMountedVehicleState.position,
-      deltaYawRadians
-    );
-
-    this.#groundedBodyRuntime.teleport(
-      freezeVector3(
-        carriedPosition.x,
-        this.#surfaceLocomotionState.resolveGroundedSupportHeightMeters(
-          carriedPosition,
-          carriedPosition.y
-        ),
-        carriedPosition.z
-      ),
-      wrapRadians(groundedBodySnapshot.yawRadians + deltaYawRadians)
-    );
-    this.#physicsRuntime.stepSimulation(authoritativeTraversalFixedStepSeconds);
-    this.#groundedBodyRuntime.advance(
-      createIdleGroundedBodyIntentSnapshot(),
-      authoritativeTraversalFixedStepSeconds,
-      this.#resolveGroundedTraversalFilterPredicate(
-        this.#surfaceLocomotionState.readGroundedTraversalExcludedColliders()
-      ),
-      this.#unmountedTraversalMotionState.unmountedLookYawRadians
-    );
-    this.#syncLocalTraversalAuthorityState(false);
-    const groundedCameraSnapshot =
-      this.#surfaceLocomotionState.syncGroundedCameraPresentation({
-        locomotionMode: this.#locomotionMode,
-        lookYawRadians: this.#unmountedTraversalMotionState.unmountedLookYawRadians,
-        resolveGroundedPresentationPosition: () =>
-          this.#unmountedTraversalMotionState.resolveGroundedPresentationPosition(),
-        traversalCameraPitchRadians:
-          this.#unmountedTraversalMotionState.traversalCameraPitchRadians
-      });
-
-    if (groundedCameraSnapshot !== null) {
-      this.#cameraSnapshot = groundedCameraSnapshot;
-    }
   }
 
   #advanceMountedVehicleLocomotion(

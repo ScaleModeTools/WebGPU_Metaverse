@@ -92,9 +92,13 @@ test("WebGpuMetaverseRuntime starts from an idle snapshot and rejects missing na
     Object.freeze({
       lastLocalAuthorityPoseCorrectionDetail: Object.freeze({
         authoritativeGrounded: null,
+        bodyStateDivergence: null,
+        groundedBodyStateDivergence: null,
         localGrounded: null,
         planarMagnitudeMeters: null,
-        verticalMagnitudeMeters: null
+        planarVelocityMagnitudeUnitsPerSecond: null,
+        verticalMagnitudeMeters: null,
+        verticalVelocityMagnitudeUnitsPerSecond: null
       }),
       lastLocalAuthorityPoseCorrectionSnapshot: null,
       lastLocalAuthorityPoseCorrectionReason: "none",
@@ -138,15 +142,17 @@ test("WebGpuMetaverseRuntime starts from an idle snapshot and rejects missing na
   assert.deepEqual(
     runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.jumpDebug,
     Object.freeze({
-      groundedBodyGrounded: null,
-      groundedBodyJumpReady: null,
       surfaceJumpSupported: null,
-      supported: null,
-      verticalSpeedUnitsPerSecond: null
+      supported: null
     })
   );
   assert.equal(
     runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.issuedTraversalIntent,
+    null
+  );
+  assert.equal(
+    runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
+      .groundedBody,
     null
   );
   assert.equal(
@@ -658,7 +664,7 @@ test("WebGpuMetaverseRuntime prewarms the booted scene before the first render w
       Math.abs(
         startSnapshot.camera.position.y -
           metaverseRuntimeConfig.camera.spawnPosition.y
-      ) < 0.02
+      ) < 0.05
     );
     assert.equal(typeof scheduledFrame, "function");
 

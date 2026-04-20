@@ -32,19 +32,34 @@ function assertApprox(actual, expected, tolerance = 0.000001) {
   );
 }
 
+function readGroundedBodyJumpReady(snapshot) {
+  return snapshot.jumpBody.jumpReady;
+}
+
+function readGroundedBodyPlanarSpeed(snapshot) {
+  return Math.hypot(snapshot.linearVelocity.x, snapshot.linearVelocity.z);
+}
+
+function readGroundedBodyVerticalSpeed(snapshot) {
+  return snapshot.jumpBody.verticalSpeedUnitsPerSecond;
+}
+
 function assertGroundedBodySnapshotsMatch(leftSnapshot, rightSnapshot) {
   assert.equal(leftSnapshot.grounded, rightSnapshot.grounded);
-  assert.equal(leftSnapshot.jumpReady, rightSnapshot.jumpReady);
+  assert.equal(
+    readGroundedBodyJumpReady(leftSnapshot),
+    readGroundedBodyJumpReady(rightSnapshot)
+  );
   assertApprox(leftSnapshot.position.x, rightSnapshot.position.x);
   assertApprox(leftSnapshot.position.y, rightSnapshot.position.y);
   assertApprox(leftSnapshot.position.z, rightSnapshot.position.z);
   assertApprox(
-    leftSnapshot.planarSpeedUnitsPerSecond,
-    rightSnapshot.planarSpeedUnitsPerSecond
+    readGroundedBodyPlanarSpeed(leftSnapshot),
+    readGroundedBodyPlanarSpeed(rightSnapshot)
   );
   assertApprox(
-    leftSnapshot.verticalSpeedUnitsPerSecond,
-    rightSnapshot.verticalSpeedUnitsPerSecond
+    readGroundedBodyVerticalSpeed(leftSnapshot),
+    readGroundedBodyVerticalSpeed(rightSnapshot)
   );
   assertApprox(leftSnapshot.yawRadians, rightSnapshot.yawRadians);
 }

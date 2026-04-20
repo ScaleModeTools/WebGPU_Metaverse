@@ -179,6 +179,11 @@ test("shared grounded traversal kernel resolves controller results into the same
     groundedBodyStepConfig,
     0.033
   );
+
+  assert.equal(preparedStep.driveTarget.boost, true);
+  assert.equal(preparedStep.driveTarget.moveAxis, 0.85);
+  assert.equal(preparedStep.driveTarget.strafeAxis, -0.15);
+  assert.ok(preparedStep.driveTarget.targetPlanarSpeedUnitsPerSecond > 0);
   const directResolvedStep = resolveMetaverseGroundedBodyStep(
     groundedStepState,
     preparedStep,
@@ -212,5 +217,35 @@ test("shared grounded traversal kernel resolves controller results into the same
     0.033
   );
 
-  assert.deepEqual(controllerResolvedStep, directResolvedStep);
+  assert.deepEqual(
+    {
+      ...controllerResolvedStep,
+      state: {
+        ...controllerResolvedStep.state,
+        contact: undefined
+      }
+    },
+    {
+      ...directResolvedStep,
+      state: {
+        ...directResolvedStep.state,
+        contact: undefined
+      }
+    }
+  );
+  assert.deepEqual(controllerResolvedStep.state.contact, {
+    appliedMovementDelta: {
+      x: 0.07,
+      y: 0.01,
+      z: 0.05
+    },
+    blockedPlanarMovement: true,
+    blockedVerticalMovement: true,
+    desiredMovementDelta: preparedStep.desiredMovementDelta,
+    supportingContactDetected: true
+  });
+  assert.deepEqual(
+    controllerResolvedStep.state.driveTarget,
+    preparedStep.driveTarget
+  );
 });

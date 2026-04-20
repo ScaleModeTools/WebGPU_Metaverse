@@ -10,6 +10,18 @@ import {
 
 let clientLoader;
 
+function readGroundedBodyJumpReady(snapshot) {
+  return snapshot.jumpBody.jumpReady;
+}
+
+function readGroundedBodyPlanarSpeed(snapshot) {
+  return Math.hypot(snapshot.linearVelocity.x, snapshot.linearVelocity.z);
+}
+
+function readGroundedBodyVerticalSpeed(snapshot) {
+  return snapshot.jumpBody.verticalSpeedUnitsPerSecond;
+}
+
 function advanceGroundedBodyRuntime(
   physicsRuntime,
   groundedBodyRuntime,
@@ -96,9 +108,24 @@ test("MetaverseGroundedBodyRuntime advances a grounded capsule body and clamps i
   );
 
   assert.equal(advancedSnapshot.grounded, true);
+  assert.equal(advancedSnapshot.jumpBody.grounded, true);
+  assert.equal(
+    advancedSnapshot.jumpBody.jumpReady,
+    readGroundedBodyJumpReady(advancedSnapshot)
+  );
   assert.equal(advancedSnapshot.position.y, 0);
   assert.equal(advancedSnapshot.eyeHeightMeters, 1.62);
-  assert.ok(advancedSnapshot.planarSpeedUnitsPerSecond > 0);
+  assert.ok(readGroundedBodyPlanarSpeed(advancedSnapshot) > 0);
+  assert.equal(advancedSnapshot.contact.supportingContactDetected, true);
+  assert.equal(advancedSnapshot.contact.blockedPlanarMovement, false);
+  assert.equal(advancedSnapshot.driveTarget.boost, true);
+  assert.equal(advancedSnapshot.driveTarget.moveAxis, 1);
+  assert.equal(advancedSnapshot.driveTarget.strafeAxis, 0);
+  assert.ok(advancedSnapshot.driveTarget.targetPlanarSpeedUnitsPerSecond > 0);
+  assert.deepEqual(
+    advancedSnapshot.linearVelocity,
+    groundedBodyRuntime.linearVelocitySnapshot
+  );
   assert.ok(
     Math.hypot(advancedSnapshot.position.x, advancedSnapshot.position.z) <= 2
   );
@@ -269,10 +296,10 @@ test("MetaverseGroundedBodyRuntime preserves planar momentum when jumping from g
 
     assert.equal(jumpSnapshot.grounded, false);
     assert.equal(airborneContinuationSnapshot.grounded, false);
-    assert.ok(jumpSnapshot.planarSpeedUnitsPerSecond > 0);
+    assert.ok(readGroundedBodyPlanarSpeed(jumpSnapshot) > 0);
     assert.ok(
-      airborneContinuationSnapshot.planarSpeedUnitsPerSecond >=
-        jumpSnapshot.planarSpeedUnitsPerSecond * 0.9
+      readGroundedBodyPlanarSpeed(airborneContinuationSnapshot) >=
+        readGroundedBodyPlanarSpeed(jumpSnapshot) * 0.9
     );
   } finally {
     groundedBodyRuntime.dispose();
@@ -355,7 +382,7 @@ test("MetaverseGroundedBodyRuntime does not let snap-to-ground clip the first gr
 
     assert.equal(jumpSnapshot.grounded, false);
     assert.ok(jumpSnapshot.position.y > 0);
-    assert.ok(jumpSnapshot.verticalSpeedUnitsPerSecond > 0);
+    assert.ok(readGroundedBodyVerticalSpeed(jumpSnapshot) > 0);
   } finally {
     groundedBodyRuntime.dispose();
     physicsRuntime.removeCollider(groundCollider);
@@ -452,7 +479,7 @@ test("MetaverseGroundedBodyRuntime keeps a launched jump airborne below snap dis
 
       if (
         snapshot.grounded !== true &&
-        snapshot.verticalSpeedUnitsPerSecond < 0 &&
+        readGroundedBodyVerticalSpeed(snapshot) < 0 &&
         snapshot.position.y > 0 &&
         snapshot.position.y < 0.18
       ) {
@@ -557,11 +584,11 @@ test("MetaverseGroundedBodyRuntime keeps jump readiness briefly after contact is
     );
 
     assert.equal(contactLostSnapshot.grounded, false);
-    assert.equal(contactLostSnapshot.jumpReady, true);
+    assert.equal(readGroundedBodyJumpReady(contactLostSnapshot), true);
     assert.equal(coyoteJumpSnapshot.grounded, false);
     assert.ok(coyoteJumpSnapshot.position.y > contactLostSnapshot.position.y);
-    assert.ok(coyoteJumpSnapshot.verticalSpeedUnitsPerSecond > 0);
-    assert.equal(coyoteJumpSnapshot.jumpReady, false);
+    assert.ok(readGroundedBodyVerticalSpeed(coyoteJumpSnapshot) > 0);
+    assert.equal(readGroundedBodyJumpReady(coyoteJumpSnapshot), false);
   } finally {
     groundedBodyRuntime.dispose();
   }
@@ -631,7 +658,7 @@ test("MetaverseGroundedBodyRuntime honors higher-level jump readiness overrides 
 
     for (let stepIndex = 0; stepIndex < 2; stepIndex += 1) {
       if (
-        snapshot.verticalSpeedUnitsPerSecond > 0 ||
+        readGroundedBodyVerticalSpeed(snapshot) > 0 ||
         snapshot.position.y > 0.12
       ) {
         break;
@@ -652,9 +679,9 @@ test("MetaverseGroundedBodyRuntime honors higher-level jump readiness overrides 
     }
 
     assert.ok(
-      snapshot.verticalSpeedUnitsPerSecond > 0 || snapshot.position.y > 0.12
+      readGroundedBodyVerticalSpeed(snapshot) > 0 || snapshot.position.y > 0.12
     );
-    assert.equal(snapshot.jumpReady, false);
+    assert.equal(readGroundedBodyJumpReady(snapshot), false);
   } finally {
     groundedBodyRuntime.dispose();
     physicsRuntime.removeCollider(groundCollider);
@@ -726,6 +753,8 @@ test("MetaverseGroundedBodyRuntime stops at a tall blocker", async () => {
     }
 
     assert.ok(groundedBodyRuntime.snapshot.grounded);
+    assert.equal(groundedBodyRuntime.snapshot.contact.blockedPlanarMovement, true);
+    assert.equal(groundedBodyRuntime.snapshot.contact.supportingContactDetected, true);
     assert.ok(groundedBodyRuntime.snapshot.position.y < 0.05);
     assert.ok(groundedBodyRuntime.snapshot.position.z > 0.7);
   } finally {
@@ -803,14 +832,14 @@ test("MetaverseGroundedBodyRuntime applies slope rules and exposes jump readines
     assert.equal(world.lastCharacterController.maxSlopeClimbAngle, Math.PI * 0.2);
     assert.equal(world.lastCharacterController.minSlopeSlideAngle, Math.PI * 0.3);
     assert.equal(snapshot.grounded, true);
-    assert.equal(snapshot.jumpReady, true);
+    assert.equal(readGroundedBodyJumpReady(snapshot), true);
   } finally {
     groundedBodyRuntime.dispose();
     physicsRuntime.removeCollider(groundCollider);
   }
 });
 
-test("MetaverseGroundedBodyRuntime toggles dynamic-body impulses without moving locomotion policy out of physics", async () => {
+test("MetaverseGroundedBodyRuntime syncs dynamic-body interaction through the grounded body owner", async () => {
   const { MetaverseGroundedBodyRuntime, RapierPhysicsRuntime } =
     await clientLoader.load("/src/physics/index.ts");
   const { physicsRuntime, world } =
@@ -836,12 +865,16 @@ test("MetaverseGroundedBodyRuntime toggles dynamic-body impulses without moving 
     physicsRuntime
   );
 
-  groundedBodyRuntime.setApplyImpulsesToDynamicBodies(true);
+  groundedBodyRuntime.syncInteractionSnapshot({
+    applyImpulsesToDynamicBodies: true
+  });
   await groundedBodyRuntime.init();
 
   assert.equal(world.lastCharacterController?.applyImpulsesToDynamicBodies, true);
 
-  groundedBodyRuntime.setApplyImpulsesToDynamicBodies(false);
+  groundedBodyRuntime.syncInteractionSnapshot({
+    applyImpulsesToDynamicBodies: false
+  });
 
   assert.equal(world.lastCharacterController?.applyImpulsesToDynamicBodies, false);
   groundedBodyRuntime.dispose();

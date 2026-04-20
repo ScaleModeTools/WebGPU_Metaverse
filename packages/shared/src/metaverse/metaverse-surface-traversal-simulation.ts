@@ -23,6 +23,16 @@ export interface MetaverseSurfaceTraversalSpeedSnapshot {
   readonly strafeSpeedUnitsPerSecond: number;
 }
 
+export interface MetaverseSurfaceTraversalDriveTargetSnapshot {
+  readonly boost: boolean;
+  readonly moveAxis: number;
+  readonly movementMagnitude: number;
+  readonly strafeAxis: number;
+  readonly targetForwardSpeedUnitsPerSecond: number;
+  readonly targetPlanarSpeedUnitsPerSecond: number;
+  readonly targetStrafeSpeedUnitsPerSecond: number;
+}
+
 export interface MetaverseSurfaceTraversalSnapshot {
   readonly planarSpeedUnitsPerSecond: number;
   readonly position: MetaverseWorldSurfaceVector3Snapshot;
@@ -30,6 +40,7 @@ export interface MetaverseSurfaceTraversalSnapshot {
 }
 
 export interface MetaverseSurfaceTraversalMotionSnapshot {
+  readonly driveTarget: MetaverseSurfaceTraversalDriveTargetSnapshot;
   readonly forwardSpeedUnitsPerSecond: number;
   readonly strafeSpeedUnitsPerSecond: number;
   readonly velocityX: number;
@@ -142,6 +153,51 @@ export function createMetaverseSurfaceTraversalVector3Snapshot(
   });
 }
 
+export function createMetaverseSurfaceTraversalDriveTargetSnapshot(
+  input: Partial<MetaverseSurfaceTraversalDriveTargetSnapshot> = {}
+): MetaverseSurfaceTraversalDriveTargetSnapshot {
+  const moveAxis = clamp(toFiniteNumber(input.moveAxis ?? 0, 0), -1, 1);
+  const strafeAxis = clamp(toFiniteNumber(input.strafeAxis ?? 0, 0), -1, 1);
+  const targetForwardSpeedUnitsPerSecond = toFiniteNumber(
+    input.targetForwardSpeedUnitsPerSecond ?? 0,
+    0
+  );
+  const targetStrafeSpeedUnitsPerSecond = toFiniteNumber(
+    input.targetStrafeSpeedUnitsPerSecond ?? 0,
+    0
+  );
+
+  return Object.freeze({
+    boost: input.boost === true,
+    moveAxis,
+    movementMagnitude: clamp(
+      toFiniteNumber(
+        input.movementMagnitude ?? Math.hypot(moveAxis, strafeAxis),
+        Math.hypot(moveAxis, strafeAxis)
+      ),
+      0,
+      1
+    ),
+    strafeAxis,
+    targetForwardSpeedUnitsPerSecond,
+    targetPlanarSpeedUnitsPerSecond: Math.max(
+      0,
+      toFiniteNumber(
+        input.targetPlanarSpeedUnitsPerSecond ??
+          Math.hypot(
+            targetForwardSpeedUnitsPerSecond,
+            targetStrafeSpeedUnitsPerSecond
+          ),
+        Math.hypot(
+          targetForwardSpeedUnitsPerSecond,
+          targetStrafeSpeedUnitsPerSecond
+        )
+      )
+    ),
+    targetStrafeSpeedUnitsPerSecond
+  });
+}
+
 export function createMetaverseSurfaceTraversalSnapshot(
   position: MetaverseWorldSurfaceVector3Snapshot,
   yawRadians: number
@@ -195,6 +251,40 @@ export function advanceMetaverseYawRadiansTowardTarget(
   );
 }
 
+export function resolveMetaverseSurfaceTraversalDriveTargetSnapshot(
+  movementInput: Pick<
+    MetaverseSurfaceTraversalInputSnapshot,
+    "boost" | "moveAxis" | "strafeAxis"
+  >,
+  config: MetaverseSurfaceTraversalConfig,
+  movementEnabled = true
+): MetaverseSurfaceTraversalDriveTargetSnapshot {
+  const moveAxis = movementEnabled
+    ? clamp(toFiniteNumber(movementInput.moveAxis, 0), -1, 1)
+    : 0;
+  const strafeAxis = movementEnabled
+    ? clamp(toFiniteNumber(movementInput.strafeAxis, 0), -1, 1)
+    : 0;
+  const movementMagnitude = clamp01(Math.hypot(moveAxis, strafeAxis));
+  const boost = movementEnabled && movementInput.boost === true;
+  const boostScale = resolveBoostMultiplier(boost, movementMagnitude, config);
+
+  return createMetaverseSurfaceTraversalDriveTargetSnapshot({
+    boost,
+    moveAxis,
+    movementMagnitude,
+    strafeAxis,
+    targetForwardSpeedUnitsPerSecond:
+      config.baseSpeedUnitsPerSecond *
+      shapeSignedAxis(moveAxis, config.accelerationCurveExponent) *
+      boostScale,
+    targetStrafeSpeedUnitsPerSecond:
+      config.baseSpeedUnitsPerSecond *
+      shapeSignedAxis(strafeAxis, config.accelerationCurveExponent) *
+      boostScale
+  });
+}
+
 export function advanceMetaverseSurfaceTraversalMotion(
   currentYawRadians: number,
   speedSnapshot: MetaverseSurfaceTraversalSpeedSnapshot,
@@ -223,26 +313,11 @@ export function advanceMetaverseSurfaceTraversalMotion(
               clampedDeltaSeconds
         )
       : wrapRadians(yawTargetRadians);
-  const moveAxis = movementEnabled
-    ? clamp(toFiniteNumber(movementInput.moveAxis, 0), -1, 1)
-    : 0;
-  const strafeAxis = movementEnabled
-    ? clamp(toFiniteNumber(movementInput.strafeAxis, 0), -1, 1)
-    : 0;
-  const movementMagnitude = clamp01(Math.hypot(moveAxis, strafeAxis));
-  const boostScale = resolveBoostMultiplier(
-    movementInput.boost,
-    movementMagnitude,
-    config
+  const driveTarget = resolveMetaverseSurfaceTraversalDriveTargetSnapshot(
+    movementInput,
+    config,
+    movementEnabled
   );
-  const targetForwardSpeedUnitsPerSecond =
-    config.baseSpeedUnitsPerSecond *
-    shapeSignedAxis(moveAxis, config.accelerationCurveExponent) *
-    boostScale;
-  const targetStrafeSpeedUnitsPerSecond =
-    config.baseSpeedUnitsPerSecond *
-    shapeSignedAxis(strafeAxis, config.accelerationCurveExponent) *
-    boostScale;
   const resolveAxisSpeedUnitsPerSecond = (
     currentSpeedUnitsPerSecond: number,
     targetSpeedUnitsPerSecond: number,
@@ -272,13 +347,13 @@ export function advanceMetaverseSurfaceTraversalMotion(
   };
   const forwardSpeedUnitsPerSecond = resolveAxisSpeedUnitsPerSecond(
     speedSnapshot.forwardSpeedUnitsPerSecond,
-    targetForwardSpeedUnitsPerSecond,
-    moveAxis
+    driveTarget.targetForwardSpeedUnitsPerSecond,
+    driveTarget.moveAxis
   );
   const strafeSpeedUnitsPerSecond = resolveAxisSpeedUnitsPerSecond(
     speedSnapshot.strafeSpeedUnitsPerSecond,
-    targetStrafeSpeedUnitsPerSecond,
-    strafeAxis
+    driveTarget.targetStrafeSpeedUnitsPerSecond,
+    driveTarget.strafeAxis
   );
   const forwardX = Math.sin(yawRadians);
   const forwardZ = -Math.cos(yawRadians);
@@ -286,6 +361,7 @@ export function advanceMetaverseSurfaceTraversalMotion(
   const rightZ = Math.sin(yawRadians);
 
   return Object.freeze({
+    driveTarget,
     forwardSpeedUnitsPerSecond,
     strafeSpeedUnitsPerSecond,
     velocityX:

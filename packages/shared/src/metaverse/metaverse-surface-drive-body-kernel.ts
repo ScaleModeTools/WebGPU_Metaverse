@@ -1,4 +1,11 @@
 import type {
+  MetaverseSurfaceDriveBodyRuntimeSnapshot
+} from "./metaverse-surface-drive-body-contract.js";
+import {
+  createMetaverseSurfaceDriveBodyContactSnapshot,
+  createMetaverseSurfaceDriveBodyRuntimeSnapshot
+} from "./metaverse-surface-drive-body-contract.js";
+import type {
   MetaverseWorldSurfaceVector3Snapshot
 } from "./metaverse-world-surface-query.js";
 import {
@@ -11,7 +18,6 @@ import {
 } from "./metaverse-surface-traversal-simulation.js";
 import {
   resolveMetaverseTraversalKinematicState,
-  type MetaverseTraversalKinematicStateSnapshot
 } from "./metaverse-traversal-kinematics.js";
 
 export interface MetaverseSurfaceDriveBodyIntentSnapshot {
@@ -22,9 +28,7 @@ export interface MetaverseSurfaceDriveBodyIntentSnapshot {
 }
 
 export interface ResolveMetaverseSurfaceDriveBodyStepInput {
-  readonly currentForwardSpeedUnitsPerSecond: number;
-  readonly currentSnapshot: MetaverseTraversalKinematicStateSnapshot;
-  readonly currentStrafeSpeedUnitsPerSecond: number;
+  readonly currentSnapshot: MetaverseSurfaceDriveBodyRuntimeSnapshot;
   readonly deltaSeconds: number;
   readonly intentSnapshot: MetaverseSurfaceDriveBodyIntentSnapshot;
   readonly lockedHeightMeters: number;
@@ -42,17 +46,23 @@ export interface ResolveMetaverseSurfaceDriveBodyStepInput {
 }
 
 export interface MetaverseSurfaceDriveBodyStepSnapshot {
-  readonly nextForwardSpeedUnitsPerSecond: number;
-  readonly nextSnapshot: MetaverseTraversalKinematicStateSnapshot;
-  readonly nextStrafeSpeedUnitsPerSecond: number;
+  readonly nextSnapshot: MetaverseSurfaceDriveBodyRuntimeSnapshot;
   readonly nextYawRadians: number;
   readonly resolvedRootPosition: MetaverseWorldSurfaceVector3Snapshot;
 }
 
+const surfaceDriveBodyContactDeltaEpsilon = 0.000001;
+
+function hasSurfaceDriveBodyMovementDeltaDivergence(
+  desiredDelta: number,
+  appliedDelta: number
+): boolean {
+  return Math.abs(toFiniteNumber(desiredDelta, 0) - toFiniteNumber(appliedDelta, 0)) >
+    surfaceDriveBodyContactDeltaEpsilon;
+}
+
 export function resolveMetaverseSurfaceDriveBodyStep({
-  currentForwardSpeedUnitsPerSecond,
   currentSnapshot,
-  currentStrafeSpeedUnitsPerSecond,
   deltaSeconds,
   intentSnapshot,
   lockedHeightMeters,
@@ -65,8 +75,10 @@ export function resolveMetaverseSurfaceDriveBodyStep({
   const motionSnapshot = advanceMetaverseSurfaceTraversalMotion(
     currentSnapshot.yawRadians,
     {
-      forwardSpeedUnitsPerSecond: currentForwardSpeedUnitsPerSecond,
-      strafeSpeedUnitsPerSecond: currentStrafeSpeedUnitsPerSecond
+      forwardSpeedUnitsPerSecond:
+        currentSnapshot.forwardSpeedUnitsPerSecond,
+      strafeSpeedUnitsPerSecond:
+        currentSnapshot.strafeSpeedUnitsPerSecond
     },
     {
       boost: intentSnapshot.boost,
@@ -107,7 +119,17 @@ export function resolveMetaverseSurfaceDriveBodyStep({
     blockedPlanarPosition.y,
     blockedPlanarPosition.z
   );
-  const nextSnapshot = resolveMetaverseTraversalKinematicState(
+  const desiredMovementDelta = createMetaverseSurfaceTraversalVector3Snapshot(
+    motionSnapshot.velocityX * deltaSeconds,
+    0,
+    motionSnapshot.velocityZ * deltaSeconds
+  );
+  const appliedMovementDelta = createMetaverseSurfaceTraversalVector3Snapshot(
+    resolvedRootPosition.x - currentSnapshot.position.x,
+    resolvedRootPosition.y - currentSnapshot.position.y,
+    resolvedRootPosition.z - currentSnapshot.position.z
+  );
+  const nextKinematicState = resolveMetaverseTraversalKinematicState(
     {
       position: currentSnapshot.position,
       yawRadians: currentSnapshot.yawRadians
@@ -118,13 +140,26 @@ export function resolveMetaverseSurfaceDriveBodyStep({
     },
     deltaSeconds
   );
+  const nextSnapshot = createMetaverseSurfaceDriveBodyRuntimeSnapshot({
+    contact: createMetaverseSurfaceDriveBodyContactSnapshot({
+      appliedMovementDelta,
+      blockedPlanarMovement:
+        hasSurfaceDriveBodyMovementDeltaDivergence(
+          desiredMovementDelta.x,
+          appliedMovementDelta.x
+        ) ||
+        hasSurfaceDriveBodyMovementDeltaDivergence(
+          desiredMovementDelta.z,
+          appliedMovementDelta.z
+        ),
+      desiredMovementDelta
+    }),
+    ...nextKinematicState,
+    driveTarget: motionSnapshot.driveTarget
+  });
 
   return Object.freeze({
-    nextForwardSpeedUnitsPerSecond:
-      nextSnapshot.forwardSpeedUnitsPerSecond,
     nextSnapshot,
-    nextStrafeSpeedUnitsPerSecond:
-      nextSnapshot.strafeSpeedUnitsPerSecond,
     nextYawRadians,
     resolvedRootPosition
   });

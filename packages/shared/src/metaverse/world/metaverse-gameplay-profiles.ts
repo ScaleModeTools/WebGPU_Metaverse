@@ -6,11 +6,16 @@ import {
   type MetaverseGroundedBodyTraversalCoreConfig,
   type MetaverseVehicleTraversalConfig
 } from "../metaverse-authoritative-traversal-config.js";
+import {
+  createMetaverseGroundedJumpPhysicsConfigSnapshot,
+  type MetaverseGroundedJumpPhysicsConfigSnapshot
+} from "../metaverse-grounded-jump-physics.js";
 import type { MetaverseSurfaceTraversalConfig } from "../metaverse-surface-traversal-simulation.js";
 import type { MetaverseWorldSurfacePolicyConfig } from "../metaverse-world-surface-policy.js";
 
 export interface MetaverseGameplayProfileSnapshot {
   readonly groundedBodyTraversal: MetaverseGroundedBodyTraversalCoreConfig;
+  readonly groundedJumpPhysics: MetaverseGroundedJumpPhysicsConfigSnapshot;
   readonly groundedJumpSupportVerticalSpeedTolerance: number;
   readonly groundedSurfacePolicy: MetaverseWorldSurfacePolicyConfig;
   readonly id: string;
@@ -120,6 +125,8 @@ function createGameplayProfile(input: {
 
   return Object.freeze({
     groundedBodyTraversal,
+    groundedJumpPhysics:
+      createMetaverseGroundedJumpPhysicsConfigSnapshot(groundedBodyTraversal),
     groundedJumpSupportVerticalSpeedTolerance:
       input.groundedJumpSupportVerticalSpeedTolerance,
     groundedSurfacePolicy: createSurfacePolicyConfig(groundedBodyTraversal),

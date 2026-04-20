@@ -98,9 +98,6 @@ interface ShellStageRouterProps {
   readonly onGameplaySignal: (signal: GameplaySignal) => void;
   readonly onInputModeChange: (inputMode: GameplayInputModeId) => void;
   readonly onLoginSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  readonly onMetaverseControlModeChange: (
-    controlMode: MetaverseControlModeId
-  ) => void;
   readonly onOpenGameplayMenu: () => void;
   readonly onOpenToolRequest: () => void;
   readonly onRunToolPreviewRequest: (
@@ -164,7 +161,6 @@ export function ShellStageRouter({
   onGameplaySignal,
   onInputModeChange,
   onLoginSubmit,
-  onMetaverseControlModeChange,
   onOpenGameplayMenu,
   onOpenToolRequest,
   onRunToolPreviewRequest,
@@ -238,7 +234,6 @@ export function ShellStageRouter({
             metaverseControlMode={metaverseControlMode}
             onCoopRoomIdDraftChange={onCoopRoomIdDraftChange}
             onExperienceLaunchRequest={onExperienceLaunchRequest}
-            onMetaverseControlModeChange={onMetaverseControlModeChange}
             onRecalibrationRequest={onRecalibrationRequest}
             onSessionModeChange={onSessionModeChange}
             onSetupRequest={onSetupRequest}

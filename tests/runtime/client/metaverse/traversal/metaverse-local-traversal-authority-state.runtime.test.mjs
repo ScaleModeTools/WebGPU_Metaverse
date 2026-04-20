@@ -16,6 +16,13 @@ function createGroundedTraversalState(actionState = undefined) {
   });
 }
 
+function createActiveJumpAction(phase = "rising") {
+  return Object.freeze({
+    kind: "jump",
+    phase
+  });
+}
+
 before(async () => {
   clientLoader = await createClientModuleLoader();
 });
@@ -32,7 +39,10 @@ test("MetaverseLocalTraversalAuthorityState derives traversal authority from gro
 
   authorityState.sync({
     advanceTick: true,
-    localJumpAuthorityState: "grounded",
+    localActiveTraversalAction: Object.freeze({
+      kind: "none",
+      phase: "idle"
+    }),
     locomotionMode: "grounded",
     traversalState: createGroundedTraversalState(
       Object.freeze({
@@ -52,7 +62,7 @@ test("MetaverseLocalTraversalAuthorityState derives traversal authority from gro
   assert.equal(authorityState.snapshot.currentActionSequence, 3);
 });
 
-test("MetaverseLocalTraversalAuthorityState prefers an issued jump edge over local pending traversal state", async () => {
+test("MetaverseLocalTraversalAuthorityState prefers an issued jump edge over local pending traversal state when minting the next jump sequence", async () => {
   const { MetaverseLocalTraversalAuthorityState } = await clientLoader.load(
     "/src/metaverse/traversal/classes/metaverse-local-traversal-authority-state.ts"
   );
@@ -85,15 +95,16 @@ test("MetaverseLocalTraversalAuthorityState prefers an issued jump edge over loc
       locomotionMode: "grounded"
     }),
     {
-      localJumpAuthorityState: "grounded",
+      localActiveTraversalAction: createActiveJumpAction("startup"),
       locomotionMode: "grounded",
       traversalState: groundedTraversalState
     }
   );
 
   assert.equal(
-    authorityState.resolveLatestPredictedGroundedTraversalActionSequence({
-      localJumpAuthorityState: "grounded",
+    authorityState.resolveNextPredictedGroundedTraversalActionSequence({
+      actionPressedThisFrame: true,
+      localActiveTraversalAction: createActiveJumpAction("startup"),
       locomotionMode: "grounded",
       traversalState: groundedTraversalState
     }),
@@ -110,7 +121,10 @@ test("MetaverseLocalTraversalAuthorityState owns next grounded traversal action 
   assert.equal(
     authorityState.resolveNextPredictedGroundedTraversalActionSequence({
       actionPressedThisFrame: true,
-      localJumpAuthorityState: "grounded",
+      localActiveTraversalAction: Object.freeze({
+        kind: "none",
+        phase: "idle"
+      }),
       locomotionMode: "grounded",
       traversalState: createGroundedTraversalState()
     }),
@@ -118,7 +132,7 @@ test("MetaverseLocalTraversalAuthorityState owns next grounded traversal action 
   );
 });
 
-test("MetaverseLocalTraversalAuthorityState falls back to resolved airborne jump state and resets cleanly", async () => {
+test("MetaverseLocalTraversalAuthorityState falls back to resolved airborne jump state and resets cleanly when minting the next jump sequence", async () => {
   const { MetaverseLocalTraversalAuthorityState } = await clientLoader.load(
     "/src/metaverse/traversal/classes/metaverse-local-traversal-authority-state.ts"
   );
@@ -136,14 +150,15 @@ test("MetaverseLocalTraversalAuthorityState falls back to resolved airborne jump
 
   authorityState.sync({
     advanceTick: true,
-    localJumpAuthorityState: "rising",
+    localActiveTraversalAction: createActiveJumpAction("rising"),
     locomotionMode: "grounded",
     traversalState: airborneTraversalState
   });
 
   assert.equal(
-    authorityState.resolveLatestPredictedGroundedTraversalActionSequence({
-      localJumpAuthorityState: "rising",
+    authorityState.resolveNextPredictedGroundedTraversalActionSequence({
+      actionPressedThisFrame: true,
+      localActiveTraversalAction: createActiveJumpAction("rising"),
       locomotionMode: "grounded",
       traversalState: airborneTraversalState
     }),
@@ -155,8 +170,12 @@ test("MetaverseLocalTraversalAuthorityState falls back to resolved airborne jump
   assert.equal(authorityState.currentTick, 0);
   assert.equal(authorityState.snapshot.currentActionKind, "none");
   assert.equal(
-    authorityState.resolveLatestPredictedGroundedTraversalActionSequence({
-      localJumpAuthorityState: "grounded",
+    authorityState.resolveNextPredictedGroundedTraversalActionSequence({
+      actionPressedThisFrame: false,
+      localActiveTraversalAction: Object.freeze({
+        kind: "none",
+        phase: "idle"
+      }),
       locomotionMode: "grounded",
       traversalState: createGroundedTraversalState()
     }),

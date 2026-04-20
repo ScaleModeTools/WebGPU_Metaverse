@@ -505,6 +505,18 @@ function assertApprox(actual, expected, label, tolerance = 0.000001) {
   );
 }
 
+function readGroundedBodyJumpReady(snapshot) {
+  return snapshot.jumpBody.jumpReady;
+}
+
+function readGroundedBodyPlanarSpeed(snapshot) {
+  return Math.hypot(snapshot.linearVelocity.x, snapshot.linearVelocity.z);
+}
+
+function readGroundedBodyVerticalSpeed(snapshot) {
+  return snapshot.jumpBody.verticalSpeedUnitsPerSecond;
+}
+
 function assertSnapshotsMatch(clientSnapshot, serverSnapshot, stepIndex) {
   assert.equal(
     clientSnapshot.grounded,
@@ -512,9 +524,24 @@ function assertSnapshotsMatch(clientSnapshot, serverSnapshot, stepIndex) {
     `step ${stepIndex}: grounded`
   );
   assert.equal(
-    clientSnapshot.jumpReady,
-    serverSnapshot.jumpReady,
+    readGroundedBodyJumpReady(clientSnapshot),
+    readGroundedBodyJumpReady(serverSnapshot),
     `step ${stepIndex}: jumpReady`
+  );
+  assert.equal(
+    clientSnapshot.contact.supportingContactDetected,
+    serverSnapshot.contact.supportingContactDetected,
+    `step ${stepIndex}: contact.supportingContactDetected`
+  );
+  assert.equal(
+    clientSnapshot.contact.blockedPlanarMovement,
+    serverSnapshot.contact.blockedPlanarMovement,
+    `step ${stepIndex}: contact.blockedPlanarMovement`
+  );
+  assert.equal(
+    clientSnapshot.contact.blockedVerticalMovement,
+    serverSnapshot.contact.blockedVerticalMovement,
+    `step ${stepIndex}: contact.blockedVerticalMovement`
   );
   assertApprox(
     clientSnapshot.position.x,
@@ -532,19 +559,49 @@ function assertSnapshotsMatch(clientSnapshot, serverSnapshot, stepIndex) {
     `step ${stepIndex}: position.z`
   );
   assertApprox(
-    clientSnapshot.planarSpeedUnitsPerSecond,
-    serverSnapshot.planarSpeedUnitsPerSecond,
+    readGroundedBodyPlanarSpeed(clientSnapshot),
+    readGroundedBodyPlanarSpeed(serverSnapshot),
     `step ${stepIndex}: planarSpeedUnitsPerSecond`
   );
   assertApprox(
-    clientSnapshot.verticalSpeedUnitsPerSecond,
-    serverSnapshot.verticalSpeedUnitsPerSecond,
+    readGroundedBodyVerticalSpeed(clientSnapshot),
+    readGroundedBodyVerticalSpeed(serverSnapshot),
     `step ${stepIndex}: verticalSpeedUnitsPerSecond`
   );
   assertApprox(
     clientSnapshot.yawRadians,
     serverSnapshot.yawRadians,
     `step ${stepIndex}: yawRadians`
+  );
+  assertApprox(
+    clientSnapshot.contact.desiredMovementDelta.x,
+    serverSnapshot.contact.desiredMovementDelta.x,
+    `step ${stepIndex}: contact.desiredMovementDelta.x`
+  );
+  assertApprox(
+    clientSnapshot.contact.desiredMovementDelta.y,
+    serverSnapshot.contact.desiredMovementDelta.y,
+    `step ${stepIndex}: contact.desiredMovementDelta.y`
+  );
+  assertApprox(
+    clientSnapshot.contact.desiredMovementDelta.z,
+    serverSnapshot.contact.desiredMovementDelta.z,
+    `step ${stepIndex}: contact.desiredMovementDelta.z`
+  );
+  assertApprox(
+    clientSnapshot.contact.appliedMovementDelta.x,
+    serverSnapshot.contact.appliedMovementDelta.x,
+    `step ${stepIndex}: contact.appliedMovementDelta.x`
+  );
+  assertApprox(
+    clientSnapshot.contact.appliedMovementDelta.y,
+    serverSnapshot.contact.appliedMovementDelta.y,
+    `step ${stepIndex}: contact.appliedMovementDelta.y`
+  );
+  assertApprox(
+    clientSnapshot.contact.appliedMovementDelta.z,
+    serverSnapshot.contact.appliedMovementDelta.z,
+    `step ${stepIndex}: contact.appliedMovementDelta.z`
   );
 }
 

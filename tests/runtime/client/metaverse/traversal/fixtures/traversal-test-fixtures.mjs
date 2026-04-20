@@ -1,4 +1,6 @@
 import {
+  createMetaverseGroundedBodyRuntimeSnapshot,
+  createMetaverseSurfaceDriveBodyRuntimeSnapshot,
   metaverseRealtimeWorldCadenceConfig,
   metaverseWorldGroundedSpawnPosition,
   metaverseWorldInitialYawRadians,
@@ -102,7 +104,24 @@ function createAuthoritativeLocalPlayerPoseSnapshot(input) {
 
   return Object.freeze({
     ...authoritativeSnapshot,
+    groundedBody:
+      authoritativeSnapshot.groundedBody ??
+      createMetaverseGroundedBodyRuntimeSnapshot({
+        grounded: authoritativeSnapshot.locomotionMode !== "swim",
+        linearVelocity: authoritativeSnapshot.linearVelocity,
+        position: authoritativeSnapshot.position,
+        yawRadians: authoritativeSnapshot.yawRadians
+      }),
     lastProcessedInputSequence,
+    swimBody:
+      authoritativeSnapshot.swimBody ??
+      (authoritativeSnapshot.locomotionMode === "swim"
+        ? createMetaverseSurfaceDriveBodyRuntimeSnapshot({
+            linearVelocity: authoritativeSnapshot.linearVelocity,
+            position: authoritativeSnapshot.position,
+            yawRadians: authoritativeSnapshot.yawRadians
+          })
+        : null),
     traversalAuthority:
       authoritativeSnapshot.traversalAuthority ??
       resolveMetaverseTraversalAuthoritySnapshotInput({

@@ -18,18 +18,7 @@ import type {
 import { DuckHuntLaunchPanel } from "../../experiences/duck-hunt/components/duck-hunt-launch-panel";
 import { ImmersiveStageFrame } from "../../ui/components/immersive-stage-frame";
 import { Button } from "@/components/ui/button";
-import {
-  ToggleGroup,
-  ToggleGroupItem
-} from "@/components/ui/toggle-group";
-import {
-  metaverseControlModes,
-  resolveMetaverseControlMode
-} from "../config/metaverse-control-modes";
 import { createMetaverseRuntimeConfig } from "../config/metaverse-runtime";
-import {
-  resolveMetaverseLocomotionMode
-} from "../config/metaverse-locomotion-modes";
 import {
   createMetaverseLocalPlayerIdentity,
   createMetaversePresenceClient
@@ -56,9 +45,6 @@ interface MetaverseStageScreenProps {
   readonly metaverseControlMode: MetaverseControlModeId;
   readonly onCoopRoomIdDraftChange: (coopRoomIdDraft: string) => void;
   readonly onExperienceLaunchRequest: (experienceId: ExperienceId) => void;
-  readonly onMetaverseControlModeChange: (
-    controlMode: MetaverseControlModeId
-  ) => void;
   readonly onRecalibrationRequest: () => void;
   readonly onSessionModeChange: (mode: GameplaySessionMode) => void;
   readonly onSetupRequest: () => void;
@@ -70,11 +56,6 @@ interface MetaverseHudSurfaceProps {
   readonly children: ReactNode;
   readonly className?: string;
   readonly strong?: boolean;
-}
-
-interface MetaverseHudFrameProps {
-  readonly children: ReactNode;
-  readonly className?: string;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -106,8 +87,6 @@ function resolveMetaverseHudScale(
 function createMetaverseHudStyle(scale: number): CSSProperties {
   return {
     "--game-ui-scale": `${scale}`,
-    "--metaverse-hud-chip-padding-x": `${12 * scale}px`,
-    "--metaverse-hud-chip-padding-y": `${8 * scale}px`,
     "--metaverse-hud-edge": `${16 * scale}px`,
     "--metaverse-hud-gap": `${24 * scale}px`,
     "--metaverse-hud-inset-padding": `${14 * scale}px`,
@@ -137,36 +116,6 @@ function MetaverseHudSurface({
   );
 }
 
-function MetaverseHudFrame({ children, className }: MetaverseHudFrameProps) {
-  return (
-    <div
-      className={[
-        "surface-shell-inset min-w-0 rounded-[var(--metaverse-hud-inset-radius)] px-[var(--metaverse-hud-inset-padding)] py-[var(--metaverse-hud-inset-padding)]",
-        className
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      {children}
-    </div>
-  );
-}
-
-function MetaverseHudChip({ children, className }: MetaverseHudFrameProps) {
-  return (
-    <div
-      className={[
-        "surface-shell-inset type-shell-detail rounded-full px-[var(--metaverse-hud-chip-padding-x)] py-[var(--metaverse-hud-chip-padding-y)]",
-        className
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      {children}
-    </div>
-  );
-}
-
 export function MetaverseStageScreen({
   attachmentProofConfig,
   audioStatusLabel,
@@ -179,7 +128,6 @@ export function MetaverseStageScreen({
   metaverseControlMode,
   onCoopRoomIdDraftChange,
   onExperienceLaunchRequest,
-  onMetaverseControlModeChange,
   onRecalibrationRequest,
   onSessionModeChange,
   onSetupRequest,
@@ -226,11 +174,6 @@ export function MetaverseStageScreen({
     () => metaverseRuntime.hudSnapshot,
     () => metaverseRuntime.hudSnapshot
   );
-  const selectedControlMode = resolveMetaverseControlMode(metaverseControlMode);
-  const selectedLocomotionMode = resolveMetaverseLocomotionMode(
-    hudSnapshot.locomotionMode
-  );
-  const activeControlMode = resolveMetaverseControlMode(hudSnapshot.controlMode);
   const showDeveloperOverlay = import.meta.env.DEV;
 
   useEffect(() => {
@@ -344,6 +287,10 @@ export function MetaverseStageScreen({
       ? null
       : `${focusedPortal.distanceFromCamera.toFixed(1)}m from portal`;
   const mountedInteractionHud = hudSnapshot.mountedInteractionHud;
+  const showPortalScan =
+    focusedPortal !== null ||
+    hudSnapshot.presence.lastError !== null ||
+    runtimeError !== null;
 
   return (
     <ImmersiveStageFrame className="bg-game-stage">
@@ -360,142 +307,53 @@ export function MetaverseStageScreen({
             ref={overlayRef}
             style={hudStyle}
           >
-            <div className="flex flex-wrap items-start gap-[var(--metaverse-hud-gap)]">
-              <MetaverseHudSurface
-                className="max-w-[min(36rem,100%)]"
-                strong
-              >
-                <p className="type-shell-banner">Ocean Hub</p>
-                <h1 className="mt-2 text-[calc(1.75rem*var(--game-ui-scale))] leading-[1.05] font-semibold text-[color:var(--shell-foreground)]">
-                  Welcome back, {username}
-                </h1>
-                <p className="type-shell-body mt-3">
-                  Keep hub traversal and hub controls separate. Surface travel,
-                  swimming, and mounted travel now transition from runtime state
-                  instead of a manual locomotion selector.
-                </p>
+            <div className="flex flex-wrap items-start justify-between gap-[var(--metaverse-hud-gap)]">
+              {showPortalScan || mountedInteractionHud.visible ? (
+                <div className="flex min-w-0 max-w-[min(28rem,100%)] flex-col gap-[var(--metaverse-hud-gap)]">
+                  {showPortalScan ? (
+                    <MetaverseHudSurface className="max-w-[min(24rem,100%)]">
+                      <div className="flex flex-col gap-3">
+                        {focusedPortal !== null ? (
+                          <div className="flex flex-col gap-2">
+                            <p className="type-shell-banner">Portal scan</p>
+                            <p className="type-shell-heading">
+                              {focusedPortal.label} is in range.
+                            </p>
+                            <p className="type-shell-body">{focusDistanceLabel}</p>
+                          </div>
+                        ) : null}
 
-                <div className="mt-4 flex flex-col gap-3">
-                  <MetaverseHudFrame>
-                    <p className="type-shell-caption">Locomotion</p>
-                    <p className="type-shell-heading mt-2">
-                      {selectedLocomotionMode.label}
-                    </p>
-                    <p className="type-shell-body mt-2">
-                      {selectedLocomotionMode.description}
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {selectedLocomotionMode.controlsSummary.map((instruction) => (
-                        <MetaverseHudChip key={instruction}>
-                          {instruction}
-                        </MetaverseHudChip>
-                      ))}
-                    </div>
-                  </MetaverseHudFrame>
+                        {hudSnapshot.presence.lastError !== null ? (
+                          <div className="surface-shell-danger rounded-[var(--metaverse-hud-inset-radius)] px-[var(--metaverse-hud-inset-padding)] py-[var(--metaverse-hud-inset-padding)]">
+                            <p className="type-shell-body text-[color:var(--shell-danger-foreground)]">
+                              Presence issue: {hudSnapshot.presence.lastError}
+                            </p>
+                          </div>
+                        ) : null}
 
-                  <ToggleGroup
-                    className="w-full justify-start"
-                    onValueChange={(nextValue) => {
-                      if (nextValue.length === 0) {
-                        return;
-                      }
+                        {runtimeError !== null ? (
+                          <div className="surface-shell-danger rounded-[var(--metaverse-hud-inset-radius)] px-[var(--metaverse-hud-inset-padding)] py-[var(--metaverse-hud-inset-padding)]">
+                            <p className="type-shell-body text-[color:var(--shell-danger-foreground)]">
+                              {runtimeError}
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
+                    </MetaverseHudSurface>
+                  ) : null}
 
-                      onMetaverseControlModeChange(nextValue as MetaverseControlModeId);
-                    }}
-                    type="single"
-                    value={metaverseControlMode}
-                    variant="outline"
-                  >
-                    {metaverseControlModes.map((controlMode) => (
-                      <ToggleGroupItem
-                        className="flex-1"
-                        key={controlMode.id}
-                        value={controlMode.id}
-                      >
-                        {controlMode.label}
-                      </ToggleGroupItem>
-                    ))}
-                  </ToggleGroup>
+                  {mountedInteractionHud.visible ? (
+                    <MetaverseHudSurface className="max-w-[min(26rem,100%)]">
+                      <p className="type-shell-banner">Vehicle access</p>
+                      <p className="type-shell-heading mt-2">
+                        {mountedInteractionHud.heading}
+                      </p>
+                      <p className="type-shell-body mt-3">
+                        {mountedInteractionHud.detail}
+                      </p>
 
-                  <MetaverseHudFrame>
-                    <p className="type-shell-caption">Control path</p>
-                    <p className="type-shell-heading mt-2">
-                      {selectedControlMode.label}
-                    </p>
-                    <p className="type-shell-body mt-2">
-                      {selectedControlMode.description}
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {selectedControlMode.controlsSummary.map((instruction) => (
-                        <MetaverseHudChip key={instruction}>
-                          {instruction}
-                        </MetaverseHudChip>
-                      ))}
-                    </div>
-                  </MetaverseHudFrame>
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button onClick={onSetupRequest} type="button" variant="outline">
-                    Open setup
-                  </Button>
-                  <MetaverseHudChip>
-                    Hub controls: {activeControlMode.label}
-                  </MetaverseHudChip>
-                  <MetaverseHudChip>
-                    Locomotion: {selectedLocomotionMode.label}
-                  </MetaverseHudChip>
-                  <MetaverseHudChip>
-                    Presence: {hudSnapshot.presence.state}
-                  </MetaverseHudChip>
-                  <MetaverseHudChip>
-                    Remote players: {hudSnapshot.presence.remotePlayerCount}
-                  </MetaverseHudChip>
-                </div>
-              </MetaverseHudSurface>
-
-              <MetaverseHudSurface className="max-w-[min(24rem,100%)]">
-                <p className="type-shell-banner">Portal scan</p>
-                <p className="type-shell-heading mt-2">
-                  {focusedPortal === null
-                    ? "Approach the glowing ring over the water to inspect an experience."
-                    : `${focusedPortal.label} is in range.`}
-                </p>
-                <p className="type-shell-body mt-3">
-                  {focusedPortal === null
-                    ? "The first portal leads to Duck Hunt. More experiences can join this shell while hub controls stay separate from experience-local gameplay input."
-                    : focusDistanceLabel}
-                </p>
-
-                {hudSnapshot.presence.lastError !== null ? (
-                  <div className="surface-shell-danger mt-4 rounded-[var(--metaverse-hud-inset-radius)] px-[var(--metaverse-hud-inset-padding)] py-[var(--metaverse-hud-inset-padding)]">
-                    <p className="type-shell-body text-[color:var(--shell-danger-foreground)]">
-                      Presence issue: {hudSnapshot.presence.lastError}
-                    </p>
-                  </div>
-                ) : null}
-
-                {runtimeError !== null ? (
-                  <div className="surface-shell-danger mt-4 rounded-[var(--metaverse-hud-inset-radius)] px-[var(--metaverse-hud-inset-padding)] py-[var(--metaverse-hud-inset-padding)]">
-                    <p className="type-shell-body text-[color:var(--shell-danger-foreground)]">
-                      {runtimeError}
-                    </p>
-                  </div>
-                ) : null}
-              </MetaverseHudSurface>
-
-              {mountedInteractionHud.visible ? (
-                <MetaverseHudSurface className="max-w-[min(26rem,100%)]">
-                  <p className="type-shell-banner">Vehicle access</p>
-                  <p className="type-shell-heading mt-2">
-                    {mountedInteractionHud.heading}
-                  </p>
-                  <p className="type-shell-body mt-3">
-                    {mountedInteractionHud.detail}
-                  </p>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {mountedInteractionHud.boardingEntries.map((entry) => (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {mountedInteractionHud.boardingEntries.map((entry) => (
                           <Button
                             key={entry.entryId}
                             onClick={() => {
@@ -506,45 +364,67 @@ export function MetaverseStageScreen({
                             {entry.label}
                           </Button>
                         ))}
-                    {mountedInteractionHud.seatTargets.map((seatTarget) => (
-                      <Button
-                        key={seatTarget.seatId}
-                        onClick={() => {
-                          metaverseRuntime.occupySeat(seatTarget.seatId);
-                        }}
-                        type="button"
-                        variant={mountedInteractionHud.seatTargetButtonVariant}
-                      >
-                        {mountedInteractionHud.seatTargetButtonVariant === "outline"
-                          ? `Sit ${seatTarget.label}`
-                          : `Move to ${seatTarget.label}`}
-                      </Button>
-                    ))}
-                    {mountedInteractionHud.leaveActionLabel !== null ? (
-                      <Button
-                        onClick={() => {
-                          metaverseRuntime.leaveMountedEnvironment();
-                        }}
-                        type="button"
-                        variant="outline"
-                      >
-                        {mountedInteractionHud.leaveActionLabel}
-                      </Button>
-                    ) : null}
-                  </div>
-                </MetaverseHudSurface>
+                        {mountedInteractionHud.seatTargets.map((seatTarget) => (
+                          <Button
+                            key={seatTarget.seatId}
+                            onClick={() => {
+                              metaverseRuntime.occupySeat(seatTarget.seatId);
+                            }}
+                            type="button"
+                            variant={mountedInteractionHud.seatTargetButtonVariant}
+                          >
+                            {mountedInteractionHud.seatTargetButtonVariant ===
+                            "outline"
+                              ? `Sit ${seatTarget.label}`
+                              : `Move to ${seatTarget.label}`}
+                          </Button>
+                        ))}
+                        {mountedInteractionHud.leaveActionLabel !== null ? (
+                          <Button
+                            onClick={() => {
+                              metaverseRuntime.leaveMountedEnvironment();
+                            }}
+                            type="button"
+                            variant="outline"
+                          >
+                            {mountedInteractionHud.leaveActionLabel}
+                          </Button>
+                        ) : null}
+                      </div>
+                    </MetaverseHudSurface>
+                  ) : null}
+                </div>
               ) : null}
 
-              {showDeveloperOverlay ? (
-                <MetaverseDeveloperOverlay
-                  className="max-w-[min(22rem,100%)]"
-                  hudScaleStyle={hudStyle}
-                  hudSnapshot={hudSnapshot}
-                />
-              ) : null}
+              <div className="ml-auto flex max-w-full justify-end">
+                {showDeveloperOverlay ? (
+                  <MetaverseDeveloperOverlay
+                    className="max-w-[min(64rem,100%)]"
+                    hudScaleStyle={hudStyle}
+                    hudSnapshot={hudSnapshot}
+                    onSetupRequest={onSetupRequest}
+                  />
+                ) : (
+                  <Button
+                    className="pointer-events-auto"
+                    onClick={onSetupRequest}
+                    type="button"
+                    variant="outline"
+                  >
+                    Main Menu
+                  </Button>
+                )}
+              </div>
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex flex-wrap items-end justify-between gap-[var(--metaverse-hud-gap)]">
+              <MetaverseHudSurface
+                className="max-w-[min(18rem,100%)]"
+                strong
+              >
+                <p className="type-shell-heading truncate">{username}</p>
+              </MetaverseHudSurface>
+
               {focusedPortal?.experienceId === "duck-hunt" ? (
                 <div className="pointer-events-auto w-full max-w-[min(48rem,100%)] max-h-[clamp(18rem,55dvh,34rem)] overflow-y-auto overscroll-contain">
                   <DuckHuntLaunchPanel

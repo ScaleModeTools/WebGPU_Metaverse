@@ -5,6 +5,7 @@ import {
   createMetaverseTraversalKinematicStateSnapshot,
   resolveMetaverseTraversalKinematicState,
   resolveMetaverseTraversalAngularVelocityRadiansPerSecond,
+  resolveMetaverseTraversalLinearVelocitySnapshot,
   resolveMetaverseTraversalPlanarDirectionalSpeeds,
   resolveMetaverseTraversalPoseKinematics,
   syncMetaverseTraversalKinematicState
@@ -62,6 +63,21 @@ test("shared traversal planar directional speeds project world velocity into the
   assertApprox(directionalSpeeds.forwardSpeedUnitsPerSecond, 4);
   assertApprox(directionalSpeeds.strafeSpeedUnitsPerSecond, 3);
   assertApprox(directionalSpeeds.planarSpeedUnitsPerSecond, 5);
+});
+
+test("shared traversal linear velocity resolves back from directional speeds and yaw", () => {
+  const linearVelocity = resolveMetaverseTraversalLinearVelocitySnapshot(
+    {
+      forwardSpeedUnitsPerSecond: 4,
+      strafeSpeedUnitsPerSecond: 3,
+      verticalSpeedUnitsPerSecond: 1.25
+    },
+    0
+  );
+
+  assertApprox(linearVelocity.x, 3);
+  assertApprox(linearVelocity.y, 1.25);
+  assertApprox(linearVelocity.z, -4);
 });
 
 test("shared traversal angular velocity wraps across the signed yaw seam", () => {

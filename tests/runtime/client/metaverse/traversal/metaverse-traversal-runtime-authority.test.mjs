@@ -31,6 +31,10 @@ const jumpInput = Object.freeze({
 
 let fixtureContext;
 
+function readGroundedBodyVerticalSpeed(snapshot) {
+  return snapshot.jumpBody.verticalSpeedUnitsPerSecond;
+}
+
 function createTraversalIntentSnapshot(input) {
   const {
     boost = false,
@@ -331,7 +335,7 @@ test("MetaverseTraversalRuntime preserves a local grounded jump ascent against r
 
     assert.equal(localJumpSnapshot.grounded, false);
     assert.ok(localJumpSnapshot.position.y > groundedSnapshot.position.y);
-    assert.ok(localJumpSnapshot.verticalSpeedUnitsPerSecond > 0);
+    assert.ok(readGroundedBodyVerticalSpeed(localJumpSnapshot) > 0);
 
     syncAuthoritativeLocalPlayerPose(
       traversalRuntime,
@@ -357,7 +361,7 @@ test("MetaverseTraversalRuntime preserves a local grounded jump ascent against r
     assert.ok(
       groundedBodyRuntime.snapshot.position.y >= localJumpSnapshot.position.y
     );
-    assert.ok(groundedBodyRuntime.snapshot.verticalSpeedUnitsPerSecond > 0);
+    assert.ok(readGroundedBodyVerticalSpeed(groundedBodyRuntime.snapshot) > 0);
     assert.equal(
       traversalRuntime.characterPresentationSnapshot?.animationVocabulary,
       "jump-up"
@@ -420,7 +424,7 @@ test("MetaverseTraversalRuntime keeps a local jump ascent when the issued jump e
       groundedBodyRuntime.snapshot.position.y >= localJumpSnapshot.position.y
     );
     assert.ok(
-      groundedBodyRuntime.snapshot.verticalSpeedUnitsPerSecond > 0
+      readGroundedBodyVerticalSpeed(groundedBodyRuntime.snapshot) > 0
     );
     assert.equal(
       traversalRuntime.characterPresentationSnapshot?.animationVocabulary,
@@ -484,7 +488,7 @@ test("MetaverseTraversalRuntime buffers a grounded jump tap in shared local trav
       traversalRuntime.advance(idleInput, groundedFixedStepSeconds);
 
       if (
-        groundedBodyRuntime.snapshot.verticalSpeedUnitsPerSecond > 0 ||
+        readGroundedBodyVerticalSpeed(groundedBodyRuntime.snapshot) > 0 ||
         groundedBodyRuntime.snapshot.position.y > 0.35
       ) {
         break;
@@ -496,7 +500,7 @@ test("MetaverseTraversalRuntime buffers a grounded jump tap in shared local trav
       "jump"
     );
     assert.ok(
-      groundedBodyRuntime.snapshot.verticalSpeedUnitsPerSecond > 0 ||
+      readGroundedBodyVerticalSpeed(groundedBodyRuntime.snapshot) > 0 ||
         groundedBodyRuntime.snapshot.position.y > 0.35
     );
   } finally {
@@ -526,7 +530,7 @@ test("MetaverseTraversalRuntime consumes a grounded jump from snap-distance supp
     );
     for (let stepIndex = 0; stepIndex < 3; stepIndex += 1) {
       if (
-        groundedBodyRuntime.snapshot.verticalSpeedUnitsPerSecond > 0 ||
+        readGroundedBodyVerticalSpeed(groundedBodyRuntime.snapshot) > 0 ||
         groundedBodyRuntime.snapshot.position.y > 0.12
       ) {
         break;
@@ -536,7 +540,7 @@ test("MetaverseTraversalRuntime consumes a grounded jump from snap-distance supp
     }
 
     assert.ok(
-      groundedBodyRuntime.snapshot.verticalSpeedUnitsPerSecond > 0 ||
+      readGroundedBodyVerticalSpeed(groundedBodyRuntime.snapshot) > 0 ||
         groundedBodyRuntime.snapshot.position.y > 0.12
     );
   } finally {
@@ -1198,7 +1202,7 @@ test("MetaverseTraversalRuntime preserves an accepted moving jump landing arc ab
   }
 });
 
-test("MetaverseTraversalRuntime reports gross divergence as the last local-authority pose snap reason", async () => {
+test("MetaverseTraversalRuntime converges gross position-only divergence without a hard snap", async () => {
   const { groundedBodyRuntime, traversalRuntime } =
     await createFlatGroundedTraversalHarness();
 
@@ -1207,19 +1211,24 @@ test("MetaverseTraversalRuntime reports gross divergence as the last local-autho
     assert.equal(traversalRuntime.locomotionMode, "grounded");
 
     const groundedSnapshot = groundedBodyRuntime.snapshot;
-
-    syncAuthoritativeLocalPlayerPose(traversalRuntime, {
-      jumpAuthorityState: "grounded",
-      lastAcceptedJumpActionSequence: 0,
-      lastProcessedJumpActionSequence: 0,
-      linearVelocity: freezeVector3(0, 0, 0),
-      locomotionMode: "grounded",
-      mountedOccupancy: null,
+    const authoritativeGroundedBody = Object.freeze({
+      ...groundedSnapshot,
       position: freezeVector3(
         groundedSnapshot.position.x + 4.1,
         groundedSnapshot.position.y,
         groundedSnapshot.position.z
-      ),
+      )
+    });
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, {
+      groundedBody: authoritativeGroundedBody,
+      jumpAuthorityState: "grounded",
+      lastAcceptedJumpActionSequence: 0,
+      lastProcessedJumpActionSequence: 0,
+      linearVelocity: groundedSnapshot.linearVelocity,
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: authoritativeGroundedBody.position,
       yawRadians: groundedSnapshot.yawRadians
     });
 
@@ -1228,13 +1237,91 @@ test("MetaverseTraversalRuntime reports gross divergence as the last local-autho
       traversalRuntime.lastLocalAuthorityPoseCorrectionReason,
       "gross-position-divergence"
     );
-    assert.ok(Math.abs(groundedBodyRuntime.snapshot.position.x - 4.1) < 0.0001);
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.x -
+          (groundedSnapshot.position.x + 0.2)
+      ) < 0.0001
+    );
+
+    for (let i = 0; i < 20; i += 1) {
+      syncAuthoritativeLocalPlayerPose(traversalRuntime, {
+        groundedBody: authoritativeGroundedBody,
+        jumpAuthorityState: "grounded",
+        lastAcceptedJumpActionSequence: 0,
+        lastProcessedJumpActionSequence: 0,
+        linearVelocity: groundedSnapshot.linearVelocity,
+        locomotionMode: "grounded",
+        mountedOccupancy: null,
+        position: authoritativeGroundedBody.position,
+        yawRadians: groundedSnapshot.yawRadians
+      });
+    }
+
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.x -
+          authoritativeGroundedBody.position.x
+      ) < 0.0001
+    );
   } finally {
     groundedBodyRuntime.dispose();
   }
 });
 
-test("MetaverseTraversalRuntime ignores moderate grounded authoritative divergence without counting a pose snap", async () => {
+test("MetaverseTraversalRuntime records body-state mismatch when gross grounded divergence includes body-state mismatch", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createFlatGroundedTraversalHarness();
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    const groundedSnapshot = groundedBodyRuntime.snapshot;
+    const authoritativePosition = freezeVector3(
+      groundedSnapshot.position.x + 4.1,
+      groundedSnapshot.position.y,
+      groundedSnapshot.position.z
+    );
+    const authoritativeGroundedBody = Object.freeze({
+      ...groundedSnapshot,
+      interaction: Object.freeze({
+        applyImpulsesToDynamicBodies:
+          !groundedSnapshot.interaction.applyImpulsesToDynamicBodies
+      }),
+      linearVelocity: freezeVector3(5.4, 0, 0),
+      position: authoritativePosition
+    });
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, {
+      groundedBody: authoritativeGroundedBody,
+      jumpAuthorityState: "grounded",
+      lastAcceptedJumpActionSequence: 0,
+      lastProcessedJumpActionSequence: 0,
+      linearVelocity: authoritativeGroundedBody.linearVelocity,
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: authoritativePosition,
+      yawRadians: groundedSnapshot.yawRadians
+    });
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(
+      traversalRuntime.lastLocalAuthorityPoseCorrectionReason,
+      "gross-body-divergence"
+    );
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.x -
+          (groundedSnapshot.position.x + 0.2)
+      ) < 0.0001
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime ignores moderate grounded authoritative divergence without counting convergence", async () => {
   const { groundedBodyRuntime, traversalRuntime } =
     await createFlatGroundedTraversalHarness();
 
@@ -1274,7 +1361,7 @@ test("MetaverseTraversalRuntime ignores moderate grounded authoritative divergen
   }
 });
 
-test("MetaverseTraversalRuntime ignores moderate swim authoritative divergence without counting a pose snap", async () => {
+test("MetaverseTraversalRuntime ignores moderate swim authoritative divergence without counting convergence", async () => {
   const { groundedBodyRuntime, traversalRuntime } =
     await fixtureContext.createOpenWaterTraversalHarness();
 

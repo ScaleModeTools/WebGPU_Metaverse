@@ -33,6 +33,26 @@ import {
   type MetaverseTraversalFacingSnapshotInput as MetaverseSharedTraversalFacingSnapshotInput
 } from "../metaverse-traversal-contract.js";
 import {
+  createMetaverseGroundedJumpBodySnapshot,
+  resolveMetaverseGroundedJumpBodyTraversalActionSnapshot,
+  type MetaverseGroundedJumpBodySnapshot
+} from "../metaverse-grounded-jump-physics.js";
+import {
+  createMetaverseGroundedBodyRuntimeSnapshot,
+  type MetaverseGroundedBodyRuntimeSnapshot
+} from "../metaverse-grounded-body-contract.js";
+import {
+  createMetaverseSurfaceDriveBodyContactSnapshot,
+  createMetaverseSurfaceDriveBodyRuntimeSnapshot,
+  type MetaverseSurfaceDriveBodyRuntimeSnapshot
+} from "../metaverse-surface-drive-body-contract.js";
+import {
+  createMetaverseGroundedBodyContactSnapshot,
+  createMetaverseGroundedBodyInteractionSnapshot,
+  type MetaverseGroundedBodyContactSnapshot
+} from "../metaverse-grounded-traversal-kernel.js";
+import { createMetaverseSurfaceTraversalDriveTargetSnapshot } from "../metaverse-surface-traversal-simulation.js";
+import {
   resolveMetaverseTraversalKinematicActionSnapshot,
   resolveMetaverseTraversalAuthoritySnapshotInput
 } from "../metaverse-traversal-authority.js";
@@ -133,8 +153,18 @@ export interface MetaverseRealtimePlayerObservedTraversalSnapshotInput {
   readonly facing?: MetaversePlayerTraversalFacingSnapshotInput;
 }
 
+export type MetaverseRealtimePlayerGroundedBodySnapshot =
+  MetaverseGroundedBodyRuntimeSnapshot;
+export type MetaverseRealtimePlayerSwimBodySnapshot =
+  MetaverseSurfaceDriveBodyRuntimeSnapshot;
+
+export interface MetaverseRealtimePlayerGroundedBodySnapshotInput
+  extends Partial<MetaverseRealtimePlayerGroundedBodySnapshot> {}
+
+export interface MetaverseRealtimePlayerSwimBodySnapshotInput
+  extends Partial<MetaverseRealtimePlayerSwimBodySnapshot> {}
+
 export interface MetaverseRealtimePlayerJumpDebugSnapshot {
-  readonly groundedBodyJumpReady: boolean;
   readonly pendingActionSequence: number;
   readonly pendingActionBufferAgeMs: Milliseconds | null;
   readonly resolvedActionSequence: number;
@@ -144,7 +174,6 @@ export interface MetaverseRealtimePlayerJumpDebugSnapshot {
 }
 
 export interface MetaverseRealtimePlayerJumpDebugSnapshotInput {
-  readonly groundedBodyJumpReady?: boolean;
   readonly pendingActionSequence?: number;
   readonly pendingActionBufferAgeMs?: number | null;
   readonly resolvedActionSequence?: number;
@@ -161,6 +190,7 @@ export type MetaverseRealtimePlayerTraversalAuthoritySnapshotInput =
 export interface MetaverseRealtimePlayerSnapshot {
   readonly angularVelocityRadiansPerSecond: number;
   readonly characterId: string;
+  readonly groundedBody: MetaverseRealtimePlayerGroundedBodySnapshot;
   readonly jumpDebug: MetaverseRealtimePlayerJumpDebugSnapshot;
   readonly lastProcessedInputSequence: number;
   readonly lastProcessedLookSequence: number;
@@ -173,6 +203,7 @@ export interface MetaverseRealtimePlayerSnapshot {
   readonly playerId: MetaversePlayerId;
   readonly position: MetaverseRealtimeVector3Snapshot;
   readonly stateSequence: number;
+  readonly swimBody: MetaverseRealtimePlayerSwimBodySnapshot | null;
   readonly traversalAuthority: MetaverseRealtimePlayerTraversalAuthoritySnapshot;
   readonly username: Username;
   readonly yawRadians: Radians;
@@ -181,6 +212,7 @@ export interface MetaverseRealtimePlayerSnapshot {
 export interface MetaverseRealtimePlayerSnapshotInput {
   readonly angularVelocityRadiansPerSecond?: number;
   readonly characterId: string;
+  readonly groundedBody?: MetaverseRealtimePlayerGroundedBodySnapshotInput;
   readonly jumpDebug?: MetaverseRealtimePlayerJumpDebugSnapshotInput;
   readonly lastProcessedInputSequence?: number;
   readonly lastProcessedLookSequence?: number;
@@ -193,6 +225,7 @@ export interface MetaverseRealtimePlayerSnapshotInput {
   readonly playerId: MetaversePlayerId;
   readonly position: MetaverseRealtimeVector3SnapshotInput;
   readonly stateSequence?: number;
+  readonly swimBody?: MetaverseRealtimePlayerSwimBodySnapshotInput | null;
   readonly traversalAuthority?: MetaverseRealtimePlayerTraversalAuthoritySnapshotInput;
   readonly username: Username;
   readonly yawRadians: number;
@@ -387,7 +420,6 @@ function freezePlayerJumpDebugSnapshot(
   input: MetaverseRealtimePlayerJumpDebugSnapshotInput | undefined
 ): MetaverseRealtimePlayerJumpDebugSnapshot {
   return Object.freeze({
-    groundedBodyJumpReady: input?.groundedBodyJumpReady === true,
     pendingActionSequence: normalizeFiniteNonNegativeInteger(
       input?.pendingActionSequence ?? 0
     ),
@@ -406,6 +438,60 @@ function freezePlayerJumpDebugSnapshot(
     ),
     surfaceJumpSupported: input?.surfaceJumpSupported === true,
     supported: input?.supported === true
+  });
+}
+
+function freezePlayerGroundedBodySnapshot(
+  input: MetaverseRealtimePlayerGroundedBodySnapshotInput | undefined,
+  fallbackGrounded: boolean,
+  linearVelocity: MetaverseRealtimeVector3Snapshot,
+  position: MetaverseRealtimeVector3Snapshot,
+  yawRadians: Radians
+): MetaverseRealtimePlayerGroundedBodySnapshot {
+  return createMetaverseGroundedBodyRuntimeSnapshot({
+    contact: createMetaverseGroundedBodyContactSnapshot({
+      ...input?.contact,
+      supportingContactDetected:
+        input?.contact?.supportingContactDetected ??
+        input?.jumpBody?.grounded ??
+        fallbackGrounded
+    }),
+    driveTarget: createMetaverseSurfaceTraversalDriveTargetSnapshot(
+      input?.driveTarget
+    ),
+    grounded: input?.jumpBody?.grounded ?? fallbackGrounded,
+    interaction: createMetaverseGroundedBodyInteractionSnapshot(
+      input?.interaction
+    ),
+    jumpBody: createMetaverseGroundedJumpBodySnapshot(input?.jumpBody),
+    linearVelocity: input?.linearVelocity ?? linearVelocity,
+    position: input?.position ?? position,
+    yawRadians: input?.yawRadians ?? yawRadians
+  });
+}
+
+function freezePlayerSwimBodySnapshot(
+  input: MetaverseRealtimePlayerSwimBodySnapshotInput | null | undefined,
+  locomotionMode: MetaversePresenceLocomotionModeId,
+  mountedOccupancy: MetaverseRealtimeMountedOccupancySnapshot | null,
+  linearVelocity: MetaverseRealtimeVector3Snapshot,
+  position: MetaverseRealtimeVector3Snapshot,
+  yawRadians: Radians
+): MetaverseRealtimePlayerSwimBodySnapshot | null {
+  if (mountedOccupancy !== null || locomotionMode !== "swim") {
+    return null;
+  }
+
+  return createMetaverseSurfaceDriveBodyRuntimeSnapshot({
+    angularVelocityRadiansPerSecond:
+      input?.angularVelocityRadiansPerSecond ?? 0,
+    contact: createMetaverseSurfaceDriveBodyContactSnapshot(input?.contact),
+    driveTarget: createMetaverseSurfaceTraversalDriveTargetSnapshot(
+      input?.driveTarget
+    ),
+    linearVelocity: input?.linearVelocity ?? linearVelocity,
+    position: input?.position ?? position,
+    yawRadians: input?.yawRadians ?? yawRadians
   });
 }
 
@@ -459,11 +545,12 @@ function freezePlayerSnapshot(
   currentTick: number = 0
 ): MetaverseRealtimePlayerSnapshot {
   const locomotionMode = resolveLocomotionMode(input.locomotionMode);
+  const yawRadians = createRadians(input.yawRadians);
   const lookSnapshot =
     input.look === undefined
       ? freezePlayerLookSnapshot({
           pitchRadians: 0,
-          yawRadians: input.yawRadians
+          yawRadians
         })
       : freezePlayerLookSnapshot(input.look);
   const observedTraversal = freezePlayerObservedTraversalSnapshot(
@@ -472,14 +559,41 @@ function freezePlayerSnapshot(
   );
   const linearVelocity =
     createMetaversePresenceVector3Snapshot(input.linearVelocity);
+  const position = createMetaversePresenceVector3Snapshot(input.position);
+  const groundedBody = freezePlayerGroundedBodySnapshot(
+    input.groundedBody,
+    Math.abs(linearVelocity.y) <= 0.05,
+    linearVelocity,
+    position,
+    yawRadians
+  );
+  const swimBody = freezePlayerSwimBodySnapshot(
+    input.swimBody,
+    locomotionMode,
+    mountedOccupancy,
+    linearVelocity,
+    position,
+    yawRadians
+  );
   const jumpDebug = freezePlayerJumpDebugSnapshot(input.jumpDebug);
   const kinematicTraversalAction =
-    resolveMetaverseTraversalKinematicActionSnapshot({
-      grounded: Math.abs(linearVelocity.y) <= 0.05,
-      locomotionMode: locomotionMode === "swim" ? "swim" : "grounded",
-      mounted: mountedOccupancy !== null,
-      verticalSpeedUnitsPerSecond: linearVelocity.y
-    });
+    input.groundedBody?.jumpBody === undefined
+      ? resolveMetaverseTraversalKinematicActionSnapshot({
+          grounded: Math.abs(linearVelocity.y) <= 0.05,
+          locomotionMode: locomotionMode === "swim" ? "swim" : "grounded",
+          mounted: mountedOccupancy !== null,
+          verticalSpeedUnitsPerSecond: linearVelocity.y
+        })
+      : mountedOccupancy !== null || locomotionMode !== "grounded"
+        ? resolveMetaverseTraversalKinematicActionSnapshot({
+            grounded: true,
+            locomotionMode: locomotionMode === "swim" ? "swim" : "grounded",
+            mounted: mountedOccupancy !== null,
+            verticalSpeedUnitsPerSecond: 0
+          })
+        : resolveMetaverseGroundedJumpBodyTraversalActionSnapshot(
+            groundedBody.jumpBody
+          );
   const traversalAuthorityInput =
     input.traversalAuthority ??
     resolveMetaverseTraversalAuthoritySnapshotInput({
@@ -501,6 +615,7 @@ function freezePlayerSnapshot(
       input.angularVelocityRadiansPerSecond ?? 0
     ),
     characterId: normalizeCharacterId(input.characterId),
+    groundedBody,
     jumpDebug,
     lastProcessedInputSequence: normalizeFiniteNonNegativeInteger(
       input.lastProcessedInputSequence ?? input.stateSequence ?? 0
@@ -517,12 +632,44 @@ function freezePlayerSnapshot(
     mountedOccupancy,
     observedTraversal,
     playerId: input.playerId,
-    position: createMetaversePresenceVector3Snapshot(input.position),
+    position,
     stateSequence: normalizeFiniteNonNegativeInteger(input.stateSequence ?? 0),
+    swimBody,
     traversalAuthority:
       createMetaverseTraversalAuthoritySnapshot(traversalAuthorityInput),
     username: input.username,
-    yawRadians: createRadians(input.yawRadians)
+    yawRadians
+  });
+}
+
+export function readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(
+  playerSnapshot: Pick<
+    MetaverseRealtimePlayerSnapshot,
+    | "groundedBody"
+    | "linearVelocity"
+    | "locomotionMode"
+    | "position"
+    | "swimBody"
+    | "yawRadians"
+  >
+): Pick<MetaverseSurfaceDriveBodyRuntimeSnapshot, "linearVelocity" | "position" | "yawRadians"> {
+  if (
+    playerSnapshot.locomotionMode === "swim" &&
+    playerSnapshot.swimBody !== null
+  ) {
+    return playerSnapshot.swimBody;
+  }
+
+  const groundedBodySnapshot =
+    playerSnapshot.groundedBody as
+      | MetaverseRealtimePlayerGroundedBodySnapshot
+      | undefined;
+
+  return Object.freeze({
+    linearVelocity:
+      groundedBodySnapshot?.linearVelocity ?? playerSnapshot.linearVelocity,
+    position: groundedBodySnapshot?.position ?? playerSnapshot.position,
+    yawRadians: groundedBodySnapshot?.yawRadians ?? playerSnapshot.yawRadians
   });
 }
 

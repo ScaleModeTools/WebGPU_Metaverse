@@ -432,13 +432,13 @@ test("WebGpuMetaverseRuntime resolves grounded surface travel automatically when
         metaverseRuntimeConfig.bodyPresentation.groundedFirstPersonForwardOffsetMeters
     );
     assert.equal(
-      runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.jumpDebug
-        .groundedBodyGrounded,
+      runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local
+        .groundedBody?.jumpBody.grounded,
       true
     );
     assert.equal(
-      runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.jumpDebug
-        .groundedBodyJumpReady,
+      runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local
+        .groundedBody?.jumpBody.jumpReady,
       true
     );
     assert.equal(
@@ -1132,7 +1132,6 @@ test("WebGpuMetaverseRuntime derives authoritative surface-routing telemetry fro
         includeVehicle: false,
         localAnimationVocabulary: "swim",
         localJumpDebug: {
-          groundedBodyJumpReady: false,
           pendingActionSequence: 7,
           pendingActionBufferAgeMs: 84,
           resolvedActionSequence: 6,
@@ -1220,24 +1219,29 @@ test("WebGpuMetaverseRuntime derives authoritative surface-routing telemetry fro
       0
     );
     assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting
+        .authoritativeLocalPlayer.groundedBody,
+      null
+    );
+    assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
         .jumpDebug.pendingActionSequence,
-      7
+      null
     );
     assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
         .jumpDebug.pendingActionBufferAgeMs,
-      84
+      null
     );
     assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
         .jumpDebug.resolvedActionSequence,
-      6
+      null
     );
     assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
         .jumpDebug.resolvedActionState,
-      "rejected-buffer-expired"
+      null
     );
     assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
@@ -1313,7 +1317,7 @@ test("WebGpuMetaverseRuntime routes mounted hub input through skiff locomotion a
     readNowMs: () => nowMs,
     readWallClockMs: () => wallClockMs
   });
-  const { runtime, windowHarness } = harness;
+  const { metaverseRuntimeConfig, runtime, windowHarness } = harness;
 
   try {
     for (let frame = 0; frame < 5; frame += 1) {
@@ -1438,7 +1442,7 @@ test("WebGpuMetaverseRuntime publishes reliable mounted occupancy changes and ro
     readNowMs: () => nowMs,
     readWallClockMs: () => wallClockMs
   });
-  const { runtime, windowHarness } = harness;
+  const { metaverseRuntimeConfig, runtime, windowHarness } = harness;
 
   try {
     for (let frame = 0; frame < 5; frame += 1) {
@@ -1496,7 +1500,7 @@ test("WebGpuMetaverseRuntime publishes reliable mounted occupancy changes and ro
   }
 });
 
-test("WebGpuMetaverseRuntime only reconciles local traversal after the authoritative processed-input ack catches up", async () => {
+test("WebGpuMetaverseRuntime converges acked pose-only traversal drift without hard camera jumps", async () => {
   const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
   const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
   const username = createUsername("Harbor Pilot");
@@ -1540,12 +1544,20 @@ test("WebGpuMetaverseRuntime only reconciles local traversal after the authorita
     );
 
     const localCameraXBeforeCorrection = runtime.hudSnapshot.camera.position.x;
+    const localBodyYBeforeCorrection =
+      runtime.hudSnapshot.camera.position.y -
+      metaverseRuntimeConfig.groundedBody.eyeHeightMeters;
+    const localGroundedBodyTelemetry =
+      runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.groundedBody;
+
+    assert.notEqual(localGroundedBodyTelemetry, null);
     fakeWorldClient.publishWorldSnapshotBuffer([
       createRealtimeWorldSnapshot({
         currentTick: 10,
         includeRemotePlayer: false,
         includeVehicle: false,
         localLastProcessedInputSequence: localPoseInputSequence - 1,
+        localPlayerY: localBodyYBeforeCorrection,
         localPlayerId,
         localPlayerX: 3,
         localUsername: username,
@@ -1597,10 +1609,28 @@ test("WebGpuMetaverseRuntime only reconciles local traversal after the authorita
         includeVehicle: false,
         localLastProcessedInputSequence: localPoseInputSequence,
         localLinearVelocity: {
-          x: 20,
+          x: 0,
           y: 0,
           z: 0
         },
+        localGroundedBody: {
+          contact: localGroundedBodyTelemetry.contact,
+          driveTarget: localGroundedBodyTelemetry.driveTarget,
+          interaction: localGroundedBodyTelemetry.interaction,
+          jumpBody: localGroundedBodyTelemetry.jumpBody,
+          linearVelocity: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          position: {
+            x: 3,
+            y: localBodyYBeforeCorrection,
+            z: 24
+          },
+          yawRadians: runtime.hudSnapshot.camera.yawRadians
+        },
+        localPlayerY: localBodyYBeforeCorrection,
         localPlayerId,
         localPlayerX: 3,
         localUsername: username,
@@ -1619,30 +1649,19 @@ test("WebGpuMetaverseRuntime only reconciles local traversal after the authorita
     wallClockMs = 1_190;
     nowMs += 1000 / 60;
     windowHarness.advanceFrame(nowMs);
-    const cameraForwardOffsetMeters =
-      runtime.hudSnapshot.locomotionMode === "swim"
-        ? -metaverseRuntimeConfig.bodyPresentation.swimThirdPersonFollowDistanceMeters
-        : runtime.hudSnapshot.locomotionMode === "grounded"
-          ? metaverseRuntimeConfig.bodyPresentation
-              .groundedFirstPersonForwardOffsetMeters
-          : 0;
-    const correctedLocalBodyX =
-      runtime.hudSnapshot.camera.position.x -
-      Math.sin(runtime.hudSnapshot.camera.yawRadians) *
-        cameraForwardOffsetMeters;
-
     assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount,
       1
     );
     assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .lastCorrectionSource,
+      "local-authority-convergence"
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
         .lastLocalAuthorityPoseCorrectionReason,
       "gross-position-divergence"
-    );
-    assert.ok(
-      (runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
-        .lastLocalAuthorityPoseCorrectionDetail.planarMagnitudeMeters ?? 0) > 1.5
     );
     assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
@@ -1654,20 +1673,14 @@ test("WebGpuMetaverseRuntime only reconciles local traversal after the authorita
         .applied,
       true
     );
-    const correctedAuthoritativeGap = Math.abs(
-      correctedLocalBodyX -
-        (runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting
-          .authoritativeLocalPlayer.position?.x ?? 0)
-    );
-    assert.ok(
-      correctedAuthoritativeGap < 1.05,
-      `corrected body x ${correctedLocalBodyX} authoritative x ${runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer.position?.x}`
-    );
     assert.ok(
       (runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeCorrection
         .planarMagnitudeMeters ?? 0) > 1.5
     );
-    assert.ok(runtime.hudSnapshot.camera.position.x > 1.5);
+    assert.ok(
+      Math.abs(runtime.hudSnapshot.camera.position.x - localCameraXBeforeCorrection) <
+        1
+    );
 
   } finally {
     harness.dispose();
@@ -1789,7 +1802,7 @@ test("WebGpuMetaverseRuntime keeps neutral authoritative local updates correctio
     assert.notEqual(
       runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
         .lastCorrectionSource,
-      "local-authority-snap"
+      "local-authority-convergence"
     );
 
   } finally {
@@ -2116,7 +2129,7 @@ test("WebGpuMetaverseRuntime keeps fully acknowledged held traversal intent corr
     assert.notEqual(
       runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
         .lastCorrectionSource,
-      "local-authority-snap"
+      "local-authority-convergence"
     );
 
   } finally {

@@ -6,6 +6,12 @@ import {
   stepMetaverseGroundedTraversalAction,
   type MetaverseGroundedTraversalBodyIntentSnapshot
 } from "./metaverse-grounded-traversal-kernel.js";
+import type {
+  MetaverseGroundedJumpBodySnapshot
+} from "./metaverse-grounded-jump-physics.js";
+import type {
+  MetaverseSurfaceDriveBodyRuntimeSnapshot
+} from "./metaverse-surface-drive-body-contract.js";
 import {
   advanceMetaverseTraversalActionState,
   clearMetaverseTraversalPendingActions,
@@ -46,16 +52,13 @@ import {
 
 export interface MetaverseUnmountedGroundedBodySnapshot {
   readonly grounded: boolean;
-  readonly jumpReady: boolean;
+  readonly jumpBody: MetaverseGroundedJumpBodySnapshot;
   readonly position: MetaverseWorldSurfaceVector3Snapshot;
-  readonly verticalSpeedUnitsPerSecond: number;
   readonly yawRadians: number;
 }
 
-export interface MetaverseUnmountedSwimBodySnapshot {
-  readonly position: MetaverseWorldSurfaceVector3Snapshot;
-  readonly yawRadians: number;
-}
+export type MetaverseUnmountedSwimBodySnapshot =
+  MetaverseSurfaceDriveBodyRuntimeSnapshot;
 
 export interface MetaverseUnmountedGroundedJumpSupportSnapshot {
   readonly groundedJumpSupported: boolean;
@@ -360,13 +363,14 @@ export function resolveMetaverseUnmountedGroundedJumpSupport({
       supportHeightMeters,
       verticalSpeedTolerance: jumpSupportVerticalSpeedTolerance,
       verticalSpeedUnitsPerSecond:
-        groundedBodySnapshot.verticalSpeedUnitsPerSecond
+        groundedBodySnapshot.jumpBody.verticalSpeedUnitsPerSecond
     }
   );
 
   return Object.freeze({
     groundedJumpSupported:
-      groundedBodySnapshot.jumpReady === true || surfaceJumpSupported === true,
+      groundedBodySnapshot.jumpBody.jumpReady === true ||
+      surfaceJumpSupported === true,
     supportHeightMeters,
     surfaceJumpSupported
   });
@@ -435,7 +439,7 @@ function prepareMetaverseUnmountedGroundedTraversalStep({
     actionState,
     bodyControl,
     deltaSeconds,
-    groundedBodyJumpReady: groundedBodySnapshot.jumpReady,
+    groundedBodyJumpReady: groundedBodySnapshot.jumpBody.jumpReady,
     surfaceJumpSupported: groundedJumpSupport.surfaceJumpSupported
   });
 
@@ -454,7 +458,7 @@ function prepareMetaverseUnmountedGroundedTraversalStep({
       ),
       bodyControl.moveAxis,
       bodyControl.strafeAxis,
-      groundedBodySnapshot.verticalSpeedUnitsPerSecond,
+      groundedBodySnapshot.jumpBody.verticalSpeedUnitsPerSecond,
       traversalActionStep.jumpRequested,
       excludedOwnerEnvironmentAssetId
     ),

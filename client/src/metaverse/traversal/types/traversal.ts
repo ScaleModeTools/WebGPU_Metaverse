@@ -6,8 +6,8 @@ import {
   type RapierQueryFilterPredicate
 } from "@/physics";
 import type {
+  MetaverseSurfaceDriveBodyRuntimeSnapshot as SharedMetaverseSurfaceDriveBodyRuntimeSnapshot,
   MetaverseSurfaceTraversalConfig as SharedMetaverseSurfaceTraversalConfig,
-  MetaverseSurfaceTraversalSnapshot as SharedMetaverseSurfaceTraversalSnapshot,
   MetaverseSurfaceTraversalSpeedSnapshot as SharedMetaverseSurfaceTraversalSpeedSnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 
@@ -23,10 +23,8 @@ import type {
 
 export type SurfaceLocomotionConfig = SharedMetaverseSurfaceTraversalConfig;
 
-export type SurfaceLocomotionSnapshot = SharedMetaverseSurfaceTraversalSnapshot & {
-  readonly linearVelocity?: PhysicsVector3Snapshot;
-  readonly position: PhysicsVector3Snapshot;
-};
+export type SurfaceLocomotionSnapshot =
+  SharedMetaverseSurfaceDriveBodyRuntimeSnapshot;
 
 export type SurfaceLocomotionSpeedSnapshot =
   SharedMetaverseSurfaceTraversalSpeedSnapshot;

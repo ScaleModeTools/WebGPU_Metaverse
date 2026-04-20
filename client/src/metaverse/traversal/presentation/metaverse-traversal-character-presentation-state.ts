@@ -26,7 +26,6 @@ import type {
 interface MetaverseTraversalCharacterPresentationStateInput {
   readonly deltaSeconds: number;
   readonly groundedBodySnapshot: MetaverseGroundedBodySnapshot | null;
-  readonly groundedLinearVelocitySnapshot: PhysicsVector3Snapshot | null;
   readonly groundedPredictionSeconds: number;
   readonly groundedSpawnPosition: PhysicsVector3Snapshot;
   readonly latestMovementInputMagnitude: number;
@@ -72,7 +71,6 @@ export class MetaverseTraversalCharacterPresentationState {
   sync({
     deltaSeconds,
     groundedBodySnapshot,
-    groundedLinearVelocitySnapshot,
     groundedPredictionSeconds,
     groundedSpawnPosition,
     latestMovementInputMagnitude,
@@ -88,12 +86,14 @@ export class MetaverseTraversalCharacterPresentationState {
     const resolvedSwimSnapshot =
       swimSnapshot ??
       createSurfaceLocomotionSnapshot(
-        freezeVector3(
-          groundedSpawnPosition.x,
-          waterSurfaceHeightMeters,
-          groundedSpawnPosition.z
-        ),
-        this.#config.camera.initialYawRadians
+        {
+          position: freezeVector3(
+            groundedSpawnPosition.x,
+            waterSurfaceHeightMeters,
+            groundedSpawnPosition.z
+          ),
+          yawRadians: this.#config.camera.initialYawRadians
+        }
       );
 
     this.#snapshot = createTraversalCharacterPresentationSnapshot({
@@ -111,7 +111,6 @@ export class MetaverseTraversalCharacterPresentationState {
           ? null
           : this.resolveGroundedPresentationPosition(
               groundedBodySnapshot,
-              groundedLinearVelocitySnapshot,
               groundedPredictionSeconds,
               readGroundedSupportHeightMeters
             ),
@@ -148,10 +147,12 @@ export class MetaverseTraversalCharacterPresentationState {
           grounded: groundedBodySnapshot.grounded,
           inputMagnitude: latestMovementInputMagnitude,
           locomotionMode: "grounded",
-          planarSpeedUnitsPerSecond:
-            groundedBodySnapshot.planarSpeedUnitsPerSecond,
+          planarSpeedUnitsPerSecond: Math.hypot(
+            groundedBodySnapshot.linearVelocity.x,
+            groundedBodySnapshot.linearVelocity.z
+          ),
           verticalSpeedUnitsPerSecond:
-            groundedBodySnapshot.verticalSpeedUnitsPerSecond
+            groundedBodySnapshot.jumpBody.verticalSpeedUnitsPerSecond
         },
         deltaSeconds
       );
@@ -181,22 +182,17 @@ export class MetaverseTraversalCharacterPresentationState {
 
   resolveGroundedPresentationPosition(
     groundedBodySnapshot: MetaverseGroundedBodySnapshot,
-    groundedLinearVelocitySnapshot: PhysicsVector3Snapshot | null,
     groundedPredictionSeconds: number,
     readGroundedSupportHeightMeters: (
       position: Pick<PhysicsVector3Snapshot, "x" | "z">
     ) => number | null
   ): PhysicsVector3Snapshot {
-    if (groundedLinearVelocitySnapshot === null) {
-      return groundedBodySnapshot.position;
-    }
-
     const planarProjectedPosition = projectTraversalPresentationPosition(
       groundedBodySnapshot.position,
       freezeVector3(
-        groundedLinearVelocitySnapshot.x,
+        groundedBodySnapshot.linearVelocity.x,
         0,
-        groundedLinearVelocitySnapshot.z
+        groundedBodySnapshot.linearVelocity.z
       ),
       groundedPredictionSeconds
     );
@@ -206,7 +202,7 @@ export class MetaverseTraversalCharacterPresentationState {
 
     return projectGroundedTraversalPresentationPosition(
       groundedBodySnapshot.position,
-      groundedLinearVelocitySnapshot,
+      groundedBodySnapshot.linearVelocity,
       groundedPredictionSeconds,
       groundedBodySnapshot.grounded,
       this.#config.groundedBody.gravityUnitsPerSecond,
@@ -218,15 +214,9 @@ export class MetaverseTraversalCharacterPresentationState {
     swimSnapshot: SurfaceLocomotionSnapshot,
     swimPredictionSeconds: number
   ): PhysicsVector3Snapshot {
-    const swimMotionSnapshot = swimSnapshot as SurfaceLocomotionSnapshot & {
-      readonly linearVelocity?: PhysicsVector3Snapshot;
-    };
-    const linearVelocity =
-      swimMotionSnapshot.linearVelocity ?? freezeVector3(0, 0, 0);
-
     return projectTraversalPresentationPosition(
       swimSnapshot.position,
-      linearVelocity,
+      swimSnapshot.linearVelocity,
       swimPredictionSeconds
     );
   }

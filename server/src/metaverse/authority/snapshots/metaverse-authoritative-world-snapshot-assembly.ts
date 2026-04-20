@@ -18,6 +18,7 @@ import {
   readMetaverseTraversalPendingActionBufferAgeMs,
   type MetaverseTraversalBodyControlSnapshot,
   type MetaverseTraversalFacingSnapshot,
+  type MetaverseSurfaceDriveBodyRuntimeSnapshot,
   type MetaverseTraversalAuthoritySnapshot,
   type MetaverseUnmountedTraversalStateSnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
@@ -31,6 +32,9 @@ import {
   type MetaverseRealtimeWorldSnapshot,
   type MetaverseVehicleId
 } from "@webgpu-metaverse/shared/metaverse/realtime";
+import type {
+  MetaverseAuthoritativeLastGroundedBodySnapshot
+} from "../players/metaverse-authoritative-last-grounded-body-snapshot.js";
 
 export interface MetaverseAuthoritativeSnapshotMountedOccupancyRuntimeState {
   readonly entryId: string | null;
@@ -44,7 +48,7 @@ export interface MetaverseAuthoritativeSnapshotMountedOccupancyRuntimeState {
 export interface MetaverseAuthoritativeSnapshotPlayerRuntimeState {
   angularVelocityRadiansPerSecond: number;
   readonly characterId: string;
-  lastGroundedBodyJumpReady: boolean;
+  lastGroundedBodySnapshot: MetaverseAuthoritativeLastGroundedBodySnapshot;
   lastGroundedJumpSupported: boolean;
   lastProcessedInputSequence: number;
   lastProcessedLookSequence: number;
@@ -63,6 +67,9 @@ export interface MetaverseAuthoritativeSnapshotPlayerRuntimeState {
   positionZ: number;
   presenceAnimationVocabulary: MetaversePresencePoseSnapshot["animationVocabulary"];
   stateSequence: number;
+  readonly swimBodyRuntime: {
+    readonly snapshot: MetaverseSurfaceDriveBodyRuntimeSnapshot;
+  };
   traversalAuthorityState: MetaverseTraversalAuthoritySnapshot;
   unmountedTraversalState: MetaverseUnmountedTraversalStateSnapshot;
   readonly username: MetaversePresencePlayerSnapshot["username"];
@@ -196,8 +203,25 @@ export function createMetaverseAuthoritativeWorldSnapshot<
         angularVelocityRadiansPerSecond:
           playerRuntime.angularVelocityRadiansPerSecond,
         characterId: playerRuntime.characterId,
+        groundedBody: Object.freeze({
+          contact: playerRuntime.lastGroundedBodySnapshot.contact,
+          driveTarget: playerRuntime.lastGroundedBodySnapshot.driveTarget,
+          grounded: playerRuntime.lastGroundedBodySnapshot.jumpBody.grounded,
+          interaction: playerRuntime.lastGroundedBodySnapshot.interaction,
+          jumpBody: playerRuntime.lastGroundedBodySnapshot.jumpBody,
+          linearVelocity: Object.freeze({
+            x: playerRuntime.linearVelocityX,
+            y: playerRuntime.linearVelocityY,
+            z: playerRuntime.linearVelocityZ
+          }),
+          position: Object.freeze({
+            x: playerRuntime.positionX,
+            y: playerRuntime.positionY,
+            z: playerRuntime.positionZ
+          }),
+          yawRadians: playerRuntime.yawRadians
+        }),
         jumpDebug: {
-          groundedBodyJumpReady: playerRuntime.lastGroundedBodyJumpReady,
           pendingActionSequence:
             playerRuntime.unmountedTraversalState.actionState.pendingActionKind ===
             "jump"
@@ -258,6 +282,11 @@ export function createMetaverseAuthoritativeWorldSnapshot<
           z: playerRuntime.positionZ
         },
         stateSequence: playerRuntime.stateSequence,
+        ...(playerRuntime.locomotionMode !== "swim"
+          ? {}
+          : {
+              swimBody: playerRuntime.swimBodyRuntime.snapshot
+            }),
         traversalAuthority: playerRuntime.traversalAuthorityState,
         username: playerRuntime.username,
         yawRadians: playerRuntime.yawRadians

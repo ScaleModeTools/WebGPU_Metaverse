@@ -1,12 +1,13 @@
 import {
+  createMetaverseSurfaceDriveBodyConfigSnapshot,
+  createMetaverseSurfaceDriveBodyRuntimeSnapshot,
   resolveMetaverseSurfaceDriveBodyStep,
   createMetaverseSurfaceTraversalVector3Snapshot as freezeVector3,
   type MetaverseSurfaceDriveBodyIntentSnapshot,
-  syncMetaverseTraversalKinematicState,
-  toFiniteNumber,
   wrapRadians,
+  type MetaverseSurfaceDriveBodyConfigSnapshot,
+  type MetaverseSurfaceDriveBodyRuntimeSnapshot,
   type MetaverseSurfaceTraversalConfig,
-  type MetaverseTraversalKinematicStateSnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 import type {
   MetaverseWorldPlacedSurfaceColliderSnapshot
@@ -24,28 +25,11 @@ import type {
   RapierQueryFilterPredicate
 } from "../types/metaverse-authoritative-rapier.js";
 
-type MetaverseAuthoritativeSurfaceDriveShapeConfig =
-  | {
-      readonly kind: "capsule";
-      readonly halfHeightMeters: number;
-      readonly radiusMeters: number;
-    }
-  | {
-      readonly kind: "cuboid";
-      readonly halfExtents: PhysicsVector3Snapshot;
-      readonly localCenter: PhysicsVector3Snapshot;
-    };
+export type MetaverseAuthoritativeSurfaceDriveRuntimeConfig =
+  MetaverseSurfaceDriveBodyConfigSnapshot;
 
-export interface MetaverseAuthoritativeSurfaceDriveRuntimeConfig {
-  readonly controllerOffsetMeters: number;
-  readonly shape: MetaverseAuthoritativeSurfaceDriveShapeConfig;
-  readonly spawnPosition: PhysicsVector3Snapshot;
-  readonly spawnYawRadians: number;
-  readonly worldRadius: number;
-}
-
-export interface MetaverseAuthoritativeSurfaceDriveSnapshot
-  extends MetaverseTraversalKinematicStateSnapshot {}
+export type MetaverseAuthoritativeSurfaceDriveSnapshot =
+  MetaverseSurfaceDriveBodyRuntimeSnapshot;
 
 export interface MetaverseAuthoritativeSurfaceDriveBlockerResolutionOptions {
   readonly excludedOwnerEnvironmentAssetId?: string | null;
@@ -84,53 +68,13 @@ export class MetaverseAuthoritativeSurfaceDriveRuntime {
   readonly #characterController: RapierCharacterControllerHandle;
   readonly #collider: RapierColliderHandle;
 
-  #forwardSpeedUnitsPerSecond = 0;
   #snapshot: MetaverseAuthoritativeSurfaceDriveSnapshot;
-  #strafeSpeedUnitsPerSecond = 0;
 
   constructor(
     config: MetaverseAuthoritativeSurfaceDriveRuntimeConfig,
     physicsRuntime: MetaverseAuthoritativeRapierPhysicsRuntime
   ) {
-    this.#config = Object.freeze({
-      controllerOffsetMeters: Math.max(
-        0.001,
-        toFiniteNumber(config.controllerOffsetMeters, 0.01)
-      ),
-      shape:
-        config.shape.kind === "capsule"
-          ? Object.freeze({
-              halfHeightMeters: Math.max(
-                0.01,
-                toFiniteNumber(config.shape.halfHeightMeters, 0.48)
-              ),
-              kind: "capsule" as const,
-              radiusMeters: Math.max(
-                0.01,
-                toFiniteNumber(config.shape.radiusMeters, 0.34)
-              )
-            })
-          : Object.freeze({
-              halfExtents: freezeVector3(
-                Math.max(0.01, toFiniteNumber(config.shape.halfExtents.x, 0.5)),
-                Math.max(0.01, toFiniteNumber(config.shape.halfExtents.y, 0.5)),
-                Math.max(0.01, toFiniteNumber(config.shape.halfExtents.z, 0.5))
-              ),
-              kind: "cuboid" as const,
-              localCenter: freezeVector3(
-                config.shape.localCenter.x,
-                config.shape.localCenter.y,
-                config.shape.localCenter.z
-              )
-            }),
-      spawnPosition: freezeVector3(
-        config.spawnPosition.x,
-        config.spawnPosition.y,
-        config.spawnPosition.z
-      ),
-      spawnYawRadians: wrapRadians(config.spawnYawRadians),
-      worldRadius: Math.max(1, toFiniteNumber(config.worldRadius, 110))
-    });
+    this.#config = createMetaverseSurfaceDriveBodyConfigSnapshot(config);
     this.#physicsRuntime = physicsRuntime;
     this.#characterController = this.#physicsRuntime.createCharacterController(
       this.#config.controllerOffsetMeters
@@ -155,7 +99,7 @@ export class MetaverseAuthoritativeSurfaceDriveRuntime {
             ),
             quaternionFromYawRadians(this.#config.spawnYawRadians)
           );
-    this.#snapshot = syncMetaverseTraversalKinematicState({
+    this.#snapshot = createMetaverseSurfaceDriveBodyRuntimeSnapshot({
       linearVelocity: freezeVector3(0, 0, 0),
       position: this.#config.spawnPosition,
       yawRadians: this.#config.spawnYawRadians
@@ -171,6 +115,8 @@ export class MetaverseAuthoritativeSurfaceDriveRuntime {
   }
 
   syncAuthoritativeState(snapshot: {
+    readonly contact?: MetaverseSurfaceDriveBodyRuntimeSnapshot["contact"] | null;
+    readonly driveTarget?: MetaverseSurfaceDriveBodyRuntimeSnapshot["driveTarget"] | null;
     readonly linearVelocity: PhysicsVector3Snapshot;
     readonly position: PhysicsVector3Snapshot;
     readonly yawRadians: number;
@@ -193,15 +139,13 @@ export class MetaverseAuthoritativeSurfaceDriveRuntime {
       this.#collider.setRotation(quaternionFromYawRadians(yawRadians));
     }
 
-    this.#snapshot = syncMetaverseTraversalKinematicState({
+    this.#snapshot = createMetaverseSurfaceDriveBodyRuntimeSnapshot({
+      contact: snapshot.contact ?? this.#snapshot.contact,
+      driveTarget: snapshot.driveTarget ?? this.#snapshot.driveTarget,
       linearVelocity,
       position,
       yawRadians
     });
-    this.#forwardSpeedUnitsPerSecond =
-      this.#snapshot.forwardSpeedUnitsPerSecond;
-    this.#strafeSpeedUnitsPerSecond =
-      this.#snapshot.strafeSpeedUnitsPerSecond;
   }
 
   advance(
@@ -218,9 +162,7 @@ export class MetaverseAuthoritativeSurfaceDriveRuntime {
     }
 
     const nextBodyStep = resolveMetaverseSurfaceDriveBodyStep({
-      currentForwardSpeedUnitsPerSecond: this.#forwardSpeedUnitsPerSecond,
       currentSnapshot: this.#snapshot,
-      currentStrafeSpeedUnitsPerSecond: this.#strafeSpeedUnitsPerSecond,
       deltaSeconds,
       intentSnapshot,
       lockedHeightMeters,
@@ -289,11 +231,6 @@ export class MetaverseAuthoritativeSurfaceDriveRuntime {
       );
     }
 
-    this.#forwardSpeedUnitsPerSecond =
-      nextBodyStep.nextForwardSpeedUnitsPerSecond;
-    this.#strafeSpeedUnitsPerSecond =
-      nextBodyStep.nextStrafeSpeedUnitsPerSecond;
-
     return this.#snapshot;
   }
 
@@ -309,9 +246,7 @@ export class MetaverseAuthoritativeSurfaceDriveRuntime {
       this.#collider.setRotation(quaternionFromYawRadians(wrappedYawRadians));
     }
 
-    this.#forwardSpeedUnitsPerSecond = 0;
-    this.#strafeSpeedUnitsPerSecond = 0;
-    this.#snapshot = syncMetaverseTraversalKinematicState({
+    this.#snapshot = createMetaverseSurfaceDriveBodyRuntimeSnapshot({
       linearVelocity: freezeVector3(0, 0, 0),
       position: sanitizedPosition,
       yawRadians: wrappedYawRadians

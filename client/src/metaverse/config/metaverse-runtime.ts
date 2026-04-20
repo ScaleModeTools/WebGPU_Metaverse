@@ -20,6 +20,7 @@ function createMetaverseRuntimeSharedConfig(
     loadedBundle.environmentPresentationProfile ??
     shellDefaultEnvironmentPresentationProfile;
   const gameplayProfile = loadedBundle.gameplayProfile;
+  const groundedJumpPhysics = gameplayProfile.groundedJumpPhysics;
 
   if (defaultSpawnNode === undefined) {
     throw new Error(
@@ -67,7 +68,14 @@ function createMetaverseRuntimeSharedConfig(
     ),
     groundedBody: {
       ...gameplayProfile.groundedBodyTraversal,
+      airborneMovementDampingFactor:
+        groundedJumpPhysics.airborneMovementDampingFactor,
       eyeHeightMeters: 1.62,
+      gravityUnitsPerSecond: groundedJumpPhysics.gravityUnitsPerSecond,
+      jumpGroundContactGraceSeconds:
+        groundedJumpPhysics.jumpGroundContactGraceSeconds,
+      jumpImpulseUnitsPerSecond:
+        groundedJumpPhysics.jumpImpulseUnitsPerSecond,
       spawnPosition: defaultSpawnNode.position
     },
     orientation: {

@@ -1,3 +1,9 @@
+import type {
+  MetaverseGroundedBodyConfigSnapshot,
+  MetaverseGroundedBodyRuntimeSnapshot,
+  MetaverseGroundedBodyStepIntentSnapshot
+} from "@webgpu-metaverse/shared/metaverse/traversal";
+
 export interface PhysicsVector3Snapshot {
   readonly x: number;
   readonly y: number;
@@ -11,52 +17,19 @@ export interface PhysicsQuaternionSnapshot {
   readonly w: number;
 }
 
-export interface MetaverseGroundedBodyIntentSnapshot {
-  readonly boost: boolean;
-  readonly jump: boolean;
-  readonly jumpReadyOverride?: boolean;
-  readonly moveAxis: number;
-  readonly snapToGroundOverrideEnabled?: boolean;
-  readonly strafeAxis: number;
-  readonly turnAxis: number;
-}
+export type MetaverseGroundedBodyIntentSnapshot =
+  MetaverseGroundedBodyStepIntentSnapshot;
 
-export interface MetaverseGroundedBodySnapshot {
+export interface MetaverseGroundedBodySnapshot
+  extends MetaverseGroundedBodyRuntimeSnapshot {
   readonly capsuleHalfHeightMeters: number;
   readonly capsuleRadiusMeters: number;
   readonly eyeHeightMeters: number;
-  readonly grounded: boolean;
-  readonly jumpReady: boolean;
-  readonly planarSpeedUnitsPerSecond: number;
-  readonly position: PhysicsVector3Snapshot;
-  readonly verticalSpeedUnitsPerSecond: number;
-  readonly yawRadians: number;
 }
 
-export interface MetaverseGroundedBodyConfig {
-  readonly accelerationCurveExponent: number;
-  readonly accelerationUnitsPerSecondSquared: number;
-  readonly airborneMovementDampingFactor: number;
-  readonly baseSpeedUnitsPerSecond: number;
-  readonly boostCurveExponent: number;
-  readonly boostMultiplier: number;
-  readonly capsuleHalfHeightMeters: number;
-  readonly capsuleRadiusMeters: number;
-  readonly controllerOffsetMeters: number;
-  readonly decelerationUnitsPerSecondSquared: number;
-  readonly dragCurveExponent: number;
+export interface MetaverseGroundedBodyConfig
+  extends MetaverseGroundedBodyConfigSnapshot {
   readonly eyeHeightMeters: number;
-  readonly gravityUnitsPerSecond: number;
-  readonly jumpGroundContactGraceSeconds?: number;
-  readonly jumpImpulseUnitsPerSecond: number;
-  readonly maxSlopeClimbAngleRadians: number;
-  readonly minSlopeSlideAngleRadians: number;
-  readonly maxTurnSpeedRadiansPerSecond: number;
-  readonly snapToGroundDistanceMeters: number;
-  readonly stepHeightMeters: number;
-  readonly stepWidthMeters: number;
-  readonly spawnPosition: PhysicsVector3Snapshot;
-  readonly worldRadius: number;
 }
 
 export interface RapierVectorLike {
@@ -146,6 +119,10 @@ export interface RapierCharacterControllerHandle {
   setMinSlopeSlideAngle?(angle: number): void;
   setApplyImpulsesToDynamicBodies(enabled: boolean): void;
   setCharacterMass(mass: number | null): void;
+}
+
+export interface MetaverseGroundedBodyInteractionSyncSnapshot {
+  readonly applyImpulsesToDynamicBodies: boolean;
 }
 
 export interface RapierWorldHandle {

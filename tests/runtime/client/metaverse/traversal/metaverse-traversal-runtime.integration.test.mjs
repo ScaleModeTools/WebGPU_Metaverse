@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
 import {
+  createMetaverseSurfaceDriveBodyRuntimeSnapshot,
   metaverseRealtimeWorldCadenceConfig,
   metaverseWorldGroundedSpawnPosition,
   metaverseWorldInitialYawRadians,
@@ -43,7 +44,7 @@ function createTraversalAuthoritySnapshot(
       ? "none"
       : groundedBodySnapshot.grounded
         ? "grounded"
-        : groundedBodySnapshot.verticalSpeedUnitsPerSecond > 0.05
+        : groundedBodySnapshot.jumpBody.verticalSpeedUnitsPerSecond > 0.05
           ? "rising"
           : "falling";
 
@@ -98,6 +99,15 @@ function createAuthoritativeLocalPlayerPoseSnapshot(input) {
   return Object.freeze({
     ...authoritativeSnapshot,
     lastProcessedInputSequence,
+    swimBody:
+      authoritativeSnapshot.swimBody ??
+      (authoritativeSnapshot.locomotionMode === "swim"
+        ? createMetaverseSurfaceDriveBodyRuntimeSnapshot({
+            linearVelocity: authoritativeSnapshot.linearVelocity,
+            position: authoritativeSnapshot.position,
+            yawRadians: authoritativeSnapshot.yawRadians
+          })
+        : null),
     traversalAuthority:
       authoritativeSnapshot.traversalAuthority ??
       resolveMetaverseTraversalAuthoritySnapshotInput({
@@ -673,7 +683,8 @@ test("MetaverseTraversalRuntime keeps sustained grounded planar movement reconci
         latestAuthoritativeSnapshot = Object.freeze({
           jumpAuthorityState: nextAuthoritativeSnapshot.grounded
             ? "grounded"
-            : nextAuthoritativeSnapshot.verticalSpeedUnitsPerSecond > 0.05
+            : nextAuthoritativeSnapshot.jumpBody.verticalSpeedUnitsPerSecond >
+              0.05
               ? "rising"
               : "falling",
           lastAcceptedJumpActionSequence: 0,

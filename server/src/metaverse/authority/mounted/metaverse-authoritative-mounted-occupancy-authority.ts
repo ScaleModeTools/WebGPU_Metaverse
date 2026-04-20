@@ -51,7 +51,6 @@ export interface MetaverseAuthoritativeMountedPlayerRuntimeState<
   MountedOccupancy extends MetaverseAuthoritativeMountedOccupancyRuntimeState = MetaverseAuthoritativeMountedOccupancyRuntimeState
 > {
   angularVelocityRadiansPerSecond: number;
-  forwardSpeedUnitsPerSecond: number;
   lastPoseAtMs: number | null;
   lastSeenAtMs: number;
   linearVelocityX: number;
@@ -61,7 +60,6 @@ export interface MetaverseAuthoritativeMountedPlayerRuntimeState<
   mountedOccupancy: MountedOccupancy | null;
   readonly playerId: MetaversePlayerId;
   realtimeWorldAuthorityActive: boolean;
-  strafeSpeedUnitsPerSecond: number;
   unmountedTraversalState: MetaverseUnmountedTraversalStateSnapshot;
 }
 
@@ -243,13 +241,11 @@ export class MetaverseAuthoritativeMountedOccupancyAuthority<
       this.#dependencies.clearDriverVehicleControl(playerRuntime.playerId);
       this.#dependencies.clearPlayerTraversalIntent(playerRuntime.playerId);
       playerRuntime.angularVelocityRadiansPerSecond = 0;
-      playerRuntime.forwardSpeedUnitsPerSecond = 0;
       playerRuntime.linearVelocityX = 0;
       playerRuntime.linearVelocityY = 0;
       playerRuntime.linearVelocityZ = 0;
       playerRuntime.mountedOccupancy = null;
       playerRuntime.lastPoseAtMs = nowMs;
-      playerRuntime.strafeSpeedUnitsPerSecond = 0;
       this.#dependencies.syncUnmountedPlayerToAuthoritativeSurface(
         playerRuntime,
         authoritativeSurfaceColliders,
@@ -295,12 +291,10 @@ export class MetaverseAuthoritativeMountedOccupancyAuthority<
 
       this.#dependencies.clearDriverVehicleControl(playerRuntime.playerId);
       playerRuntime.angularVelocityRadiansPerSecond = 0;
-      playerRuntime.forwardSpeedUnitsPerSecond = 0;
       playerRuntime.linearVelocityX = 0;
       playerRuntime.linearVelocityY = 0;
       playerRuntime.linearVelocityZ = 0;
       playerRuntime.lastPoseAtMs = nowMs;
-      playerRuntime.strafeSpeedUnitsPerSecond = 0;
       this.#dependencies.syncUnmountedPlayerToAuthoritativeSurface(
         playerRuntime,
         authoritativeSurfaceColliders,

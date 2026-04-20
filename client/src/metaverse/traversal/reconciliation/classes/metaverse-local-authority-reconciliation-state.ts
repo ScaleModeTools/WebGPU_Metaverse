@@ -1,11 +1,9 @@
 import type {
   MetaverseRealtimePlayerSnapshot,
 } from "@webgpu-metaverse/shared/metaverse/realtime";
-import type {
-  MetaverseTraversalActiveActionSnapshot,
-  MetaverseTraversalAuthoritySnapshot,
-  MetaverseUnmountedTraversalStateSnapshot
-} from "@webgpu-metaverse/shared/metaverse/traversal";
+import {
+  readMetaverseRealtimePlayerActiveBodyKinematicSnapshot
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 import {
   isMetaverseTraversalAuthorityGroundedLocomotion
 } from "@webgpu-metaverse/shared/metaverse/traversal";
@@ -16,9 +14,9 @@ import {
   createDefaultLocalAuthorityPoseCorrectionDetailSnapshot,
   createDefaultLocalAuthorityPoseCorrectionSnapshot,
   createLocalAuthorityPoseCorrectionDetailSnapshot,
-  resolveLocalAuthorityPoseCorrectionDecision,
+  resolveLocalAuthorityPoseConvergenceDecision,
+  resolveLocalAuthorityPoseDivergenceDiagnostics,
   resolveLocalAuthorityPoseCorrectionReason,
-  shouldSuppressRoutineGroundedCorrectionForIssuedTraversalAction,
   type AuthoritativeCorrectionTelemetrySnapshot,
   type LocalAuthorityPoseCorrectionSnapshot,
   type LocalAuthorityPoseCorrectionDetailSnapshot,
@@ -26,21 +24,16 @@ import {
   type LocalTraversalPoseSnapshot
 } from "../local-authority-pose-correction";
 
-interface LocalGroundedBodyAuthoritySnapshot {
-  readonly grounded: boolean;
-}
-
-interface TraversalStateLike
-  extends Pick<MetaverseUnmountedTraversalStateSnapshot, "actionState"> {}
-
 export interface AuthoritativeLocalPlayerPoseSnapshot
   extends Pick<
     MetaverseRealtimePlayerSnapshot,
+    | "groundedBody"
     | "lastProcessedInputSequence"
     | "linearVelocity"
     | "locomotionMode"
     | "mountedOccupancy"
     | "position"
+    | "swimBody"
     | "traversalAuthority"
     | "yawRadians"
   > {}
@@ -49,6 +42,8 @@ export interface ApplyAuthoritativeUnmountedPoseInput {
   readonly authoritativeGrounded: boolean;
   readonly authoritativePlayerSnapshot: AuthoritativeLocalPlayerPoseSnapshot;
   readonly localTraversalPose: LocalTraversalPoseSnapshot;
+  readonly positionBlendAlpha: number;
+  readonly yawBlendAlpha: number;
 }
 
 export interface SyncAuthoritativeLocalPlayerPoseInput {
@@ -60,14 +55,47 @@ export interface SyncAuthoritativeLocalPlayerPoseInput {
     readonly authoritativePlayerSnapshot: AuthoritativeLocalPlayerPoseSnapshot;
     readonly localTraversalPose: LocalTraversalPoseSnapshot;
   }) => LocalAuthorityPoseCorrectionSnapshot;
-  readonly currentTick: number;
-  readonly hardSnapDistanceMeters: number;
-  readonly latestIssuedTraversalActionSequence: number;
-  readonly localGroundedBodySnapshot: LocalGroundedBodyAuthoritySnapshot | null;
-  readonly localPredictedTraversalAction: MetaverseTraversalActiveActionSnapshot;
-  readonly localTraversalAuthority: MetaverseTraversalAuthoritySnapshot;
+  readonly convergenceMaxPositionStepMeters: number;
+  readonly convergenceMaxYawStepRadians: number;
+  readonly convergenceSettleDistanceMeters: number;
+  readonly convergenceStartDistanceMeters: number;
+  readonly localGroundedBodySnapshot: AuthoritativeLocalPlayerPoseSnapshot["groundedBody"] | null;
+  readonly localSwimBodySnapshot: AuthoritativeLocalPlayerPoseSnapshot["swimBody"] | null;
+  readonly localGrounded: boolean | null;
   readonly localTraversalPose: LocalTraversalPoseSnapshot | null;
-  readonly traversalState: TraversalStateLike;
+}
+
+function wrapRadians(rawValue: number): number {
+  if (!Number.isFinite(rawValue)) {
+    return 0;
+  }
+
+  let wrappedValue = rawValue;
+
+  while (wrappedValue > Math.PI) {
+    wrappedValue -= Math.PI * 2;
+  }
+
+  while (wrappedValue <= -Math.PI) {
+    wrappedValue += Math.PI * 2;
+  }
+
+  return wrappedValue;
+}
+
+function resolveBoundedConvergenceBlendAlpha(
+  magnitude: number,
+  maxStep: number
+): number {
+  if (!Number.isFinite(magnitude) || magnitude <= 0) {
+    return 1;
+  }
+
+  if (!Number.isFinite(maxStep) || maxStep <= 0) {
+    return 0;
+  }
+
+  return Math.min(1, maxStep / magnitude);
 }
 
 export class MetaverseLocalAuthorityReconciliationState {
@@ -80,6 +108,7 @@ export class MetaverseLocalAuthorityReconciliationState {
     createDefaultLocalAuthorityPoseCorrectionSnapshot();
   #lastLocalAuthorityPoseCorrectionReason: LocalAuthorityPoseCorrectionReason =
     "none";
+  #localAuthorityPoseConvergenceActive = false;
 
   get authoritativeCorrectionTelemetrySnapshot(): AuthoritativeCorrectionTelemetrySnapshot {
     return this.#latestAuthoritativeCorrectionTelemetrySnapshot;
@@ -110,35 +139,41 @@ export class MetaverseLocalAuthorityReconciliationState {
     this.#lastLocalAuthorityPoseCorrectionSnapshot =
       createDefaultLocalAuthorityPoseCorrectionSnapshot();
     this.#lastLocalAuthorityPoseCorrectionReason = "none";
+    this.#localAuthorityPoseConvergenceActive = false;
   }
 
   syncAuthoritativeLocalPlayerPose({
     applyAuthoritativeUnmountedPose,
     authoritativePlayerSnapshot,
     createLocalAuthorityPoseCorrectionSnapshot,
-    currentTick,
-    hardSnapDistanceMeters,
-    latestIssuedTraversalActionSequence,
+    convergenceMaxPositionStepMeters,
+    convergenceMaxYawStepRadians,
+    convergenceSettleDistanceMeters,
+    convergenceStartDistanceMeters,
     localGroundedBodySnapshot,
-    localPredictedTraversalAction,
-    localTraversalAuthority,
-    localTraversalPose,
-    traversalState
+    localSwimBodySnapshot,
+    localGrounded,
+    localTraversalPose
   }: SyncAuthoritativeLocalPlayerPoseInput): boolean {
     if (
       authoritativePlayerSnapshot.mountedOccupancy !== null ||
       authoritativePlayerSnapshot.locomotionMode === "mounted" ||
       localTraversalPose === null
     ) {
+      this.#localAuthorityPoseConvergenceActive = false;
       return false;
     }
 
+    const authoritativeActiveBodySnapshot =
+      readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(
+        authoritativePlayerSnapshot
+      );
     const planarDistance = Math.hypot(
-      authoritativePlayerSnapshot.position.x - localTraversalPose.position.x,
-      authoritativePlayerSnapshot.position.z - localTraversalPose.position.z
+      authoritativeActiveBodySnapshot.position.x - localTraversalPose.position.x,
+      authoritativeActiveBodySnapshot.position.z - localTraversalPose.position.z
     );
     const verticalDistance = Math.abs(
-      authoritativePlayerSnapshot.position.y - localTraversalPose.position.y
+      authoritativeActiveBodySnapshot.position.y - localTraversalPose.position.y
     );
     const authoritativeGrounded =
       isMetaverseTraversalAuthorityGroundedLocomotion({
@@ -149,55 +184,65 @@ export class MetaverseLocalAuthorityReconciliationState {
         mounted: authoritativePlayerSnapshot.mountedOccupancy !== null,
         traversalAuthority: authoritativePlayerSnapshot.traversalAuthority
       });
-    const correctionDecision = resolveLocalAuthorityPoseCorrectionDecision({
+    const divergenceDiagnostics = resolveLocalAuthorityPoseDivergenceDiagnostics({
+      authoritativeGroundedBody:
+        authoritativePlayerSnapshot.locomotionMode === "grounded"
+          ? authoritativePlayerSnapshot.groundedBody
+          : null,
+      authoritativeLinearVelocity: authoritativeActiveBodySnapshot.linearVelocity,
       authoritativeLocomotionMode: authoritativePlayerSnapshot.locomotionMode,
-      hardSnapDistanceMeters,
+      authoritativeSwimBody:
+        authoritativePlayerSnapshot.locomotionMode === "swim"
+          ? authoritativePlayerSnapshot.swimBody
+          : null,
+      localGroundedBody: localGroundedBodySnapshot,
+      localLinearVelocity: localTraversalPose.linearVelocity,
       localLocomotionMode: localTraversalPose.locomotionMode,
+      localSwimBody: localSwimBodySnapshot
+    });
+    const convergenceDecision = resolveLocalAuthorityPoseConvergenceDecision({
+      convergenceActive: this.#localAuthorityPoseConvergenceActive,
+      convergenceSettleDistanceMeters,
+      convergenceStartDistanceMeters,
       planarDistance,
       verticalDistance
     });
+    const positionDistance = Math.hypot(planarDistance, verticalDistance);
+    const yawDistance = Math.abs(
+      wrapRadians(
+        authoritativeActiveBodySnapshot.yawRadians -
+          localTraversalPose.yawRadians
+      )
+    );
 
     this.#latestAuthoritativeCorrectionTelemetrySnapshot =
       createAuthoritativeCorrectionTelemetrySnapshot(
         localTraversalPose,
-        authoritativePlayerSnapshot,
+        Object.freeze({
+          locomotionMode: authoritativePlayerSnapshot.locomotionMode,
+          position: authoritativeActiveBodySnapshot.position
+        }),
         false
       );
 
-    if (
-      authoritativePlayerSnapshot.locomotionMode === "grounded" &&
-      localGroundedBodySnapshot !== null &&
-      shouldSuppressRoutineGroundedCorrectionForIssuedTraversalAction({
-        actionState: traversalState.actionState,
-        authoritativeGrounded,
-        authoritativeTraversalAuthority:
-          authoritativePlayerSnapshot.traversalAuthority,
-        currentTick,
-        hardSnapDistanceMeters,
-        issuedTraversalActionSequence: latestIssuedTraversalActionSequence,
-        localGrounded: localGroundedBodySnapshot.grounded,
-        localTraversalActionAuthority: localTraversalAuthority,
-        localTraversalAction: localPredictedTraversalAction,
-        locomotionMismatch: correctionDecision.locomotionMismatch,
-        planarDistance
-      })
-    ) {
+    if (!convergenceDecision.shouldConvergePose) {
+      this.#localAuthorityPoseConvergenceActive = false;
       return false;
     }
 
-    if (!correctionDecision.shouldSnapCorrection) {
-      return false;
-    }
-
+    this.#localAuthorityPoseConvergenceActive = true;
     this.#localAuthorityPoseCorrectionCount += 1;
     this.#lastLocalAuthorityPoseCorrectionDetail =
       createLocalAuthorityPoseCorrectionDetailSnapshot(
         localTraversalPose,
-        authoritativePlayerSnapshot.position,
-        localGroundedBodySnapshot?.grounded ?? null,
+        authoritativeActiveBodySnapshot.position,
+        localGrounded,
         authoritativePlayerSnapshot.locomotionMode === "grounded"
           ? authoritativeGrounded
-          : null
+          : null,
+        authoritativeActiveBodySnapshot.linearVelocity,
+        divergenceDiagnostics.groundedBodyStateDivergence,
+        divergenceDiagnostics.bodyStateDivergence
       );
     this.#lastLocalAuthorityPoseCorrectionSnapshot =
       createLocalAuthorityPoseCorrectionSnapshot({
@@ -206,19 +251,31 @@ export class MetaverseLocalAuthorityReconciliationState {
       });
     this.#lastLocalAuthorityPoseCorrectionReason =
       resolveLocalAuthorityPoseCorrectionReason({
-        grossPositionDivergence: correctionDecision.grossPositionDivergence
+        bodyStateDivergence: divergenceDiagnostics.bodyStateDivergence,
+        grossPositionDivergence: convergenceDecision.grossPositionDivergence
       });
     this.#latestAuthoritativeCorrectionTelemetrySnapshot =
       createAuthoritativeCorrectionTelemetrySnapshot(
         localTraversalPose,
-        authoritativePlayerSnapshot,
+        Object.freeze({
+          locomotionMode: authoritativePlayerSnapshot.locomotionMode,
+          position: authoritativeActiveBodySnapshot.position
+        }),
         true
       );
 
     applyAuthoritativeUnmountedPose({
       authoritativeGrounded,
       authoritativePlayerSnapshot,
-      localTraversalPose
+      localTraversalPose,
+      positionBlendAlpha: resolveBoundedConvergenceBlendAlpha(
+        positionDistance,
+        convergenceMaxPositionStepMeters
+      ),
+      yawBlendAlpha: resolveBoundedConvergenceBlendAlpha(
+        yawDistance,
+        convergenceMaxYawStepRadians
+      )
     });
 
     return true;

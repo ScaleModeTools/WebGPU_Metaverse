@@ -37,7 +37,6 @@ export interface MetaverseGroundedTraversalStepResult {
   readonly cameraSnapshot: MetaverseCameraSnapshot;
   readonly locomotionMode: "grounded" | "swim";
   readonly nextTraversalState: MetaverseUnmountedTraversalStateSnapshot;
-  readonly supportHeightMeters: number | null;
   readonly transitionSnapshot: MetaverseUnmountedTraversalTransitionSnapshot;
   readonly waterlineHeightMeters: number;
 }
@@ -48,7 +47,6 @@ export interface MetaverseSwimTraversalStepResult {
   readonly locomotionMode: "grounded" | "swim";
   readonly nextSwimSnapshot: SurfaceLocomotionSnapshot;
   readonly nextTraversalState: MetaverseUnmountedTraversalStateSnapshot;
-  readonly supportHeightMeters: number | null;
   readonly transitionSnapshot: MetaverseUnmountedTraversalTransitionSnapshot;
 }
 
@@ -177,6 +175,8 @@ export class MetaverseFixedStepTraversalSimulation {
 
     if (linearVelocity !== null) {
       swimBodyRuntime.syncAuthoritativeState({
+        contact: swimBodyRuntime.snapshot.contact,
+        driveTarget: swimBodyRuntime.snapshot.driveTarget,
         linearVelocity: freezeVector3(
           linearVelocity.x,
           linearVelocity.y,
@@ -198,15 +198,13 @@ export class MetaverseFixedStepTraversalSimulation {
   }
 
   syncAuthoritativeSwimLocomotion(input: {
-    readonly linearVelocity: PhysicsVector3Snapshot;
-    readonly position: PhysicsVector3Snapshot;
     readonly positionBlendAlpha?: number;
     readonly readWaterSurfaceHeightMeters: (
       position: Pick<PhysicsVector3Snapshot, "x" | "y" | "z">,
       paddingMeters?: number
     ) => number;
+    readonly swimSnapshot: SurfaceLocomotionSnapshot;
     readonly yawBlendAlpha?: number;
-    readonly yawRadians: number;
   }): SurfaceLocomotionSnapshot {
     const swimBodyRuntime = this.ensureSwimBodyRuntime(
       input.readWaterSurfaceHeightMeters
@@ -222,19 +220,23 @@ export class MetaverseFixedStepTraversalSimulation {
     );
     const blendedYawRadians = wrapRadians(
       currentSwimSnapshot.yawRadians +
-        wrapRadians(input.yawRadians - currentSwimSnapshot.yawRadians) *
+        wrapRadians(
+          input.swimSnapshot.yawRadians - currentSwimSnapshot.yawRadians
+        ) *
           yawBlendAlpha
     );
 
     swimBodyRuntime.syncAuthoritativeState({
-      linearVelocity: input.linearVelocity,
+      contact: input.swimSnapshot.contact,
+      driveTarget: input.swimSnapshot.driveTarget,
+      linearVelocity: input.swimSnapshot.linearVelocity,
       position: freezeVector3(
         currentSwimSnapshot.position.x +
-          (input.position.x - currentSwimSnapshot.position.x) *
+          (input.swimSnapshot.position.x - currentSwimSnapshot.position.x) *
             positionBlendAlpha,
-        input.readWaterSurfaceHeightMeters(input.position),
+        input.readWaterSurfaceHeightMeters(input.swimSnapshot.position),
         currentSwimSnapshot.position.z +
-          (input.position.z - currentSwimSnapshot.position.z) *
+          (input.swimSnapshot.position.z - currentSwimSnapshot.position.z) *
             positionBlendAlpha
       ),
       yawRadians: blendedYawRadians
@@ -331,7 +333,6 @@ export class MetaverseFixedStepTraversalSimulation {
       ),
       locomotionMode: locomotionOutcome.locomotionMode,
       nextTraversalState: locomotionOutcome.traversalState,
-      supportHeightMeters: locomotionOutcome.supportHeightMeters,
       transitionSnapshot: traversalBodyStep.transitionSnapshot,
       waterlineHeightMeters: locomotionOutcome.waterlineHeightMeters
     });
@@ -429,7 +430,6 @@ export class MetaverseFixedStepTraversalSimulation {
       locomotionMode: locomotionOutcome.locomotionMode,
       nextSwimSnapshot,
       nextTraversalState: locomotionOutcome.traversalState,
-      supportHeightMeters: locomotionOutcome.supportHeightMeters,
       transitionSnapshot: traversalBodyStep.transitionSnapshot
     });
   }

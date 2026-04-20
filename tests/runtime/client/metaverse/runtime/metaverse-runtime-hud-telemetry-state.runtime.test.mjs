@@ -36,13 +36,18 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
   dependencies.traversalRuntime.lastLocalAuthorityPoseCorrectionDetail =
     Object.freeze({
       authoritativeGrounded: true,
+      bodyStateDivergence: true,
+      groundedBodyStateDivergence: true,
       localGrounded: false,
       planarMagnitudeMeters: 1.2,
-      verticalMagnitudeMeters: 0.3
+      planarVelocityMagnitudeUnitsPerSecond: 2.8,
+      verticalMagnitudeMeters: 0.3,
+      verticalVelocityMagnitudeUnitsPerSecond: 0.7
     });
   dependencies.traversalRuntime.lastLocalAuthorityPoseCorrectionSnapshot =
     Object.freeze({
       authoritative: Object.freeze({
+        groundedBody: null,
         lastProcessedInputSequence: 24,
         linearVelocity: Object.freeze({
           x: 2.4,
@@ -55,6 +60,37 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
           y: 0.8,
           z: -4.2
         }),
+        swimBody: Object.freeze({
+          angularVelocityRadiansPerSecond: 0,
+          contact: Object.freeze({
+            appliedMovementDelta: Object.freeze({ x: 0, y: 0, z: 0 }),
+            blockedPlanarMovement: true,
+            desiredMovementDelta: Object.freeze({ x: 0, y: 0, z: -0.7 })
+          }),
+          driveTarget: Object.freeze({
+            boost: true,
+            moveAxis: 1,
+            movementMagnitude: 1,
+            strafeAxis: -0.25,
+            targetForwardSpeedUnitsPerSecond: 5.8,
+            targetPlanarSpeedUnitsPerSecond: 5.98,
+            targetStrafeSpeedUnitsPerSecond: -1.45
+          }),
+          forwardSpeedUnitsPerSecond: 2.4,
+          linearVelocity: Object.freeze({
+            x: 2.4,
+            y: 0,
+            z: -0.7
+          }),
+          planarSpeedUnitsPerSecond: 2.5,
+          position: Object.freeze({
+            x: 1.1,
+            y: 0.8,
+            z: -4.2
+          }),
+          strafeSpeedUnitsPerSecond: -0.3,
+          yawRadians: 0.25
+        }),
         surfaceRouting: Object.freeze({
           blockingAffordanceDetected: false,
           decisionReason: "capability-transition-validated",
@@ -63,6 +99,7 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
         })
       }),
       local: Object.freeze({
+        groundedBody: null,
         issuedTraversalIntent: Object.freeze({
           actionIntent: Object.freeze({
             kind: "none",
@@ -89,16 +126,15 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
           y: 1.1,
           z: -3.6
         }),
+        swimBody: null,
         surfaceRouting: Object.freeze({
           autostepHeightMeters: 0.2,
           blockingAffordanceDetected: false,
           decisionReason: "capability-maintained",
+          groundedBody: null,
           jumpDebug: Object.freeze({
-            groundedBodyGrounded: false,
-            groundedBodyJumpReady: true,
             surfaceJumpSupported: false,
-            supported: true,
-            verticalSpeedUnitsPerSecond: -0.4
+            supported: true
           }),
           locomotionMode: "grounded",
           resolvedSupportHeightMeters: 0.6,
@@ -116,9 +152,9 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
       })
     });
   dependencies.traversalRuntime.lastLocalAuthorityPoseCorrectionReason =
-    "gross-position-divergence";
+    "gross-body-divergence";
   dependencies.traversalRuntime.lastLocalReconciliationCorrectionSource =
-    "local-authority-snap";
+    "local-authority-convergence";
   dependencies.traversalRuntime.localAuthorityPoseCorrectionCount = 1;
   dependencies.traversalRuntime.localReconciliationCorrectionCount = 1;
   renderedCamera.position.x = 0.4;
@@ -156,18 +192,19 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
   );
   assert.equal(
     telemetrySnapshot.worldSnapshot.localReconciliation.lastCorrectionSource,
-    "local-authority-snap"
+    "local-authority-convergence"
   );
   assert.equal(
     telemetrySnapshot.worldSnapshot.localReconciliation
       .lastLocalAuthorityPoseCorrectionReason,
-    "gross-position-divergence"
+    "gross-body-divergence"
   );
   assert.deepEqual(
     telemetrySnapshot.worldSnapshot.localReconciliation
       .lastLocalAuthorityPoseCorrectionSnapshot,
     {
       authoritative: {
+        groundedBody: null,
         lastProcessedInputSequence: 24,
         linearVelocity: {
           x: 2.4,
@@ -180,6 +217,45 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
           y: 0.8,
           z: -4.2
         },
+        swimBody: {
+          angularVelocityRadiansPerSecond: 0,
+          contact: {
+            appliedMovementDelta: {
+              x: 0,
+              y: 0,
+              z: 0
+            },
+            blockedPlanarMovement: true,
+            desiredMovementDelta: {
+              x: 0,
+              y: 0,
+              z: -0.7
+            }
+          },
+          driveTarget: {
+            boost: true,
+            moveAxis: 1,
+            movementMagnitude: 1,
+            strafeAxis: -0.25,
+            targetForwardSpeedUnitsPerSecond: 5.8,
+            targetPlanarSpeedUnitsPerSecond: 5.98,
+            targetStrafeSpeedUnitsPerSecond: -1.45
+          },
+          forwardSpeedUnitsPerSecond: 2.4,
+          linearVelocity: {
+            x: 2.4,
+            y: 0,
+            z: -0.7
+          },
+          planarSpeedUnitsPerSecond: 2.5,
+          position: {
+            x: 1.1,
+            y: 0.8,
+            z: -4.2
+          },
+          strafeSpeedUnitsPerSecond: -0.3,
+          yawRadians: 0.25
+        },
         surfaceRouting: {
           blockingAffordanceDetected: false,
           decisionReason: "capability-transition-validated",
@@ -188,6 +264,7 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
         }
       },
       local: {
+        groundedBody: null,
         issuedTraversalIntent: {
           actionIntent: {
             kind: "none",
@@ -214,19 +291,19 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
           y: 1.1,
           z: -3.6
         },
+        swimBody: null,
         surfaceRouting: {
           autostepHeightMeters: 0.2,
           blockingAffordanceDetected: false,
           decisionReason: "capability-maintained",
+          groundedBody: null,
           jumpDebug: {
-            groundedBodyGrounded: false,
-            groundedBodyJumpReady: true,
             surfaceJumpSupported: false,
-            supported: true,
-            verticalSpeedUnitsPerSecond: -0.4
+            supported: true
           },
           locomotionMode: "grounded",
           resolvedSupportHeightMeters: 0.6,
+          swimBody: null,
           supportingAffordanceSampleCount: 2,
           traversalAuthority: {
             currentActionKind: "none",
@@ -244,4 +321,261 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
   assert.equal(telemetrySnapshot.renderer.drawCallCount, 7);
   assert.equal(telemetrySnapshot.renderer.triangleCount, 42);
   assert.equal(telemetrySnapshot.worldSnapshot.datagramSendFailureCount, 3);
+});
+
+test("MetaverseRuntimeHudTelemetryState carries authoritative local-player grounded jump body through HUD telemetry", async () => {
+  const [{ MetaverseRuntimeHudTelemetryState }, { metaverseRuntimeConfig }] =
+    await Promise.all([
+      clientLoader.load("/src/metaverse/hud/debug/metaverse-runtime-hud-telemetry-state.ts"),
+      clientLoader.load("/src/metaverse/config/metaverse-runtime.ts")
+    ]);
+  let nowMs = 0;
+  const dependencies = createFakeHudPublisherDependencies(() => nowMs);
+  dependencies.config = metaverseRuntimeConfig;
+  const telemetryState = new MetaverseRuntimeHudTelemetryState(dependencies);
+  const renderedCamera = createFakeRenderedCamera();
+
+  dependencies.remoteWorldRuntime.readFreshAuthoritativeLocalPlayerSnapshot =
+    () =>
+      Object.freeze({
+        groundedBody: Object.freeze({
+          contact: Object.freeze({
+            appliedMovementDelta: Object.freeze({ x: 0, y: 0, z: 0 }),
+            blockedPlanarMovement: false,
+            blockedVerticalMovement: false,
+            desiredMovementDelta: Object.freeze({ x: 0, y: 0, z: 0 }),
+            supportingContactDetected: false
+          }),
+          driveTarget: Object.freeze({
+            boost: false,
+            moveAxis: 0,
+            movementMagnitude: 0,
+            strafeAxis: 0,
+            targetForwardSpeedUnitsPerSecond: 0,
+            targetPlanarSpeedUnitsPerSecond: 0,
+            targetStrafeSpeedUnitsPerSecond: 0
+          }),
+          interaction: Object.freeze({
+            applyImpulsesToDynamicBodies: false
+          }),
+          jumpBody: Object.freeze({
+            grounded: false,
+            jumpGroundContactGraceSecondsRemaining: 0.12,
+            jumpReady: false,
+            jumpSnapSuppressionActive: true,
+            verticalSpeedUnitsPerSecond: 4.2
+          })
+        }),
+        jumpDebug: Object.freeze({
+          pendingActionSequence: 9,
+          pendingActionBufferAgeMs: 48,
+          resolvedActionSequence: 8,
+          resolvedActionState: "accepted",
+          surfaceJumpSupported: false,
+          supported: false
+        }),
+        lastProcessedInputSequence: 8,
+        locomotionMode: "grounded",
+        position: Object.freeze({
+          x: 0,
+          y: 0.6,
+          z: 0
+        }),
+        traversalAuthority: Object.freeze({
+          currentActionKind: "jump",
+          currentActionPhase: "rising",
+          currentActionSequence: 8,
+          lastConsumedActionSequence: 8,
+          lastRejectedActionReason: "none",
+          lastRejectedActionSequence: 0,
+          phaseStartedAtTick: 24
+        }),
+        yawRadians: 0
+      });
+
+  telemetryState.trackFrame(
+    nowMs,
+    dependencies.traversalRuntime.cameraSnapshot,
+    renderedCamera
+  );
+
+  const telemetrySnapshot = telemetryState.createSnapshot(
+    nowMs,
+    createPublishInput()
+  );
+
+  assert.deepEqual(
+    telemetrySnapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
+      .groundedBody?.jumpBody,
+    {
+      grounded: false,
+      jumpGroundContactGraceSecondsRemaining: 0.12,
+      jumpReady: false,
+      jumpSnapSuppressionActive: true,
+      verticalSpeedUnitsPerSecond: 4.2
+    }
+  );
+  assert.equal(
+    telemetrySnapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
+      .jumpDebug.pendingActionSequence,
+    9
+  );
+  assert.equal(
+    telemetrySnapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
+      .jumpDebug.resolvedActionState,
+    "accepted"
+  );
+  assert.equal(
+    telemetrySnapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
+      .swimBody,
+    null
+  );
+});
+
+test("MetaverseRuntimeHudTelemetryState resolves authoritative swim telemetry from the shared swim-body owner", async () => {
+  const [{ MetaverseRuntimeHudTelemetryState }, { metaverseRuntimeConfig }] =
+    await Promise.all([
+      clientLoader.load("/src/metaverse/hud/debug/metaverse-runtime-hud-telemetry-state.ts"),
+      clientLoader.load("/src/metaverse/config/metaverse-runtime.ts")
+    ]);
+  let nowMs = 0;
+  const dependencies = createFakeHudPublisherDependencies(() => nowMs);
+  dependencies.config = metaverseRuntimeConfig;
+  const telemetryState = new MetaverseRuntimeHudTelemetryState(dependencies);
+  const renderedCamera = createFakeRenderedCamera();
+
+  dependencies.remoteWorldRuntime.readFreshAuthoritativeLocalPlayerSnapshot =
+    () =>
+      Object.freeze({
+        groundedBody: Object.freeze({
+          contact: Object.freeze({
+            appliedMovementDelta: Object.freeze({ x: 0, y: 0, z: 0 }),
+            blockedPlanarMovement: false,
+            blockedVerticalMovement: false,
+            desiredMovementDelta: Object.freeze({ x: 0, y: 0, z: 0 }),
+            supportingContactDetected: true
+          }),
+          driveTarget: Object.freeze({
+            boost: true,
+            moveAxis: 1,
+            movementMagnitude: 1,
+            strafeAxis: 0,
+            targetForwardSpeedUnitsPerSecond: 14.88,
+            targetPlanarSpeedUnitsPerSecond: 14.88,
+            targetStrafeSpeedUnitsPerSecond: 0
+          }),
+          interaction: Object.freeze({
+            applyImpulsesToDynamicBodies: true
+          }),
+          jumpBody: Object.freeze({
+            grounded: false,
+            jumpGroundContactGraceSecondsRemaining: 0,
+            jumpReady: false,
+            jumpSnapSuppressionActive: false,
+            verticalSpeedUnitsPerSecond: -6.53
+          })
+        }),
+        jumpDebug: Object.freeze({
+          pendingActionSequence: 55,
+          pendingActionBufferAgeMs: 20,
+          resolvedActionSequence: 55,
+          resolvedActionState: "accepted",
+          surfaceJumpSupported: true,
+          supported: true
+        }),
+        lastProcessedInputSequence: 12,
+        linearVelocity: Object.freeze({
+          x: 9,
+          y: 0,
+          z: 9
+        }),
+        locomotionMode: "swim",
+        position: Object.freeze({
+          x: 99,
+          y: 50,
+          z: 99
+        }),
+        swimBody: Object.freeze({
+          angularVelocityRadiansPerSecond: 0.2,
+          contact: Object.freeze({
+            appliedMovementDelta: Object.freeze({ x: 1, y: 0, z: -3 }),
+            blockedPlanarMovement: false,
+            desiredMovementDelta: Object.freeze({ x: 1, y: 0, z: -3 })
+          }),
+          driveTarget: Object.freeze({
+            boost: false,
+            moveAxis: 0.75,
+            movementMagnitude: 0.75,
+            strafeAxis: 0.1,
+            targetForwardSpeedUnitsPerSecond: 3,
+            targetPlanarSpeedUnitsPerSecond: 3.2,
+            targetStrafeSpeedUnitsPerSecond: 0.4
+          }),
+          forwardSpeedUnitsPerSecond: 3,
+          linearVelocity: Object.freeze({
+            x: 1,
+            y: 0,
+            z: -3
+          }),
+          planarSpeedUnitsPerSecond: 3.2,
+          position: Object.freeze({
+            x: 1,
+            y: 0,
+            z: -3
+          }),
+          strafeSpeedUnitsPerSecond: 0.4,
+          yawRadians: 0.25
+        }),
+        traversalAuthority: Object.freeze({
+          currentActionKind: "none",
+          currentActionPhase: "idle",
+          currentActionSequence: 0,
+          lastConsumedActionSequence: 0,
+          lastRejectedActionReason: "none",
+          lastRejectedActionSequence: 0,
+          phaseStartedAtTick: 0
+        }),
+        yawRadians: 1.2
+      });
+
+  telemetryState.trackFrame(
+    nowMs,
+    dependencies.traversalRuntime.cameraSnapshot,
+    renderedCamera
+  );
+
+  const telemetrySnapshot = telemetryState.createSnapshot(
+    nowMs,
+    createPublishInput()
+  );
+
+  assert.deepEqual(
+    telemetrySnapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
+      .swimBody?.position,
+    {
+      x: 1,
+      y: 0,
+      z: -3
+    }
+  );
+  assert.equal(
+    telemetrySnapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
+      .surfaceRouting.decisionReason,
+    "capability-maintained"
+  );
+  assert.equal(
+    telemetrySnapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
+      .groundedBody,
+    null
+  );
+  assert.equal(
+    telemetrySnapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
+      .jumpDebug.pendingActionSequence,
+    null
+  );
+  assert.equal(
+    telemetrySnapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
+      .correctionPlanarMagnitudeMeters,
+    Math.hypot(1, -3)
+  );
 });

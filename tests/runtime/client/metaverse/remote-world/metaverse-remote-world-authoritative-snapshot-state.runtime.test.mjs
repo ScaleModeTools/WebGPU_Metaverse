@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
 import {
+  createMetaverseGroundedBodyRuntimeSnapshot,
   createMetaversePlayerId,
   createUsername
 } from "@webgpu-metaverse/shared";
@@ -437,6 +438,143 @@ test("MetaverseRemoteWorldAuthoritativeSnapshotState keeps acked authoritative l
   );
 });
 
+test("MetaverseRemoteWorldAuthoritativeSnapshotState preserves the shared swim body owner on acked local swim authority", async () => {
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let currentWallClockMs = 1_000;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const { authoritativeSnapshotState } =
+    await createAuthoritativeSnapshotHarness({
+      latestPlayerInputSequence: 6,
+      localPlayerId,
+      readWallClockMs: () => currentWallClockMs,
+      worldSnapshots: [
+        createRealtimeWorldSnapshot({
+          currentTick: 10,
+          localAnimationVocabulary: "swim",
+          localLastProcessedInputSequence: 6,
+          localLinearVelocity: {
+            x: 1,
+            y: 0,
+            z: -6
+          },
+          localLocomotionMode: "swim",
+          localPlayerId,
+          localPlayerX: 4,
+          localPlayerY: 0,
+          localPlayerZ: 18,
+          localYawRadians: 0.25,
+          localUsername,
+          remotePlayerId,
+          remotePlayerX: 10,
+          remoteUsername,
+          serverTimeMs: 1_000,
+          snapshotSequence: 1,
+          vehicleX: 10,
+          yawRadians: 0.25
+        })
+      ]
+    });
+
+  const ackedLocalPlayerPose =
+    authoritativeSnapshotState.readFreshAckedAuthoritativeLocalPlayerPose(120);
+
+  assert.notEqual(ackedLocalPlayerPose, null);
+  assert.deepEqual(ackedLocalPlayerPose.swimBody?.linearVelocity, {
+    x: 1,
+    y: 0,
+    z: -6
+  });
+  assert.deepEqual(ackedLocalPlayerPose.swimBody?.position, {
+    x: 4,
+    y: 0,
+    z: 18
+  });
+  assert.equal(ackedLocalPlayerPose.swimBody?.yawRadians, 0.25);
+});
+
+test("MetaverseRemoteWorldAuthoritativeSnapshotState reads acked grounded yaw from the active body owner", async () => {
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let currentWallClockMs = 1_000;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const { authoritativeSnapshotState } =
+    await createAuthoritativeSnapshotHarness({
+      latestPlayerInputSequence: 6,
+      localPlayerId,
+      readWallClockMs: () => currentWallClockMs,
+      worldSnapshots: [
+        createRealtimeWorldSnapshot({
+          currentTick: 10,
+          localGroundedBody: createMetaverseGroundedBodyRuntimeSnapshot({
+            grounded: true,
+            linearVelocity: {
+              x: 2,
+              y: 0,
+              z: -1
+            },
+            position: {
+              x: 6,
+              y: 0.25,
+              z: 22
+            },
+            yawRadians: 0.75
+          }),
+          localLastProcessedInputSequence: 6,
+          localLinearVelocity: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          localLocomotionMode: "grounded",
+          localPlayerId,
+          localPlayerX: 4,
+          localPlayerY: 0,
+          localPlayerZ: 18,
+          localYawRadians: 0.25,
+          localUsername,
+          remotePlayerId,
+          remotePlayerX: 10,
+          remoteUsername,
+          serverTimeMs: 1_000,
+          snapshotSequence: 1,
+          vehicleX: 10
+        })
+      ]
+    });
+
+  const ackedLocalPlayerPose =
+    authoritativeSnapshotState.readFreshAckedAuthoritativeLocalPlayerPose(120);
+
+  assert.notEqual(ackedLocalPlayerPose, null);
+  assert.deepEqual(ackedLocalPlayerPose.position, {
+    x: 6,
+    y: 0.25,
+    z: 22
+  });
+  assert.deepEqual(ackedLocalPlayerPose.linearVelocity, {
+    x: 2,
+    y: 0,
+    z: -1
+  });
+  assert.equal(ackedLocalPlayerPose.yawRadians, 0.75);
+  assert.equal(ackedLocalPlayerPose.groundedBody.yawRadians, 0.75);
+});
+
 test("MetaverseRemoteWorldAuthoritativeSnapshotState consumes each fresh acked authoritative local player pose once even when unchanged raw authority is republished", async () => {
   const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
   const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
@@ -567,5 +705,115 @@ test("MetaverseRemoteWorldAuthoritativeSnapshotState consumes each fresh acked a
     authoritativeSnapshotState.consumeFreshAckedAuthoritativeLocalPlayerPose(120)
       ?.position.z,
     23.4
+  );
+});
+
+test("MetaverseRemoteWorldAuthoritativeSnapshotState does not redeliver local authority for body-state-only changes", async () => {
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let currentWallClockMs = 1_050;
+  const bodyPosition = {
+    x: 0,
+    y: 0.6,
+    z: 23.7
+  };
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const initialWorldSnapshot = createRealtimeWorldSnapshot({
+    currentTick: 11,
+    localGroundedBody: createMetaverseGroundedBodyRuntimeSnapshot({
+      grounded: true,
+      linearVelocity: {
+        x: 0,
+        y: 0,
+        z: -6
+      },
+      position: bodyPosition,
+      yawRadians: 0
+    }),
+    localJumpAuthorityState: "grounded",
+    localLastProcessedInputSequence: 6,
+    localLinearVelocity: {
+      x: 0,
+      y: 0,
+      z: -6
+    },
+    localLocomotionMode: "grounded",
+    localPlayerId,
+    localPlayerY: 0.6,
+    localPlayerZ: 23.7,
+    localUsername,
+    remotePlayerId,
+    remotePlayerX: 12,
+    remoteUsername,
+    serverTimeMs: 1_050,
+    snapshotSequence: 1,
+    vehicleX: 12
+  });
+  const { authoritativeSnapshotState, fakeWorldClient } =
+    await createAuthoritativeSnapshotHarness({
+      latestPlayerInputSequence: 6,
+      localPlayerId,
+      readWallClockMs: () => currentWallClockMs,
+      worldSnapshots: [initialWorldSnapshot]
+    });
+
+  assert.equal(
+    authoritativeSnapshotState.consumeFreshAckedAuthoritativeLocalPlayerPose(120)
+      ?.position.z,
+    23.7
+  );
+
+  const bodyStateOnlyWorldSnapshot = createRealtimeWorldSnapshot({
+    currentTick: 11,
+    localGroundedBody: createMetaverseGroundedBodyRuntimeSnapshot({
+      contact: {
+        blockedPlanarMovement: true,
+        blockedVerticalMovement: false,
+        supportingContactDetected: true
+      },
+      grounded: true,
+      interaction: {
+        applyImpulsesToDynamicBodies: true
+      },
+      linearVelocity: {
+        x: 0,
+        y: 0,
+        z: -6
+      },
+      position: bodyPosition,
+      yawRadians: 0
+    }),
+    localJumpAuthorityState: "grounded",
+    localLastProcessedInputSequence: 6,
+    localLinearVelocity: {
+      x: 0,
+      y: 0,
+      z: -6
+    },
+    localLocomotionMode: "grounded",
+    localPlayerId,
+    localPlayerY: 0.6,
+    localPlayerZ: 23.7,
+    localUsername,
+    remotePlayerId,
+    remotePlayerX: 12,
+    remoteUsername,
+    serverTimeMs: 1_050,
+    snapshotSequence: 1,
+    vehicleX: 12
+  });
+
+  fakeWorldClient.publishWorldSnapshotBuffer([bodyStateOnlyWorldSnapshot]);
+
+  assert.equal(
+    authoritativeSnapshotState.consumeFreshAckedAuthoritativeLocalPlayerPose(120),
+    null
   );
 });

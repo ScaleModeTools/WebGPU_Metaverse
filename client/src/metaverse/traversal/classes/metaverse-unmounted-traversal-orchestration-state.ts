@@ -30,9 +30,6 @@ import {
   toFiniteNumber
 } from "../policies/surface-locomotion";
 import {
-  syncPredictedGroundedTraversalActionStateFromAuthoritativeTraversal
-} from "../reconciliation/grounded-traversal-action-authority";
-import {
   MetaverseLocalAuthorityReconciliationState,
   type AuthoritativeLocalPlayerPoseSnapshot
 } from "../reconciliation/classes/metaverse-local-authority-reconciliation-state";
@@ -43,7 +40,10 @@ import { MetaverseLocalTraversalAuthorityState } from "./metaverse-local-travers
 import { MetaverseTraversalTelemetryState } from "./metaverse-traversal-telemetry-state";
 import { MetaverseUnmountedTraversalMotionState } from "./metaverse-unmounted-traversal-motion-state";
 
-const localPlayerAuthoritativeHardSnapDistanceMeters = 2.5;
+const localPlayerAuthoritativeConvergenceStartDistanceMeters = 2.5;
+const localPlayerAuthoritativeConvergenceSettleDistanceMeters = 0.05;
+const localPlayerAuthoritativeConvergenceMaxPositionStepMeters = 0.2;
+const localPlayerAuthoritativeConvergenceMaxYawStepRadians = 0.08;
 
 function resolveMovementInputMagnitude(
   movementInput: Pick<MetaverseFlightInputSnapshot, "moveAxis" | "strafeAxis">
@@ -281,35 +281,14 @@ export class MetaverseUnmountedTraversalOrchestrationState {
       return cameraSnapshot;
     }
 
-    const authoritativeTraversalAuthority =
-      authoritativePlayerSnapshot.traversalAuthority;
-    const latestIssuedTraversalActionSequence =
-      this.#dependencies.localTraversalAuthorityState
-        .resolveLatestPredictedGroundedTraversalActionSequence({
-          localActiveTraversalAction:
-            this.#dependencies.unmountedTraversalMotionState.resolveLocalPredictedTraversalAction(),
-          locomotionMode: this.#dependencies.readLocomotionMode(),
-          traversalState: this.#dependencies.readTraversalState()
-        });
-
-    if (this.#dependencies.readLocomotionMode() === "grounded") {
-      const nextUnmountedTraversalState =
-        syncPredictedGroundedTraversalActionStateFromAuthoritativeTraversal(
-          this.#dependencies.readTraversalState(),
-          authoritativeTraversalAuthority,
-          latestIssuedTraversalActionSequence
-        );
-
-      if (nextUnmountedTraversalState !== this.#dependencies.readTraversalState()) {
-        this.#dependencies.writeTraversalState(nextUnmountedTraversalState);
-        this.#dependencies.syncLocalTraversalAuthorityState(false);
-      }
-    }
-
     const localGroundedBodySnapshot =
       localTraversalPose.locomotionMode === "grounded" &&
       this.#dependencies.groundedBodyRuntime.isInitialized
         ? this.#dependencies.groundedBodyRuntime.snapshot
+        : null;
+    const localSwimBodySnapshot =
+      localTraversalPose.locomotionMode === "swim"
+        ? this.#dependencies.surfaceLocomotionState.readSwimSnapshot()
         : null;
     const nextCameraSnapshot = { current: cameraSnapshot };
     const appliedCorrection =
@@ -324,23 +303,25 @@ export class MetaverseUnmountedTraversalOrchestrationState {
           createLocalAuthorityPoseCorrectionSnapshot: (input) =>
             this.#dependencies.telemetryState
               .createLocalAuthorityPoseCorrectionSnapshot(input),
-          currentTick: this.#dependencies.localTraversalAuthorityState.currentTick,
-          hardSnapDistanceMeters: localPlayerAuthoritativeHardSnapDistanceMeters,
-          latestIssuedTraversalActionSequence,
+          convergenceMaxPositionStepMeters:
+            localPlayerAuthoritativeConvergenceMaxPositionStepMeters,
+          convergenceMaxYawStepRadians:
+            localPlayerAuthoritativeConvergenceMaxYawStepRadians,
+          convergenceSettleDistanceMeters:
+            localPlayerAuthoritativeConvergenceSettleDistanceMeters,
+          convergenceStartDistanceMeters:
+            localPlayerAuthoritativeConvergenceStartDistanceMeters,
           localGroundedBodySnapshot,
-          localPredictedTraversalAction:
-            this.#dependencies.unmountedTraversalMotionState.resolveLocalPredictedTraversalAction(),
-          localTraversalAuthority:
-            this.#dependencies.localTraversalAuthorityState.snapshot,
+          localSwimBodySnapshot,
+          localGrounded: localGroundedBodySnapshot?.grounded ?? null,
           localTraversalPose,
-          traversalState: this.#dependencies.readTraversalState()
         });
 
     if (!appliedCorrection) {
       return nextCameraSnapshot.current;
     }
 
-    this.#dependencies.telemetryState.recordLocalAuthoritySnap();
+    this.#dependencies.telemetryState.recordLocalAuthorityConvergence();
     this.#dependencies.syncLocalTraversalAuthorityState(false);
     this.syncCharacterPresentationSnapshot();
 
@@ -355,10 +336,6 @@ export class MetaverseUnmountedTraversalOrchestrationState {
       groundedBodySnapshot: this.#dependencies.groundedBodyRuntime.isInitialized
         ? this.#dependencies.groundedBodyRuntime.snapshot
         : null,
-      groundedLinearVelocitySnapshot:
-        this.#dependencies.groundedBodyRuntime.isInitialized
-          ? this.#dependencies.groundedBodyRuntime.linearVelocitySnapshot
-          : null,
       groundedPredictionSeconds:
         this.#dependencies.unmountedTraversalMotionState.groundedPredictionSeconds,
       groundedSpawnPosition,

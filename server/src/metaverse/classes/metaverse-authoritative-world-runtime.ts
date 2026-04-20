@@ -1,5 +1,5 @@
 import {
-  resolveMetaverseTraversalKinematicActionSnapshot,
+  resolveMetaverseGroundedJumpBodyTraversalActionSnapshot,
   type MetaverseTraversalActiveActionSnapshot,
   type MetaverseSurfaceTraversalConfig,
 } from "@webgpu-metaverse/shared/metaverse/traversal";
@@ -112,7 +112,6 @@ function createMetaverseAuthoritativeGroundedBodyRuntimeConfig(
     readonly groundedBodyTraversal: {
       readonly accelerationCurveExponent: number;
       readonly accelerationUnitsPerSecondSquared: number;
-      readonly airborneMovementDampingFactor: number;
       readonly baseSpeedUnitsPerSecond: number;
       readonly boostCurveExponent: number;
       readonly boostMultiplier: number;
@@ -121,9 +120,6 @@ function createMetaverseAuthoritativeGroundedBodyRuntimeConfig(
       readonly controllerOffsetMeters: number;
       readonly decelerationUnitsPerSecondSquared: number;
       readonly dragCurveExponent: number;
-      readonly gravityUnitsPerSecond: number;
-      readonly jumpGroundContactGraceSeconds: number;
-      readonly jumpImpulseUnitsPerSecond: number;
       readonly maxSlopeClimbAngleRadians: number;
       readonly maxTurnSpeedRadiansPerSecond: number;
       readonly minSlopeSlideAngleRadians: number;
@@ -131,12 +127,26 @@ function createMetaverseAuthoritativeGroundedBodyRuntimeConfig(
       readonly stepHeightMeters: number;
       readonly stepWidthMeters: number;
     };
+    readonly groundedJumpPhysics: {
+      readonly airborneMovementDampingFactor: number;
+      readonly gravityUnitsPerSecond: number;
+      readonly jumpGroundContactGraceSeconds: number;
+      readonly jumpImpulseUnitsPerSecond: number;
+    };
     readonly worldRadius: number;
   },
   spawnPosition: PhysicsVector3Snapshot
 ): MetaverseAuthoritativeGroundedBodyConfig {
   return Object.freeze({
     ...gameplayProfile.groundedBodyTraversal,
+    airborneMovementDampingFactor:
+      gameplayProfile.groundedJumpPhysics.airborneMovementDampingFactor,
+    gravityUnitsPerSecond:
+      gameplayProfile.groundedJumpPhysics.gravityUnitsPerSecond,
+    jumpGroundContactGraceSeconds:
+      gameplayProfile.groundedJumpPhysics.jumpGroundContactGraceSeconds,
+    jumpImpulseUnitsPerSecond:
+      gameplayProfile.groundedJumpPhysics.jumpImpulseUnitsPerSecond,
     spawnPosition,
     worldRadius: gameplayProfile.worldRadius
   } satisfies MetaverseAuthoritativeGroundedBodyConfig);
@@ -155,14 +165,19 @@ function resolvePlayerActiveTraversalAction(
 ): MetaverseTraversalActiveActionSnapshot {
   const groundedBodySnapshot = playerRuntime.groundedBodyRuntime.snapshot;
 
-  return resolveMetaverseTraversalKinematicActionSnapshot({
-    grounded: groundedBodySnapshot.grounded,
-    locomotionMode:
-      playerRuntime.locomotionMode === "swim" ? "swim" : "grounded",
-    mounted: playerRuntime.mountedOccupancy !== null,
-    verticalSpeedUnitsPerSecond:
-      groundedBodySnapshot.verticalSpeedUnitsPerSecond
-  });
+  if (
+    playerRuntime.mountedOccupancy !== null ||
+    playerRuntime.locomotionMode !== "grounded"
+  ) {
+    return Object.freeze({
+      kind: "none",
+      phase: "idle"
+    });
+  }
+
+  return resolveMetaverseGroundedJumpBodyTraversalActionSnapshot(
+    groundedBodySnapshot.jumpBody
+  );
 }
 
 function createPhysicsVector3Snapshot(
@@ -364,9 +379,10 @@ export class MetaverseAuthoritativeWorldRuntime
           this.#physicsRuntime
         );
 
-        groundedBodyRuntime.setApplyImpulsesToDynamicBodies(
-          this.#environmentBodiesByEnvironmentAssetId.size > 0
-        );
+        groundedBodyRuntime.syncInteractionSnapshot({
+          applyImpulsesToDynamicBodies:
+            this.#environmentBodiesByEnvironmentAssetId.size > 0
+        });
 
         return groundedBodyRuntime;
       },

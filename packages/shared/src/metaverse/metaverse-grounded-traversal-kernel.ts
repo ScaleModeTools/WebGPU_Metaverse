@@ -3,9 +3,11 @@ import type {
   MetaverseTraversalBodyControlSnapshot
 } from "./metaverse-traversal-contract.js";
 import {
+  createMetaverseSurfaceTraversalDriveTargetSnapshot,
   createMetaverseSurfaceTraversalVector3Snapshot,
   toFiniteNumber,
-  wrapRadians
+  wrapRadians,
+  type MetaverseSurfaceTraversalDriveTargetSnapshot
 } from "./metaverse-surface-traversal-simulation.js";
 import {
   advanceMetaverseTraversalActionState,
@@ -18,6 +20,11 @@ import {
   type MetaverseGroundedTraversalConfig,
   type MetaverseGroundedTraversalIntentSnapshot
 } from "./metaverse-grounded-traversal-simulation.js";
+import {
+  createMetaverseGroundedJumpBodySnapshot,
+  resolveMetaverseGroundedJumpContinuationSnapshot,
+  resolveMetaverseGroundedJumpSynchronizedState
+} from "./metaverse-grounded-jump-physics.js";
 
 export interface MetaverseGroundedTraversalBodyIntentSnapshot
   extends MetaverseTraversalBodyControlSnapshot {
@@ -51,9 +58,7 @@ export interface MetaverseGroundedTraversalSurfaceJumpSupportInput {
 }
 
 export interface MetaverseGroundedBodyStepConfig
-  extends MetaverseGroundedTraversalConfig {
-  readonly jumpGroundContactGraceSeconds?: number;
-}
+  extends MetaverseGroundedTraversalConfig {}
 
 export interface MetaverseGroundedBodyStepIntentSnapshot
   extends MetaverseGroundedTraversalIntentSnapshot {
@@ -61,9 +66,24 @@ export interface MetaverseGroundedBodyStepIntentSnapshot
   readonly snapToGroundOverrideEnabled?: boolean;
 }
 
+export interface MetaverseGroundedBodyContactSnapshot {
+  readonly appliedMovementDelta: MetaverseWorldSurfaceVector3Snapshot;
+  readonly blockedPlanarMovement: boolean;
+  readonly blockedVerticalMovement: boolean;
+  readonly desiredMovementDelta: MetaverseWorldSurfaceVector3Snapshot;
+  readonly supportingContactDetected: boolean;
+}
+
+export interface MetaverseGroundedBodyInteractionSnapshot {
+  readonly applyImpulsesToDynamicBodies: boolean;
+}
+
 export interface MetaverseGroundedBodyStepStateSnapshot {
+  readonly contact: MetaverseGroundedBodyContactSnapshot;
+  readonly driveTarget: MetaverseSurfaceTraversalDriveTargetSnapshot;
   readonly forwardSpeedUnitsPerSecond: number;
   readonly grounded: boolean;
+  readonly interaction: MetaverseGroundedBodyInteractionSnapshot;
   readonly jumpGroundContactGraceSecondsRemaining: number;
   readonly jumpReady: boolean;
   readonly jumpSnapSuppressionActive: boolean;
@@ -74,6 +94,7 @@ export interface MetaverseGroundedBodyStepStateSnapshot {
 }
 
 export interface MetaverseGroundedBodyPreparedStepSnapshot {
+  readonly driveTarget: MetaverseSurfaceTraversalDriveTargetSnapshot;
   readonly desiredMovementDelta: MetaverseWorldSurfaceVector3Snapshot;
   readonly jumpRequested: boolean;
   readonly snapToGroundEnabled: boolean;
@@ -94,14 +115,81 @@ export interface MetaverseGroundedBodyResolvedStepSnapshot {
 }
 
 export interface SyncMetaverseGroundedBodyStepStateInput {
+  readonly driveTarget?: MetaverseSurfaceTraversalDriveTargetSnapshot | null;
   readonly grounded: boolean;
+  readonly interaction?: MetaverseGroundedBodyInteractionSnapshot | null;
   readonly linearVelocity: MetaverseWorldSurfaceVector3Snapshot;
   readonly position: MetaverseWorldSurfaceVector3Snapshot;
   readonly yawRadians: number;
 }
 
+const groundedBodyContactDeltaEpsilon = 0.000001;
+
 function normalizeFiniteNonNegativeSeconds(value: number): number {
   return Math.max(0, toFiniteNumber(value, 0));
+}
+
+function hasGroundedBodyMovementDeltaDivergence(
+  desiredDelta: number,
+  appliedDelta: number
+): boolean {
+  return (
+    Math.abs(toFiniteNumber(desiredDelta, 0) - toFiniteNumber(appliedDelta, 0)) >
+    groundedBodyContactDeltaEpsilon
+  );
+}
+
+export function createMetaverseGroundedBodyContactSnapshot(
+  input: Partial<MetaverseGroundedBodyContactSnapshot> = {}
+): MetaverseGroundedBodyContactSnapshot {
+  return Object.freeze({
+    appliedMovementDelta: createMetaverseSurfaceTraversalVector3Snapshot(
+      input.appliedMovementDelta?.x ?? 0,
+      input.appliedMovementDelta?.y ?? 0,
+      input.appliedMovementDelta?.z ?? 0
+    ),
+    blockedPlanarMovement: input.blockedPlanarMovement === true,
+    blockedVerticalMovement: input.blockedVerticalMovement === true,
+    desiredMovementDelta: createMetaverseSurfaceTraversalVector3Snapshot(
+      input.desiredMovementDelta?.x ?? 0,
+      input.desiredMovementDelta?.y ?? 0,
+      input.desiredMovementDelta?.z ?? 0
+    ),
+    supportingContactDetected: input.supportingContactDetected === true
+  });
+}
+
+export function createMetaverseGroundedBodyInteractionSnapshot(
+  input: Partial<MetaverseGroundedBodyInteractionSnapshot> = {}
+): MetaverseGroundedBodyInteractionSnapshot {
+  return Object.freeze({
+    applyImpulsesToDynamicBodies: input.applyImpulsesToDynamicBodies === true
+  });
+}
+
+export function resolveMetaverseGroundedBodyControllerContactSnapshot(
+  preparedStepSnapshot: MetaverseGroundedBodyPreparedStepSnapshot,
+  controllerResultSnapshot: MetaverseGroundedBodyControllerResultSnapshot
+): MetaverseGroundedBodyContactSnapshot {
+  return createMetaverseGroundedBodyContactSnapshot({
+    appliedMovementDelta: controllerResultSnapshot.computedMovementDelta,
+    blockedPlanarMovement:
+      hasGroundedBodyMovementDeltaDivergence(
+        preparedStepSnapshot.desiredMovementDelta.x,
+        controllerResultSnapshot.computedMovementDelta.x
+      ) ||
+      hasGroundedBodyMovementDeltaDivergence(
+        preparedStepSnapshot.desiredMovementDelta.z,
+        controllerResultSnapshot.computedMovementDelta.z
+      ),
+    blockedVerticalMovement:
+      hasGroundedBodyMovementDeltaDivergence(
+        preparedStepSnapshot.desiredMovementDelta.y,
+        controllerResultSnapshot.computedMovementDelta.y
+      ),
+    desiredMovementDelta: preparedStepSnapshot.desiredMovementDelta,
+    supportingContactDetected: controllerResultSnapshot.computedGrounded === true
+  });
 }
 
 export function stepMetaverseGroundedTraversalAction({
@@ -158,33 +246,37 @@ export function isMetaverseGroundedTraversalSurfaceJumpSupported({
 export function createMetaverseGroundedBodyStepStateSnapshot(
   input: Partial<MetaverseGroundedBodyStepStateSnapshot> = {}
 ): MetaverseGroundedBodyStepStateSnapshot {
-  const grounded = input.grounded === true;
-  const jumpGroundContactGraceSecondsRemaining =
-    grounded
-      ? Math.max(
-          normalizeFiniteNonNegativeSeconds(
-            input.jumpGroundContactGraceSecondsRemaining ?? 0
-          ),
-          0
-        )
-      : normalizeFiniteNonNegativeSeconds(
-          input.jumpGroundContactGraceSecondsRemaining ?? 0
-        );
-  const jumpReady =
-    grounded ||
-    jumpGroundContactGraceSecondsRemaining > 0 ||
-    input.jumpReady === true;
+  const jumpBodySnapshot = createMetaverseGroundedJumpBodySnapshot({
+    grounded: input.grounded === true,
+    jumpGroundContactGraceSecondsRemaining:
+      input.jumpGroundContactGraceSecondsRemaining ?? 0,
+    jumpReady: input.jumpReady === true,
+    jumpSnapSuppressionActive: input.jumpSnapSuppressionActive === true,
+    verticalSpeedUnitsPerSecond: input.verticalSpeedUnitsPerSecond ?? 0
+  });
 
   return Object.freeze({
+    contact: createMetaverseGroundedBodyContactSnapshot(
+      input.contact ?? {
+        supportingContactDetected: jumpBodySnapshot.grounded
+      }
+    ),
+    driveTarget: createMetaverseSurfaceTraversalDriveTargetSnapshot(
+      input.driveTarget ?? {}
+    ),
     forwardSpeedUnitsPerSecond: toFiniteNumber(
       input.forwardSpeedUnitsPerSecond ?? 0,
       0
     ),
-    grounded,
-    jumpGroundContactGraceSecondsRemaining,
-    jumpReady,
+    grounded: jumpBodySnapshot.grounded,
+    interaction: createMetaverseGroundedBodyInteractionSnapshot(
+      input.interaction ?? {}
+    ),
+    jumpGroundContactGraceSecondsRemaining:
+      jumpBodySnapshot.jumpGroundContactGraceSecondsRemaining,
+    jumpReady: jumpBodySnapshot.jumpReady,
     jumpSnapSuppressionActive:
-      grounded === true ? false : input.jumpSnapSuppressionActive === true,
+      jumpBodySnapshot.jumpSnapSuppressionActive,
     position: createMetaverseSurfaceTraversalVector3Snapshot(
       input.position?.x ?? 0,
       input.position?.y ?? 0,
@@ -194,9 +286,8 @@ export function createMetaverseGroundedBodyStepStateSnapshot(
       input.strafeSpeedUnitsPerSecond ?? 0,
       0
     ),
-    verticalSpeedUnitsPerSecond: grounded
-      ? 0
-      : toFiniteNumber(input.verticalSpeedUnitsPerSecond ?? 0, 0),
+    verticalSpeedUnitsPerSecond:
+      jumpBodySnapshot.verticalSpeedUnitsPerSecond,
     yawRadians: wrapRadians(input.yawRadians ?? 0)
   });
 }
@@ -231,6 +322,7 @@ export function prepareMetaverseGroundedBodyStep(
   );
 
   return Object.freeze({
+    driveTarget: traversalPreparedStep.driveTarget,
     desiredMovementDelta: traversalPreparedStep.desiredMovementDelta,
     jumpRequested: traversalPreparedStep.jumpRequested,
     snapToGroundEnabled:
@@ -250,7 +342,8 @@ export function resolveMetaverseGroundedBodyStep(
   resolvedRootPosition: MetaverseWorldSurfaceVector3Snapshot,
   grounded: boolean,
   config: MetaverseGroundedBodyStepConfig,
-  deltaSeconds: number
+  deltaSeconds: number,
+  contactSnapshot: MetaverseGroundedBodyContactSnapshot | null = null
 ): MetaverseGroundedBodyResolvedStepSnapshot {
   const resolvedTraversalStep = resolveMetaverseGroundedTraversalStep(
     stateSnapshot.position,
@@ -260,30 +353,43 @@ export function resolveMetaverseGroundedBodyStep(
     deltaSeconds,
     config.worldRadius
   );
-  const jumpGroundContactGraceSecondsRemaining =
-    preparedStepSnapshot.jumpRequested === true
-      ? 0
-      : resolvedTraversalStep.grounded
-        ? normalizeFiniteNonNegativeSeconds(
-            config.jumpGroundContactGraceSeconds ?? 0
-          )
-        : Math.max(
-            0,
-            stateSnapshot.jumpGroundContactGraceSecondsRemaining -
-              Math.max(0, toFiniteNumber(deltaSeconds, 0))
-          );
+  const jumpContinuationSnapshot =
+    resolveMetaverseGroundedJumpContinuationSnapshot({
+      config,
+      deltaSeconds,
+      grounded: resolvedTraversalStep.grounded,
+      jumpGroundContactGraceSecondsRemaining:
+        stateSnapshot.jumpGroundContactGraceSecondsRemaining,
+      jumpRequested: preparedStepSnapshot.jumpRequested,
+      jumpSnapSuppressionActive:
+        stateSnapshot.jumpSnapSuppressionActive
+    });
   const stepState = createMetaverseGroundedBodyStepStateSnapshot({
+    contact:
+      contactSnapshot ??
+      createMetaverseGroundedBodyContactSnapshot({
+        appliedMovementDelta: createMetaverseSurfaceTraversalVector3Snapshot(
+          resolvedTraversalStep.position.x - stateSnapshot.position.x,
+          resolvedTraversalStep.position.y - stateSnapshot.position.y,
+          resolvedTraversalStep.position.z - stateSnapshot.position.z
+        ),
+        desiredMovementDelta: createMetaverseSurfaceTraversalVector3Snapshot(
+          resolvedTraversalStep.position.x - stateSnapshot.position.x,
+          resolvedTraversalStep.position.y - stateSnapshot.position.y,
+          resolvedTraversalStep.position.z - stateSnapshot.position.z
+        ),
+        supportingContactDetected: resolvedTraversalStep.grounded
+      }),
+    driveTarget: preparedStepSnapshot.driveTarget,
     forwardSpeedUnitsPerSecond:
       resolvedTraversalStep.forwardSpeedUnitsPerSecond,
     grounded: resolvedTraversalStep.grounded,
-    jumpGroundContactGraceSecondsRemaining,
-    jumpReady:
-      resolvedTraversalStep.grounded ||
-      jumpGroundContactGraceSecondsRemaining > 0,
-    jumpSnapSuppressionActive: resolvedTraversalStep.grounded
-      ? false
-      : stateSnapshot.jumpSnapSuppressionActive === true ||
-          preparedStepSnapshot.jumpRequested === true,
+    interaction: stateSnapshot.interaction,
+    jumpGroundContactGraceSecondsRemaining:
+      jumpContinuationSnapshot.jumpGroundContactGraceSecondsRemaining,
+    jumpReady: jumpContinuationSnapshot.jumpReady,
+    jumpSnapSuppressionActive:
+      jumpContinuationSnapshot.jumpSnapSuppressionActive,
     position: resolvedTraversalStep.position,
     strafeSpeedUnitsPerSecond:
       resolvedTraversalStep.strafeSpeedUnitsPerSecond,
@@ -309,6 +415,10 @@ export function resolveMetaverseGroundedBodyControllerStep(
     0,
     toFiniteNumber(controllerResultSnapshot.standingOffsetMeters, 0)
   );
+  const contactSnapshot = resolveMetaverseGroundedBodyControllerContactSnapshot(
+    preparedStepSnapshot,
+    controllerResultSnapshot
+  );
 
   return resolveMetaverseGroundedBodyStep(
     stateSnapshot,
@@ -324,7 +434,8 @@ export function resolveMetaverseGroundedBodyControllerStep(
     ),
     controllerResultSnapshot.computedGrounded === true,
     config,
-    deltaSeconds
+    deltaSeconds,
+    contactSnapshot
   );
 }
 
@@ -339,22 +450,31 @@ export function syncMetaverseGroundedBodyStepState(
       syncInput.yawRadians,
       syncInput.grounded === true
     );
+  const synchronizedJumpState =
+    resolveMetaverseGroundedJumpSynchronizedState({
+      config,
+      currentJumpSnapSuppressionActive:
+        currentStateSnapshot.jumpSnapSuppressionActive,
+      grounded: syncInput.grounded === true
+    });
 
   return createMetaverseGroundedBodyStepStateSnapshot({
+    contact: createMetaverseGroundedBodyContactSnapshot({
+      supportingContactDetected: syncInput.grounded === true
+    }),
+    driveTarget: createMetaverseSurfaceTraversalDriveTargetSnapshot(
+      syncInput.driveTarget ?? currentStateSnapshot.driveTarget
+    ),
     forwardSpeedUnitsPerSecond:
       directionalSpeedSnapshot.forwardSpeedUnitsPerSecond,
     grounded: syncInput.grounded,
+    interaction:
+      syncInput.interaction ?? currentStateSnapshot.interaction,
     jumpGroundContactGraceSecondsRemaining:
-      syncInput.grounded === true
-        ? normalizeFiniteNonNegativeSeconds(
-            config.jumpGroundContactGraceSeconds ?? 0
-          )
-        : 0,
-    jumpReady: syncInput.grounded === true,
+      synchronizedJumpState.jumpGroundContactGraceSecondsRemaining,
+    jumpReady: synchronizedJumpState.jumpReady,
     jumpSnapSuppressionActive:
-      syncInput.grounded === true
-        ? false
-        : currentStateSnapshot.jumpSnapSuppressionActive,
+      synchronizedJumpState.jumpSnapSuppressionActive,
     position: syncInput.position,
     strafeSpeedUnitsPerSecond:
       directionalSpeedSnapshot.strafeSpeedUnitsPerSecond,

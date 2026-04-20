@@ -125,9 +125,13 @@ function createFakeHudPublisherDependencies(readNowMs) {
     cameraSnapshot: createFakeCameraSnapshot(),
     lastLocalAuthorityPoseCorrectionDetail: Object.freeze({
       authoritativeGrounded: null,
+      bodyStateDivergence: null,
+      groundedBodyStateDivergence: null,
       localGrounded: null,
       planarMagnitudeMeters: null,
-      verticalMagnitudeMeters: null
+      planarVelocityMagnitudeUnitsPerSecond: null,
+      verticalMagnitudeMeters: null,
+      verticalVelocityMagnitudeUnitsPerSecond: null
     }),
     lastLocalAuthorityPoseCorrectionSnapshot: null,
     lastLocalAuthorityPoseCorrectionReason: "none",
@@ -147,15 +151,14 @@ function createFakeHudPublisherDependencies(readNowMs) {
       autostepHeightMeters: null,
       blockingAffordanceDetected: false,
       decisionReason: "capability-maintained",
+      groundedBody: null,
       jumpDebug: Object.freeze({
-        groundedBodyGrounded: null,
-        groundedBodyJumpReady: null,
         surfaceJumpSupported: null,
-        supported: null,
-        verticalSpeedUnitsPerSecond: null
+        supported: null
       }),
       locomotionMode: "grounded",
       resolvedSupportHeightMeters: 0.6,
+      swimBody: null,
       supportingAffordanceSampleCount: 0,
       traversalAuthority: Object.freeze({
         currentActionKind: "none",

@@ -619,9 +619,10 @@ export class MetaverseEnvironmentPhysicsRuntime {
     await this.#bootDynamicEnvironmentColliders();
     await this.#bootDynamicEnvironmentCollisionMeshes(sceneAssetLoader);
     await this.#bootDynamicEnvironmentBodies();
-    this.#groundedBodyRuntime.setApplyImpulsesToDynamicBodies(
-      this.#dynamicBodyRuntimesByEnvironmentAssetId.size > 0
-    );
+    this.#groundedBodyRuntime.syncInteractionSnapshot({
+      applyImpulsesToDynamicBodies:
+        this.#dynamicBodyRuntimesByEnvironmentAssetId.size > 0
+    });
     await this.#groundedBodyRuntime.init(initialYawRadians);
 
     if (this.#showPhysicsDebug && this.#physicsDebugObject === null) {
@@ -694,7 +695,9 @@ export class MetaverseEnvironmentPhysicsRuntime {
     }
 
     this.#dynamicBodyRuntimesByEnvironmentAssetId.clear();
-    this.#groundedBodyRuntime.setApplyImpulsesToDynamicBodies(false);
+    this.#groundedBodyRuntime.syncInteractionSnapshot({
+      applyImpulsesToDynamicBodies: false
+    });
     this.#groundedBodyRuntime.dispose();
   }
 

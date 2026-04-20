@@ -280,6 +280,19 @@ test("shared metaverse world bundles carry validated gameplay profile ids", () =
   );
 });
 
+test("shared gameplay profiles expose one grounded jump physics snapshot", () => {
+  assert.deepEqual(shellArcadeGameplayProfile.groundedJumpPhysics, {
+    airborneMovementDampingFactor:
+      shellArcadeGameplayProfile.groundedBodyTraversal.airborneMovementDampingFactor,
+    gravityUnitsPerSecond:
+      shellArcadeGameplayProfile.groundedBodyTraversal.gravityUnitsPerSecond,
+    jumpGroundContactGraceSeconds:
+      shellArcadeGameplayProfile.groundedBodyTraversal.jumpGroundContactGraceSeconds,
+    jumpImpulseUnitsPerSecond:
+      shellArcadeGameplayProfile.groundedBodyTraversal.jumpImpulseUnitsPerSecond
+  });
+});
+
 test("shared metaverse world bundles preserve mounted seat and entry authoring", () => {
   const parsedBundle = parseMetaverseMapBundleSnapshot(stagingGroundMapBundle);
   const dockAsset = parsedBundle.environmentAssets.find(
@@ -556,6 +569,23 @@ test("metaverse realtime world contracts freeze snapshots and derive seated occu
     Math.PI * 3
   );
   assert.equal(
+    worldSnapshot.players[0]?.groundedBody.contact.supportingContactDetected,
+    true
+  );
+  assert.equal(worldSnapshot.players[0]?.groundedBody.driveTarget.boost, false);
+  assert.equal(worldSnapshot.players[0]?.groundedBody.driveTarget.moveAxis, 0);
+  assert.equal(
+    worldSnapshot.players[0]?.groundedBody.driveTarget
+      .targetPlanarSpeedUnitsPerSecond,
+    0
+  );
+  assert.equal(
+    worldSnapshot.players[0]?.groundedBody.interaction
+      .applyImpulsesToDynamicBodies,
+    false
+  );
+  assert.equal(worldSnapshot.players[0]?.swimBody, null);
+  assert.equal(
     worldSnapshot.vehicles[0]?.seats[0]?.occupantPlayerId,
     playerId
   );
@@ -633,6 +663,82 @@ test("metaverse realtime world contracts derive traversal authority from accepte
   );
 });
 
+test("metaverse realtime world contracts prefer shared grounded jump body over fallback velocity inference", () => {
+  const playerId = createMetaversePlayerId("jump-body-authority-pilot");
+  const username = createUsername("Jump Body Authority Pilot");
+
+  assert.notEqual(playerId, null);
+  assert.notEqual(username, null);
+
+  const worldSnapshot = createMetaverseRealtimeWorldSnapshot({
+    players: [
+      {
+        characterId: "metaverse-mannequin-v1",
+        groundedBody: {
+          jumpBody: {
+            grounded: false,
+            jumpGroundContactGraceSecondsRemaining: 0,
+            jumpReady: false,
+            jumpSnapSuppressionActive: true,
+            verticalSpeedUnitsPerSecond: 4.2
+          }
+        },
+        jumpDebug: {
+          resolvedActionSequence: 9,
+          resolvedActionState: "accepted"
+        },
+        linearVelocity: {
+          x: 0,
+          y: 0,
+          z: 0
+        },
+        locomotionMode: "grounded",
+        playerId,
+        position: {
+          x: 0,
+          y: 1.4,
+          z: 0
+        },
+        username,
+        yawRadians: 0
+      }
+    ],
+    tick: {
+      currentTick: 5,
+      emittedAtServerTimeMs: 500,
+      simulationTimeMs: 500,
+      tickIntervalMs: 100
+    },
+    vehicles: []
+  });
+
+  assert.equal(
+    worldSnapshot.players[0]?.groundedBody.jumpBody.verticalSpeedUnitsPerSecond,
+    4.2
+  );
+  assert.equal(
+    worldSnapshot.players[0]?.groundedBody.contact.supportingContactDetected,
+    false
+  );
+  assert.equal(
+    worldSnapshot.players[0]?.groundedBody.interaction
+      .applyImpulsesToDynamicBodies,
+    false
+  );
+  assert.equal(
+    worldSnapshot.players[0]?.traversalAuthority.currentActionKind,
+    "jump"
+  );
+  assert.equal(
+    worldSnapshot.players[0]?.traversalAuthority.currentActionPhase,
+    "rising"
+  );
+  assert.equal(
+    worldSnapshot.players[0]?.traversalAuthority.currentActionSequence,
+    9
+  );
+});
+
 test("metaverse realtime world contracts derive traversal startup from buffered jump state", () => {
   const playerId = createMetaversePlayerId("jump-startup-pilot");
   const username = createUsername("Jump Startup Pilot");
@@ -688,6 +794,55 @@ test("metaverse realtime world contracts derive traversal startup from buffered 
     worldSnapshot.players[0]?.traversalAuthority.phaseStartedAtTick,
     11
   );
+});
+
+test("metaverse realtime world contracts carry a shared swim body owner for swim locomotion", () => {
+  const playerId = createMetaversePlayerId("swim-body-pilot");
+  const username = createUsername("Swim Body Pilot");
+
+  assert.notEqual(playerId, null);
+  assert.notEqual(username, null);
+
+  const worldSnapshot = createMetaverseRealtimeWorldSnapshot({
+    players: [
+      {
+        characterId: "metaverse-mannequin-v1",
+        linearVelocity: {
+          x: 1.5,
+          y: 0,
+          z: -6
+        },
+        locomotionMode: "swim",
+        playerId,
+        position: {
+          x: 4,
+          y: 0,
+          z: 18
+        },
+        username,
+        yawRadians: 0.25
+      }
+    ],
+    tick: {
+      currentTick: 13,
+      emittedAtServerTimeMs: 1_300,
+      simulationTimeMs: 1_300,
+      tickIntervalMs: 100
+    },
+    vehicles: []
+  });
+
+  assert.deepEqual(worldSnapshot.players[0]?.swimBody?.linearVelocity, {
+    x: 1.5,
+    y: 0,
+    z: -6
+  });
+  assert.deepEqual(worldSnapshot.players[0]?.swimBody?.position, {
+    x: 4,
+    y: 0,
+    z: 18
+  });
+  assert.equal(worldSnapshot.players[0]?.swimBody?.yawRadians, 0.25);
 });
 
 test("metaverse realtime world contracts reject seat occupancy that disagrees with the vehicle tick", () => {

@@ -8,6 +8,7 @@ export type {
 } from "./types/metaverse-dynamic-body";
 export type {
   MetaverseGroundedBodyConfig,
+  MetaverseGroundedBodyInteractionSyncSnapshot,
   MetaverseGroundedBodyIntentSnapshot,
   MetaverseGroundedBodySnapshot,
   PhysicsQuaternionSnapshot,

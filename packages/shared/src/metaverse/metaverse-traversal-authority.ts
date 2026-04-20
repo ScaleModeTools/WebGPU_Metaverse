@@ -10,6 +10,9 @@ import {
   createMetaverseTraversalActiveActionSnapshot,
   createMetaverseTraversalAuthoritySnapshot
 } from "./metaverse-traversal-contract.js";
+import {
+  resolveMetaverseGroundedJumpBodyTraversalActionSnapshot
+} from "./metaverse-grounded-jump-physics.js";
 import type {
   MetaverseTraversalActionStateSnapshot
 } from "./metaverse-traversal-action-kernel.js";
@@ -118,8 +121,6 @@ export interface MetaverseTraversalAuthorityGroundedLocomotionInput {
   readonly traversalAuthority: TraversalAuthorityActionSnapshotLike;
 }
 
-const metaverseTraversalActionVerticalSpeedTolerance = 0.05;
-
 function normalizeFiniteNonNegativeInteger(rawValue: number): number {
   if (!Number.isFinite(rawValue) || rawValue <= 0) {
     return 0;
@@ -152,16 +153,9 @@ export function resolveMetaverseTraversalKinematicActionSnapshot({
     return createMetaverseTraversalActiveActionSnapshot();
   }
 
-  if (grounded) {
-    return createMetaverseTraversalActiveActionSnapshot();
-  }
-
-  return createMetaverseTraversalActiveActionSnapshot({
-    kind: "jump",
-    phase:
-      verticalSpeedUnitsPerSecond > metaverseTraversalActionVerticalSpeedTolerance
-        ? "rising"
-        : "falling"
+  return resolveMetaverseGroundedJumpBodyTraversalActionSnapshot({
+    grounded,
+    verticalSpeedUnitsPerSecond
   });
 }
 

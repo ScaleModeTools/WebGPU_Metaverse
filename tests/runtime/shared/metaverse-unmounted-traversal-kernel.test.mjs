@@ -87,6 +87,31 @@ const waterRegionSnapshots = Object.freeze([
   })
 ]);
 
+function createGroundedBodySnapshot({
+  grounded,
+  jumpReady,
+  position,
+  verticalSpeedUnitsPerSecond,
+  yawRadians
+}) {
+  return Object.freeze({
+    grounded,
+    jumpBody: Object.freeze({
+      grounded,
+      jumpGroundContactGraceSecondsRemaining: 0,
+      jumpReady,
+      jumpSnapSuppressionActive: false,
+      verticalSpeedUnitsPerSecond
+    }),
+    position: Object.freeze({
+      x: position.x,
+      y: position.y,
+      z: position.z
+    }),
+    yawRadians
+  });
+}
+
 const groundedBodyConfig = Object.freeze({
   controllerOffsetMeters: 0.02,
   maxTurnSpeedRadiansPerSecond: 1.9,
@@ -141,7 +166,7 @@ test("shared unmounted grounded traversal prep owns jump support plus autostep r
     }),
     deltaSeconds: 1 / 30,
     groundedBodyConfig,
-    groundedBodySnapshot: Object.freeze({
+    groundedBodySnapshot: createGroundedBodySnapshot({
       grounded: true,
       jumpReady: true,
       position: Object.freeze({
@@ -183,7 +208,7 @@ test("shared unmounted grounded traversal prep keeps snap-to-ground armed on sup
     }),
     deltaSeconds: 1 / 30,
     groundedBodyConfig,
-    groundedBodySnapshot: Object.freeze({
+    groundedBodySnapshot: createGroundedBodySnapshot({
       grounded: true,
       jumpReady: true,
       position: Object.freeze({
@@ -238,7 +263,7 @@ test("shared unmounted traversal body-step helper sequences grounded prep body a
     advanceGroundedBodySnapshot: (input) => {
       groundedAdvanceInput = input;
 
-      return Object.freeze({
+      return createGroundedBodySnapshot({
         grounded: false,
         jumpReady: false,
         position: Object.freeze({
@@ -261,7 +286,7 @@ test("shared unmounted traversal body-step helper sequences grounded prep body a
     }),
     deltaSeconds: 1 / 30,
     groundedBodyConfig,
-    groundedBodySnapshot: Object.freeze({
+    groundedBodySnapshot: createGroundedBodySnapshot({
       grounded: true,
       jumpReady: true,
       position: Object.freeze({
@@ -415,7 +440,7 @@ test("shared unmounted grounded traversal outcome keeps airborne travel grounded
     })
   });
   const airborneOutcome = resolveMetaverseUnmountedTraversalStep({
-    groundedBodySnapshot: Object.freeze({
+    groundedBodySnapshot: createGroundedBodySnapshot({
       grounded: false,
       jumpReady: false,
       position: Object.freeze({
@@ -438,7 +463,7 @@ test("shared unmounted grounded traversal outcome keeps airborne travel grounded
   assert.equal(airborneOutcome.waterlineHeightMeters, 0);
 
   const waterEntryOutcome = resolveMetaverseUnmountedTraversalStep({
-    groundedBodySnapshot: Object.freeze({
+    groundedBodySnapshot: createGroundedBodySnapshot({
       grounded: false,
       jumpReady: false,
       position: Object.freeze({
@@ -481,7 +506,7 @@ test("shared unmounted grounded traversal outcome does not fabricate water entry
     })
   });
   const groundedOutcome = resolveMetaverseUnmountedTraversalStep({
-    groundedBodySnapshot: Object.freeze({
+    groundedBodySnapshot: createGroundedBodySnapshot({
       grounded: true,
       jumpReady: true,
       position: Object.freeze({
@@ -600,7 +625,7 @@ test("shared unmounted swim traversal outcome reports a blocked capability trans
 
 test("shared unmounted grounded traversal outcome enters swim once airborne travel drops below the waterline even if shoreline probes can see future support", () => {
   const airborneWaterEntryOutcome = resolveMetaverseUnmountedTraversalStep({
-    groundedBodySnapshot: Object.freeze({
+    groundedBodySnapshot: createGroundedBodySnapshot({
       grounded: false,
       jumpReady: false,
       position: Object.freeze({
@@ -659,7 +684,7 @@ test("shared unmounted grounded traversal prep suppresses snap-to-ground while e
     }),
     deltaSeconds: 1 / 30,
     groundedBodyConfig,
-    groundedBodySnapshot: Object.freeze({
+    groundedBodySnapshot: createGroundedBodySnapshot({
       grounded: false,
       jumpReady: false,
       position: Object.freeze({

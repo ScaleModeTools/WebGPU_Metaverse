@@ -42,9 +42,7 @@ test("shared surface-drive body kernel resolves a callback-driven movement step 
   let capturedStepInput = null;
 
   const nextBodyStep = resolveMetaverseSurfaceDriveBodyStep({
-    currentForwardSpeedUnitsPerSecond: 0,
     currentSnapshot,
-    currentStrafeSpeedUnitsPerSecond: 0,
     deltaSeconds: 1,
     intentSnapshot: Object.freeze({
       boost: false,
@@ -79,8 +77,13 @@ test("shared surface-drive body kernel resolves a callback-driven movement step 
   assertApprox(nextBodyStep.nextSnapshot.linearVelocity.x, 4);
   assertApprox(nextBodyStep.nextSnapshot.linearVelocity.y, 2);
   assertApprox(nextBodyStep.nextSnapshot.linearVelocity.z, 0);
-  assertApprox(nextBodyStep.nextForwardSpeedUnitsPerSecond, 4);
-  assertApprox(nextBodyStep.nextStrafeSpeedUnitsPerSecond, 0);
+  assert.equal(nextBodyStep.nextSnapshot.contact.blockedPlanarMovement, false);
+  assertApprox(nextBodyStep.nextSnapshot.contact.desiredMovementDelta.x, 4);
+  assertApprox(nextBodyStep.nextSnapshot.contact.desiredMovementDelta.z, 0);
+  assertApprox(nextBodyStep.nextSnapshot.contact.appliedMovementDelta.x, 4);
+  assertApprox(nextBodyStep.nextSnapshot.contact.appliedMovementDelta.z, 0);
+  assertApprox(nextBodyStep.nextSnapshot.forwardSpeedUnitsPerSecond, 4);
+  assertApprox(nextBodyStep.nextSnapshot.strafeSpeedUnitsPerSecond, 0);
 });
 
 test("shared surface-drive body kernel applies world clamp before optional blocker resolution", () => {
@@ -101,9 +104,7 @@ test("shared surface-drive body kernel applies world clamp before optional block
   let blockerInput = null;
 
   const nextBodyStep = resolveMetaverseSurfaceDriveBodyStep({
-    currentForwardSpeedUnitsPerSecond: 0,
     currentSnapshot,
-    currentStrafeSpeedUnitsPerSecond: 0,
     deltaSeconds: 1,
     intentSnapshot: Object.freeze({
       boost: false,
@@ -139,6 +140,11 @@ test("shared surface-drive body kernel applies world clamp before optional block
   assertApprox(nextBodyStep.resolvedRootPosition.x, 0.5);
   assertApprox(nextBodyStep.resolvedRootPosition.y, 1);
   assertApprox(nextBodyStep.resolvedRootPosition.z, -0.25);
+  assert.equal(nextBodyStep.nextSnapshot.contact.blockedPlanarMovement, true);
+  assertApprox(nextBodyStep.nextSnapshot.contact.desiredMovementDelta.x, 0);
+  assertApprox(nextBodyStep.nextSnapshot.contact.desiredMovementDelta.z, 0);
+  assertApprox(nextBodyStep.nextSnapshot.contact.appliedMovementDelta.x, 0.5);
+  assertApprox(nextBodyStep.nextSnapshot.contact.appliedMovementDelta.z, -0.25);
   assertApprox(nextBodyStep.nextSnapshot.linearVelocity.x, 0.5);
   assertApprox(nextBodyStep.nextSnapshot.linearVelocity.y, 1);
   assertApprox(nextBodyStep.nextSnapshot.linearVelocity.z, -0.25);

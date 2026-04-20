@@ -540,6 +540,12 @@
       ]
     },
     {
+      "ownerPath": "server/src/metaverse/authority/players/metaverse-authoritative-last-grounded-body-snapshot.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse/authoritative-last-grounded-body-snapshot.test.mjs"
+      ]
+    },
+    {
       "ownerPath": "server/src/metaverse/authority/players/metaverse-authoritative-player-state-sync.ts",
       "testPaths": [
         "tests/runtime/server/metaverse/authoritative-world-player-pose-authority.test.mjs",

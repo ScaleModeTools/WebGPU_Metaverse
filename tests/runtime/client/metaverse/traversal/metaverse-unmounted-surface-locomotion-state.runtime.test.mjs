@@ -236,6 +236,11 @@ test("MetaverseUnmountedSurfaceLocomotionState preserves planar carry velocity w
       y: 0,
       z: -0.57
     });
+    assert.deepEqual(groundedBodyRuntime.snapshot.linearVelocity, {
+      x: -14.86,
+      y: 0,
+      z: -0.57
+    });
     assert.equal(groundedBodyRuntime.snapshot.grounded, true);
     assert.equal(groundedBodyRuntime.snapshot.position.y, 0.59);
   } finally {

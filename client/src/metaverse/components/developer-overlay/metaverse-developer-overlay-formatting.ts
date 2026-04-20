@@ -1,10 +1,25 @@
 import type { MetaverseHudSnapshot } from "../../types/metaverse-runtime";
+import type { MetaverseTelemetryGroundedBodySnapshot } from "../../types/telemetry";
 
 type ReliableTransportSnapshot = MetaverseHudSnapshot["transport"]["presenceReliable"];
 type DatagramTransportSnapshot =
   MetaverseHudSnapshot["transport"]["worldDriverDatagram"];
 type SnapshotStreamTransportSnapshot =
   MetaverseHudSnapshot["transport"]["worldSnapshotStream"];
+type GroundedBodyContactSnapshot =
+  MetaverseTelemetryGroundedBodySnapshot["contact"];
+type SwimBodyContactSnapshot =
+  NonNullable<
+    MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["surfaceRouting"]["local"]["swimBody"]
+  >["contact"];
+type GroundedBodyDriveTargetSnapshot =
+  MetaverseTelemetryGroundedBodySnapshot["driveTarget"];
+type GroundedBodyInteractionSnapshot =
+  MetaverseTelemetryGroundedBodySnapshot["interaction"];
+type SwimBodyDriveTargetSnapshot =
+  NonNullable<
+    MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["surfaceRouting"]["local"]["swimBody"]
+  >["driveTarget"];
 
 const metaversePresenceWebTransportTarget = resolveConfiguredWebTransportTarget(
   import.meta.env?.VITE_METAVERSE_PRESENCE_WEBTRANSPORT_URL
@@ -31,8 +46,8 @@ function formatCorrectionSource(
   switch (source) {
     case "mounted-vehicle-authority":
       return "mounted";
-    case "local-authority-snap":
-      return "pose";
+    case "local-authority-convergence":
+      return "body";
     default:
       return "none";
   }
@@ -61,8 +76,10 @@ function formatPoseCorrectionReason(
   reason: MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionReason"]
 ): string {
   switch (reason) {
+    case "gross-body-divergence":
+      return "gross body divergence";
     case "gross-position-divergence":
-      return "gross divergence";
+      return "gross position divergence";
     default:
       return "none";
   }
@@ -299,24 +316,143 @@ function formatPoseCorrectionDetailValue(
 ): string {
   return `${formatOptionalMeters(detail.planarMagnitudeMeters)} planar · ${formatOptionalMeters(
     detail.verticalMagnitudeMeters
-  )} vertical · local grounded ${formatBooleanLabel(
+  )} vertical · ${formatOptionalVelocityUnitsPerSecond(
+    detail.planarVelocityMagnitudeUnitsPerSecond
+  )} planar vel · ${formatOptionalVelocityUnitsPerSecond(
+    detail.verticalVelocityMagnitudeUnitsPerSecond
+  )} vertical vel · body diverged ${formatBooleanLabel(
+    detail.bodyStateDivergence
+  )} · contact diverged ${formatBooleanLabel(
+    detail.groundedBodyStateDivergence
+  )} · local grounded ${formatBooleanLabel(
     detail.localGrounded
   )} · authority grounded ${formatBooleanLabel(detail.authoritativeGrounded)}`;
 }
 
 function formatLocalJumpGateValue(
+  groundedBody: MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["surfaceRouting"]["local"]["groundedBody"],
   jumpDebug: MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["surfaceRouting"]["local"]["jumpDebug"]
 ): string {
+  if (groundedBody === null) {
+    return "n/a";
+  }
+
+  const groundedJumpBody = groundedBody.jumpBody;
+
   return `grounded ${formatBooleanLabel(
-    jumpDebug.groundedBodyGrounded
+    groundedJumpBody.grounded
   )} · ready ${formatBooleanLabel(
-    jumpDebug.groundedBodyJumpReady
+    groundedJumpBody.jumpReady
   )} · surface ${formatBooleanLabel(
     jumpDebug.surfaceJumpSupported
   )} · supported ${formatBooleanLabel(
     jumpDebug.supported
   )} · vy ${formatOptionalVelocityUnitsPerSecond(
-    jumpDebug.verticalSpeedUnitsPerSecond
+    groundedJumpBody.verticalSpeedUnitsPerSecond
+  )}`;
+}
+
+function formatAuthoritativeJumpGateValue(
+  groundedBody: MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["surfaceRouting"]["authoritativeLocalPlayer"]["groundedBody"],
+  jumpDebug: MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["surfaceRouting"]["authoritativeLocalPlayer"]["jumpDebug"]
+): string {
+  if (groundedBody === null) {
+    return "n/a";
+  }
+
+  return `grounded ${formatBooleanLabel(
+    groundedBody.jumpBody.grounded
+  )} · ready ${formatBooleanLabel(
+    groundedBody.jumpBody.jumpReady
+  )} · surface ${formatBooleanLabel(
+    jumpDebug.surfaceJumpSupported
+  )} · supported ${formatBooleanLabel(
+    jumpDebug.supported
+  )} · vy ${formatOptionalVelocityUnitsPerSecond(
+    groundedBody.jumpBody.verticalSpeedUnitsPerSecond
+  )}`;
+}
+
+function formatGroundedBodyContactValue(
+  contact: GroundedBodyContactSnapshot | SwimBodyContactSnapshot | null
+): string {
+  if (contact == null) {
+    return "n/a";
+  }
+
+  if ("supportingContactDetected" in contact) {
+    return `support ${formatBooleanLabel(
+      contact.supportingContactDetected
+    )} · planar blocked ${formatBooleanLabel(
+      contact.blockedPlanarMovement
+    )} · vertical blocked ${formatBooleanLabel(contact.blockedVerticalMovement)}`;
+  }
+
+  return `planar blocked ${formatBooleanLabel(
+    contact.blockedPlanarMovement
+  )} · desired ${formatMeters(
+    Math.hypot(contact.desiredMovementDelta.x, contact.desiredMovementDelta.z)
+  )} · applied ${formatMeters(
+    Math.hypot(contact.appliedMovementDelta.x, contact.appliedMovementDelta.z)
+  )}`;
+}
+
+function formatGroundedBodyDriveTargetValue(
+  driveTarget:
+    | GroundedBodyDriveTargetSnapshot
+    | SwimBodyDriveTargetSnapshot
+    | null
+): string {
+  if (driveTarget == null) {
+    return "n/a";
+  }
+
+  return `boost ${formatBooleanLabel(
+    driveTarget.boost
+  )} · move ${driveTarget.moveAxis.toFixed(2)} · strafe ${driveTarget.strafeAxis.toFixed(
+    2
+  )} · target ${driveTarget.targetForwardSpeedUnitsPerSecond.toFixed(
+    2
+  )}/${driveTarget.targetStrafeSpeedUnitsPerSecond.toFixed(2)} u/s`;
+}
+
+function readSurfaceDriveTargetValue(input: {
+  readonly groundedBody:
+    | MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["surfaceRouting"]["local"]["groundedBody"]
+    | MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["surfaceRouting"]["authoritativeLocalPlayer"]["groundedBody"]
+    | null;
+  readonly swimBody:
+    | MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["surfaceRouting"]["local"]["swimBody"]
+    | MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["surfaceRouting"]["authoritativeLocalPlayer"]["swimBody"]
+    | null;
+}): GroundedBodyDriveTargetSnapshot | SwimBodyDriveTargetSnapshot | null {
+  return input.groundedBody?.driveTarget ?? input.swimBody?.driveTarget ?? null;
+}
+
+function readSurfaceContactValue(input: {
+  readonly groundedBody:
+    | MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["surfaceRouting"]["local"]["groundedBody"]
+    | MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["surfaceRouting"]["authoritativeLocalPlayer"]["groundedBody"]
+    | null;
+  readonly swimBody:
+    | MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["surfaceRouting"]["local"]["swimBody"]
+    | MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["surfaceRouting"]["authoritativeLocalPlayer"]["swimBody"]
+    | null;
+}): GroundedBodyContactSnapshot | SwimBodyContactSnapshot | null {
+  return input.groundedBody?.contact ?? input.swimBody?.contact ?? null;
+}
+
+function formatGroundedBodyInteractionValue(
+  interaction:
+    | GroundedBodyInteractionSnapshot
+    | null
+): string {
+  if (interaction == null) {
+    return "n/a";
+  }
+
+  return `dynamic impulses ${formatBooleanLabel(
+    interaction.applyImpulsesToDynamicBodies
   )}`;
 }
 
@@ -377,6 +513,56 @@ function formatLastLocalAuthorityPoseCorrectionSnapshotValue(
     snapshot.authoritative.surfaceRouting.decisionReason
   )} · support ${formatOptionalMeters(
     snapshot.authoritative.surfaceRouting.resolvedSupportHeightMeters
+  )}`;
+}
+
+function formatLastLocalAuthorityPoseCorrectionContactValue(
+  snapshot: MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionSnapshot"]
+): string {
+  if (snapshot === null) {
+    return "none";
+  }
+
+  return `local ${formatGroundedBodyContactValue(
+    snapshot.local.groundedBody?.contact ??
+      snapshot.local.swimBody?.contact ??
+      null
+  )} -> authority ${formatGroundedBodyContactValue(
+    snapshot.authoritative.groundedBody?.contact ??
+      snapshot.authoritative.swimBody?.contact ??
+      null
+  )}`;
+}
+
+function formatLastLocalAuthorityPoseCorrectionDriveTargetValue(
+  snapshot: MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionSnapshot"]
+): string {
+  if (snapshot === null) {
+    return "none";
+  }
+
+  return `local ${formatGroundedBodyDriveTargetValue(
+    snapshot.local.groundedBody?.driveTarget ??
+      snapshot.local.swimBody?.driveTarget ??
+      null
+  )} -> authority ${formatGroundedBodyDriveTargetValue(
+    snapshot.authoritative.groundedBody?.driveTarget ??
+      snapshot.authoritative.swimBody?.driveTarget ??
+      null
+  )}`;
+}
+
+function formatLastLocalAuthorityPoseCorrectionInteractionValue(
+  snapshot: MetaverseHudSnapshot["telemetry"]["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionSnapshot"]
+): string {
+  if (snapshot === null) {
+    return "none";
+  }
+
+  return `local ${formatGroundedBodyInteractionValue(
+    snapshot.local.groundedBody?.interaction ?? null
+  )} -> authority ${formatGroundedBodyInteractionValue(
+    snapshot.authoritative.groundedBody?.interaction ?? null
   )}`;
 }
 
@@ -642,8 +828,72 @@ function createDeveloperReport(hudSnapshot: MetaverseHudSnapshot): string {
           hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
             .traversalAuthority
         )}`,
+        `Jump gate: local ${formatLocalJumpGateValue(
+          hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.groundedBody,
+          hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.jumpDebug
+        )} -> authority ${formatAuthoritativeJumpGateValue(
+          hudSnapshot.telemetry.worldSnapshot.surfaceRouting
+            .authoritativeLocalPlayer.groundedBody,
+          hudSnapshot.telemetry.worldSnapshot.surfaceRouting
+            .authoritativeLocalPlayer.jumpDebug
+        )}`,
+        `Drive target: local ${formatGroundedBodyDriveTargetValue(
+          readSurfaceDriveTargetValue({
+            groundedBody:
+              hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local
+                .groundedBody,
+            swimBody:
+              hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.swimBody
+          })
+        )} -> authority ${formatGroundedBodyDriveTargetValue(
+          readSurfaceDriveTargetValue({
+            groundedBody:
+              hudSnapshot.telemetry.worldSnapshot.surfaceRouting
+                .authoritativeLocalPlayer.groundedBody,
+            swimBody:
+              hudSnapshot.telemetry.worldSnapshot.surfaceRouting
+                .authoritativeLocalPlayer.swimBody
+          })
+        )}`,
+        `Body contact: local ${formatGroundedBodyContactValue(
+          readSurfaceContactValue({
+            groundedBody:
+              hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local
+                .groundedBody,
+            swimBody:
+              hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.swimBody
+          })
+        )} -> authority ${formatGroundedBodyContactValue(
+          readSurfaceContactValue({
+            groundedBody:
+              hudSnapshot.telemetry.worldSnapshot.surfaceRouting
+                .authoritativeLocalPlayer.groundedBody,
+            swimBody:
+              hudSnapshot.telemetry.worldSnapshot.surfaceRouting
+                .authoritativeLocalPlayer.swimBody
+          })
+        )}`,
+        `Body interaction: local ${formatGroundedBodyInteractionValue(
+          hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.groundedBody
+            ?.interaction ?? null
+        )} -> authority ${formatGroundedBodyInteractionValue(
+          hudSnapshot.telemetry.worldSnapshot.surfaceRouting
+            .authoritativeLocalPlayer.groundedBody?.interaction ?? null
+        )}`,
         `Correction: ${formatCorrectionStatusValue(hudSnapshot)}`,
-        `Last snap: ${formatLastLocalAuthorityPoseCorrectionSnapshotValue(
+        `Last correction: ${formatLastLocalAuthorityPoseCorrectionSnapshotValue(
+          hudSnapshot.telemetry.worldSnapshot.localReconciliation
+            .lastLocalAuthorityPoseCorrectionSnapshot
+        )}`,
+        `Last correction contact: ${formatLastLocalAuthorityPoseCorrectionContactValue(
+          hudSnapshot.telemetry.worldSnapshot.localReconciliation
+            .lastLocalAuthorityPoseCorrectionSnapshot
+        )}`,
+        `Last correction drive: ${formatLastLocalAuthorityPoseCorrectionDriveTargetValue(
+          hudSnapshot.telemetry.worldSnapshot.localReconciliation
+            .lastLocalAuthorityPoseCorrectionSnapshot
+        )}`,
+        `Last correction interaction: ${formatLastLocalAuthorityPoseCorrectionInteractionValue(
           hudSnapshot.telemetry.worldSnapshot.localReconciliation
             .lastLocalAuthorityPoseCorrectionSnapshot
         )}`,

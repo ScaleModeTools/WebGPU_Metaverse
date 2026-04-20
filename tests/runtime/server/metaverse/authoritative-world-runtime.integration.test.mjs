@@ -812,6 +812,14 @@ test("MetaverseAuthoritativeWorldRuntime accepts a grounded-spawn jump after rec
     jumpSnapshot.players[0]?.traversalAuthority.lastConsumedActionSequence,
     3
   );
+  assert.equal(
+    jumpSnapshot.players[0]?.groundedBody.jumpBody.grounded,
+    false
+  );
+  assert.ok(
+    (jumpSnapshot.players[0]?.groundedBody.jumpBody
+      .verticalSpeedUnitsPerSecond ?? 0) > 0
+  );
   assert.equal(jumpSnapshot.players[0]?.jumpDebug.resolvedActionState, "accepted");
 });
 

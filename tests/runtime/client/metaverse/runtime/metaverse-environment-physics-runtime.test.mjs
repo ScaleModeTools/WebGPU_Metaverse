@@ -97,7 +97,7 @@ test("MetaverseEnvironmentPhysicsRuntime keeps mountable skiff mesh collision an
   const groundedBodyRuntime = {
     async init() {},
     dispose() {},
-    setApplyImpulsesToDynamicBodies() {}
+    syncInteractionSnapshot() {}
   };
   const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
     metaverseRuntimeConfig,
@@ -177,7 +177,7 @@ test("MetaverseEnvironmentPhysicsRuntime clears and restores dynamic skiff colli
   const groundedBodyRuntime = {
     async init() {},
     dispose() {},
-    setApplyImpulsesToDynamicBodies() {}
+    syncInteractionSnapshot() {}
   };
   const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
     metaverseRuntimeConfig,
@@ -313,7 +313,7 @@ test("MetaverseEnvironmentPhysicsRuntime loads proof-authored collision meshes a
       groundedBodyRuntime: {
         async init() {},
         dispose() {},
-        setApplyImpulsesToDynamicBodies() {}
+        syncInteractionSnapshot() {}
       },
       physicsRuntime,
       sceneRuntime: {
@@ -434,7 +434,7 @@ test("MetaverseEnvironmentPhysicsRuntime uses proof-authored collisionPath for s
       groundedBodyRuntime: {
         async init() {},
         dispose() {},
-        setApplyImpulsesToDynamicBodies() {}
+        syncInteractionSnapshot() {}
       },
       physicsRuntime,
       sceneRuntime: {
@@ -524,7 +524,7 @@ test("MetaverseEnvironmentPhysicsRuntime derives static barrier colliders from t
       groundedBodyRuntime: {
         async init() {},
         dispose() {},
-        setApplyImpulsesToDynamicBodies() {}
+        syncInteractionSnapshot() {}
       },
       physicsRuntime,
       sceneRuntime: {
@@ -590,7 +590,7 @@ test("MetaverseEnvironmentPhysicsRuntime keeps authoritative remote player block
       groundedBodyRuntime: {
         async init() {},
         dispose() {},
-        setApplyImpulsesToDynamicBodies() {}
+        syncInteractionSnapshot() {}
       },
       physicsRuntime,
       sceneRuntime: {
@@ -686,7 +686,7 @@ test("MetaverseEnvironmentPhysicsRuntime keeps authoritative environment-body co
       groundedBodyRuntime: {
         async init() {},
         dispose() {},
-        setApplyImpulsesToDynamicBodies() {}
+        syncInteractionSnapshot() {}
       },
       physicsRuntime,
       sceneRuntime: {

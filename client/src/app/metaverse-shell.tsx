@@ -54,7 +54,6 @@ export function MetaverseShell() {
       onOpenGameplayMenu={() => controller.onGameplayMenuOpen(true)}
       onOpenToolRequest={controller.onOpenToolRequest}
       onRunToolPreviewRequest={controller.onRunToolPreviewRequest}
-      onMetaverseControlModeChange={controller.onMetaverseControlModeChange}
       onRequestPermission={controller.onRequestPermission}
       onRecalibrationRequest={controller.onRecalibrationRequest}
       onRetryCapabilityProbe={controller.onRetryCapabilityProbe}

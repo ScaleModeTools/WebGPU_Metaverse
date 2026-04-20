@@ -7,6 +7,13 @@ import type {
   MetaverseRealtimePlayerTraversalActionRejectionReasonId,
   MetaverseTraversalStateResolutionReasonId
 } from "@webgpu-metaverse/shared";
+import type {
+  MetaverseGroundedBodyContactSnapshot,
+  MetaverseGroundedBodyInteractionSnapshot,
+  MetaverseGroundedJumpBodySnapshot,
+  MetaverseSurfaceDriveBodyRuntimeSnapshot,
+  MetaverseSurfaceTraversalDriveTargetSnapshot
+} from "@webgpu-metaverse/shared/metaverse/traversal";
 
 import type { MetaverseLocomotionModeId } from "./metaverse-locomotion-mode";
 import type { MetaverseVector3Snapshot } from "./presentation";
@@ -23,6 +30,16 @@ export interface MetaverseRendererTelemetrySnapshot {
   readonly label: string;
   readonly triangleCount: number;
 }
+
+export interface MetaverseTelemetryGroundedBodySnapshot {
+  readonly contact: MetaverseGroundedBodyContactSnapshot;
+  readonly driveTarget: MetaverseSurfaceTraversalDriveTargetSnapshot;
+  readonly interaction: MetaverseGroundedBodyInteractionSnapshot;
+  readonly jumpBody: MetaverseGroundedJumpBodySnapshot;
+}
+
+export type MetaverseTelemetrySwimBodySnapshot =
+  MetaverseSurfaceDriveBodyRuntimeSnapshot;
 
 export interface MetaverseTelemetrySnapshot {
   readonly frameDeltaMs: number;
@@ -60,16 +77,22 @@ export interface MetaverseTelemetrySnapshot {
     readonly localReconciliation: {
       readonly lastLocalAuthorityPoseCorrectionDetail: {
         readonly authoritativeGrounded: boolean | null;
+        readonly bodyStateDivergence: boolean | null;
+        readonly groundedBodyStateDivergence: boolean | null;
         readonly localGrounded: boolean | null;
         readonly planarMagnitudeMeters: number | null;
+        readonly planarVelocityMagnitudeUnitsPerSecond: number | null;
         readonly verticalMagnitudeMeters: number | null;
+        readonly verticalVelocityMagnitudeUnitsPerSecond: number | null;
       };
       readonly lastLocalAuthorityPoseCorrectionSnapshot: {
         readonly authoritative: {
+          readonly groundedBody: MetaverseTelemetryGroundedBodySnapshot | null;
           readonly lastProcessedInputSequence: number;
           readonly linearVelocity: MetaverseVector3Snapshot;
           readonly locomotionMode: MetaverseLocomotionModeId;
           readonly position: MetaverseVector3Snapshot;
+          readonly swimBody: MetaverseTelemetrySwimBodySnapshot | null;
           readonly surfaceRouting: {
             readonly blockingAffordanceDetected: boolean;
             readonly decisionReason: MetaverseTraversalStateResolutionReasonId;
@@ -78,6 +101,7 @@ export interface MetaverseTelemetrySnapshot {
           };
         };
         readonly local: {
+          readonly groundedBody: MetaverseTelemetryGroundedBodySnapshot | null;
           readonly issuedTraversalIntent: {
             readonly actionIntent: MetaversePlayerTraversalActionIntentSnapshot;
             readonly bodyControl: MetaversePlayerTraversalBodyControlSnapshot;
@@ -87,19 +111,19 @@ export interface MetaverseTelemetrySnapshot {
           readonly linearVelocity: MetaverseVector3Snapshot;
           readonly locomotionMode: MetaverseLocomotionModeId;
           readonly position: MetaverseVector3Snapshot;
+          readonly swimBody: MetaverseTelemetrySwimBodySnapshot | null;
           readonly surfaceRouting: {
             readonly autostepHeightMeters: number | null;
             readonly blockingAffordanceDetected: boolean;
             readonly decisionReason: MetaverseTraversalStateResolutionReasonId;
+            readonly groundedBody: MetaverseTelemetryGroundedBodySnapshot | null;
             readonly jumpDebug: {
-              readonly groundedBodyGrounded: boolean | null;
-              readonly groundedBodyJumpReady: boolean | null;
               readonly surfaceJumpSupported: boolean | null;
               readonly supported: boolean | null;
-              readonly verticalSpeedUnitsPerSecond: number | null;
             };
             readonly locomotionMode: MetaverseLocomotionModeId;
             readonly resolvedSupportHeightMeters: number;
+            readonly swimBody: MetaverseTelemetrySwimBodySnapshot | null;
             readonly supportingAffordanceSampleCount: number;
             readonly traversalAuthority: {
               readonly currentActionKind: MetaverseRealtimePlayerTraversalActionKindId;
@@ -115,11 +139,12 @@ export interface MetaverseTelemetrySnapshot {
       } | null;
       readonly lastLocalAuthorityPoseCorrectionReason:
         | "none"
+        | "gross-body-divergence"
         | "gross-position-divergence";
       readonly lastCorrectionSource:
         | "none"
         | "mounted-vehicle-authority"
-        | "local-authority-snap";
+        | "local-authority-convergence";
       readonly lastCorrectionAgeMs: number | null;
       readonly localAuthorityPoseCorrectionCount: number;
       readonly mountedVehicleAuthorityCorrectionCount: number;
@@ -139,8 +164,8 @@ export interface MetaverseTelemetrySnapshot {
       readonly authoritativeLocalPlayer: {
         readonly correctionPlanarMagnitudeMeters: number | null;
         readonly correctionVerticalMagnitudeMeters: number | null;
+        readonly groundedBody: MetaverseTelemetryGroundedBodySnapshot | null;
         readonly jumpDebug: {
-          readonly groundedBodyJumpReady: boolean | null;
           readonly pendingActionSequence: number | null;
           readonly pendingActionBufferAgeMs: number | null;
           readonly resolvedActionSequence: number | null;
@@ -152,6 +177,7 @@ export interface MetaverseTelemetrySnapshot {
         readonly locomotionMismatch: boolean;
         readonly locomotionMode: MetaverseLocomotionModeId | null;
         readonly position: MetaverseVector3Snapshot | null;
+        readonly swimBody: MetaverseTelemetrySwimBodySnapshot | null;
         readonly traversalAuthority: {
           readonly currentActionKind: MetaverseRealtimePlayerTraversalActionKindId | null;
           readonly currentActionPhase: MetaverseRealtimePlayerTraversalActionPhaseId | null;
@@ -172,15 +198,14 @@ export interface MetaverseTelemetrySnapshot {
         readonly autostepHeightMeters: number | null;
         readonly blockingAffordanceDetected: boolean;
         readonly decisionReason: MetaverseTraversalStateResolutionReasonId;
+        readonly groundedBody: MetaverseTelemetryGroundedBodySnapshot | null;
         readonly jumpDebug: {
-          readonly groundedBodyGrounded: boolean | null;
-          readonly groundedBodyJumpReady: boolean | null;
           readonly surfaceJumpSupported: boolean | null;
           readonly supported: boolean | null;
-          readonly verticalSpeedUnitsPerSecond: number | null;
         };
         readonly locomotionMode: MetaverseLocomotionModeId;
         readonly resolvedSupportHeightMeters: number;
+        readonly swimBody: MetaverseTelemetrySwimBodySnapshot | null;
         readonly supportingAffordanceSampleCount: number;
         readonly traversalAuthority: {
           readonly currentActionKind: MetaverseRealtimePlayerTraversalActionKindId;
