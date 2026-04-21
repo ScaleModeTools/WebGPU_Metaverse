@@ -394,6 +394,7 @@ type MetaverseRealtimeWorldCommandTypeMatches = AssertTrue<
     | "sync-driver-vehicle-control"
     | "sync-mounted-occupancy"
     | "sync-player-look-intent"
+    | "sync-player-weapon-state"
     | "sync-player-traversal-intent"
   >
 >;
@@ -416,11 +417,18 @@ type MetaverseRealtimeWorldDriverControlIntentUsesStringAssetId = AssertTrue<
   >
 >;
 type MetaverseRealtimePlayerSnapshotAckUsesNumber = AssertTrue<
-  IsEqual<MetaverseRealtimeWorldSnapshot["players"][number]["lastProcessedInputSequence"], number>
+  IsEqual<
+    NonNullable<
+      MetaverseRealtimeWorldSnapshot["observerPlayer"]
+    >["lastProcessedInputSequence"],
+    number
+  >
 >;
 type MetaverseRealtimePlayerOrientationAckUsesNumber = AssertTrue<
   IsEqual<
-    MetaverseRealtimeWorldSnapshot["players"][number]["lastProcessedTraversalOrientationSequence"],
+    NonNullable<
+      MetaverseRealtimeWorldSnapshot["observerPlayer"]
+    >["lastProcessedTraversalOrientationSequence"],
     number
   >
 >;
@@ -443,6 +451,7 @@ type MetaverseRealtimeWorldWebTransportDatagramTypeMatches = AssertTrue<
     MetaverseRealtimeWorldWebTransportClientDatagramType,
     | "world-driver-vehicle-control-datagram"
     | "world-player-look-intent-datagram"
+    | "world-player-weapon-state-datagram"
     | "world-player-traversal-intent-datagram"
   >
 >;
@@ -451,6 +460,7 @@ type MetaverseRealtimeWorldWebTransportDatagramWrapsDriverControl = AssertTrue<
     MetaverseRealtimeWorldWebTransportClientDatagram["command"]["type"],
     | "sync-driver-vehicle-control"
     | "sync-player-look-intent"
+    | "sync-player-weapon-state"
     | "sync-player-traversal-intent"
   >
 >;

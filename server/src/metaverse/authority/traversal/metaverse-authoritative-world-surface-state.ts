@@ -7,7 +7,6 @@ import {
   type MetaverseUnmountedTraversalStateSnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 import {
-  createMetaverseWorldPlacedSurfaceTriMeshSupportSnapshot,
   type MetaverseWorldSurfacePolicyConfig
 } from "@webgpu-metaverse/shared/metaverse/world";
 import type {
@@ -26,9 +25,6 @@ import type {
   RapierColliderHandle,
   RapierQueryFilterPredicate
 } from "../../types/metaverse-authoritative-rapier.js";
-import {
-  createMetaverseAuthoritativeLastGroundedBodySnapshot
-} from "../players/metaverse-authoritative-last-grounded-body-snapshot.js";
 
 interface MetaverseAuthoritativeSurfaceStatePlayerRuntime {
   lastGroundedBodySnapshot: {
@@ -71,9 +67,13 @@ interface MetaverseAuthoritativeWorldSurfaceStateDependencies<
     readonly MetaverseAuthoritativeSurfaceColliderSnapshot[];
   readonly staticCollisionMeshSeedSnapshots:
     readonly MetaverseAuthoritativeCollisionMeshSeedSnapshot[];
-  readonly syncPlayerTraversalBodyRuntimes: (
+  readonly syncUnmountedPlayerToGroundedSupport: (
     playerRuntime: PlayerRuntime,
-    grounded: boolean
+    supportHeightMeters: number
+) => void;
+  readonly syncUnmountedPlayerToSwimWaterline: (
+    playerRuntime: PlayerRuntime,
+    waterlineHeightMeters: number
   ) => void;
   readonly vehicleDriveColliderHandles: ReadonlySet<RapierColliderHandle>;
   readonly waterRegionSnapshots: readonly {
@@ -148,21 +148,7 @@ class MetaverseAuthoritativeDynamicSurfaceCollisionMeshRuntime {
     }
 
     const rotation = createYawQuaternion(poseSnapshot.yawRadians);
-    this.#surfaceColliderSnapshots = Object.freeze(
-      this.#triMeshes.flatMap((triMesh) => {
-        const supportSnapshot =
-          createMetaverseWorldPlacedSurfaceTriMeshSupportSnapshot(
-            this.#environmentAssetId,
-            triMesh,
-            {
-              position: poseSnapshot.position,
-              yawRadians: poseSnapshot.yawRadians
-            }
-          );
-
-        return supportSnapshot === null ? [] : [supportSnapshot];
-      })
-    );
+    this.#surfaceColliderSnapshots = Object.freeze([]);
 
     if (this.#colliders.length === 0) {
       this.#colliders = this.#triMeshes.map((triMesh) =>
@@ -336,30 +322,29 @@ export class MetaverseAuthoritativeWorldSurfaceState<
       locomotionDecision.locomotionMode === "grounded" &&
       locomotionDecision.supportHeightMeters !== null
     ) {
-      playerRuntime.positionY = locomotionDecision.supportHeightMeters;
-      playerRuntime.lastGroundedBodySnapshot =
-        createMetaverseAuthoritativeLastGroundedBodySnapshot({
-          ...playerRuntime.lastGroundedBodySnapshot,
-          positionYMeters: locomotionDecision.supportHeightMeters
-        });
       playerRuntime.locomotionMode = "grounded";
       playerRuntime.unmountedTraversalState =
         createMetaverseUnmountedTraversalStateSnapshot({
           actionState: playerRuntime.unmountedTraversalState.actionState,
           locomotionMode: "grounded"
         });
-      this.#dependencies.syncPlayerTraversalBodyRuntimes(playerRuntime, true);
+      this.#dependencies.syncUnmountedPlayerToGroundedSupport(
+        playerRuntime,
+        locomotionDecision.supportHeightMeters
+      );
       return;
     }
 
-    playerRuntime.positionY = waterlineHeightMeters;
     playerRuntime.locomotionMode = "swim";
     playerRuntime.unmountedTraversalState =
       createMetaverseUnmountedTraversalStateSnapshot({
         actionState: playerRuntime.unmountedTraversalState.actionState,
         locomotionMode: "swim"
       });
-    this.#dependencies.syncPlayerTraversalBodyRuntimes(playerRuntime, false);
+    this.#dependencies.syncUnmountedPlayerToSwimWaterline(
+      playerRuntime,
+      waterlineHeightMeters
+    );
   }
 
   syncDynamicSurfaceColliders(dynamicSurfaceRuntime: DynamicSurfaceRuntime): void {
@@ -422,19 +407,6 @@ export class MetaverseAuthoritativeWorldSurfaceState<
           ownerEnvironmentAssetId: seedSnapshot.environmentAssetId,
           traversalAffordance: "blocker"
         });
-        const supportSnapshot =
-          createMetaverseWorldPlacedSurfaceTriMeshSupportSnapshot(
-            seedSnapshot.environmentAssetId,
-            triMesh,
-            {
-              position: seedSnapshot.position,
-              yawRadians: seedSnapshot.yawRadians
-            }
-          );
-
-        if (supportSnapshot !== null) {
-          this.#staticSurfaceColliderSnapshots.push(supportSnapshot);
-        }
       }
     }
   }

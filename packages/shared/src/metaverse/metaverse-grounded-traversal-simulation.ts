@@ -21,6 +21,9 @@ export interface MetaverseGroundedTraversalConfig
 
 export interface MetaverseGroundedTraversalIntentSnapshot {
   readonly boost: boolean;
+  // `jump` is an accepted impulse edge by the time it reaches grounded
+  // traversal simulation. Readiness is resolved by the caller that owns the
+  // action queue and contact truth.
   readonly jump: boolean;
   readonly moveAxis: number;
   readonly strafeAxis: number;
@@ -115,8 +118,7 @@ export function prepareMetaverseGroundedTraversalStep(
     movementDampingFactor,
     yawTargetRadians
   );
-  const jumpRequested =
-    intentSnapshot.jump === true && stateSnapshot.jumpReady;
+  const jumpRequested = intentSnapshot.jump === true;
   const verticalSpeedUnitsPerSecond =
     resolveMetaverseGroundedJumpVerticalSpeedUnitsPerSecond({
       config,

@@ -126,8 +126,8 @@ export const metaverseWorldCadenceConfig = Object.freeze({
     metaverseRealtimeWorldCadenceConfig.authoritativeTickIntervalMs,
   localAuthoritativeFreshnessMaxAgeMs: 66,
   maxBufferedSnapshots: 6,
-  remoteCharacterRootInterpolationDelayMs: 0,
-  remoteCharacterRootMaxExtrapolationMs: 0,
+  remoteCharacterRootInterpolationDelayMs: 66,
+  remoteCharacterRootMaxExtrapolationMs: 66,
   maxExtrapolationMs: 66,
   remoteInterpolationDelayMs: 66
 });
@@ -166,7 +166,15 @@ export const metaverseLocalAuthorityReconciliationConfig = Object.freeze({
   mountedOccupancyMismatchHoldMs: 50
 });
 
-export function createMetaverseWorldClient(): MetaverseWorldClient {
+export interface MetaverseWorldClientFactoryDependencies {
+  readonly readEstimatedServerTimeMs?:
+    | ((localWallClockMs: number) => number)
+    | undefined;
+}
+
+export function createMetaverseWorldClient(
+  dependencies: MetaverseWorldClientFactoryDependencies = {}
+): MetaverseWorldClient {
   const preferredTransportMode = resolveMetaverseRealtimeTransportMode();
   const localdevWebTransportBootStatus = resolveLocaldevWebTransportBootStatus();
   const localdevWebTransportBootError = resolveLocaldevWebTransportBootError();
@@ -232,7 +240,12 @@ export function createMetaverseWorldClient(): MetaverseWorldClient {
     ...(latestWinsDatagramTransport === null
       ? {}
       : {
-          latestWinsDatagramTransport
+      latestWinsDatagramTransport
+        }),
+    ...(dependencies.readEstimatedServerTimeMs === undefined
+      ? {}
+      : {
+          readEstimatedServerTimeMs: dependencies.readEstimatedServerTimeMs
         }),
     ...(snapshotStreamTransport === null
       ? {}

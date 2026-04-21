@@ -1,13 +1,14 @@
 import {
+  resolveMetaverseDynamicCuboidBodyConfigSnapshotFromSurfaceAsset,
+  type MetaverseDynamicCuboidBodyConfigSnapshot
+} from "@webgpu-metaverse/shared/metaverse/traversal";
+import {
   resolveMetaverseGameplayProfile,
   resolveMetaverseWorldDynamicSurfaceCollidersForAsset,
   resolveMetaverseWorldPlacedSurfaceColliders,
   resolveMetaverseWorldPlacedWaterRegions,
-  resolveMetaverseWorldSurfaceScaleVector,
   type MetaverseMapBundleSnapshot,
   type MetaverseGameplayProfileSnapshot,
-  type MetaverseWorldEnvironmentColliderAuthoring,
-  type MetaverseWorldEnvironmentDynamicBodyAuthoring,
   type MetaverseWorldPlacedSurfaceColliderSnapshot,
   type MetaverseWorldPlacedWaterRegionSnapshot,
   type MetaverseWorldSurfaceAssetAuthoring,
@@ -33,12 +34,8 @@ export interface MetaverseAuthoritativeDynamicSurfaceSeedSnapshot {
 }
 
 export interface MetaverseAuthoritativeEnvironmentBodySeedSnapshot {
-  readonly colliderCenter: MetaverseWorldSurfaceVector3Snapshot;
-  readonly dynamicBody: MetaverseWorldEnvironmentDynamicBodyAuthoring;
+  readonly config: MetaverseDynamicCuboidBodyConfigSnapshot;
   readonly environmentAssetId: string;
-  readonly halfExtents: MetaverseWorldSurfaceVector3Snapshot;
-  readonly position: MetaverseWorldSurfaceVector3Snapshot;
-  readonly yawRadians: number;
 }
 
 export interface MetaverseAuthoritativeCollisionMeshSeedSnapshot {
@@ -85,56 +82,6 @@ const emptyMetaverseAuthoritativeSurfaceColliders = Object.freeze(
   []
 ) as readonly MetaverseAuthoritativeSurfaceColliderSnapshot[];
 
-function freezeVector3(
-  x: number,
-  y: number,
-  z: number
-): MetaverseWorldSurfaceVector3Snapshot {
-  return Object.freeze({
-    x,
-    y,
-    z
-  });
-}
-
-function resolveScaledColliderCenter(
-  collider: MetaverseWorldEnvironmentColliderAuthoring,
-  scale:
-    | number
-    | {
-        readonly x: number;
-        readonly y: number;
-        readonly z: number;
-      }
-): MetaverseWorldSurfaceVector3Snapshot {
-  const scaleVector = resolveMetaverseWorldSurfaceScaleVector(scale);
-
-  return freezeVector3(
-    collider.center.x * scaleVector.x,
-    collider.center.y * scaleVector.y,
-    collider.center.z * scaleVector.z
-  );
-}
-
-function resolveScaledColliderHalfExtents(
-  collider: MetaverseWorldEnvironmentColliderAuthoring,
-  scale:
-    | number
-    | {
-        readonly x: number;
-        readonly y: number;
-        readonly z: number;
-      }
-): MetaverseWorldSurfaceVector3Snapshot {
-  const scaleVector = resolveMetaverseWorldSurfaceScaleVector(scale);
-
-  return freezeVector3(
-    Math.abs(collider.size.x * scaleVector.x) * 0.5,
-    Math.abs(collider.size.y * scaleVector.y) * 0.5,
-    Math.abs(collider.size.z * scaleVector.z) * 0.5
-  );
-}
-
 function createSurfaceAssets(
   bundle: MetaverseMapBundleSnapshot
 ): readonly MetaverseWorldSurfaceAssetAuthoring[] {
@@ -164,7 +111,7 @@ function createSurfaceAssets(
   );
 }
 
-function shouldUseCollisionMeshSurfaceSupport(
+function shouldBootCollisionMeshColliders(
   surfaceAsset: Pick<
     MetaverseWorldSurfaceAssetAuthoring,
     "collisionPath" | "dynamicBody"
@@ -232,7 +179,6 @@ export function createMetaverseAuthoritativeWorldBundleInputs(
   const staticSurfaceColliders = surfaceAssets
     .filter(
       (surfaceAsset) =>
-        !shouldUseCollisionMeshSurfaceSupport(surfaceAsset) &&
         (surfaceAsset.placement === "static" ||
           surfaceAsset.placement === "instanced")
     )
@@ -248,7 +194,6 @@ export function createMetaverseAuthoritativeWorldBundleInputs(
       surfaceAssets.flatMap((surfaceAsset) => {
         if (
           surfaceAsset.placement !== "dynamic" ||
-          shouldUseCollisionMeshSurfaceSupport(surfaceAsset) ||
           surfaceAsset.surfaceColliders.length === 0 ||
           surfaceAsset.placements.length === 0
         ) {
@@ -270,7 +215,7 @@ export function createMetaverseAuthoritativeWorldBundleInputs(
       surfaceAssets.flatMap((surfaceAsset) => {
         if (
           surfaceAsset.placement !== "dynamic" ||
-          !shouldUseCollisionMeshSurfaceSupport(surfaceAsset) ||
+          !shouldBootCollisionMeshColliders(surfaceAsset) ||
           surfaceAsset.collisionPath === null ||
           surfaceAsset.placements.length === 0
         ) {
@@ -297,22 +242,19 @@ export function createMetaverseAuthoritativeWorldBundleInputs(
           return [];
         }
 
-        const authoredPlacement = surfaceAsset.placements[0]!;
+        const config =
+          resolveMetaverseDynamicCuboidBodyConfigSnapshotFromSurfaceAsset(
+            surfaceAsset
+          );
+
+        if (config === null) {
+          return [];
+        }
 
         return [
           Object.freeze({
-            colliderCenter: resolveScaledColliderCenter(
-              surfaceAsset.collider,
-              authoredPlacement.scale
-            ),
-            dynamicBody: surfaceAsset.dynamicBody,
+            config,
             environmentAssetId: surfaceAsset.environmentAssetId,
-            halfExtents: resolveScaledColliderHalfExtents(
-              surfaceAsset.collider,
-              authoredPlacement.scale
-            ),
-            position: authoredPlacement.position,
-            yawRadians: authoredPlacement.rotationYRadians
           } satisfies MetaverseAuthoritativeEnvironmentBodySeedSnapshot)
         ];
       })
@@ -325,7 +267,7 @@ export function createMetaverseAuthoritativeWorldBundleInputs(
         if (
           (surfaceAsset.placement !== "static" &&
             surfaceAsset.placement !== "instanced") ||
-          !shouldUseCollisionMeshSurfaceSupport(surfaceAsset) ||
+          !shouldBootCollisionMeshColliders(surfaceAsset) ||
           surfaceAsset.collisionPath === null
         ) {
           return [];

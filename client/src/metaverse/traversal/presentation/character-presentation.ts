@@ -16,6 +16,7 @@ import type {
 } from "../types/traversal";
 
 interface TraversalCharacterPresentationInput {
+  readonly animationCycleId?: number | null;
   readonly animationVocabulary: MetaverseCharacterPresentationSnapshot["animationVocabulary"];
   readonly config: MetaverseRuntimeConfig;
   readonly groundedBodySnapshot: MetaverseGroundedBodySnapshot | null;
@@ -33,9 +34,13 @@ interface TraversalCharacterPresentationInput {
 function createCharacterPresentationSnapshot(
   position: PhysicsVector3Snapshot,
   yawRadians: number,
-  animationVocabulary: MetaverseCharacterPresentationSnapshot["animationVocabulary"]
+  animationVocabulary: MetaverseCharacterPresentationSnapshot["animationVocabulary"],
+  animationCycleId?: number | null
 ): MetaverseCharacterPresentationSnapshot {
   return Object.freeze({
+    ...(animationCycleId === null || animationCycleId === undefined
+      ? {}
+      : { animationCycleId }),
     animationVocabulary,
     position: Object.freeze({
       x: position.x,
@@ -49,9 +54,13 @@ function createCharacterPresentationSnapshot(
 function createFixedCharacterPresentationSnapshot(
   position: PhysicsVector3Snapshot,
   yawRadians: number,
-  animationVocabulary: MetaverseCharacterPresentationSnapshot["animationVocabulary"]
+  animationVocabulary: MetaverseCharacterPresentationSnapshot["animationVocabulary"],
+  animationCycleId?: number | null
 ): MetaverseCharacterPresentationSnapshot {
   return Object.freeze({
+    ...(animationCycleId === null || animationCycleId === undefined
+      ? {}
+      : { animationCycleId }),
     animationVocabulary,
     position: Object.freeze({
       x: position.x,
@@ -65,16 +74,23 @@ function createFixedCharacterPresentationSnapshot(
 function createGroundedCharacterPresentationSnapshot(
   bodySnapshot: MetaverseGroundedBodySnapshot,
   animationVocabulary: MetaverseCharacterPresentationSnapshot["animationVocabulary"],
+  animationCycleId: number | null = null,
   yawRadians: number = bodySnapshot.yawRadians,
   position: PhysicsVector3Snapshot = bodySnapshot.position
 ): MetaverseCharacterPresentationSnapshot {
-  return createCharacterPresentationSnapshot(position, yawRadians, animationVocabulary);
+  return createCharacterPresentationSnapshot(
+    position,
+    yawRadians,
+    animationVocabulary,
+    animationCycleId
+  );
 }
 
 function createSwimCharacterPresentationSnapshot(
   swimSnapshot: SurfaceLocomotionSnapshot,
   animationVocabulary: MetaverseCharacterPresentationSnapshot["animationVocabulary"],
   config: MetaverseRuntimeConfig,
+  animationCycleId: number | null = null,
   yawRadians: number = swimSnapshot.yawRadians,
   position: PhysicsVector3Snapshot = swimSnapshot.position
 ): MetaverseCharacterPresentationSnapshot {
@@ -90,11 +106,13 @@ function createSwimCharacterPresentationSnapshot(
       position.z
     ),
     yawRadians,
-    moving ? "swim" : "swim-idle"
+    moving ? "swim" : "swim-idle",
+    animationCycleId
   );
 }
 
 export function createTraversalCharacterPresentationSnapshot({
+  animationCycleId,
   animationVocabulary,
   config,
   groundedBodySnapshot,
@@ -110,11 +128,12 @@ export function createTraversalCharacterPresentationSnapshot({
     mountedVehicleSnapshot !== null &&
     mountedOccupancyPresentationState?.constrainToAnchor === true
   ) {
-    return createFixedCharacterPresentationSnapshot(
-      mountedVehicleSnapshot.position,
-      mountedVehicleSnapshot.yawRadians,
-      mountedOccupancyPresentationState.mountedCharacterAnimationVocabulary
-    );
+      return createFixedCharacterPresentationSnapshot(
+        mountedVehicleSnapshot.position,
+        mountedVehicleSnapshot.yawRadians,
+        mountedOccupancyPresentationState.mountedCharacterAnimationVocabulary,
+        animationCycleId
+      );
   }
 
   if (locomotionMode === "grounded") {
@@ -123,6 +142,7 @@ export function createTraversalCharacterPresentationSnapshot({
       : createGroundedCharacterPresentationSnapshot(
           groundedBodySnapshot,
           animationVocabulary,
+          animationCycleId ?? null,
           presentationYawRadians ?? groundedBodySnapshot.yawRadians,
           groundedPresentationPosition ?? groundedBodySnapshot.position
         );
@@ -133,6 +153,7 @@ export function createTraversalCharacterPresentationSnapshot({
       swimSnapshot,
       animationVocabulary,
       config,
+      animationCycleId ?? null,
       presentationYawRadians ?? swimSnapshot.yawRadians,
       swimPresentationPosition ?? swimSnapshot.position
     );

@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
 import {
+  createMetaverseSurfaceDriveBodyRuntimeSnapshot
+} from "@webgpu-metaverse/shared";
+
+import {
   createFlatGroundSurfaceColliderSnapshot,
   createTraversalFixtureContext,
   freezeVector3,
@@ -131,6 +135,7 @@ test("MetaverseTraversalRuntime ignores routine authoritative unmounted yaw drif
     assert.ok(groundedTraversalPose !== null);
 
     syncAuthoritativeLocalPlayerPose(groundedHarness.traversalRuntime, {
+      groundedBody: groundedHarness.groundedBodyRuntime.snapshot,
       jumpAuthorityState: "grounded",
       lastAcceptedJumpActionSequence: 0,
       lastProcessedJumpActionSequence: 0,
@@ -175,6 +180,11 @@ test("MetaverseTraversalRuntime ignores routine authoritative unmounted yaw drif
       locomotionMode: "swim",
       mountedOccupancy: null,
       position: swimTraversalPose.position,
+      swimBody: createMetaverseSurfaceDriveBodyRuntimeSnapshot({
+        linearVelocity: freezeVector3(0, 0, -2.2),
+        position: swimTraversalPose.position,
+        yawRadians: swimTraversalPose.yawRadians
+      }),
       yawRadians: swimTraversalPose.yawRadians - 0.3
     });
 
@@ -218,6 +228,7 @@ test("MetaverseTraversalRuntime ignores gross authoritative unmounted yaw drift 
     assert.ok(groundedTraversalPoseBeforeCorrection !== null);
 
     syncAuthoritativeLocalPlayerPose(groundedHarness.traversalRuntime, {
+      groundedBody: groundedHarness.groundedBodyRuntime.snapshot,
       jumpAuthorityState: "grounded",
       lastAcceptedJumpActionSequence: 0,
       lastProcessedJumpActionSequence: 0,
@@ -255,6 +266,11 @@ test("MetaverseTraversalRuntime ignores gross authoritative unmounted yaw drift 
       locomotionMode: "swim",
       mountedOccupancy: null,
       position: swimTraversalPoseBeforeCorrection.position,
+      swimBody: createMetaverseSurfaceDriveBodyRuntimeSnapshot({
+        linearVelocity: freezeVector3(0, 0, -2.2),
+        position: swimTraversalPoseBeforeCorrection.position,
+        yawRadians: swimTraversalPoseBeforeCorrection.yawRadians
+      }),
       yawRadians: swimTraversalPoseBeforeCorrection.yawRadians - 0.7
     });
 

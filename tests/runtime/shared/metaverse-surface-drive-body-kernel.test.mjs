@@ -86,6 +86,55 @@ test("shared surface-drive body kernel resolves a callback-driven movement step 
   assertApprox(nextBodyStep.nextSnapshot.strafeSpeedUnitsPerSecond, 0);
 });
 
+test("shared surface-drive body kernel ignores sub-centimeter planar contact delta noise", () => {
+  const currentSnapshot = createMetaverseTraversalKinematicStateSnapshot({
+    angularVelocityRadiansPerSecond: 0,
+    linearVelocity: {
+      x: 0,
+      y: 0,
+      z: 0
+    },
+    position: {
+      x: 0,
+      y: 0,
+      z: 0
+    },
+    yawRadians: 0
+  });
+
+  const nextBodyStep = resolveMetaverseSurfaceDriveBodyStep({
+    currentSnapshot,
+    deltaSeconds: 1,
+    intentSnapshot: Object.freeze({
+      boost: false,
+      moveAxis: 1,
+      strafeAxis: 0,
+      yawAxis: 0
+    }),
+    lockedHeightMeters: 2,
+    locomotionConfig,
+    preferredLookYawRadians: Math.PI * 0.5,
+    resolveBlockedPlanarPosition: (rootPosition) =>
+      Object.freeze({
+        x: rootPosition.x - 0.005,
+        y: rootPosition.y,
+        z: rootPosition.z + 0.004
+      }),
+    resolveUnclampedRootPosition: (input) =>
+      Object.freeze({
+        x: input.desiredDeltaX,
+        y: 99,
+        z: input.desiredDeltaZ
+      }),
+    worldRadius: 110
+  });
+
+  assert.equal(nextBodyStep.nextSnapshot.contact.blockedPlanarMovement, false);
+  assertApprox(nextBodyStep.nextSnapshot.contact.desiredMovementDelta.x, 4);
+  assertApprox(nextBodyStep.nextSnapshot.contact.appliedMovementDelta.x, 3.995);
+  assertApprox(nextBodyStep.nextSnapshot.contact.appliedMovementDelta.z, 0.004);
+});
+
 test("shared surface-drive body kernel applies world clamp before optional blocker resolution", () => {
   const currentSnapshot = createMetaverseTraversalKinematicStateSnapshot({
     angularVelocityRadiansPerSecond: 0,

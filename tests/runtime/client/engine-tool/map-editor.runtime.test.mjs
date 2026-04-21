@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
+import {
+  createMetaversePlayerId,
+  resolveMetaversePlayerTeamId,
+  stagingGroundMapBundle
+} from "@webgpu-metaverse/shared";
+
 import { createClientModuleLoader } from "../load-client-module.mjs";
 
 let clientLoader;
@@ -23,7 +29,26 @@ test("metaverse map bundle loader resolves the staging-ground authored slice and
   assert.equal(loadedBundle.bundle.mapId, "staging-ground");
   assert.equal(loadedBundle.bundle.environmentAssets.length, 6);
   assert.equal(loadedBundle.bundle.launchVariations.length, 2);
-  assert.equal(loadedBundle.bundle.playerSpawnNodes.length, 1);
+  assert.equal(loadedBundle.bundle.playerSpawnNodes.length, 5);
+  assert.equal(loadedBundle.bundle.playerSpawnNodes[0]?.teamId, "neutral");
+  assert.equal(
+    loadedBundle.bundle.playerSpawnNodes.filter((spawnNode) => spawnNode.teamId === "blue")
+      .length,
+    2
+  );
+  assert.equal(
+    loadedBundle.bundle.playerSpawnNodes.filter((spawnNode) => spawnNode.teamId === "red")
+      .length,
+    2
+  );
+  assert.equal(
+    loadedBundle.bundle.playerSpawnSelection.enemyAvoidanceRadiusMeters,
+    18
+  );
+  assert.equal(
+    loadedBundle.bundle.playerSpawnSelection.homeTeamBiasMeters,
+    12
+  );
   assert.equal(loadedBundle.bundle.sceneObjects.length, 1);
   assert.equal(loadedBundle.bundle.waterRegions.length, 1);
   assert.equal(loadedBundle.hudProfile?.id, "shell-default-hud");
@@ -36,6 +61,162 @@ test("metaverse map bundle loader resolves the staging-ground authored slice and
     loadedBundle.environmentPresentationProfile?.id,
     "shell-default-environment-presentation"
   );
+});
+
+test("metaverse runtime config chooses the authored home-team spawn for the local player lane", async () => {
+  const {
+    clearMetaverseWorldBundlePreviewEntry,
+    registerMetaverseWorldBundlePreviewEntry
+  } = await clientLoader.load("/src/metaverse/world/bundle-registry/index.ts");
+  const { createMetaverseRuntimeConfig } = await clientLoader.load(
+    "/src/metaverse/config/metaverse-runtime.ts"
+  );
+  const previewBundleId = "client-team-spawn-runtime-config-test";
+
+  const requirePlayerIdForTeam = (prefix, teamId) => {
+    for (let index = 1; index < 200; index += 1) {
+      const playerId = createMetaversePlayerId(`${prefix}-${index}`);
+
+      if (playerId !== null && resolveMetaversePlayerTeamId(playerId) === teamId) {
+        return playerId;
+      }
+    }
+
+    throw new Error(`Unable to resolve player id for team ${teamId}.`);
+  };
+
+  registerMetaverseWorldBundlePreviewEntry({
+    bundle: Object.freeze({
+      ...stagingGroundMapBundle,
+      label: "Client Team Spawn Preview",
+      mapId: previewBundleId,
+      playerSpawnNodes: Object.freeze([
+        Object.freeze({
+          label: "Blue Base",
+          position: Object.freeze({
+            x: -24,
+            y: 0,
+            z: 0
+          }),
+          spawnId: "blue-base",
+          teamId: "blue",
+          yawRadians: 0
+        }),
+        Object.freeze({
+          label: "Red Base",
+          position: Object.freeze({
+            x: 24,
+            y: 0,
+            z: 0
+          }),
+          spawnId: "red-base",
+          teamId: "red",
+          yawRadians: Math.PI
+        })
+      ]),
+      playerSpawnSelection: Object.freeze({
+        enemyAvoidanceRadiusMeters: 12,
+        homeTeamBiasMeters: 8
+      })
+    }),
+    bundleId: previewBundleId,
+    label: "Client Team Spawn Preview",
+    sourceBundleId: "staging-ground"
+  });
+
+  try {
+    const blueConfig = createMetaverseRuntimeConfig(
+      previewBundleId,
+      requirePlayerIdForTeam("client-blue", "blue")
+    );
+    const redConfig = createMetaverseRuntimeConfig(
+      previewBundleId,
+      requirePlayerIdForTeam("client-red", "red")
+    );
+
+    assert.equal(blueConfig.groundedBody.spawnPosition.x, -24);
+    assert.equal(blueConfig.camera.initialYawRadians, 0);
+    assert.equal(redConfig.groundedBody.spawnPosition.x, 24);
+    assert.equal(redConfig.camera.initialYawRadians, Math.PI);
+  } finally {
+    clearMetaverseWorldBundlePreviewEntry(previewBundleId);
+  }
+});
+
+test("metaverse world bundle registration posts the selected runtime bundle and source bundle id through the shared authority sync path", async () => {
+  const { registerMetaverseWorldBundleOnServer } = await clientLoader.load(
+    "/src/metaverse/world/map-bundles/index.ts"
+  );
+
+  const fetchCalls = [];
+
+  await registerMetaverseWorldBundleOnServer("staging-ground", {
+    async fetch(url, init = {}) {
+      fetchCalls.push({
+        init,
+        url
+      });
+
+      return {
+        async json() {
+          return {
+            status: "registered"
+          };
+        },
+        ok: true
+      };
+    }
+  });
+
+  assert.equal(fetchCalls.length, 1);
+  assert.match(fetchCalls[0].url, /\/metaverse\/world\/preview-bundles$/);
+  assert.equal(fetchCalls[0].init.method, "POST");
+  assert.equal(fetchCalls[0].init.headers["content-type"], "application/json");
+
+  const requestBody = JSON.parse(fetchCalls[0].init.body);
+
+  assert.equal(requestBody.bundle.mapId, "staging-ground");
+  assert.equal(requestBody.sourceBundleId, "staging-ground");
+});
+
+test("map editor viewport scene draft handles keep player spawns addressable for viewport transforms", async () => {
+  const {
+    createMapEditorViewportSceneDraftHandles,
+    disposeMapEditorViewportSceneDraftHandles,
+    syncMapEditorViewportSceneDrafts
+  } = await clientLoader.load(
+    "/src/engine-tool/viewport/map-editor-viewport-scene-drafts.ts"
+  );
+
+  const handles = createMapEditorViewportSceneDraftHandles();
+
+  try {
+    syncMapEditorViewportSceneDrafts(handles, {
+      playerSpawnDrafts: Object.freeze([
+        Object.freeze({
+          label: "Spawn One",
+          position: Object.freeze({
+            x: 4,
+            y: 0,
+            z: 8
+          }),
+          spawnId: "spawn-one",
+          teamId: "blue",
+          yawRadians: Math.PI * 0.5
+        })
+      ]),
+      sceneObjectDrafts: Object.freeze([]),
+      waterRegionDrafts: Object.freeze([])
+    });
+
+    const spawnGroup = handles.playerSpawnGroupsById.get("spawn-one");
+
+    assert.notEqual(spawnGroup, undefined);
+    assert.equal(handles.rootGroup.children.includes(spawnGroup), true);
+    assert.equal(spawnGroup.userData.playerSpawnId, "spawn-one");
+  } finally {
+    disposeMapEditorViewportSceneDraftHandles(handles);
+  }
 });
 
 test("map editor project flattens authored placements and updates selected placement drafts immutably", async () => {
@@ -56,6 +237,7 @@ test("map editor project flattens authored placements and updates selected place
     selectMapEditorPlacement,
     updateMapEditorLaunchVariationDraft,
     updateMapEditorEnvironmentPresentationProfileId,
+    updateMapEditorPlayerSpawnSelectionDraft,
     updateMapEditorWaterRegionDraft,
     updateMapEditorSceneObjectDraft,
     updateMapEditorPlacement
@@ -88,7 +270,16 @@ test("map editor project flattens authored placements and updates selected place
     "shell-default-environment-presentation"
   );
   assert.equal(initialProject.launchVariationDrafts.length, 2);
-  assert.equal(initialProject.playerSpawnDrafts.length, 1);
+  assert.equal(initialProject.playerSpawnDrafts.length, 5);
+  assert.equal(initialProject.playerSpawnDrafts[0].teamId, "neutral");
+  assert.equal(
+    initialProject.playerSpawnSelectionDraft.enemyAvoidanceRadiusMeters,
+    18
+  );
+  assert.equal(
+    initialProject.playerSpawnSelectionDraft.homeTeamBiasMeters,
+    12
+  );
   assert.equal(initialProject.sceneObjectDrafts.length, 1);
   assert.equal(initialProject.waterRegionDrafts.length, 1);
   assert.notEqual(initialSelectedPlacement, null);
@@ -193,6 +384,13 @@ test("map editor project flattens authored placements and updates selected place
       initialProject,
       "shell-golden-hour-environment-presentation"
     );
+  const updatedPlayerSpawnSelectionProject =
+    updateMapEditorPlayerSpawnSelectionDraft(initialProject, (spawnSelection) => ({
+      ...spawnSelection,
+      enemyAvoidanceRadiusMeters:
+        spawnSelection.enemyAvoidanceRadiusMeters + 6,
+      homeTeamBiasMeters: spawnSelection.homeTeamBiasMeters + 4
+    }));
   const addedPlayerSpawnProject = addMapEditorPlayerSpawnDraft(initialProject);
   const addedSceneObjectProject = addMapEditorSceneObjectDraft(initialProject);
   const addedWaterRegionProject = addMapEditorWaterRegionDraft(initialProject);
@@ -277,6 +475,15 @@ test("map editor project flattens authored placements and updates selected place
     "shell-golden-hour-environment-presentation"
   );
   assert.equal(
+    updatedPlayerSpawnSelectionProject.playerSpawnSelectionDraft
+      .enemyAvoidanceRadiusMeters,
+    initialProject.playerSpawnSelectionDraft.enemyAvoidanceRadiusMeters + 6
+  );
+  assert.equal(
+    updatedPlayerSpawnSelectionProject.playerSpawnSelectionDraft.homeTeamBiasMeters,
+    initialProject.playerSpawnSelectionDraft.homeTeamBiasMeters + 4
+  );
+  assert.equal(
     addedLaunchVariationProject.launchVariationDrafts.length,
     initialProject.launchVariationDrafts.length + 1
   );
@@ -288,7 +495,13 @@ test("map editor project flattens authored placements and updates selected place
     addedPlayerSpawnProject.playerSpawnDrafts[
       addedPlayerSpawnProject.playerSpawnDrafts.length - 1
     ].label,
-    "Player Spawn 2"
+    `Player Spawn ${initialProject.playerSpawnDrafts.length + 1}`
+  );
+  assert.equal(
+    addedPlayerSpawnProject.playerSpawnDrafts[
+      addedPlayerSpawnProject.playerSpawnDrafts.length - 1
+    ].teamId,
+    "neutral"
   );
   assert.equal(
     addedSceneObjectProject.sceneObjectDrafts.length,
@@ -327,6 +540,44 @@ test("map editor project flattens authored placements and updates selected place
     updatedLaunchVariation.vehicleLayoutId,
     "gladiation-heavy-vehicles"
   );
+});
+
+test("map editor export preserves authored spawn teams and team-proximity selection settings", async () => {
+  const { loadMetaverseMapBundle } = await clientLoader.load(
+    "/src/metaverse/world/map-bundles/load-metaverse-map-bundle.ts"
+  );
+  const {
+    createMapEditorProject,
+    updateMapEditorPlayerSpawnDraft,
+    updateMapEditorPlayerSpawnSelectionDraft
+  } = await clientLoader.load("/src/engine-tool/project/map-editor-project-state.ts");
+  const { exportMapEditorProjectToMetaverseMapBundle } = await clientLoader.load(
+    "/src/engine-tool/run/export-map-editor-project-to-metaverse-map-bundle.ts"
+  );
+
+  const initialProject = createMapEditorProject(
+    loadMetaverseMapBundle("staging-ground")
+  );
+  const spawnId = initialProject.playerSpawnDrafts[0]?.spawnId;
+
+  assert.notEqual(spawnId, undefined);
+
+  const project = updateMapEditorPlayerSpawnSelectionDraft(
+    updateMapEditorPlayerSpawnDraft(initialProject, spawnId, (spawnDraft) => ({
+      ...spawnDraft,
+      teamId: "blue"
+    })),
+    (spawnSelection) => ({
+      ...spawnSelection,
+      enemyAvoidanceRadiusMeters: 22,
+      homeTeamBiasMeters: 14
+    })
+  );
+  const exportedBundle = exportMapEditorProjectToMetaverseMapBundle(project);
+
+  assert.equal(exportedBundle.playerSpawnNodes[0]?.teamId, "blue");
+  assert.equal(exportedBundle.playerSpawnSelection.enemyAvoidanceRadiusMeters, 22);
+  assert.equal(exportedBundle.playerSpawnSelection.homeTeamBiasMeters, 14);
 });
 
 test("map editor project save/load persists authored launch variations and environment presentation through project storage", async () => {
@@ -460,6 +711,76 @@ test("map editor validate-and-run exports a bundle-backed preview through the ru
   );
 });
 
+test("map editor preview registration pushes authored player spawns into the active metaverse runtime config", async () => {
+  const {
+    createMapEditorProject,
+    updateMapEditorPlayerSpawnDraft
+  } = await clientLoader.load("/src/engine-tool/project/map-editor-project-state.ts");
+  const { validateAndRegisterMapEditorPreviewBundle } = await clientLoader.load(
+    "/src/engine-tool/run/map-editor-run-preview.ts"
+  );
+  const { loadMetaverseMapBundle } = await clientLoader.load(
+    "/src/metaverse/world/map-bundles/load-metaverse-map-bundle.ts"
+  );
+  const { createMetaverseRuntimeConfig } = await clientLoader.load(
+    "/src/metaverse/config/metaverse-runtime.ts"
+  );
+
+  const initialProject = createMapEditorProject(
+    loadMetaverseMapBundle("staging-ground")
+  );
+  const firstSpawnId = initialProject.playerSpawnDrafts[0]?.spawnId;
+
+  assert.notEqual(firstSpawnId, undefined);
+
+  const project = updateMapEditorPlayerSpawnDraft(
+    initialProject,
+    firstSpawnId,
+    (spawnDraft) => ({
+      ...spawnDraft,
+      position: {
+        ...spawnDraft.position,
+        x: spawnDraft.position.x + 9,
+        z: spawnDraft.position.z - 5
+      },
+      yawRadians: Math.PI * 0.5
+    })
+  );
+
+  const previewResult = await validateAndRegisterMapEditorPreviewBundle(project, {
+    async fetch() {
+      return {
+        async json() {
+          return {
+            status: "registered"
+          };
+        },
+        ok: true
+      };
+    }
+  });
+  const previewBundle = loadMetaverseMapBundle(previewResult.launchSelection.bundleId);
+  const runtimeConfig = createMetaverseRuntimeConfig(
+    previewResult.launchSelection.bundleId
+  );
+  const previewSpawn = previewBundle.bundle.playerSpawnNodes[0];
+
+  assert.equal(previewResult.validation.valid, true);
+  assert.equal(previewResult.registrationError, null);
+  assert.notEqual(previewSpawn, undefined);
+  assert.equal(runtimeConfig.groundedBody.spawnPosition.x, previewSpawn.position.x);
+  assert.equal(runtimeConfig.groundedBody.spawnPosition.z, previewSpawn.position.z);
+  assert.equal(
+    runtimeConfig.camera.spawnPosition.x,
+    previewSpawn.position.x
+  );
+  assert.equal(
+    runtimeConfig.camera.spawnPosition.z,
+    previewSpawn.position.z - 0.24
+  );
+  assert.equal(runtimeConfig.camera.initialYawRadians, previewSpawn.yawRadians);
+});
+
 test("map editor preview registration pushes authored water regions into the active metaverse runtime config", async () => {
   const {
     createMapEditorProject,
@@ -534,10 +855,6 @@ test("map editor preview registration pushes authored water regions into the act
   assert.deepEqual(runtimeConfig.environment.fogColor, [0.78, 0.6, 0.48]);
   assert.deepEqual(runtimeConfig.ocean.nearColor, [0.34, 0.41, 0.58]);
   assert.equal(runtimeConfig.groundedBody.baseSpeedUnitsPerSecond, 9.1);
-  assert.equal(
-    runtimeConfig.traversal.groundedJumpSupportVerticalSpeedTolerance,
-    0.65
-  );
   assert.equal(runtimeConfig.swim.baseSpeedUnitsPerSecond, 7.1);
   assert.equal(runtimeConfig.movement.worldRadius, 132);
 });

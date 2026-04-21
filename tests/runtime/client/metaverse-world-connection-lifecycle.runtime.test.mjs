@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
-import {
-  createMetaversePlayerId,
-  createMetaverseRealtimeWorldEvent,
-  createMetaverseVehicleId
-} from "@webgpu-metaverse/shared";
+import { createMetaversePlayerId } from "@webgpu-metaverse/shared";
 
+import {
+  createManualTimerScheduler,
+  createWorldEvent,
+  flushAsyncWork
+} from "./fixtures/metaverse-world-network-test-fixtures.mjs";
 import { createClientModuleLoader } from "./load-client-module.mjs";
 
 let clientLoader;
@@ -18,122 +19,6 @@ before(async () => {
 after(async () => {
   await clientLoader?.close();
 });
-
-function flushAsyncWork() {
-  return new Promise((resolve) => {
-    setImmediate(resolve);
-  });
-}
-
-function createManualTimerScheduler() {
-  const clearedHandles = new Set();
-  const scheduledTasks = [];
-  let nextHandle = 1;
-
-  return Object.freeze({
-    clearTimeout(handle) {
-      clearedHandles.add(handle);
-    },
-    get clearedCount() {
-      return clearedHandles.size;
-    },
-    get pendingTasks() {
-      return scheduledTasks.filter((task) => !clearedHandles.has(task.handle));
-    },
-    runNext(delay) {
-      const taskIndex = scheduledTasks.findIndex(
-        (task) =>
-          !clearedHandles.has(task.handle) &&
-          (delay === undefined || task.delay === delay)
-      );
-
-      assert.notEqual(taskIndex, -1);
-
-      const [task] = scheduledTasks.splice(taskIndex, 1);
-
-      assert.notEqual(task, undefined);
-      clearedHandles.add(task.handle);
-      task.callback();
-    },
-    setTimeout(callback, delay) {
-      const handle = nextHandle;
-
-      nextHandle += 1;
-      scheduledTasks.push({
-        callback,
-        delay,
-        handle
-      });
-
-      return handle;
-    }
-  });
-}
-
-function createWorldEvent({
-  playerId,
-  snapshotSequence,
-  currentTick,
-  serverTimeMs,
-  vehicleX = 8
-}) {
-  const vehicleId = createMetaverseVehicleId("metaverse-hub-skiff-v1");
-
-  assert.notEqual(vehicleId, null);
-
-  return createMetaverseRealtimeWorldEvent({
-    world: {
-      players: [
-        {
-          characterId: "mesh2motion-humanoid-v1",
-          lastProcessedInputSequence: snapshotSequence,
-          lastProcessedLookSequence: snapshotSequence,
-          lastProcessedTraversalOrientationSequence: snapshotSequence,
-          linearVelocity: {
-            x: 0,
-            y: 0,
-            z: 0
-          },
-          locomotionMode: "grounded",
-          playerId,
-          position: {
-            x: 0,
-            y: 1.62,
-            z: 24
-          },
-          stateSequence: snapshotSequence,
-          username: "Harbor Pilot",
-          yawRadians: 0
-        }
-      ],
-      snapshotSequence,
-      tick: {
-        currentTick,
-        serverTimeMs,
-        tickIntervalMs: 50
-      },
-      vehicles: [
-        {
-          angularVelocityRadiansPerSecond: 0,
-          environmentAssetId: "metaverse-hub-skiff-v1",
-          linearVelocity: {
-            x: 0.5,
-            y: 0,
-            z: 0
-          },
-          position: {
-            x: vehicleX,
-            y: 0.4,
-            z: 12
-          },
-          seats: [],
-          vehicleId,
-          yawRadians: 0
-        }
-      ]
-    }
-  });
-}
 
 test("MetaverseWorldConnectionLifecycle binds one player, polls, and cancels scheduled polling on dispose", async () => {
   const { MetaverseWorldConnectionLifecycle } = await clientLoader.load(

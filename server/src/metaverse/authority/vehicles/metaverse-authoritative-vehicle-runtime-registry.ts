@@ -125,6 +125,34 @@ function resolveVehicleDriveColliderShape(
   });
 }
 
+function resolveVehicleInitialPose(
+  readSurfaceAsset: (
+    environmentAssetId: string
+  ) => MetaverseWorldSurfaceAssetAuthoring | null,
+  environmentAssetId: string
+): {
+  readonly position: PhysicsVector3Snapshot;
+  readonly yawRadians: number;
+} {
+  const surfaceAsset = readSurfaceAsset(environmentAssetId);
+  const authoredPlacement = surfaceAsset?.placements[0] ?? null;
+
+  if (surfaceAsset === null || authoredPlacement === null) {
+    throw new Error(
+      `Metaverse authoritative world requires one authored placement for vehicle ${environmentAssetId}.`
+    );
+  }
+
+  return Object.freeze({
+    position: createPhysicsVector3Snapshot(
+      authoredPlacement.position.x,
+      authoredPlacement.position.y,
+      authoredPlacement.position.z
+    ),
+    yawRadians: authoredPlacement.rotationYRadians
+  });
+}
+
 export class MetaverseAuthoritativeVehicleRuntimeRegistry<
   PlayerRuntime extends MetaverseAuthoritativeVehicleRegistryPlayerRuntimeState,
   MountedOccupancy extends MetaverseAuthoritativeVehicleRegistryMountedOccupancyRuntimeState,
@@ -180,6 +208,10 @@ export class MetaverseAuthoritativeVehicleRuntimeRegistry<
       this.#dependencies.readSurfaceAsset,
       environmentAssetId
     );
+    const initialVehiclePose = resolveVehicleInitialPose(
+      this.#dependencies.readSurfaceAsset,
+      environmentAssetId
+    );
     const vehicleRuntime = {
       angularVelocityRadiansPerSecond: 0,
       driveRuntime: new MetaverseAuthoritativeSurfaceDriveRuntime(
@@ -202,13 +234,13 @@ export class MetaverseAuthoritativeVehicleRuntimeRegistry<
       linearVelocityX: 0,
       linearVelocityY: 0,
       linearVelocityZ: 0,
-      positionX: 0,
-      positionY: 0,
-      positionZ: 0,
+      positionX: initialVehiclePose.position.x,
+      positionY: initialVehiclePose.position.y,
+      positionZ: initialVehiclePose.position.z,
       seatsById: new Map<string, SeatRuntime>(),
       strafeSpeedUnitsPerSecond: 0,
       vehicleId,
-      yawRadians: 0
+      yawRadians: initialVehiclePose.yawRadians
     } as VehicleRuntime;
 
     this.#dependencies.vehicleDriveColliderHandles.add(
@@ -279,11 +311,7 @@ export class MetaverseAuthoritativeVehicleRuntimeRegistry<
       vehicleRuntime.linearVelocityX = 0;
       vehicleRuntime.linearVelocityY = 0;
       vehicleRuntime.linearVelocityZ = 0;
-      vehicleRuntime.positionX = playerRuntime.positionX;
-      vehicleRuntime.positionY = playerRuntime.positionY;
-      vehicleRuntime.positionZ = playerRuntime.positionZ;
       vehicleRuntime.strafeSpeedUnitsPerSecond = 0;
-      vehicleRuntime.yawRadians = playerRuntime.yawRadians;
       vehicleRuntime.lastPoseAtMs = nowMs;
     }
 

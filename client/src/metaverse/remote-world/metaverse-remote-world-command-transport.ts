@@ -1,6 +1,6 @@
 import type {
-  MetaversePlayerTraversalIntentSnapshot,
-  MetaversePlayerTraversalIntentSnapshotInput
+  MetaversePlayerTraversalIntentSnapshotInput,
+  MetaverseRealtimePlayerWeaponStateSnapshot
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import type {
@@ -8,7 +8,10 @@ import type {
   MountedEnvironmentSnapshot
 } from "../types/metaverse-runtime";
 import type { MetaverseLocalPlayerIdentity } from "../classes/metaverse-presence-runtime";
-import type { RoutedDriverVehicleControlIntentSnapshot } from "../traversal/types/traversal";
+import type {
+  MetaverseIssuedTraversalIntentInputSnapshot,
+  RoutedDriverVehicleControlIntentSnapshot
+} from "../traversal/types/traversal";
 import type { MetaverseWorldClientRuntime } from "@/network";
 
 interface MetaverseRemoteWorldCommandTransportDependencies {
@@ -80,7 +83,7 @@ export class MetaverseRemoteWorldCommandTransport {
 
   syncLocalTraversalIntent(
     traversalIntentInput: MetaversePlayerTraversalIntentSnapshotInput | null
-  ): MetaversePlayerTraversalIntentSnapshot | null {
+  ): MetaverseIssuedTraversalIntentInputSnapshot | null {
     const worldClient = this.#readWorldClient();
 
     if (worldClient === null || this.#localPlayerIdentity === null) {
@@ -101,7 +104,7 @@ export class MetaverseRemoteWorldCommandTransport {
 
   previewLocalTraversalIntent(
     traversalIntentInput: MetaversePlayerTraversalIntentSnapshotInput | null
-  ): MetaversePlayerTraversalIntentSnapshot | null {
+  ): MetaverseIssuedTraversalIntentInputSnapshot | null {
     const worldClient = this.#readWorldClient();
 
     if (worldClient === null || this.#localPlayerIdentity === null) {
@@ -141,6 +144,22 @@ export class MetaverseRemoteWorldCommandTransport {
         yawRadians: lookSnapshot.yawRadians
       },
       playerId: this.#localPlayerIdentity.playerId
+    });
+  }
+
+  syncLocalPlayerWeaponState(
+    weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null
+  ): void {
+    const worldClient = this.#readWorldClient();
+
+    if (worldClient === null || this.#localPlayerIdentity === null) {
+      worldClient?.syncPlayerWeaponState?.(null);
+      return;
+    }
+
+    worldClient.syncPlayerWeaponState?.({
+      playerId: this.#localPlayerIdentity.playerId,
+      weaponState
     });
   }
 }

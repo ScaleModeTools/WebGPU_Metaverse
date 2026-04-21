@@ -1,0 +1,307 @@
+import assert from "node:assert/strict";
+
+import {
+  createMetaverseRealtimeWorldEvent,
+  createMetaverseSyncPlayerTraversalIntentCommand as createRawMetaverseSyncPlayerTraversalIntentCommand,
+  createMetaverseVehicleId
+} from "@webgpu-metaverse/shared";
+
+function flushAsyncWork() {
+  return new Promise((resolve) => {
+    setImmediate(resolve);
+  });
+}
+
+function createManualTimerScheduler() {
+  const clearedHandles = new Set();
+  const scheduledTasks = [];
+  let nextHandle = 1;
+
+  return Object.freeze({
+    clearTimeout(handle) {
+      clearedHandles.add(handle);
+    },
+    get clearedCount() {
+      return clearedHandles.size;
+    },
+    get pendingTasks() {
+      return scheduledTasks.filter((task) => !clearedHandles.has(task.handle));
+    },
+    runNext(delay) {
+      const taskIndex = scheduledTasks.findIndex(
+        (task) =>
+          !clearedHandles.has(task.handle) &&
+          (delay === undefined || task.delay === delay)
+      );
+
+      assert.notEqual(taskIndex, -1);
+
+      const [task] = scheduledTasks.splice(taskIndex, 1);
+
+      assert.notEqual(task, undefined);
+      clearedHandles.add(task.handle);
+      task.callback();
+    },
+    setTimeout(callback, delay) {
+      const handle = nextHandle;
+
+      nextHandle += 1;
+      scheduledTasks.push({
+        callback,
+        delay,
+        handle
+      });
+
+      return handle;
+    }
+  });
+}
+
+function createTraversalIntentInput(input) {
+  if ("bodyControl" in input || "actionIntent" in input) {
+    return {
+      ...input,
+      facing: input.facing ?? {
+        pitchRadians: input.pitchRadians ?? 0,
+        yawRadians:
+          input.bodyYawRadians ??
+          input.lookYawRadians ??
+          input.yawRadians ??
+          0
+      }
+    };
+  }
+
+  return {
+    actionIntent: {
+      kind:
+        input.jump === true || (input.jumpActionSequence ?? 0) > 0
+          ? "jump"
+          : "none",
+      pressed: input.jump === true,
+      ...(input.jumpActionSequence === undefined
+        ? {}
+        : { sequence: input.jumpActionSequence })
+    },
+    bodyControl: {
+      boost: input.boost,
+      moveAxis: input.moveAxis,
+      strafeAxis: input.strafeAxis,
+      turnAxis: input.yawAxis ?? 0
+    },
+    facing: {
+      pitchRadians: input.pitchRadians ?? 0,
+      yawRadians:
+        input.bodyYawRadians ??
+        input.lookYawRadians ??
+        input.yawRadians ??
+        0
+    },
+    inputSequence: input.inputSequence,
+    locomotionMode: input.locomotionMode ?? "grounded",
+    sampleId: input.sampleId,
+    orientationSequence: input.orientationSequence
+  };
+}
+
+function createMetaverseSyncPlayerTraversalIntentCommand(input) {
+  const nextIntent = input.intent;
+  const normalizedFacing =
+    nextIntent.facing ?? {
+      pitchRadians: nextIntent.pitchRadians ?? 0,
+      yawRadians:
+        nextIntent.bodyYawRadians ??
+        nextIntent.lookYawRadians ??
+        nextIntent.yawRadians ??
+        0
+    };
+
+  if ("bodyControl" in nextIntent || "actionIntent" in nextIntent) {
+    return createRawMetaverseSyncPlayerTraversalIntentCommand({
+      ...input,
+      intent: {
+        ...nextIntent,
+        facing: normalizedFacing
+      }
+    });
+  }
+
+  return createRawMetaverseSyncPlayerTraversalIntentCommand({
+    ...input,
+    intent: {
+      actionIntent: {
+        kind:
+          nextIntent.jump === true || (nextIntent.jumpActionSequence ?? 0) > 0
+            ? "jump"
+            : "none",
+        pressed: nextIntent.jump === true,
+        ...(nextIntent.jumpActionSequence === undefined
+          ? {}
+          : { sequence: nextIntent.jumpActionSequence })
+      },
+      bodyControl: {
+        boost: nextIntent.boost,
+        moveAxis: nextIntent.moveAxis,
+        strafeAxis: nextIntent.strafeAxis,
+        turnAxis: nextIntent.yawAxis ?? 0
+      },
+      facing: normalizedFacing,
+      inputSequence: nextIntent.inputSequence,
+      locomotionMode: nextIntent.locomotionMode ?? "grounded",
+      orientationSequence: nextIntent.orientationSequence
+    }
+  });
+}
+
+function createDefaultVehicleSnapshot({ vehicleX = 8 } = {}) {
+  const vehicleId = createMetaverseVehicleId("metaverse-hub-skiff-v1");
+
+  assert.notEqual(vehicleId, null);
+
+  return Object.freeze({
+    angularVelocityRadiansPerSecond: 0,
+    environmentAssetId: "metaverse-hub-skiff-v1",
+    linearVelocity: Object.freeze({
+      x: 0.5,
+      y: 0,
+      z: 0
+    }),
+    position: Object.freeze({
+      x: vehicleX,
+      y: 0.4,
+      z: 12
+    }),
+    seats: Object.freeze([]),
+    vehicleId,
+    yawRadians: 0
+  });
+}
+
+function createWorldEvent({
+  authoritativeJumpActionSequence = 0,
+  currentTick,
+  groundedBody = Object.freeze({
+    linearVelocity: Object.freeze({
+      x: 0,
+      y: 0,
+      z: 0
+    }),
+    position: Object.freeze({
+      x: 0,
+      y: 1.62,
+      z: 24
+    }),
+    yawRadians: 0
+  }),
+  includeDefaultVehicle = true,
+  lastProcessedInputSequence,
+  lastProcessedLookSequence = 0,
+  lastProcessedWeaponSequence = 0,
+  lastProcessedTraversalSampleId,
+  lastProcessedTraversalOrientationSequence,
+  locomotionMode = "grounded",
+  playerCharacterId = "mesh2motion-humanoid-v1",
+  playerId,
+  playerStateSequence,
+  serverTimeMs,
+  snapshotSequence,
+  tickIntervalMs = 50,
+  username = "Harbor Pilot",
+  vehicleX = 8,
+  vehicles = null
+}) {
+  const resolvedLastProcessedInputSequence =
+    lastProcessedInputSequence ?? snapshotSequence;
+  const resolvedLastProcessedTraversalOrientationSequence =
+    lastProcessedTraversalOrientationSequence ??
+    resolvedLastProcessedInputSequence;
+  const resolvedLastProcessedTraversalSampleId =
+    lastProcessedTraversalSampleId ?? resolvedLastProcessedInputSequence;
+  const resolvedPlayerStateSequence = playerStateSequence ?? snapshotSequence;
+  const resolvedVehicles =
+    vehicles ??
+    (includeDefaultVehicle
+      ? Object.freeze([createDefaultVehicleSnapshot({ vehicleX })])
+      : Object.freeze([]));
+
+  return createMetaverseRealtimeWorldEvent({
+    world: {
+      observerPlayer: {
+        ...(authoritativeJumpActionSequence > 0
+          ? {
+              jumpDebug: {
+                resolvedActionSequence: authoritativeJumpActionSequence,
+                resolvedActionState: "accepted"
+              }
+            }
+          : {}),
+        lastProcessedInputSequence: resolvedLastProcessedInputSequence,
+        lastProcessedLookSequence,
+        lastProcessedWeaponSequence,
+        lastProcessedTraversalSampleId:
+          resolvedLastProcessedTraversalSampleId,
+        lastProcessedTraversalOrientationSequence:
+          resolvedLastProcessedTraversalOrientationSequence,
+        playerId
+      },
+      players: [
+        {
+          characterId: playerCharacterId,
+          groundedBody,
+          locomotionMode,
+          playerId,
+          ...(authoritativeJumpActionSequence > 0
+            ? {
+                traversalAuthority: {
+                  lastConsumedActionKind: "jump",
+                  lastConsumedActionSequence: authoritativeJumpActionSequence
+                }
+              }
+            : {}),
+          stateSequence: resolvedPlayerStateSequence,
+          username
+        }
+      ],
+      snapshotSequence,
+      tick: {
+        currentTick,
+        serverTimeMs,
+        tickIntervalMs
+      },
+      vehicles: resolvedVehicles
+    }
+  });
+}
+
+function readLocalPlayerSnapshot(worldEvent) {
+  return Object.freeze({
+    ...worldEvent.world.observerPlayer,
+    traversalAuthority: worldEvent.world.players[0]?.traversalAuthority
+  });
+}
+
+function createConnectedStatusSnapshot(
+  playerId,
+  connected = true,
+  overrides = {}
+) {
+  return Object.freeze({
+    connected,
+    lastError: null,
+    lastSnapshotSequence: null,
+    lastWorldTick: null,
+    playerId,
+    state: connected ? "connected" : "connecting",
+    ...overrides
+  });
+}
+
+export {
+  createConnectedStatusSnapshot,
+  createManualTimerScheduler,
+  createMetaverseSyncPlayerTraversalIntentCommand,
+  createTraversalIntentInput,
+  createWorldEvent,
+  flushAsyncWork,
+  readLocalPlayerSnapshot
+};

@@ -16,6 +16,11 @@ interface MouseFlightInputState {
   secondaryAction: boolean;
 }
 
+interface GamepadTriggerInputSnapshot {
+  readonly primaryAction: boolean;
+  readonly secondaryAction: boolean;
+}
+
 type MouseFlightButtonInputKey = "primaryAction" | "secondaryAction";
 
 interface MetaverseFlightInputRuntimeDependencies {
@@ -55,6 +60,14 @@ function createMouseFlightInputState(): MouseFlightInputState {
     primaryAction: false,
     secondaryAction: false
   };
+}
+
+function isGamepadButtonPressed(button: GamepadButton | null | undefined): boolean {
+  if (button === null || button === undefined) {
+    return false;
+  }
+
+  return button.pressed === true || (button.value ?? 0) >= 0.5;
 }
 
 function isEditableEventTarget(target: EventTarget | null): boolean {
@@ -233,6 +246,7 @@ export class MetaverseFlightInputRuntime {
     );
     this.#mouseInput.lookDeltaX = 0;
     this.#mouseInput.lookDeltaY = 0;
+    const gamepadTriggerInput = this.#readGamepadTriggerInput();
 
     return Object.freeze({
       boost: this.#keyboardInput.boost,
@@ -240,14 +254,51 @@ export class MetaverseFlightInputRuntime {
       moveAxis:
         (this.#keyboardInput.moveForward ? 1 : 0) -
         (this.#keyboardInput.moveBackward ? 1 : 0),
-      primaryAction: this.#mouseInput.primaryAction,
+      primaryAction:
+        this.#mouseInput.primaryAction || gamepadTriggerInput.primaryAction,
       pitchAxis,
-      secondaryAction: this.#mouseInput.secondaryAction,
+      secondaryAction:
+        this.#mouseInput.secondaryAction || gamepadTriggerInput.secondaryAction,
       strafeAxis:
         (this.#keyboardInput.strafeRight ? 1 : 0) -
         (this.#keyboardInput.strafeLeft ? 1 : 0),
       yawAxis
     });
+  }
+
+  #readGamepadTriggerInput(): GamepadTriggerInputSnapshot {
+    const getGamepads = globalThis.navigator?.getGamepads;
+
+    if (typeof getGamepads !== "function") {
+      return {
+        primaryAction: false,
+        secondaryAction: false
+      };
+    }
+
+    const gamepads = getGamepads.call(globalThis.navigator);
+    let primaryAction = false;
+    let secondaryAction = false;
+
+    for (let gamepadIndex = 0; gamepadIndex < gamepads.length; gamepadIndex += 1) {
+      const gamepad = gamepads[gamepadIndex];
+
+      if (gamepad === null || gamepad === undefined) {
+        continue;
+      }
+
+      primaryAction ||= isGamepadButtonPressed(gamepad.buttons[7]);
+      secondaryAction ||= isGamepadButtonPressed(gamepad.buttons[6]);
+
+      if (primaryAction && secondaryAction) {
+        break;
+      }
+    }
+
+    return {
+      primaryAction,
+      secondaryAction
+    };
   }
 
   #exitPointerLockIfHeld(): void {

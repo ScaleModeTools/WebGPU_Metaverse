@@ -9,6 +9,7 @@ import {
   type MapEditorPlacementDraftSnapshot
 } from "@/engine-tool/project/map-editor-project-state";
 import type {
+  MapEditorPlayerSpawnTransformUpdate,
   MapEditorPlacementUpdate,
   MapEditorViewportHelperVisibilitySnapshot,
   MapEditorViewportToolMode
@@ -30,6 +31,10 @@ interface MapEditorViewportPaneProps {
     placementId: string,
     update: MapEditorPlacementUpdate
   ) => void;
+  readonly onCommitPlayerSpawnTransform: (
+    spawnId: string,
+    update: MapEditorPlayerSpawnTransformUpdate
+  ) => void;
   readonly onSelectPlacementId: (placementId: string) => void;
   readonly placementDrafts: readonly MapEditorPlacementDraftSnapshot[];
   readonly playerSpawnDrafts: readonly MapEditorPlayerSpawnDraftSnapshot[];
@@ -48,6 +53,7 @@ export function MapEditorViewportPane({
   bundleId,
   onBuildPlacementAtPosition,
   onCommitPlacementTransform,
+  onCommitPlayerSpawnTransform,
   onSelectPlacementId,
   placementDrafts,
   playerSpawnDrafts,
@@ -103,6 +109,7 @@ export function MapEditorViewportPane({
           onBuildPlacementAtPosition={onBuildPlacementAtPosition}
           helperVisibility={viewportHelperVisibility}
           onCommitPlacementTransform={onCommitPlacementTransform}
+          onCommitPlayerSpawnTransform={onCommitPlayerSpawnTransform}
           onSelectPlacementId={onSelectPlacementId}
           placementDrafts={placementDrafts}
           playerSpawnDrafts={playerSpawnDrafts}
@@ -116,7 +123,7 @@ export function MapEditorViewportPane({
       <div className="shrink-0 border-t border-border/70 px-4 py-3 text-sm text-muted-foreground">
         {viewportToolMode === "build" && activeBuildPrimitiveAssetId !== null
           ? `Orbit with drag, pan with right-drag, zoom with the scroll wheel, and fly with WASD plus Q/E. Click to stamp ${activeBuildPrimitiveAssetId} onto the snapped build plane.`
-          : "Orbit with drag, pan with right-drag, zoom with the scroll wheel, and fly with WASD plus Q/E. Move, rotate, and scale now use live gizmos while authoring truth still commits back into tool project state."}
+          : "Orbit with drag, pan with right-drag, zoom with the scroll wheel, and fly with WASD plus Q/E. Placements use move/rotate/scale gizmos, and player spawns support click-to-move plus rotate directly in the viewport."}
       </div>
     </div>
   );

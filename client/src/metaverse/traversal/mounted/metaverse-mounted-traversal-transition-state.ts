@@ -5,12 +5,16 @@ import type { MountedEnvironmentSnapshot } from "../../types/mounted";
 import type { MetaverseCameraSnapshot } from "../../types/presentation";
 import type { MountedEnvironmentAnchorSnapshot } from "../types/traversal";
 import { freezeVector3 } from "../policies/surface-locomotion";
+import type { LocalAuthorityPoseIntentionalDiscontinuityCause } from "../reconciliation/local-authority-pose-correction";
 import { MetaverseUnmountedSurfaceLocomotionState } from "../surface/metaverse-unmounted-surface-locomotion-state";
 import { MetaverseMountedVehicleTraversalState } from "./metaverse-mounted-vehicle-traversal-state";
 
 interface MetaverseMountedTraversalTransitionStateDependencies {
   readonly groundedBodyRuntime: MetaverseGroundedBodyRuntime;
   readonly mountedVehicleState: MetaverseMountedVehicleTraversalState;
+  readonly noteIntentionalDiscontinuity: (
+    cause: LocalAuthorityPoseIntentionalDiscontinuityCause
+  ) => void;
   readonly readCameraSnapshot: () => MetaverseCameraSnapshot;
   readonly readLocomotionMode: () => MetaverseLocomotionModeId;
   readonly readMountedEnvironmentAnchorSnapshot: (
@@ -84,6 +88,7 @@ export class MetaverseMountedTraversalTransitionState {
       return this.#dependencies.mountedVehicleState.mountedEnvironmentSnapshot;
     }
 
+    this.#dependencies.noteIntentionalDiscontinuity("mounted-boarding");
     this.#enterMountedOccupancyTraversalState();
     this.#dependencies.syncCharacterPresentationSnapshot();
 
@@ -105,6 +110,7 @@ export class MetaverseMountedTraversalTransitionState {
       return this.#dependencies.mountedVehicleState.mountedEnvironmentSnapshot;
     }
 
+    this.#dependencies.noteIntentionalDiscontinuity("mounted-boarding");
     this.#enterMountedOccupancyTraversalState();
     this.#dependencies.syncCharacterPresentationSnapshot();
 
@@ -116,32 +122,44 @@ export class MetaverseMountedTraversalTransitionState {
       this.#dependencies.mountedVehicleState.mountedVehicleSnapshot;
 
     if (previousMountedVehicleState !== null) {
+      this.#dependencies.noteIntentionalDiscontinuity("mounted-unboarding");
       const freeRoamMountedOccupancy =
         this.#dependencies.mountedVehicleState.keepsFreeRoam;
-      const groundedBodySnapshot = this.#dependencies.groundedBodyRuntime.snapshot;
-      const excludedEnvironmentAssetId = freeRoamMountedOccupancy
-        ? null
-        : previousMountedVehicleState.environmentAssetId;
 
       this.#dependencies.mountedVehicleState.clear();
-      const automaticSurfaceSyncResult =
-        this.#dependencies.surfaceLocomotionState.syncAutomaticSurfaceLocomotion({
-          currentLocomotionMode: this.#dependencies.readLocomotionMode(),
-          excludedOwnerEnvironmentAssetId: excludedEnvironmentAssetId,
-          lookYawRadians: this.#dependencies.readCameraSnapshot().yawRadians,
-          position: freeRoamMountedOccupancy
-            ? groundedBodySnapshot.position
-            : previousMountedVehicleState.position,
-          resolveGroundedPresentationPosition: () =>
-            this.#dependencies.resolveGroundedPresentationPosition(),
-          resolveSwimPresentationPosition: (swimSnapshot) =>
-            this.#dependencies.resolveSwimPresentationPosition(swimSnapshot),
-          traversalCameraPitchRadians:
-            this.#dependencies.readTraversalCameraPitchRadians(),
-          yawRadians: freeRoamMountedOccupancy
-            ? groundedBodySnapshot.yawRadians
-            : previousMountedVehicleState.yawRadians
-        });
+      const automaticSurfaceSyncResult = freeRoamMountedOccupancy
+        ? this.#dependencies.surfaceLocomotionState
+            .syncAutomaticSurfaceLocomotionFromGroundedBody({
+              currentLocomotionMode: this.#dependencies.readLocomotionMode(),
+              excludedOwnerEnvironmentAssetId: null,
+              lookYawRadians: this.#dependencies.readUnmountedLookYawRadians(),
+              resolveGroundedPresentationPosition: () =>
+                this.#dependencies.resolveGroundedPresentationPosition(),
+              resolveSwimPresentationPosition: (swimSnapshot) =>
+                this.#dependencies.resolveSwimPresentationPosition(
+                  swimSnapshot
+                ),
+              traversalCameraPitchRadians:
+                this.#dependencies.readTraversalCameraPitchRadians()
+            })
+        : this.#dependencies.surfaceLocomotionState.syncAutomaticSurfaceLocomotion(
+            {
+              currentLocomotionMode: this.#dependencies.readLocomotionMode(),
+              excludedOwnerEnvironmentAssetId:
+                previousMountedVehicleState.environmentAssetId,
+              lookYawRadians: this.#dependencies.readCameraSnapshot().yawRadians,
+              position: previousMountedVehicleState.position,
+              resolveGroundedPresentationPosition: () =>
+                this.#dependencies.resolveGroundedPresentationPosition(),
+              resolveSwimPresentationPosition: (swimSnapshot) =>
+                this.#dependencies.resolveSwimPresentationPosition(
+                  swimSnapshot
+                ),
+              traversalCameraPitchRadians:
+                this.#dependencies.readTraversalCameraPitchRadians(),
+              yawRadians: previousMountedVehicleState.yawRadians
+            }
+          );
 
       this.#dependencies.setLocomotionMode(
         automaticSurfaceSyncResult.locomotionMode
@@ -158,6 +176,7 @@ export class MetaverseMountedTraversalTransitionState {
     }
 
     if (this.#dependencies.readLocomotionMode() === "mounted") {
+      this.#dependencies.noteIntentionalDiscontinuity("mounted-unboarding");
       const cameraSnapshot = this.#dependencies.readCameraSnapshot();
       const automaticSurfaceSyncResult =
         this.#dependencies.surfaceLocomotionState.syncAutomaticSurfaceLocomotion({

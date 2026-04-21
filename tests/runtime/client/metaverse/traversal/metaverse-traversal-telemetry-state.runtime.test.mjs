@@ -29,11 +29,17 @@ function createReconciliationStateStub() {
       return resetCalls;
     },
     lastLocalAuthorityPoseCorrectionDetail: Object.freeze({
+      convergenceEpisodeStartIntentionalDiscontinuityCause: "none",
+      convergenceEpisodeStartHistoricalLocalSampleMatched: null,
+      convergenceEpisodeStartHistoricalLocalSampleSelectionReason: null,
+      convergenceEpisodeStartHistoricalLocalSampleTimeDeltaMs: null,
       planarMagnitudeMeters: null
     }),
     lastLocalAuthorityPoseCorrectionSnapshot: null,
     lastLocalAuthorityPoseCorrectionReason: "none",
     localAuthorityPoseCorrectionCount: 0,
+    localAuthorityPoseConvergenceEpisodeCount: 0,
+    localAuthorityPoseConvergenceStepCount: 0,
     reset() {
       resetCalls += 1;
     }
@@ -80,13 +86,13 @@ test("MetaverseTraversalTelemetryState tracks correction counts and resets deleg
   });
 
   telemetryState.recordMountedVehicleAuthorityCorrection();
-  telemetryState.recordLocalAuthorityConvergence();
+  telemetryState.recordLocalAuthorityConvergence({ episodeStarted: false });
 
   assert.equal(telemetryState.localReconciliationCorrectionCount, 2);
   assert.equal(telemetryState.mountedVehicleAuthorityCorrectionCount, 1);
   assert.equal(
     telemetryState.lastLocalReconciliationCorrectionSource,
-    "local-authority-convergence"
+    "local-authority-convergence-step"
   );
   assert.equal(telemetryState.localAuthorityPoseCorrectionCount, 0);
   assert.equal(
@@ -105,7 +111,7 @@ test("MetaverseTraversalTelemetryState tracks correction counts and resets deleg
   assert.equal(reconciliationState.resetCalls, 1);
 });
 
-test("MetaverseTraversalTelemetryState publishes surface-routing telemetry without fabricating jump support off grounded traversal", async () => {
+test("MetaverseTraversalTelemetryState publishes surface-routing telemetry without fabricating grounded-only body telemetry off the swim path", async () => {
   const [{ MetaverseTraversalTelemetryState }, { metaverseRuntimeConfig }] =
     await Promise.all([
       clientLoader.load(
@@ -144,19 +150,11 @@ test("MetaverseTraversalTelemetryState publishes surface-routing telemetry witho
     }
   });
 
-  assert.deepEqual(telemetryState.localGroundedJumpGateTelemetrySnapshot, {
-    surfaceJumpSupported: null,
-    supported: null
-  });
   assert.deepEqual(telemetryState.surfaceRoutingLocalTelemetrySnapshot, {
     autostepHeightMeters: 0.18,
     blockingAffordanceDetected: false,
     decisionReason: "capability-transition-validated",
     groundedBody: null,
-    jumpDebug: {
-      surfaceJumpSupported: null,
-      supported: null
-    },
     locomotionMode: "swim",
     resolvedSupportHeightMeters: 0.42,
     swimBody: null,
@@ -242,6 +240,23 @@ test("MetaverseTraversalTelemetryState captures local and authoritative surface-
       traversalAuthority: createMetaverseTraversalAuthoritySnapshot(),
       yawRadians: 0
     }),
+    localGroundedBodySnapshot: null,
+    localIssuedTraversalIntentSnapshot: Object.freeze({
+      actionIntent: Object.freeze({
+        kind: "none",
+        pressed: false,
+        sequence: 0
+      }),
+      bodyControl: Object.freeze({
+        boost: true,
+        moveAxis: 1,
+        strafeAxis: -0.25,
+        turnAxis: 0.5
+      }),
+      inputSequence: 19,
+      locomotionMode: "grounded"
+    }),
+    localSwimBodySnapshot: null,
     localTraversalPose: Object.freeze({
       linearVelocity: Object.freeze({ x: 0, y: 0, z: 0 }),
       locomotionMode: "grounded",
@@ -284,10 +299,6 @@ test("MetaverseTraversalTelemetryState captures local and authoritative surface-
       blockingAffordanceDetected: false,
       decisionReason: "capability-maintained",
       groundedBody: null,
-      jumpDebug: {
-        surfaceJumpSupported: null,
-        supported: null
-      },
       locomotionMode: "grounded",
       resolvedSupportHeightMeters: 0.1,
       swimBody: null,
@@ -345,6 +356,6 @@ test("MetaverseTraversalTelemetryState captures local and authoritative surface-
   );
   assert.equal(
     snapshot.authoritative.surfaceRouting.resolvedSupportHeightMeters,
-    0.1
+    0
   );
 });

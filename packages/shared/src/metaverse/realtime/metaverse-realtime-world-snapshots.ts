@@ -1,10 +1,12 @@
 import type { Username } from "../../player-profile.js";
 import type { TypeBrand } from "../../type-branding.js";
 import type { Milliseconds, Radians } from "../../unit-measurements.js";
+import type { MetaversePlayerTeamId } from "../metaverse-player-team.js";
 import {
   createMilliseconds,
   createRadians
 } from "../../unit-measurements.js";
+import { normalizeMetaversePlayerTeamId } from "../metaverse-player-team.js";
 import type {
   MetaversePlayerId,
   MetaversePresenceLocomotionModeId,
@@ -17,7 +19,8 @@ import {
   createMetaversePresenceVector3Snapshot,
   metaversePresenceLocomotionModeIds,
   metaversePresenceMountedOccupancyKinds,
-  metaversePresenceMountedOccupantRoleIds
+  metaversePresenceMountedOccupantRoleIds,
+  shouldKeepMetaverseMountedOccupancyFreeRoam
 } from "../metaverse-presence-contract.js";
 import {
   createMetaverseTraversalAuthoritySnapshot,
@@ -56,6 +59,13 @@ import {
   resolveMetaverseTraversalKinematicActionSnapshot,
   resolveMetaverseTraversalAuthoritySnapshotInput
 } from "../metaverse-traversal-authority.js";
+import type {
+  MetaverseRealtimePlayerWeaponStateSnapshot,
+  MetaverseRealtimePlayerWeaponStateSnapshotInput
+} from "./metaverse-realtime-player-weapon-state.js";
+import {
+  createMetaverseRealtimePlayerWeaponStateSnapshot
+} from "./metaverse-realtime-player-weapon-state.js";
 
 export const metaverseRealtimeWorldServerEventTypes = [
   "world-snapshot"
@@ -143,14 +153,14 @@ export interface MetaverseRealtimePlayerLookSnapshotInput {
   readonly yawRadians?: number;
 }
 
-export interface MetaverseRealtimePlayerObservedTraversalSnapshot {
-  readonly bodyControl: MetaversePlayerTraversalBodyControlSnapshot;
-  readonly facing: MetaversePlayerTraversalFacingSnapshot;
+export interface MetaverseRealtimePlayerPresentationIntentSnapshot {
+  readonly moveAxis: number;
+  readonly strafeAxis: number;
 }
 
-export interface MetaverseRealtimePlayerObservedTraversalSnapshotInput {
-  readonly bodyControl?: MetaversePlayerTraversalBodyControlSnapshotInput;
-  readonly facing?: MetaversePlayerTraversalFacingSnapshotInput;
+export interface MetaverseRealtimePlayerPresentationIntentSnapshotInput {
+  readonly moveAxis?: number;
+  readonly strafeAxis?: number;
 }
 
 export type MetaverseRealtimePlayerGroundedBodySnapshot =
@@ -169,8 +179,6 @@ export interface MetaverseRealtimePlayerJumpDebugSnapshot {
   readonly pendingActionBufferAgeMs: Milliseconds | null;
   readonly resolvedActionSequence: number;
   readonly resolvedActionState: MetaverseRealtimePlayerTraversalActionResolutionStateId;
-  readonly surfaceJumpSupported: boolean;
-  readonly supported: boolean;
 }
 
 export interface MetaverseRealtimePlayerJumpDebugSnapshotInput {
@@ -178,8 +186,6 @@ export interface MetaverseRealtimePlayerJumpDebugSnapshotInput {
   readonly pendingActionBufferAgeMs?: number | null;
   readonly resolvedActionSequence?: number;
   readonly resolvedActionState?: MetaverseRealtimePlayerTraversalActionResolutionStateId;
-  readonly surfaceJumpSupported?: boolean;
-  readonly supported?: boolean;
 }
 
 export type MetaverseRealtimePlayerTraversalAuthoritySnapshot =
@@ -191,44 +197,54 @@ export interface MetaverseRealtimePlayerSnapshot {
   readonly angularVelocityRadiansPerSecond: number;
   readonly characterId: string;
   readonly groundedBody: MetaverseRealtimePlayerGroundedBodySnapshot;
-  readonly jumpDebug: MetaverseRealtimePlayerJumpDebugSnapshot;
-  readonly lastProcessedInputSequence: number;
-  readonly lastProcessedLookSequence: number;
-  readonly lastProcessedTraversalOrientationSequence: number;
-  readonly linearVelocity: MetaverseRealtimeVector3Snapshot;
   readonly look: MetaverseRealtimePlayerLookSnapshot;
   readonly locomotionMode: MetaversePresenceLocomotionModeId;
   readonly mountedOccupancy: MetaverseRealtimeMountedOccupancySnapshot | null;
-  readonly observedTraversal: MetaverseRealtimePlayerObservedTraversalSnapshot;
+  readonly presentationIntent: MetaverseRealtimePlayerPresentationIntentSnapshot;
   readonly playerId: MetaversePlayerId;
-  readonly position: MetaverseRealtimeVector3Snapshot;
   readonly stateSequence: number;
   readonly swimBody: MetaverseRealtimePlayerSwimBodySnapshot | null;
+  readonly teamId: MetaversePlayerTeamId;
   readonly traversalAuthority: MetaverseRealtimePlayerTraversalAuthoritySnapshot;
+  readonly weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null;
   readonly username: Username;
-  readonly yawRadians: Radians;
 }
 
 export interface MetaverseRealtimePlayerSnapshotInput {
   readonly angularVelocityRadiansPerSecond?: number;
   readonly characterId: string;
   readonly groundedBody?: MetaverseRealtimePlayerGroundedBodySnapshotInput;
-  readonly jumpDebug?: MetaverseRealtimePlayerJumpDebugSnapshotInput;
-  readonly lastProcessedInputSequence?: number;
-  readonly lastProcessedLookSequence?: number;
-  readonly lastProcessedTraversalOrientationSequence?: number;
-  readonly linearVelocity: MetaverseRealtimeVector3SnapshotInput;
   readonly look?: MetaverseRealtimePlayerLookSnapshotInput;
   readonly locomotionMode?: MetaversePresenceLocomotionModeId;
   readonly mountedOccupancy?: MetaverseRealtimeMountedOccupancySnapshotInput | null;
-  readonly observedTraversal?: MetaverseRealtimePlayerObservedTraversalSnapshotInput;
+  readonly presentationIntent?: MetaverseRealtimePlayerPresentationIntentSnapshotInput;
   readonly playerId: MetaversePlayerId;
-  readonly position: MetaverseRealtimeVector3SnapshotInput;
   readonly stateSequence?: number;
   readonly swimBody?: MetaverseRealtimePlayerSwimBodySnapshotInput | null;
+  readonly teamId?: MetaversePlayerTeamId;
   readonly traversalAuthority?: MetaverseRealtimePlayerTraversalAuthoritySnapshotInput;
+  readonly weaponState?: MetaverseRealtimePlayerWeaponStateSnapshotInput | null;
   readonly username: Username;
-  readonly yawRadians: number;
+}
+
+export interface MetaverseRealtimeObserverPlayerSnapshot {
+  readonly jumpDebug: MetaverseRealtimePlayerJumpDebugSnapshot;
+  readonly lastProcessedInputSequence: number;
+  readonly lastProcessedLookSequence: number;
+  readonly lastProcessedTraversalSampleId: number;
+  readonly lastProcessedTraversalOrientationSequence: number;
+  readonly lastProcessedWeaponSequence: number;
+  readonly playerId: MetaversePlayerId;
+}
+
+export interface MetaverseRealtimeObserverPlayerSnapshotInput {
+  readonly jumpDebug?: MetaverseRealtimePlayerJumpDebugSnapshotInput;
+  readonly lastProcessedInputSequence?: number;
+  readonly lastProcessedLookSequence?: number;
+  readonly lastProcessedTraversalSampleId?: number;
+  readonly lastProcessedTraversalOrientationSequence?: number;
+  readonly lastProcessedWeaponSequence?: number;
+  readonly playerId: MetaversePlayerId;
 }
 
 export interface MetaverseRealtimeVehicleSnapshot {
@@ -267,6 +283,7 @@ export interface MetaverseRealtimeEnvironmentBodySnapshotInput {
 
 export interface MetaverseRealtimeWorldSnapshot {
   readonly environmentBodies: readonly MetaverseRealtimeEnvironmentBodySnapshot[];
+  readonly observerPlayer: MetaverseRealtimeObserverPlayerSnapshot | null;
   readonly players: readonly MetaverseRealtimePlayerSnapshot[];
   readonly snapshotSequence: number;
   readonly tick: MetaverseRealtimeTickSnapshot;
@@ -276,6 +293,7 @@ export interface MetaverseRealtimeWorldSnapshot {
 export interface MetaverseRealtimeWorldSnapshotInput {
   readonly environmentBodies?:
     readonly MetaverseRealtimeEnvironmentBodySnapshotInput[];
+  readonly observerPlayer?: MetaverseRealtimeObserverPlayerSnapshotInput | null;
   readonly players: readonly MetaverseRealtimePlayerSnapshotInput[];
   readonly snapshotSequence?: number;
   readonly tick: MetaverseRealtimeTickSnapshotInput;
@@ -401,18 +419,23 @@ function freezePlayerLookSnapshot(
   });
 }
 
-function freezePlayerObservedTraversalSnapshot(
-  input: MetaverseRealtimePlayerObservedTraversalSnapshotInput | undefined,
-  lookSnapshot: MetaverseRealtimePlayerLookSnapshot
-): MetaverseRealtimePlayerObservedTraversalSnapshot {
+function clampPresentationIntentAxis(rawValue: number | undefined): number {
+  const normalizedValue = normalizeFiniteNumber(rawValue ?? 0);
+  if (normalizedValue < -1) {
+    return -1;
+  }
+  if (normalizedValue > 1) {
+    return 1;
+  }
+  return normalizedValue;
+}
+
+function freezePlayerPresentationIntentSnapshot(
+  input: MetaverseRealtimePlayerPresentationIntentSnapshotInput | undefined
+): MetaverseRealtimePlayerPresentationIntentSnapshot {
   return Object.freeze({
-    bodyControl: createMetaverseTraversalBodyControlSnapshot(input?.bodyControl),
-    facing: createMetaverseTraversalFacingSnapshot(
-      input?.facing ?? {
-        pitchRadians: lookSnapshot.pitchRadians,
-        yawRadians: lookSnapshot.yawRadians
-      }
-    )
+    moveAxis: clampPresentationIntentAxis(input?.moveAxis),
+    strafeAxis: clampPresentationIntentAxis(input?.strafeAxis)
   });
 }
 
@@ -435,9 +458,31 @@ function freezePlayerJumpDebugSnapshot(
     ),
     resolvedActionState: resolveActionResolutionState(
       input?.resolvedActionState
+    )
+  });
+}
+
+function freezeObserverPlayerSnapshot(
+  input: MetaverseRealtimeObserverPlayerSnapshotInput
+): MetaverseRealtimeObserverPlayerSnapshot {
+  return Object.freeze({
+    jumpDebug: freezePlayerJumpDebugSnapshot(input.jumpDebug),
+    lastProcessedInputSequence: normalizeFiniteNonNegativeInteger(
+      input.lastProcessedInputSequence ?? 0
     ),
-    surfaceJumpSupported: input?.surfaceJumpSupported === true,
-    supported: input?.supported === true
+    lastProcessedLookSequence: normalizeFiniteNonNegativeInteger(
+      input.lastProcessedLookSequence ?? 0
+    ),
+    lastProcessedTraversalSampleId: normalizeFiniteNonNegativeInteger(
+      input.lastProcessedTraversalSampleId ?? 0
+    ),
+    lastProcessedTraversalOrientationSequence: normalizeFiniteNonNegativeInteger(
+      input.lastProcessedTraversalOrientationSequence ?? 0
+    ),
+    lastProcessedWeaponSequence: normalizeFiniteNonNegativeInteger(
+      input.lastProcessedWeaponSequence ?? 0
+    ),
+    playerId: input.playerId
   });
 }
 
@@ -463,7 +508,11 @@ function freezePlayerGroundedBodySnapshot(
     interaction: createMetaverseGroundedBodyInteractionSnapshot(
       input?.interaction
     ),
-    jumpBody: createMetaverseGroundedJumpBodySnapshot(input?.jumpBody),
+    jumpBody: createMetaverseGroundedJumpBodySnapshot(
+      input?.jumpBody ?? {
+        grounded: fallbackGrounded
+      }
+    ),
     linearVelocity: input?.linearVelocity ?? linearVelocity,
     position: input?.position ?? position,
     yawRadians: input?.yawRadians ?? yawRadians
@@ -539,13 +588,57 @@ function freezeMountedOccupancySnapshot(
   });
 }
 
+function resolvePlayerCanonicalKinematicSnapshot(
+  input: MetaverseRealtimePlayerSnapshotInput,
+  locomotionMode: MetaversePresenceLocomotionModeId,
+  mountedOccupancy: MetaverseRealtimeMountedOccupancySnapshot | null
+): {
+  readonly linearVelocity: MetaverseRealtimeVector3Snapshot;
+  readonly position: MetaverseRealtimeVector3Snapshot;
+  readonly yawRadians: Radians;
+} {
+  const preferSwimKinematics =
+    mountedOccupancy === null && locomotionMode === "swim";
+  const activeBodyInput = preferSwimKinematics
+    ? input.swimBody
+    : input.groundedBody;
+
+  if (
+    activeBodyInput?.linearVelocity === undefined ||
+    activeBodyInput.position === undefined ||
+    activeBodyInput.yawRadians === undefined
+  ) {
+    throw new Error(
+      preferSwimKinematics
+        ? "Metaverse realtime swim player snapshots require swimBody linearVelocity, position, and yawRadians inputs."
+        : "Metaverse realtime grounded or mounted player snapshots require groundedBody linearVelocity, position, and yawRadians inputs."
+    );
+  }
+
+  return Object.freeze({
+    linearVelocity: createMetaversePresenceVector3Snapshot(
+      activeBodyInput.linearVelocity
+    ),
+    position: createMetaversePresenceVector3Snapshot(activeBodyInput.position),
+    yawRadians: createRadians(activeBodyInput.yawRadians)
+  });
+}
+
 function freezePlayerSnapshot(
   input: MetaverseRealtimePlayerSnapshotInput,
   mountedOccupancy: MetaverseRealtimeMountedOccupancySnapshot | null,
   currentTick: number = 0
 ): MetaverseRealtimePlayerSnapshot {
+  const mountedTraversalState =
+    mountedOccupancy !== null &&
+    !shouldKeepMetaverseMountedOccupancyFreeRoam(mountedOccupancy);
   const locomotionMode = resolveLocomotionMode(input.locomotionMode);
-  const yawRadians = createRadians(input.yawRadians);
+  const canonicalKinematicSnapshot = resolvePlayerCanonicalKinematicSnapshot(
+    input,
+    locomotionMode,
+    mountedOccupancy
+  );
+  const { linearVelocity, position, yawRadians } = canonicalKinematicSnapshot;
   const lookSnapshot =
     input.look === undefined
       ? freezePlayerLookSnapshot({
@@ -553,13 +646,9 @@ function freezePlayerSnapshot(
           yawRadians
         })
       : freezePlayerLookSnapshot(input.look);
-  const observedTraversal = freezePlayerObservedTraversalSnapshot(
-    input.observedTraversal,
-    lookSnapshot
+  const presentationIntent = freezePlayerPresentationIntentSnapshot(
+    input.presentationIntent
   );
-  const linearVelocity =
-    createMetaversePresenceVector3Snapshot(input.linearVelocity);
-  const position = createMetaversePresenceVector3Snapshot(input.position);
   const groundedBody = freezePlayerGroundedBodySnapshot(
     input.groundedBody,
     Math.abs(linearVelocity.y) <= 0.05,
@@ -575,20 +664,19 @@ function freezePlayerSnapshot(
     position,
     yawRadians
   );
-  const jumpDebug = freezePlayerJumpDebugSnapshot(input.jumpDebug);
   const kinematicTraversalAction =
     input.groundedBody?.jumpBody === undefined
       ? resolveMetaverseTraversalKinematicActionSnapshot({
           grounded: Math.abs(linearVelocity.y) <= 0.05,
           locomotionMode: locomotionMode === "swim" ? "swim" : "grounded",
-          mounted: mountedOccupancy !== null,
+          mounted: mountedTraversalState,
           verticalSpeedUnitsPerSecond: linearVelocity.y
         })
-      : mountedOccupancy !== null || locomotionMode !== "grounded"
+      : mountedTraversalState || locomotionMode !== "grounded"
         ? resolveMetaverseTraversalKinematicActionSnapshot({
             grounded: true,
             locomotionMode: locomotionMode === "swim" ? "swim" : "grounded",
-            mounted: mountedOccupancy !== null,
+            mounted: mountedTraversalState,
             verticalSpeedUnitsPerSecond: 0
           })
         : resolveMetaverseGroundedJumpBodyTraversalActionSnapshot(
@@ -600,15 +688,17 @@ function freezePlayerSnapshot(
       activeAction: kinematicTraversalAction,
       currentTick,
       locomotionMode: locomotionMode === "swim" ? "swim" : "grounded",
-      mounted: mountedOccupancy !== null,
-      pendingActionKind:
-        jumpDebug.pendingActionSequence > 0 ? "jump" : "none",
-      pendingActionSequence: jumpDebug.pendingActionSequence,
-      resolvedActionKind:
-        jumpDebug.resolvedActionSequence > 0 ? "jump" : "none",
-      resolvedActionSequence: jumpDebug.resolvedActionSequence,
-      resolvedActionState: jumpDebug.resolvedActionState
+      mounted: mountedTraversalState,
+      pendingActionKind: "none",
+      pendingActionSequence: 0,
+      resolvedActionKind: "none",
+      resolvedActionSequence: 0,
+      resolvedActionState: "none"
     });
+  const weaponState =
+    input.weaponState === undefined || input.weaponState === null
+      ? null
+      : createMetaverseRealtimePlayerWeaponStateSnapshot(input.weaponState);
 
   return Object.freeze({
     angularVelocityRadiansPerSecond: normalizeFiniteNumber(
@@ -616,41 +706,25 @@ function freezePlayerSnapshot(
     ),
     characterId: normalizeCharacterId(input.characterId),
     groundedBody,
-    jumpDebug,
-    lastProcessedInputSequence: normalizeFiniteNonNegativeInteger(
-      input.lastProcessedInputSequence ?? input.stateSequence ?? 0
-    ),
-    lastProcessedLookSequence: normalizeFiniteNonNegativeInteger(
-      input.lastProcessedLookSequence ?? 0
-    ),
-    lastProcessedTraversalOrientationSequence: normalizeFiniteNonNegativeInteger(
-      input.lastProcessedTraversalOrientationSequence ?? 0
-    ),
-    linearVelocity,
     look: lookSnapshot,
     locomotionMode,
     mountedOccupancy,
-    observedTraversal,
+    presentationIntent,
     playerId: input.playerId,
-    position,
     stateSequence: normalizeFiniteNonNegativeInteger(input.stateSequence ?? 0),
     swimBody,
+    teamId: normalizeMetaversePlayerTeamId(input.teamId, input.playerId),
     traversalAuthority:
       createMetaverseTraversalAuthoritySnapshot(traversalAuthorityInput),
-    username: input.username,
-    yawRadians
+    weaponState,
+    username: input.username
   });
 }
 
 export function readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(
   playerSnapshot: Pick<
     MetaverseRealtimePlayerSnapshot,
-    | "groundedBody"
-    | "linearVelocity"
-    | "locomotionMode"
-    | "position"
-    | "swimBody"
-    | "yawRadians"
+    "groundedBody" | "locomotionMode" | "swimBody"
   >
 ): Pick<MetaverseSurfaceDriveBodyRuntimeSnapshot, "linearVelocity" | "position" | "yawRadians"> {
   if (
@@ -660,17 +734,7 @@ export function readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(
     return playerSnapshot.swimBody;
   }
 
-  const groundedBodySnapshot =
-    playerSnapshot.groundedBody as
-      | MetaverseRealtimePlayerGroundedBodySnapshot
-      | undefined;
-
-  return Object.freeze({
-    linearVelocity:
-      groundedBodySnapshot?.linearVelocity ?? playerSnapshot.linearVelocity,
-    position: groundedBodySnapshot?.position ?? playerSnapshot.position,
-    yawRadians: groundedBodySnapshot?.yawRadians ?? playerSnapshot.yawRadians
-  });
+  return playerSnapshot.groundedBody;
 }
 
 function freezeVehicleSnapshot(
@@ -816,6 +880,12 @@ export function createMetaverseRealtimePlayerLookSnapshot(
   return freezePlayerLookSnapshot(input);
 }
 
+export function createMetaverseRealtimeObserverPlayerSnapshot(
+  input: MetaverseRealtimeObserverPlayerSnapshotInput
+): MetaverseRealtimeObserverPlayerSnapshot {
+  return freezeObserverPlayerSnapshot(input);
+}
+
 export function createMetaverseRealtimeMountedOccupancySnapshot(
   input: MetaverseRealtimeMountedOccupancySnapshotInput
 ): MetaverseRealtimeMountedOccupancySnapshot {
@@ -956,8 +1026,20 @@ export function createMetaverseRealtimeWorldSnapshot(
     }
   }
 
+  const observerPlayer =
+    input.observerPlayer === undefined || input.observerPlayer === null
+      ? null
+      : freezeObserverPlayerSnapshot(input.observerPlayer);
+
+  if (observerPlayer !== null && !playerIds.has(observerPlayer.playerId)) {
+    throw new Error(
+      `Metaverse realtime world snapshot observer player ${observerPlayer.playerId} must reference a player present in the same world snapshot.`
+    );
+  }
+
   return Object.freeze({
     environmentBodies: Object.freeze(environmentBodies),
+    observerPlayer,
     players: Object.freeze(players),
     snapshotSequence: normalizeFiniteNonNegativeInteger(input.snapshotSequence ?? 0),
     tick,

@@ -16,7 +16,10 @@ import {
   projectGroundedTraversalPresentationPosition,
   projectTraversalPresentationPosition
 } from "./presentation-projection";
-import { MetaverseMovementAnimationPolicyRuntime } from "./metaverse-movement-animation-policy";
+import {
+  createGroundedMovementAnimationPolicyInput,
+  MetaverseMovementAnimationPolicyRuntime
+} from "./metaverse-movement-animation-policy";
 import { createTraversalCharacterPresentationSnapshot } from "./character-presentation";
 import type {
   SurfaceLocomotionSnapshot,
@@ -29,6 +32,8 @@ interface MetaverseTraversalCharacterPresentationStateInput {
   readonly groundedPredictionSeconds: number;
   readonly groundedSpawnPosition: PhysicsVector3Snapshot;
   readonly latestMovementInputMagnitude: number;
+  readonly latestMovementMoveAxis: number;
+  readonly latestMovementStrafeAxis: number;
   readonly locomotionMode: MetaverseLocomotionModeId;
   readonly mountedOccupancyPresentationState:
     | MetaverseMountedOccupancyPresentationStateSnapshot
@@ -36,7 +41,8 @@ interface MetaverseTraversalCharacterPresentationStateInput {
   readonly mountedVehicleSnapshot: TraversalMountedVehicleSnapshot | null;
   readonly presentationYawRadians: number | null;
   readonly readGroundedSupportHeightMeters: (
-    position: Pick<PhysicsVector3Snapshot, "x" | "z">
+    position: Pick<PhysicsVector3Snapshot, "x" | "z">,
+    maxSupportHeightMeters?: number | null
   ) => number | null;
   readonly swimPredictionSeconds: number;
   readonly swimSnapshot: SurfaceLocomotionSnapshot | null;
@@ -74,6 +80,8 @@ export class MetaverseTraversalCharacterPresentationState {
     groundedPredictionSeconds,
     groundedSpawnPosition,
     latestMovementInputMagnitude,
+    latestMovementMoveAxis,
+    latestMovementStrafeAxis,
     locomotionMode,
     mountedOccupancyPresentationState,
     mountedVehicleSnapshot,
@@ -102,8 +110,11 @@ export class MetaverseTraversalCharacterPresentationState {
         groundedBodySnapshot,
         swimSnapshot,
         latestMovementInputMagnitude,
+        latestMovementMoveAxis,
+        latestMovementStrafeAxis,
         deltaSeconds
       ),
+      animationCycleId: this.#movementAnimationRuntime.animationCycleId,
       config: this.#config,
       groundedBodySnapshot,
       groundedPresentationPosition:
@@ -134,6 +145,8 @@ export class MetaverseTraversalCharacterPresentationState {
     groundedBodySnapshot: MetaverseGroundedBodySnapshot | null,
     swimSnapshot: SurfaceLocomotionSnapshot | null,
     latestMovementInputMagnitude: number,
+    latestMovementMoveAxis: number,
+    latestMovementStrafeAxis: number,
     deltaSeconds: number
   ): MetaverseCharacterPresentationSnapshot["animationVocabulary"] {
     if (locomotionMode === "grounded") {
@@ -143,17 +156,12 @@ export class MetaverseTraversalCharacterPresentationState {
       }
 
       return this.#movementAnimationRuntime.advance(
-        {
-          grounded: groundedBodySnapshot.grounded,
+        createGroundedMovementAnimationPolicyInput({
+          groundedBodySnapshot,
           inputMagnitude: latestMovementInputMagnitude,
-          locomotionMode: "grounded",
-          planarSpeedUnitsPerSecond: Math.hypot(
-            groundedBodySnapshot.linearVelocity.x,
-            groundedBodySnapshot.linearVelocity.z
-          ),
-          verticalSpeedUnitsPerSecond:
-            groundedBodySnapshot.jumpBody.verticalSpeedUnitsPerSecond
-        },
+          moveAxis: latestMovementMoveAxis,
+          strafeAxis: latestMovementStrafeAxis
+        }),
         deltaSeconds
       );
     }
@@ -169,7 +177,9 @@ export class MetaverseTraversalCharacterPresentationState {
           grounded: false,
           inputMagnitude: latestMovementInputMagnitude,
           locomotionMode: "swim",
+          moveAxis: latestMovementMoveAxis,
           planarSpeedUnitsPerSecond: swimSnapshot.planarSpeedUnitsPerSecond,
+          strafeAxis: latestMovementStrafeAxis,
           verticalSpeedUnitsPerSecond: 0
         },
         deltaSeconds
@@ -184,7 +194,8 @@ export class MetaverseTraversalCharacterPresentationState {
     groundedBodySnapshot: MetaverseGroundedBodySnapshot,
     groundedPredictionSeconds: number,
     readGroundedSupportHeightMeters: (
-      position: Pick<PhysicsVector3Snapshot, "x" | "z">
+      position: Pick<PhysicsVector3Snapshot, "x" | "z">,
+      maxSupportHeightMeters?: number | null
     ) => number | null
   ): PhysicsVector3Snapshot {
     const planarProjectedPosition = projectTraversalPresentationPosition(
@@ -198,7 +209,10 @@ export class MetaverseTraversalCharacterPresentationState {
     );
     const supportHeightMeters = groundedBodySnapshot.grounded
       ? groundedBodySnapshot.position.y
-      : readGroundedSupportHeightMeters(planarProjectedPosition);
+      : readGroundedSupportHeightMeters(
+          planarProjectedPosition,
+          groundedBodySnapshot.position.y
+        );
 
     return projectGroundedTraversalPresentationPosition(
       groundedBodySnapshot.position,

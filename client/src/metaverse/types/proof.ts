@@ -12,9 +12,12 @@ import type {
 
 export interface MetaverseCharacterAnimationClipProofConfig {
   readonly clipName: string;
+  readonly loopMode?: MetaverseCharacterAnimationClipLoopMode;
   readonly sourcePath: string;
   readonly vocabulary: MetaverseCharacterAnimationVocabularyId;
 }
+
+export type MetaverseCharacterAnimationClipLoopMode = "once" | "repeat";
 
 export const metaverseHumanoidV2PistolPoseIds = [
   "down",
@@ -80,6 +83,7 @@ export interface MetaverseAttachmentMountProofConfig {
   readonly forwardReferenceNodeName?: string | null;
   readonly offHandSupportPointId?: string | null;
   readonly socketName: MetaverseAttachmentSocketName;
+  readonly triggerMarkerNodeName?: string | null;
 }
 
 export interface MetaverseAttachmentProofConfig {

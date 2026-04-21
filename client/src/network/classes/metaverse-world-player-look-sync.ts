@@ -1,7 +1,7 @@
 import type {
   MetaverseRealtimePlayerLookSnapshot,
+  MetaverseRealtimePlayerTraversalAuthoritySnapshot,
   MetaverseRealtimeWorldEvent,
-  MetaverseRealtimeWorldSnapshot,
   MetaverseSyncPlayerLookIntentCommandInput
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 import type { MetaversePlayerId } from "@webgpu-metaverse/shared/metaverse/presence";
@@ -13,10 +13,10 @@ type TimeoutHandle = ReturnType<typeof globalThis.setTimeout>;
 type PendingPlayerLookIntentCommand = ReturnType<
   typeof createMetaverseSyncPlayerLookIntentCommand
 >;
-type LocalPlayerLookAckSnapshot = Pick<
-  MetaverseRealtimeWorldSnapshot["players"][number],
-  "lastProcessedLookSequence"
->;
+type LocalPlayerLookAckSnapshot = {
+  readonly lastProcessedLookSequence: number;
+  readonly traversalAuthority?: MetaverseRealtimePlayerTraversalAuthoritySnapshot;
+};
 
 export interface MetaverseWorldPlayerLookSyncDependencies {
   readonly acceptWorldEvent: (

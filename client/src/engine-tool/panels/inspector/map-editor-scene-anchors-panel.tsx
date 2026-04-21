@@ -1,6 +1,17 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import type {
+  MapEditorPlayerSpawnSelectionDraftSnapshot
+} from "@/engine-tool/project/map-editor-project-player-spawn-selection";
 import type {
   MapEditorPlayerSpawnDraftSnapshot,
   MapEditorSceneObjectDraftSnapshot
@@ -13,6 +24,11 @@ function resolveFiniteNumber(value: string): number | null {
 }
 
 interface MapEditorSceneAnchorsPanelProps {
+  readonly onUpdatePlayerSpawnSelection: (
+    update: (
+      draft: MapEditorPlayerSpawnSelectionDraftSnapshot
+    ) => MapEditorPlayerSpawnSelectionDraftSnapshot
+  ) => void;
   readonly onUpdatePlayerSpawn: (
     spawnId: string,
     update: (draft: MapEditorPlayerSpawnDraftSnapshot) => MapEditorPlayerSpawnDraftSnapshot
@@ -22,13 +38,16 @@ interface MapEditorSceneAnchorsPanelProps {
     update: (draft: MapEditorSceneObjectDraftSnapshot) => MapEditorSceneObjectDraftSnapshot
   ) => void;
   readonly playerSpawnDrafts: readonly MapEditorPlayerSpawnDraftSnapshot[];
+  readonly playerSpawnSelectionDraft: MapEditorPlayerSpawnSelectionDraftSnapshot;
   readonly sceneObjectDrafts: readonly MapEditorSceneObjectDraftSnapshot[];
 }
 
 export function MapEditorSceneAnchorsPanel({
+  onUpdatePlayerSpawnSelection,
   onUpdatePlayerSpawn,
   onUpdateSceneObject,
   playerSpawnDrafts,
+  playerSpawnSelectionDraft,
   sceneObjectDrafts
 }: MapEditorSceneAnchorsPanelProps) {
   if (playerSpawnDrafts.length === 0 && sceneObjectDrafts.length === 0) {
@@ -41,11 +60,104 @@ export function MapEditorSceneAnchorsPanel({
 
   return (
     <div className="flex flex-col gap-4 rounded-2xl border border-border/70 bg-muted/25 p-3">
+      <div className="flex flex-col gap-3 rounded-xl border border-border/70 bg-background/70 p-3">
+        <div>
+          <p className="text-sm font-medium">Team Spawn Routing</p>
+          <p className="text-xs text-muted-foreground">
+            Home-team spawns stay preferred until enemies enter the authored
+            avoidance radius.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="map-editor-spawn-enemy-radius">
+              Enemy Avoidance Radius
+            </Label>
+            <Input
+              id="map-editor-spawn-enemy-radius"
+              onChange={(event) => {
+                const nextValue = resolveFiniteNumber(event.target.value);
+
+                if (nextValue !== null) {
+                  onUpdatePlayerSpawnSelection((draft) => ({
+                    ...draft,
+                    enemyAvoidanceRadiusMeters: Math.max(0, nextValue)
+                  }));
+                }
+              }}
+              value={playerSpawnSelectionDraft.enemyAvoidanceRadiusMeters.toFixed(2)}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="map-editor-spawn-home-bias">Home Team Bias</Label>
+            <Input
+              id="map-editor-spawn-home-bias"
+              onChange={(event) => {
+                const nextValue = resolveFiniteNumber(event.target.value);
+
+                if (nextValue !== null) {
+                  onUpdatePlayerSpawnSelection((draft) => ({
+                    ...draft,
+                    homeTeamBiasMeters: Math.max(0, nextValue)
+                  }));
+                }
+              }}
+              value={playerSpawnSelectionDraft.homeTeamBiasMeters.toFixed(2)}
+            />
+          </div>
+        </div>
+      </div>
+
       {playerSpawnDrafts.map((spawnDraft) => (
         <div className="flex flex-col gap-3" key={spawnDraft.spawnId}>
           <div>
             <p className="text-sm font-medium">{spawnDraft.label}</p>
-            <p className="text-xs text-muted-foreground">{spawnDraft.spawnId}</p>
+            <p className="text-xs text-muted-foreground">
+              {spawnDraft.spawnId}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor={`${spawnDraft.spawnId}-team`}>Home Team</Label>
+              <Select
+                onValueChange={(value) => {
+                  onUpdatePlayerSpawn(spawnDraft.spawnId, (draft) => ({
+                    ...draft,
+                    teamId:
+                      value === "red" || value === "blue" ? value : "neutral"
+                  }));
+                }}
+                value={spawnDraft.teamId}
+              >
+                <SelectTrigger id={`${spawnDraft.spawnId}-team`}>
+                  <SelectValue placeholder="Select team" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="neutral">Neutral</SelectItem>
+                    <SelectItem value="red">Red Team</SelectItem>
+                    <SelectItem value="blue">Blue Team</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor={`${spawnDraft.spawnId}-yaw`}>Spawn Yaw</Label>
+              <Input
+                id={`${spawnDraft.spawnId}-yaw`}
+                onChange={(event) => {
+                  const nextValue = resolveFiniteNumber(event.target.value);
+
+                  if (nextValue !== null) {
+                    onUpdatePlayerSpawn(spawnDraft.spawnId, (draft) => ({
+                      ...draft,
+                      yawRadians: nextValue
+                    }));
+                  }
+                }}
+                value={spawnDraft.yawRadians.toFixed(2)}
+              />
+            </div>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="flex flex-col gap-2">

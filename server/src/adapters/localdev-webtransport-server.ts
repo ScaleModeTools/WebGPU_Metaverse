@@ -27,6 +27,7 @@ import {
   createMetaverseRealtimeWorldWebTransportCommandRequest,
   createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram,
   createMetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram,
+  createMetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagram,
   createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram,
   createMetaverseRealtimeWorldWebTransportErrorMessage,
   createMetaverseRealtimeWorldWebTransportSnapshotRequest,
@@ -400,6 +401,12 @@ function parseMetaverseWorldClientDatagram(
       return createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram({
         command: payload.command as unknown as Parameters<
           typeof createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram
+        >[0]["command"]
+      });
+    case "world-player-weapon-state-datagram":
+      return createMetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagram({
+        command: payload.command as unknown as Parameters<
+          typeof createMetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagram
         >[0]["command"]
       });
     default:

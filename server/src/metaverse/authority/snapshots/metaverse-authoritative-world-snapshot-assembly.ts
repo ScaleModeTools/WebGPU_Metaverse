@@ -3,7 +3,9 @@ import {
   createMetaversePresencePoseSnapshot,
   createMetaversePresenceRosterEvent,
   createMetaversePresenceRosterSnapshot,
+  shouldTreatMetaverseMountedOccupancyAsTraversalMounted,
   type MetaversePlayerId,
+  type MetaversePlayerTeamId,
   type MetaversePresenceMountedOccupancySnapshot,
   type MetaversePresenceMountedOccupantRoleId,
   type MetaversePresencePlayerSnapshot,
@@ -12,12 +14,9 @@ import {
   type MetaversePresenceRosterSnapshot
 } from "@webgpu-metaverse/shared/metaverse/presence";
 import {
-  createMetaverseTraversalBodyControlSnapshot,
-  createMetaverseTraversalFacingSnapshot,
   metaverseTraversalActionBufferSeconds,
   readMetaverseTraversalPendingActionBufferAgeMs,
   type MetaverseTraversalBodyControlSnapshot,
-  type MetaverseTraversalFacingSnapshot,
   type MetaverseSurfaceDriveBodyRuntimeSnapshot,
   type MetaverseTraversalAuthoritySnapshot,
   type MetaverseUnmountedTraversalStateSnapshot
@@ -25,9 +24,10 @@ import {
 import {
   createMetaverseRealtimeWorldEvent,
   createMetaverseRealtimeWorldSnapshot,
+  readMetaverseRealtimePlayerActiveBodyKinematicSnapshot,
   type MetaverseRealtimeEnvironmentBodySnapshotInput,
   type MetaverseRealtimeMountedOccupancySnapshotInput,
-  type MetaverseRealtimePlayerObservedTraversalSnapshot,
+  type MetaverseRealtimeObserverPlayerSnapshotInput,
   type MetaverseRealtimeWorldEvent,
   type MetaverseRealtimeWorldSnapshot,
   type MetaverseVehicleId
@@ -49,11 +49,11 @@ export interface MetaverseAuthoritativeSnapshotPlayerRuntimeState {
   angularVelocityRadiansPerSecond: number;
   readonly characterId: string;
   lastGroundedBodySnapshot: MetaverseAuthoritativeLastGroundedBodySnapshot;
-  lastGroundedJumpSupported: boolean;
   lastProcessedInputSequence: number;
   lastProcessedLookSequence: number;
+  lastProcessedTraversalSampleId: number;
   lastProcessedTraversalOrientationSequence: number;
-  lastSurfaceJumpSupported: boolean;
+  lastProcessedWeaponSequence: number;
   linearVelocityX: number;
   linearVelocityY: number;
   linearVelocityZ: number;
@@ -62,6 +62,7 @@ export interface MetaverseAuthoritativeSnapshotPlayerRuntimeState {
   locomotionMode: MetaversePresencePoseSnapshot["locomotionMode"];
   mountedOccupancy: MetaverseAuthoritativeSnapshotMountedOccupancyRuntimeState | null;
   readonly playerId: MetaversePlayerId;
+  readonly teamId: MetaversePlayerTeamId;
   positionX: number;
   positionY: number;
   positionZ: number;
@@ -73,12 +74,14 @@ export interface MetaverseAuthoritativeSnapshotPlayerRuntimeState {
   traversalAuthorityState: MetaverseTraversalAuthoritySnapshot;
   unmountedTraversalState: MetaverseUnmountedTraversalStateSnapshot;
   readonly username: MetaversePresencePlayerSnapshot["username"];
+  weaponState: MetaverseRealtimeWorldSnapshot["players"][number]["weaponState"];
   yawRadians: number;
 }
 
 export interface MetaverseAuthoritativeSnapshotPlayerTraversalIntentRuntimeState {
-  readonly bodyControl: MetaverseTraversalBodyControlSnapshot;
-  readonly facing: MetaverseTraversalFacingSnapshot;
+  readonly currentIntent: {
+    readonly bodyControl: MetaverseTraversalBodyControlSnapshot;
+  };
 }
 
 export interface MetaverseAuthoritativeSnapshotVehicleSeatRuntimeState {
@@ -119,32 +122,67 @@ export interface MetaverseAuthoritativeWorldSnapshotAssemblyConfig {
   readonly currentTick: number;
   readonly lastAdvancedAtMs: number | null;
   readonly nowMs: number;
+  readonly observerPlayerId?: MetaversePlayerId;
   readonly snapshotSequence: number;
   readonly tickIntervalMs: number;
 }
 
-function createObservedPlayerTraversalSnapshot(
-  playerRuntime: MetaverseAuthoritativeSnapshotPlayerRuntimeState,
+function createPlayerPresentationIntentSnapshot(
   traversalIntent:
     | MetaverseAuthoritativeSnapshotPlayerTraversalIntentRuntimeState
     | undefined
-): MetaverseRealtimePlayerObservedTraversalSnapshot {
+): {
+  readonly moveAxis: number;
+  readonly strafeAxis: number;
+} {
   return Object.freeze({
-    bodyControl:
-      traversalIntent?.bodyControl ??
-      createMetaverseTraversalBodyControlSnapshot({
-        boost: false,
-        moveAxis: 0,
-        strafeAxis: 0,
-        turnAxis: 0
-      }),
-    facing:
-      traversalIntent?.facing ??
-      createMetaverseTraversalFacingSnapshot({
-        pitchRadians: playerRuntime.lookPitchRadians,
-        yawRadians: playerRuntime.lookYawRadians
-      })
+    moveAxis: traversalIntent?.currentIntent.bodyControl.moveAxis ?? 0,
+    strafeAxis: traversalIntent?.currentIntent.bodyControl.strafeAxis ?? 0
   });
+}
+
+function createObserverPlayerSnapshot(
+  playerRuntime: MetaverseAuthoritativeSnapshotPlayerRuntimeState
+): MetaverseRealtimeObserverPlayerSnapshotInput {
+  return {
+    jumpDebug: {
+      pendingActionSequence:
+        playerRuntime.unmountedTraversalState.actionState.pendingActionKind ===
+        "jump"
+          ? playerRuntime.unmountedTraversalState.actionState
+              .pendingActionSequence
+          : 0,
+      pendingActionBufferAgeMs:
+        playerRuntime.unmountedTraversalState.actionState.pendingActionKind ===
+        "jump"
+          ? readMetaverseTraversalPendingActionBufferAgeMs(
+              playerRuntime.unmountedTraversalState.actionState,
+              metaverseTraversalActionBufferSeconds,
+              "jump"
+            )
+          : null,
+      resolvedActionSequence:
+        playerRuntime.unmountedTraversalState.actionState.resolvedActionKind ===
+        "jump"
+          ? playerRuntime.unmountedTraversalState.actionState
+              .resolvedActionSequence
+          : 0,
+      resolvedActionState:
+        playerRuntime.unmountedTraversalState.actionState.resolvedActionKind ===
+        "jump"
+          ? playerRuntime.unmountedTraversalState.actionState
+              .resolvedActionState
+          : "none"
+    },
+    lastProcessedInputSequence: playerRuntime.lastProcessedInputSequence,
+    lastProcessedLookSequence: playerRuntime.lastProcessedLookSequence,
+    lastProcessedTraversalSampleId:
+      playerRuntime.lastProcessedTraversalSampleId,
+    lastProcessedTraversalOrientationSequence:
+      playerRuntime.lastProcessedTraversalOrientationSequence,
+    lastProcessedWeaponSequence: playerRuntime.lastProcessedWeaponSequence,
+    playerId: playerRuntime.playerId
+  };
 }
 
 function createMountedOccupancySnapshot(
@@ -182,17 +220,19 @@ export function createMetaverseAuthoritativeWorldSnapshot<
     readonly vehicles: Iterable<VehicleRuntime>;
   }
 ): MetaverseRealtimeWorldSnapshot {
-  const players = [...config.players]
-    .sort((leftPlayer, rightPlayer) =>
+  const sortedPlayerRuntimes = [...config.players].sort(
+    (leftPlayer, rightPlayer) =>
       leftPlayer.playerId < rightPlayer.playerId
         ? -1
         : leftPlayer.playerId > rightPlayer.playerId
           ? 1
           : 0
-    )
-    .map((playerRuntime) => {
+  );
+  const players = sortedPlayerRuntimes.map((playerRuntime) => {
       const traversalIntent =
-        playerRuntime.mountedOccupancy === null
+        !shouldTreatMetaverseMountedOccupancyAsTraversalMounted(
+          playerRuntime.mountedOccupancy
+        )
           ? config.traversalIntentsByPlayerId.get(playerRuntime.playerId)
           : undefined;
       const mountedOccupancy = createMountedOccupancySnapshot(
@@ -221,53 +261,12 @@ export function createMetaverseAuthoritativeWorldSnapshot<
           }),
           yawRadians: playerRuntime.yawRadians
         }),
-        jumpDebug: {
-          pendingActionSequence:
-            playerRuntime.unmountedTraversalState.actionState.pendingActionKind ===
-            "jump"
-              ? playerRuntime.unmountedTraversalState.actionState
-                  .pendingActionSequence
-              : 0,
-          pendingActionBufferAgeMs:
-            playerRuntime.unmountedTraversalState.actionState.pendingActionKind ===
-            "jump"
-              ? readMetaverseTraversalPendingActionBufferAgeMs(
-                  playerRuntime.unmountedTraversalState.actionState,
-                  metaverseTraversalActionBufferSeconds,
-                  "jump"
-                )
-              : null,
-          resolvedActionSequence:
-            playerRuntime.unmountedTraversalState.actionState.resolvedActionKind ===
-            "jump"
-              ? playerRuntime.unmountedTraversalState.actionState
-                  .resolvedActionSequence
-              : 0,
-          resolvedActionState:
-            playerRuntime.unmountedTraversalState.actionState.resolvedActionKind ===
-            "jump"
-              ? playerRuntime.unmountedTraversalState.actionState
-                  .resolvedActionState
-              : "none",
-          surfaceJumpSupported: playerRuntime.lastSurfaceJumpSupported,
-          supported: playerRuntime.lastGroundedJumpSupported
-        },
-        lastProcessedInputSequence: playerRuntime.lastProcessedInputSequence,
-        lastProcessedLookSequence: playerRuntime.lastProcessedLookSequence,
-        lastProcessedTraversalOrientationSequence:
-          playerRuntime.lastProcessedTraversalOrientationSequence,
-        linearVelocity: {
-          x: playerRuntime.linearVelocityX,
-          y: playerRuntime.linearVelocityY,
-          z: playerRuntime.linearVelocityZ
-        },
         look: {
           pitchRadians: playerRuntime.lookPitchRadians,
           yawRadians: playerRuntime.lookYawRadians
         },
         locomotionMode: playerRuntime.locomotionMode,
-        observedTraversal: createObservedPlayerTraversalSnapshot(
-          playerRuntime,
+        presentationIntent: createPlayerPresentationIntentSnapshot(
           traversalIntent
         ),
         ...(mountedOccupancy === undefined
@@ -276,22 +275,24 @@ export function createMetaverseAuthoritativeWorldSnapshot<
               mountedOccupancy
             }),
         playerId: playerRuntime.playerId,
-        position: {
-          x: playerRuntime.positionX,
-          y: playerRuntime.positionY,
-          z: playerRuntime.positionZ
-        },
         stateSequence: playerRuntime.stateSequence,
         ...(playerRuntime.locomotionMode !== "swim"
           ? {}
           : {
               swimBody: playerRuntime.swimBodyRuntime.snapshot
             }),
+        teamId: playerRuntime.teamId,
         traversalAuthority: playerRuntime.traversalAuthorityState,
-        username: playerRuntime.username,
-        yawRadians: playerRuntime.yawRadians
+        weaponState: playerRuntime.weaponState,
+        username: playerRuntime.username
       };
     });
+  const observerPlayerRuntime =
+    config.observerPlayerId === undefined
+      ? null
+      : sortedPlayerRuntimes.find(
+          (playerRuntime) => playerRuntime.playerId === config.observerPlayerId
+        ) ?? null;
   const environmentBodies = [...config.environmentBodies]
     .sort((leftEnvironmentBody, rightEnvironmentBody) =>
       leftEnvironmentBody.environmentAssetId.localeCompare(
@@ -350,6 +351,11 @@ export function createMetaverseAuthoritativeWorldSnapshot<
 
   return createMetaverseRealtimeWorldSnapshot({
     environmentBodies,
+    ...(observerPlayerRuntime === null
+      ? {}
+      : {
+          observerPlayer: createObserverPlayerSnapshot(observerPlayerRuntime)
+        }),
     players,
     snapshotSequence: config.snapshotSequence,
     tick: {
@@ -378,8 +384,11 @@ export function createMetaverseAuthoritativePresenceRosterSnapshot(
   >
 ): MetaversePresenceRosterSnapshot {
   return createMetaversePresenceRosterSnapshot({
-    players: worldSnapshot.players.map((playerSnapshot) =>
-      createMetaversePresencePlayerSnapshot({
+    players: worldSnapshot.players.map((playerSnapshot) => {
+      const activeBodySnapshot =
+        readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(playerSnapshot);
+
+      return createMetaversePresencePlayerSnapshot({
         characterId: playerSnapshot.characterId,
         playerId: playerSnapshot.playerId,
         pose: createMetaversePresencePoseSnapshot({
@@ -402,13 +411,14 @@ export function createMetaverseAuthoritativePresenceRosterSnapshot(
                   occupantRole: playerSnapshot.mountedOccupancy.occupantRole,
                   seatId: playerSnapshot.mountedOccupancy.seatId
                 },
-          position: playerSnapshot.position,
+          position: activeBodySnapshot.position,
           stateSequence: playerSnapshot.stateSequence,
-          yawRadians: playerSnapshot.yawRadians
+          yawRadians: activeBodySnapshot.yawRadians
         }),
+        teamId: playerSnapshot.teamId,
         username: playerSnapshot.username
-      })
-    ),
+      });
+    }),
     snapshotSequence: worldSnapshot.snapshotSequence,
     tickIntervalMs: Number(worldSnapshot.tick.tickIntervalMs)
   });

@@ -517,13 +517,25 @@ test("LocaldevWebTransportServer routes reliable frames and datagrams through th
     },
     type: "world-player-look-intent-datagram"
   });
+  await worldSession.sendClientDatagram({
+    command: {
+      playerId: "driver-player",
+      type: "sync-player-weapon-state",
+      weaponSequence: 5,
+      weaponState: {
+        aimMode: "ads",
+        weaponId: "metaverse-service-pistol-v1"
+      }
+    },
+    type: "world-player-weapon-state-datagram"
+  });
   await flushAsyncWork();
 
   assert.equal(recordedPresenceMessages.length, 1);
   assert.equal(recordedPresenceMessages[0]?.type, "presence-roster-request");
   assert.equal(recordedWorldMessages.length, 1);
   assert.equal(recordedWorldMessages[0]?.type, "world-snapshot-request");
-  assert.equal(recordedWorldDatagrams.length, 2);
+  assert.equal(recordedWorldDatagrams.length, 3);
   assert.equal(
     recordedWorldDatagrams[0]?.type,
     "world-driver-vehicle-control-datagram"
@@ -533,6 +545,11 @@ test("LocaldevWebTransportServer routes reliable frames and datagrams through th
     "world-player-look-intent-datagram"
   );
   assert.equal(recordedWorldDatagrams[1]?.command.type, "sync-player-look-intent");
+  assert.equal(
+    recordedWorldDatagrams[2]?.type,
+    "world-player-weapon-state-datagram"
+  );
+  assert.equal(recordedWorldDatagrams[2]?.command.type, "sync-player-weapon-state");
 
   await presenceStream.close();
   await worldStream.close();

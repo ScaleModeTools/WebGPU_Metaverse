@@ -1,5 +1,10 @@
 import { type Camera } from "three/webgpu";
 
+import {
+  readMetaverseRealtimePlayerActiveBodyKinematicSnapshot
+} from "@webgpu-metaverse/shared";
+
+import { metaverseLocalAuthorityReconciliationConfig } from "../config/metaverse-world-network";
 import type { MetaverseControlModeId } from "../types/metaverse-control-mode";
 import type {
   FocusedExperiencePortalSnapshot,
@@ -17,6 +22,7 @@ import { MetaverseEnvironmentPhysicsRuntime } from "../classes/metaverse-environ
 import { MetaversePresenceRuntime } from "../classes/metaverse-presence-runtime";
 import { MetaverseRemoteWorldRuntime } from "../classes/metaverse-remote-world-runtime";
 import { MetaverseTraversalRuntime } from "../classes/metaverse-traversal-runtime";
+import { MetaverseWeaponPresentationRuntime } from "../classes/metaverse-weapon-presentation-runtime";
 import {
   MetaverseRuntimeHudTelemetryState,
   type MetaverseRendererTelemetrySource
@@ -31,6 +37,7 @@ interface MetaverseRuntimeHudPublisherDependencies {
   readonly readNowMs: () => number;
   readonly remoteWorldRuntime: MetaverseRemoteWorldRuntime;
   readonly traversalRuntime: MetaverseTraversalRuntime;
+  readonly weaponPresentationRuntime?: MetaverseWeaponPresentationRuntime;
 }
 
 interface PublishRuntimeHudSnapshotInput {
@@ -48,6 +55,84 @@ interface PublishRuntimeHudSnapshotInput {
 }
 
 const metaverseUiUpdateIntervalMs = 120;
+const metaverseRadarRangeMeters = 60;
+const metaverseRadarEnemyPingIntervalMs = 5_000;
+const hiddenWeaponHudSnapshot = Object.freeze({
+  adsTransitionMs: 0,
+  aimMode: "hip-fire",
+  reticleColor: "white",
+  reticleId: "default-ring",
+  reticleStyleId: "pistol-ring",
+  visible: false,
+  weaponId: null,
+  weaponLabel: null
+} satisfies MetaverseHudSnapshot["weapon"]);
+
+function createEmptyRadarSnapshot(
+  localTeamId: MetaverseHudSnapshot["radar"]["localTeamId"] = null
+): MetaverseHudSnapshot["radar"] {
+  return Object.freeze({
+    available: false,
+    enemyContacts: Object.freeze([]),
+    enemyPingAgeMs: null,
+    enemyPingIntervalMs: metaverseRadarEnemyPingIntervalMs,
+    friendlyContacts: Object.freeze([]),
+    localTeamId,
+    rangeMeters: metaverseRadarRangeMeters
+  });
+}
+
+function freezeRadarContactSnapshot(
+  localYawRadians: number,
+  localPosition: {
+    readonly x: number;
+    readonly z: number;
+  },
+  playerSnapshot: Parameters<
+    typeof readMetaverseRealtimePlayerActiveBodyKinematicSnapshot
+  >[0] & {
+    readonly teamId: MetaverseHudSnapshot["radar"]["enemyContacts"][number]["teamId"];
+    readonly username: MetaverseHudSnapshot["radar"]["enemyContacts"][number]["username"];
+  }
+): MetaverseHudSnapshot["radar"]["enemyContacts"][number] {
+  const remoteBodySnapshot =
+    readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(playerSnapshot);
+  const deltaX = remoteBodySnapshot.position.x - localPosition.x;
+  const deltaZ = remoteBodySnapshot.position.z - localPosition.z;
+  const forwardX = Math.sin(localYawRadians);
+  const forwardZ = -Math.cos(localYawRadians);
+  const rightX = Math.cos(localYawRadians);
+  const rightZ = Math.sin(localYawRadians);
+  const rightOffset = deltaX * rightX + deltaZ * rightZ;
+  const forwardOffset = deltaX * forwardX + deltaZ * forwardZ;
+  const distanceMeters = Math.hypot(deltaX, deltaZ);
+  const normalizedScale =
+    distanceMeters > metaverseRadarRangeMeters
+      ? metaverseRadarRangeMeters / distanceMeters
+      : 1;
+
+  return Object.freeze({
+    clamped: distanceMeters > metaverseRadarRangeMeters,
+    distanceMeters,
+    radarX:
+      (rightOffset * normalizedScale) / metaverseRadarRangeMeters,
+    radarY:
+      (-forwardOffset * normalizedScale) / metaverseRadarRangeMeters,
+    teamId: playerSnapshot.teamId,
+    username: playerSnapshot.username
+  });
+}
+
+function compareRadarContacts(
+  leftContact: MetaverseHudSnapshot["radar"]["enemyContacts"][number],
+  rightContact: MetaverseHudSnapshot["radar"]["enemyContacts"][number]
+): number {
+  if (leftContact.distanceMeters !== rightContact.distanceMeters) {
+    return leftContact.distanceMeters - rightContact.distanceMeters;
+  }
+
+  return leftContact.username.localeCompare(rightContact.username);
+}
 
 function freezeHudSnapshot(
   lifecycle: MetaverseHudSnapshot["lifecycle"],
@@ -59,8 +144,10 @@ function freezeHudSnapshot(
   controlMode: MetaverseHudSnapshot["controlMode"],
   locomotionMode: MetaverseHudSnapshot["locomotionMode"],
   presence: MetaverseHudSnapshot["presence"],
+  radar: MetaverseHudSnapshot["radar"],
   telemetry: MetaverseHudSnapshot["telemetry"],
-  transport: MetaverseHudSnapshot["transport"]
+  transport: MetaverseHudSnapshot["transport"],
+  weapon: MetaverseHudSnapshot["weapon"]
 ): MetaverseHudSnapshot {
   return Object.freeze({
     boot,
@@ -74,8 +161,10 @@ function freezeHudSnapshot(
     mountedInteractionHud:
       createMetaverseMountedInteractionHudSnapshot(mountedInteraction),
     presence,
+    radar,
     telemetry,
-    transport
+    transport,
+    weapon
   });
 }
 
@@ -85,9 +174,15 @@ export class MetaverseRuntimeHudPublisher {
   readonly #remoteWorldRuntime: MetaverseRemoteWorldRuntime;
   readonly #telemetryState: MetaverseRuntimeHudTelemetryState;
   readonly #traversalRuntime: MetaverseTraversalRuntime;
+  readonly #weaponPresentationRuntime:
+    | Pick<MetaverseWeaponPresentationRuntime, "hudSnapshot">
+    | null;
   readonly #uiUpdateListeners = new Set<() => void>();
 
+  #cachedEnemyRadarContacts: MetaverseHudSnapshot["radar"]["enemyContacts"] =
+    Object.freeze([]);
   #hudSnapshot: MetaverseHudSnapshot;
+  #lastEnemyRadarPingAtMs: number | null = null;
   #lastUiUpdateAtMs = Number.NEGATIVE_INFINITY;
 
   constructor({
@@ -98,12 +193,14 @@ export class MetaverseRuntimeHudPublisher {
     presenceRuntime,
     readNowMs,
     remoteWorldRuntime,
-    traversalRuntime
+    traversalRuntime,
+    weaponPresentationRuntime
   }: MetaverseRuntimeHudPublisherDependencies) {
     this.#presenceRuntime = presenceRuntime;
     this.#readNowMs = readNowMs;
     this.#remoteWorldRuntime = remoteWorldRuntime;
     this.#traversalRuntime = traversalRuntime;
+    this.#weaponPresentationRuntime = weaponPresentationRuntime ?? null;
     this.#telemetryState = new MetaverseRuntimeHudTelemetryState({
       config,
       devicePixelRatio,
@@ -127,13 +224,15 @@ export class MetaverseRuntimeHudPublisher {
       initialControlMode,
       this.#traversalRuntime.locomotionMode,
       this.#presenceRuntime.resolveHudSnapshot(),
+      createEmptyRadarSnapshot(this.#presenceRuntime.localTeamId),
       this.#telemetryState.createSnapshot(this.#readNowMs(), {
         frameDeltaMs: 0,
         frameRate: 0,
         renderedFrameCount: 0,
         renderer: null
       }),
-      this.#createTransportSnapshot()
+      this.#createTransportSnapshot(),
+      this.#createWeaponSnapshot()
     );
   }
 
@@ -151,6 +250,8 @@ export class MetaverseRuntimeHudPublisher {
 
   resetTelemetryState(): void {
     this.#telemetryState.reset();
+    this.#cachedEnemyRadarContacts = Object.freeze([]);
+    this.#lastEnemyRadarPingAtMs = null;
     this.#lastUiUpdateAtMs = Number.NEGATIVE_INFINITY;
   }
 
@@ -172,6 +273,7 @@ export class MetaverseRuntimeHudPublisher {
     nowMs: number | null = null
   ): void {
     const resolvedNowMs = nowMs ?? this.#readNowMs();
+    const presenceSnapshot = this.#presenceRuntime.resolveHudSnapshot();
 
     this.#hudSnapshot = freezeHudSnapshot(
       input.lifecycle,
@@ -186,14 +288,16 @@ export class MetaverseRuntimeHudPublisher {
       input.mountedInteraction,
       input.controlMode,
       this.#traversalRuntime.locomotionMode,
-      this.#presenceRuntime.resolveHudSnapshot(),
+      presenceSnapshot,
+      this.#createRadarSnapshot(resolvedNowMs, presenceSnapshot),
       this.#telemetryState.createSnapshot(resolvedNowMs, {
         frameDeltaMs: input.frameDeltaMs,
         frameRate: input.frameRate,
         renderedFrameCount: input.renderedFrameCount,
         renderer: input.renderer
       }),
-      this.#createTransportSnapshot()
+      this.#createTransportSnapshot(),
+      this.#createWeaponSnapshot()
     );
 
     if (
@@ -256,6 +360,79 @@ export class MetaverseRuntimeHudPublisher {
         this.#remoteWorldRuntime.driverVehicleControlDatagramStatusSnapshot,
       worldReliable: this.#remoteWorldRuntime.reliableTransportStatusSnapshot,
       worldSnapshotStream: this.#remoteWorldRuntime.snapshotStreamTelemetrySnapshot
+    });
+  }
+
+  #createWeaponSnapshot(): MetaverseHudSnapshot["weapon"] {
+    return this.#weaponPresentationRuntime?.hudSnapshot ?? hiddenWeaponHudSnapshot;
+  }
+
+  #createRadarSnapshot(
+    nowMs: number,
+    presenceSnapshot: MetaverseHudSnapshot["presence"]
+  ): MetaverseHudSnapshot["radar"] {
+    const localPlayerSnapshot =
+      this.#remoteWorldRuntime.readFreshAuthoritativeLocalPlayerSnapshot(
+        metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
+      );
+    const localTeamId = localPlayerSnapshot?.teamId ?? presenceSnapshot.localTeamId;
+
+    if (localPlayerSnapshot === null || localTeamId === null) {
+      this.#cachedEnemyRadarContacts = Object.freeze([]);
+      this.#lastEnemyRadarPingAtMs = null;
+
+      return createEmptyRadarSnapshot(localTeamId);
+    }
+
+    const localBodySnapshot =
+      readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(localPlayerSnapshot);
+    const remotePlayerSnapshots =
+      this.#remoteWorldRuntime.readFreshAuthoritativeRemotePlayerSnapshots(
+        metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
+      );
+    const friendlyContacts = Object.freeze(
+      remotePlayerSnapshots
+        .filter((playerSnapshot) => playerSnapshot.teamId === localTeamId)
+        .map((playerSnapshot) =>
+          freezeRadarContactSnapshot(
+            localPlayerSnapshot.look.yawRadians,
+            localBodySnapshot.position,
+            playerSnapshot
+          )
+        )
+        .sort(compareRadarContacts)
+    );
+
+    if (
+      this.#lastEnemyRadarPingAtMs === null ||
+      nowMs - this.#lastEnemyRadarPingAtMs >= metaverseRadarEnemyPingIntervalMs
+    ) {
+      this.#cachedEnemyRadarContacts = Object.freeze(
+        remotePlayerSnapshots
+          .filter((playerSnapshot) => playerSnapshot.teamId !== localTeamId)
+          .map((playerSnapshot) =>
+            freezeRadarContactSnapshot(
+              localPlayerSnapshot.look.yawRadians,
+              localBodySnapshot.position,
+              playerSnapshot
+            )
+          )
+          .sort(compareRadarContacts)
+      );
+      this.#lastEnemyRadarPingAtMs = nowMs;
+    }
+
+    return Object.freeze({
+      available: true,
+      enemyContacts: this.#cachedEnemyRadarContacts,
+      enemyPingAgeMs:
+        this.#lastEnemyRadarPingAtMs === null
+          ? null
+          : Math.max(0, nowMs - this.#lastEnemyRadarPingAtMs),
+      enemyPingIntervalMs: metaverseRadarEnemyPingIntervalMs,
+      friendlyContacts,
+      localTeamId,
+      rangeMeters: metaverseRadarRangeMeters
     });
   }
 }

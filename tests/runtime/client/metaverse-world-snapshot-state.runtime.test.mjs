@@ -69,28 +69,32 @@ function createWorldEvent({
 
   return createMetaverseRealtimeWorldEvent({
     world: {
+      observerPlayer: {
+        lastProcessedInputSequence: snapshotSequence,
+        lastProcessedLookSequence: snapshotSequence,
+        lastProcessedTraversalOrientationSequence: snapshotSequence,
+        playerId
+      },
       players: [
         {
           characterId: "mesh2motion-humanoid-v1",
-          jumpDebug: undefined,
-          lastProcessedInputSequence: snapshotSequence,
-          lastProcessedLookSequence: snapshotSequence,
-          lastProcessedTraversalOrientationSequence: snapshotSequence,
-          linearVelocity: {
-            x: 0,
-            y: 0,
-            z: 0
+          groundedBody: {
+            linearVelocity: {
+              x: 0,
+              y: 0,
+              z: 0
+            },
+            position: {
+              x: 0,
+              y: 1.62,
+              z: 24
+            },
+            yawRadians: 0
           },
           locomotionMode: "grounded",
           playerId,
-          position: {
-            x: 0,
-            y: 1.62,
-            z: 24
-          },
           stateSequence: snapshotSequence,
-          username: "Harbor Pilot",
-          yawRadians: 0
+          username: "Harbor Pilot"
         }
       ],
       snapshotSequence,

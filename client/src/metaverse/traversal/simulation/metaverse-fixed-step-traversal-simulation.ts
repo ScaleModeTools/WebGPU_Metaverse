@@ -299,8 +299,6 @@ export class MetaverseFixedStepTraversalSimulation {
           this.#config.groundedBody.snapToGroundDistanceMeters
       }),
       groundedBodySnapshot: currentBodySnapshot,
-      jumpSupportVerticalSpeedTolerance:
-        this.#config.traversal.groundedJumpSupportVerticalSpeedTolerance,
       preferredLookYawRadians,
       surfaceColliderSnapshots: this.#dependencies.surfaceColliderSnapshots,
       surfacePolicyConfig,
@@ -396,8 +394,6 @@ export class MetaverseFixedStepTraversalSimulation {
           this.#config.groundedBody.snapToGroundDistanceMeters
       }),
       groundedBodySnapshot: null,
-      jumpSupportVerticalSpeedTolerance:
-        this.#config.traversal.groundedJumpSupportVerticalSpeedTolerance,
       preferredLookYawRadians,
       surfaceColliderSnapshots: this.#dependencies.surfaceColliderSnapshots,
       surfacePolicyConfig: readMetaverseSurfacePolicyConfig(this.#config),

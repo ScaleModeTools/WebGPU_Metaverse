@@ -2,11 +2,13 @@ import type {
   MetaverseRealtimeWorldWebTransportClientDatagram,
   MetaverseSyncDriverVehicleControlCommand,
   MetaverseSyncPlayerLookIntentCommand,
+  MetaverseSyncPlayerWeaponStateCommand,
   MetaverseSyncPlayerTraversalIntentCommand
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 import {
   createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram,
   createMetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram,
+  createMetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagram,
   createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
@@ -87,6 +89,15 @@ export function createMetaverseRealtimeWorldLatestWinsWebTransportDatagramTransp
     ): Promise<void> {
       await channel.sendDatagram(
         createMetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram({
+          command
+        })
+      );
+    },
+    async sendPlayerWeaponStateDatagram(
+      command: MetaverseSyncPlayerWeaponStateCommand
+    ): Promise<void> {
+      await channel.sendDatagram(
+        createMetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagram({
           command
         })
       );

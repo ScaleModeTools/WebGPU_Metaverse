@@ -5,6 +5,8 @@ import {
   Bone,
   Box3,
   Group,
+  LoopOnce,
+  LoopRepeat,
   Matrix4,
   Object3D,
   Quaternion,
@@ -21,6 +23,7 @@ import {
 } from "./metaverse-scene-character-animation";
 
 import type {
+  MetaverseCharacterAnimationClipLoopMode,
   MetaverseCharacterAnimationVocabularyId,
   MetaverseCharacterProofConfig,
   MetaverseHumanoidV2PistolPoseId
@@ -83,6 +86,10 @@ export interface LoadedMetaverseCharacterProofRuntime<
   readonly clipsByVocabulary: ReadonlyMap<
     MetaverseCharacterAnimationVocabularyId,
     AnimationClip
+  >;
+  readonly clipLoopModesByVocabulary: ReadonlyMap<
+    MetaverseCharacterAnimationVocabularyId,
+    MetaverseCharacterAnimationClipLoopMode
   >;
   readonly firstPersonHeadAnchorNodes: readonly Object3D[];
   readonly heldWeaponPoseRuntime: THeldWeaponPoseRuntime | null;
@@ -347,6 +354,20 @@ function validateCharacterScale(
   }
 }
 
+function configureCharacterActionLoopMode(
+  action: AnimationAction,
+  loopMode: MetaverseCharacterAnimationClipLoopMode
+): void {
+  if (loopMode === "once") {
+    action.clampWhenFinished = true;
+    action.setLoop(LoopOnce, 1);
+    return;
+  }
+
+  action.clampWhenFinished = false;
+  action.setLoop(LoopRepeat, Number.POSITIVE_INFINITY);
+}
+
 function createCharacterProofRuntime<THeldWeaponPoseRuntime>(
   characterId: string,
   skeletonId: MetaverseCharacterProofConfig["skeletonId"],
@@ -354,6 +375,10 @@ function createCharacterProofRuntime<THeldWeaponPoseRuntime>(
   clipsByVocabulary: ReadonlyMap<
     MetaverseCharacterAnimationVocabularyId,
     AnimationClip
+  >,
+  clipLoopModesByVocabulary: ReadonlyMap<
+    MetaverseCharacterAnimationVocabularyId,
+    MetaverseCharacterAnimationClipLoopMode
   >,
   humanoidV2PistolPoseClipsByPoseId:
     | ReadonlyMap<MetaverseHumanoidV2PistolPoseId, AnimationClip>
@@ -394,7 +419,13 @@ function createCharacterProofRuntime<THeldWeaponPoseRuntime>(
   anchorGroup.updateMatrixWorld(true);
 
   for (const [vocabulary, clip] of clipsByVocabulary) {
-    actionsByVocabulary.set(vocabulary, mixer.clipAction(clip));
+    const action = mixer.clipAction(clip);
+
+    configureCharacterActionLoopMode(
+      action,
+      clipLoopModesByVocabulary.get(vocabulary) ?? "repeat"
+    );
+    actionsByVocabulary.set(vocabulary, action);
   }
 
   const idleAction = actionsByVocabulary.get("idle");
@@ -416,11 +447,13 @@ function createCharacterProofRuntime<THeldWeaponPoseRuntime>(
 
   return {
     activeAnimationActionSetId: "full-body",
+    activeAnimationCycleId: 0,
     activeAnimationVocabulary: "idle",
     actionsByVocabulary,
     anchorGroup,
     characterId,
     clipsByVocabulary,
+    clipLoopModesByVocabulary,
     firstPersonHeadAnchorNodes,
     heldWeaponPoseRuntime: dependencies.createHeldWeaponPoseRuntime(characterScene),
     humanoidV2PistolLowerBodyActionsByVocabulary,
@@ -455,6 +488,7 @@ export function cloneMetaverseCharacterProofRuntime<THeldWeaponPoseRuntime>(
     sourceRuntime.skeletonId,
     cloneCharacterScene(sourceRuntime.scene),
     sourceRuntime.clipsByVocabulary,
+    sourceRuntime.clipLoopModesByVocabulary,
     sourceRuntime.humanoidV2PistolPoseRuntime?.clipsByPoseId ?? null,
     dependencies
   );
@@ -511,6 +545,10 @@ export async function loadMetaverseCharacterProofRuntime<
     MetaverseCharacterAnimationVocabularyId,
     AnimationClip
   >();
+  const clipLoopModesByVocabulary = new Map<
+    MetaverseCharacterAnimationVocabularyId,
+    MetaverseCharacterAnimationClipLoopMode
+  >();
 
   for (const animationClipConfig of characterProofConfig.animationClips) {
     let animationAsset = animationAssetsByPath.get(animationClipConfig.sourcePath);
@@ -537,6 +575,10 @@ export async function loadMetaverseCharacterProofRuntime<
     }
 
     clipsByVocabulary.set(animationClipConfig.vocabulary, clip);
+    clipLoopModesByVocabulary.set(
+      animationClipConfig.vocabulary,
+      animationClipConfig.loopMode ?? "repeat"
+    );
   }
 
   let humanoidV2PistolPoseClipsByPoseId:
@@ -606,6 +648,7 @@ export async function loadMetaverseCharacterProofRuntime<
     characterProofConfig.skeletonId,
     characterAsset.scene,
     clipsByVocabulary,
+    clipLoopModesByVocabulary,
     humanoidV2PistolPoseClipsByPoseId,
     dependencies
   );

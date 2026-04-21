@@ -69,6 +69,7 @@ function createFakeHudPublisherDependencies(readNowMs) {
   const presenceRuntime = {
     connectionRequired: true,
     isJoined: false,
+    localTeamId: "blue",
     reliableTransportStatusSnapshot: Object.freeze({
       enabled: false
     }),
@@ -76,6 +77,7 @@ function createFakeHudPublisherDependencies(readNowMs) {
       return Object.freeze({
         joined: this.isJoined,
         lastError: null,
+        localTeamId: this.localTeamId,
         remotePlayerCount: 0,
         state: this.isJoined ? "connected" : "idle"
       });
@@ -90,9 +92,11 @@ function createFakeHudPublisherDependencies(readNowMs) {
     }),
     isConnected: false,
     latestAuthoritativeTickIntervalMs: 50,
-    latestPlayerTraversalIntentSnapshot: null,
     readFreshAuthoritativeLocalPlayerSnapshot() {
       return null;
+    },
+    readFreshAuthoritativeRemotePlayerSnapshots() {
+      return Object.freeze([]);
     },
     reliableTransportStatusSnapshot: Object.freeze({
       enabled: true
@@ -125,8 +129,22 @@ function createFakeHudPublisherDependencies(readNowMs) {
     cameraSnapshot: createFakeCameraSnapshot(),
     lastLocalAuthorityPoseCorrectionDetail: Object.freeze({
       authoritativeGrounded: null,
+      authoritativeSnapshotAgeMs: null,
+      authoritativeSnapshotSequence: null,
+      authoritativeTick: null,
       bodyStateDivergence: null,
+      convergenceEpisodeStarted: false,
+      convergenceEpisodeStartIntentionalDiscontinuityCause: "none",
+      convergenceEpisodeStartHistoricalLocalSampleMatched: null,
+      convergenceEpisodeStartHistoricalLocalSampleSelectionReason: null,
+      convergenceEpisodeStartHistoricalLocalSampleTimeDeltaMs: null,
+      convergenceEpisodeStartPlanarMagnitudeMeters: null,
+      convergenceEpisodeStartReason: "none",
+      convergenceEpisodeStartVerticalMagnitudeMeters: null,
+      convergenceEpisodeStartYawMagnitudeRadians: null,
       groundedBodyStateDivergence: null,
+      lastProcessedInputSequence: null,
+      lastProcessedTraversalOrientationSequence: null,
       localGrounded: null,
       planarMagnitudeMeters: null,
       planarVelocityMagnitudeUnitsPerSecond: null,
@@ -137,7 +155,10 @@ function createFakeHudPublisherDependencies(readNowMs) {
     lastLocalAuthorityPoseCorrectionReason: "none",
     lastLocalReconciliationCorrectionSource: "none",
     localAuthorityPoseCorrectionCount: 0,
+    localAuthorityPoseConvergenceEpisodeCount: 0,
+    localAuthorityPoseConvergenceStepCount: 0,
     localReconciliationCorrectionCount: 0,
+    latestIssuedTraversalIntentSnapshot: null,
     localTraversalPoseSnapshot: Object.freeze({
       position: Object.freeze({
         x: 0,
@@ -152,10 +173,6 @@ function createFakeHudPublisherDependencies(readNowMs) {
       blockingAffordanceDetected: false,
       decisionReason: "capability-maintained",
       groundedBody: null,
-      jumpDebug: Object.freeze({
-        surfaceJumpSupported: null,
-        supported: null
-      }),
       locomotionMode: "grounded",
       resolvedSupportHeightMeters: 0.6,
       swimBody: null,
@@ -174,7 +191,21 @@ function createFakeHudPublisherDependencies(readNowMs) {
 
   return {
     config: Object.freeze({
-      portals: Object.freeze([])
+      groundedBody: Object.freeze({
+        capsuleHalfHeightMeters: 0.9,
+        capsuleRadiusMeters: 0.35,
+        gravityUnitsPerSecond: 30,
+        jumpImpulseUnitsPerSecond: 12,
+        stepHeightMeters: 0.42
+      }),
+      movement: Object.freeze({
+        worldRadius: 320
+      }),
+      ocean: Object.freeze({
+        height: 0
+      }),
+      portals: Object.freeze([]),
+      waterRegionSnapshots: Object.freeze([])
     }),
     devicePixelRatio: 2,
     environmentPhysicsRuntime: {

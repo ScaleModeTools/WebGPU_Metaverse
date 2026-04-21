@@ -10,6 +10,7 @@ import type {
   MetaversePresenceMountedOccupantRoleId,
   MetaversePresencePoseSnapshot
 } from "@webgpu-metaverse/shared/metaverse/presence";
+import { shouldTreatMetaverseMountedOccupancyAsTraversalMounted } from "@webgpu-metaverse/shared/metaverse/presence";
 import {
   createMetaverseSyncMountedOccupancyCommand,
   type MetaverseSyncMountedOccupancyCommand,
@@ -270,8 +271,14 @@ export class MetaverseAuthoritativeMountedOccupancyAuthority<
     this.#dependencies.clearPlayerVehicleOccupancy(playerRuntime.playerId);
     this.#dependencies.clearPlayerTraversalIntent(playerRuntime.playerId);
     playerRuntime.mountedOccupancy = acceptedMountedOccupancy;
+    const traversalMountedOccupancy =
+      shouldTreatMetaverseMountedOccupancyAsTraversalMounted(
+        acceptedMountedOccupancy
+      );
     playerRuntime.locomotionMode =
-      acceptedMountedOccupancy === null ? "grounded" : "mounted";
+      acceptedMountedOccupancy === null || !traversalMountedOccupancy
+        ? "grounded"
+        : "mounted";
     if (acceptedMountedOccupancy === null) {
       playerRuntime.unmountedTraversalState =
         createMetaverseUnmountedTraversalStateSnapshot({
@@ -306,16 +313,37 @@ export class MetaverseAuthoritativeMountedOccupancyAuthority<
       return;
     }
 
-    if (acceptedMountedOccupancy.occupantRole !== "driver") {
-      this.#dependencies.clearDriverVehicleControl(playerRuntime.playerId);
-    }
-
     const vehicleRuntime =
       this.#dependencies.syncVehicleOccupancyAndInitialPoseFromPlayer(
         playerRuntime,
         acceptedMountedOccupancy,
         nowMs
       );
+
+    if (!traversalMountedOccupancy) {
+      const authoritativeSurfaceColliders =
+        this.#dependencies.resolveAuthoritativeSurfaceColliders();
+
+      if (acceptedMountedOccupancy.occupantRole !== "driver") {
+        this.#dependencies.clearDriverVehicleControl(playerRuntime.playerId);
+      }
+
+      playerRuntime.lastPoseAtMs = nowMs;
+      this.#dependencies.syncUnmountedPlayerToAuthoritativeSurface(
+        playerRuntime,
+        authoritativeSurfaceColliders,
+        null
+      );
+      this.#dependencies.syncAuthoritativePlayerLookToCurrentFacing(playerRuntime);
+      this.#dependencies.syncPlayerTraversalAuthorityState(playerRuntime);
+      this.#dependencies.incrementSnapshotSequence();
+
+      return;
+    }
+
+    if (acceptedMountedOccupancy.occupantRole !== "driver") {
+      this.#dependencies.clearDriverVehicleControl(playerRuntime.playerId);
+    }
 
     this.#dependencies.syncMountedPlayerPoseFromVehicle(
       playerRuntime,

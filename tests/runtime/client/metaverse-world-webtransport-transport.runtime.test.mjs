@@ -52,20 +52,22 @@ test("createMetaverseWorldWebTransportTransport sends explicit realtime world sn
                 players: [
                   {
                     characterId: "mesh2motion-humanoid-v1",
-                    linearVelocity: {
-                      x: 0,
-                      y: 0,
-                      z: 0
+                    groundedBody: {
+                      linearVelocity: {
+                        x: 0,
+                        y: 0,
+                        z: 0
+                      },
+                      position: {
+                        x: 0,
+                        y: 1.62,
+                        z: 24
+                      },
+                      yawRadians: 0
                     },
                     playerId,
-                    position: {
-                      x: 0,
-                      y: 1.62,
-                      z: 24
-                    },
                     stateSequence: 1,
-                    username,
-                    yawRadians: 0
+                    username
                   }
                 ],
                 snapshotSequence: 1,

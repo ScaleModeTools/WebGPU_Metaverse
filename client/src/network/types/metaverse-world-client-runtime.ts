@@ -1,10 +1,10 @@
 import type {
   MetaversePlayerId,
-  MetaversePlayerTraversalIntentSnapshot,
   MetaverseRealtimeWorldSnapshot,
   MetaverseSyncDriverVehicleControlCommandInput,
   MetaverseSyncMountedOccupancyCommandInput,
   MetaverseSyncPlayerLookIntentCommandInput,
+  MetaverseSyncPlayerWeaponStateCommandInput,
   MetaverseSyncPlayerTraversalIntentCommandInput
 } from "@webgpu-metaverse/shared";
 
@@ -15,16 +15,18 @@ import type {
   RealtimeDatagramTransportStatusSnapshot,
   RealtimeReliableTransportStatusSnapshot
 } from "@/network";
+import type { MetaversePlayerIssuedTraversalIntentSnapshot } from "./metaverse-player-issued-traversal-intent";
 
 export interface MetaverseWorldClientRuntime {
   readonly currentPollIntervalMs: number;
   readonly driverVehicleControlDatagramStatusSnapshot: RealtimeDatagramTransportStatusSnapshot;
   readonly latestPlayerInputSequence: number;
-  readonly latestPlayerLookSequence: number;
-  readonly latestPlayerTraversalOrientationSequence: number;
-  readonly latestPlayerTraversalIntentSnapshot:
-    | MetaversePlayerTraversalIntentSnapshot
+  readonly latestPlayerIssuedTraversalIntentSnapshot:
+    | MetaversePlayerIssuedTraversalIntentSnapshot
     | null;
+  readonly latestPlayerLookSequence: number;
+  readonly latestPlayerWeaponSequence: number;
+  readonly latestPlayerTraversalOrientationSequence: number;
   readonly reliableTransportStatusSnapshot: RealtimeReliableTransportStatusSnapshot;
   readonly statusSnapshot: MetaverseWorldClientStatusSnapshot;
   readonly telemetrySnapshot: MetaverseWorldClientTelemetrySnapshot;
@@ -41,12 +43,15 @@ export interface MetaverseWorldClientRuntime {
   syncPlayerLookIntent(
     commandInput: MetaverseSyncPlayerLookIntentCommandInput | null
   ): void;
+  syncPlayerWeaponState(
+    commandInput: MetaverseSyncPlayerWeaponStateCommandInput | null
+  ): void;
   syncPlayerTraversalIntent(
     commandInput: MetaverseSyncPlayerTraversalIntentCommandInput | null
-  ): MetaversePlayerTraversalIntentSnapshot | null;
+  ): MetaversePlayerIssuedTraversalIntentSnapshot | null;
   previewPlayerTraversalIntent(
     commandInput: MetaverseSyncPlayerTraversalIntentCommandInput | null
-  ): MetaversePlayerTraversalIntentSnapshot | null;
+  ): MetaversePlayerIssuedTraversalIntentSnapshot | null;
   subscribeUpdates(listener: () => void): () => void;
   dispose(): void;
 }

@@ -6,6 +6,10 @@ import type {
   MetaversePresencePoseSnapshotInput,
   MetaversePresenceRosterSnapshot
 } from "@webgpu-metaverse/shared/metaverse/presence";
+import {
+  resolveMetaversePlayerTeamId,
+  type MetaversePlayerTeamId
+} from "@webgpu-metaverse/shared";
 
 import type {
   MetaversePresenceClientStatusSnapshot,
@@ -31,6 +35,7 @@ import {
 export interface MetaverseLocalPlayerIdentity {
   readonly characterId: string;
   readonly playerId: MetaversePlayerId;
+  readonly teamId?: MetaversePlayerTeamId;
   readonly username: Username;
 }
 
@@ -60,11 +65,13 @@ function freezePresenceHudSnapshot(
   state: MetaverseHudSnapshot["presence"]["state"],
   joined: boolean,
   lastError: string | null,
+  localTeamId: MetaverseHudSnapshot["presence"]["localTeamId"],
   remotePlayerCount: number
 ): MetaverseHudSnapshot["presence"] {
   return Object.freeze({
     joined,
     lastError,
+    localTeamId,
     remotePlayerCount,
     state
   });
@@ -110,6 +117,27 @@ export class MetaversePresenceRuntime {
     return (
       this.#metaversePresenceClient?.reliableTransportStatusSnapshot ??
       createDisabledRealtimeReliableTransportStatusSnapshot()
+    );
+  }
+
+  get localTeamId(): MetaversePlayerTeamId | null {
+    const resolvedRosterTeamId =
+      this.#metaversePresenceClient?.rosterSnapshot?.players.find(
+        (playerSnapshot) =>
+          playerSnapshot.playerId === this.#localPlayerIdentity?.playerId
+      )?.teamId ?? null;
+
+    if (resolvedRosterTeamId !== null) {
+      return resolvedRosterTeamId;
+    }
+
+    if (this.#localPlayerIdentity === null) {
+      return null;
+    }
+
+    return (
+      this.#localPlayerIdentity.teamId ??
+      resolveMetaversePlayerTeamId(this.#localPlayerIdentity.playerId)
     );
   }
 
@@ -227,7 +255,7 @@ export class MetaversePresenceRuntime {
 
   resolveHudSnapshot(): MetaverseHudSnapshot["presence"] {
     if (!this.#isConfigured()) {
-      return freezePresenceHudSnapshot("disabled", false, null, 0);
+      return freezePresenceHudSnapshot("disabled", false, null, null, 0);
     }
 
     const metaversePresenceClient = this.#metaversePresenceClient;
@@ -237,6 +265,7 @@ export class MetaversePresenceRuntime {
         "idle",
         false,
         null,
+        this.localTeamId,
         this.#remoteCharacterPresentations.length
       );
     }
@@ -245,6 +274,7 @@ export class MetaversePresenceRuntime {
       metaversePresenceClient.statusSnapshot.state,
       metaversePresenceClient.statusSnapshot.joined,
       metaversePresenceClient.statusSnapshot.lastError,
+      this.localTeamId,
       this.#remoteCharacterPresentations.length
     );
   }
@@ -277,6 +307,9 @@ export class MetaversePresenceRuntime {
         lookSnapshot,
         locomotionMode,
         mountedEnvironment
+      ),
+      teamId: this.localTeamId ?? resolveMetaversePlayerTeamId(
+        this.#localPlayerIdentity.playerId
       ),
       username: this.#localPlayerIdentity.username
     };

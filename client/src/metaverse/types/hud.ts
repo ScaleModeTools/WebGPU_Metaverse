@@ -15,6 +15,14 @@ import type {
   RealtimeDatagramTransportStatusSnapshot,
   RealtimeReliableTransportStatusSnapshot
 } from "@/network";
+import type {
+  MetaversePlayerTeamId,
+  ReticleColor,
+  ReticleId
+} from "@webgpu-metaverse/shared";
+import type {
+  MetaverseRealtimePlayerWeaponAimModeId
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 
 export const metaverseRuntimeLifecycleStates = [
   "idle",
@@ -50,6 +58,36 @@ export const metaverseBootPhaseStates = [
 export type MetaverseBootPhaseState =
   (typeof metaverseBootPhaseStates)[number];
 
+export interface MetaverseWeaponHudSnapshot {
+  readonly adsTransitionMs: number;
+  readonly aimMode: MetaverseRealtimePlayerWeaponAimModeId;
+  readonly reticleColor: ReticleColor;
+  readonly reticleId: ReticleId;
+  readonly reticleStyleId: string;
+  readonly visible: boolean;
+  readonly weaponId: string | null;
+  readonly weaponLabel: string | null;
+}
+
+export interface MetaverseHudRadarContactSnapshot {
+  readonly clamped: boolean;
+  readonly distanceMeters: number;
+  readonly radarX: number;
+  readonly radarY: number;
+  readonly teamId: MetaversePlayerTeamId;
+  readonly username: string;
+}
+
+export interface MetaverseHudRadarSnapshot {
+  readonly available: boolean;
+  readonly enemyContacts: readonly MetaverseHudRadarContactSnapshot[];
+  readonly enemyPingAgeMs: number | null;
+  readonly enemyPingIntervalMs: number;
+  readonly friendlyContacts: readonly MetaverseHudRadarContactSnapshot[];
+  readonly localTeamId: MetaversePlayerTeamId | null;
+  readonly rangeMeters: number;
+}
+
 export interface MetaverseHudSnapshot {
   readonly boot: {
     readonly authoritativeWorldConnected: boolean;
@@ -69,9 +107,11 @@ export interface MetaverseHudSnapshot {
   readonly presence: {
     readonly joined: boolean;
     readonly lastError: string | null;
+    readonly localTeamId: MetaversePlayerTeamId | null;
     readonly remotePlayerCount: number;
     readonly state: MetaversePresenceHudState;
   };
+  readonly radar: MetaverseHudRadarSnapshot;
   readonly telemetry: MetaverseTelemetrySnapshot;
   readonly transport: {
     readonly presenceReliable: RealtimeReliableTransportStatusSnapshot;
@@ -79,6 +119,7 @@ export interface MetaverseHudSnapshot {
     readonly worldReliable: RealtimeReliableTransportStatusSnapshot;
     readonly worldSnapshotStream: MetaverseWorldSnapshotStreamTelemetrySnapshot;
   };
+  readonly weapon: MetaverseWeaponHudSnapshot;
 }
 
 export interface MetaverseMountedInteractionHudSnapshot {

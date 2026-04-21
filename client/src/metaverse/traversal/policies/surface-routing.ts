@@ -56,7 +56,8 @@ export function resolveSurfaceHeightMeters(
   surfaceColliderSnapshots: readonly MetaversePlacedCuboidColliderSnapshot[],
   x: number,
   z: number,
-  excludedOwnerEnvironmentAssetId: string | null = null
+  excludedOwnerEnvironmentAssetId: string | null = null,
+  maxSupportHeightMeters: number | null = null
 ): number | null {
   return resolveMetaverseWorldSurfaceHeightMeters(
     readMetaverseSurfacePolicyConfig(config),
@@ -64,7 +65,8 @@ export function resolveSurfaceHeightMeters(
     config.waterRegionSnapshots,
     x,
     z,
-    excludedOwnerEnvironmentAssetId
+    excludedOwnerEnvironmentAssetId,
+    maxSupportHeightMeters
   );
 }
 

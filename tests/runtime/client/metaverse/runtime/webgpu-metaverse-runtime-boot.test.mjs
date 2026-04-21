@@ -92,8 +92,22 @@ test("WebGpuMetaverseRuntime starts from an idle snapshot and rejects missing na
     Object.freeze({
       lastLocalAuthorityPoseCorrectionDetail: Object.freeze({
         authoritativeGrounded: null,
+        authoritativeSnapshotAgeMs: null,
+        authoritativeSnapshotSequence: null,
+        authoritativeTick: null,
         bodyStateDivergence: null,
+        convergenceEpisodeStarted: false,
+        convergenceEpisodeStartIntentionalDiscontinuityCause: "none",
+        convergenceEpisodeStartHistoricalLocalSampleMatched: null,
+        convergenceEpisodeStartHistoricalLocalSampleSelectionReason: null,
+        convergenceEpisodeStartHistoricalLocalSampleTimeDeltaMs: null,
+        convergenceEpisodeStartPlanarMagnitudeMeters: null,
+        convergenceEpisodeStartReason: "none",
+        convergenceEpisodeStartVerticalMagnitudeMeters: null,
+        convergenceEpisodeStartYawMagnitudeRadians: null,
         groundedBodyStateDivergence: null,
+        lastProcessedInputSequence: null,
+        lastProcessedTraversalOrientationSequence: null,
         localGrounded: null,
         planarMagnitudeMeters: null,
         planarVelocityMagnitudeUnitsPerSecond: null,
@@ -105,9 +119,13 @@ test("WebGpuMetaverseRuntime starts from an idle snapshot and rejects missing na
       lastCorrectionAgeMs: null,
       lastCorrectionSource: "none",
       localAuthorityPoseCorrectionCount: 0,
+      localAuthorityPoseConvergenceEpisodeCount: 0,
+      localAuthorityPoseConvergenceStepCount: 0,
       mountedVehicleAuthorityCorrectionCount: 0,
       recentCorrectionCountPast5Seconds: 0,
       recentLocalAuthorityPoseCorrectionCountPast5Seconds: 0,
+      recentLocalAuthorityPoseConvergenceEpisodeCountPast5Seconds: 0,
+      recentLocalAuthorityPoseConvergenceStepCountPast5Seconds: 0,
       recentMountedVehicleAuthorityCorrectionCountPast5Seconds: 0,
       totalCorrectionCount: 0
     })
@@ -138,13 +156,6 @@ test("WebGpuMetaverseRuntime starts from an idle snapshot and rejects missing na
   assert.equal(
     runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.autostepHeightMeters,
     null
-  );
-  assert.deepEqual(
-    runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.jumpDebug,
-    Object.freeze({
-      surfaceJumpSupported: null,
-      supported: null
-    })
   );
   assert.equal(
     runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.issuedTraversalIntent,

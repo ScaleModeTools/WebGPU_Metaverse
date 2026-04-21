@@ -15,9 +15,12 @@ import {
   createMetaverseSyncDriverVehicleControlCommand,
   createMetaverseSyncPlayerLookIntentCommand,
   createMetaverseSyncMountedOccupancyCommand,
+  createMetaverseSyncPlayerWeaponStateCommand,
   createMetaverseSyncPlayerTraversalIntentCommand,
   metaversePlayerTraversalIntentLocomotionModeIds,
   type MetaversePlayerTraversalIntentLocomotionModeId,
+  metaverseRealtimePlayerWeaponAimModeIds,
+  type MetaverseRealtimePlayerWeaponAimModeId,
   metaverseRealtimePlayerTraversalActionKindIds,
   type MetaverseRealtimePlayerTraversalActionKindId,
   type MetaverseRealtimeWorldClientCommand
@@ -296,6 +299,38 @@ function parseWorldTraversalIntent(intentBody: Record<string, unknown>) {
   };
 }
 
+function parseWorldTraversalRecentIntentHistory(
+  historyBody: unknown,
+  fieldName: string
+) {
+  if (!Array.isArray(historyBody)) {
+    throw new Error(`${fieldName} must be an array.`);
+  }
+
+  return historyBody.map((historyEntryBody, historyEntryIndex) => {
+    if (!isRecord(historyEntryBody)) {
+      throw new Error(`${fieldName}[${historyEntryIndex}] must be an object.`);
+    }
+
+    return {
+      ...(historyEntryBody.durationMs === undefined
+        ? {}
+        : {
+            durationMs: readNumberField(
+              historyEntryBody.durationMs,
+              `${fieldName}[${historyEntryIndex}].durationMs`
+            )
+          }),
+      intent: parseWorldTraversalIntent(
+        readRecordField(
+          historyEntryBody.intent,
+          `${fieldName}[${historyEntryIndex}].intent`
+        )
+      )
+    };
+  });
+}
+
 function parseWorldTraversalBodyControl(
   bodyControlBody: unknown,
   fieldName: string
@@ -400,6 +435,34 @@ function parseWorldLookIntent(lookIntentBody: Record<string, unknown>) {
   };
 }
 
+function parseWorldPlayerWeaponState(weaponStateBody: unknown) {
+  if (weaponStateBody === null) {
+    return null;
+  }
+
+  const weaponState = readRecordField(weaponStateBody, "weaponState");
+  const aimMode =
+    weaponState.aimMode === undefined
+      ? undefined
+      : readStringField(weaponState.aimMode, "weaponState.aimMode");
+
+  if (
+    aimMode !== undefined &&
+    !metaverseRealtimePlayerWeaponAimModeIds.includes(
+      aimMode as MetaverseRealtimePlayerWeaponAimModeId
+    )
+  ) {
+    throw new Error(`Unsupported weaponState.aimMode: ${aimMode}`);
+  }
+
+  return {
+    ...(aimMode === undefined
+      ? {}
+      : { aimMode: aimMode as MetaverseRealtimePlayerWeaponAimModeId }),
+    weaponId: readStringField(weaponState.weaponId, "weaponState.weaponId")
+  };
+}
+
 function parseWorldCommand(
   body: unknown
 ): MetaverseRealtimeWorldClientCommand {
@@ -420,7 +483,23 @@ function parseWorldCommand(
       });
     case "sync-player-traversal-intent":
       return createMetaverseSyncPlayerTraversalIntentCommand({
+        ...(body.estimatedServerTimeMs === undefined
+          ? {}
+          : {
+              estimatedServerTimeMs: readNumberField(
+                body.estimatedServerTimeMs,
+                "estimatedServerTimeMs"
+              )
+            }),
         intent: parseWorldTraversalIntent(readRecordField(body.intent, "intent")),
+        ...(body.recentIntentHistory === undefined
+          ? {}
+          : {
+              recentIntentHistory: parseWorldTraversalRecentIntentHistory(
+                body.recentIntentHistory,
+                "recentIntentHistory"
+              )
+            }),
         playerId: resolvePlayerId(readStringField(body.playerId, "playerId"))
       });
     case "sync-player-look-intent":
@@ -432,8 +511,14 @@ function parseWorldCommand(
           ? {}
           : {
               lookSequence: readNumberField(body.lookSequence, "lookSequence")
-            }),
+          }),
         playerId: resolvePlayerId(readStringField(body.playerId, "playerId"))
+      });
+    case "sync-player-weapon-state":
+      return createMetaverseSyncPlayerWeaponStateCommand({
+        playerId: resolvePlayerId(readStringField(body.playerId, "playerId")),
+        weaponSequence: readNumberField(body.weaponSequence, "weaponSequence"),
+        weaponState: parseWorldPlayerWeaponState(body.weaponState)
       });
     case "sync-driver-vehicle-control": {
       const controlIntentBody = readRecordField(body.controlIntent, "controlIntent");
@@ -522,14 +607,10 @@ export class MetaverseWorldHttpAdapter {
         return true;
       }
 
-      writeJson(
-        response,
-        200,
-        this.#runtime.acceptWorldCommand(
-          parseWorldCommand(await readJsonBody(request)),
-          nowMs
-        )
-      );
+      const command = parseWorldCommand(await readJsonBody(request));
+
+      this.#runtime.acceptWorldCommand(command, nowMs);
+      writeJson(response, 200, this.#runtime.readWorldEvent(nowMs, command.playerId));
     } catch (error) {
       writeJson(response, isUnknownPlayerError(error) ? 409 : 400, {
         error:

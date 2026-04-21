@@ -48,13 +48,18 @@ export class MetaverseSceneCameraPresentationState {
 
   syncPresentedCamera(
     cameraSnapshot: MetaverseCameraSnapshot,
-    nowMs: number
+    nowMs: number,
+    fieldOfViewDegrees: number | null = null
   ): void {
     this.#dependencies.environmentProofState.syncPresentation(
       cameraSnapshot,
       nowMs
     );
-    syncMetaverseSceneCamera(this.#dependencies.camera, cameraSnapshot);
+    syncMetaverseSceneCamera(
+      this.#dependencies.camera,
+      cameraSnapshot,
+      fieldOfViewDegrees
+    );
   }
 
   syncSceneInteractionSnapshot(

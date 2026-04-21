@@ -18,7 +18,7 @@ import {
 } from "./map-editor-project-state";
 import { exportMapEditorProjectToMetaverseMapBundle } from "../run/export-map-editor-project-to-metaverse-map-bundle";
 
-const storedMapEditorProjectRecordVersion = 1 as const;
+const storedMapEditorProjectRecordVersion = 2 as const;
 const mapEditorProjectStorageKeyPrefix =
   "webgpu-metaverse:engine-tool:map-editor-project:";
 
@@ -64,6 +64,7 @@ function isStoredMapEditorProjectRecord(
     Array.isArray(bundle.environmentAssets) &&
     Array.isArray(bundle.launchVariations) &&
     Array.isArray(bundle.playerSpawnNodes) &&
+    isRecord(bundle.playerSpawnSelection) &&
     Array.isArray(bundle.resourceSpawns) &&
     Array.isArray(bundle.sceneObjects) &&
     Array.isArray(bundle.waterRegions) &&

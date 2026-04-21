@@ -288,7 +288,7 @@ test("canonical humanoid rig definitions keep stable bone and socket parentage",
   assert.deepEqual(skeletonSocketParentById.humanoid_v2, humanoidV2SocketParentById);
 });
 
-test("humanoid_v2 rig metadata keeps arm-only aim layering and head anchors explicit", async () => {
+test("humanoid_v2 rig metadata keeps upper-torso aim layering and head anchors explicit", async () => {
   const {
     humanoidV2HeadAnchorNodeNames,
     humanoidV2PistolAimOverlayTrackPrefixes,
@@ -306,6 +306,8 @@ test("humanoid_v2 rig metadata keeps arm-only aim layering and head anchors expl
     neck: "neck_01"
   });
   assert.deepEqual(humanoidV2PistolAimOverlayTrackPrefixes, [
+    "spine_02",
+    "spine_03",
     "clavicle_l",
     "upperarm_l",
     "lowerarm_l",
@@ -322,7 +324,8 @@ test("humanoid_v2 rig metadata keeps arm-only aim layering and head anchors expl
   ]);
   assert.equal(isHumanoidV2PistolAimOverlayTrack("upperarm_l.quaternion"), true);
   assert.equal(isHumanoidV2PistolAimOverlayTrack("index_02_r.rotation"), true);
-  assert.equal(isHumanoidV2PistolAimOverlayTrack("spine_03.quaternion"), false);
+  assert.equal(isHumanoidV2PistolAimOverlayTrack("spine_02.quaternion"), true);
+  assert.equal(isHumanoidV2PistolAimOverlayTrack("spine_03.quaternion"), true);
   assert.equal(isHumanoidV2PistolAimOverlayTrack("head.quaternion"), false);
   assert.equal(isHumanoidV2PistolAimOverlayTrack("thigh_r.quaternion"), false);
 
@@ -479,7 +482,8 @@ test("attachment manifests keep explicit attachment socket ownership for held an
   assert.equal(pistolAttachment.defaultSocketId, "hand_r_socket");
   assert.deepEqual(pistolAttachment.heldMount, {
     attachmentSocketNodeName: "metaverse_service_pistol_grip_hand_r_socket",
-    forwardReferenceNodeName: "metaverse_service_pistol_forward_marker"
+    forwardReferenceNodeName: "metaverse_service_pistol_forward_marker",
+    triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker"
   });
   assert.deepEqual(pistolAttachment.offHandSupportPointIdBySocketId, {
     hand_r_socket: "pistol-support-left"
@@ -623,6 +627,46 @@ test("shipped metaverse glb assets keep normalized node scale", async () => {
       );
     }
   }
+});
+
+test("dock gltf LODs keep a flush deck support plane", async () => {
+  const [highDockDocument, lowDockDocument] = await Promise.all([
+    loadMetaverseAssetDocument(
+      "/models/metaverse/environment/metaverse-hub-dock-high.gltf"
+    ),
+    loadMetaverseAssetDocument(
+      "/models/metaverse/environment/metaverse-hub-dock-low.gltf"
+    )
+  ]);
+
+  const resolveDeckSupportBounds = (document) => {
+    const deckNode = (document.nodes ?? []).find((node) => node.mesh === 0);
+    const deckAccessorIndex =
+      document.meshes?.[0]?.primitives?.[0]?.attributes?.POSITION;
+    const deckAccessor =
+      typeof deckAccessorIndex === "number"
+        ? document.accessors?.[deckAccessorIndex]
+        : null;
+    const translationY =
+      deckNode?.translation?.[1] ??
+      (Array.isArray(deckNode?.matrix) ? deckNode.matrix[13] : 0);
+
+    assert.ok(deckNode);
+    assert.ok(deckAccessor);
+
+    return {
+      maxY: (deckAccessor.max?.[1] ?? 0) + translationY,
+      minY: (deckAccessor.min?.[1] ?? 0) + translationY
+    };
+  };
+
+  const highDockBounds = resolveDeckSupportBounds(highDockDocument);
+  const lowDockBounds = resolveDeckSupportBounds(lowDockDocument);
+
+  assert.ok(Math.abs(highDockBounds.minY) < 0.000001);
+  assert.ok(Math.abs(highDockBounds.maxY - 0.34) < 0.000001);
+  assert.ok(Math.abs(lowDockBounds.minY) < 0.000001);
+  assert.ok(Math.abs(lowDockBounds.maxY - 0.34) < 0.000001);
 });
 
 test("environment manifest keeps the shipped playground surfaces explicit as procedural range geometry", async () => {

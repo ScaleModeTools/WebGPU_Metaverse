@@ -3,22 +3,12 @@ import test, { after, before } from "node:test";
 
 import {
   createTraversalFixtureContext,
+  forwardTravelInput,
   freezeVector3,
   groundedFixedStepSeconds
 } from "./fixtures/traversal-test-fixtures.mjs";
 
 let fixtureContext;
-
-const forwardTravelInput = Object.freeze({
-  boost: false,
-  jump: false,
-  moveAxis: 1,
-  pitchAxis: 0,
-  primaryAction: false,
-  secondaryAction: false,
-  strafeAxis: 0,
-  yawAxis: 0
-});
 
 const forwardJumpTravelInput = Object.freeze({
   ...forwardTravelInput,

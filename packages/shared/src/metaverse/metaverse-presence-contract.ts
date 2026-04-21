@@ -1,10 +1,12 @@
 import type { Username } from "../player-profile.js";
 import type { TypeBrand } from "../type-branding.js";
 import type { Milliseconds, Radians } from "../unit-measurements.js";
+import type { MetaversePlayerTeamId } from "./metaverse-player-team.js";
 import {
   createMilliseconds,
   createRadians
 } from "../unit-measurements.js";
+import { normalizeMetaversePlayerTeamId } from "./metaverse-player-team.js";
 
 export const metaversePresenceAnimationVocabularyIds = [
   "idle",
@@ -21,8 +23,7 @@ export const metaversePresenceAnimationVocabularyIds = [
 
 export const metaversePresencePrimaryLocomotionModeIds = [
   "grounded",
-  "swim",
-  "fly"
+  "swim"
 ] as const;
 
 export const metaversePresenceCompatibilityLocomotionModeIds = [
@@ -135,6 +136,7 @@ export interface MetaversePresencePlayerSnapshot {
   readonly characterId: string;
   readonly playerId: MetaversePlayerId;
   readonly pose: MetaversePresencePoseSnapshot;
+  readonly teamId: MetaversePlayerTeamId;
   readonly username: Username;
 }
 
@@ -142,6 +144,7 @@ export interface MetaversePresencePlayerSnapshotInput {
   readonly characterId: string;
   readonly playerId: MetaversePlayerId;
   readonly pose: MetaversePresencePoseSnapshotInput;
+  readonly teamId?: MetaversePlayerTeamId;
   readonly username: Username;
 }
 
@@ -166,6 +169,7 @@ export interface MetaverseJoinPresenceCommand {
   readonly characterId: string;
   readonly playerId: MetaversePlayerId;
   readonly pose: MetaversePresencePoseSnapshot;
+  readonly teamId: MetaversePlayerTeamId;
   readonly type: "join-presence";
   readonly username: Username;
 }
@@ -174,6 +178,7 @@ export interface MetaverseJoinPresenceCommandInput {
   readonly characterId: string;
   readonly playerId: MetaversePlayerId;
   readonly pose: MetaversePresencePoseSnapshotInput;
+  readonly teamId?: MetaversePlayerTeamId;
   readonly username: Username;
 }
 
@@ -230,6 +235,22 @@ export function shouldKeepMetaverseMountedOccupancyFreeRoam(
     mountedOccupancy !== undefined &&
     mountedOccupancy.occupancyKind === "entry" &&
     mountedOccupancy.occupantRole !== "driver"
+  );
+}
+
+export function shouldTreatMetaverseMountedOccupancyAsTraversalMounted(
+  mountedOccupancy:
+    | Pick<
+        MetaversePresenceMountedOccupancySnapshot,
+        "occupancyKind" | "occupantRole"
+      >
+    | null
+    | undefined
+): boolean {
+  return (
+    mountedOccupancy !== null &&
+    mountedOccupancy !== undefined &&
+    !shouldKeepMetaverseMountedOccupancyFreeRoam(mountedOccupancy)
   );
 }
 
@@ -471,12 +492,14 @@ export function createMetaversePresencePlayerSnapshot({
   characterId,
   playerId,
   pose,
+  teamId,
   username
 }: MetaversePresencePlayerSnapshotInput): MetaversePresencePlayerSnapshot {
   return Object.freeze({
     characterId: normalizeCharacterId(characterId),
     playerId,
     pose: createMetaversePresencePoseSnapshot(pose),
+    teamId: normalizeMetaversePlayerTeamId(teamId, playerId),
     username
   });
 }
@@ -510,12 +533,14 @@ export function createMetaverseJoinPresenceCommand({
   characterId,
   playerId,
   pose,
+  teamId,
   username
 }: MetaverseJoinPresenceCommandInput): MetaverseJoinPresenceCommand {
   return Object.freeze({
     characterId: normalizeCharacterId(characterId),
     playerId,
     pose: createMetaversePresencePoseSnapshot(pose),
+    teamId: normalizeMetaversePlayerTeamId(teamId, playerId),
     type: "join-presence",
     username
   });

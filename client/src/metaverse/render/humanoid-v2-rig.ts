@@ -5,7 +5,11 @@ export const humanoidV2HeadAnchorNodeNames = Object.freeze({
   neck: "neck_01"
 } as const);
 
+// The held-weapon IK restores the arm chain before solving, so the authored
+// pistol overlay needs upper-torso support on non-driven spine bones.
 export const humanoidV2PistolAimOverlayTrackPrefixes = Object.freeze([
+  "spine_02",
+  "spine_03",
   "clavicle_l",
   "upperarm_l",
   "lowerarm_l",

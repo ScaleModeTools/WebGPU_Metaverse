@@ -13,6 +13,9 @@ import {
 
 import { MetaverseAuthoritativeWorldRuntime } from "../../../server/dist/metaverse/classes/metaverse-authoritative-world-runtime.js";
 import { MetaverseWorldHttpAdapter } from "../../../server/dist/metaverse/adapters/metaverse-world-http-adapter.js";
+import {
+  authoredWaterBaySkiffYawRadians
+} from "../metaverse-authored-world-test-fixtures.mjs";
 
 function createResponseCapture() {
   let body = "";
@@ -236,13 +239,13 @@ test("MetaverseWorldHttpAdapter accepts traversal intent commands on the explici
   assert.equal(handled, true);
   assert.equal(response.statusCode, 200);
   assert.equal(response.json.type, "world-snapshot");
-  assert.equal(response.json.world.players[0]?.lastProcessedInputSequence, 1);
+  assert.equal(response.json.world.observerPlayer?.lastProcessedInputSequence, 1);
 
   runtime.advanceToTime(200);
 
   const worldSnapshot = runtime.readWorldSnapshot(200, playerId);
 
-  assert.equal(worldSnapshot.players[0]?.lastProcessedInputSequence, 2);
+  assert.equal(worldSnapshot.observerPlayer?.lastProcessedInputSequence, 2);
   assert.equal(worldSnapshot.players[0]?.locomotionMode, "grounded");
   assert.equal(worldSnapshot.players[0]?.stateSequence, 2);
 });
@@ -316,7 +319,10 @@ test("MetaverseWorldHttpAdapter accepts explicit player look commands on the exp
   assert.equal(response.json.type, "world-snapshot");
   assert.equal(response.json.world.players[0]?.look.pitchRadians, -0.4);
   assert.equal(response.json.world.players[0]?.look.yawRadians, 1.2);
-  assert.equal(response.json.world.players[0]?.yawRadians, 0.25);
+  assert.equal(
+    response.json.world.players[0]?.groundedBody?.yawRadians,
+    authoredWaterBaySkiffYawRadians
+  );
 });
 
 test("MetaverseWorldHttpAdapter accepts reliable mounted occupancy commands on the explicit command route", async () => {

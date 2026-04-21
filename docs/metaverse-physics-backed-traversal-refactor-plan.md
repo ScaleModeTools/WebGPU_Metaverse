@@ -6,14 +6,17 @@ Priority: high
 
 Current implementation priority:
 
-- finish Phase 3 so jump validation reduces to accepted impulse plus ordinary
-  contact instead of extra jump-gating seams
-- finish Phase 7 so mounted and moving-support travel stop relying on bespoke
-  carry or forced advancement patches
-- finish Phase 8 so supported paths stop triggering pose-era reconciliation
-  and body truth stays the only gameplay authority
-- keep Phase 9 as a real deletion pass after those seams are gone instead of
-  treating partial cleanup as plan completion
+- finish Phase 3 so accepted jump is one impulse edge plus ordinary contact,
+  and normal supported play does not accumulate `rejected-buffer-expired`
+  jump actions
+- finish Phase 7 so mounted and moving-support travel cannot inject body
+  discontinuities above the physics-owned body seam
+- finish Phase 8 so any remaining gross-position convergence episode under
+  nominal RTT resolves to either the correct fixed-step sample or an explicit
+  intentional discontinuity cause instead of widening reconciliation again
+- run Phase 9 as a real deletion pass behind the remaining Phase 3 and 7
+  seams so mounted carry, jump-gating shortcuts, and compatibility mirrors are
+  removed instead of relabeled
 
 Execution rules:
 
@@ -24,6 +27,60 @@ Execution rules:
   the same implementation step when practical
 - if one phase starts expanding into multiple locomotion lanes, split the
   remaining work and finish the current lane first
+
+## Finish Checklist
+
+Close the refactor in this order:
+
+1. observer-side continuity
+   - add a two-client runtime test where player A keeps moving while only
+     yaw or aim updates advance
+   - prove player B keeps receiving fresh remote root position updates across
+     those orientation-only refreshes
+2. grounded tap parity
+   - add an end-to-end tap test through the real client and authoritative
+     transport path
+   - close any case where a brief directional tap advances materially farther
+     on authority than it does locally
+3. jump authority seam
+   - finish ordinary supported jumping so normal play does not accumulate
+     `rejected-buffer-expired`
+   - add the stale rejection race where authority rejects jump seq `N` after
+     the client already issued seq `N+1`, and prove only the stale jump
+     collapses
+4. intentional spawn discontinuity
+   - route respawn or team-spawn through the same explicit discontinuity lane
+     as initial spawn bootstrap
+   - add a mid-session respawn test
+5. mounted and moving-support continuity
+   - finish deleting or fully owning the remaining mounted or support carry
+     patches above the shared body seam
+6. deletion pass
+   - remove the transitional discontinuity hooks, jump gating, and remaining
+     compatibility mirrors in the same slices that close their owning seams
+
+The refactor is not done until:
+
+- short directional taps stay in local and authoritative parity without a
+  visible overshoot correction
+- remotes continue moving while same-input-sequence yaw or aim refreshes are
+  the only incoming updates
+- ordinary supported jump and landing play no longer racks up normal-play
+  `rejected-buffer-expired` resolutions
+- respawn uses the same intentional discontinuity labeling path as initial
+  spawn bootstrap
+- targeted runtime suites pass and `./tools/verify` passes
+
+## Near-Term Slices
+
+Take the next implementation slices in this order:
+
+1. add observer-side yaw-only remote movement coverage
+2. add grounded tap-parity coverage
+3. fix whichever of those fails first
+4. finish the remaining Phase 3 jump authority seam
+5. finish the remaining Phase 7 and 8 discontinuity wiring
+6. run Phase 9 as deletion, not as relabeling
 
 ## Goal
 
@@ -46,20 +103,35 @@ Execution rules:
 
 ## Current Baseline
 
-- the current traversal stack is still kinematic-heavy even after the shared
-  validation refactor
-- shared kernels already converge profile, intent, and several movement
-  outcomes, but the runtimes still carry custom controller math and mode
-  handoff logic above the physics step
-- recent corrections have clustered around jump continuity, water entry or
-  exit carryover, and dynamic actor contact ordering rather than world-bundle
-  or profile-selection drift
-- dynamic collision parity work has reduced false disagreement enough that the
-  main remaining complexity now lives in the locomotion model itself
-- live supported paths still show pose-related reconciliation, which means the
-  remaining open seams are not just cleanup: some traversal or correction
-  paths still reason from pose-era or carry-era state instead of pure
-  input-plus-body physics truth
+- ack-aligned reconciliation is landed: authoritative local delivery is
+  freshness-keyed, correction reads one active-body owner, and the HUD now
+  distinguishes convergence episodes from settle steps while preserving
+  episode-start context
+- repeated ack buckets now match the correct fixed-step local sample by exact
+  authoritative tick first and authoritative target time second, so identical
+  acknowledged input and orientation buckets no longer collapse to an arbitrary
+  newest local sample
+- false disagreement from blocked-planar contact noise has been pushed down
+  toward telemetry and debug territory
+- Phase 8 is narrowed now: sample matching, bounded convergence, and
+  episode-start telemetry are landed and covered, so the remaining
+  reconciliation seam is proving the correct fixed-step sample versus a real
+  intentional discontinuity instead of reopening pose-era correction design
+- Phase 3 still has a visible authority-resolution seam because normal play
+  can accumulate `rejected-buffer-expired` jump actions; ordinary supported
+  jumping must reduce to accepted impulse plus ordinary contact before the
+  phase closes
+- intentional-discontinuity plumbing is partially landed already:
+  reconciliation detail, HUD freeze-through, and developer reports can now
+  carry explicit discontinuity causes, and mounted boarding/unboarding plus
+  moving-support carry already feed those causes into traversal diagnostics
+- Phase 7 still has a visible continuity seam because mounted boarding,
+  unboarding, and moving-support carry can still adapt the body above the
+  shared runtime owner; the remaining work is routing every supported authored
+  translation through that lane or deleting the carry seam entirely
+- presentation is standardizing around Mesh2Motion and `humanoid_v2`, but that
+  work stays outside this traversal plan except where it derives from the same
+  capsule truth
 
 ## Invariants
 
@@ -289,6 +361,8 @@ Exit:
   validation logic tied to presentation semantics
 - the server expects the physical consequence of the accepted jump rather than
   bespoke jump phase labels
+- ordinary supported jumping does not accumulate
+  `rejected-buffer-expired` authority resolutions during normal play
 
 Progress:
 
@@ -327,9 +401,11 @@ Progress:
   against the active grounded-or-swim body kinematic owner, and airborne jump
   continuity no longer gets a dedicated correction exemption path
 - remaining work: jump still keeps explicit gameplay gating above pure impulse
-  and contact through shared jump-ready paths, so Phase 3 does not close until
-  accepted jump input yields body impulse and ordinary airborne contact rules
-  without extra validation-era jump gating as a separate gameplay seam
+  and contact through shared jump-ready paths, and live HUD diagnostics can
+  still show `rejected-buffer-expired` during normal play; Phase 3 does not
+  close until accepted jump input yields body impulse and ordinary airborne
+  contact rules without extra validation-era jump gating as a separate
+  gameplay seam
 
 ### Phase 4 — Grounded `WASD + Shift` locomotion migration
 
@@ -487,16 +563,24 @@ Progress:
   free-roam occupants now sync through one grounded-body owner path, and
   airborne free-roam occupants no longer get support carry reapplied while
   they are off the deck
-- remaining work: mounted and moving-support travel still has bespoke carry or
-  forced-advance behavior in the runtime, so Phase 7 remains open until those
-  supported paths stay on the same body-owner truth without manual carry
-  patches above the physics-owned body seam
+- mounted traversal now notes `mounted-boarding` and `mounted-unboarding`, and
+  traversal runtime notes `moving-support-carry`, into local-authority
+  reconciliation telemetry so supported authored translations begin to surface
+  as explicit discontinuity causes instead of unexplained gross-position starts
+- remaining work: Phase 7 remains open until mounted and moving-support travel
+  either stay on continuous body-owner truth or surface an explicit intentional
+  discontinuity cause rather than relying on hidden carry patches above the
+  physics-owned body seam
 
 ### Phase 8 — Reconciliation simplification
 
 Status: active
 
-Delete correction logic that exists only to defend the older kinematic model.
+Eliminate gross-position episode starts that still happen after ack-aligned
+matching. Phase 8 is no longer about generic pose-era reconciliation; it is
+about proving that authoritative active-body state matches the correct
+fixed-step local historical sample, and that any real body discontinuity is
+intentional and labeled.
 
 Delete:
 
@@ -504,51 +588,81 @@ Delete:
 - transition-specific carry hacks that only preserve kinematic handoff state
 - routine snap suppression added only because supported physical paths drifted
   under the older controller model
+- broad pose-era or hash-era delivery identities that can hide repeated
+  fixed-step samples inside one acknowledged input bucket
 
 Exit:
 
 - reconciliation compares acknowledged authoritative physical state against
-  predicted physical state envelopes
+  the correct fixed-step predicted physical state, including repeated ack
+  buckets where input and orientation edges did not change
 - supported gameplay paths do not need special-case correction masks
+- supported grounded travel and normal jump or landing play stay under a
+  strict convergence-episode budget under nominal RTT, not merely a tolerable
+  settle-step count afterward
+- intentional discontinuities such as spawn, boarding, unboarding,
+  moving-support carry, or authored translations report explicit causes
+  instead of surfacing as unexplained gross-position divergence
 
 Progress:
 
-- the local-authority correction path now compares acknowledged active-body
-  kinematics against predicted body kinematics without a dedicated issued-jump
-  suppression lane, and authoritative correction telemetry plus correction
-  detail now read the same active-body owner that grounded and swim authority
-  delivery use
+- authoritative local delivery now uses active-body kinematics consistently
+  for position, linear velocity, and yaw across grounded and swim authority
+  paths
+- delivery identity is freshness-only rather than a broad gameplay-state hash,
+  so receipt of newer authoritative local state does not depend on unrelated
+  body, contact, or gameplay debug fields
+- local correction uses bounded planar, vertical, and yaw convergence instead
+  of hard overwrite semantics; gross active-body divergence starts bounded
+  convergence toward authoritative capsule truth, while contact, drive,
+  interaction, jump-body, and mode differences remain telemetry and
+  correction-reason data instead of vetoing convergence
+- traversal now exposes episode-start telemetry: start reason, start
+  magnitudes, historical-sample match state, authoritative age, authoritative
+  tick, authoritative sequence, acknowledged input and orientation sequences,
+  snapshot sequence, and explicit intentional-discontinuity cause
+- mounted boarding, mounted unboarding, and moving-support carry now feed
+  explicit intentional-discontinuity causes into reconciliation diagnostics,
+  so those authored translations do not have to appear as unlabeled starts in
+  the developer report
+- live diagnostics can distinguish a new convergence episode from a settle
+  tail, which makes supported-path drift debuggable instead of merely
+  countable
 - client unmounted reconciliation no longer rewrites predicted grounded
   traversal action state from authoritative jump acceptance before body
   correction, and the last public helper that existed mainly to support that
   action-era correction seam has been deleted so input-side sequence issuance
   stays local while authoritative correction stays body-first
-- the unmounted local-authority convergence gate is capsule-first now: gross
-  active-body position divergence starts bounded convergence toward
-  authoritative capsule truth, and grounded or swim contact, drive,
-  interaction, jump-body, and mode differences remain telemetry and
-  correction-reason data instead of vetoing position convergence
-- authoritative local-player correction now sends bounded position and yaw
-  blend alphas instead of hard overwrite alphas, so gross corrections converge
-  across acknowledged body snapshots rather than stepping the local capsule all
-  the way to the server pose in one frame
-- acked local-player authority now uses the active-body owner consistently for
-  position, linear velocity, and yaw, so correction delivery no longer mixes
-  nested body kinematics with top-level compatibility yaw
-- swim correction is tighter now too: authoritative ack delivery keeps
-  capsule kinematics and traversal authority as the delivery identity, while
-  HUD telemetry and developer reports carry swim-body drive and blocker
-  contact truth from the shared body owner, so remaining swim convergence can
-  be judged against actual swim physics state instead of a loose
+- swim correction is tighter too: authoritative ack delivery keeps capsule
+  kinematics and traversal authority as the delivery identity, while HUD
+  telemetry and developer reports carry swim-body drive and blocker contact
+  truth from the shared body owner, so remaining swim convergence can be
+  judged against actual swim physics state instead of a loose
   position-plus-velocity seam
-- remaining work: live action still shows pose-related reconciliation on
-  supported paths, so Phase 8 is not done until correction judges body and
-  contact truth only, and pose remains a derived presentation result of
-  input-driven movement instead of a seam that can reassert gameplay truth
+
+Remaining work:
+
+- harden historical-sample identity so authoritative ack chooses the correct
+  fixed-step local sample inside an ack bucket, not merely any sample sharing
+  the same acknowledged input or orientation edges
+- treat HUD starts above the current thresholds of 1.25 m planar, 1.5 m
+  vertical, or 0.12 rad yaw as real episode starts even when historical sample
+  matched, body divergence is absent, contact divergence is absent, and
+  snapshot age is low
+- investigate the narrowed live hypothesis: either historical-match identity
+  is still too coarse inside repeated ack buckets, or one supported path still
+  produces a true spatial discontinuity that preserves velocity and contact
+  while translating the capsule
+- finish routing all supported authored translations through explicit
+  intentional-discontinuity causes; any remaining unlabeled gross-position
+  starts on supported paths should be treated as bugs
+- close Phase 8 only when supported grounded travel and normal jump or landing
+  play stay under a strict convergence-episode budget, not merely when settle
+  steps look smooth afterward
 
 ### Phase 9 — Deletion pass
 
-Status: pending
+Status: active
 
 Remove remaining kinematic-first traversal owners once the physics-backed path
 is proven.
@@ -559,12 +673,18 @@ Delete:
 - transition-specific carryover patches made obsolete by persistent body
   velocity
 - validation logic that reasons about presentation-only traversal vocabulary
+- temporary discontinuity hooks and compatibility mirrors once mounted,
+  support-carry, and jump seams stay continuous on shared truth
 
 Exit:
 
 - gameplay traversal truth is physics-backed with coarse gameplay modes on top
+- supported transitions stay continuous through shared body owners instead of
+  relying on correction-time relabeling or local shortcut carry
 - supported locomotion no longer relies on the old kinematic controller as the
   primary gameplay authority
+- normal traversal does not depend on intentional-discontinuity labels as a
+  product behavior escape hatch
 
 Progress:
 
@@ -574,10 +694,13 @@ Progress:
   suppression plumbing, and grounded plus swim authority delivery now read the
   nested body owners directly instead of reconstructing locomotion truth from
   top-level pose mirrors
-- remaining work: the deletion pass is blocked on the open Phase 3, 7, and 8
-  seams; it does not close until the remaining jump gating, mounted carry, and
-  pose-related reconciliation paths are removed rather than merely wrapped by
-  newer body-owner surfaces
+- Phase 8 diagnostics are now in place only to expose the remaining shortcut
+  seams; they are not the target state and should disappear with the shortcut
+  path they currently identify
+- remaining work: delete the remaining jump gating when Phase 3 lands, delete
+  mounted and moving-support carry adaptation when Phase 7 lands on shared
+  body continuity, and remove the transitional discontinuity hooks in the same
+  slices instead of leaving them behind as permanent escape hatches
 
 ## Test Gates
 
@@ -588,6 +711,20 @@ Progress:
   contact, and moving-support travel without routine local correction
 - reconciliation tests cover gross position-only capsule divergence so matching
   contact or drive flags cannot hide an authoritative position error
+- reconciliation tests cover many fixed steps reusing the same acknowledged
+  input and orientation values, and authoritative matching still selects the
+  nearest correct local historical sample
+- grounded-movement soak tests cover ordinary `WASD + Shift` travel under
+  nominal snapshot age and require zero or near-zero convergence episodes, not
+  just a tolerable number of settle steps
+- jump soak tests cover ordinary supported jump and landing play without
+  accumulating `rejected-buffer-expired` action resolutions
+- moving-support and mount handoff tests require shared-body continuity under
+  nominal RTT; any remaining discontinuity label is a transitional regression
+  to delete, not accepted steady-state behavior
+- HUD and developer-report tests cover explicit discontinuity labels for
+  mounted boarding, mounted unboarding, and moving-support carry; spawn should
+  use the same gate once runtime wiring lands
 - presentation tests prove animation and camera derive from physical state
   instead of defining gameplay outcomes
 - `./tools/verify` remains the stop-ship gate after implementation phases
@@ -604,5 +741,5 @@ Progress:
   and mounted work
 - dynamic actor contact lands before reconciliation deletion so player and
   mover collisions are proven under the new model
-- reconciliation simplification happens after supported paths stop drifting,
-  not before
+- reconciliation simplification is already landed; the remaining work is
+  deletion in the jump and mounted lanes rather than reopening correction

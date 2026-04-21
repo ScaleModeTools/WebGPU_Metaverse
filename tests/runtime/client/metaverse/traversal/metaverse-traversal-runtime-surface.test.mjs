@@ -4,22 +4,12 @@ import test, { after, before } from "node:test";
 import { authoredWaterBayOpenWaterSpawn } from "../../../metaverse-authored-world-test-fixtures.mjs";
 import {
   createTraversalFixtureContext,
+  forwardTravelInput,
   freezeVector3,
   translateSyntheticWaterBayVector3
 } from "./fixtures/traversal-test-fixtures.mjs";
 
 let fixtureContext;
-
-const forwardTravelInput = Object.freeze({
-  boost: false,
-  jump: false,
-  moveAxis: 1,
-  pitchAxis: 0,
-  primaryAction: false,
-  secondaryAction: false,
-  strafeAxis: 0,
-  yawAxis: 0
-});
 
 before(async () => {
   fixtureContext = await createTraversalFixtureContext();

@@ -9,6 +9,7 @@ import {
 import {
   metaverseRealtimeWorldCadenceConfig,
   createMetaverseGameplayTraversalIntentSnapshotInput,
+  readMetaverseRealtimePlayerActiveBodyKinematicSnapshot,
   type MetaversePlayerTraversalIntentSnapshotInput
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
@@ -74,6 +75,133 @@ export interface AdvanceUnmountedTraversalInput {
 export interface AdvanceUnmountedTraversalResult {
   readonly cameraSnapshot: MetaverseCameraSnapshot;
   readonly traversalState: MetaverseUnmountedTraversalStateSnapshot;
+}
+
+export interface PredictedLocalReconciliationSampleMatch {
+  readonly sample: PredictedLocalReconciliationSample;
+  readonly selectionReason:
+    | "exact-traversal-sample-id"
+    | "exact-authoritative-tick"
+    | "latest-at-or-before-authoritative-time"
+    | "earliest-after-authoritative-time"
+    | "latest-matching-sample";
+  readonly timeDeltaMs: number | null;
+}
+
+export function resolvePredictedLocalReconciliationSampleFromMatchingHistory(
+  matchingSamplesNewestToOldest: readonly PredictedLocalReconciliationSample[],
+  {
+    authoritativeSnapshotAgeMs,
+    authoritativeTraversalSampleId,
+    authoritativeTick,
+    receivedAtWallClockMs
+  }: {
+    readonly authoritativeSnapshotAgeMs: number | null;
+    readonly authoritativeTraversalSampleId: number | null;
+    readonly authoritativeTick: number | null;
+    readonly receivedAtWallClockMs: number | null;
+  }
+): PredictedLocalReconciliationSampleMatch | null {
+  if (matchingSamplesNewestToOldest.length <= 0) {
+    return null;
+  }
+
+  if (
+    authoritativeTraversalSampleId !== null &&
+    Number.isFinite(authoritativeTraversalSampleId) &&
+    authoritativeTraversalSampleId > 0
+  ) {
+    for (const sample of matchingSamplesNewestToOldest) {
+      if (sample.traversalSampleId === authoritativeTraversalSampleId) {
+        return Object.freeze({
+          sample,
+          selectionReason: "exact-traversal-sample-id",
+          timeDeltaMs: null
+        });
+      }
+    }
+  }
+
+  if (authoritativeTick !== null && Number.isFinite(authoritativeTick)) {
+    for (const sample of matchingSamplesNewestToOldest) {
+      if (sample.localPredictionTick === authoritativeTick) {
+        return Object.freeze({
+          sample,
+          selectionReason: "exact-authoritative-tick",
+          timeDeltaMs: null
+        });
+      }
+    }
+  }
+
+  const targetWallClockMs =
+    receivedAtWallClockMs !== null &&
+    Number.isFinite(receivedAtWallClockMs) &&
+    authoritativeSnapshotAgeMs !== null &&
+    Number.isFinite(authoritativeSnapshotAgeMs)
+      ? receivedAtWallClockMs - Math.max(0, authoritativeSnapshotAgeMs)
+      : null;
+
+  if (targetWallClockMs === null) {
+    const sample = matchingSamplesNewestToOldest[0] ?? null;
+
+    return sample === null
+      ? null
+      : Object.freeze({
+          sample,
+          selectionReason: "latest-matching-sample",
+          timeDeltaMs: null
+        });
+  }
+
+  let latestSampleAtOrBeforeTarget: PredictedLocalReconciliationSample | null =
+    null;
+  let latestSampleAtOrBeforeTargetMs = Number.NEGATIVE_INFINITY;
+  let earliestSampleAfterTarget: PredictedLocalReconciliationSample | null =
+    null;
+  let earliestSampleAfterTargetMs = Number.POSITIVE_INFINITY;
+
+  for (const sample of matchingSamplesNewestToOldest) {
+    if (sample.localWallClockMs <= targetWallClockMs) {
+      if (sample.localWallClockMs > latestSampleAtOrBeforeTargetMs) {
+        latestSampleAtOrBeforeTarget = sample;
+        latestSampleAtOrBeforeTargetMs = sample.localWallClockMs;
+      }
+      continue;
+    }
+
+    if (sample.localWallClockMs < earliestSampleAfterTargetMs) {
+      earliestSampleAfterTarget = sample;
+      earliestSampleAfterTargetMs = sample.localWallClockMs;
+    }
+  }
+
+  if (latestSampleAtOrBeforeTarget !== null) {
+    return Object.freeze({
+      sample: latestSampleAtOrBeforeTarget,
+      selectionReason: "latest-at-or-before-authoritative-time",
+      timeDeltaMs:
+        latestSampleAtOrBeforeTarget.localWallClockMs - targetWallClockMs
+    });
+  }
+
+  if (earliestSampleAfterTarget !== null) {
+    return Object.freeze({
+      sample: earliestSampleAfterTarget,
+      selectionReason: "earliest-after-authoritative-time",
+      timeDeltaMs: earliestSampleAfterTarget.localWallClockMs - targetWallClockMs
+    });
+  }
+
+  const sample = matchingSamplesNewestToOldest[0] ?? null;
+
+  return sample === null
+    ? null
+    : Object.freeze({
+        sample,
+        selectionReason: "latest-matching-sample",
+        timeDeltaMs: null
+      });
 }
 
 export class MetaverseUnmountedTraversalMotionState {
@@ -203,14 +331,16 @@ export class MetaverseUnmountedTraversalMotionState {
 
   readLocalTraversalPoseForReconciliation(): LocalTraversalPoseSnapshot | null {
     if (
-      this.#dependencies.readMountedVehicleActive() ||
+      (this.#dependencies.readMountedVehicleActive() &&
+        !this.#dependencies.readMountedOccupancyKeepsFreeRoam()) ||
       this.#dependencies.readLocomotionMode() === "mounted"
     ) {
       return null;
     }
 
     if (this.#dependencies.readLocomotionMode() === "swim") {
-      const swimSnapshot = this.#dependencies.surfaceLocomotionState.readSwimSnapshot();
+      const swimSnapshot =
+        this.#dependencies.surfaceLocomotionState.readSwimSnapshot();
 
       if (swimSnapshot === null) {
         return null;
@@ -236,29 +366,23 @@ export class MetaverseUnmountedTraversalMotionState {
     };
   }
 
-  readPredictedLocalReconciliationSample({
+  readPredictedLocalReconciliationSampleMatch({
     authoritativeSnapshotAgeMs,
     authoritativeTick,
     lastProcessedInputSequence,
+    lastProcessedTraversalSampleId,
     lastProcessedTraversalOrientationSequence,
     receivedAtWallClockMs
   }: {
     readonly authoritativeSnapshotAgeMs: number | null;
     readonly authoritativeTick: number | null;
     readonly lastProcessedInputSequence: number;
+    readonly lastProcessedTraversalSampleId: number;
     readonly lastProcessedTraversalOrientationSequence: number;
     readonly receivedAtWallClockMs: number | null;
-  }): PredictedLocalReconciliationSample | null {
-    const targetWallClockMs =
-      receivedAtWallClockMs !== null &&
-      Number.isFinite(receivedAtWallClockMs) &&
-      authoritativeSnapshotAgeMs !== null &&
-      Number.isFinite(authoritativeSnapshotAgeMs)
-        ? receivedAtWallClockMs - Math.max(0, authoritativeSnapshotAgeMs)
-        : null;
-    let newestMatchingSample: PredictedLocalReconciliationSample | null = null;
-    let nearestTimedSample: PredictedLocalReconciliationSample | null = null;
-    let nearestTimedSampleDistanceMs = Number.POSITIVE_INFINITY;
+  }): PredictedLocalReconciliationSampleMatch | null {
+    const matchingSamplesNewestToOldest: PredictedLocalReconciliationSample[] =
+      [];
 
     for (
       let sampleOffset = 0;
@@ -275,38 +399,43 @@ export class MetaverseUnmountedTraversalMotionState {
 
       if (
         sample === undefined ||
-        sample.inputSequence !== lastProcessedInputSequence ||
-        sample.traversalOrientationSequence !==
-          lastProcessedTraversalOrientationSequence
+        (
+          lastProcessedTraversalSampleId > 0
+            ? sample.traversalSampleId !== lastProcessedTraversalSampleId
+            : sample.inputSequence !== lastProcessedInputSequence ||
+              sample.traversalOrientationSequence !==
+                lastProcessedTraversalOrientationSequence
+        )
       ) {
         continue;
       }
 
-      newestMatchingSample ??= sample;
-
-      if (
-        authoritativeTick !== null &&
-        Number.isFinite(authoritativeTick) &&
-        sample.localPredictionTick === authoritativeTick
-      ) {
-        return sample;
-      }
-
-      if (targetWallClockMs === null) {
-        continue;
-      }
-
-      const sampleDistanceMs = Math.abs(
-        sample.localWallClockMs - targetWallClockMs
-      );
-
-      if (sampleDistanceMs < nearestTimedSampleDistanceMs) {
-        nearestTimedSample = sample;
-        nearestTimedSampleDistanceMs = sampleDistanceMs;
-      }
+      matchingSamplesNewestToOldest.push(sample);
     }
 
-    return nearestTimedSample ?? newestMatchingSample;
+    return resolvePredictedLocalReconciliationSampleFromMatchingHistory(
+      matchingSamplesNewestToOldest,
+      {
+        authoritativeSnapshotAgeMs,
+        authoritativeTraversalSampleId:
+          lastProcessedTraversalSampleId > 0
+            ? lastProcessedTraversalSampleId
+            : null,
+        authoritativeTick,
+        receivedAtWallClockMs
+      }
+    );
+  }
+
+  readPredictedLocalReconciliationSample(input: {
+    readonly authoritativeSnapshotAgeMs: number | null;
+    readonly authoritativeTick: number | null;
+    readonly lastProcessedInputSequence: number;
+    readonly lastProcessedTraversalSampleId: number;
+    readonly lastProcessedTraversalOrientationSequence: number;
+    readonly receivedAtWallClockMs: number | null;
+  }): PredictedLocalReconciliationSample | null {
+    return this.readPredictedLocalReconciliationSampleMatch(input)?.sample ?? null;
   }
 
   applyAuthoritativeUnmountedPose({
@@ -314,17 +443,29 @@ export class MetaverseUnmountedTraversalMotionState {
     authoritativePlayerSnapshot,
     localTraversalPose,
     positionBlendAlpha,
+    syncAuthoritativeLook = false,
     yawBlendAlpha
   }: ApplyAuthoritativeUnmountedPoseInput): MetaverseCameraSnapshot {
-    const correctionLinearVelocity = authoritativePlayerSnapshot.linearVelocity;
+    const authoritativeActiveBodySnapshot =
+      readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(
+        authoritativePlayerSnapshot
+      );
+
+    if (syncAuthoritativeLook && authoritativePlayerSnapshot.look !== undefined) {
+      this.#traversalCameraPitchRadians =
+        authoritativePlayerSnapshot.look.pitchRadians;
+      this.#unmountedLookYawRadians = wrapRadians(
+        authoritativePlayerSnapshot.look.yawRadians
+      );
+    }
 
     if (authoritativePlayerSnapshot.locomotionMode === "swim") {
       const authoritativeSwimSnapshot =
         authoritativePlayerSnapshot.swimBody ??
         createSurfaceLocomotionSnapshot({
-          linearVelocity: correctionLinearVelocity,
-          position: authoritativePlayerSnapshot.position,
-          yawRadians: authoritativePlayerSnapshot.yawRadians
+          linearVelocity: authoritativeActiveBodySnapshot.linearVelocity,
+          position: authoritativeActiveBodySnapshot.position,
+          yawRadians: authoritativeActiveBodySnapshot.yawRadians
         });
       const cameraSnapshot =
         this.#dependencies.surfaceLocomotionState.syncAuthoritativeSwimLocomotion(
@@ -556,9 +697,11 @@ export class MetaverseUnmountedTraversalMotionState {
     return this.#dependencies.characterPresentationState.resolveGroundedPresentationPosition(
       this.#dependencies.groundedBodyRuntime.snapshot,
       this.#groundedLocomotionAccumulatorSeconds,
-      (position) =>
+      (position, maxSupportHeightMeters) =>
         this.#dependencies.surfaceLocomotionState.readGroundedSupportHeightMeters(
-          position
+          position,
+          null,
+          maxSupportHeightMeters ?? null
         )
     );
   }
@@ -683,8 +826,10 @@ export class MetaverseUnmountedTraversalMotionState {
       localWallClockMs: this.#dependencies.readWallClockMs(),
       pose,
       swimBody,
+      traversalSampleId: issuedTraversalIntent?.sampleId ?? 0,
       traversalOrientationSequence:
-        issuedTraversalIntent?.orientationSequence ?? 0
+        this.#dependencies.localTraversalAuthorityState
+          .latestIssuedTraversalOrientationSequence
     });
   }
 

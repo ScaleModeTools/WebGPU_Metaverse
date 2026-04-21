@@ -38,14 +38,7 @@ import { resolveMetaverseProofLodModelPath } from "./resolve-metaverse-proof-lod
 function resolveHeldAttachmentSocketName(
   socketId: SocketId
 ): MetaverseAttachmentProofConfig["heldMount"]["socketName"] {
-  switch (socketId) {
-    case "hand_l_socket":
-      return "grip_l_socket";
-    case "hand_r_socket":
-      return "grip_r_socket";
-    default:
-      return socketId;
-  }
+  return socketId;
 }
 
 function resolveAttachmentSupportPoints(
@@ -313,6 +306,7 @@ function resolveMetaverseCharacterProofConfig(): MetaverseCharacterProofConfig {
       clipDescriptor.vocabulary,
       Object.freeze({
         clipName: clipDescriptor.clipName,
+        loopMode: clipDescriptor.loopMode,
         sourcePath: clipDescriptor.sourcePath,
         vocabulary: clipDescriptor.vocabulary
       })
@@ -436,7 +430,16 @@ function resolveMetaverseAttachmentProofConfig(
       ),
       socketName: resolveHeldAttachmentSocketName(
         attachmentDescriptor.defaultSocketId
-      )
+      ),
+      triggerMarkerNodeName:
+        attachmentDescriptor.heldMount.triggerMarkerNodeName === null ||
+        attachmentDescriptor.heldMount.triggerMarkerNodeName === undefined
+          ? null
+          : resolveAttachmentNodeName(
+              attachmentDescriptor.label,
+              attachmentDescriptor.heldMount.triggerMarkerNodeName,
+              "held trigger marker node name"
+            )
     }),
     label: attachmentDescriptor.label,
     modelPath: resolveMetaverseProofLodModelPath(attachmentDescriptor.renderModel),

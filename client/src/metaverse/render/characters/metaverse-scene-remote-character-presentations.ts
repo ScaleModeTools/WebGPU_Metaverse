@@ -76,7 +76,8 @@ export interface MetaverseRemoteCharacterPresentationDependencies<
   readonly syncCharacterAnimation: (
     characterRuntime: TCharacterRuntime,
     targetVocabulary: MetaverseCharacterAnimationVocabularyId,
-    useHumanoidV2PistolLayering?: boolean
+    useHumanoidV2PistolLayering?: boolean,
+    animationCycleId?: number | null
   ) => void;
   readonly syncCharacterPresentation: (
     characterRuntime: TCharacterRuntime,
@@ -334,7 +335,8 @@ export function syncRemoteCharacterPresentations<
         remoteCharacterPresentation.presentation.animationVocabulary,
         remoteCharacterRuntime.mountedCharacterRuntime
       ),
-      useHumanoidV2PistolLayering
+      useHumanoidV2PistolLayering,
+      remoteCharacterPresentation.presentation.animationCycleId
     );
 
     if (remoteCharacterRuntime.characterRuntime.humanoidV2PistolPoseRuntime !== null) {

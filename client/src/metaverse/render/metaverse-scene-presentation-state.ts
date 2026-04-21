@@ -60,7 +60,8 @@ export class MetaverseScenePresentationState {
     deltaSeconds: number,
     characterPresentation: MetaverseCharacterPresentationSnapshot | null = null,
     remoteCharacterPresentations: readonly MetaverseRemoteCharacterPresentationSnapshot[] = [],
-    mountedEnvironment: MountedEnvironmentSnapshot | null = null
+    mountedEnvironment: MountedEnvironmentSnapshot | null = null,
+    cameraFieldOfViewDegrees: number | null = null
   ): MetaverseSceneInteractionSnapshot {
     const {
       cameraPresentationState,
@@ -76,7 +77,11 @@ export class MetaverseScenePresentationState {
       characterPresentation,
       mountedPresentationSnapshot
     );
-    cameraPresentationState.syncPresentedCamera(presentedCameraSnapshot, nowMs);
+    cameraPresentationState.syncPresentedCamera(
+      presentedCameraSnapshot,
+      nowMs,
+      cameraFieldOfViewDegrees
+    );
     remoteCharacterPresentationState.syncPresentation(
       remoteCharacterPresentations,
       deltaSeconds

@@ -297,3 +297,53 @@ test("MetaverseFlightInputRuntime keeps pointer-lock mouse look travel frame-rat
     globalThis.window = originalWindow;
   }
 });
+
+test("MetaverseFlightInputRuntime maps gamepad triggers onto primary and secondary actions without changing movement axes", async () => {
+  const { MetaverseFlightInputRuntime } = await clientLoader.load(
+    "/src/metaverse/classes/metaverse-flight-input-runtime.ts"
+  );
+  const originalNavigator = globalThis.navigator;
+  const flightInputRuntime = new MetaverseFlightInputRuntime();
+
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: {
+      getGamepads() {
+        return [
+          {
+            buttons: [
+              { pressed: false, value: 0 },
+              { pressed: false, value: 0 },
+              { pressed: false, value: 0 },
+              { pressed: false, value: 0 },
+              { pressed: false, value: 0 },
+              { pressed: false, value: 0 },
+              { pressed: true, value: 1 },
+              { pressed: true, value: 1 }
+            ]
+          }
+        ];
+      }
+    },
+    writable: true
+  });
+
+  try {
+    assert.deepEqual(normalizeSnapshotSignedZeros(flightInputRuntime.readSnapshot()), {
+      boost: false,
+      jump: false,
+      moveAxis: 0,
+      pitchAxis: 0,
+      primaryAction: true,
+      secondaryAction: true,
+      strafeAxis: 0,
+      yawAxis: 0
+    });
+  } finally {
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: originalNavigator,
+      writable: true
+    });
+  }
+});

@@ -114,20 +114,20 @@ interface SyncAutomaticSurfaceLocomotionInput {
   readonly yawRadians: number;
 }
 
-interface SyncGroundedCameraPresentationInput {
-  readonly locomotionMode: MetaverseLocomotionModeId;
+interface SyncAutomaticSurfaceLocomotionFromGroundedBodyInput {
+  readonly currentLocomotionMode: MetaverseLocomotionModeId;
+  readonly excludedOwnerEnvironmentAssetId?: string | null;
   readonly lookYawRadians: number;
   readonly resolveGroundedPresentationPosition: () => PhysicsVector3Snapshot;
+  readonly resolveSwimPresentationPosition: (
+    swimSnapshot: SurfaceLocomotionSnapshot
+  ) => PhysicsVector3Snapshot;
   readonly traversalCameraPitchRadians: number;
 }
 
-interface SyncGroundedMovingSupportCarryInput {
-  readonly currentLocomotionMode: MetaverseLocomotionModeId;
+interface SyncGroundedCameraPresentationInput {
+  readonly locomotionMode: MetaverseLocomotionModeId;
   readonly lookYawRadians: number;
-  readonly nextSupportPosition: PhysicsVector3Snapshot;
-  readonly nextSupportYawRadians: number;
-  readonly previousSupportPosition: PhysicsVector3Snapshot;
-  readonly previousSupportYawRadians: number;
   readonly resolveGroundedPresentationPosition: () => PhysicsVector3Snapshot;
   readonly traversalCameraPitchRadians: number;
 }
@@ -147,43 +147,6 @@ type AutomaticSurfaceTelemetrySnapshot = Readonly<{
   >;
   readonly autostepHeightMeters: number | null;
 }>;
-
-function rotateVectorAroundYaw(
-  vector: PhysicsVector3Snapshot,
-  yawRadians: number
-): PhysicsVector3Snapshot {
-  const sinYaw = Math.sin(yawRadians);
-  const cosYaw = Math.cos(yawRadians);
-
-  return freezeVector3(
-    vector.x * cosYaw + vector.z * sinYaw,
-    vector.y,
-    -vector.x * sinYaw + vector.z * cosYaw
-  );
-}
-
-function createMovingSupportCarriedPosition(
-  currentPosition: PhysicsVector3Snapshot,
-  previousSupportPosition: PhysicsVector3Snapshot,
-  nextSupportPosition: PhysicsVector3Snapshot,
-  deltaYawRadians: number
-): PhysicsVector3Snapshot {
-  const relativePosition = freezeVector3(
-    currentPosition.x - previousSupportPosition.x,
-    currentPosition.y - previousSupportPosition.y,
-    currentPosition.z - previousSupportPosition.z
-  );
-  const rotatedRelativePosition = rotateVectorAroundYaw(
-    relativePosition,
-    deltaYawRadians
-  );
-
-  return freezeVector3(
-    nextSupportPosition.x + rotatedRelativePosition.x,
-    currentPosition.y + (nextSupportPosition.y - previousSupportPosition.y),
-    nextSupportPosition.z + rotatedRelativePosition.z
-  );
-}
 
 export class MetaverseUnmountedSurfaceLocomotionState {
   readonly #config: MetaverseRuntimeConfig;
@@ -281,7 +244,8 @@ export class MetaverseUnmountedSurfaceLocomotionState {
 
   readGroundedSupportHeightMeters(
     position: Pick<PhysicsVector3Snapshot, "x" | "z">,
-    fallbackHeightMeters: number | null = null
+    fallbackHeightMeters: number | null = null,
+    maxSupportHeightMeters: number | null = null
   ): number | null {
     const localWaterSurfaceHeightMeters = this.readWaterSurfaceHeightMeters(
       position,
@@ -291,7 +255,9 @@ export class MetaverseUnmountedSurfaceLocomotionState {
       this.#config,
       this.#dependencies.surfaceColliderSnapshots,
       position.x,
-      position.z
+      position.z,
+      null,
+      maxSupportHeightMeters
     );
 
     if (resolvedSurfaceHeightMeters === null) {
@@ -309,10 +275,15 @@ export class MetaverseUnmountedSurfaceLocomotionState {
 
   resolveGroundedSupportHeightMeters(
     position: PhysicsVector3Snapshot,
-    fallbackHeightMeters: number | null = null
+    fallbackHeightMeters: number | null = null,
+    maxSupportHeightMeters: number | null = null
   ): number {
     const resolvedSupportHeightMeters =
-      this.readGroundedSupportHeightMeters(position, fallbackHeightMeters);
+      this.readGroundedSupportHeightMeters(
+        position,
+        fallbackHeightMeters,
+        maxSupportHeightMeters
+      );
 
     if (resolvedSupportHeightMeters === null) {
       return fallbackHeightMeters ?? position.y;
@@ -600,6 +571,63 @@ export class MetaverseUnmountedSurfaceLocomotionState {
     });
   }
 
+  syncAutomaticSurfaceLocomotionFromGroundedBody(
+    input: SyncAutomaticSurfaceLocomotionFromGroundedBodyInput
+  ): {
+    readonly cameraSnapshot: MetaverseCameraSnapshot | null;
+    readonly locomotionMode: "grounded" | "swim";
+  } {
+    if (!this.#groundedBodyRuntime.isInitialized) {
+      return Object.freeze({
+        cameraSnapshot: null,
+        locomotionMode:
+          input.currentLocomotionMode === "swim" ? "swim" : "grounded"
+      });
+    }
+
+    const groundedBodySnapshot = this.#groundedBodyRuntime.snapshot;
+    const locomotionSnapshot = resolveAutomaticSurfaceLocomotionSnapshot(
+      this.#config,
+      this.#dependencies.surfaceColliderSnapshots,
+      groundedBodySnapshot.position,
+      groundedBodySnapshot.yawRadians,
+      input.currentLocomotionMode === "grounded" ? "grounded" : "swim",
+      input.excludedOwnerEnvironmentAssetId ?? null
+    );
+    const locomotionDecision = locomotionSnapshot.decision;
+
+    this.#syncAutomaticSurfaceTelemetry(locomotionSnapshot, null);
+
+    if (locomotionDecision.locomotionMode === "grounded") {
+      return Object.freeze({
+        cameraSnapshot: this.syncGroundedCameraPresentation({
+          locomotionMode: "grounded",
+          lookYawRadians: input.lookYawRadians,
+          resolveGroundedPresentationPosition:
+            input.resolveGroundedPresentationPosition,
+          traversalCameraPitchRadians: input.traversalCameraPitchRadians
+        }),
+        locomotionMode: "grounded"
+      });
+    }
+
+    return Object.freeze({
+      cameraSnapshot: this.enterSwimLocomotion({
+        linearVelocity: freezeVector3(
+          groundedBodySnapshot.linearVelocity.x,
+          0,
+          groundedBodySnapshot.linearVelocity.z
+        ),
+        lookYawRadians: input.lookYawRadians,
+        position: groundedBodySnapshot.position,
+        resolveSwimPresentationPosition: input.resolveSwimPresentationPosition,
+        traversalCameraPitchRadians: input.traversalCameraPitchRadians,
+        yawRadians: groundedBodySnapshot.yawRadians
+      }),
+      locomotionMode: "swim"
+    });
+  }
+
   syncGroundedCameraPresentation(
     input: SyncGroundedCameraPresentationInput
   ): MetaverseCameraSnapshot | null {
@@ -609,66 +637,6 @@ export class MetaverseUnmountedSurfaceLocomotionState {
     ) {
       return null;
     }
-
-    return createTraversalGroundedCameraPresentationSnapshot(
-      this.#groundedBodyRuntime.snapshot,
-      input.traversalCameraPitchRadians,
-      this.#config,
-      input.lookYawRadians,
-      input.resolveGroundedPresentationPosition()
-    );
-  }
-
-  syncGroundedMovingSupportCarry(
-    input: SyncGroundedMovingSupportCarryInput
-  ): MetaverseCameraSnapshot | null {
-    if (
-      !this.#groundedBodyRuntime.isInitialized ||
-      input.currentLocomotionMode !== "grounded"
-    ) {
-      return null;
-    }
-
-    const currentBodySnapshot = this.#groundedBodyRuntime.snapshot;
-
-    if (
-      currentBodySnapshot.grounded !== true ||
-      currentBodySnapshot.contact.supportingContactDetected !== true
-    ) {
-      return null;
-    }
-
-    const deltaYawRadians = wrapRadians(
-      input.nextSupportYawRadians - input.previousSupportYawRadians
-    );
-    const carriedPosition = createMovingSupportCarriedPosition(
-      currentBodySnapshot.position,
-      input.previousSupportPosition,
-      input.nextSupportPosition,
-      deltaYawRadians
-    );
-
-    this.#groundedBodyRuntime.setAutostepEnabled(false);
-    this.#groundedBodyRuntime.syncAuthoritativeState({
-      driveTarget: currentBodySnapshot.driveTarget,
-      grounded: true,
-      interaction: currentBodySnapshot.interaction,
-      linearVelocity: rotateVectorAroundYaw(
-        currentBodySnapshot.linearVelocity,
-        deltaYawRadians
-      ),
-      position: freezeVector3(
-        carriedPosition.x,
-        this.resolveGroundedSupportHeightMeters(
-          carriedPosition,
-          carriedPosition.y
-        ),
-        carriedPosition.z
-      ),
-      yawRadians: wrapRadians(
-        currentBodySnapshot.yawRadians + deltaYawRadians
-      )
-    });
 
     return createTraversalGroundedCameraPresentationSnapshot(
       this.#groundedBodyRuntime.snapshot,

@@ -17,6 +17,17 @@ export const mesh2motionHumanoidWalkAnimationClipId = createAnimationClipId(
   "mesh2motion-humanoid-walk-v1"
 );
 
+export const mesh2motionHumanoidJumpUpAnimationClipId = createAnimationClipId(
+  "mesh2motion-humanoid-jump-up-v1"
+);
+
+export const mesh2motionHumanoidJumpMidAnimationClipId = createAnimationClipId(
+  "mesh2motion-humanoid-jump-mid-v1"
+);
+
+export const mesh2motionHumanoidJumpDownAnimationClipId =
+  createAnimationClipId("mesh2motion-humanoid-jump-down-v1");
+
 export const mesh2motionHumanoidSwimIdleAnimationClipId = createAnimationClipId(
   "mesh2motion-humanoid-swim-idle-v1"
 );
@@ -42,6 +53,9 @@ const mesh2motionHumanoidAnimationClipIdByVocabulary = Object.freeze({
   walk: mesh2motionHumanoidWalkAnimationClipId,
   "swim-idle": mesh2motionHumanoidSwimIdleAnimationClipId,
   swim: mesh2motionHumanoidSwimAnimationClipId,
+  "jump-up": mesh2motionHumanoidJumpUpAnimationClipId,
+  "jump-mid": mesh2motionHumanoidJumpMidAnimationClipId,
+  "jump-down": mesh2motionHumanoidJumpDownAnimationClipId,
   aim: mesh2motionHumanoidAimAnimationClipId,
   interact: mesh2motionHumanoidInteractAnimationClipId,
   seated: mesh2motionHumanoidSeatedAnimationClipId
@@ -52,6 +66,9 @@ const mesh2motionHumanoidLoopModeByVocabulary = Object.freeze({
   walk: "repeat",
   "swim-idle": "repeat",
   swim: "repeat",
+  "jump-up": "once",
+  "jump-mid": "repeat",
+  "jump-down": "once",
   aim: "repeat",
   interact: "once",
   seated: "repeat"

@@ -271,7 +271,8 @@ function createRemoteCharacterPresentations(
           animationVocabulary: playerSnapshot.pose.animationVocabulary,
           position: playerSnapshot.pose.position,
           yawRadians: playerSnapshot.pose.yawRadians
-        })
+        }),
+        weaponState: null
       })
     );
   }

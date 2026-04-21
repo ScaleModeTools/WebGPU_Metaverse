@@ -25,8 +25,9 @@ export interface MetaverseAttachmentProofRuntime {
   activeMountKind: "held" | "mounted-holster" | null;
   readonly attachmentRoot: Group;
   readonly heldForwardReferenceNode: Object3D | null;
+  readonly heldGripSocketNode: Object3D;
   readonly heldMount: MetaverseAttachmentMountRuntime;
-  readonly heldRightHandGripSocketNode: Object3D;
+  readonly heldTriggerMarkerNode: Object3D | null;
   implicitOffHandGripLocalPosition: Vector3 | null;
   implicitOffHandGripLocalQuaternion: Quaternion | null;
   readonly mountedHolsterMount: MetaverseAttachmentMountRuntime | null;
@@ -230,12 +231,20 @@ export function cloneMetaverseAttachmentProofRuntime<
             sourceRuntime.heldForwardReferenceNode.name,
             cloneLabel
           ),
-    heldMount: cloneMetaverseAttachmentMountRuntime(sourceRuntime.heldMount),
-    heldRightHandGripSocketNode: nodeResolvers.findNamedNode(
+    heldGripSocketNode: nodeResolvers.findNamedNode(
       characterProofRuntime.scene,
-      sourceRuntime.heldRightHandGripSocketNode.name,
+      sourceRuntime.heldGripSocketNode.name,
       cloneLabel
     ),
+    heldMount: cloneMetaverseAttachmentMountRuntime(sourceRuntime.heldMount),
+    heldTriggerMarkerNode:
+      sourceRuntime.heldTriggerMarkerNode === null
+        ? null
+        : nodeResolvers.findNamedNode(
+            characterProofRuntime.scene,
+            sourceRuntime.heldTriggerMarkerNode.name,
+            cloneLabel
+          ),
     implicitOffHandGripLocalPosition: null,
     implicitOffHandGripLocalQuaternion: null,
     mountedHolsterMount:
@@ -299,7 +308,7 @@ export async function loadMetaverseAttachmentProofRuntime<
     dependencies.heldWeaponSolveDirectionEpsilon,
     dependencies
   );
-  const heldRightHandGripSocketNode = dependencies.findNamedNode(
+  const heldGripSocketNode = dependencies.findNamedNode(
     attachmentAsset.scene,
     attachmentProofConfig.heldMount.attachmentSocketNodeName,
     "Metaverse attachment mount"
@@ -317,6 +326,15 @@ export async function loadMetaverseAttachmentProofRuntime<
           attachmentAsset.scene,
           dependencies.heldWeaponSolveDirectionEpsilon,
           dependencies
+        );
+  const heldTriggerMarkerNode =
+    attachmentProofConfig.heldMount.triggerMarkerNodeName === null ||
+    attachmentProofConfig.heldMount.triggerMarkerNodeName === undefined
+      ? null
+      : dependencies.findNamedNode(
+          attachmentAsset.scene,
+          attachmentProofConfig.heldMount.triggerMarkerNodeName,
+          "Metaverse attachment trigger marker"
         );
   const heldOffHandSupportPointId =
     attachmentProofConfig.heldMount.offHandSupportPointId ?? null;
@@ -373,8 +391,9 @@ export async function loadMetaverseAttachmentProofRuntime<
     activeMountKind: null,
     attachmentRoot,
     heldForwardReferenceNode,
+    heldGripSocketNode,
     heldMount,
-    heldRightHandGripSocketNode,
+    heldTriggerMarkerNode,
     implicitOffHandGripLocalPosition: null,
     implicitOffHandGripLocalQuaternion: null,
     mountedHolsterMount,

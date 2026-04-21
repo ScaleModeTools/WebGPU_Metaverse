@@ -80,10 +80,6 @@ function createCorrectionSnapshotStub() {
         blockingAffordanceDetected: false,
         decisionReason: "capability-maintained",
         groundedBody: null,
-        jumpDebug: Object.freeze({
-          surfaceJumpSupported: true,
-          supported: true
-        }),
         resolvedSupportHeightMeters: 0,
         supportingAffordanceSampleCount: 0
       })
@@ -216,6 +212,140 @@ test("MetaverseLocalAuthorityReconciliationState preserves a locally predicted a
   );
 });
 
+test("MetaverseLocalAuthorityReconciliationState force-snaps a locally predicted jump back to authority once the jump edge is rejected", async () => {
+  const { MetaverseLocalAuthorityReconciliationState } = await clientLoader.load(
+    "/src/metaverse/traversal/reconciliation/classes/metaverse-local-authority-reconciliation-state.ts"
+  );
+  const reconciliationState =
+    new MetaverseLocalAuthorityReconciliationState();
+  const appliedInputs = [];
+
+  const appliedCorrection = reconciliationState.syncAuthoritativeLocalPlayerPose({
+    applyAuthoritativeUnmountedPose(input) {
+      appliedInputs.push(input);
+    },
+    authoritativePlayerSnapshot: Object.freeze({
+      groundedBody: createGroundedBodySnapshot({
+        grounded: true
+      }),
+      lastProcessedInputSequence: 4,
+      linearVelocity: freezeVector3(0, 0, 0),
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: freezeVector3(0, 0, 24),
+      traversalAuthority: Object.freeze({
+        currentActionKind: "none",
+        currentActionPhase: "idle",
+        currentActionSequence: 0,
+        lastConsumedActionKind: "none",
+        lastConsumedActionSequence: 0,
+        lastRejectedActionKind: "jump",
+        lastRejectedActionReason: "buffer-expired",
+        lastRejectedActionSequence: 3,
+        phaseStartedAtTick: 6
+      }),
+      yawRadians: 0
+    }),
+    createLocalAuthorityPoseCorrectionSnapshot() {
+      return createCorrectionSnapshotStub();
+    },
+    ...createConvergenceConfig(),
+    localGroundedBodySnapshot: createGroundedBodySnapshot({
+      grounded: false,
+      position: freezeVector3(0, 0.8, 24)
+    }),
+    localIssuedTraversalIntentSnapshot: Object.freeze({
+      actionIntent: Object.freeze({
+        kind: "jump",
+        pressed: true,
+        sequence: 3
+      }),
+      bodyControl: Object.freeze({
+        boost: false,
+        moveAxis: 0,
+        strafeAxis: 0,
+        turnAxis: 0
+      }),
+      inputSequence: 4,
+      locomotionMode: "grounded",
+      sampleId: 9
+    }),
+    localSwimBodySnapshot: null,
+    localGrounded: false,
+    localTraversalPose: Object.freeze({
+      linearVelocity: freezeVector3(0, 0.2, 0),
+      locomotionMode: "grounded",
+      position: freezeVector3(0, 0.8, 24),
+      yawRadians: 0
+    })
+  });
+
+  assert.equal(appliedCorrection, true);
+  assert.equal(appliedInputs.length, 1);
+  assert.equal(appliedInputs[0]?.positionBlendAlpha, 1);
+  assert.equal(appliedInputs[0]?.yawBlendAlpha, 1);
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionReason,
+    "gross-body-divergence"
+  );
+});
+
+test("MetaverseLocalAuthorityReconciliationState reconciles grounded free-roam mounted entry occupancy through the active body owner", async () => {
+  const { MetaverseLocalAuthorityReconciliationState } = await clientLoader.load(
+    "/src/metaverse/traversal/reconciliation/classes/metaverse-local-authority-reconciliation-state.ts"
+  );
+  const reconciliationState =
+    new MetaverseLocalAuthorityReconciliationState();
+  const applyCalls = [];
+
+  const appliedCorrection = reconciliationState.syncAuthoritativeLocalPlayerPose({
+    applyAuthoritativeUnmountedPose(input) {
+      applyCalls.push(input);
+    },
+    authoritativePlayerSnapshot: Object.freeze({
+      groundedBody: createGroundedBodySnapshot({
+        position: freezeVector3(1.6, 0, 24)
+      }),
+      lastProcessedInputSequence: 5,
+      linearVelocity: freezeVector3(0.4, 0, 0),
+      locomotionMode: "grounded",
+      mountedOccupancy: Object.freeze({
+        environmentAssetId: "metaverse-test-shuttle-v1",
+        entryId: "deck-entry",
+        occupancyKind: "entry",
+        occupantRole: "passenger",
+        seatId: null
+      }),
+      position: freezeVector3(1.6, 0, 24),
+      traversalAuthority: createGroundedTraversalAuthoritySnapshot({
+        currentTick: 5
+      }),
+      yawRadians: 0
+    }),
+    createLocalAuthorityPoseCorrectionSnapshot() {
+      return createCorrectionSnapshotStub();
+    },
+    ...createConvergenceConfig(),
+    localGroundedBodySnapshot: createGroundedBodySnapshot(),
+    localSwimBodySnapshot: null,
+    localGrounded: true,
+    localTraversalPose: Object.freeze({
+      linearVelocity: freezeVector3(0, 0, 0),
+      locomotionMode: "grounded",
+      position: freezeVector3(0, 0, 24),
+      yawRadians: 0
+    })
+  });
+
+  assert.equal(appliedCorrection, true);
+  assert.equal(applyCalls.length, 1);
+  assert.equal(applyCalls[0]?.authoritativeGrounded, true);
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionReason,
+    "gross-position-divergence"
+  );
+});
+
 test("MetaverseLocalAuthorityReconciliationState starts bounded convergence on gross position-only divergence while body state matches", async () => {
   const { MetaverseLocalAuthorityReconciliationState } = await clientLoader.load(
     "/src/metaverse/traversal/reconciliation/classes/metaverse-local-authority-reconciliation-state.ts"
@@ -332,6 +462,326 @@ test("MetaverseLocalAuthorityReconciliationState starts bounded convergence on g
   );
 });
 
+test("MetaverseLocalAuthorityReconciliationState preserves episode start context across settle steps", async () => {
+  const { MetaverseLocalAuthorityReconciliationState } = await clientLoader.load(
+    "/src/metaverse/traversal/reconciliation/classes/metaverse-local-authority-reconciliation-state.ts"
+  );
+  const reconciliationState =
+    new MetaverseLocalAuthorityReconciliationState();
+  let applyCalls = 0;
+  const authoritativePosition = freezeVector3(1.3, 0, 24);
+  const createAuthoritativePlayerSnapshot = () =>
+    Object.freeze({
+      groundedBody: createGroundedBodySnapshot({
+        position: authoritativePosition
+      }),
+      lastProcessedInputSequence: 11,
+      lastProcessedTraversalOrientationSequence: 12,
+      linearVelocity: freezeVector3(0, 0, 0),
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: authoritativePosition,
+      traversalAuthority: createGroundedTraversalAuthoritySnapshot(),
+      yawRadians: 0
+    });
+
+  const startedCorrection =
+    reconciliationState.syncAuthoritativeLocalPlayerPose({
+      applyAuthoritativeUnmountedPose() {
+        applyCalls += 1;
+      },
+      authoritativePlayerSnapshot: createAuthoritativePlayerSnapshot(),
+      authoritativeSnapshotAgeMs: 34,
+      authoritativeSnapshotSequence: 3,
+      authoritativeTick: 19,
+      createLocalAuthorityPoseCorrectionSnapshot() {
+        return createCorrectionSnapshotStub();
+      },
+      ...createConvergenceConfig(),
+      historicalLocalSampleMatched: true,
+      historicalLocalSampleSelectionReason:
+        "latest-at-or-before-authoritative-time",
+      historicalLocalSampleTimeDeltaMs: -4,
+      localGroundedBodySnapshot: createGroundedBodySnapshot(),
+      localSwimBodySnapshot: null,
+      localGrounded: true,
+      localTraversalPose: Object.freeze({
+        linearVelocity: freezeVector3(0, 0, 0),
+        locomotionMode: "grounded",
+        position: freezeVector3(0, 0, 24),
+        yawRadians: 0
+      })
+    });
+
+  assert.equal(startedCorrection, true);
+  assert.equal(applyCalls, 1);
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionDetail
+      .convergenceEpisodeStarted,
+    true
+  );
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionDetail
+      .convergenceEpisodeStartReason,
+    "gross-position-divergence"
+  );
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionDetail
+      .convergenceEpisodeStartIntentionalDiscontinuityCause,
+    "none"
+  );
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionDetail
+      .convergenceEpisodeStartHistoricalLocalSampleMatched,
+    true
+  );
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionDetail
+      .convergenceEpisodeStartHistoricalLocalSampleSelectionReason,
+    "latest-at-or-before-authoritative-time"
+  );
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionDetail
+      .convergenceEpisodeStartHistoricalLocalSampleTimeDeltaMs,
+    -4
+  );
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionDetail
+      .convergenceEpisodeStartPlanarMagnitudeMeters,
+    1.3
+  );
+
+  const settleStepCorrection =
+    reconciliationState.syncAuthoritativeLocalPlayerPose({
+      applyAuthoritativeUnmountedPose() {
+        applyCalls += 1;
+      },
+      authoritativePlayerSnapshot: createAuthoritativePlayerSnapshot(),
+      authoritativeSnapshotAgeMs: 50,
+      authoritativeSnapshotSequence: 4,
+      authoritativeTick: 20,
+      createLocalAuthorityPoseCorrectionSnapshot() {
+        return createCorrectionSnapshotStub();
+      },
+      ...createConvergenceConfig(),
+      historicalLocalSampleMatched: false,
+      localGroundedBodySnapshot: createGroundedBodySnapshot({
+        position: freezeVector3(1.22, 0, 24)
+      }),
+      localSwimBodySnapshot: null,
+      localGrounded: true,
+      localTraversalPose: Object.freeze({
+        linearVelocity: freezeVector3(0, 0, 0),
+        locomotionMode: "grounded",
+        position: freezeVector3(1.22, 0, 24),
+        yawRadians: 0
+      })
+    });
+
+  assert.equal(settleStepCorrection, true);
+  assert.equal(applyCalls, 2);
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionDetail
+      .convergenceEpisodeStarted,
+    false
+  );
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionReason,
+    "none"
+  );
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionDetail
+      .convergenceEpisodeStartReason,
+    "gross-position-divergence"
+  );
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionDetail
+      .convergenceEpisodeStartIntentionalDiscontinuityCause,
+    "none"
+  );
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionDetail
+      .convergenceEpisodeStartHistoricalLocalSampleMatched,
+    true
+  );
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionDetail
+      .convergenceEpisodeStartHistoricalLocalSampleSelectionReason,
+    "latest-at-or-before-authoritative-time"
+  );
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionDetail
+      .convergenceEpisodeStartHistoricalLocalSampleTimeDeltaMs,
+    -4
+  );
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionDetail
+      .convergenceEpisodeStartPlanarMagnitudeMeters,
+    1.3
+  );
+});
+
+test("MetaverseLocalAuthorityReconciliationState preserves the last intentional discontinuity cause across settle steps", async () => {
+  const { MetaverseLocalAuthorityReconciliationState } = await clientLoader.load(
+    "/src/metaverse/traversal/reconciliation/classes/metaverse-local-authority-reconciliation-state.ts"
+  );
+  const reconciliationState =
+    new MetaverseLocalAuthorityReconciliationState();
+  let applyCalls = 0;
+  const authoritativePosition = freezeVector3(1.3, 0, 24);
+  const createAuthoritativePlayerSnapshot = () =>
+    Object.freeze({
+      groundedBody: createGroundedBodySnapshot({
+        position: authoritativePosition
+      }),
+      lastProcessedInputSequence: 11,
+      lastProcessedTraversalOrientationSequence: 12,
+      linearVelocity: freezeVector3(0, 0, 0),
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: authoritativePosition,
+      traversalAuthority: createGroundedTraversalAuthoritySnapshot(),
+      yawRadians: 0
+    });
+
+  reconciliationState.noteIntentionalDiscontinuity("mounted-unboarding");
+
+  reconciliationState.syncAuthoritativeLocalPlayerPose({
+    applyAuthoritativeUnmountedPose() {
+      applyCalls += 1;
+    },
+    authoritativePlayerSnapshot: createAuthoritativePlayerSnapshot(),
+    createLocalAuthorityPoseCorrectionSnapshot() {
+      return createCorrectionSnapshotStub();
+    },
+    ...createConvergenceConfig(),
+    historicalLocalSampleMatched: true,
+    localGroundedBodySnapshot: createGroundedBodySnapshot(),
+    localSwimBodySnapshot: null,
+    localGrounded: true,
+    localTraversalPose: Object.freeze({
+      linearVelocity: freezeVector3(0, 0, 0),
+      locomotionMode: "grounded",
+      position: freezeVector3(0, 0, 24),
+      yawRadians: 0
+    })
+  });
+
+  assert.equal(applyCalls, 1);
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionDetail
+      .convergenceEpisodeStartIntentionalDiscontinuityCause,
+    "mounted-unboarding"
+  );
+
+  reconciliationState.syncAuthoritativeLocalPlayerPose({
+    applyAuthoritativeUnmountedPose() {
+      applyCalls += 1;
+    },
+    authoritativePlayerSnapshot: createAuthoritativePlayerSnapshot(),
+    createLocalAuthorityPoseCorrectionSnapshot() {
+      return createCorrectionSnapshotStub();
+    },
+    ...createConvergenceConfig(),
+    historicalLocalSampleMatched: false,
+    localGroundedBodySnapshot: createGroundedBodySnapshot({
+      position: freezeVector3(1.22, 0, 24)
+    }),
+    localSwimBodySnapshot: null,
+    localGrounded: true,
+    localTraversalPose: Object.freeze({
+      linearVelocity: freezeVector3(0, 0, 0),
+      locomotionMode: "grounded",
+      position: freezeVector3(1.22, 0, 24),
+      yawRadians: 0
+    })
+  });
+
+  assert.equal(applyCalls, 2);
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionDetail
+      .convergenceEpisodeStartIntentionalDiscontinuityCause,
+    "mounted-unboarding"
+  );
+});
+
+test("MetaverseLocalAuthorityReconciliationState clears a pending intentional discontinuity when no episode starts", async () => {
+  const { MetaverseLocalAuthorityReconciliationState } = await clientLoader.load(
+    "/src/metaverse/traversal/reconciliation/classes/metaverse-local-authority-reconciliation-state.ts"
+  );
+  const reconciliationState =
+    new MetaverseLocalAuthorityReconciliationState();
+
+  reconciliationState.noteIntentionalDiscontinuity("mounted-unboarding");
+
+  const ignoredCorrection =
+    reconciliationState.syncAuthoritativeLocalPlayerPose({
+      applyAuthoritativeUnmountedPose() {},
+      authoritativePlayerSnapshot: Object.freeze({
+        groundedBody: createGroundedBodySnapshot({
+          position: freezeVector3(0.05, 0, 24.02)
+        }),
+        lastProcessedInputSequence: 0,
+        linearVelocity: freezeVector3(0, 0, 0),
+        locomotionMode: "grounded",
+        mountedOccupancy: null,
+        position: freezeVector3(0.05, 0, 24.02),
+        traversalAuthority: createGroundedTraversalAuthoritySnapshot(),
+        yawRadians: 0
+      }),
+      createLocalAuthorityPoseCorrectionSnapshot() {
+        return createCorrectionSnapshotStub();
+      },
+      ...createConvergenceConfig(),
+      localGroundedBodySnapshot: createGroundedBodySnapshot(),
+      localSwimBodySnapshot: null,
+      localGrounded: true,
+      localTraversalPose: Object.freeze({
+        linearVelocity: freezeVector3(0, 0, 0),
+        locomotionMode: "grounded",
+        position: freezeVector3(0, 0, 24),
+        yawRadians: 0
+      })
+    });
+
+  assert.equal(ignoredCorrection, false);
+
+  reconciliationState.syncAuthoritativeLocalPlayerPose({
+    applyAuthoritativeUnmountedPose() {},
+    authoritativePlayerSnapshot: Object.freeze({
+      groundedBody: createGroundedBodySnapshot({
+        position: freezeVector3(3.2, 0, 24)
+      }),
+      lastProcessedInputSequence: 6,
+      linearVelocity: freezeVector3(0, 0, 0),
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: freezeVector3(3.2, 0, 24),
+      traversalAuthority: createGroundedTraversalAuthoritySnapshot(),
+      yawRadians: 0
+    }),
+    createLocalAuthorityPoseCorrectionSnapshot() {
+      return createCorrectionSnapshotStub();
+    },
+    ...createConvergenceConfig(),
+    localGroundedBodySnapshot: createGroundedBodySnapshot(),
+    localSwimBodySnapshot: null,
+    localGrounded: true,
+    localTraversalPose: Object.freeze({
+      linearVelocity: freezeVector3(0, 0, 0),
+      locomotionMode: "grounded",
+      position: freezeVector3(0, 0, 24),
+      yawRadians: 0
+    })
+  });
+
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionDetail
+      .convergenceEpisodeStartIntentionalDiscontinuityCause,
+    "none"
+  );
+});
+
 test("MetaverseLocalAuthorityReconciliationState leaves routine planar and vertical drift below the convergence start thresholds alone", async () => {
   const { MetaverseLocalAuthorityReconciliationState } = await clientLoader.load(
     "/src/metaverse/traversal/reconciliation/classes/metaverse-local-authority-reconciliation-state.ts"
@@ -410,10 +860,6 @@ test("MetaverseLocalAuthorityReconciliationState converges only on gross diverge
         blockingAffordanceDetected: false,
         decisionReason: "capability-maintained",
         groundedBody: null,
-        jumpDebug: Object.freeze({
-          surfaceJumpSupported: true,
-          supported: true
-        }),
         resolvedSupportHeightMeters: 0,
         supportingAffordanceSampleCount: 0
       })
@@ -476,7 +922,7 @@ test("MetaverseLocalAuthorityReconciliationState converges only on gross diverge
   );
 });
 
-test("MetaverseLocalAuthorityReconciliationState converges gross swim divergence when swim body contact and drive truth disagree", async () => {
+test("MetaverseLocalAuthorityReconciliationState keeps blocked-planar swim contact mismatch out of body divergence", async () => {
   const { MetaverseLocalAuthorityReconciliationState } = await clientLoader.load(
     "/src/metaverse/traversal/reconciliation/classes/metaverse-local-authority-reconciliation-state.ts"
   );
@@ -553,6 +999,11 @@ test("MetaverseLocalAuthorityReconciliationState converges gross swim divergence
   assert.equal(reconciliationState.localAuthorityPoseCorrectionCount, 1);
   assert.equal(
     reconciliationState.lastLocalAuthorityPoseCorrectionReason,
-    "gross-body-divergence"
+    "gross-position-divergence"
+  );
+  assert.equal(
+    reconciliationState.lastLocalAuthorityPoseCorrectionDetail
+      .bodyStateDivergence,
+    false
   );
 });

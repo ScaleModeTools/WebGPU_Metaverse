@@ -325,11 +325,6 @@ function freezeLocalAuthorityPoseCorrectionSnapshot(
             : freezeGroundedBodyTelemetrySnapshot(
                 snapshot.local.surfaceRouting.groundedBody
               ),
-        jumpDebug: Object.freeze({
-          surfaceJumpSupported:
-            snapshot.local.surfaceRouting.jumpDebug.surfaceJumpSupported,
-          supported: snapshot.local.surfaceRouting.jumpDebug.supported
-        }),
         locomotionMode: snapshot.local.surfaceRouting.locomotionMode,
         resolvedSupportHeightMeters:
           snapshot.local.surfaceRouting.resolvedSupportHeightMeters,
@@ -535,10 +530,30 @@ function freezeTelemetrySnapshot(
             snapshot.worldSnapshot.localReconciliation
               .lastLocalAuthorityPoseCorrectionDetail
               .convergenceEpisodeStarted,
+          convergenceEpisodeStartIntentionalDiscontinuityCause:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail
+              .convergenceEpisodeStartIntentionalDiscontinuityCause,
+          convergenceEpisodeStartHistoricalLocalSampleMatched:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail
+              .convergenceEpisodeStartHistoricalLocalSampleMatched,
+          convergenceEpisodeStartHistoricalLocalSampleSelectionReason:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail
+              .convergenceEpisodeStartHistoricalLocalSampleSelectionReason,
+          convergenceEpisodeStartHistoricalLocalSampleTimeDeltaMs:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail
+              .convergenceEpisodeStartHistoricalLocalSampleTimeDeltaMs,
           convergenceEpisodeStartPlanarMagnitudeMeters:
             snapshot.worldSnapshot.localReconciliation
               .lastLocalAuthorityPoseCorrectionDetail
               .convergenceEpisodeStartPlanarMagnitudeMeters,
+          convergenceEpisodeStartReason:
+            snapshot.worldSnapshot.localReconciliation
+              .lastLocalAuthorityPoseCorrectionDetail
+              .convergenceEpisodeStartReason,
           convergenceEpisodeStartVerticalMagnitudeMeters:
             snapshot.worldSnapshot.localReconciliation
               .lastLocalAuthorityPoseCorrectionDetail
@@ -662,12 +677,6 @@ function freezeTelemetrySnapshot(
             resolvedActionState:
               snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
                 .jumpDebug.resolvedActionState,
-            surfaceJumpSupported:
-              snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
-                .jumpDebug.surfaceJumpSupported,
-            supported:
-              snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
-                .jumpDebug.supported
           }),
           lastProcessedInputSequence:
             snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
@@ -746,26 +755,19 @@ function freezeTelemetrySnapshot(
               : freezeGroundedBodyTelemetrySnapshot(
                   snapshot.worldSnapshot.surfaceRouting.local.groundedBody
                 ),
-          jumpDebug: Object.freeze({
-            surfaceJumpSupported:
-              snapshot.worldSnapshot.surfaceRouting.local.jumpDebug
-                .surfaceJumpSupported,
-            supported:
-              snapshot.worldSnapshot.surfaceRouting.local.jumpDebug.supported
-          }),
-        locomotionMode:
-          snapshot.worldSnapshot.surfaceRouting.local.locomotionMode,
-        resolvedSupportHeightMeters:
-          snapshot.worldSnapshot.surfaceRouting.local.resolvedSupportHeightMeters,
-        swimBody:
-          snapshot.worldSnapshot.surfaceRouting.local.swimBody == null
-            ? null
-            : freezeSwimBodyTelemetrySnapshot(
-                snapshot.worldSnapshot.surfaceRouting.local.swimBody
-              ),
-        supportingAffordanceSampleCount:
-          snapshot.worldSnapshot.surfaceRouting.local
-            .supportingAffordanceSampleCount,
+          locomotionMode:
+            snapshot.worldSnapshot.surfaceRouting.local.locomotionMode,
+          resolvedSupportHeightMeters:
+            snapshot.worldSnapshot.surfaceRouting.local.resolvedSupportHeightMeters,
+          swimBody:
+            snapshot.worldSnapshot.surfaceRouting.local.swimBody == null
+              ? null
+              : freezeSwimBodyTelemetrySnapshot(
+                  snapshot.worldSnapshot.surfaceRouting.local.swimBody
+                ),
+          supportingAffordanceSampleCount:
+            snapshot.worldSnapshot.surfaceRouting.local
+              .supportingAffordanceSampleCount,
           traversalAuthority: Object.freeze({
             currentActionKind:
               snapshot.worldSnapshot.surfaceRouting.local.traversalAuthority
@@ -908,7 +910,7 @@ export class MetaverseRuntimeHudTelemetryState {
   #createSurfaceRoutingTelemetrySnapshot():
     MetaverseTelemetrySnapshot["worldSnapshot"]["surfaceRouting"] {
     const issuedTraversalIntent =
-      this.#remoteWorldRuntime.latestPlayerTraversalIntentSnapshot;
+      this.#traversalRuntime.latestIssuedTraversalIntentSnapshot;
     const authoritativeLocalPlayerSnapshot =
       this.#remoteWorldRuntime.readFreshAuthoritativeLocalPlayerSnapshot(
         metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
@@ -991,17 +993,7 @@ export class MetaverseRuntimeHudTelemetryState {
             !authoritativeLocalPlayerGroundedBodyActive
               ? null
               : authoritativeLocalPlayerSnapshot?.jumpDebug.resolvedActionState ??
-            null,
-          surfaceJumpSupported:
-            !authoritativeLocalPlayerGroundedBodyActive
-              ? null
-              : authoritativeLocalPlayerSnapshot?.jumpDebug
-                  .surfaceJumpSupported ??
-            null,
-          supported:
-            !authoritativeLocalPlayerGroundedBodyActive
-              ? null
-              : authoritativeLocalPlayerSnapshot?.jumpDebug.supported ?? null
+            null
         }),
         lastProcessedInputSequence:
           authoritativeLocalPlayerSnapshot?.lastProcessedInputSequence ?? null,

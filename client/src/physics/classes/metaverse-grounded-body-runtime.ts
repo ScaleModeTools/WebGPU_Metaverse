@@ -3,6 +3,7 @@ import {
   createMetaverseGroundedJumpPhysicsConfigSnapshot,
   createMetaverseGroundedJumpBodySnapshot,
   createMetaverseGroundedBodyInteractionSnapshot,
+  resolveMetaverseGroundedBodyColliderTranslationSnapshot,
   clamp,
   createMetaverseGroundedBodyStepStateSnapshot,
   createMetaverseSurfaceTraversalVector3Snapshot as freezeVector3,
@@ -249,10 +250,10 @@ export class MetaverseGroundedBodyRuntime {
       this.#snapshot.interaction.applyImpulsesToDynamicBodies
     );
     controller.setCharacterMass(1);
-    this.#syncAutostepConfiguration(controller);
     this.#syncSnapToGroundConfiguration(controller, true);
     controller.setMaxSlopeClimbAngle?.(this.#config.maxSlopeClimbAngleRadians);
     controller.setMinSlopeSlideAngle?.(this.#config.minSlopeSlideAngleRadians);
+    this.#syncAutostepConfiguration(controller);
 
     const collider = this.#physicsRuntime.createCapsuleCollider(
       this.#config.capsuleHalfHeightMeters,
@@ -485,10 +486,9 @@ export class MetaverseGroundedBodyRuntime {
   #rootToColliderCenter(
     rootPosition: PhysicsVector3Snapshot
   ): PhysicsVector3Snapshot {
-    return freezeVector3(
-      rootPosition.x,
-      rootPosition.y + this.#standingOffsetMeters,
-      rootPosition.z
+    return resolveMetaverseGroundedBodyColliderTranslationSnapshot(
+      this.#config,
+      rootPosition
     );
   }
 }

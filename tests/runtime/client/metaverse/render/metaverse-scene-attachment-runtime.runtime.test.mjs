@@ -121,25 +121,29 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
     new BoxGeometry(0.28, 0.08, 0.08),
     new MeshStandardMaterial({ color: 0x4b5563 })
   );
-  const triggerHandSocket = new Group();
+  const gripHandSocket = new Group();
+  const triggerMarker = new Group();
   const backSocket = new Group();
 
   attachmentScene.name = "metaverse_service_pistol_root";
   attachmentMesh.position.x = 0.14;
-  triggerHandSocket.name = "metaverse_service_pistol_trigger_hand_r_socket";
-  triggerHandSocket.position.set(-0.01, 0.02, -0.03);
+  gripHandSocket.name = "metaverse_service_pistol_grip_hand_r_socket";
+  gripHandSocket.position.set(-0.01, 0.02, -0.03);
+  triggerMarker.name = "metaverse_service_pistol_trigger_marker";
+  triggerMarker.position.set(0.026, 0.012, 0.004);
   backSocket.name = "metaverse_service_pistol_back_socket";
   backSocket.position.set(0.12, -0.04, 0.03);
   backSocket.quaternion.set(0, 0.7071067811865475, -0.7071067811865476, 0);
-  attachmentScene.add(attachmentMesh, triggerHandSocket, backSocket);
+  attachmentScene.add(attachmentMesh, gripHandSocket, triggerMarker, backSocket);
 
   const sceneRuntime = createMetaverseScene(metaverseRuntimeConfig, {
     attachmentProofConfig: {
       attachmentId: "metaverse-service-pistol-v1",
       heldMount: {
-        attachmentSocketNodeName: "metaverse_service_pistol_trigger_hand_r_socket",
+        attachmentSocketNodeName: "metaverse_service_pistol_grip_hand_r_socket",
         offHandSupportPointId: "hand_l_support",
-        socketName: "grip_r_socket"
+        socketName: "hand_r_socket",
+        triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker"
       },
       label: "Metaverse service pistol",
       modelPath: "/models/metaverse/attachments/metaverse-service-pistol.gltf",
@@ -291,7 +295,7 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
   );
 
   assert.ok(attachmentRoot);
-  assert.equal(attachmentRoot.parent?.name, "grip_r_socket");
+  assert.equal(attachmentRoot.parent?.name, "hand_r_socket");
   assert.ok(
     attachmentRoot.position.distanceTo(new Vector3(0.01, -0.02, 0.03)) < 0.000001
   );
@@ -422,7 +426,7 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
     }
   );
 
-  assert.equal(attachmentRoot.parent?.name, "grip_r_socket");
+  assert.equal(attachmentRoot.parent?.name, "hand_r_socket");
   assert.ok(
     attachmentRoot.position.distanceTo(new Vector3(0.01, -0.02, 0.03)) < 0.000001
   );
@@ -459,7 +463,7 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
     ]
   );
 
-  assert.equal(attachmentRoot.parent?.name, "grip_r_socket");
+  assert.equal(attachmentRoot.parent?.name, "hand_r_socket");
   assert.ok(
     attachmentRoot.position.distanceTo(new Vector3(0.01, -0.02, 0.03)) < 0.000001
   );
@@ -572,13 +576,13 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
 
   sceneRuntime.scene.updateMatrixWorld(true);
 
-  const gripSocket = sceneRuntime.scene.getObjectByName("grip_r_socket");
-  assert.ok(gripSocket);
+  const handSocket = sceneRuntime.scene.getObjectByName("hand_r_socket");
+  assert.ok(handSocket);
   const initialAttachmentQuaternion = attachmentRoot.getWorldQuaternion(
     new Quaternion()
   );
 
-  gripSocket.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), 0.3);
+  handSocket.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), 0.3);
   sceneRuntime.scene.updateMatrixWorld(true);
 
   const nextAttachmentQuaternion = attachmentRoot.getWorldQuaternion(
@@ -600,7 +604,7 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
   );
 
   assert.equal(characterRoot.visible, false);
-  assert.equal(attachmentRoot.parent?.name, "grip_r_socket");
+  assert.equal(attachmentRoot.parent?.name, "hand_r_socket");
   assert.ok(
     attachmentRoot.position.distanceTo(new Vector3(0.01, -0.02, 0.03)) < 0.000001
   );

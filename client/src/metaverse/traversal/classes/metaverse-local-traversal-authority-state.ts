@@ -10,6 +10,11 @@ import type {
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import type { MetaverseLocomotionModeId } from "../../types/metaverse-locomotion-mode";
+import {
+  createMetaverseIssuedTraversalIntentSnapshot,
+  type MetaverseIssuedTraversalIntentInputSnapshot,
+  type MetaverseIssuedTraversalIntentSnapshot
+} from "../types/traversal";
 
 function createDefaultTraversalAuthoritySnapshot(): MetaverseTraversalAuthoritySnapshot {
   return createMetaverseTraversalAuthoritySnapshot();
@@ -80,7 +85,7 @@ export interface ResolveNextPredictedGroundedTraversalActionSequenceInput {
 }
 
 function resolveLatestPredictedGroundedTraversalActionSequence(
-  latestIssuedTraversalIntentSnapshot: MetaversePlayerTraversalIntentSnapshot | null,
+  latestIssuedTraversalIntentSnapshot: MetaverseIssuedTraversalIntentSnapshot | null,
   {
     localActiveTraversalAction,
     locomotionMode,
@@ -130,17 +135,22 @@ function resolveLatestPredictedGroundedTraversalActionSequence(
 export class MetaverseLocalTraversalAuthorityState {
   #snapshot = createDefaultTraversalAuthoritySnapshot();
   #currentTick = 0;
-  #latestIssuedTraversalIntentSnapshot: MetaversePlayerTraversalIntentSnapshot | null =
+  #latestIssuedTraversalIntentSnapshot: MetaverseIssuedTraversalIntentSnapshot | null =
     null;
+  #latestIssuedTraversalOrientationSequence = 0;
 
   get currentTick(): number {
     return this.#currentTick;
   }
 
   get latestIssuedTraversalIntentSnapshot():
-    | MetaversePlayerTraversalIntentSnapshot
+    | MetaverseIssuedTraversalIntentSnapshot
     | null {
     return this.#latestIssuedTraversalIntentSnapshot;
+  }
+
+  get latestIssuedTraversalOrientationSequence(): number {
+    return this.#latestIssuedTraversalOrientationSequence;
   }
 
   get snapshot(): MetaverseTraversalAuthoritySnapshot {
@@ -151,6 +161,7 @@ export class MetaverseLocalTraversalAuthorityState {
     this.#snapshot = createDefaultTraversalAuthoritySnapshot();
     this.#currentTick = 0;
     this.#latestIssuedTraversalIntentSnapshot = null;
+    this.#latestIssuedTraversalOrientationSequence = 0;
   }
 
   sync({
@@ -178,10 +189,13 @@ export class MetaverseLocalTraversalAuthorityState {
   }
 
   syncIssuedTraversalIntentSnapshot(
-    traversalIntentSnapshot: MetaversePlayerTraversalIntentSnapshot | null,
+    traversalIntentSnapshot: MetaverseIssuedTraversalIntentInputSnapshot | null,
     input: Omit<SyncLocalTraversalAuthorityStateInput, "advanceTick">
   ): void {
-    this.#latestIssuedTraversalIntentSnapshot = traversalIntentSnapshot;
+    this.#latestIssuedTraversalIntentSnapshot =
+      createMetaverseIssuedTraversalIntentSnapshot(traversalIntentSnapshot);
+    this.#latestIssuedTraversalOrientationSequence =
+      traversalIntentSnapshot?.orientationSequence ?? 0;
     this.sync({
       ...input,
       advanceTick: false

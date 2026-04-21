@@ -1,20 +1,27 @@
 import {
-  isMetaverseTraversalAuthorityActionAirborne,
-  isMetaverseTraversalAuthorityActionPendingOrActive,
-} from "@webgpu-metaverse/shared/metaverse/traversal";
+  readMetaverseRealtimePlayerActiveBodyKinematicSnapshot,
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 import type {
-  MetaverseRealtimePlayerObservedTraversalSnapshot,
   MetaverseRealtimePlayerSnapshot
 } from "@webgpu-metaverse/shared/metaverse/realtime";
+import {
+  shouldKeepMetaverseMountedOccupancyFreeRoam
+} from "@webgpu-metaverse/shared/metaverse/presence";
 
 import type { MetaverseCameraSnapshot, MetaverseRemoteCharacterPresentationSnapshot } from "../../types/presentation";
 import type { MetaverseRuntimeConfig } from "../../types/runtime-config";
 import {
+  createGroundedMovementAnimationPolicyInput,
+  metaverseMovementAnimationPolicyConfig,
   MetaverseMovementAnimationPolicyRuntime
 } from "./metaverse-movement-animation-policy";
 import {
   createTraversalSurfaceCameraPresentationSnapshot
 } from "./camera-presentation";
+import {
+  projectGroundedTraversalPresentationPosition,
+  projectTraversalPresentationPosition
+} from "./presentation-projection";
 
 interface MutableVector3Snapshot {
   x: number;
@@ -33,11 +40,13 @@ interface MutableRemoteCharacterPresentationSnapshot {
   playerId: string;
   poseSyncMode: "runtime-server-sampled";
   presentation: {
+    animationCycleId?: number;
     animationVocabulary:
       MetaverseRemoteCharacterPresentationSnapshot["presentation"]["animationVocabulary"];
     position: MutableVector3Snapshot;
     yawRadians: number;
   };
+  weaponState: MetaverseRemoteCharacterPresentationSnapshot["weaponState"];
 }
 
 export interface RemoteCharacterPresentationAuthoritativeSample {
@@ -48,6 +57,7 @@ export interface RemoteCharacterPresentationAuthoritativeSample {
   readonly nextPlayer: MetaverseRealtimePlayerSnapshot | null;
   readonly remoteCharacterRootAlpha: number;
   readonly remoteCharacterRootBasePlayer: MetaverseRealtimePlayerSnapshot;
+  readonly remoteCharacterRootExtrapolationSeconds: number;
   readonly remoteCharacterRootNextPlayer: MetaverseRealtimePlayerSnapshot | null;
   readonly sampleEpoch: number;
 }
@@ -108,72 +118,104 @@ function lerpWrappedRadians(
 
 function sampleRemotePlayerRootPositionInto(
   target: MutableVector3Snapshot,
+  config: RemoteCharacterAimPresentationConfig,
   remoteCharacterRootBasePlayer: MetaverseRealtimePlayerSnapshot,
   remoteCharacterRootNextPlayer: MetaverseRealtimePlayerSnapshot | null,
-  remoteCharacterRootAlpha: number
+  remoteCharacterRootAlpha: number,
+  remoteCharacterRootExtrapolationSeconds: number
 ): MutableVector3Snapshot {
+  const baseActiveBodySnapshot =
+    readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(
+      remoteCharacterRootBasePlayer
+    );
+
   if (remoteCharacterRootNextPlayer !== null) {
+    const nextActiveBodySnapshot =
+      readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(
+        remoteCharacterRootNextPlayer
+      );
+
     return writeMutableVector3(
       target,
       lerp(
-        remoteCharacterRootBasePlayer.position.x,
-        remoteCharacterRootNextPlayer.position.x,
+        baseActiveBodySnapshot.position.x,
+        nextActiveBodySnapshot.position.x,
         remoteCharacterRootAlpha
       ),
       lerp(
-        remoteCharacterRootBasePlayer.position.y,
-        remoteCharacterRootNextPlayer.position.y,
+        baseActiveBodySnapshot.position.y,
+        nextActiveBodySnapshot.position.y,
         remoteCharacterRootAlpha
       ),
       lerp(
-        remoteCharacterRootBasePlayer.position.z,
-        remoteCharacterRootNextPlayer.position.z,
+        baseActiveBodySnapshot.position.z,
+        nextActiveBodySnapshot.position.z,
         remoteCharacterRootAlpha
       )
     );
   }
 
+  const projectedPosition =
+    remoteCharacterRootBasePlayer.locomotionMode === "grounded"
+      ? projectGroundedTraversalPresentationPosition(
+          baseActiveBodySnapshot.position,
+          baseActiveBodySnapshot.linearVelocity,
+          remoteCharacterRootExtrapolationSeconds,
+          remoteCharacterRootBasePlayer.groundedBody.grounded,
+          config.groundedBody.gravityUnitsPerSecond
+        )
+      : projectTraversalPresentationPosition(
+          baseActiveBodySnapshot.position,
+          baseActiveBodySnapshot.linearVelocity,
+          remoteCharacterRootExtrapolationSeconds
+        );
+
   return writeMutableVector3(
     target,
-    remoteCharacterRootBasePlayer.position.x,
-    remoteCharacterRootBasePlayer.position.y,
-    remoteCharacterRootBasePlayer.position.z
+    projectedPosition.x,
+    projectedPosition.y,
+    projectedPosition.z
   );
 }
 
-function sampleRemotePlayerYawRadians(
+function sampleRemotePlayerBodyYawRadians(
   basePlayer: MetaverseRealtimePlayerSnapshot,
   nextPlayer: MetaverseRealtimePlayerSnapshot | null,
   alpha: number,
   extrapolationSeconds: number
 ): number {
+  const baseActiveBodySnapshot =
+    readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(basePlayer);
+
   if (nextPlayer === null) {
     if (extrapolationSeconds <= 0) {
-      return basePlayer.yawRadians;
+      return baseActiveBodySnapshot.yawRadians;
     }
 
     return wrapRadians(
-      basePlayer.yawRadians +
+      baseActiveBodySnapshot.yawRadians +
         basePlayer.angularVelocityRadiansPerSecond * extrapolationSeconds
     );
   }
 
-  return lerpWrappedRadians(basePlayer.yawRadians, nextPlayer.yawRadians, alpha);
+  return lerpWrappedRadians(
+    baseActiveBodySnapshot.yawRadians,
+    readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(nextPlayer).yawRadians,
+    alpha
+  );
 }
 
-function sampleRemotePlayerObservedTraversalFacingYawRadians(
-  basePlayer: MetaverseRealtimePlayerSnapshot,
-  nextPlayer: MetaverseRealtimePlayerSnapshot | null,
-  alpha: number
-): number {
-  if (nextPlayer === null) {
-    return basePlayer.observedTraversal.facing.yawRadians;
-  }
-
-  return lerpWrappedRadians(
-    basePlayer.observedTraversal.facing.yawRadians,
-    nextPlayer.observedTraversal.facing.yawRadians,
-    alpha
+function shouldPresentRemotePlayerYawFromLook(
+  playerSnapshot: Pick<
+    MetaverseRealtimePlayerSnapshot,
+    "mountedOccupancy"
+  >
+): boolean {
+  return (
+    playerSnapshot.mountedOccupancy === null ||
+    shouldKeepMetaverseMountedOccupancyFreeRoam(
+      playerSnapshot.mountedOccupancy
+    )
   );
 }
 
@@ -182,20 +224,13 @@ function sampleRemotePlayerLookPitchRadians(
   nextPlayer: MetaverseRealtimePlayerSnapshot | null,
   alpha: number
 ): number {
-  const readPresentationPitchRadians = (
-    playerSnapshot: MetaverseRealtimePlayerSnapshot
-  ): number =>
-    playerSnapshot.mountedOccupancy === null
-      ? playerSnapshot.observedTraversal.facing.pitchRadians
-      : playerSnapshot.look.pitchRadians;
-
   if (nextPlayer === null) {
-    return readPresentationPitchRadians(basePlayer);
+    return basePlayer.look.pitchRadians;
   }
 
   return lerp(
-    readPresentationPitchRadians(basePlayer),
-    readPresentationPitchRadians(nextPlayer),
+    basePlayer.look.pitchRadians,
+    nextPlayer.look.pitchRadians,
     alpha
   );
 }
@@ -205,20 +240,13 @@ function sampleRemotePlayerLookYawRadians(
   nextPlayer: MetaverseRealtimePlayerSnapshot | null,
   alpha: number
 ): number {
-  const readPresentationYawRadians = (
-    playerSnapshot: MetaverseRealtimePlayerSnapshot
-  ): number =>
-    playerSnapshot.mountedOccupancy === null
-      ? playerSnapshot.observedTraversal.facing.yawRadians
-      : playerSnapshot.look.yawRadians;
-
   if (nextPlayer === null) {
-    return readPresentationYawRadians(basePlayer);
+    return basePlayer.look.yawRadians;
   }
 
   return lerpWrappedRadians(
-    readPresentationYawRadians(basePlayer),
-    readPresentationYawRadians(nextPlayer),
+    basePlayer.look.yawRadians,
+    nextPlayer.look.yawRadians,
     alpha
   );
 }
@@ -228,13 +256,14 @@ function resolveRemoteCharacterAimCameraSnapshot(
   look: MutableRemoteCharacterPresentationSnapshot["look"],
   playerSnapshot: Pick<
     MetaverseRealtimePlayerSnapshot,
-    "locomotionMode" | "mountedOccupancy"
+    "locomotionMode" | "mountedOccupancy" | "weaponState"
   >,
   config: RemoteCharacterAimPresentationConfig
 ): MetaverseCameraSnapshot | null {
   if (
     playerSnapshot.mountedOccupancy !== null ||
-    playerSnapshot.locomotionMode !== "grounded"
+    playerSnapshot.locomotionMode !== "grounded" ||
+    playerSnapshot.weaponState === null
   ) {
     return null;
   }
@@ -260,84 +289,139 @@ function selectSampledRemotePlayerSnapshot(
   return alpha < 0.5 ? basePlayer : nextPlayer;
 }
 
-function resolveObservedTraversalInputMagnitude(
-  observedTraversal: MetaverseRealtimePlayerObservedTraversalSnapshot
+function sampleRemotePlayerPresentationYawRadians(
+  basePlayer: MetaverseRealtimePlayerSnapshot,
+  nextPlayer: MetaverseRealtimePlayerSnapshot | null,
+  alpha: number,
+  extrapolationSeconds: number
+): number {
+  const sampledPlayerSnapshot = selectSampledRemotePlayerSnapshot(
+    basePlayer,
+    nextPlayer,
+    alpha
+  );
+
+  if (shouldPresentRemotePlayerYawFromLook(sampledPlayerSnapshot)) {
+    return sampleRemotePlayerLookYawRadians(basePlayer, nextPlayer, alpha);
+  }
+
+  return sampleRemotePlayerBodyYawRadians(
+    basePlayer,
+    nextPlayer,
+    alpha,
+    extrapolationSeconds
+  );
+}
+
+function resolvePresentationIntentInputMagnitude(
+  playerSnapshot: Pick<
+    MetaverseRealtimePlayerSnapshot,
+    "presentationIntent"
+  >
 ): number {
   return Math.min(
     1,
     Math.hypot(
-      observedTraversal.bodyControl.moveAxis,
-      observedTraversal.bodyControl.strafeAxis
+      playerSnapshot.presentationIntent.moveAxis,
+      playerSnapshot.presentationIntent.strafeAxis
     )
   );
-}
-
-function sampleRemotePlayerObservedTraversalInputMagnitude(
-  basePlayer: MetaverseRealtimePlayerSnapshot,
-  nextPlayer: MetaverseRealtimePlayerSnapshot | null,
-  alpha: number
-): number {
-  if (nextPlayer === null) {
-    return resolveObservedTraversalInputMagnitude(basePlayer.observedTraversal);
-  }
-
-  const moveAxis = lerp(
-    basePlayer.observedTraversal.bodyControl.moveAxis,
-    nextPlayer.observedTraversal.bodyControl.moveAxis,
-    alpha
-  );
-  const strafeAxis = lerp(
-    basePlayer.observedTraversal.bodyControl.strafeAxis,
-    nextPlayer.observedTraversal.bodyControl.strafeAxis,
-    alpha
-  );
-
-  return Math.min(1, Math.hypot(moveAxis, strafeAxis));
 }
 
 function resolveRemoteCharacterAnimationVocabulary(
   animationRuntime: MetaverseMovementAnimationPolicyRuntime,
   playerSnapshot: Pick<
     MetaverseRealtimePlayerSnapshot,
-    | "linearVelocity"
+    | "groundedBody"
     | "locomotionMode"
     | "mountedOccupancy"
-    | "observedTraversal"
+    | "presentationIntent"
+    | "swimBody"
     | "traversalAuthority"
+    | "weaponState"
   >,
-  inputMagnitude: number,
   deltaSeconds: number
 ): MetaverseRemoteCharacterPresentationSnapshot["presentation"]["animationVocabulary"] {
+  const moveAxis = playerSnapshot.presentationIntent.moveAxis;
+  const strafeAxis = playerSnapshot.presentationIntent.strafeAxis;
+  const inputMagnitude = resolvePresentationIntentInputMagnitude(playerSnapshot);
+
   if (playerSnapshot.mountedOccupancy?.occupancyKind === "seat") {
     animationRuntime.reset("seated");
     return "seated";
   }
 
+  if (
+    playerSnapshot.locomotionMode === "grounded" &&
+    shouldPresentRemotePlayerYawFromLook(playerSnapshot) &&
+    playerSnapshot.traversalAuthority.currentActionKind === "jump"
+  ) {
+    const authoritativeJumpVerticalSpeed =
+      playerSnapshot.traversalAuthority.currentActionPhase === "startup"
+        ? metaverseMovementAnimationPolicyConfig.jump
+            .upEnterVerticalSpeedUnitsPerSecond + 0.01
+        : playerSnapshot.traversalAuthority.currentActionPhase === "falling"
+          ? Math.min(
+              playerSnapshot.groundedBody.jumpBody.verticalSpeedUnitsPerSecond,
+              metaverseMovementAnimationPolicyConfig.jump
+                .downEnterVerticalSpeedUnitsPerSecond - 0.01
+            )
+          : playerSnapshot.groundedBody.jumpBody.verticalSpeedUnitsPerSecond;
+
+    return animationRuntime.advance(
+      {
+        ...createGroundedMovementAnimationPolicyInput({
+          groundedBodySnapshot: playerSnapshot.groundedBody,
+          inputMagnitude,
+          moveAxis,
+          strafeAxis
+        }),
+        grounded: false,
+        verticalSpeedUnitsPerSecond: authoritativeJumpVerticalSpeed
+      },
+      deltaSeconds
+    );
+  }
+
+  if (
+    playerSnapshot.mountedOccupancy === null &&
+    playerSnapshot.locomotionMode === "grounded" &&
+    playerSnapshot.groundedBody.grounded &&
+    playerSnapshot.weaponState?.aimMode === "ads" &&
+    inputMagnitude < 0.08
+  ) {
+    animationRuntime.reset("aim");
+    return "aim";
+  }
+
+  if (playerSnapshot.locomotionMode === "grounded") {
+    return animationRuntime.advance(
+      createGroundedMovementAnimationPolicyInput({
+        groundedBodySnapshot: playerSnapshot.groundedBody,
+        inputMagnitude,
+        moveAxis,
+        strafeAxis
+      }),
+      deltaSeconds
+    );
+  }
+
+  const swimBodySnapshot =
+    playerSnapshot.swimBody ??
+    readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(playerSnapshot);
+
   return animationRuntime.advance(
     {
-      grounded:
-        playerSnapshot.mountedOccupancy !== null ||
-        (playerSnapshot.locomotionMode === "grounded" &&
-          !isMetaverseTraversalAuthorityActionPendingOrActive(
-            playerSnapshot.traversalAuthority,
-            "jump"
-          ) &&
-          !isMetaverseTraversalAuthorityActionAirborne(
-            playerSnapshot.traversalAuthority,
-            "jump"
-          )),
+      grounded: false,
       inputMagnitude,
-      locomotionMode:
-        playerSnapshot.mountedOccupancy !== null
-          ? "grounded"
-          : playerSnapshot.locomotionMode === "swim"
-            ? "swim"
-            : "grounded",
+      locomotionMode: "swim",
+      moveAxis,
       planarSpeedUnitsPerSecond: Math.hypot(
-        playerSnapshot.linearVelocity.x,
-        playerSnapshot.linearVelocity.z
+        swimBodySnapshot.linearVelocity.x,
+        swimBodySnapshot.linearVelocity.z
       ),
-      verticalSpeedUnitsPerSecond: playerSnapshot.linearVelocity.y
+      strafeAxis,
+      verticalSpeedUnitsPerSecond: 0
     },
     deltaSeconds
   );
@@ -354,6 +438,9 @@ export class MetaverseRemoteCharacterPresentationOwner {
     playerSnapshot: MetaverseRealtimePlayerSnapshot,
     config: RemoteCharacterAimPresentationConfig
   ) {
+    const activeBodySnapshot =
+      readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(playerSnapshot);
+
     this.#config = config;
     this.#snapshot = {
       aimCamera: null,
@@ -366,15 +453,22 @@ export class MetaverseRemoteCharacterPresentationOwner {
       playerId: playerSnapshot.playerId,
       poseSyncMode: "runtime-server-sampled",
       presentation: {
+        animationCycleId: 0,
         animationVocabulary: "idle",
         position: writeMutableVector3(
           createMutableVector3(),
-          playerSnapshot.position.x,
-          playerSnapshot.position.y,
-          playerSnapshot.position.z
+          activeBodySnapshot.position.x,
+          activeBodySnapshot.position.y,
+          activeBodySnapshot.position.z
         ),
-        yawRadians: playerSnapshot.yawRadians
-      }
+        yawRadians: sampleRemotePlayerPresentationYawRadians(
+          playerSnapshot,
+          null,
+          0,
+          0
+        )
+      },
+      weaponState: playerSnapshot.weaponState
     };
   }
 
@@ -394,6 +488,7 @@ export class MetaverseRemoteCharacterPresentationOwner {
     nextPlayer,
     remoteCharacterRootAlpha,
     remoteCharacterRootBasePlayer,
+    remoteCharacterRootExtrapolationSeconds,
     remoteCharacterRootNextPlayer,
     sampleEpoch
   }: RemoteCharacterPresentationAuthoritativeSample): void {
@@ -416,36 +511,30 @@ export class MetaverseRemoteCharacterPresentationOwner {
     );
     this.#snapshot.mountedOccupancy =
       sampledDiscretePlayerSnapshot.mountedOccupancy;
+    this.#snapshot.weaponState = sampledDiscretePlayerSnapshot.weaponState;
     this.#snapshot.presentation.animationVocabulary =
       resolveRemoteCharacterAnimationVocabulary(
         this.#animationRuntime,
         sampledDiscretePlayerSnapshot,
-        sampleRemotePlayerObservedTraversalInputMagnitude(
-          basePlayer,
-          nextPlayer,
-          alpha
-        ),
         deltaSeconds
       );
+    this.#snapshot.presentation.animationCycleId =
+      this.#animationRuntime.animationCycleId;
     sampleRemotePlayerRootPositionInto(
       this.#snapshot.presentation.position,
+      this.#config,
       remoteCharacterRootBasePlayer,
       remoteCharacterRootNextPlayer,
-      remoteCharacterRootAlpha
+      remoteCharacterRootAlpha,
+      remoteCharacterRootExtrapolationSeconds
     );
     this.#snapshot.presentation.yawRadians =
-      sampledDiscretePlayerSnapshot.mountedOccupancy === null
-        ? sampleRemotePlayerObservedTraversalFacingYawRadians(
-            basePlayer,
-            nextPlayer,
-            alpha
-          )
-        : sampleRemotePlayerYawRadians(
-            basePlayer,
-            nextPlayer,
-            alpha,
-            extrapolationSeconds
-          );
+      sampleRemotePlayerPresentationYawRadians(
+        basePlayer,
+        nextPlayer,
+        alpha,
+        extrapolationSeconds
+      );
     this.#snapshot.aimCamera = resolveRemoteCharacterAimCameraSnapshot(
       this.#snapshot.presentation.position,
       this.#snapshot.look,

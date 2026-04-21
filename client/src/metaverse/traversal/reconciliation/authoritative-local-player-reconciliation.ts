@@ -1,39 +1,38 @@
 import type {
-  MetaverseRealtimePlayerSnapshot,
   MetaverseRealtimeWorldSnapshot
 } from "@webgpu-metaverse/shared/metaverse/realtime";
+import type { MetaverseRealtimePlayerSnapshot } from "@webgpu-metaverse/shared/metaverse/realtime";
 import { createRadians } from "@webgpu-metaverse/shared";
 import {
   readMetaverseRealtimePlayerActiveBodyKinematicSnapshot
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
-export type AckedAuthoritativeLocalPlayerPose = Pick<
+export type AuthoritativeLocalPlayerReconciliationSnapshot = Pick<
   MetaverseRealtimePlayerSnapshot,
   | "groundedBody"
-  | "lastProcessedInputSequence"
-  | "lastProcessedTraversalOrientationSequence"
-  | "linearVelocity"
+  | "look"
   | "locomotionMode"
   | "mountedOccupancy"
-  | "position"
   | "swimBody"
   | "traversalAuthority"
-  | "yawRadians"
 >;
 
-type AckedAuthoritativeLocalPlayerSnapshot = Pick<
-  MetaverseRealtimePlayerSnapshot,
-  | "groundedBody"
-  | "lastProcessedInputSequence"
-  | "lastProcessedTraversalOrientationSequence"
-  | "linearVelocity"
-  | "locomotionMode"
-  | "mountedOccupancy"
-  | "position"
-  | "swimBody"
-  | "traversalAuthority"
-  | "yawRadians"
->;
+type AckedAuthoritativeLocalPlayerSnapshot =
+  AuthoritativeLocalPlayerReconciliationSnapshot & {
+    readonly lastProcessedInputSequence: number;
+    readonly lastProcessedTraversalSampleId: number;
+    readonly lastProcessedTraversalOrientationSequence: number;
+  };
+
+export type AckedAuthoritativeLocalPlayerPose =
+  AckedAuthoritativeLocalPlayerSnapshot & {
+    readonly linearVelocity:
+      MetaverseRealtimePlayerSnapshot["groundedBody"]["linearVelocity"];
+    readonly position:
+      MetaverseRealtimePlayerSnapshot["groundedBody"]["position"];
+    readonly yawRadians:
+      MetaverseRealtimePlayerSnapshot["groundedBody"]["yawRadians"];
+  };
 
 export interface FreshAckedAuthoritativeLocalPlayerSnapshot {
   readonly latestWorldSnapshot: Pick<
@@ -41,8 +40,10 @@ export interface FreshAckedAuthoritativeLocalPlayerSnapshot {
     "snapshotSequence" | "tick"
   >;
   readonly playerSnapshot: Pick<
-    MetaverseRealtimePlayerSnapshot,
-    "lastProcessedInputSequence" | "lastProcessedTraversalOrientationSequence"
+    AckedAuthoritativeLocalPlayerSnapshot,
+    | "lastProcessedInputSequence"
+    | "lastProcessedTraversalSampleId"
+    | "lastProcessedTraversalOrientationSequence"
   >;
 }
 
@@ -50,6 +51,7 @@ export interface ConsumedAckedAuthoritativeLocalPlayerSample {
   readonly authoritativeSnapshotAgeMs: number;
   readonly authoritativeTick: number;
   readonly lastProcessedInputSequence: number;
+  readonly lastProcessedTraversalSampleId: number;
   readonly lastProcessedTraversalOrientationSequence: number;
   readonly pose: AckedAuthoritativeLocalPlayerPose;
   readonly receivedAtWallClockMs: number;
@@ -65,6 +67,7 @@ export function createAckedAuthoritativeLocalPlayerDeliveryKey(
     latestWorldSnapshot.snapshotSequence,
     latestWorldSnapshot.tick.currentTick,
     playerSnapshot.lastProcessedInputSequence,
+    playerSnapshot.lastProcessedTraversalSampleId,
     playerSnapshot.lastProcessedTraversalOrientationSequence
   ].join("|");
 }
@@ -78,9 +81,12 @@ export function readAckedAuthoritativeLocalPlayerPose(
   return {
     groundedBody: playerSnapshot.groundedBody,
     lastProcessedInputSequence: playerSnapshot.lastProcessedInputSequence,
+    lastProcessedTraversalSampleId:
+      playerSnapshot.lastProcessedTraversalSampleId,
     lastProcessedTraversalOrientationSequence:
       playerSnapshot.lastProcessedTraversalOrientationSequence,
     linearVelocity: activeBodySnapshot.linearVelocity,
+    look: playerSnapshot.look,
     locomotionMode: playerSnapshot.locomotionMode,
     mountedOccupancy: playerSnapshot.mountedOccupancy,
     position: activeBodySnapshot.position,

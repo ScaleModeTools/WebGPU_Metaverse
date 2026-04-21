@@ -36,8 +36,24 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
   dependencies.traversalRuntime.lastLocalAuthorityPoseCorrectionDetail =
     Object.freeze({
       authoritativeGrounded: true,
+      authoritativeSnapshotAgeMs: 36,
+      authoritativeSnapshotSequence: 8,
+      authoritativeTick: 16,
       bodyStateDivergence: true,
+      convergenceEpisodeStarted: true,
+      convergenceEpisodeStartIntentionalDiscontinuityCause:
+        "mounted-unboarding",
+      convergenceEpisodeStartHistoricalLocalSampleMatched: false,
+      convergenceEpisodeStartHistoricalLocalSampleSelectionReason:
+        "earliest-after-authoritative-time",
+      convergenceEpisodeStartHistoricalLocalSampleTimeDeltaMs: 6,
+      convergenceEpisodeStartPlanarMagnitudeMeters: 1.2,
+      convergenceEpisodeStartReason: "gross-body-divergence",
+      convergenceEpisodeStartVerticalMagnitudeMeters: 0.3,
+      convergenceEpisodeStartYawMagnitudeRadians: 0.2,
       groundedBodyStateDivergence: true,
+      lastProcessedInputSequence: 24,
+      lastProcessedTraversalOrientationSequence: 31,
       localGrounded: false,
       planarMagnitudeMeters: 1.2,
       planarVelocityMagnitudeUnitsPerSecond: 2.8,
@@ -49,6 +65,7 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
       authoritative: Object.freeze({
         groundedBody: null,
         lastProcessedInputSequence: 24,
+        lastProcessedTraversalOrientationSequence: 31,
         linearVelocity: Object.freeze({
           x: 2.4,
           y: 0,
@@ -132,10 +149,6 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
           blockingAffordanceDetected: false,
           decisionReason: "capability-maintained",
           groundedBody: null,
-          jumpDebug: Object.freeze({
-            surfaceJumpSupported: false,
-            supported: true
-          }),
           locomotionMode: "grounded",
           resolvedSupportHeightMeters: 0.6,
           supportingAffordanceSampleCount: 2,
@@ -154,7 +167,7 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
   dependencies.traversalRuntime.lastLocalAuthorityPoseCorrectionReason =
     "gross-body-divergence";
   dependencies.traversalRuntime.lastLocalReconciliationCorrectionSource =
-    "local-authority-convergence";
+    "local-authority-convergence-episode";
   dependencies.traversalRuntime.localAuthorityPoseCorrectionCount = 1;
   dependencies.traversalRuntime.localReconciliationCorrectionCount = 1;
   renderedCamera.position.x = 0.4;
@@ -192,12 +205,18 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
   );
   assert.equal(
     telemetrySnapshot.worldSnapshot.localReconciliation.lastCorrectionSource,
-    "local-authority-convergence"
+    "local-authority-convergence-episode"
   );
   assert.equal(
     telemetrySnapshot.worldSnapshot.localReconciliation
       .lastLocalAuthorityPoseCorrectionReason,
     "gross-body-divergence"
+  );
+  assert.equal(
+    telemetrySnapshot.worldSnapshot.localReconciliation
+      .lastLocalAuthorityPoseCorrectionDetail
+      .convergenceEpisodeStartIntentionalDiscontinuityCause,
+    "mounted-unboarding"
   );
   assert.deepEqual(
     telemetrySnapshot.worldSnapshot.localReconciliation
@@ -206,6 +225,7 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
       authoritative: {
         groundedBody: null,
         lastProcessedInputSequence: 24,
+        lastProcessedTraversalOrientationSequence: 31,
         linearVelocity: {
           x: 2.4,
           y: 0,
@@ -297,10 +317,6 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
           blockingAffordanceDetected: false,
           decisionReason: "capability-maintained",
           groundedBody: null,
-          jumpDebug: {
-            surfaceJumpSupported: false,
-            supported: true
-          },
           locomotionMode: "grounded",
           resolvedSupportHeightMeters: 0.6,
           swimBody: null,
@@ -339,6 +355,7 @@ test("MetaverseRuntimeHudTelemetryState carries authoritative local-player groun
     () =>
       Object.freeze({
         groundedBody: Object.freeze({
+          angularVelocityRadiansPerSecond: 0,
           contact: Object.freeze({
             appliedMovementDelta: Object.freeze({ x: 0, y: 0, z: 0 }),
             blockedPlanarMovement: false,
@@ -355,6 +372,11 @@ test("MetaverseRuntimeHudTelemetryState carries authoritative local-player groun
             targetPlanarSpeedUnitsPerSecond: 0,
             targetStrafeSpeedUnitsPerSecond: 0
           }),
+          linearVelocity: Object.freeze({
+            x: 0,
+            y: 4.2,
+            z: 0
+          }),
           interaction: Object.freeze({
             applyImpulsesToDynamicBodies: false
           }),
@@ -364,15 +386,19 @@ test("MetaverseRuntimeHudTelemetryState carries authoritative local-player groun
             jumpReady: false,
             jumpSnapSuppressionActive: true,
             verticalSpeedUnitsPerSecond: 4.2
-          })
+          }),
+          position: Object.freeze({
+            x: 0,
+            y: 0.6,
+            z: 0
+          }),
+          yawRadians: 0
         }),
         jumpDebug: Object.freeze({
           pendingActionSequence: 9,
           pendingActionBufferAgeMs: 48,
           resolvedActionSequence: 8,
-          resolvedActionState: "accepted",
-          surfaceJumpSupported: false,
-          supported: false
+          resolvedActionState: "accepted"
         }),
         lastProcessedInputSequence: 8,
         locomotionMode: "grounded",
@@ -479,9 +505,7 @@ test("MetaverseRuntimeHudTelemetryState resolves authoritative swim telemetry fr
           pendingActionSequence: 55,
           pendingActionBufferAgeMs: 20,
           resolvedActionSequence: 55,
-          resolvedActionState: "accepted",
-          surfaceJumpSupported: true,
-          supported: true
+          resolvedActionState: "accepted"
         }),
         lastProcessedInputSequence: 12,
         linearVelocity: Object.freeze({

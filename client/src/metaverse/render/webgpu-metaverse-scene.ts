@@ -87,7 +87,8 @@ export function createMetaverseScene(
     deltaSeconds: number,
     characterPresentation?: MetaverseCharacterPresentationSnapshot | null,
     remoteCharacterPresentations?: readonly MetaverseRemoteCharacterPresentationSnapshot[],
-    mountedEnvironment?: MountedEnvironmentSnapshot | null
+    mountedEnvironment?: MountedEnvironmentSnapshot | null,
+    cameraFieldOfViewDegrees?: number | null
   ): MetaverseSceneInteractionSnapshot;
   readDynamicEnvironmentPose(
     environmentAssetId: string
@@ -254,7 +255,8 @@ export function createMetaverseScene(
       deltaSeconds,
       characterPresentation = null,
       remoteCharacterPresentations = [],
-      mountedEnvironment = null
+      mountedEnvironment = null,
+      cameraFieldOfViewDegrees = null
     ) {
       return presentationState.syncPresentation(
         cameraSnapshot,
@@ -263,7 +265,8 @@ export function createMetaverseScene(
         deltaSeconds,
         characterPresentation,
         remoteCharacterPresentations,
-        mountedEnvironment
+        mountedEnvironment,
+        cameraFieldOfViewDegrees
       );
     },
     readDynamicEnvironmentPose(environmentAssetId) {

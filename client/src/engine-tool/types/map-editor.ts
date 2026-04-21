@@ -40,3 +40,12 @@ export interface MapEditorPlacementUpdate {
   readonly rotationYRadians?: number;
   readonly scale?: MetaverseWorldSurfaceVector3Snapshot;
 }
+
+export interface MapEditorPlayerSpawnTransformUpdate {
+  readonly position: {
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+  };
+  readonly yawRadians: number;
+}

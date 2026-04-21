@@ -1,3 +1,4 @@
+export * from "./metaverse-player-team.js";
 export * from "./traversal/index.js";
 export * from "./world/index.js";
 export * from "./presence/index.js";

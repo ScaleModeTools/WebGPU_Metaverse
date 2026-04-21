@@ -12,7 +12,14 @@ import type {
 
 type TimeoutHandle = ReturnType<typeof globalThis.setTimeout>;
 type SnapshotAcceptanceSource = "command" | "polling" | "snapshot-stream";
-type LocalPlayerWorldSnapshot = MetaverseRealtimeWorldSnapshot["players"][number];
+type LocalPlayerWorldSnapshot = {
+  readonly lastProcessedInputSequence: number;
+  readonly lastProcessedLookSequence: number;
+  readonly lastProcessedTraversalOrientationSequence: number;
+  readonly lastProcessedWeaponSequence: number;
+  readonly traversalAuthority:
+    MetaverseRealtimeWorldSnapshot["players"][number]["traversalAuthority"];
+};
 
 interface MetaverseWorldSnapshotStateDependencies {
   readonly clearTimeout: typeof globalThis.clearTimeout;
@@ -249,11 +256,31 @@ export class MetaverseWorldSnapshotState {
       return null;
     }
 
-    return (
+    const observerPlayerSnapshot = latestWorldSnapshot.observerPlayer;
+    const localPlayerSnapshot =
       latestWorldSnapshot.players.find(
         (playerSnapshot) => playerSnapshot.playerId === playerId
-      ) ?? null
-    );
+      ) ?? null;
+
+    if (
+      observerPlayerSnapshot === null ||
+      observerPlayerSnapshot.playerId !== playerId ||
+      localPlayerSnapshot === null
+    ) {
+      return null;
+    }
+
+    return Object.freeze({
+      lastProcessedInputSequence:
+        observerPlayerSnapshot.lastProcessedInputSequence,
+      lastProcessedLookSequence:
+        observerPlayerSnapshot.lastProcessedLookSequence,
+      lastProcessedTraversalOrientationSequence:
+        observerPlayerSnapshot.lastProcessedTraversalOrientationSequence,
+      lastProcessedWeaponSequence:
+        observerPlayerSnapshot.lastProcessedWeaponSequence,
+      traversalAuthority: localPlayerSnapshot.traversalAuthority
+    });
   }
 
   resolvePollDelayMs(defaultPollIntervalMs: number): number {

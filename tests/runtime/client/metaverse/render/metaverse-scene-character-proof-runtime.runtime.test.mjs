@@ -188,20 +188,24 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
     new BoxGeometry(0.28, 0.08, 0.08),
     new MeshStandardMaterial({ color: 0x4b5563 })
   );
-  const triggerHandSocket = new Group();
+  const gripHandSocket = new Group();
+  const triggerMarker = new Group();
 
   attachmentMesh.position.x = 0.14;
   attachmentScene.name = "metaverse_service_pistol_root";
-  triggerHandSocket.name = "metaverse_service_pistol_trigger_hand_r_socket";
-  triggerHandSocket.position.set(0.04, -0.045, 0.025);
-  attachmentScene.add(attachmentMesh, triggerHandSocket);
+  gripHandSocket.name = "metaverse_service_pistol_grip_hand_r_socket";
+  gripHandSocket.position.set(0.04, -0.045, 0.025);
+  triggerMarker.name = "metaverse_service_pistol_trigger_marker";
+  triggerMarker.position.set(0.076, -0.022, 0.025);
+  attachmentScene.add(attachmentMesh, gripHandSocket, triggerMarker);
 
   const sceneRuntime = createMetaverseScene(metaverseRuntimeConfig, {
     attachmentProofConfig: {
       attachmentId: "metaverse-service-pistol-v1",
       heldMount: {
-        attachmentSocketNodeName: "metaverse_service_pistol_trigger_hand_r_socket",
-        socketName: "grip_r_socket"
+        attachmentSocketNodeName: "metaverse_service_pistol_grip_hand_r_socket",
+        socketName: "hand_r_socket",
+        triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker"
       },
       label: "Metaverse service pistol",
       modelPath: "/models/metaverse/attachments/metaverse-service-pistol.gltf",
@@ -271,6 +275,9 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
   const attachmentRoot = sceneRuntime.scene.getObjectByName(
     "metaverse_attachment/metaverse-service-pistol-v1"
   );
+  const heldGripSocketNode = sceneRuntime.scene.getObjectByName(
+    "metaverse_service_pistol_grip_hand_r_socket"
+  );
   const resolveExpectedPalmBasis = (
     sourceSocketLocalPosition,
     thumbBaseLocalPosition,
@@ -331,11 +338,12 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
   assert.ok(leftPalmSocket);
   assert.ok(palmSocket);
   assert.ok(attachmentRoot);
+  assert.ok(heldGripSocketNode);
   assert.equal(leftGripSocket.parent?.name, "hand_l");
   assert.equal(gripSocket.parent?.name, "hand_r");
   assert.equal(leftPalmSocket.parent?.name, "hand_l");
   assert.equal(palmSocket.parent?.name, "hand_r");
-  assert.equal(attachmentRoot.parent?.name, "grip_r_socket");
+  assert.equal(attachmentRoot.parent?.name, "hand_r_socket");
   assert.ok(
     leftGripSocket.position.distanceTo(leftExpectedPalmBasis.gripLocalPosition) <
       0.000001,
@@ -387,17 +395,17 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
     palmSocket.quaternion.angleTo(handSocket.quaternion) > 0.2,
     "Synthesized humanoid_v2 right palm socket should not inherit the authored hand socket twist"
   );
-  assertQuaternionArraysEquivalent(
-    attachmentRoot.quaternion.toArray(),
-    [0, 0, 0, 1],
-    0.000001,
-    "Humanoid_v2 held attachment should keep identity local rotation when socket and attachment axes match"
+  assert.ok(
+    heldGripSocketNode
+      .getWorldPosition(new Vector3())
+      .distanceTo(handSocket.getWorldPosition(new Vector3())) < 0.000001,
+    "Humanoid_v2 held attachment should land its authored grip socket on hand_r_socket."
   );
   assertQuaternionArraysEquivalent(
-    attachmentRoot.getWorldQuaternion(new Quaternion()).toArray(),
-    gripSocket.getWorldQuaternion(new Quaternion()).toArray(),
+    heldGripSocketNode.getWorldQuaternion(new Quaternion()).toArray(),
+    handSocket.getWorldQuaternion(new Quaternion()).toArray(),
     0.000001,
-    "Humanoid_v2 held attachment should inherit the synthesized grip socket world rotation"
+    "Humanoid_v2 held attachment should align its authored grip socket to hand_r_socket."
   );
 });
 

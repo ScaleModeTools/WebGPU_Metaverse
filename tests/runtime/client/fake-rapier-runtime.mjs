@@ -359,14 +359,14 @@ class FakeCharacterController {
         }
       );
 
+      const surfaceY = candidateTranslation.y + halfExtentY;
+
       if (
         Math.abs(localOffset.x) > halfExtentX + capsuleRadius ||
         Math.abs(localOffset.z) > halfExtentZ + capsuleRadius
       ) {
         continue;
       }
-
-      const surfaceY = candidateTranslation.y + halfExtentY;
 
       if (highestSurfaceY === null || surfaceY > highestSurfaceY) {
         highestSurfaceY = surfaceY;

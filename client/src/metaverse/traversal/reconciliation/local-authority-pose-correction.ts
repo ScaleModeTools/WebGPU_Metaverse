@@ -1,15 +1,19 @@
 import type { PhysicsVector3Snapshot } from "@/physics";
 import type {
-  MetaversePlayerTraversalIntentSnapshot,
   MetaverseRealtimePlayerSnapshot
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import type { MetaverseTelemetrySnapshot } from "../../types/telemetry";
+import type { MetaverseIssuedTraversalIntentSnapshot } from "../types/traversal";
 
 export type AuthoritativeCorrectionTelemetrySnapshot =
   MetaverseTelemetrySnapshot["worldSnapshot"]["surfaceRouting"]["authoritativeCorrection"];
 export type LocalAuthorityPoseCorrectionReason =
   MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionReason"];
+export type LocalAuthorityPoseIntentionalDiscontinuityCause =
+  MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionDetail"]["convergenceEpisodeStartIntentionalDiscontinuityCause"];
+export type LocalAuthorityPoseHistoricalLocalSampleSelectionReason =
+  MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionDetail"]["convergenceEpisodeStartHistoricalLocalSampleSelectionReason"];
 export type LocalAuthorityPoseCorrectionDetailSnapshot =
   MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"]["lastLocalAuthorityPoseCorrectionDetail"];
 export type LocalAuthorityPoseCorrectionSnapshot =
@@ -20,7 +24,7 @@ type CorrectionGroundedBodySnapshot =
 type CorrectionSwimBodySnapshot =
   MetaverseRealtimePlayerSnapshot["swimBody"];
 type CorrectionLinearVelocitySnapshot =
-  MetaverseRealtimePlayerSnapshot["linearVelocity"];
+  MetaverseRealtimePlayerSnapshot["groundedBody"]["linearVelocity"];
 
 const localAuthorityPlanarVelocityDivergenceToleranceUnitsPerSecond = 1.5;
 const localAuthorityVerticalVelocityDivergenceToleranceUnitsPerSecond = 1;
@@ -37,12 +41,13 @@ export interface LocalTraversalPoseSnapshot {
 export interface PredictedLocalReconciliationSample {
   readonly groundedBody: CorrectionGroundedBodySnapshot | null;
   readonly inputSequence: number;
-  readonly issuedTraversalIntent: MetaversePlayerTraversalIntentSnapshot | null;
+  readonly issuedTraversalIntent: MetaverseIssuedTraversalIntentSnapshot | null;
   readonly localGrounded: boolean | null;
   readonly localPredictionTick: number;
   readonly localWallClockMs: number;
   readonly pose: LocalTraversalPoseSnapshot;
   readonly swimBody: CorrectionSwimBodySnapshot | null;
+  readonly traversalSampleId: number;
   readonly traversalOrientationSequence: number;
 }
 
@@ -112,7 +117,12 @@ export function createDefaultLocalAuthorityPoseCorrectionDetailSnapshot(): Local
     authoritativeGrounded: null,
     bodyStateDivergence: null,
     convergenceEpisodeStarted: false,
+    convergenceEpisodeStartIntentionalDiscontinuityCause: "none",
+    convergenceEpisodeStartHistoricalLocalSampleMatched: null,
+    convergenceEpisodeStartHistoricalLocalSampleSelectionReason: null,
+    convergenceEpisodeStartHistoricalLocalSampleTimeDeltaMs: null,
     convergenceEpisodeStartPlanarMagnitudeMeters: null,
+    convergenceEpisodeStartReason: "none",
     convergenceEpisodeStartVerticalMagnitudeMeters: null,
     convergenceEpisodeStartYawMagnitudeRadians: null,
     groundedBodyStateDivergence: null,
@@ -158,7 +168,12 @@ export function createLocalAuthorityPoseCorrectionDetailSnapshot({
   authoritativeTick,
   bodyStateDivergence,
   convergenceEpisodeStarted,
+  convergenceEpisodeStartIntentionalDiscontinuityCause,
+  convergenceEpisodeStartHistoricalLocalSampleMatched,
+  convergenceEpisodeStartHistoricalLocalSampleSelectionReason,
+  convergenceEpisodeStartHistoricalLocalSampleTimeDeltaMs,
   convergenceEpisodeStartPlanarMagnitudeMeters,
+  convergenceEpisodeStartReason,
   convergenceEpisodeStartVerticalMagnitudeMeters,
   convergenceEpisodeStartYawMagnitudeRadians,
   groundedBodyStateDivergence,
@@ -175,7 +190,14 @@ export function createLocalAuthorityPoseCorrectionDetailSnapshot({
   readonly authoritativeTick: number | null;
   readonly bodyStateDivergence: boolean;
   readonly convergenceEpisodeStarted: boolean;
+  readonly convergenceEpisodeStartIntentionalDiscontinuityCause: LocalAuthorityPoseIntentionalDiscontinuityCause;
+  readonly convergenceEpisodeStartHistoricalLocalSampleMatched: boolean | null;
+  readonly convergenceEpisodeStartHistoricalLocalSampleSelectionReason: LocalAuthorityPoseHistoricalLocalSampleSelectionReason;
+  readonly convergenceEpisodeStartHistoricalLocalSampleTimeDeltaMs:
+    | number
+    | null;
   readonly convergenceEpisodeStartPlanarMagnitudeMeters: number | null;
+  readonly convergenceEpisodeStartReason: LocalAuthorityPoseCorrectionReason;
   readonly convergenceEpisodeStartVerticalMagnitudeMeters: number | null;
   readonly convergenceEpisodeStartYawMagnitudeRadians: number | null;
   readonly groundedBodyStateDivergence: boolean;
@@ -191,7 +213,12 @@ export function createLocalAuthorityPoseCorrectionDetailSnapshot({
     authoritativeGrounded,
     bodyStateDivergence,
     convergenceEpisodeStarted,
+    convergenceEpisodeStartIntentionalDiscontinuityCause,
+    convergenceEpisodeStartHistoricalLocalSampleMatched,
+    convergenceEpisodeStartHistoricalLocalSampleSelectionReason,
+    convergenceEpisodeStartHistoricalLocalSampleTimeDeltaMs,
     convergenceEpisodeStartPlanarMagnitudeMeters,
+    convergenceEpisodeStartReason,
     convergenceEpisodeStartVerticalMagnitudeMeters,
     convergenceEpisodeStartYawMagnitudeRadians,
     groundedBodyStateDivergence,
@@ -250,8 +277,6 @@ function resolveGroundedBodyStateDivergence(
   return (
     authoritativeGroundedBody.contact.supportingContactDetected !==
       localGroundedBody.contact.supportingContactDetected ||
-    authoritativeGroundedBody.contact.blockedPlanarMovement !==
-      localGroundedBody.contact.blockedPlanarMovement ||
     authoritativeGroundedBody.contact.blockedVerticalMovement !==
       localGroundedBody.contact.blockedVerticalMovement ||
     authoritativeGroundedBody.interaction.applyImpulsesToDynamicBodies !==
@@ -292,8 +317,6 @@ function resolveSwimBodyStateDivergence(
   }
 
   return (
-    authoritativeSwimBody.contact.blockedPlanarMovement !==
-      localSwimBody.contact.blockedPlanarMovement ||
     Math.abs(
       authoritativeSwimBody.driveTarget.moveAxis -
         localSwimBody.driveTarget.moveAxis

@@ -6,7 +6,8 @@ import {
   createMountedAnchorKey,
   createMountedEnvironmentSnapshot,
   createTraversalFixtureContext,
-  freezeVector3
+  freezeVector3,
+  syncAuthoritativeLocalPlayerPose
 } from "./fixtures/traversal-test-fixtures.mjs";
 
 let fixtureContext;
@@ -523,7 +524,7 @@ test("MetaverseTraversalRuntime keeps standing deck entry occupancy grounded and
   }
 });
 
-test("MetaverseTraversalRuntime carries grounded free-roam deck occupancy through body sync without injecting an idle step", async () => {
+test("MetaverseTraversalRuntime leaves grounded free-roam deck occupancy on the live body until authoritative player correction arrives", async () => {
   const vehicleAssetId = "metaverse-test-shuttle-v1";
   const deckEntryAnchor = freezeVector3(0.42, 1.38, 24.58);
   const { groundedBodyRuntime, traversalRuntime } =
@@ -604,7 +605,16 @@ test("MetaverseTraversalRuntime carries grounded free-roam deck occupancy throug
     });
 
     assert.equal(groundedBodyRuntime.snapshot.grounded, true);
-    assert.ok(groundedBodyRuntime.snapshot.position.x > boardedSnapshot.position.x);
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.x - boardedSnapshot.position.x
+      ) < 0.000001
+    );
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.z - boardedSnapshot.position.z
+      ) < 0.000001
+    );
     assert.ok(
       Math.abs(
         groundedBodyRuntime.snapshot.linearVelocity.x -
@@ -616,6 +626,32 @@ test("MetaverseTraversalRuntime carries grounded free-roam deck occupancy throug
         groundedBodyRuntime.snapshot.linearVelocity.z -
           seededLinearVelocity.z
       ) < 0.000001
+    );
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, {
+      linearVelocity: seededLinearVelocity,
+      locomotionMode: "grounded",
+      mountedOccupancy: Object.freeze({
+        environmentAssetId: vehicleAssetId,
+        entryId: "deck-entry",
+        occupancyKind: "entry",
+        occupantRole: "passenger",
+        seatId: null
+      }),
+      position: freezeVector3(
+        boardedSnapshot.position.x + 1.6,
+        boardedSnapshot.position.y,
+        boardedSnapshot.position.z
+      ),
+      yawRadians: boardedSnapshot.yawRadians
+    });
+
+    assert.equal(groundedBodyRuntime.snapshot.grounded, true);
+    assert.ok(
+      groundedBodyRuntime.snapshot.position.x > boardedSnapshot.position.x + 0.19
+    );
+    assert.ok(
+      groundedBodyRuntime.snapshot.position.x < boardedSnapshot.position.x + 0.21
     );
   } finally {
     groundedBodyRuntime.dispose();
@@ -720,6 +756,252 @@ test("MetaverseTraversalRuntime does not force airborne free-roam deck occupancy
     assert.ok(
       Math.abs(
         groundedBodyRuntime.snapshot.position.z - airbornePosition.z
+      ) < 0.000001
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime leaves grounded free-roam deck occupancy on the live body when unboarding", async () => {
+  const vehicleAssetId = "metaverse-test-shuttle-v1";
+  const deckEntryAnchor = freezeVector3(0.42, 1.38, 24.58);
+  const { groundedBodyRuntime, traversalRuntime } =
+    await fixtureContext.createTraversalHarness({
+      dynamicEnvironmentPoses: {
+        [vehicleAssetId]: Object.freeze({
+          position: freezeVector3(0, 0.12, 24),
+          yawRadians: 0
+        })
+      },
+      mountedEnvironmentAnchorSnapshots: {
+        [createMountedAnchorKey(vehicleAssetId, null, "deck-entry")]:
+          Object.freeze({
+            position: deckEntryAnchor,
+            yawRadians: 0
+          })
+      },
+      mountableEnvironmentConfigs: {
+        [vehicleAssetId]: {
+          entries: [
+            Object.freeze({
+              cameraPolicyId: "seat-follow",
+              controlRoutingPolicyId: "look-only",
+              dismountOffset: freezeVector3(0, 0, 1),
+              entryId: "deck-entry",
+              entryNodeName: "deck_entry",
+              label: "Board deck",
+              lookLimitPolicyId: "passenger-bench",
+              occupancyAnimationId: "standing",
+              occupantRole: "passenger"
+            })
+          ],
+          label: "Metaverse test shuttle",
+          seats: [
+            Object.freeze({
+              cameraPolicyId: "vehicle-follow",
+              controlRoutingPolicyId: "vehicle-surface-drive",
+              directEntryEnabled: true,
+              dismountOffset: freezeVector3(0, 0, 1),
+              label: "Take helm",
+              lookLimitPolicyId: "driver-forward",
+              occupancyAnimationId: "seated",
+              seatId: "driver-seat",
+              seatNodeName: "driver_seat",
+              seatRole: "driver"
+            })
+          ]
+        }
+      },
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(2.3, 0.06, 1.8),
+          rotation: { x: 0, y: 0, z: 0, w: 1 },
+          translation: freezeVector3(0, 0.94, 24),
+          traversalAffordance: "support"
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    traversalRuntime.boardEnvironment(vehicleAssetId, "deck-entry");
+
+    const boardedSnapshot = groundedBodyRuntime.snapshot;
+    const preservedPosition = freezeVector3(
+      boardedSnapshot.position.x + 0.28,
+      boardedSnapshot.position.y,
+      boardedSnapshot.position.z - 0.19
+    );
+    const preservedLinearVelocity = freezeVector3(0.75, 0, 0.2);
+    const preservedYawRadians = 0.31;
+
+    groundedBodyRuntime.syncAuthoritativeState({
+      grounded: true,
+      interaction: boardedSnapshot.interaction,
+      linearVelocity: preservedLinearVelocity,
+      position: preservedPosition,
+      yawRadians: preservedYawRadians
+    });
+
+    traversalRuntime.leaveMountedEnvironment();
+
+    assert.equal(traversalRuntime.mountedEnvironmentSnapshot, null);
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+    assert.equal(groundedBodyRuntime.snapshot.grounded, true);
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.x - preservedPosition.x
+      ) < 0.000001
+    );
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.y - preservedPosition.y
+      ) < 0.000001
+    );
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.z - preservedPosition.z
+      ) < 0.000001
+    );
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.linearVelocity.x -
+          preservedLinearVelocity.x
+      ) < 0.000001
+    );
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.linearVelocity.z -
+          preservedLinearVelocity.z
+      ) < 0.000001
+    );
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.yawRadians - preservedYawRadians
+      ) < 0.000001
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime does not reseat airborne free-roam deck occupancy when unboarding", async () => {
+  const vehicleAssetId = "metaverse-test-shuttle-v1";
+  const deckEntryAnchor = freezeVector3(0.42, 1.38, 24.58);
+  const { groundedBodyRuntime, traversalRuntime } =
+    await fixtureContext.createTraversalHarness({
+      dynamicEnvironmentPoses: {
+        [vehicleAssetId]: Object.freeze({
+          position: freezeVector3(0, 0.12, 24),
+          yawRadians: 0
+        })
+      },
+      mountedEnvironmentAnchorSnapshots: {
+        [createMountedAnchorKey(vehicleAssetId, null, "deck-entry")]:
+          Object.freeze({
+            position: deckEntryAnchor,
+            yawRadians: 0
+          })
+      },
+      mountableEnvironmentConfigs: {
+        [vehicleAssetId]: {
+          entries: [
+            Object.freeze({
+              cameraPolicyId: "seat-follow",
+              controlRoutingPolicyId: "look-only",
+              dismountOffset: freezeVector3(0, 0, 1),
+              entryId: "deck-entry",
+              entryNodeName: "deck_entry",
+              label: "Board deck",
+              lookLimitPolicyId: "passenger-bench",
+              occupancyAnimationId: "standing",
+              occupantRole: "passenger"
+            })
+          ],
+          label: "Metaverse test shuttle",
+          seats: [
+            Object.freeze({
+              cameraPolicyId: "vehicle-follow",
+              controlRoutingPolicyId: "vehicle-surface-drive",
+              directEntryEnabled: true,
+              dismountOffset: freezeVector3(0, 0, 1),
+              label: "Take helm",
+              lookLimitPolicyId: "driver-forward",
+              occupancyAnimationId: "seated",
+              seatId: "driver-seat",
+              seatNodeName: "driver_seat",
+              seatRole: "driver"
+            })
+          ]
+        }
+      },
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(2.3, 0.06, 1.8),
+          rotation: { x: 0, y: 0, z: 0, w: 1 },
+          translation: freezeVector3(0, 0.94, 24),
+          traversalAffordance: "support"
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+    traversalRuntime.boardEnvironment(vehicleAssetId, "deck-entry");
+
+    const boardedSnapshot = groundedBodyRuntime.snapshot;
+    const airbornePosition = freezeVector3(
+      boardedSnapshot.position.x + 0.12,
+      boardedSnapshot.position.y + 0.7,
+      boardedSnapshot.position.z - 0.09
+    );
+    const airborneLinearVelocity = freezeVector3(0.3, 1.15, 0);
+
+    groundedBodyRuntime.syncAuthoritativeState({
+      grounded: false,
+      interaction: boardedSnapshot.interaction,
+      linearVelocity: airborneLinearVelocity,
+      position: airbornePosition,
+      yawRadians: boardedSnapshot.yawRadians
+    });
+
+    traversalRuntime.leaveMountedEnvironment();
+
+    assert.equal(traversalRuntime.mountedEnvironmentSnapshot, null);
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.x - airbornePosition.x
+      ) < 0.000001
+    );
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.y - airbornePosition.y
+      ) < 0.000001
+    );
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.z - airbornePosition.z
+      ) < 0.000001
+    );
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.linearVelocity.x -
+          airborneLinearVelocity.x
+      ) < 0.000001
+    );
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.linearVelocity.y -
+          airborneLinearVelocity.y
+      ) < 0.000001
+    );
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.linearVelocity.z -
+          airborneLinearVelocity.z
       ) < 0.000001
     );
   } finally {

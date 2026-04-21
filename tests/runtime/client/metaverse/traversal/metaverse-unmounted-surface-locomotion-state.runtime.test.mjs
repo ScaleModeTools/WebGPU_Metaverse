@@ -247,3 +247,88 @@ test("MetaverseUnmountedSurfaceLocomotionState preserves planar carry velocity w
     groundedBodyRuntime.dispose();
   }
 });
+
+test("MetaverseUnmountedSurfaceLocomotionState routes grounded-body automatic surface sync into swim without discarding planar carry velocity", async () => {
+  const [
+    { MetaverseUnmountedSurfaceLocomotionState },
+    { metaverseRuntimeConfig },
+    { MetaverseGroundedBodyRuntime, RapierPhysicsRuntime }
+  ] = await Promise.all([
+    clientLoader.load(
+      "/src/metaverse/traversal/surface/metaverse-unmounted-surface-locomotion-state.ts"
+    ),
+    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
+    clientLoader.load("/src/physics/index.ts")
+  ]);
+  const physicsRuntime = createFakePhysicsRuntime(RapierPhysicsRuntime);
+
+  await physicsRuntime.init();
+
+  const groundedBodyRuntime = new MetaverseGroundedBodyRuntime(
+    {
+      ...metaverseRuntimeConfig.groundedBody,
+      worldRadius: metaverseRuntimeConfig.movement.worldRadius
+    },
+    physicsRuntime
+  );
+
+  await groundedBodyRuntime.init(0);
+
+  try {
+    const surfaceLocomotionState = new MetaverseUnmountedSurfaceLocomotionState({
+      config: metaverseRuntimeConfig,
+      dependencies: {
+        resolveGroundedTraversalFilterPredicate() {
+          return () => true;
+        },
+        resolveWaterborneTraversalFilterPredicate() {
+          return () => true;
+        },
+        surfaceColliderSnapshots: Object.freeze([])
+      },
+      groundedBodyRuntime,
+      physicsRuntime,
+      readMountedVehicleColliderHandle: () => null
+    });
+    const waterbornePosition = freezeVector3(49.47, 0, 17.92);
+    const carriedLinearVelocity = freezeVector3(8.46, 0.35, -7.05);
+
+    groundedBodyRuntime.syncAuthoritativeState({
+      grounded: false,
+      linearVelocity: carriedLinearVelocity,
+      position: waterbornePosition,
+      yawRadians: 0.25
+    });
+
+    const automaticSurfaceSyncResult =
+      surfaceLocomotionState.syncAutomaticSurfaceLocomotionFromGroundedBody({
+        currentLocomotionMode: "grounded",
+        lookYawRadians: 0.1,
+        resolveGroundedPresentationPosition: () => waterbornePosition,
+        resolveSwimPresentationPosition: (swimSnapshot) => swimSnapshot.position,
+        traversalCameraPitchRadians: 0
+      });
+
+    assert.equal(automaticSurfaceSyncResult.locomotionMode, "swim");
+    assert.notEqual(automaticSurfaceSyncResult.cameraSnapshot, null);
+    assert.ok(
+      Math.abs(
+        (surfaceLocomotionState.readSwimSnapshot()?.linearVelocity.x ?? 0) -
+          8.46
+      ) < 0.000001
+    );
+    assert.equal(surfaceLocomotionState.readSwimSnapshot()?.linearVelocity.y, 0);
+    assert.ok(
+      Math.abs(
+        (surfaceLocomotionState.readSwimSnapshot()?.linearVelocity.z ?? 0) +
+          7.05
+      ) < 0.000001
+    );
+    assert.equal(
+      surfaceLocomotionState.readSwimSnapshot()?.position.y,
+      surfaceLocomotionState.resolveWaterSurfaceHeightMeters(waterbornePosition)
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});

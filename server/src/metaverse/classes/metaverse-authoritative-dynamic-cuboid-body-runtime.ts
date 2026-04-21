@@ -1,64 +1,23 @@
+import {
+  createMetaverseDynamicCuboidBodyConfigSnapshot,
+  createMetaverseDynamicCuboidBodyRuntimeSnapshot,
+  type MetaverseDynamicCuboidBodyConfigSnapshot,
+  type MetaverseDynamicCuboidBodyRuntimeSnapshot
+} from "@webgpu-metaverse/shared/metaverse/traversal";
+
 import { MetaverseAuthoritativeRapierPhysicsRuntime } from "./metaverse-authoritative-rapier-physics-runtime.js";
 import type {
   PhysicsQuaternionSnapshot,
-  PhysicsVector3Snapshot,
   RapierRigidBodyHandle
 } from "../types/metaverse-authoritative-rapier.js";
 
-export interface MetaverseAuthoritativeDynamicCuboidBodyConfig {
-  readonly additionalMass: number;
-  readonly angularDamping: number;
-  readonly colliderCenter: PhysicsVector3Snapshot;
-  readonly gravityScale: number;
-  readonly halfExtents: PhysicsVector3Snapshot;
-  readonly linearDamping: number;
-  readonly lockRotations: boolean;
-  readonly spawnPosition: PhysicsVector3Snapshot;
-  readonly spawnYawRadians: number;
-}
-
-export interface MetaverseAuthoritativeDynamicCuboidBodySnapshot {
-  readonly linearVelocity: PhysicsVector3Snapshot;
-  readonly position: PhysicsVector3Snapshot;
-  readonly yawRadians: number;
-}
-
-function toFiniteNumber(value: number, fallback = 0): number {
-  return Number.isFinite(value) ? value : fallback;
-}
-
-function wrapRadians(rawValue: number): number {
-  if (!Number.isFinite(rawValue)) {
-    return 0;
-  }
-
-  let nextValue = rawValue;
-
-  while (nextValue > Math.PI) {
-    nextValue -= Math.PI * 2;
-  }
-
-  while (nextValue <= -Math.PI) {
-    nextValue += Math.PI * 2;
-  }
-
-  return nextValue;
-}
-
-function freezeVector3(
-  x: number,
-  y: number,
-  z: number
-): PhysicsVector3Snapshot {
-  return Object.freeze({
-    x: toFiniteNumber(x),
-    y: toFiniteNumber(y),
-    z: toFiniteNumber(z)
-  });
-}
+export type MetaverseAuthoritativeDynamicCuboidBodyConfig =
+  MetaverseDynamicCuboidBodyConfigSnapshot;
+export type MetaverseAuthoritativeDynamicCuboidBodySnapshot =
+  MetaverseDynamicCuboidBodyRuntimeSnapshot;
 
 function createYawQuaternionSnapshot(yawRadians: number): PhysicsQuaternionSnapshot {
-  const halfYawRadians = wrapRadians(yawRadians) * 0.5;
+  const halfYawRadians = yawRadians * 0.5;
 
   return Object.freeze({
     x: 0,
@@ -71,41 +30,7 @@ function createYawQuaternionSnapshot(yawRadians: number): PhysicsQuaternionSnaps
 function sanitizeConfig(
   config: MetaverseAuthoritativeDynamicCuboidBodyConfig
 ): MetaverseAuthoritativeDynamicCuboidBodyConfig {
-  return Object.freeze({
-    additionalMass: Math.max(0, toFiniteNumber(config.additionalMass)),
-    angularDamping: Math.max(0, toFiniteNumber(config.angularDamping)),
-    colliderCenter: freezeVector3(
-      config.colliderCenter.x,
-      config.colliderCenter.y,
-      config.colliderCenter.z
-    ),
-    gravityScale: Math.max(0, toFiniteNumber(config.gravityScale, 1)),
-    halfExtents: freezeVector3(
-      Math.max(0.01, Math.abs(toFiniteNumber(config.halfExtents.x, 0.5))),
-      Math.max(0.01, Math.abs(toFiniteNumber(config.halfExtents.y, 0.5))),
-      Math.max(0.01, Math.abs(toFiniteNumber(config.halfExtents.z, 0.5)))
-    ),
-    linearDamping: Math.max(0, toFiniteNumber(config.linearDamping)),
-    lockRotations: config.lockRotations,
-    spawnPosition: freezeVector3(
-      config.spawnPosition.x,
-      config.spawnPosition.y,
-      config.spawnPosition.z
-    ),
-    spawnYawRadians: wrapRadians(config.spawnYawRadians)
-  });
-}
-
-function freezeSnapshot(
-  position: PhysicsVector3Snapshot,
-  yawRadians: number,
-  linearVelocity: PhysicsVector3Snapshot
-): MetaverseAuthoritativeDynamicCuboidBodySnapshot {
-  return Object.freeze({
-    linearVelocity,
-    position,
-    yawRadians: wrapRadians(yawRadians)
-  });
+  return createMetaverseDynamicCuboidBodyConfigSnapshot(config);
 }
 
 export class MetaverseAuthoritativeDynamicCuboidBodyRuntime {
@@ -134,10 +59,11 @@ export class MetaverseAuthoritativeDynamicCuboidBodyRuntime {
         rotation: createYawQuaternionSnapshot(this.#config.spawnYawRadians)
       }
     ).body;
-    this.#snapshot = freezeSnapshot(
-      this.#config.spawnPosition,
-      this.#config.spawnYawRadians,
-      freezeVector3(0, 0, 0)
+    this.#snapshot = createMetaverseDynamicCuboidBodyRuntimeSnapshot(
+      {
+        position: this.#config.spawnPosition,
+        yawRadians: this.#config.spawnYawRadians
+      }
     );
   }
 
@@ -150,11 +76,11 @@ export class MetaverseAuthoritativeDynamicCuboidBodyRuntime {
     const translation = rigidBody.translation();
     const linearVelocity = rigidBody.linvel();
 
-    this.#snapshot = freezeSnapshot(
-      freezeVector3(translation.x, translation.y, translation.z),
-      this.#config.spawnYawRadians,
-      freezeVector3(linearVelocity.x, linearVelocity.y, linearVelocity.z)
-    );
+    this.#snapshot = createMetaverseDynamicCuboidBodyRuntimeSnapshot({
+      linearVelocity,
+      position: translation,
+      yawRadians: this.#config.spawnYawRadians
+    });
 
     return this.#snapshot;
   }
@@ -165,10 +91,11 @@ export class MetaverseAuthoritativeDynamicCuboidBodyRuntime {
       this.#rigidBody = null;
     }
 
-    this.#snapshot = freezeSnapshot(
-      this.#config.spawnPosition,
-      this.#config.spawnYawRadians,
-      freezeVector3(0, 0, 0)
+    this.#snapshot = createMetaverseDynamicCuboidBodyRuntimeSnapshot(
+      {
+        position: this.#config.spawnPosition,
+        yawRadians: this.#config.spawnYawRadians
+      }
     );
   }
 

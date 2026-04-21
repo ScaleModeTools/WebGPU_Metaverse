@@ -11,7 +11,8 @@ import type {
   MetaverseSyncDriverVehicleControlCommand,
   MetaverseSyncMountedOccupancyCommand,
   MetaverseSyncPlayerLookIntentCommand,
-  MetaverseSyncPlayerTraversalIntentCommand
+  MetaverseSyncPlayerTraversalIntentCommand,
+  MetaverseSyncPlayerWeaponStateCommand
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
 interface MetaverseAuthoritativePlayerPoseCommandHandler {
@@ -30,6 +31,13 @@ interface MetaverseAuthoritativePlayerTraversalCommandHandler {
   ): void;
   acceptSyncPlayerTraversalIntentCommand(
     command: MetaverseSyncPlayerTraversalIntentCommand,
+    nowMs: number
+  ): void;
+}
+
+interface MetaverseAuthoritativePlayerWeaponStateCommandHandler {
+  acceptSyncPlayerWeaponStateCommand(
+    command: MetaverseSyncPlayerWeaponStateCommand,
     nowMs: number
   ): void;
 }
@@ -57,6 +65,8 @@ interface MetaverseAuthoritativeWorldCommandIntakeDependencies {
   readonly playerPoseAuthority: MetaverseAuthoritativePlayerPoseCommandHandler;
   readonly playerTraversalAuthority:
     MetaverseAuthoritativePlayerTraversalCommandHandler;
+  readonly playerWeaponStateAuthority:
+    MetaverseAuthoritativePlayerWeaponStateCommandHandler;
   readonly readPresenceRosterEvent:
     (nowMs: number) => MetaversePresenceRosterEvent;
   readonly readWorldEvent: (nowMs: number) => MetaverseRealtimeWorldEvent;
@@ -147,6 +157,10 @@ export class MetaverseAuthoritativeWorldCommandIntake {
           command,
           normalizedNowMs
         );
+        break;
+      case "sync-player-weapon-state":
+        this.#dependencies.playerWeaponStateAuthority
+          .acceptSyncPlayerWeaponStateCommand(command, normalizedNowMs);
         break;
       default: {
         const exhaustiveCommand: never = command;

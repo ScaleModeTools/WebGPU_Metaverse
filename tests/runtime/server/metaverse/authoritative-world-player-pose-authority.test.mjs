@@ -12,6 +12,7 @@ import {
   createAuthoritativeRuntime,
   createMetaverseSyncPlayerTraversalIntentCommand,
   joinSurfacePlayer,
+  readPlayerActiveBodySnapshot,
   requireValue
 } from "./authoritative-world-test-fixtures.mjs";
 
@@ -49,7 +50,10 @@ test("MetaverseAuthoritativeWorldRuntime keeps presence resyncs from overriding 
   const authoritativePlayerSnapshot = authoritativeWorldSnapshot.players[0];
 
   assert.notEqual(authoritativePlayerSnapshot, undefined);
-  assert.equal(authoritativePlayerSnapshot?.lastProcessedInputSequence, 2);
+  assert.equal(
+    authoritativeWorldSnapshot.observerPlayer?.lastProcessedInputSequence,
+    2
+  );
   assert.equal(authoritativePlayerSnapshot?.stateSequence, 2);
 
   runtime.acceptPresenceCommand(
@@ -57,7 +61,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps presence resyncs from overriding 
       playerId,
       pose: {
         animationVocabulary: "jump-down",
-        locomotionMode: "fly",
+        locomotionMode: "swim",
         look: {
           pitchRadians: 0.45,
           yawRadians: 1.1
@@ -77,10 +81,10 @@ test("MetaverseAuthoritativeWorldRuntime keeps presence resyncs from overriding 
   let worldSnapshot = runtime.readWorldSnapshot(200, playerId);
 
   assert.deepEqual(
-    worldSnapshot.players[0]?.position,
-    authoritativePlayerSnapshot?.position
+    readPlayerActiveBodySnapshot(worldSnapshot.players[0]).position,
+    readPlayerActiveBodySnapshot(authoritativePlayerSnapshot).position
   );
-  assert.equal(worldSnapshot.players[0]?.lastProcessedInputSequence, 2);
+  assert.equal(worldSnapshot.observerPlayer?.lastProcessedInputSequence, 2);
   assert.equal(worldSnapshot.players[0]?.locomotionMode, "grounded");
   assert.equal(worldSnapshot.players[0]?.stateSequence, 2);
 
@@ -88,7 +92,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps presence resyncs from overriding 
 
   assert.deepEqual(
     presenceSnapshot.players[0]?.pose.position,
-    authoritativePlayerSnapshot?.position
+    readPlayerActiveBodySnapshot(authoritativePlayerSnapshot).position
   );
   assert.equal(presenceSnapshot.players[0]?.pose.stateSequence, 2);
 
@@ -120,14 +124,14 @@ test("MetaverseAuthoritativeWorldRuntime keeps presence resyncs from overriding 
   presenceSnapshot = runtime.readPresenceRosterSnapshot(200, playerId);
 
   assert.deepEqual(
-    worldSnapshot.players[0]?.position,
-    authoritativePlayerSnapshot?.position
+    readPlayerActiveBodySnapshot(worldSnapshot.players[0]).position,
+    readPlayerActiveBodySnapshot(authoritativePlayerSnapshot).position
   );
-  assert.equal(worldSnapshot.players[0]?.lastProcessedInputSequence, 2);
+  assert.equal(worldSnapshot.observerPlayer?.lastProcessedInputSequence, 2);
   assert.equal(worldSnapshot.players[0]?.stateSequence, 2);
   assert.deepEqual(
     presenceSnapshot.players[0]?.pose.position,
-    authoritativePlayerSnapshot?.position
+    readPlayerActiveBodySnapshot(authoritativePlayerSnapshot).position
   );
   assert.equal(presenceSnapshot.players[0]?.pose.stateSequence, 2);
 });

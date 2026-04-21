@@ -138,17 +138,20 @@ function createAttachmentFixture({ BoxGeometry, Group, Mesh, MeshStandardMateria
     new BoxGeometry(0.28, 0.08, 0.08),
     new MeshStandardMaterial({ color: 0x4b5563 })
   );
-  const triggerHandSocket = new Group();
+  const gripHandSocket = new Group();
+  const triggerMarker = new Group();
   const backSocket = new Group();
 
   attachmentScene.name = "metaverse_service_pistol_root";
   attachmentMesh.position.x = 0.14;
-  triggerHandSocket.name = "metaverse_service_pistol_trigger_hand_r_socket";
-  triggerHandSocket.position.set(-0.01, 0.02, -0.03);
+  gripHandSocket.name = "metaverse_service_pistol_grip_hand_r_socket";
+  gripHandSocket.position.set(-0.01, 0.02, -0.03);
+  triggerMarker.name = "metaverse_service_pistol_trigger_marker";
+  triggerMarker.position.set(0.026, 0.012, 0.004);
   backSocket.name = "metaverse_service_pistol_back_socket";
   backSocket.position.set(0.12, -0.04, 0.03);
   backSocket.quaternion.set(0, 0.7071067811865475, -0.7071067811865476, 0);
-  attachmentScene.add(attachmentMesh, triggerHandSocket, backSocket);
+  attachmentScene.add(attachmentMesh, gripHandSocket, triggerMarker, backSocket);
 
   return attachmentScene;
 }
@@ -212,8 +215,9 @@ test("MetaverseSceneInteractivePresentationState boots manifest-driven character
     attachmentProofConfig: {
       attachmentId: "metaverse-service-pistol-v1",
       heldMount: {
-        attachmentSocketNodeName: "metaverse_service_pistol_trigger_hand_r_socket",
-        socketName: "grip_r_socket"
+        attachmentSocketNodeName: "metaverse_service_pistol_grip_hand_r_socket",
+        socketName: "hand_r_socket",
+        triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker"
       },
       label: "Metaverse service pistol",
       modelPath: "/models/metaverse/attachments/metaverse-service-pistol.gltf",
@@ -324,7 +328,7 @@ test("MetaverseSceneInteractivePresentationState boots manifest-driven character
     interactivePresentationState.characterProofRuntime?.characterId,
     "mesh2motion-humanoid-v1"
   );
-  assert.equal(attachmentRoot.parent?.name, "grip_r_socket");
+  assert.equal(attachmentRoot.parent?.name, "hand_r_socket");
 
   interactivePresentationState.syncAttachmentMount(
     mountedOccupancyStateModule
@@ -341,7 +345,7 @@ test("MetaverseSceneInteractivePresentationState boots manifest-driven character
 
   interactivePresentationState.syncAttachmentMount(null);
 
-  assert.equal(attachmentRoot.parent?.name, "grip_r_socket");
+  assert.equal(attachmentRoot.parent?.name, "hand_r_socket");
 });
 
 test("MetaverseSceneInteractivePresentationState rejects attachment proof slices without a character proof slice", async () => {
@@ -355,8 +359,9 @@ test("MetaverseSceneInteractivePresentationState rejects attachment proof slices
     attachmentProofConfig: {
       attachmentId: "metaverse-service-pistol-v1",
       heldMount: {
-        attachmentSocketNodeName: "metaverse_service_pistol_trigger_hand_r_socket",
-        socketName: "grip_r_socket"
+        attachmentSocketNodeName: "metaverse_service_pistol_grip_hand_r_socket",
+        socketName: "hand_r_socket",
+        triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker"
       },
       label: "Metaverse service pistol",
       modelPath: "/models/metaverse/attachments/metaverse-service-pistol.gltf",

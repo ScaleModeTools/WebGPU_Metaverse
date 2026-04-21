@@ -1,4 +1,7 @@
-import type { MetaversePresenceMountedOccupancySnapshot } from "@webgpu-metaverse/shared";
+import type {
+  MetaversePresenceMountedOccupancySnapshot,
+  MetaverseRealtimePlayerWeaponStateSnapshot
+} from "@webgpu-metaverse/shared";
 
 export const metaverseCharacterAnimationVocabularyIds = [
   "idle",
@@ -35,6 +38,7 @@ export interface MetaverseCharacterLookSnapshot {
 }
 
 export interface MetaverseCharacterPresentationSnapshot {
+  readonly animationCycleId?: number;
   readonly animationVocabulary: MetaverseCharacterAnimationVocabularyId;
   readonly position: MetaverseVector3Snapshot;
   readonly yawRadians: number;
@@ -52,6 +56,7 @@ export interface MetaverseRemoteCharacterPresentationSnapshot {
   readonly playerId: string;
   readonly presentation: MetaverseCharacterPresentationSnapshot;
   readonly poseSyncMode: MetaverseRemoteCharacterPoseSyncMode;
+  readonly weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null;
 }
 
 export interface MetaverseRemoteVehiclePresentationSnapshot {

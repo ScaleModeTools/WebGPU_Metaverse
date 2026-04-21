@@ -82,7 +82,30 @@ export interface MetaverseTelemetrySnapshot {
         readonly authoritativeGrounded: boolean | null;
         readonly bodyStateDivergence: boolean | null;
         readonly convergenceEpisodeStarted: boolean;
+        readonly convergenceEpisodeStartIntentionalDiscontinuityCause:
+          | "none"
+          | "spawn"
+          | "mounted-boarding"
+          | "mounted-unboarding";
+        readonly convergenceEpisodeStartHistoricalLocalSampleMatched:
+          | boolean
+          | null;
+        readonly convergenceEpisodeStartHistoricalLocalSampleSelectionReason:
+          | "exact-traversal-sample-id"
+          | "exact-authoritative-tick"
+          | "latest-at-or-before-authoritative-time"
+          | "earliest-after-authoritative-time"
+          | "latest-matching-sample"
+          | null;
+        readonly convergenceEpisodeStartHistoricalLocalSampleTimeDeltaMs:
+          | number
+          | null;
         readonly convergenceEpisodeStartPlanarMagnitudeMeters: number | null;
+        readonly convergenceEpisodeStartReason:
+          | "none"
+          | "gross-body-divergence"
+          | "gross-position-divergence"
+          | "gross-yaw-divergence";
         readonly convergenceEpisodeStartVerticalMagnitudeMeters: number | null;
         readonly convergenceEpisodeStartYawMagnitudeRadians: number | null;
         readonly groundedBodyStateDivergence: boolean | null;
@@ -127,10 +150,6 @@ export interface MetaverseTelemetrySnapshot {
             readonly blockingAffordanceDetected: boolean;
             readonly decisionReason: MetaverseTraversalStateResolutionReasonId;
             readonly groundedBody: MetaverseTelemetryGroundedBodySnapshot | null;
-            readonly jumpDebug: {
-              readonly surfaceJumpSupported: boolean | null;
-              readonly supported: boolean | null;
-            };
             readonly locomotionMode: MetaverseLocomotionModeId;
             readonly resolvedSupportHeightMeters: number;
             readonly swimBody: MetaverseTelemetrySwimBodySnapshot | null;
@@ -186,8 +205,6 @@ export interface MetaverseTelemetrySnapshot {
           readonly pendingActionBufferAgeMs: number | null;
           readonly resolvedActionSequence: number | null;
           readonly resolvedActionState: MetaverseRealtimePlayerTraversalActionResolutionStateId | null;
-          readonly surfaceJumpSupported: boolean | null;
-          readonly supported: boolean | null;
         };
         readonly lastProcessedInputSequence: number | null;
         readonly locomotionMismatch: boolean;
@@ -215,10 +232,6 @@ export interface MetaverseTelemetrySnapshot {
         readonly blockingAffordanceDetected: boolean;
         readonly decisionReason: MetaverseTraversalStateResolutionReasonId;
         readonly groundedBody: MetaverseTelemetryGroundedBodySnapshot | null;
-        readonly jumpDebug: {
-          readonly surfaceJumpSupported: boolean | null;
-          readonly supported: boolean | null;
-        };
         readonly locomotionMode: MetaverseLocomotionModeId;
         readonly resolvedSupportHeightMeters: number;
         readonly swimBody: MetaverseTelemetrySwimBodySnapshot | null;

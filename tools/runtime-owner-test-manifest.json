@@ -62,6 +62,12 @@
       ]
     },
     {
+      "ownerPath": "client/src/engine-tool/project/map-editor-project-player-spawn-selection.ts",
+      "testPaths": [
+        "tests/runtime/client/engine-tool/map-editor.runtime.test.mjs"
+      ]
+    },
+    {
       "ownerPath": "client/src/engine-tool/project/map-editor-project-state.ts",
       "testPaths": [
         "tests/runtime/client/engine-tool/map-editor.runtime.test.mjs"
@@ -113,6 +119,12 @@
       "ownerPath": "client/src/metaverse/classes/metaverse-runtime-service-lifecycle.ts",
       "testPaths": [
         "tests/runtime/client/metaverse/runtime/metaverse-runtime-service-lifecycle.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/classes/metaverse-weapon-presentation-runtime.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/runtime/metaverse-weapon-presentation-runtime.runtime.test.mjs"
       ]
     },
     {
@@ -342,6 +354,12 @@
       ]
     },
     {
+      "ownerPath": "client/src/network/classes/metaverse-world-player-weapon-state-sync.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse-world-player-weapon-state-sync.runtime.test.mjs"
+      ]
+    },
+    {
       "ownerPath": "client/src/network/classes/coop-room-client.ts",
       "testPaths": [
         "tests/runtime/client/coop-room-client.runtime.test.mjs"
@@ -552,6 +570,12 @@
         "tests/runtime/server/metaverse/authoritative-world-player-traversal-authority.test.mjs",
         "tests/runtime/server/metaverse/authoritative-world-mounted-occupancy.test.mjs",
         "tests/runtime/server/metaverse/authoritative-world-runtime.integration.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "server/src/metaverse/authority/players/metaverse-authoritative-player-weapon-state-authority.ts",
+      "testPaths": [
+        "tests/runtime/server/metaverse/authoritative-player-weapon-state-authority.test.mjs"
       ]
     },
     {

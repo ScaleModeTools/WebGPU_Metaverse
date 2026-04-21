@@ -38,13 +38,19 @@ import { readMetaverseGameplayProfile } from "../metaverse-gameplay-profiles.js"
 import type {
   MetaverseMapBundleEnvironmentAssetSnapshot,
   MetaverseMapBundleLaunchVariationSnapshot,
+  MetaverseMapBundlePlayerSpawnSelectionSnapshot,
   MetaverseMapBundlePlacementSnapshot,
   MetaverseMapBundlePresentationProfileIds,
   MetaverseMapBundleResourceSpawnSnapshot,
   MetaverseMapBundleSceneObjectCapabilitySnapshot,
   MetaverseMapBundleSceneObjectSnapshot,
   MetaverseMapBundleSnapshot,
+  MetaverseMapPlayerSpawnTeamId,
   MetaverseMapBundleSpawnNodeSnapshot
+} from "./metaverse-map-bundle.js";
+import {
+  defaultMetaverseMapBundlePlayerSpawnSelection,
+  metaverseMapPlayerSpawnTeamIds
 } from "./metaverse-map-bundle.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -587,6 +593,7 @@ function readSpawnNode(
     label: readString(spawnNode.label, `${fieldName}.label`),
     position: readVector3(spawnNode.position, `${fieldName}.position`),
     spawnId: readString(spawnNode.spawnId, `${fieldName}.spawnId`),
+    teamId: readSpawnTeamId(spawnNode.teamId, `${fieldName}.teamId`),
     yawRadians: readNumber(spawnNode.yawRadians, `${fieldName}.yawRadians`)
   });
 }
@@ -779,6 +786,57 @@ function readLaunchVariation(
   });
 }
 
+function readSpawnTeamId(
+  value: unknown,
+  fieldName: string
+): MetaverseMapPlayerSpawnTeamId {
+  if (value === undefined || value === null) {
+    return "neutral";
+  }
+
+  const teamId = readString(value, fieldName);
+
+  if (!metaverseMapPlayerSpawnTeamIds.includes(teamId as MetaverseMapPlayerSpawnTeamId)) {
+    throw new Error(`Unsupported spawn team id for ${fieldName}: ${teamId}`);
+  }
+
+  return teamId as MetaverseMapPlayerSpawnTeamId;
+}
+
+function readPlayerSpawnSelection(
+  value: unknown,
+  fieldName: string
+): MetaverseMapBundlePlayerSpawnSelectionSnapshot {
+  if (value === undefined || value === null) {
+    return defaultMetaverseMapBundlePlayerSpawnSelection;
+  }
+
+  const playerSpawnSelection = readRecord(value, fieldName);
+  const enemyAvoidanceRadiusMeters = readNumber(
+    playerSpawnSelection.enemyAvoidanceRadiusMeters,
+    `${fieldName}.enemyAvoidanceRadiusMeters`
+  );
+  const homeTeamBiasMeters = readNumber(
+    playerSpawnSelection.homeTeamBiasMeters,
+    `${fieldName}.homeTeamBiasMeters`
+  );
+
+  if (enemyAvoidanceRadiusMeters < 0) {
+    throw new Error(
+      `${fieldName}.enemyAvoidanceRadiusMeters must stay at or above 0.`
+    );
+  }
+
+  if (homeTeamBiasMeters < 0) {
+    throw new Error(`${fieldName}.homeTeamBiasMeters must stay at or above 0.`);
+  }
+
+  return Object.freeze({
+    enemyAvoidanceRadiusMeters,
+    homeTeamBiasMeters
+  });
+}
+
 function readWaterRegion(
   value: unknown,
   fieldName: string
@@ -836,8 +894,12 @@ export function parseMetaverseMapBundleSnapshot(
           readSpawnNode(
             spawnNode,
             `bundle.playerSpawnNodes[${spawnNodeIndex}]`
-          )
+        )
       )
+    ),
+    playerSpawnSelection: readPlayerSpawnSelection(
+      bundle.playerSpawnSelection,
+      "bundle.playerSpawnSelection"
     ),
     presentationProfileIds: readPresentationProfileIds(
       bundle.presentationProfileIds,

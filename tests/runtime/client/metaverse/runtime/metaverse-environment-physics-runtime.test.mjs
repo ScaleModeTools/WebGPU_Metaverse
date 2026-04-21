@@ -368,12 +368,13 @@ test("MetaverseEnvironmentPhysicsRuntime uses proof-authored collisionPath for s
   let collisionLoadCount = 0;
   const collisionScene = new Group();
 
-  collisionScene.add(
-    new Mesh(
-      new BoxGeometry(8.4, 0.34, 4.2),
-      new MeshStandardMaterial({ color: 0xffffff })
-    )
+  const collisionMesh = new Mesh(
+    new BoxGeometry(8.4, 0.34, 4.2),
+    new MeshStandardMaterial({ color: 0xffffff })
   );
+
+  collisionMesh.position.y = 0.17;
+  collisionScene.add(collisionMesh);
   const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
     metaverseRuntimeConfig,
     {
@@ -412,7 +413,7 @@ test("MetaverseEnvironmentPhysicsRuntime uses proof-authored collisionPath for s
             orientation: null,
             physicsColliders: [
               {
-                center: { x: 0, y: 0, z: 0 },
+                center: { x: 0, y: 0.17, z: 0 },
                 shape: "box",
                 size: { x: 8.4, y: 0.34, z: 4.2 },
                 traversalAffordance: "support"
@@ -421,7 +422,7 @@ test("MetaverseEnvironmentPhysicsRuntime uses proof-authored collisionPath for s
             placement: "static",
             placements: [
               {
-                position: { x: 5, y: 0.43, z: -12 },
+                position: { x: 5, y: 0.26, z: -12 },
                 rotationYRadians: Math.PI * 0.5,
                 scale: 1
               }
@@ -606,20 +607,56 @@ test("MetaverseEnvironmentPhysicsRuntime keeps authoritative remote player block
 
   environmentPhysicsRuntime.syncAuthoritativeRemotePlayerBlockers([
     Object.freeze({
+      groundedBody: Object.freeze({
+        linearVelocity: Object.freeze({ x: 0, y: 0, z: 0 }),
+        position: Object.freeze({ x: 2.4, y: 0.68, z: -5.2 }),
+        yawRadians: 0
+      }),
       locomotionMode: "grounded",
       mountedOccupancy: null,
       playerId: "remote-deckhand-1",
-      position: Object.freeze({ x: 2.4, y: 0.68, z: -5.2 }),
-      yawRadians: 0
+      swimBody: null
     }),
     Object.freeze({
+      groundedBody: Object.freeze({
+        linearVelocity: Object.freeze({ x: 0, y: 0, z: 0 }),
+        position: Object.freeze({ x: 4.4, y: 0, z: -8 }),
+        yawRadians: 0
+      }),
       locomotionMode: "swim",
       mountedOccupancy: null,
       playerId: "remote-swimmer-2",
-      position: Object.freeze({ x: 4.4, y: 0, z: -8 }),
-      yawRadians: 0
+      swimBody: Object.freeze({
+        angularVelocityRadiansPerSecond: 0,
+        contact: Object.freeze({
+          appliedMovementDelta: Object.freeze({ x: 0, y: 0, z: 0 }),
+          blockedPlanarMovement: false,
+          desiredMovementDelta: Object.freeze({ x: 0, y: 0, z: 0 })
+        }),
+        driveTarget: Object.freeze({
+          boost: false,
+          moveAxis: 0,
+          movementMagnitude: 0,
+          strafeAxis: 0,
+          targetForwardSpeedUnitsPerSecond: 0,
+          targetPlanarSpeedUnitsPerSecond: 0,
+          targetStrafeSpeedUnitsPerSecond: 0
+        }),
+        linearVelocity: Object.freeze({ x: 0, y: 0, z: 0 }),
+        planarDirectionalSpeeds: Object.freeze({
+          forwardSpeedUnitsPerSecond: 0,
+          strafeSpeedUnitsPerSecond: 0
+        }),
+        position: Object.freeze({ x: 4.4, y: 0, z: -8 }),
+        yawRadians: 0
+      })
     }),
     Object.freeze({
+      groundedBody: Object.freeze({
+        linearVelocity: Object.freeze({ x: 0, y: 0, z: 0 }),
+        position: Object.freeze({ x: 1.8, y: 0.8, z: -5.6 }),
+        yawRadians: 0
+      }),
       locomotionMode: "grounded",
       mountedOccupancy: Object.freeze({
         environmentAssetId: "metaverse-hub-skiff-v1",
@@ -629,8 +666,7 @@ test("MetaverseEnvironmentPhysicsRuntime keeps authoritative remote player block
         seatId: "port-bench-seat"
       }),
       playerId: "remote-passenger-3",
-      position: Object.freeze({ x: 1.8, y: 0.8, z: -5.6 }),
-      yawRadians: 0
+      swimBody: null
     })
   ]);
 

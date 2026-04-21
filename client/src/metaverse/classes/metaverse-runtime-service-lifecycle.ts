@@ -8,6 +8,7 @@ import type {
   MetaverseCharacterPresentationSnapshot
 } from "../types/presentation";
 import type { MetaverseHudSnapshot } from "../types/metaverse-runtime";
+import type { MetaverseWeaponPresentationRuntime } from "./metaverse-weapon-presentation-runtime";
 
 interface MetaverseRuntimeServiceLifecycleCanvasHost {
   readonly clientHeight: number;
@@ -90,6 +91,9 @@ interface MetaverseRuntimeServiceLifecycleDependencies {
   readonly authoritativeWorldSync: MetaverseRuntimeServiceLifecycleAuthoritativeWorldSync;
   readonly bootLifecycle: MetaverseRuntimeServiceLifecycleBootLifecycle;
   readonly environmentPhysicsRuntime: MetaverseRuntimeServiceLifecycleEnvironmentPhysicsRuntime;
+  readonly ensureAuthoritativeWorldBundleSynchronized?:
+    | (() => Promise<void>)
+    | null;
   readonly flightInputRuntime: MetaverseRuntimeServiceLifecycleFlightInputRuntime;
   readonly frameLoop: MetaverseRuntimeServiceLifecycleFrameLoop;
   readonly hudPublisher: MetaverseRuntimeServiceLifecycleHudPublisher;
@@ -98,6 +102,7 @@ interface MetaverseRuntimeServiceLifecycleDependencies {
   readonly remoteWorldRuntime: MetaverseRuntimeServiceLifecycleRemoteWorldRuntime;
   readonly sceneRuntime: MetaverseRuntimeServiceLifecycleSceneRuntime;
   readonly traversalRuntime: MetaverseRuntimeServiceLifecycleTraversalRuntime;
+  readonly weaponPresentationRuntime?: Pick<MetaverseWeaponPresentationRuntime, "reset">;
 }
 
 interface MetaverseRuntimeServiceBootRequest {
@@ -125,6 +130,7 @@ export class MetaverseRuntimeServiceLifecycle {
   readonly #authoritativeWorldSync: MetaverseRuntimeServiceLifecycleAuthoritativeWorldSync;
   readonly #bootLifecycle: MetaverseRuntimeServiceLifecycleBootLifecycle;
   readonly #environmentPhysicsRuntime: MetaverseRuntimeServiceLifecycleEnvironmentPhysicsRuntime;
+  readonly #ensureAuthoritativeWorldBundleSynchronized: () => Promise<void>;
   readonly #flightInputRuntime: MetaverseRuntimeServiceLifecycleFlightInputRuntime;
   readonly #frameLoop: MetaverseRuntimeServiceLifecycleFrameLoop;
   readonly #hudPublisher: MetaverseRuntimeServiceLifecycleHudPublisher;
@@ -133,11 +139,16 @@ export class MetaverseRuntimeServiceLifecycle {
   readonly #remoteWorldRuntime: MetaverseRuntimeServiceLifecycleRemoteWorldRuntime;
   readonly #sceneRuntime: MetaverseRuntimeServiceLifecycleSceneRuntime;
   readonly #traversalRuntime: MetaverseRuntimeServiceLifecycleTraversalRuntime;
+  readonly #weaponPresentationRuntime: Pick<
+    MetaverseWeaponPresentationRuntime,
+    "reset"
+  > | null;
 
   constructor({
     authoritativeWorldSync,
     bootLifecycle,
     environmentPhysicsRuntime,
+    ensureAuthoritativeWorldBundleSynchronized,
     flightInputRuntime,
     frameLoop,
     hudPublisher,
@@ -145,11 +156,14 @@ export class MetaverseRuntimeServiceLifecycle {
     readNowMs,
     remoteWorldRuntime,
     sceneRuntime,
-    traversalRuntime
+    traversalRuntime,
+    weaponPresentationRuntime
   }: MetaverseRuntimeServiceLifecycleDependencies) {
     this.#authoritativeWorldSync = authoritativeWorldSync;
     this.#bootLifecycle = bootLifecycle;
     this.#environmentPhysicsRuntime = environmentPhysicsRuntime;
+    this.#ensureAuthoritativeWorldBundleSynchronized =
+      ensureAuthoritativeWorldBundleSynchronized ?? (async () => {});
     this.#flightInputRuntime = flightInputRuntime;
     this.#frameLoop = frameLoop;
     this.#hudPublisher = hudPublisher;
@@ -158,9 +172,11 @@ export class MetaverseRuntimeServiceLifecycle {
     this.#remoteWorldRuntime = remoteWorldRuntime;
     this.#sceneRuntime = sceneRuntime;
     this.#traversalRuntime = traversalRuntime;
+    this.#weaponPresentationRuntime = weaponPresentationRuntime ?? null;
   }
 
   resetForStart(): void {
+    this.#weaponPresentationRuntime?.reset();
     this.#traversalRuntime.reset();
     this.#frameLoop.reset();
     this.#presenceRuntime.dispose();
@@ -173,6 +189,7 @@ export class MetaverseRuntimeServiceLifecycle {
     renderer,
   }: MetaverseRuntimeServiceBootRequest): Promise<void> {
     publishHudSnapshot("booting", null, true);
+    await this.#ensureAuthoritativeWorldBundleSynchronized();
 
     this.#bootLifecycle.ensureRuntimeInputInstalled(
       canvas,
@@ -238,6 +255,7 @@ export class MetaverseRuntimeServiceLifecycle {
     this.#presenceRuntime.dispose();
     this.#remoteWorldRuntime.dispose();
     this.#traversalRuntime.reset();
+    this.#weaponPresentationRuntime?.reset();
     this.#sceneRuntime.resetPresentation();
     this.#bootLifecycle.reset();
     this.#hudPublisher.resetTelemetryState();

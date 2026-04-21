@@ -1,7 +1,6 @@
 export const metaversePrimaryLocomotionModeIds = [
   "grounded",
-  "swim",
-  "fly"
+  "swim"
 ] as const;
 
 export const metaverseCompatibilityLocomotionModeIds = [

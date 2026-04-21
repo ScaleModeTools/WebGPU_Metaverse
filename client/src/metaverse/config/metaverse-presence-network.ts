@@ -1,8 +1,10 @@
 import {
+  resolveMetaversePlayerTeamId,
   createMetaversePlayerId,
   createMilliseconds,
   createUsername,
   type MetaversePlayerId,
+  type MetaversePlayerTeamId,
   type Username
 } from "@webgpu-metaverse/shared";
 
@@ -19,6 +21,7 @@ import { createWebTransportHttpFallbackInvoker } from "@/network/adapters/webtra
 export interface MetaverseLocalPlayerIdentity {
   readonly characterId: string;
   readonly playerId: MetaversePlayerId;
+  readonly teamId?: MetaversePlayerTeamId;
   readonly username: Username;
 }
 
@@ -304,6 +307,7 @@ export function createMetaverseLocalPlayerIdentity(
   return Object.freeze({
     characterId: normalizedCharacterId,
     playerId,
+    teamId: resolveMetaversePlayerTeamId(playerId),
     username: resolvedUsername
   });
 }

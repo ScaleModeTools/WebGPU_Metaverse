@@ -27,7 +27,7 @@ test("scene environment runtime builds shared water regions and visual atmospher
 
   assert.equal(
     environmentRuntime.waterGroup.children.length,
-    metaverseWorldPlacedWaterRegions.length * 2
+    metaverseWorldPlacedWaterRegions.length
   );
   assert.equal(
     environmentRuntime.backgroundColor.r,

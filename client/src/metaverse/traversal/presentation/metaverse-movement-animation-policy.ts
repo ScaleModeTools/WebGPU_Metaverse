@@ -1,3 +1,5 @@
+import type { MetaverseGroundedBodySnapshot } from "@/physics";
+
 import type { MetaverseCharacterAnimationVocabularyId } from "../../types/presentation";
 
 export interface MetaverseMovementAnimationPolicyModeConfig {
@@ -21,17 +23,29 @@ export interface MetaverseMovementAnimationPolicyInput {
   readonly grounded: boolean;
   readonly inputMagnitude: number;
   readonly locomotionMode: "grounded" | "swim";
+  readonly moveAxis: number;
   readonly planarSpeedUnitsPerSecond: number;
+  readonly strafeAxis: number;
   readonly verticalSpeedUnitsPerSecond: number;
+}
+
+export interface GroundedMovementAnimationPolicyInputConfig {
+  readonly groundedBodySnapshot: Pick<
+    MetaverseGroundedBodySnapshot,
+    "grounded" | "jumpBody" | "linearVelocity"
+  >;
+  readonly inputMagnitude: number;
+  readonly moveAxis: number;
+  readonly strafeAxis: number;
 }
 
 export const metaverseMovementAnimationPolicyConfig = Object.freeze({
   grounded: Object.freeze({
-    enterSpeedUnitsPerSecond: 0.72,
-    exitSpeedUnitsPerSecond: 0.34,
-    holdMs: 140,
-    intentEnterThreshold: 0.16,
-    minimumAppliedSpeedUnitsPerSecond: 0.08
+    enterSpeedUnitsPerSecond: 0.52,
+    exitSpeedUnitsPerSecond: 0.2,
+    holdMs: 90,
+    intentEnterThreshold: 0.12,
+    minimumAppliedSpeedUnitsPerSecond: 0.05
   }),
   jump: Object.freeze({
     downEnterVerticalSpeedUnitsPerSecond: -0.35,
@@ -45,6 +59,27 @@ export const metaverseMovementAnimationPolicyConfig = Object.freeze({
     minimumAppliedSpeedUnitsPerSecond: 0.05
   })
 } satisfies MetaverseMovementAnimationPolicyConfig);
+
+export function createGroundedMovementAnimationPolicyInput({
+  groundedBodySnapshot,
+  inputMagnitude,
+  moveAxis,
+  strafeAxis
+}: GroundedMovementAnimationPolicyInputConfig): MetaverseMovementAnimationPolicyInput {
+  return {
+    grounded: groundedBodySnapshot.grounded,
+    inputMagnitude,
+    locomotionMode: "grounded",
+    moveAxis,
+    planarSpeedUnitsPerSecond: Math.hypot(
+      groundedBodySnapshot.linearVelocity.x,
+      groundedBodySnapshot.linearVelocity.z
+    ),
+    strafeAxis,
+    verticalSpeedUnitsPerSecond:
+      groundedBodySnapshot.jumpBody.verticalSpeedUnitsPerSecond
+  };
+}
 
 function toFiniteNumber(value: number, fallback = 0): number {
   return Number.isFinite(value) ? value : fallback;
@@ -60,6 +95,10 @@ function clamp(value: number, min: number, max: number): number {
 
 function clamp01(value: number): number {
   return clamp(value, 0, 1);
+}
+
+function sanitizeSignedAxis(value: number): number {
+  return clamp(toFiniteNumber(value, 0), -1, 1);
 }
 
 function resolveJumpAnimationVocabulary(
@@ -143,7 +182,9 @@ function resolveMovingAnimationVocabulary(
 export class MetaverseMovementAnimationPolicyRuntime {
   readonly #config: MetaverseMovementAnimationPolicyConfig;
 
+  #animationCycleId = 0;
   #holdRemainingMs = 0;
+  #movementDirectionKey: string | null = null;
   #vocabulary: MetaverseCharacterAnimationVocabularyId = "idle";
 
   constructor(
@@ -156,9 +197,76 @@ export class MetaverseMovementAnimationPolicyRuntime {
     return this.#vocabulary;
   }
 
+  get animationCycleId(): number {
+    return this.#animationCycleId;
+  }
+
   reset(vocabulary: MetaverseCharacterAnimationVocabularyId = "idle"): void {
+    this.#animationCycleId = 0;
     this.#holdRemainingMs = 0;
+    this.#movementDirectionKey = null;
     this.#vocabulary = vocabulary;
+  }
+
+  #resolveMovementDirectionKey(
+    input: Pick<
+      MetaverseMovementAnimationPolicyInput,
+      "inputMagnitude" | "moveAxis" | "strafeAxis"
+    >,
+    config: MetaverseMovementAnimationPolicyModeConfig
+  ): string | null {
+    if (
+      clamp01(input.inputMagnitude) <
+      clamp01(toFiniteNumber(config.intentEnterThreshold, 0))
+    ) {
+      return null;
+    }
+
+    const directionAxisDeadzone = Math.max(
+      0.25,
+      clamp01(toFiniteNumber(config.intentEnterThreshold, 0))
+    );
+    const moveAxis = sanitizeSignedAxis(input.moveAxis);
+    const strafeAxis = sanitizeSignedAxis(input.strafeAxis);
+    const moveDirection =
+      Math.abs(moveAxis) >= directionAxisDeadzone
+        ? Math.sign(moveAxis).toString()
+        : "0";
+    const strafeDirection =
+      Math.abs(strafeAxis) >= directionAxisDeadzone
+        ? Math.sign(strafeAxis).toString()
+        : "0";
+
+    return moveDirection === "0" && strafeDirection === "0"
+      ? null
+      : `${moveDirection}:${strafeDirection}`;
+  }
+
+  #syncMovementCycleId(
+    currentVocabulary: MetaverseCharacterAnimationVocabularyId,
+    nextVocabulary: MetaverseCharacterAnimationVocabularyId,
+    input: Pick<
+      MetaverseMovementAnimationPolicyInput,
+      "inputMagnitude" | "moveAxis" | "strafeAxis"
+    >,
+    config: MetaverseMovementAnimationPolicyModeConfig
+  ): void {
+    const nextDirectionKey =
+      nextVocabulary === "walk" || nextVocabulary === "swim"
+        ? this.#resolveMovementDirectionKey(input, config)
+        : null;
+
+    if (
+      (currentVocabulary !== nextVocabulary &&
+        (nextVocabulary === "walk" || nextVocabulary === "swim")) ||
+      (nextVocabulary === currentVocabulary &&
+        nextDirectionKey !== null &&
+        nextDirectionKey !== this.#movementDirectionKey)
+    ) {
+      this.#animationCycleId += 1;
+    }
+
+    this.#movementDirectionKey = nextDirectionKey;
   }
 
   advance(
@@ -181,6 +289,12 @@ export class MetaverseMovementAnimationPolicyRuntime {
         this.#config.swim
       );
 
+      this.#syncMovementCycleId(
+        this.#vocabulary,
+        nextState.vocabulary,
+        input,
+        this.#config.swim
+      );
       this.#holdRemainingMs = nextState.holdRemainingMs;
       this.#vocabulary = nextState.vocabulary;
       return this.#vocabulary;
@@ -188,6 +302,7 @@ export class MetaverseMovementAnimationPolicyRuntime {
 
     if (!input.grounded) {
       this.#holdRemainingMs = 0;
+      this.#movementDirectionKey = null;
       this.#vocabulary = resolveJumpAnimationVocabulary(
         input.verticalSpeedUnitsPerSecond,
         this.#config.jump
@@ -205,6 +320,12 @@ export class MetaverseMovementAnimationPolicyRuntime {
       this.#config.grounded
     );
 
+    this.#syncMovementCycleId(
+      this.#vocabulary,
+      nextState.vocabulary,
+      input,
+      this.#config.grounded
+    );
     this.#holdRemainingMs = nextState.holdRemainingMs;
     this.#vocabulary = nextState.vocabulary;
     return this.#vocabulary;

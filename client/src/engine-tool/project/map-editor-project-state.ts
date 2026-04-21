@@ -7,6 +7,11 @@ import {
   type MapEditorLaunchVariationDraftSnapshot
 } from "@/engine-tool/project/map-editor-project-launch-variations";
 import {
+  createPlayerSpawnSelectionDraft,
+  freezePlayerSpawnSelectionDraft,
+  type MapEditorPlayerSpawnSelectionDraftSnapshot
+} from "@/engine-tool/project/map-editor-project-player-spawn-selection";
+import {
   createPlayerSpawnDrafts,
   createSceneObjectDrafts,
   createWaterRegionDrafts,
@@ -54,6 +59,7 @@ export interface MapEditorProjectSnapshot {
   readonly launchVariationDrafts: readonly MapEditorLaunchVariationDraftSnapshot[];
   readonly placementDrafts: readonly MapEditorPlacementDraftSnapshot[];
   readonly playerSpawnDrafts: readonly MapEditorPlayerSpawnDraftSnapshot[];
+  readonly playerSpawnSelectionDraft: MapEditorPlayerSpawnSelectionDraftSnapshot;
   readonly sceneObjectDrafts: readonly MapEditorSceneObjectDraftSnapshot[];
   readonly selectedLaunchVariationId: string | null;
   readonly selectedPlacementId: string | null;
@@ -349,6 +355,7 @@ export function createMapEditorProject(
     launchVariationDrafts,
     placementDrafts,
     playerSpawnDrafts: createPlayerSpawnDrafts(loadedBundle),
+    playerSpawnSelectionDraft: createPlayerSpawnSelectionDraft(loadedBundle),
     sceneObjectDrafts: createSceneObjectDrafts(loadedBundle),
     selectedLaunchVariationId,
     selectedPlacementId,
@@ -477,6 +484,7 @@ export function addMapEditorPlayerSpawnDraft(
     label: `Player Spawn ${nextSpawnNumber}`,
     position: nextPosition,
     spawnId: createMapEditorPlayerSpawnId(project),
+    teamId: "neutral",
     yawRadians: 0
   });
 
@@ -625,6 +633,20 @@ export function updateMapEditorPlayerSpawnDraft(
           ? freezePlayerSpawnDraft(update(spawnDraft))
           : spawnDraft
       )
+    )
+  });
+}
+
+export function updateMapEditorPlayerSpawnSelectionDraft(
+  project: MapEditorProjectSnapshot,
+  update: (
+    draft: MapEditorPlayerSpawnSelectionDraftSnapshot
+  ) => MapEditorPlayerSpawnSelectionDraftSnapshot
+): MapEditorProjectSnapshot {
+  return Object.freeze({
+    ...project,
+    playerSpawnSelectionDraft: freezePlayerSpawnSelectionDraft(
+      update(project.playerSpawnSelectionDraft)
     )
   });
 }

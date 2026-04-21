@@ -116,7 +116,6 @@ export function queueMetaverseTraversalAction(
   );
 
   if (
-    actionIntent.pressed !== true ||
     normalizedActionKind === "none" ||
     normalizedActionSequence <= latestKnownActionSequence
   ) {
@@ -303,9 +302,9 @@ export function advanceMetaverseTraversalActionState(
       pendingActionBufferSecondsRemaining: 0,
       pendingActionKind: "none",
       pendingActionSequence: 0,
-      resolvedActionKind: state.pendingActionKind,
-      resolvedActionSequence: state.pendingActionSequence,
-      resolvedActionState: "rejected-buffer-expired"
+      resolvedActionKind: state.resolvedActionKind,
+      resolvedActionSequence: state.resolvedActionSequence,
+      resolvedActionState: state.resolvedActionState
     })
   });
 }

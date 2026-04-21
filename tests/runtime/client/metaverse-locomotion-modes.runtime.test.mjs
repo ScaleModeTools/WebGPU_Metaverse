@@ -21,11 +21,11 @@ test("metaverse locomotion config keeps mounted on the compatibility surface onl
   assert.equal(locomotionModes.defaultMetaverseLocomotionMode, "grounded");
   assert.deepEqual(
     locomotionModes.metaversePrimaryLocomotionModes.map((mode) => mode.id),
-    ["grounded", "swim", "fly"]
+    ["grounded", "swim"]
   );
   assert.deepEqual(
     locomotionModes.metaverseCompatibilityLocomotionModes.map((mode) => mode.id),
-    ["grounded", "swim", "fly", "mounted"]
+    ["grounded", "swim", "mounted"]
   );
   assert.equal(
     locomotionModes.resolveMetaversePrimaryLocomotionMode("grounded").label,

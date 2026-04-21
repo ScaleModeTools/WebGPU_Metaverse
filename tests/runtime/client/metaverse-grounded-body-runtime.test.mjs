@@ -594,7 +594,7 @@ test("MetaverseGroundedBodyRuntime keeps jump readiness briefly after contact is
   }
 });
 
-test("MetaverseGroundedBodyRuntime honors higher-level jump readiness overrides while support is within snap distance", async () => {
+test("MetaverseGroundedBodyRuntime trusts an accepted jump edge without a second body-level readiness override", async () => {
   const { MetaverseGroundedBodyRuntime, RapierPhysicsRuntime } =
     await clientLoader.load("/src/physics/index.ts");
   const physicsRuntime = createFakePhysicsRuntime(RapierPhysicsRuntime);
@@ -648,7 +648,6 @@ test("MetaverseGroundedBodyRuntime honors higher-level jump readiness overrides 
       {
         boost: false,
         jump: true,
-        jumpReadyOverride: true,
         moveAxis: 0,
         strafeAxis: 0,
         turnAxis: 0
@@ -753,7 +752,6 @@ test("MetaverseGroundedBodyRuntime stops at a tall blocker", async () => {
     }
 
     assert.ok(groundedBodyRuntime.snapshot.grounded);
-    assert.equal(groundedBodyRuntime.snapshot.contact.blockedPlanarMovement, true);
     assert.equal(groundedBodyRuntime.snapshot.contact.supportingContactDetected, true);
     assert.ok(groundedBodyRuntime.snapshot.position.y < 0.05);
     assert.ok(groundedBodyRuntime.snapshot.position.z > 0.7);

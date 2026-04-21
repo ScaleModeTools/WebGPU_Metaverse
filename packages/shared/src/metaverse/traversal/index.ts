@@ -1,4 +1,5 @@
 export * from "../metaverse-authoritative-traversal-config.js";
+export * from "../metaverse-dynamic-body-contract.js";
 export * from "../metaverse-grounded-body-contract.js";
 export * from "../metaverse-grounded-jump-physics.js";
 export * from "../metaverse-grounded-traversal-kernel.js";

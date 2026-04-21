@@ -53,6 +53,7 @@ import { MetaverseRuntimeFrameLoop } from "./metaverse-runtime-frame-loop";
 import { MetaverseRuntimeRenderSession } from "./metaverse-runtime-render-session";
 import { MetaverseRuntimeServiceLifecycle } from "./metaverse-runtime-service-lifecycle";
 import { MetaverseTraversalRuntime } from "./metaverse-traversal-runtime";
+import { MetaverseWeaponPresentationRuntime } from "./metaverse-weapon-presentation-runtime";
 
 interface MetaverseRendererHost {
   readonly info?: {
@@ -81,8 +82,19 @@ interface MetaverseRuntimeDependencies {
   readonly authoritativePlayerMovementEnabled?: boolean;
   readonly cancelAnimationFrame?: typeof globalThis.cancelAnimationFrame;
   readonly characterProofConfig?: MetaverseCharacterProofConfig | null;
+  readonly ensureAuthoritativeWorldBundleSynchronized?:
+    | (() => Promise<void>)
+    | null;
   readonly createMetaversePresenceClient?: (() => MetaversePresenceClientRuntime) | null;
-  readonly createMetaverseWorldClient?: (() => MetaverseWorldClientRuntime) | null;
+  readonly createMetaverseWorldClient?:
+    | ((
+        dependencies?: {
+          readonly readEstimatedServerTimeMs?:
+            | ((localWallClockMs: number) => number)
+            | undefined;
+        }
+      ) => MetaverseWorldClientRuntime)
+    | null;
   readonly createRenderer?: (
     canvas: HTMLCanvasElement
   ) => MetaverseRendererHost;
@@ -146,6 +158,7 @@ export class WebGpuMetaverseRuntime {
   readonly #mountedInteractionRuntime: MetaverseMountedInteractionRuntime;
   readonly #renderSession: MetaverseRuntimeRenderSession;
   readonly #startCoordinator: MetaverseRuntimeStartCoordinator;
+  readonly #weaponPresentationRuntime: MetaverseWeaponPresentationRuntime;
 
   #controlMode: MetaverseControlModeId = defaultMetaverseControlMode;
 
@@ -246,6 +259,12 @@ export class WebGpuMetaverseRuntime {
       readWallClockMs: readWallClockMsImpl,
       samplingConfig: metaverseRemoteWorldSamplingConfig
     });
+    this.#weaponPresentationRuntime = new MetaverseWeaponPresentationRuntime(
+      config,
+      {
+        attachmentProofConfig: dependencies.attachmentProofConfig ?? null
+      }
+    );
     const presenceRuntime = new MetaversePresenceRuntime({
       createMetaversePresenceClient:
         dependencies.createMetaversePresenceClient ?? null,
@@ -314,7 +333,8 @@ export class WebGpuMetaverseRuntime {
       presenceRuntime,
       readNowMs: readNowMsImpl,
       remoteWorldRuntime,
-      traversalRuntime
+      traversalRuntime,
+      weaponPresentationRuntime: this.#weaponPresentationRuntime
     });
 
     const frameLoop = new MetaverseRuntimeFrameLoop({
@@ -328,7 +348,8 @@ export class WebGpuMetaverseRuntime {
       presenceRuntime,
       remoteWorldRuntime,
       sceneRuntime,
-      traversalRuntime
+      traversalRuntime,
+      weaponPresentationRuntime: this.#weaponPresentationRuntime
     });
 
     this.#renderSession = new MetaverseRuntimeRenderSession({
@@ -352,6 +373,8 @@ export class WebGpuMetaverseRuntime {
       authoritativeWorldSync,
       bootLifecycle,
       environmentPhysicsRuntime,
+      ensureAuthoritativeWorldBundleSynchronized:
+        dependencies.ensureAuthoritativeWorldBundleSynchronized ?? null,
       flightInputRuntime: this.#flightInputRuntime,
       frameLoop,
       hudPublisher: this.#hudPublisher,
@@ -359,7 +382,8 @@ export class WebGpuMetaverseRuntime {
       readNowMs: readNowMsImpl,
       remoteWorldRuntime,
       sceneRuntime,
-      traversalRuntime
+      traversalRuntime,
+      weaponPresentationRuntime: this.#weaponPresentationRuntime
     });
 
     this.#startCoordinator = new MetaverseRuntimeStartCoordinator({
@@ -374,8 +398,16 @@ export class WebGpuMetaverseRuntime {
     return this.#hudPublisher.hudSnapshot;
   }
 
+  get weaponHudSnapshot(): MetaverseHudSnapshot["weapon"] {
+    return this.#weaponPresentationRuntime.hudSnapshot;
+  }
+
   subscribeUiUpdates(listener: () => void): () => void {
     return this.#hudPublisher.subscribeUiUpdates(listener);
+  }
+
+  subscribeWeaponUiUpdates(listener: () => void): () => void {
+    return this.#weaponPresentationRuntime.subscribeUiUpdates(listener);
   }
 
   setControlMode(controlMode: MetaverseControlModeId): void {
@@ -385,6 +417,7 @@ export class WebGpuMetaverseRuntime {
 
     this.#controlMode = controlMode;
     this.#flightInputRuntime.reset();
+    this.#weaponPresentationRuntime.reset();
     this.#renderSession.syncOrPublishRuntimeState(true);
   }
 

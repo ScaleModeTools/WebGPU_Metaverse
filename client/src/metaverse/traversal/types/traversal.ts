@@ -10,6 +10,11 @@ import type {
   MetaverseSurfaceTraversalConfig as SharedMetaverseSurfaceTraversalConfig,
   MetaverseSurfaceTraversalSpeedSnapshot as SharedMetaverseSurfaceTraversalSpeedSnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
+import type {
+  MetaversePlayerTraversalActionIntentSnapshot,
+  MetaversePlayerTraversalBodyControlSnapshot,
+  MetaversePlayerTraversalIntentSnapshot
+} from "@webgpu-metaverse/shared";
 
 import type {
   MountedEnvironmentSnapshot
@@ -32,6 +37,50 @@ export type SurfaceLocomotionSpeedSnapshot =
 export interface DynamicEnvironmentPoseSnapshot {
   readonly position: PhysicsVector3Snapshot;
   readonly yawRadians: number;
+}
+
+export interface MetaverseIssuedTraversalIntentSnapshot {
+  readonly actionIntent: MetaversePlayerTraversalActionIntentSnapshot;
+  readonly bodyControl: MetaversePlayerTraversalBodyControlSnapshot;
+  readonly inputSequence: number;
+  readonly locomotionMode: "grounded" | "swim";
+  readonly sampleId: number;
+}
+
+export type MetaverseIssuedTraversalIntentInputSnapshot = Pick<
+  MetaversePlayerTraversalIntentSnapshot,
+  | "actionIntent"
+  | "bodyControl"
+  | "inputSequence"
+  | "locomotionMode"
+  | "sampleId"
+  | "orientationSequence"
+>;
+
+export function createMetaverseIssuedTraversalIntentSnapshot(
+  snapshot:
+    | Pick<
+        MetaversePlayerTraversalIntentSnapshot,
+        | "actionIntent"
+        | "bodyControl"
+        | "inputSequence"
+        | "locomotionMode"
+        | "sampleId"
+      >
+    | null
+    | undefined
+): MetaverseIssuedTraversalIntentSnapshot | null {
+  if (snapshot === null || snapshot === undefined) {
+    return null;
+  }
+
+  return Object.freeze({
+    actionIntent: snapshot.actionIntent,
+    bodyControl: snapshot.bodyControl,
+    inputSequence: snapshot.inputSequence,
+    locomotionMode: snapshot.locomotionMode,
+    sampleId: snapshot.sampleId
+  });
 }
 
 export interface MountedEnvironmentAnchorSnapshot {

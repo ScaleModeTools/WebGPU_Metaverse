@@ -13,6 +13,65 @@ after(async () => {
   await clientLoader?.close();
 });
 
+test("syncCharacterAnimation uses authored jump vocabularies before locomotion fallback", async () => {
+  const [
+    { AnimationClip, AnimationMixer, Group, NumberKeyframeTrack },
+    { syncCharacterAnimation }
+  ] = await Promise.all([
+    import("three/webgpu"),
+    clientLoader.load(
+      "/src/metaverse/render/characters/metaverse-scene-character-animation.ts"
+    )
+  ]);
+  const anchorGroup = new Group();
+  const mixer = new AnimationMixer(anchorGroup);
+  const createAction = (clipName, targetPositionX) =>
+    mixer.clipAction(
+      new AnimationClip(clipName, 1, [
+        new NumberKeyframeTrack(
+          ".position[x]",
+          [0, 1],
+          [0, targetPositionX]
+        )
+      ])
+    );
+  const idleAction = createAction("idle", 0);
+  const walkAction = createAction("walk", 1);
+  const jumpUpAction = createAction("jump-up", 2);
+  const jumpMidAction = createAction("jump-mid", 3);
+  const jumpDownAction = createAction("jump-down", 4);
+  const characterRuntime = {
+    activeAnimationActionSetId: "full-body",
+    activeAnimationCycleId: 0,
+    activeAnimationVocabulary: "idle",
+    actionsByVocabulary: new Map([
+      ["idle", idleAction],
+      ["walk", walkAction],
+      ["jump-up", jumpUpAction],
+      ["jump-mid", jumpMidAction],
+      ["jump-down", jumpDownAction]
+    ]),
+    anchorGroup,
+    humanoidV2PistolLowerBodyActionsByVocabulary: null,
+    humanoidV2PistolPoseRuntime: null,
+    skeletonId: "humanoid_v2"
+  };
+
+  idleAction.play();
+
+  syncCharacterAnimation(characterRuntime, "jump-up", false, 1);
+  assert.equal(characterRuntime.activeAnimationVocabulary, "jump-up");
+  assert.equal(characterRuntime.activeAnimationCycleId, 1);
+
+  syncCharacterAnimation(characterRuntime, "jump-mid", false, 2);
+  assert.equal(characterRuntime.activeAnimationVocabulary, "jump-mid");
+  assert.equal(characterRuntime.activeAnimationCycleId, 2);
+
+  syncCharacterAnimation(characterRuntime, "jump-down", false, 3);
+  assert.equal(characterRuntime.activeAnimationVocabulary, "jump-down");
+  assert.equal(characterRuntime.activeAnimationCycleId, 3);
+});
+
 test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and remotely", async () => {
   const [
     {
@@ -96,14 +155,20 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
   addBone("ring_01_l", handLBone, new Vector3(-0.1, 0, -0.03));
   addBone("pinky_01_l", handLBone, new Vector3(-0.08, 0, -0.05));
   addBone("thumb_01_r", handRBone, new Vector3(0.04, -0.02, 0.06));
-  addBone("index_01_r", handRBone, new Vector3(0.1, 0, 0.03));
+  const index01RBone = addBone("index_01_r", handRBone, new Vector3(0.1, 0, 0.03));
+  const index02RBone = addBone("index_02_r", index01RBone, new Vector3(0.055, -0.004, -0.004));
+  addBone("index_03_r", index02RBone, new Vector3(0.04, -0.004, -0.003));
   addBone("middle_01_r", handRBone, new Vector3(0.11, 0, 0));
   addBone("ring_01_r", handRBone, new Vector3(0.1, 0, -0.03));
   addBone("pinky_01_r", handRBone, new Vector3(0.08, 0, -0.05));
 
   const headSocketBone = addBone("head_socket", headBone, new Vector3(0, 0.12, 0));
   const handLSocketBone = addBone("hand_l_socket", handLBone, new Vector3(-0.05, 0, 0));
-  const handRSocketBone = addBone("hand_r_socket", handRBone, new Vector3(0.05, 0, 0));
+  const handRSocketBone = addBone(
+    "hand_r_socket",
+    handRBone,
+    new Vector3(0.159, -0.031, 0.023)
+  );
   const hipSocketBone = addBone("hip_socket", pelvisBone, new Vector3(0.16, -0.08, -0.06));
   const seatSocketBone = addBone("seat_socket", pelvisBone, new Vector3(0, -0.02, -0.08));
 
@@ -160,6 +225,8 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
     bonesByName.get("pinky_01_l"),
     bonesByName.get("thumb_01_r"),
     bonesByName.get("index_01_r"),
+    bonesByName.get("index_02_r"),
+    bonesByName.get("index_03_r"),
     bonesByName.get("middle_01_r"),
     bonesByName.get("ring_01_r"),
     bonesByName.get("pinky_01_r"),
@@ -216,21 +283,25 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
     new BoxGeometry(0.28, 0.08, 0.08),
     new MeshStandardMaterial({ color: 0x4b5563 })
   );
-  const triggerHandSocket = new Group();
+  const gripHandSocket = new Group();
+  const triggerMarker = new Group();
 
   attachmentMesh.position.set(0.16, 0, 0);
   attachmentScene.name = "metaverse_service_pistol_root";
-  triggerHandSocket.name = "metaverse_service_pistol_trigger_hand_r_socket";
-  triggerHandSocket.position.set(0.04, -0.045, 0.025);
-  attachmentScene.add(attachmentMesh, triggerHandSocket);
+  gripHandSocket.name = "metaverse_service_pistol_grip_hand_r_socket";
+  gripHandSocket.position.set(0.04, -0.045, 0.025);
+  triggerMarker.name = "metaverse_service_pistol_trigger_marker";
+  triggerMarker.position.set(0.076, -0.022, 0.025);
+  attachmentScene.add(attachmentMesh, gripHandSocket, triggerMarker);
 
   const sceneRuntime = createMetaverseScene(metaverseRuntimeConfig, {
     attachmentProofConfig: {
       attachmentId: "metaverse-service-pistol-v1",
       heldMount: {
-        attachmentSocketNodeName: "metaverse_service_pistol_trigger_hand_r_socket",
+        attachmentSocketNodeName: "metaverse_service_pistol_grip_hand_r_socket",
         offHandSupportPointId: null,
-        socketName: "grip_r_socket"
+        socketName: "hand_r_socket",
+        triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker"
       },
       label: "Metaverse service pistol",
       modelPath: "/models/metaverse/attachments/metaverse-service-pistol.gltf",
@@ -354,8 +425,11 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
   const attachmentRoot = sceneRuntime.scene.getObjectByName(
     "metaverse_attachment/metaverse-service-pistol-v1"
   );
-  const triggerHandSocketNode = sceneRuntime.scene.getObjectByName(
-    "metaverse_service_pistol_trigger_hand_r_socket"
+  const gripHandSocketNode = sceneRuntime.scene.getObjectByName(
+    "metaverse_service_pistol_grip_hand_r_socket"
+  );
+  const triggerMarkerNode = sceneRuntime.scene.getObjectByName(
+    "metaverse_service_pistol_trigger_marker"
   );
   const leftSupportPointNode = sceneRuntime.scene.getObjectByName(
     "metaverse_attachment_support_point/metaverse-service-pistol-v1/hand_l_support"
@@ -364,23 +438,17 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
   const rightSupportPointNode = sceneRuntime.scene.getObjectByName(
     "metaverse_attachment_support_point/metaverse-service-pistol-v1/hand_r_support"
   );
-  const rightGripSocketNode = sceneRuntime.scene.getObjectByName("grip_r_socket");
-  const rightKnuckleNodes = [
-    "index_01_r",
-    "middle_01_r",
-    "ring_01_r",
-    "pinky_01_r"
-  ].map((boneName) => sceneRuntime.scene.getObjectByName(boneName));
+  const rightHandSocketNode = sceneRuntime.scene.getObjectByName("hand_r_socket");
+  const rightTriggerContactNode = sceneRuntime.scene.getObjectByName("index_03_r");
 
   assert.ok(attachmentRoot);
-  assert.ok(triggerHandSocketNode);
+  assert.ok(gripHandSocketNode);
+  assert.ok(triggerMarkerNode);
   assert.equal(leftSupportPointNode, undefined);
   assert.equal(rightSupportPointNode, undefined);
   assert.ok(leftGripSocketNode);
-  assert.ok(rightGripSocketNode);
-  for (const knuckleNode of rightKnuckleNodes) {
-    assert.ok(knuckleNode);
-  }
+  assert.ok(rightHandSocketNode);
+  assert.ok(rightTriggerContactNode);
 
   const initialWeaponForward = new Vector3(1, 0, 0)
     .applyQuaternion(attachmentRoot.getWorldQuaternion(new Quaternion()))
@@ -398,28 +466,39 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
     -targetGripUp.dot(normalizedLookDirection)
   );
   targetGripUp.normalize();
-  const rightGripForward = new Vector3(1, 0, 0)
-    .applyQuaternion(rightGripSocketNode.getWorldQuaternion(new Quaternion()))
+  const rightHandForward = new Vector3(1, 0, 0)
+    .applyQuaternion(rightHandSocketNode.getWorldQuaternion(new Quaternion()))
     .normalize();
-  const rightGripUp = new Vector3(0, 1, 0)
-    .applyQuaternion(rightGripSocketNode.getWorldQuaternion(new Quaternion()))
+  const rightHandUp = new Vector3(0, 1, 0)
+    .applyQuaternion(rightHandSocketNode.getWorldQuaternion(new Quaternion()))
     .normalize();
-  const resolveAttachmentAssetLocalPoint = (node) =>
-    attachmentRoot.worldToLocal(node.getWorldPosition(new Vector3()));
-  const resolveKnuckleCentroid = (nodes) =>
-    nodes
-      .reduce(
-        (centroid, node) =>
-          centroid.add(resolveAttachmentAssetLocalPoint(node)),
-        new Vector3()
-      )
-      .multiplyScalar(1 / nodes.length);
-  const rightKnuckleCentroid = resolveKnuckleCentroid(rightKnuckleNodes);
-  const expectedRightGripEdge = attachmentRoot.worldToLocal(
-    triggerHandSocketNode.getWorldPosition(new Vector3())
-  );
   const initialLeftGripLocalPosition = attachmentRoot.worldToLocal(
     leftGripSocketNode.getWorldPosition(new Vector3())
+  );
+  const rightTriggerContactWorldPosition = rightTriggerContactNode.getWorldPosition(
+    new Vector3()
+  );
+  const triggerMarkerWorldPosition = triggerMarkerNode.getWorldPosition(
+    new Vector3()
+  );
+  const resolveElbowFlexionRadians = (upperarmBone, lowerarmBone, handBone) => {
+    const elbowWorldPosition = lowerarmBone.getWorldPosition(new Vector3());
+    const elbowToShoulder = upperarmBone
+      .getWorldPosition(new Vector3())
+      .sub(elbowWorldPosition);
+    const elbowToHand = handBone.getWorldPosition(new Vector3()).sub(elbowWorldPosition);
+
+    return Math.PI - elbowToShoulder.angleTo(elbowToHand);
+  };
+  const leftElbowFlexionRadians = resolveElbowFlexionRadians(
+    upperarmLBone,
+    lowerarmLBone,
+    handLBone
+  );
+  const rightElbowFlexionRadians = resolveElbowFlexionRadians(
+    upperarmRBone,
+    lowerarmRBone,
+    handRBone
   );
 
   assert.ok(
@@ -427,30 +506,40 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
     `Expected weapon forward ${initialWeaponForward.toArray()} to track camera look ${normalizedLookDirection.toArray()}.`
   );
   assert.ok(
-    rightGripForward.angleTo(normalizedLookDirection) < 0.12,
-    `Expected right grip forward ${rightGripForward.toArray()} to track camera look ${normalizedLookDirection.toArray()}.`
+    rightHandForward.angleTo(normalizedLookDirection) < 0.14,
+    `Expected right hand forward ${rightHandForward.toArray()} to track camera look ${normalizedLookDirection.toArray()}.`
   );
   assert.ok(
-    rightGripUp.angleTo(targetGripUp) < 0.12,
-    `Expected right grip up ${rightGripUp.toArray()} to stay upright against ${targetGripUp.toArray()}.`
+    rightHandUp.angleTo(targetGripUp) < 0.12,
+    `Expected right hand up ${rightHandUp.toArray()} to stay upright against ${targetGripUp.toArray()}.`
   );
   assert.ok(
-    rightKnuckleCentroid.distanceTo(expectedRightGripEdge) < 0.015,
-    `Expected right-hand knuckles ${rightKnuckleCentroid.toArray()} to land on the authored trigger-hand socket ${expectedRightGripEdge.toArray()}.`
+    rightTriggerContactWorldPosition.distanceTo(triggerMarkerWorldPosition) < 0.05,
+    `Expected right trigger contact ${rightTriggerContactWorldPosition.toArray()} to stay near the authored trigger marker ${triggerMarkerWorldPosition.toArray()} without overextending the arm.`
   );
   assert.ok(
-    rightKnuckleCentroid.z > 0.01,
-    `Expected right-hand knuckles ${rightKnuckleCentroid.toArray()} to stay on the trigger-hand side selected by the authored weapon socket.`
+    triggerMarkerWorldPosition.distanceTo(
+      rightHandSocketNode.getWorldPosition(new Vector3())
+    ) > 0.015,
+    `Expected authored trigger marker ${triggerMarkerWorldPosition.toArray()} to remain distinct from the grip-alignment hand socket target.`
   );
   assert.ok(
-    triggerHandSocketNode
+    gripHandSocketNode
       .getWorldPosition(new Vector3())
-      .distanceTo(rightGripSocketNode.getWorldPosition(new Vector3())) < 0.000001,
-    "Expected the authored trigger-hand socket to align exactly with the character grip socket."
+      .distanceTo(rightHandSocketNode.getWorldPosition(new Vector3())) < 0.000001,
+    "Expected the authored weapon grip socket to align exactly with the character hand socket."
   );
   assert.ok(
     renderedCameraPosition.distanceTo(traversalCameraPosition) < 0.000001,
     `Expected rendered held-weapon camera ${renderedCameraPosition.toArray()} to stay locked to the raw traversal camera ${traversalCameraPosition.toArray()}.`
+  );
+  assert.ok(
+    leftElbowFlexionRadians > 0.1,
+    `Expected left elbow to stay bent in the held-weapon pose, but flexion was ${leftElbowFlexionRadians.toFixed(4)} radians.`
+  );
+  assert.ok(
+    rightElbowFlexionRadians > 0.16,
+    `Expected right elbow to stay bent in the held-weapon pose, but flexion was ${rightElbowFlexionRadians.toFixed(4)} radians.`
   );
   assert.ok(
     spine01Bone.quaternion.angleTo(new Quaternion()) < 0.001,

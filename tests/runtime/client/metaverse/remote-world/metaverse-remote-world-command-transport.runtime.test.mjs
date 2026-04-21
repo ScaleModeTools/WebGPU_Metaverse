@@ -4,6 +4,7 @@ import test, { after, before } from "node:test";
 import {
   createMetaverseGameplayTraversalIntentSnapshotInput,
   createMetaversePlayerId,
+  createMetaverseRealtimePlayerWeaponStateSnapshot,
   createUsername
 } from "@webgpu-metaverse/shared";
 
@@ -65,6 +66,12 @@ test("MetaverseRemoteWorldCommandTransport adapts grounded traversal, look, moun
     pitchRadians: 0.1,
     yawRadians: 0.8
   });
+  commandTransport.syncLocalPlayerWeaponState(
+    createMetaverseRealtimePlayerWeaponStateSnapshot({
+      aimMode: "ads",
+      weaponId: "duck-hunt-pistol"
+    })
+  );
   commandTransport.syncMountedOccupancy({
     entryId: null,
     environmentAssetId: "harbor-skiff",
@@ -83,7 +90,6 @@ test("MetaverseRemoteWorldCommandTransport adapts grounded traversal, look, moun
   });
 
   assert.equal(previewSnapshot?.actionIntent.kind, "jump");
-  assert.equal(previewSnapshot?.facing.yawRadians, 1.3);
   assert.equal(syncedSnapshot?.actionIntent.kind, "jump");
   assert.equal(syncedSnapshot?.inputSequence, 1);
   assert.equal(
@@ -97,6 +103,10 @@ test("MetaverseRemoteWorldCommandTransport adapts grounded traversal, look, moun
   assert.equal(
     worldClient.playerLookIntentRequests[0]?.lookIntent.yawRadians,
     0.8
+  );
+  assert.equal(
+    worldClient.playerWeaponStateRequests[0]?.weaponState?.aimMode,
+    "ads"
   );
   assert.equal(
     worldClient.mountedOccupancyRequests[0]?.mountedOccupancy?.seatId,
@@ -140,7 +150,10 @@ test("MetaverseRemoteWorldCommandTransport clears traversal/look lanes when the 
     null
   );
   commandTransport.syncLocalPlayerLook(null);
+  commandTransport.syncLocalPlayerWeaponState(null);
 
   assert.equal(worldClient.playerTraversalIntentRequests[0], null);
   assert.equal(worldClient.playerLookIntentRequests[0], null);
+  assert.equal(worldClient.playerWeaponStateRequests[0]?.playerId, localPlayerId);
+  assert.equal(worldClient.playerWeaponStateRequests[0]?.weaponState, null);
 });

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
 import {
+  createMetaverseGroundedBodyRuntimeSnapshot,
   createMetaversePlayerId,
   createMetaverseRealtimeWorldSnapshot,
   createMetaverseVehicleId,
@@ -27,12 +28,20 @@ function createWorldSnapshot({
       {
         angularVelocityRadiansPerSecond: 0,
         characterId: "mesh2motion-humanoid-v1",
-        jumpAuthorityState: "grounded",
-        linearVelocity: {
-          x: 2,
-          y: 0,
-          z: 0
-        },
+        groundedBody: createMetaverseGroundedBodyRuntimeSnapshot({
+          grounded: true,
+          linearVelocity: {
+            x: 2,
+            y: 0,
+            z: 0
+          },
+          position: {
+            x: worldPlayerX,
+            y: 1,
+            z: 0
+          },
+          yawRadians: 0
+        }),
         look: {
           pitchRadians: 0,
           yawRadians: 0
@@ -40,14 +49,8 @@ function createWorldSnapshot({
         locomotionMode: "grounded",
         mountedOccupancy: null,
         playerId,
-        position: {
-          x: worldPlayerX,
-          y: 1,
-          z: 0
-        },
         stateSequence: snapshotSequence,
-        username: createUsername("Harbor Pilot"),
-        yawRadians: 0
+        username: createUsername("Harbor Pilot")
       }
     ],
     snapshotSequence,
@@ -181,7 +184,7 @@ test("resolveMetaverseRemoteWorldFreshLatestSnapshot gates stale latest snapshot
   );
 
   assert.equal(
-    playerSnapshotsByPlayerId.get(playerId)?.position.x,
+    playerSnapshotsByPlayerId.get(playerId)?.groundedBody.position.x,
     7
   );
   assert.equal(vehicleSnapshotsByVehicleId.get(vehicleId)?.position.x, 12);

@@ -54,7 +54,8 @@ export function advanceLocalCharacterAnimation<
       characterPresentation?.animationVocabulary ?? "idle",
       mountedCharacterRuntime
     ),
-    useHumanoidV2PistolLayering
+    useHumanoidV2PistolLayering,
+    characterPresentation?.animationCycleId
   );
 
   if (characterRuntime.humanoidV2PistolPoseRuntime !== null) {

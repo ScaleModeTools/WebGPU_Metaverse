@@ -104,9 +104,6 @@ export interface MetaverseRuntimeConfig {
     };
   };
   readonly portals: readonly MetaversePortalConfig[];
-  readonly traversal: {
-    readonly groundedJumpSupportVerticalSpeedTolerance: number;
-  };
   readonly skiff: {
     readonly accelerationCurveExponent: number;
     readonly accelerationUnitsPerSecondSquared: number;

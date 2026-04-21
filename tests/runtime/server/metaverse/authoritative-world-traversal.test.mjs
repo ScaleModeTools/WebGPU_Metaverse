@@ -12,6 +12,8 @@ import {
   createAuthoritativeRuntime,
   createMetaverseSyncPlayerTraversalIntentCommand,
   joinSurfacePlayer,
+  readPlayerActiveBodySnapshot,
+  readPrimaryPlayerActiveBodySnapshot,
   requireValue,
   shippedGroundedSpawnSupportHeightMeters
 } from "./authoritative-world-test-fixtures.mjs";
@@ -49,17 +51,19 @@ test("MetaverseAuthoritativeWorldRuntime simulates unmounted grounded and swim t
 
   const groundedWorldSnapshot =
     groundedRuntime.readWorldSnapshot(200, groundedPlayerId);
+  const groundedActiveBodySnapshot =
+    readPrimaryPlayerActiveBodySnapshot(groundedWorldSnapshot);
 
   assert.equal(groundedWorldSnapshot.tick.currentTick, 2);
-  assert.equal(groundedWorldSnapshot.players[0]?.lastProcessedInputSequence, 2);
+  assert.equal(groundedWorldSnapshot.observerPlayer?.lastProcessedInputSequence, 2);
   assert.equal(groundedWorldSnapshot.players[0]?.locomotionMode, "grounded");
-  assert.ok((groundedWorldSnapshot.players[0]?.position.y ?? 0) > 0.4);
+  assert.ok(groundedActiveBodySnapshot.position.y > 0.4);
   assert.ok(
-    (groundedWorldSnapshot.players[0]?.position.y ?? 0) <
+    groundedActiveBodySnapshot.position.y <
       shippedGroundedSpawnSupportHeightMeters
   );
-  assert.ok((groundedWorldSnapshot.players[0]?.position.z ?? -14.8) < -14.8);
-  assert.ok((groundedWorldSnapshot.players[0]?.linearVelocity.z ?? 0) < 0);
+  assert.ok(groundedActiveBodySnapshot.position.z < -14.8);
+  assert.ok(groundedActiveBodySnapshot.linearVelocity.z < 0);
   assert.equal(groundedWorldSnapshot.players[0]?.stateSequence, 2);
 
   const swimRuntime = createAuthoritativeRuntime();
@@ -103,15 +107,15 @@ test("MetaverseAuthoritativeWorldRuntime simulates unmounted grounded and swim t
   swimRuntime.advanceToTime(500);
 
   const swimWorldSnapshot = swimRuntime.readWorldSnapshot(500, swimPlayerId);
+  const swimActiveBodySnapshot =
+    readPrimaryPlayerActiveBodySnapshot(swimWorldSnapshot);
 
-  assert.equal(swimWorldSnapshot.players[0]?.lastProcessedInputSequence, 3);
+  assert.equal(swimWorldSnapshot.observerPlayer?.lastProcessedInputSequence, 3);
   assert.equal(swimWorldSnapshot.players[0]?.locomotionMode, "swim");
-  assert.equal(swimWorldSnapshot.players[0]?.position.y, 0);
-  assert.ok(
-    (swimWorldSnapshot.players[0]?.position.z ?? Number.POSITIVE_INFINITY) <
-      authoredWaterBayOpenWaterSpawn.z
-  );
-  assert.ok((swimWorldSnapshot.players[0]?.linearVelocity.z ?? 0) < 0);
+  assert.equal(swimActiveBodySnapshot.position.y, 0);
+  assert.equal(swimActiveBodySnapshot.linearVelocity.y, 0);
+  assert.ok(swimActiveBodySnapshot.position.z < authoredWaterBayOpenWaterSpawn.z);
+  assert.ok(swimActiveBodySnapshot.linearVelocity.z < 0);
   assert.equal(swimWorldSnapshot.players[0]?.stateSequence, 3);
 });
 
@@ -179,10 +183,11 @@ test("MetaverseAuthoritativeWorldRuntime keeps other grounded players as solid t
   );
   blockedRuntime.advanceToTime(500);
 
-  const blockedPlayers = blockedRuntime.readWorldSnapshot(
+  const blockedWorldSnapshot = blockedRuntime.readWorldSnapshot(
     500,
     blockedMoverPlayerId
-  ).players;
+  );
+  const blockedPlayers = blockedWorldSnapshot.players;
   const blockedMover = blockedPlayers.find(
     (player) => player.playerId === blockedMoverPlayerId
   );
@@ -192,12 +197,17 @@ test("MetaverseAuthoritativeWorldRuntime keeps other grounded players as solid t
 
   assert.notEqual(blockedMover, undefined);
   assert.notEqual(blockedStaticPlayer, undefined);
-  assert.equal(blockedMover?.lastProcessedInputSequence, 2);
+  assert.equal(
+    blockedWorldSnapshot.observerPlayer?.lastProcessedInputSequence,
+    2
+  );
   assert.equal(blockedMover?.locomotionMode, "grounded");
-  assert.ok((blockedMover?.position.z ?? Number.NEGATIVE_INFINITY) > blockerSpawnPosition.z);
+  assert.ok(
+    readPlayerActiveBodySnapshot(blockedMover).position.z > blockerSpawnPosition.z
+  );
   assert.ok(
     Math.abs(
-      (blockedStaticPlayer?.position.z ?? blockerSpawnPosition.z) -
+      readPlayerActiveBodySnapshot(blockedStaticPlayer).position.z -
         blockerSpawnPosition.z
     ) < 0.05
   );
@@ -236,11 +246,13 @@ test("MetaverseAuthoritativeWorldRuntime keeps other grounded players as solid t
   const soloMover = soloRuntime
     .readWorldSnapshot(500, soloMoverPlayerId)
     .players.find((player) => player.playerId === soloMoverPlayerId);
+  const soloMoverActiveBodySnapshot = readPlayerActiveBodySnapshot(soloMover);
+  const blockedMoverActiveBodySnapshot = readPlayerActiveBodySnapshot(blockedMover);
 
   assert.notEqual(soloMover, undefined);
-  assert.ok((soloMover?.position.z ?? Number.POSITIVE_INFINITY) < blockerSpawnPosition.z);
+  assert.ok(soloMoverActiveBodySnapshot.position.z < blockerSpawnPosition.z);
   assert.ok(
-    (blockedMover?.position.z ?? Number.NEGATIVE_INFINITY) >
-      (soloMover?.position.z ?? Number.POSITIVE_INFINITY) + 1.5
+    blockedMoverActiveBodySnapshot.position.z >
+      soloMoverActiveBodySnapshot.position.z + 1.5
   );
 });

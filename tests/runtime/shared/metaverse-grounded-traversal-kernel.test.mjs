@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createMetaverseGroundedBodyStepStateSnapshot,
   prepareMetaverseGroundedBodyStep,
+  resolveMetaverseGroundedBodyControllerContactSnapshot,
   resolveMetaverseGroundedBodyControllerStep,
   resolveMetaverseGroundedBodyStep,
   syncMetaverseGroundedBodyStepState
@@ -240,7 +241,7 @@ test("shared grounded traversal kernel resolves controller results into the same
       z: 0.05
     },
     blockedPlanarMovement: true,
-    blockedVerticalMovement: true,
+    blockedVerticalMovement: false,
     desiredMovementDelta: preparedStep.desiredMovementDelta,
     supportingContactDetected: true
   });
@@ -248,4 +249,52 @@ test("shared grounded traversal kernel resolves controller results into the same
     controllerResolvedStep.state.driveTarget,
     preparedStep.driveTarget
   );
+});
+
+test("shared grounded traversal kernel ignores sub-centimeter contact delta noise", () => {
+  const contactSnapshot = resolveMetaverseGroundedBodyControllerContactSnapshot(
+    {
+      desiredMovementDelta: {
+        x: 0.25,
+        y: 0.02,
+        z: -0.12
+      }
+    },
+    {
+      computedGrounded: true,
+      computedMovementDelta: {
+        x: 0.245,
+        y: 0.011,
+        z: -0.111
+      }
+    }
+  );
+
+  assert.equal(contactSnapshot.blockedPlanarMovement, false);
+  assert.equal(contactSnapshot.blockedVerticalMovement, false);
+  assert.equal(contactSnapshot.supportingContactDetected, true);
+});
+
+test("shared grounded traversal kernel does not treat grounded support lift as blocked vertical movement", () => {
+  const contactSnapshot = resolveMetaverseGroundedBodyControllerContactSnapshot(
+    {
+      desiredMovementDelta: {
+        x: 0,
+        y: -0.005,
+        z: -0.075
+      }
+    },
+    {
+      computedGrounded: true,
+      computedMovementDelta: {
+        x: 0,
+        y: 0.0193,
+        z: -0.075
+      }
+    }
+  );
+
+  assert.equal(contactSnapshot.blockedPlanarMovement, false);
+  assert.equal(contactSnapshot.blockedVerticalMovement, false);
+  assert.equal(contactSnapshot.supportingContactDetected, true);
 });

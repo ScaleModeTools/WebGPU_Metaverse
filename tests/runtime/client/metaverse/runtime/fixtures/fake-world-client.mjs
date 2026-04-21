@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 
 import {
+  createMetaverseRealtimePlayerWeaponStateSnapshot,
   createMetaverseRealtimeWorldSnapshot,
   createMetaverseVehicleId,
   doMetaversePlayerTraversalSequencedInputsMatch,
@@ -79,6 +80,7 @@ export function createRealtimeWorldSnapshot({
   localLastProcessedInputSequence,
   localLastProcessedJumpActionSequence = 0,
   localLastProcessedLookSequence,
+  localLastProcessedWeaponSequence = 0,
   localLastProcessedTraversalOrientationSequence,
   localLinearVelocity = {
     x: 0,
@@ -98,9 +100,6 @@ export function createRealtimeWorldSnapshot({
   localUsername,
   localYawRadians = 0,
   remoteAnimationVocabulary,
-  remoteLastProcessedInputSequence,
-  remoteLastProcessedLookSequence,
-  remoteLastProcessedTraversalOrientationSequence,
   remoteLinearVelocity,
   remoteLocomotionMode,
   remoteLookPitchRadians = 0,
@@ -108,10 +107,9 @@ export function createRealtimeWorldSnapshot({
   remoteMountedOccupancy = null,
   remoteObservedMoveAxis = 0,
   remoteObservedStrafeAxis = 0,
-  remoteObservedFacingPitchRadians,
-  remoteObservedFacingYawRadians,
   remotePlayerAngularVelocityRadiansPerSecond = 0,
   remotePlayerId,
+  remoteWeaponState = null,
   remotePlayerX,
   remotePlayerY,
   remotePlayerZ = 18,
@@ -131,24 +129,13 @@ export function createRealtimeWorldSnapshot({
   const vehicleId = createMetaverseVehicleId("metaverse-hub-skiff-v1");
   const resolvedLocalLastProcessedInputSequence =
     localLastProcessedInputSequence ?? snapshotSequence;
-  const resolvedRemoteLastProcessedInputSequence =
-    remoteLastProcessedInputSequence ?? snapshotSequence;
   const resolvedLocalLastProcessedLookSequence =
     localLastProcessedLookSequence ?? resolvedLocalLastProcessedInputSequence;
   const resolvedLocalLastProcessedTraversalOrientationSequence =
     localLastProcessedTraversalOrientationSequence ??
     resolvedLocalLastProcessedInputSequence;
-  const resolvedRemoteLastProcessedLookSequence =
-    remoteLastProcessedLookSequence ?? resolvedRemoteLastProcessedInputSequence;
-  const resolvedRemoteLastProcessedTraversalOrientationSequence =
-    remoteLastProcessedTraversalOrientationSequence ??
-    resolvedRemoteLastProcessedInputSequence;
   const resolvedLocalLookYawRadians = localLookYawRadians ?? localYawRadians;
   const resolvedRemoteLookYawRadians = remoteLookYawRadians ?? yawRadians;
-  const resolvedRemoteObservedFacingPitchRadians =
-    remoteObservedFacingPitchRadians ?? remoteLookPitchRadians;
-  const resolvedRemoteObservedFacingYawRadians =
-    remoteObservedFacingYawRadians ?? resolvedRemoteLookYawRadians;
   const hasRemoteCanonicalSeatOccupancy =
     includeVehicle && vehicleSeatOccupantPlayerId === remotePlayerId;
   const resolvedRemoteLocomotionMode =
@@ -233,38 +220,69 @@ export function createRealtimeWorldSnapshot({
           resolvedActionState:
             resolvedLocalJumpDebug?.resolvedActionState ?? "none"
         });
+  const localCanonicalPosition = {
+    x: localPlayerX,
+    y: localPlayerY,
+    z: localPlayerZ
+  };
+  const localCanonicalGroundedBody =
+    localGroundedBody ??
+    {
+      linearVelocity: localLinearVelocity,
+      position: localCanonicalPosition,
+      yawRadians: localYawRadians
+    };
+  const localCanonicalSwimBody =
+    localMountedOccupancy === null && localLocomotionMode === "swim"
+      ? {
+          linearVelocity: localLinearVelocity,
+          position: localCanonicalPosition,
+          yawRadians: localYawRadians
+        }
+      : undefined;
+  const remoteCanonicalPosition = {
+    x: remotePlayerX,
+    y: resolvedRemotePlayerY,
+    z: remotePlayerZ
+  };
+  const remoteCanonicalGroundedBody = {
+    linearVelocity: resolvedRemoteLinearVelocity,
+    position: remoteCanonicalPosition,
+    yawRadians
+  };
+  const remoteCanonicalSwimBody =
+    resolvedRemoteLocomotionMode === "swim"
+      ? {
+          linearVelocity: resolvedRemoteLinearVelocity,
+          position: remoteCanonicalPosition,
+          yawRadians
+        }
+      : undefined;
 
   assert.notEqual(vehicleId, null);
 
   return createMetaverseRealtimeWorldSnapshot({
+    observerPlayer: {
+      jumpDebug: resolvedLocalJumpDebug,
+      lastProcessedInputSequence: resolvedLocalLastProcessedInputSequence,
+      lastProcessedLookSequence: resolvedLocalLastProcessedLookSequence,
+      lastProcessedTraversalOrientationSequence:
+        resolvedLocalLastProcessedTraversalOrientationSequence,
+      lastProcessedWeaponSequence: localLastProcessedWeaponSequence,
+      playerId: localPlayerId
+    },
     players: [
       {
         angularVelocityRadiansPerSecond: 0,
         animationVocabulary: localAnimationVocabulary,
         characterId: "mesh2motion-humanoid-v1",
-        ...(localGroundedBody === undefined
-          ? {}
-          : { groundedBody: localGroundedBody }),
-        jumpDebug: resolvedLocalJumpDebug,
-        linearVelocity: localLinearVelocity,
+        groundedBody: localCanonicalGroundedBody,
         look: {
           pitchRadians: localLookPitchRadians,
           yawRadians: resolvedLocalLookYawRadians
         },
         locomotionMode:
           localMountedOccupancy === null ? localLocomotionMode : "mounted",
-        observedTraversal: {
-          bodyControl: {
-            boost: false,
-            moveAxis: localObservedMoveAxis,
-            strafeAxis: localObservedStrafeAxis,
-            turnAxis: 0
-          },
-          facing: {
-            pitchRadians: localLookPitchRadians,
-            yawRadians: resolvedLocalLookYawRadians
-          }
-        },
         mountedOccupancy:
           localMountedOccupancy === null
             ? null
@@ -272,22 +290,21 @@ export function createRealtimeWorldSnapshot({
                 ...localMountedOccupancy,
                 vehicleId
               },
-        playerId: localPlayerId,
-        position: {
-          x: localPlayerX,
-          y: localPlayerY,
-          z: localPlayerZ
+        ...(localCanonicalSwimBody === undefined
+          ? {}
+          : {
+              swimBody: localCanonicalSwimBody
+            }),
+        presentationIntent: {
+          moveAxis: localObservedMoveAxis,
+          strafeAxis: localObservedStrafeAxis
         },
-        lastProcessedInputSequence: resolvedLocalLastProcessedInputSequence,
-        lastProcessedLookSequence: resolvedLocalLastProcessedLookSequence,
-        lastProcessedTraversalOrientationSequence:
-          resolvedLocalLastProcessedTraversalOrientationSequence,
+        playerId: localPlayerId,
         stateSequence: snapshotSequence,
         ...(localTraversalAuthority === undefined
           ? {}
           : { traversalAuthority: localTraversalAuthority }),
-        username: localUsername,
-        yawRadians: localYawRadians
+        username: localUsername
       },
       ...(includeRemotePlayer
         ? [
@@ -296,24 +313,12 @@ export function createRealtimeWorldSnapshot({
                 remotePlayerAngularVelocityRadiansPerSecond,
               animationVocabulary: resolvedRemoteAnimationVocabulary,
               characterId: "mesh2motion-humanoid-v1",
-              linearVelocity: resolvedRemoteLinearVelocity,
+              groundedBody: remoteCanonicalGroundedBody,
               look: {
                 pitchRadians: remoteLookPitchRadians,
                 yawRadians: resolvedRemoteLookYawRadians
               },
               locomotionMode: resolvedRemoteLocomotionMode,
-              observedTraversal: {
-                bodyControl: {
-                  boost: false,
-                  moveAxis: remoteObservedMoveAxis,
-                  strafeAxis: remoteObservedStrafeAxis,
-                  turnAxis: 0
-                },
-                facing: {
-                  pitchRadians: resolvedRemoteObservedFacingPitchRadians,
-                  yawRadians: resolvedRemoteObservedFacingYawRadians
-                }
-              },
               ...(remoteMountedOccupancy === null
                 ? {}
                 : {
@@ -322,19 +327,23 @@ export function createRealtimeWorldSnapshot({
                       vehicleId
                     }
                   }),
-              playerId: remotePlayerId,
-              position: {
-                x: remotePlayerX,
-                y: resolvedRemotePlayerY,
-                z: remotePlayerZ
+              ...(remoteCanonicalSwimBody === undefined
+                ? {}
+                : {
+                    swimBody: remoteCanonicalSwimBody
+                  }),
+              presentationIntent: {
+                moveAxis: remoteObservedMoveAxis,
+                strafeAxis: remoteObservedStrafeAxis
               },
-              lastProcessedInputSequence: resolvedRemoteLastProcessedInputSequence,
-              lastProcessedLookSequence: resolvedRemoteLastProcessedLookSequence,
-              lastProcessedTraversalOrientationSequence:
-                resolvedRemoteLastProcessedTraversalOrientationSequence,
+              playerId: remotePlayerId,
               stateSequence: snapshotSequence,
-              username: remoteUsername,
-              yawRadians
+              ...(remoteWeaponState === null
+                ? {}
+                : {
+                    weaponState: remoteWeaponState
+                  }),
+              username: remoteUsername
             }
           ]
         : [])
@@ -401,15 +410,19 @@ export class FakeMetaverseWorldClient {
     this.driverVehicleControlRequests = [];
     this.lastJumpPressed = false;
     this.lastPlayerLookIntentRequestKey = null;
+    this.lastPlayerWeaponStateRequestKey = null;
     this.lastPlayerTraversalIntentRequestKey = null;
     this.latestPlayerInputSequence = 0;
+    this.latestPlayerIssuedTraversalIntentSnapshot = null;
     this.latestPlayerLookSequence = 0;
+    this.latestPlayerWeaponSequence = 0;
     this.latestPlayerTraversalOrientationSequence = 0;
     this.latestPlayerLookIntentSnapshot = null;
-    this.latestPlayerTraversalIntentSnapshot = null;
+    this.latestPlayerWeaponStateSnapshot = null;
     this.mountedOccupancyRequests = [];
     this.nextJumpActionSequence = 0;
     this.playerLookIntentRequests = [];
+    this.playerWeaponStateRequests = [];
     this.playerTraversalIntentRequests = [];
     this.ensureConnectedRequests = [];
     this.listeners = new Set();
@@ -426,6 +439,7 @@ export class FakeMetaverseWorldClient {
     this.telemetrySnapshot = createFakeWorldClientTelemetrySnapshot(
       worldSnapshotBuffer
     );
+    this._latestPlayerTraversalIntentSnapshot = null;
     this.worldSnapshotBuffer = Object.freeze(worldSnapshotBuffer);
     this.statusSnapshot = Object.freeze({
       connected: worldSnapshotBuffer.length > 0,
@@ -491,15 +505,35 @@ export class FakeMetaverseWorldClient {
           });
   }
 
+  syncPlayerWeaponState(commandInput) {
+    this.playerWeaponStateRequests.push(commandInput);
+    const nextPlayerWeaponStateRequestKey =
+      commandInput === null ? null : JSON.stringify(commandInput);
+
+    if (
+      commandInput !== null &&
+      nextPlayerWeaponStateRequestKey !== this.lastPlayerWeaponStateRequestKey
+    ) {
+      this.latestPlayerWeaponSequence += 1;
+    }
+
+    this.lastPlayerWeaponStateRequestKey = nextPlayerWeaponStateRequestKey;
+    this.latestPlayerWeaponStateSnapshot =
+      commandInput === null || commandInput.weaponState === null
+        ? null
+        : createMetaverseRealtimePlayerWeaponStateSnapshot(commandInput.weaponState);
+  }
+
   syncPlayerTraversalIntent(commandInput) {
     this.playerTraversalIntentRequests.push(commandInput);
     const nextTraversalIntentSnapshot =
-      this.previewPlayerTraversalIntent(commandInput);
+      this.#previewPlayerTraversalIntentSnapshot(commandInput);
 
     if (commandInput === null || nextTraversalIntentSnapshot === null) {
       this.lastJumpPressed = false;
       this.lastPlayerTraversalIntentRequestKey = null;
-      this.latestPlayerTraversalIntentSnapshot = null;
+      this.latestPlayerIssuedTraversalIntentSnapshot = null;
+      this._latestPlayerTraversalIntentSnapshot = null;
       return null;
     }
 
@@ -510,16 +544,16 @@ export class FakeMetaverseWorldClient {
         : commandInput.intent.jump === true;
     const sequencedInputChanged =
       !doMetaversePlayerTraversalSequencedInputsMatch(
-        this.latestPlayerTraversalIntentSnapshot,
+        this._latestPlayerTraversalIntentSnapshot,
         nextTraversalIntentSnapshot
       );
     const orientationInputChanged =
-      this.latestPlayerTraversalIntentSnapshot === null ||
-      this.latestPlayerTraversalIntentSnapshot.bodyControl.turnAxis !==
+      this._latestPlayerTraversalIntentSnapshot === null ||
+      this._latestPlayerTraversalIntentSnapshot.bodyControl.turnAxis !==
         nextTraversalIntentSnapshot.bodyControl.turnAxis ||
-      this.latestPlayerTraversalIntentSnapshot.facing.pitchRadians !==
+      this._latestPlayerTraversalIntentSnapshot.facing.pitchRadians !==
         nextTraversalIntentSnapshot.facing.pitchRadians ||
-      this.latestPlayerTraversalIntentSnapshot.facing.yawRadians !==
+      this._latestPlayerTraversalIntentSnapshot.facing.yawRadians !==
         nextTraversalIntentSnapshot.facing.yawRadians;
 
     if (sequencedInputChanged) {
@@ -538,7 +572,7 @@ export class FakeMetaverseWorldClient {
     }
 
     this.lastJumpPressed = jumpPressed;
-    this.latestPlayerTraversalIntentSnapshot = Object.freeze({
+    this._latestPlayerTraversalIntentSnapshot = Object.freeze({
       ...nextTraversalIntentSnapshot,
       inputSequence: this.latestPlayerInputSequence,
       orientationSequence: this.latestPlayerTraversalOrientationSequence,
@@ -557,10 +591,36 @@ export class FakeMetaverseWorldClient {
       })
     });
 
-    return this.latestPlayerTraversalIntentSnapshot;
+    this.latestPlayerIssuedTraversalIntentSnapshot = Object.freeze({
+      actionIntent: this._latestPlayerTraversalIntentSnapshot.actionIntent,
+      bodyControl: this._latestPlayerTraversalIntentSnapshot.bodyControl,
+      inputSequence: this._latestPlayerTraversalIntentSnapshot.inputSequence,
+      locomotionMode: this._latestPlayerTraversalIntentSnapshot.locomotionMode,
+      orientationSequence:
+        this._latestPlayerTraversalIntentSnapshot.orientationSequence
+    });
+
+    return this.latestPlayerIssuedTraversalIntentSnapshot;
   }
 
   previewPlayerTraversalIntent(commandInput) {
+    const nextTraversalIntentSnapshot =
+      this.#previewPlayerTraversalIntentSnapshot(commandInput);
+
+    if (nextTraversalIntentSnapshot === null) {
+      return null;
+    }
+
+    return Object.freeze({
+      actionIntent: nextTraversalIntentSnapshot.actionIntent,
+      bodyControl: nextTraversalIntentSnapshot.bodyControl,
+      inputSequence: nextTraversalIntentSnapshot.inputSequence,
+      locomotionMode: nextTraversalIntentSnapshot.locomotionMode,
+      orientationSequence: nextTraversalIntentSnapshot.orientationSequence
+    });
+  }
+
+  #previewPlayerTraversalIntentSnapshot(commandInput) {
     if (commandInput === null) {
       return null;
     }
@@ -617,25 +677,28 @@ export class FakeMetaverseWorldClient {
     });
     const nextInputSequence =
       !doMetaversePlayerTraversalSequencedInputsMatch(
-        this.latestPlayerTraversalIntentSnapshot,
+        this._latestPlayerTraversalIntentSnapshot,
         normalizedTraversalIntentSnapshot
       )
         ? this.latestPlayerInputSequence + 1
         : this.latestPlayerInputSequence;
     const nextOrientationSequence =
-      this.latestPlayerTraversalIntentSnapshot === null ||
-      this.latestPlayerTraversalIntentSnapshot.bodyControl.turnAxis !==
+      this._latestPlayerTraversalIntentSnapshot === null ||
+      this._latestPlayerTraversalIntentSnapshot.bodyControl.turnAxis !==
         normalizedTraversalIntentSnapshot.bodyControl.turnAxis ||
-      this.latestPlayerTraversalIntentSnapshot.facing.pitchRadians !==
+      this._latestPlayerTraversalIntentSnapshot.facing.pitchRadians !==
         normalizedTraversalIntentSnapshot.facing.pitchRadians ||
-      this.latestPlayerTraversalIntentSnapshot.facing.yawRadians !==
+      this._latestPlayerTraversalIntentSnapshot.facing.yawRadians !==
         normalizedTraversalIntentSnapshot.facing.yawRadians
         ? this.latestPlayerTraversalOrientationSequence + 1
         : this.latestPlayerTraversalOrientationSequence;
 
     return Object.freeze({
-      ...normalizedTraversalIntentSnapshot,
+      actionIntent: normalizedTraversalIntentSnapshot.actionIntent,
+      bodyControl: normalizedTraversalIntentSnapshot.bodyControl,
+      facing: normalizedTraversalIntentSnapshot.facing,
       inputSequence: nextInputSequence,
+      locomotionMode: normalizedTraversalIntentSnapshot.locomotionMode,
       orientationSequence: nextOrientationSequence
     });
   }

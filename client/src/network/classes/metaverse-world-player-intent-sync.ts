@@ -1,24 +1,28 @@
 import type {
   MetaversePlayerId,
-  MetaversePlayerTraversalIntentSnapshot,
+  MetaverseRealtimePlayerTraversalAuthoritySnapshot,
   MetaverseRealtimeWorldEvent,
-  MetaverseRealtimeWorldSnapshot,
   MetaverseSyncPlayerLookIntentCommandInput,
+  MetaverseSyncPlayerWeaponStateCommandInput,
   MetaverseSyncPlayerTraversalIntentCommandInput
 } from "@webgpu-metaverse/shared";
 
 import type { MetaverseWorldClientStatusSnapshot } from "../types/metaverse-world-client";
+import {
+  createMetaversePlayerIssuedTraversalIntentSnapshot,
+  type MetaversePlayerIssuedTraversalIntentSnapshot
+} from "../types/metaverse-player-issued-traversal-intent";
 import { MetaverseWorldPlayerLookSync } from "./metaverse-world-player-look-sync";
 import { MetaverseWorldPlayerTraversalIntentSync } from "./metaverse-world-player-traversal-intent-sync";
+import { MetaverseWorldPlayerWeaponStateSync } from "./metaverse-world-player-weapon-state-sync";
 
-type LocalPlayerWorldSnapshot = MetaverseRealtimeWorldSnapshot["players"][number];
-type LocalPlayerCommandAckSnapshot = Pick<
-  LocalPlayerWorldSnapshot,
-  | "lastProcessedInputSequence"
-  | "lastProcessedLookSequence"
-  | "lastProcessedTraversalOrientationSequence"
-  | "traversalAuthority"
->;
+type LocalPlayerCommandAckSnapshot = {
+  readonly lastProcessedInputSequence: number;
+  readonly lastProcessedLookSequence: number;
+  readonly lastProcessedTraversalOrientationSequence: number;
+  readonly lastProcessedWeaponSequence: number;
+  readonly traversalAuthority: MetaverseRealtimePlayerTraversalAuthoritySnapshot;
+};
 
 interface MetaverseWorldPlayerIntentSyncDependencies {
   readonly acceptWorldEvent: (
@@ -30,12 +34,16 @@ interface MetaverseWorldPlayerIntentSyncDependencies {
     fallbackMessage: string
   ) => void;
   readonly clearTimeout: typeof globalThis.clearTimeout;
+  readonly readEstimatedServerTimeMs?: ((localWallClockMs: number) => number) | undefined;
   readonly readLatestLocalPlayerSnapshot: () => LocalPlayerCommandAckSnapshot | null;
   readonly readPlayerId: () => MetaversePlayerId | null;
+  readonly readWallClockMs: () => number;
   readonly readStatusSnapshot: () => MetaverseWorldClientStatusSnapshot;
   readonly resolveCommandDelayMs: () => number;
   readonly sendPlayerLookIntentCommand:
     ConstructorParameters<typeof MetaverseWorldPlayerLookSync>[0]["sendPlayerLookIntentCommand"];
+  readonly sendPlayerWeaponStateCommand:
+    ConstructorParameters<typeof MetaverseWorldPlayerWeaponStateSync>[0]["sendPlayerWeaponStateCommand"];
   readonly sendPlayerTraversalIntentCommand:
     ConstructorParameters<typeof MetaverseWorldPlayerTraversalIntentSync>[0]["sendPlayerTraversalIntentCommand"];
   readonly setTimeout: typeof globalThis.setTimeout;
@@ -44,6 +52,7 @@ interface MetaverseWorldPlayerIntentSyncDependencies {
 export class MetaverseWorldPlayerIntentSync {
   readonly #playerLookSync: MetaverseWorldPlayerLookSync;
   readonly #playerTraversalIntentSync: MetaverseWorldPlayerTraversalIntentSync;
+  readonly #playerWeaponStateSync: MetaverseWorldPlayerWeaponStateSync;
 
   constructor(dependencies: MetaverseWorldPlayerIntentSyncDependencies) {
     this.#playerLookSync = new MetaverseWorldPlayerLookSync({
@@ -57,12 +66,25 @@ export class MetaverseWorldPlayerIntentSync {
       sendPlayerLookIntentCommand: dependencies.sendPlayerLookIntentCommand,
       setTimeout: dependencies.setTimeout
     });
-    this.#playerTraversalIntentSync = new MetaverseWorldPlayerTraversalIntentSync({
+    this.#playerWeaponStateSync = new MetaverseWorldPlayerWeaponStateSync({
       acceptWorldEvent: dependencies.acceptWorldEvent,
       applyWorldAccessError: dependencies.applyWorldAccessError,
       clearTimeout: dependencies.clearTimeout,
       readLatestLocalPlayerSnapshot: dependencies.readLatestLocalPlayerSnapshot,
       readPlayerId: dependencies.readPlayerId,
+      readStatusSnapshot: dependencies.readStatusSnapshot,
+      resolveCommandDelayMs: dependencies.resolveCommandDelayMs,
+      sendPlayerWeaponStateCommand: dependencies.sendPlayerWeaponStateCommand,
+      setTimeout: dependencies.setTimeout
+    });
+    this.#playerTraversalIntentSync = new MetaverseWorldPlayerTraversalIntentSync({
+      acceptWorldEvent: dependencies.acceptWorldEvent,
+      applyWorldAccessError: dependencies.applyWorldAccessError,
+      clearTimeout: dependencies.clearTimeout,
+      readEstimatedServerTimeMs: dependencies.readEstimatedServerTimeMs,
+      readLatestLocalPlayerSnapshot: dependencies.readLatestLocalPlayerSnapshot,
+      readPlayerId: dependencies.readPlayerId,
+      readWallClockMs: dependencies.readWallClockMs,
       readStatusSnapshot: dependencies.readStatusSnapshot,
       resolveCommandDelayMs: dependencies.resolveCommandDelayMs,
       sendPlayerTraversalIntentCommand:
@@ -79,10 +101,16 @@ export class MetaverseWorldPlayerIntentSync {
     return this.#playerLookSync.latestPlayerLookSequence;
   }
 
-  get latestPlayerTraversalIntentSnapshot():
-    | MetaversePlayerTraversalIntentSnapshot
+  get latestPlayerWeaponSequence(): number {
+    return this.#playerWeaponStateSync.latestPlayerWeaponSequence;
+  }
+
+  get latestPlayerIssuedTraversalIntentSnapshot():
+    | MetaversePlayerIssuedTraversalIntentSnapshot
     | null {
-    return this.#playerTraversalIntentSync.latestPlayerTraversalIntentSnapshot;
+    return createMetaversePlayerIssuedTraversalIntentSnapshot(
+      this.#playerTraversalIntentSync.latestPlayerTraversalIntentSnapshot
+    );
   }
 
   get latestPlayerTraversalOrientationSequence(): number {
@@ -91,14 +119,15 @@ export class MetaverseWorldPlayerIntentSync {
 
   previewPlayerTraversalIntent(
     commandInput: MetaverseSyncPlayerTraversalIntentCommandInput | null
-  ): MetaversePlayerTraversalIntentSnapshot | null {
-    return this.#playerTraversalIntentSync.previewPlayerTraversalIntent(
-      commandInput
+  ): MetaversePlayerIssuedTraversalIntentSnapshot | null {
+    return createMetaversePlayerIssuedTraversalIntentSnapshot(
+      this.#playerTraversalIntentSync.previewPlayerTraversalIntent(commandInput)
     );
   }
 
   syncFromAuthoritativeWorld(): void {
     this.#playerLookSync.syncFromAuthoritativeWorld();
+    this.#playerWeaponStateSync.syncFromAuthoritativeWorld();
     this.#playerTraversalIntentSync.syncFromAuthoritativeWorld();
   }
 
@@ -108,16 +137,23 @@ export class MetaverseWorldPlayerIntentSync {
     this.#playerLookSync.syncPlayerLookIntent(commandInput);
   }
 
+  syncPlayerWeaponState(
+    commandInput: MetaverseSyncPlayerWeaponStateCommandInput | null
+  ): void {
+    this.#playerWeaponStateSync.syncPlayerWeaponState(commandInput);
+  }
+
   syncPlayerTraversalIntent(
     commandInput: MetaverseSyncPlayerTraversalIntentCommandInput | null
-  ): MetaversePlayerTraversalIntentSnapshot | null {
-    return this.#playerTraversalIntentSync.syncPlayerTraversalIntent(
-      commandInput
+  ): MetaversePlayerIssuedTraversalIntentSnapshot | null {
+    return createMetaversePlayerIssuedTraversalIntentSnapshot(
+      this.#playerTraversalIntentSync.syncPlayerTraversalIntent(commandInput)
     );
   }
 
   dispose(): void {
     this.#playerLookSync.dispose();
+    this.#playerWeaponStateSync.dispose();
     this.#playerTraversalIntentSync.dispose();
   }
 }

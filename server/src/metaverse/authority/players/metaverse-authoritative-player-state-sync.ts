@@ -19,13 +19,17 @@ import {
   type MetaverseTraversalKinematicStateSnapshot,
   type MetaverseUnmountedTraversalStateSnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
-import type {
-  MetaversePlayerId,
-  MetaversePresenceMountedOccupantRoleId,
-  MetaversePresencePlayerSnapshot,
-  MetaversePresencePoseSnapshot
+import {
+  shouldTreatMetaverseMountedOccupancyAsTraversalMounted,
+  type MetaversePlayerId,
+  type MetaversePlayerTeamId,
+  type MetaversePresenceMountedOccupancySnapshot,
+  type MetaversePresenceMountedOccupantRoleId,
+  type MetaversePresencePlayerSnapshot,
+  type MetaversePresencePoseSnapshot
 } from "@webgpu-metaverse/shared/metaverse/presence";
 import type {
+  MetaverseRealtimePlayerWeaponStateSnapshot,
   MetaversePlayerTraversalIntentSnapshot,
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
@@ -68,6 +72,7 @@ export interface MetaverseAuthoritativePlayerStateSyncSurfaceDriveRuntime {
 
 export interface MetaverseAuthoritativePlayerStateSyncMountedOccupancyRuntimeState {
   readonly lookLimitPolicyId: MetaverseMountedLookLimitPolicyId;
+  readonly occupancyKind: MetaversePresenceMountedOccupancySnapshot["occupancyKind"];
   readonly occupantRole: MetaversePresenceMountedOccupantRoleId;
 }
 
@@ -94,12 +99,12 @@ export interface MetaverseAuthoritativePlayerStateSyncRuntimeState<
   readonly characterId: string;
   readonly groundedBodyRuntime: GroundedBodyRuntime;
   lastGroundedBodySnapshot: MetaverseAuthoritativeLastGroundedBodySnapshot;
-  lastGroundedJumpSupported: boolean;
   lastPoseAtMs: number | null;
   lastProcessedInputSequence: number;
   lastProcessedLookSequence: number;
+  lastProcessedTraversalSampleId: number;
   lastProcessedTraversalOrientationSequence: number;
-  lastSurfaceJumpSupported: boolean;
+  lastProcessedWeaponSequence: number;
   lastSeenAtMs: number;
   linearVelocityX: number;
   linearVelocityY: number;
@@ -109,6 +114,7 @@ export interface MetaverseAuthoritativePlayerStateSyncRuntimeState<
   locomotionMode: MetaversePresencePoseSnapshot["locomotionMode"];
   mountedOccupancy: MountedOccupancy | null;
   readonly playerId: MetaversePlayerId;
+  readonly teamId: MetaversePlayerTeamId;
   positionX: number;
   positionY: number;
   positionZ: number;
@@ -119,6 +125,7 @@ export interface MetaverseAuthoritativePlayerStateSyncRuntimeState<
   unmountedTraversalState: MetaverseUnmountedTraversalStateSnapshot;
   readonly swimBodyRuntime: SwimBodyRuntime;
   readonly username: MetaversePresencePlayerSnapshot["username"];
+  weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null;
   yawRadians: number;
 }
 
@@ -227,6 +234,7 @@ export class MetaverseAuthoritativePlayerStateSync<
   createPlayerRuntimeState(
     playerId: MetaversePlayerId,
     characterId: string,
+    teamId: MetaversePlayerTeamId,
     username: MetaversePresencePlayerSnapshot["username"],
     nowMs: number
   ): PlayerRuntime {
@@ -250,11 +258,11 @@ export class MetaverseAuthoritativePlayerStateSync<
         captureMetaverseAuthoritativeLastGroundedBodySnapshot(
           groundedBodyRuntime.snapshot
         ),
-      lastGroundedJumpSupported: false,
       lastProcessedInputSequence: 0,
       lastProcessedLookSequence: 0,
+      lastProcessedTraversalSampleId: 0,
       lastProcessedTraversalOrientationSequence: 0,
-      lastSurfaceJumpSupported: false,
+      lastProcessedWeaponSequence: 0,
       lastPoseAtMs: null,
       lastSeenAtMs: nowMs,
       linearVelocityX: 0,
@@ -265,6 +273,7 @@ export class MetaverseAuthoritativePlayerStateSync<
       locomotionMode: "grounded",
       mountedOccupancy: null,
       playerId,
+      teamId,
       positionX: 0,
       positionY: 0,
       positionZ: 0,
@@ -277,6 +286,7 @@ export class MetaverseAuthoritativePlayerStateSync<
       }),
       swimBodyRuntime,
       username,
+      weaponState: null,
       yawRadians: this.#dependencies.initialYawRadians
     } as PlayerRuntime;
   }
@@ -339,7 +349,9 @@ export class MetaverseAuthoritativePlayerStateSync<
         currentTick: this.#dependencies.readCurrentTick(),
         locomotionMode:
           playerRuntime.locomotionMode === "swim" ? "swim" : "grounded",
-        mounted: playerRuntime.mountedOccupancy !== null,
+        mounted: shouldTreatMetaverseMountedOccupancyAsTraversalMounted(
+          playerRuntime.mountedOccupancy
+        ),
         previousTraversalAuthority: playerRuntime.traversalAuthorityState
       });
   }
@@ -394,6 +406,59 @@ export class MetaverseAuthoritativePlayerStateSync<
     this.#applyTraversalKinematicStateToPlayerRuntime(
       playerRuntime,
       nextKinematicStateSnapshot
+    );
+  }
+
+  syncUnmountedPlayerToGroundedSupport(
+    playerRuntime: PlayerRuntime,
+    supportHeightMeters: number,
+    deltaSeconds: number
+  ): void {
+    playerRuntime.groundedBodyRuntime.syncAuthoritativeState({
+      driveTarget: playerRuntime.lastGroundedBodySnapshot.driveTarget,
+      grounded: true,
+      interaction: playerRuntime.lastGroundedBodySnapshot.interaction,
+      linearVelocity: createPhysicsVector3Snapshot(
+        playerRuntime.linearVelocityX,
+        0,
+        playerRuntime.linearVelocityZ
+      ),
+      position: createPhysicsVector3Snapshot(
+        playerRuntime.positionX,
+        supportHeightMeters,
+        playerRuntime.positionZ
+      ),
+      yawRadians: playerRuntime.yawRadians
+    });
+    this.applyGroundedBodySnapshotToPlayerRuntime(
+      playerRuntime,
+      playerRuntime.groundedBodyRuntime.snapshot,
+      deltaSeconds
+    );
+  }
+
+  syncUnmountedPlayerToSwimWaterline(
+    playerRuntime: PlayerRuntime,
+    waterlineHeightMeters: number,
+    deltaSeconds: number
+  ): void {
+    playerRuntime.swimBodyRuntime.syncAuthoritativeState({
+      linearVelocity: createPhysicsVector3Snapshot(
+        playerRuntime.linearVelocityX,
+        0,
+        playerRuntime.linearVelocityZ
+      ),
+      position: createPhysicsVector3Snapshot(
+        playerRuntime.positionX,
+        waterlineHeightMeters,
+        playerRuntime.positionZ
+      ),
+      yawRadians: playerRuntime.yawRadians
+    });
+    this.applySurfaceDriveSnapshotToPlayerRuntime(
+      playerRuntime,
+      playerRuntime.swimBodyRuntime.snapshot,
+      deltaSeconds
     );
   }
 
@@ -463,12 +528,18 @@ export class MetaverseAuthoritativePlayerStateSync<
   #resolveAuthoritativePlayerLookConstraintBounds(
     playerRuntime: PlayerRuntime
   ): MetaversePlayerLookConstraintBounds {
-    if (playerRuntime.mountedOccupancy === null) {
+    const mountedOccupancy = playerRuntime.mountedOccupancy;
+
+    if (
+      !shouldTreatMetaverseMountedOccupancyAsTraversalMounted(
+        mountedOccupancy
+      )
+    ) {
       return metaverseUnmountedPlayerLookConstraintBounds;
     }
 
     return resolveMetaverseMountedLookConstraintBounds(
-      playerRuntime.mountedOccupancy.lookLimitPolicyId
+      mountedOccupancy!.lookLimitPolicyId
     );
   }
 

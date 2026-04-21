@@ -87,6 +87,37 @@ test("shared grounded traversal kernel prepares jump intent and resolves world-r
   assertApprox(resolvedStep.verticalSpeedUnitsPerSecond, 2);
 });
 
+test("shared grounded traversal kernel treats jump intent as an accepted impulse edge instead of re-checking readiness", () => {
+  const preparedStep = prepareMetaverseGroundedTraversalStep(
+    {
+      forwardSpeedUnitsPerSecond: 0,
+      grounded: true,
+      jumpReady: false,
+      position: {
+        x: 0,
+        y: 0.4,
+        z: 0
+      },
+      strafeSpeedUnitsPerSecond: 0,
+      verticalSpeedUnitsPerSecond: 0,
+      yawRadians: 0
+    },
+    {
+      boost: false,
+      jump: true,
+      moveAxis: 0,
+      strafeAxis: 0,
+      turnAxis: 0
+    },
+    groundedTraversalConfig,
+    0.25,
+    0
+  );
+
+  assert.equal(preparedStep.jumpRequested, true);
+  assert.ok(preparedStep.verticalSpeedUnitsPerSecond > 0);
+});
+
 test("shared grounded traversal kernel decomposes authoritative linear velocity into yaw-relative directional speeds", () => {
   const directionalSpeedSnapshot =
     resolveMetaverseGroundedTraversalDirectionalSpeeds(

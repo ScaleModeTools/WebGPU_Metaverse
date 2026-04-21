@@ -1,17 +1,20 @@
 import type {
   MetaverseSyncPlayerLookIntentCommand,
   MetaverseSyncDriverVehicleControlCommand,
+  MetaverseSyncPlayerWeaponStateCommand,
   MetaverseSyncPlayerTraversalIntentCommand
 } from "./realtime/metaverse-realtime-world-commands.js";
 import {
   createMetaverseSyncPlayerLookIntentCommand,
   createMetaverseSyncDriverVehicleControlCommand,
+  createMetaverseSyncPlayerWeaponStateCommand,
   createMetaverseSyncPlayerTraversalIntentCommand
 } from "./realtime/metaverse-realtime-world-commands.js";
 
 export const metaverseRealtimeWorldWebTransportClientDatagramTypes = [
   "world-player-look-intent-datagram",
   "world-player-traversal-intent-datagram",
+  "world-player-weapon-state-datagram",
   "world-driver-vehicle-control-datagram"
 ] as const;
 
@@ -45,9 +48,19 @@ export interface MetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram
   readonly command: MetaverseSyncPlayerTraversalIntentCommand;
 }
 
+export interface MetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagram {
+  readonly command: MetaverseSyncPlayerWeaponStateCommand;
+  readonly type: "world-player-weapon-state-datagram";
+}
+
+export interface MetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagramInput {
+  readonly command: MetaverseSyncPlayerWeaponStateCommand;
+}
+
 export type MetaverseRealtimeWorldWebTransportClientDatagram =
   | MetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram
   | MetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram
+  | MetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagram
   | MetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram;
 
 export function createMetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram(
@@ -65,6 +78,15 @@ export function createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDat
   return Object.freeze({
     command: createMetaverseSyncPlayerTraversalIntentCommand(input.command),
     type: "world-player-traversal-intent-datagram"
+  });
+}
+
+export function createMetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagram(
+  input: MetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagramInput
+): MetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagram {
+  return Object.freeze({
+    command: createMetaverseSyncPlayerWeaponStateCommand(input.command),
+    type: "world-player-weapon-state-datagram"
   });
 }
 

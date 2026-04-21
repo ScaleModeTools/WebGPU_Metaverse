@@ -1,14 +1,15 @@
 import type {
-  MetaversePlayerTraversalIntentSnapshot,
   MetaverseRealtimeWorldEvent,
   MetaverseRealtimeWorldSnapshot,
   MetaverseSyncDriverVehicleControlCommandInput,
   MetaverseSyncPlayerLookIntentCommandInput,
   MetaverseSyncMountedOccupancyCommandInput,
+  MetaverseSyncPlayerWeaponStateCommandInput,
   MetaverseSyncPlayerTraversalIntentCommandInput
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 import type { MetaversePlayerId } from "@webgpu-metaverse/shared/metaverse/presence";
 import {
+  createMetaverseSyncPlayerWeaponStateCommand,
   createMetaverseSyncPlayerLookIntentCommand,
   createMetaverseSyncPlayerTraversalIntentCommand
 } from "@webgpu-metaverse/shared/metaverse/realtime";
@@ -21,6 +22,7 @@ import type {
   MetaverseWorldClientTelemetrySnapshot,
   MetaverseWorldClientStatusSnapshot
 } from "../types/metaverse-world-client";
+import type { MetaversePlayerIssuedTraversalIntentSnapshot } from "../types/metaverse-player-issued-traversal-intent";
 import type { MetaverseWorldTransport } from "../types/metaverse-world-transport";
 import {
   createRealtimeDatagramTransportStatusSnapshot,
@@ -44,6 +46,9 @@ interface MetaverseWorldClientDependencies {
   readonly clearTimeout?: typeof globalThis.clearTimeout;
   readonly fetch?: typeof globalThis.fetch;
   readonly latestWinsDatagramTransport?: MetaverseRealtimeWorldLatestWinsDatagramTransport;
+  readonly readEstimatedServerTimeMs?:
+    | ((localWallClockMs: number) => number)
+    | undefined;
   readonly readWallClockMs?: () => number;
   readonly resolveDriverVehicleControlDatagramTransportStatusSnapshot?:
     | ((
@@ -63,6 +68,9 @@ type PendingPlayerTraversalIntentCommand = ReturnType<
 >;
 type PendingPlayerLookIntentCommand = ReturnType<
   typeof createMetaverseSyncPlayerLookIntentCommand
+>;
+type PendingPlayerWeaponStateCommand = ReturnType<
+  typeof createMetaverseSyncPlayerWeaponStateCommand
 >;
 
 function resolveMembershipLossMessage(message: string): string | null {
@@ -110,6 +118,10 @@ export class MetaverseWorldClient {
   readonly #playerTraversalDatagramLane:
     MetaverseWorldLatestWinsCommandLane<
       ReturnType<typeof createMetaverseSyncPlayerTraversalIntentCommand>
+    >;
+  readonly #playerWeaponStateDatagramLane:
+    MetaverseWorldLatestWinsCommandLane<
+      ReturnType<typeof createMetaverseSyncPlayerWeaponStateCommand>
     >;
   readonly #readWallClockMs: () => number;
   readonly #resolveDriverVehicleControlDatagramTransportStatusSnapshot:
@@ -180,6 +192,20 @@ export class MetaverseWorldClient {
                 latestWinsDatagramTransport.sendPlayerTraversalIntentDatagram(command),
         setTimeout: this.#setTimeout
       });
+    this.#playerWeaponStateDatagramLane =
+      new MetaverseWorldLatestWinsCommandLane({
+        clearTimeout: this.#clearTimeout,
+        onStateChange: () => {
+          this.#notifyUpdates();
+        },
+        recoveryDelayMs: Number(this.#config.defaultCommandIntervalMs),
+        sendDatagram:
+          latestWinsDatagramTransport === null
+            ? null
+            : async (command) =>
+                latestWinsDatagramTransport.sendPlayerWeaponStateDatagram(command),
+        setTimeout: this.#setTimeout
+      });
     let connectionLifecycle: MetaverseWorldConnectionLifecycle | null = null;
     this.#snapshotState = new MetaverseWorldSnapshotState({
       clearTimeout: this.#clearTimeout,
@@ -241,15 +267,19 @@ export class MetaverseWorldClient {
         this.#applyWorldAccessError(error, fallbackMessage);
       },
       clearTimeout: this.#clearTimeout,
+      readEstimatedServerTimeMs: dependencies.readEstimatedServerTimeMs,
       readLatestLocalPlayerSnapshot: () =>
         this.#snapshotState.readLatestLocalPlayerSnapshot(
           this.#connectionLifecycle.playerId
         ),
       readPlayerId: () => this.#connectionLifecycle.playerId,
+      readWallClockMs: this.#readWallClockMs,
       readStatusSnapshot: () => this.#statusSnapshot,
       resolveCommandDelayMs: () => this.#resolveCommandDelayMs(),
       sendPlayerLookIntentCommand: (command) =>
         this.#sendPlayerLookIntentCommand(command),
+      sendPlayerWeaponStateCommand: (command) =>
+        this.#sendPlayerWeaponStateCommand(command),
       sendPlayerTraversalIntentCommand: (command) =>
         this.#sendPlayerTraversalIntentCommand(command),
       setTimeout: this.#setTimeout
@@ -322,19 +352,23 @@ export class MetaverseWorldClient {
     return this.#playerIntentSync.latestPlayerLookSequence;
   }
 
+  get latestPlayerWeaponSequence(): number {
+    return this.#playerIntentSync.latestPlayerWeaponSequence;
+  }
+
   get latestPlayerTraversalOrientationSequence(): number {
     return this.#playerIntentSync.latestPlayerTraversalOrientationSequence;
   }
 
-  get latestPlayerTraversalIntentSnapshot():
-    | MetaversePlayerTraversalIntentSnapshot
+  get latestPlayerIssuedTraversalIntentSnapshot():
+    | MetaversePlayerIssuedTraversalIntentSnapshot
     | null {
-    return this.#playerIntentSync.latestPlayerTraversalIntentSnapshot;
+    return this.#playerIntentSync.latestPlayerIssuedTraversalIntentSnapshot;
   }
 
   previewPlayerTraversalIntent(
     commandInput: MetaverseSyncPlayerTraversalIntentCommandInput | null
-  ): MetaversePlayerTraversalIntentSnapshot | null {
+  ): MetaversePlayerIssuedTraversalIntentSnapshot | null {
     if (commandInput === null) {
       return null;
     }
@@ -409,7 +443,7 @@ export class MetaverseWorldClient {
 
   syncPlayerTraversalIntent(
     commandInput: MetaverseSyncPlayerTraversalIntentCommandInput | null
-  ): MetaversePlayerTraversalIntentSnapshot | null {
+  ): MetaversePlayerIssuedTraversalIntentSnapshot | null {
     if (commandInput === null) {
       return this.#playerIntentSync.syncPlayerTraversalIntent(null);
     }
@@ -430,6 +464,19 @@ export class MetaverseWorldClient {
     this.#assertNotDisposed();
     this.#connectionLifecycle.bindPlayer(commandInput.playerId);
     this.#playerIntentSync.syncPlayerLookIntent(commandInput);
+  }
+
+  syncPlayerWeaponState(
+    commandInput: MetaverseSyncPlayerWeaponStateCommandInput | null
+  ): void {
+    if (commandInput === null) {
+      this.#playerIntentSync.syncPlayerWeaponState(null);
+      return;
+    }
+
+    this.#assertNotDisposed();
+    this.#connectionLifecycle.bindPlayer(commandInput.playerId);
+    this.#playerIntentSync.syncPlayerWeaponState(commandInput);
   }
 
   syncMountedOccupancy(
@@ -457,6 +504,7 @@ export class MetaverseWorldClient {
     this.#snapshotState.dispose(this.#connectionLifecycle.playerId);
     this.#playerLookDatagramLane.dispose();
     this.#playerTraversalDatagramLane.dispose();
+    this.#playerWeaponStateDatagramLane.dispose();
     this.#latestWinsDatagramTransport?.dispose?.();
     this.#transport.dispose?.();
   }
@@ -493,6 +541,21 @@ export class MetaverseWorldClient {
       (await this.#playerTraversalDatagramLane.send(
         command,
         "Metaverse player traversal intent datagram send failed."
+      )) === "datagram"
+    ) {
+      return null;
+    }
+
+    return this.#transport.sendCommand(command);
+  }
+
+  async #sendPlayerWeaponStateCommand(
+    command: PendingPlayerWeaponStateCommand
+  ): Promise<MetaverseRealtimeWorldEvent | null> {
+    if (
+      (await this.#playerWeaponStateDatagramLane.send(
+        command,
+        "Metaverse player weapon state datagram send failed."
       )) === "datagram"
     ) {
       return null;

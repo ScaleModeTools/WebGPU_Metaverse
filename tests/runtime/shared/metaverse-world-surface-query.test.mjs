@@ -7,6 +7,7 @@ import {
   createMetaverseWorldPlacedSurfaceTriMeshSupportSnapshot,
   readMetaverseWorldMountedEntryAuthoring,
   readMetaverseWorldMountedSeatAuthoring,
+  resolveMetaverseTraversalStateFromWorldAffordances,
   resolveMetaverseWorldMountedOccupancyPolicySnapshotFromAuthoring,
   resolveMetaverseWorldPlacedSurfaceColliders,
   resolveMetaverseWorldSurfaceHeightMeters,
@@ -117,6 +118,108 @@ test("shared world surface query derives support height from authored tri-mesh c
         -5.9
       ) ?? 0) - 2.6
     ) < 0.0001
+  );
+});
+
+test("shared traversal state resolver keeps direct grounded support height above water when step probes are absent", () => {
+  const supportHeightMeters = 0.8;
+  const traversalState = resolveMetaverseTraversalStateFromWorldAffordances(
+    Object.freeze({
+      capsuleHalfHeightMeters: 0.48,
+      capsuleRadiusMeters: 0.34,
+      gravityUnitsPerSecond: 18,
+      jumpImpulseUnitsPerSecond: 6.8,
+      oceanHeightMeters: 0,
+      stepHeightMeters: 0.28
+    }),
+    Object.freeze([
+      Object.freeze({
+        halfExtents: Object.freeze({ x: 0.2, y: 0.1, z: 0.2 }),
+        ownerEnvironmentAssetId: "test-free-roam-support",
+        rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+        rotationYRadians: 0,
+        translation: Object.freeze({ x: 0, y: 0.7, z: 0 }),
+        traversalAffordance: "support"
+      })
+    ]),
+    Object.freeze([
+      Object.freeze({
+        halfExtents: Object.freeze({ x: 3, y: 0, z: 3 }),
+        rotationYRadians: 0,
+        translation: Object.freeze({ x: 0, y: 0, z: 0 }),
+        waterRegionId: "test-water"
+      })
+    ]),
+    Object.freeze({ x: 0, y: supportHeightMeters, z: 0 }),
+    0,
+    "grounded"
+  );
+
+  assert.equal(traversalState.decision.locomotionMode, "grounded");
+  assert.ok(
+    Math.abs(
+      traversalState.debug.resolvedSupportHeightMeters - supportHeightMeters
+    ) < 0.000001
+  );
+  assert.notEqual(traversalState.decision.supportHeightMeters, null);
+  assert.ok(
+    Math.abs(
+      traversalState.decision.supportHeightMeters - supportHeightMeters
+    ) < 0.000001
+  );
+});
+
+test("shared world surface query can cap support selection at the active capsule bottom height", () => {
+  const config = Object.freeze({
+    capsuleHalfHeightMeters: 0.48,
+    capsuleRadiusMeters: 0.34,
+    gravityUnitsPerSecond: 18,
+    jumpImpulseUnitsPerSecond: 6.8,
+    oceanHeightMeters: 0,
+    stepHeightMeters: 0.28
+  });
+  const floorSurfaceHeightMeters = 0.1;
+  const overheadSurfaceHeightMeters = 1.5;
+  const surfaceColliders = Object.freeze([
+    Object.freeze({
+      halfExtents: Object.freeze({ x: 2, y: 0.1, z: 2 }),
+      ownerEnvironmentAssetId: "test-floor-support",
+      rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+      rotationYRadians: 0,
+      translation: Object.freeze({ x: 0, y: 0, z: 0 }),
+      traversalAffordance: "support"
+    }),
+    Object.freeze({
+      halfExtents: Object.freeze({ x: 2, y: 0.15, z: 2 }),
+      ownerEnvironmentAssetId: "test-overhead-support",
+      rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+      rotationYRadians: 0,
+      translation: Object.freeze({ x: 0, y: 1.35, z: 0 }),
+      traversalAffordance: "support"
+    })
+  ]);
+
+  assert.equal(
+    resolveMetaverseWorldSurfaceHeightMeters(
+      config,
+      surfaceColliders,
+      Object.freeze([]),
+      0,
+      0
+    ),
+    overheadSurfaceHeightMeters
+  );
+  assert.equal(
+    resolveMetaverseWorldSurfaceHeightMeters(
+      config,
+      surfaceColliders,
+      Object.freeze([]),
+      0,
+      0,
+      null,
+      floorSurfaceHeightMeters
+    ),
+    floorSurfaceHeightMeters
   );
 });
 

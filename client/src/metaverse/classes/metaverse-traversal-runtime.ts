@@ -5,7 +5,6 @@ import {
 } from "@/physics";
 import {
   createMetaverseUnmountedTraversalStateSnapshot,
-  type MetaversePlayerTraversalIntentSnapshot,
   type MetaversePlayerTraversalIntentSnapshotInput,
   type MetaverseTraversalAuthoritySnapshot,
   type MetaverseUnmountedTraversalStateSnapshot
@@ -38,20 +37,21 @@ import {
   type LocalTraversalPoseSnapshot
 } from "../traversal/reconciliation/local-authority-pose-correction";
 import {
+  type AuthoritativeLocalPlayerPoseSyncOptions,
   MetaverseLocalAuthorityReconciliationState,
   type AuthoritativeLocalPlayerPoseSnapshot
 } from "../traversal/reconciliation/classes/metaverse-local-authority-reconciliation-state";
 import type { ConsumedAckedAuthoritativeLocalPlayerSample } from "../traversal/reconciliation/authoritative-local-player-reconciliation";
 import { MetaverseUnmountedSurfaceLocomotionState } from "../traversal/surface/metaverse-unmounted-surface-locomotion-state";
 import type {
+  MetaverseIssuedTraversalIntentInputSnapshot,
   MetaverseTraversalRuntimeDependencies,
+  MetaverseIssuedTraversalIntentSnapshot,
   RoutedDriverVehicleControlIntentSnapshot,
 } from "../traversal/types/traversal";
 
 type LocalSurfaceRoutingTelemetrySnapshot =
   MetaverseTelemetrySnapshot["worldSnapshot"]["surfaceRouting"]["local"];
-type LocalJumpGateTelemetrySnapshot =
-  MetaverseTelemetrySnapshot["worldSnapshot"]["surfaceRouting"]["local"]["jumpDebug"];
 type LocalReconciliationCorrectionSource =
   MetaverseTelemetrySnapshot["worldSnapshot"]["localReconciliation"]["lastCorrectionSource"];
 
@@ -142,6 +142,11 @@ export class MetaverseTraversalRuntime {
       new MetaverseMountedTraversalTransitionState({
         groundedBodyRuntime: this.#groundedBodyRuntime,
         mountedVehicleState: this.#mountedVehicleState,
+        noteIntentionalDiscontinuity: (cause) => {
+          this.#localAuthorityReconciliationState.noteIntentionalDiscontinuity(
+            cause
+          );
+        },
         readCameraSnapshot: () => this.#cameraSnapshot,
         readLocomotionMode: () => this.#locomotionMode,
         readMountedEnvironmentAnchorSnapshot: (mountedEnvironment) =>
@@ -237,6 +242,12 @@ export class MetaverseTraversalRuntime {
     return this.#mountedVehicleState.mountedEnvironmentSnapshot;
   }
 
+  get latestIssuedTraversalIntentSnapshot():
+    | MetaverseIssuedTraversalIntentSnapshot
+    | null {
+    return this.#localTraversalAuthorityState.latestIssuedTraversalIntentSnapshot;
+  }
+
   get routedDriverVehicleControlIntentSnapshot():
     | RoutedDriverVehicleControlIntentSnapshot
     | null {
@@ -292,10 +303,6 @@ export class MetaverseTraversalRuntime {
     return this.#telemetryState.surfaceRoutingLocalTelemetrySnapshot;
   }
 
-  get localGroundedJumpGateTelemetrySnapshot(): LocalJumpGateTelemetrySnapshot {
-    return this.#telemetryState.localGroundedJumpGateTelemetrySnapshot;
-  }
-
   get authoritativeCorrectionTelemetrySnapshot(): AuthoritativeCorrectionTelemetrySnapshot {
     return this.#telemetryState.authoritativeCorrectionTelemetrySnapshot;
   }
@@ -319,7 +326,7 @@ export class MetaverseTraversalRuntime {
   }
 
   syncIssuedTraversalIntentSnapshot(
-    traversalIntentSnapshot: MetaversePlayerTraversalIntentSnapshot | null
+    traversalIntentSnapshot: MetaverseIssuedTraversalIntentInputSnapshot | null
   ): void {
     this.#unmountedTraversalOrchestrationState
       .syncIssuedTraversalIntentSnapshot(traversalIntentSnapshot);
@@ -434,36 +441,7 @@ export class MetaverseTraversalRuntime {
         this.#telemetryState.recordMountedVehicleAuthorityCorrection();
       }
 
-      if (authoritativeSyncResult.keepsFreeRoam) {
-        if (
-          authoritativeSyncResult.previousMountedVehicleSnapshot !== null &&
-          authoritativeSyncResult.nextMountedVehicleSnapshot !== null
-        ) {
-          const groundedCameraSnapshot =
-            this.#surfaceLocomotionState.syncGroundedMovingSupportCarry({
-              currentLocomotionMode: this.#locomotionMode,
-              lookYawRadians:
-                this.#unmountedTraversalMotionState.unmountedLookYawRadians,
-              nextSupportPosition:
-                authoritativeSyncResult.nextMountedVehicleSnapshot.position,
-              nextSupportYawRadians:
-                authoritativeSyncResult.nextMountedVehicleSnapshot.yawRadians,
-              previousSupportPosition:
-                authoritativeSyncResult.previousMountedVehicleSnapshot.position,
-              previousSupportYawRadians:
-                authoritativeSyncResult.previousMountedVehicleSnapshot.yawRadians,
-              resolveGroundedPresentationPosition: () =>
-                this.#unmountedTraversalMotionState.resolveGroundedPresentationPosition(),
-              traversalCameraPitchRadians:
-                this.#unmountedTraversalMotionState.traversalCameraPitchRadians
-            });
-
-          if (groundedCameraSnapshot !== null) {
-            this.#syncLocalTraversalAuthorityState(false);
-            this.#cameraSnapshot = groundedCameraSnapshot;
-          }
-        }
-      } else if (authoritativeSyncResult.presentationCameraSnapshot !== null) {
+      if (authoritativeSyncResult.presentationCameraSnapshot !== null) {
         this.#cameraSnapshot =
           authoritativeSyncResult.presentationCameraSnapshot;
       }
@@ -476,13 +454,15 @@ export class MetaverseTraversalRuntime {
   syncAuthoritativeLocalPlayerPose(
     authoritativePlayerSnapshot:
       | AuthoritativeLocalPlayerPoseSnapshot
-      | ConsumedAckedAuthoritativeLocalPlayerSample
+      | ConsumedAckedAuthoritativeLocalPlayerSample,
+    syncOptions: AuthoritativeLocalPlayerPoseSyncOptions = {}
   ): void {
     this.#cameraSnapshot =
       this.#unmountedTraversalOrchestrationState
         .syncAuthoritativeLocalPlayerPose(
           this.#cameraSnapshot,
-          authoritativePlayerSnapshot
+          authoritativePlayerSnapshot,
+          syncOptions
         );
   }
 

@@ -56,6 +56,22 @@ export interface MetaverseGroundedBodyRuntimeSnapshot
   readonly yawRadians: number;
 }
 
+export function resolveMetaverseGroundedBodyColliderTranslationSnapshot(
+  config: Pick<
+    MetaverseGroundedBodyConfigSnapshot,
+    "capsuleHalfHeightMeters" | "capsuleRadiusMeters"
+  >,
+  rootPosition: Pick<MetaverseWorldSurfaceVector3Snapshot, "x" | "y" | "z">
+): MetaverseWorldSurfaceVector3Snapshot {
+  return createMetaverseSurfaceTraversalVector3Snapshot(
+    rootPosition.x,
+    rootPosition.y +
+      config.capsuleHalfHeightMeters +
+      config.capsuleRadiusMeters,
+    rootPosition.z
+  );
+}
+
 export function createMetaverseGroundedBodyOwnerSnapshot(
   input: Partial<MetaverseGroundedBodyOwnerSnapshot> = {}
 ): MetaverseGroundedBodyOwnerSnapshot {

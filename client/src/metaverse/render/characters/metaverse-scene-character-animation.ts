@@ -36,6 +36,7 @@ export interface HumanoidV2PistolPoseRuntime {
 
 export interface MetaverseCharacterAnimationRuntimeLike {
   activeAnimationActionSetId: "full-body" | "humanoid_v2_pistol_lower_body";
+  activeAnimationCycleId: number | null;
   activeAnimationVocabulary: MetaverseCharacterAnimationVocabularyId;
   readonly actionsByVocabulary: ReadonlyMap<
     MetaverseCharacterAnimationVocabularyId,
@@ -78,6 +79,21 @@ function wrapRadians(rawValue: number): number {
 
 function resolveCharacterRenderYawRadians(yawRadians: number): number {
   return wrapRadians(metaverseCharacterRenderYawOffsetRadians - yawRadians);
+}
+
+function resolveAnimationPlaybackRate(
+  vocabulary: MetaverseCharacterAnimationVocabularyId,
+  useHumanoidV2PistolLayering: boolean
+): number {
+  if (vocabulary === "walk") {
+    return useHumanoidV2PistolLayering ? 1 : 1.1;
+  }
+
+  if (vocabulary === "swim") {
+    return 1.06;
+  }
+
+  return 1;
 }
 
 function createHumanoidV2LowerBodyLocomotionClip(
@@ -236,7 +252,8 @@ export function resolveHeldCharacterAnimationVocabulary(
 export function syncCharacterAnimation(
   characterRuntime: MetaverseCharacterAnimationRuntimeLike,
   targetVocabulary: MetaverseCharacterAnimationVocabularyId,
-  useHumanoidV2PistolLayering: boolean = false
+  useHumanoidV2PistolLayering: boolean = false,
+  animationCycleId?: number | null
 ): void {
   const resolveNextVocabulary = (): MetaverseCharacterAnimationVocabularyId => {
     const fallbackCandidates: readonly MetaverseCharacterAnimationVocabularyId[] =
@@ -293,6 +310,13 @@ export function syncCharacterAnimation(
     nextVocabulary,
     useHumanoidV2PistolLayering
   );
+  const resolvedAnimationCycleId =
+    animationCycleId === null || animationCycleId === undefined
+      ? characterRuntime.activeAnimationCycleId
+      : Math.max(0, Math.trunc(animationCycleId));
+  const shouldRestartCurrentAction =
+    resolvedAnimationCycleId !== null &&
+    resolvedAnimationCycleId !== characterRuntime.activeAnimationCycleId;
 
   if (nextActionSelection === null) {
     return;
@@ -301,7 +325,8 @@ export function syncCharacterAnimation(
   if (
     nextVocabulary === characterRuntime.activeAnimationVocabulary &&
     nextActionSelection.actionSetId ===
-      characterRuntime.activeAnimationActionSetId
+      characterRuntime.activeAnimationActionSetId &&
+    !shouldRestartCurrentAction
   ) {
     return;
   }
@@ -316,7 +341,9 @@ export function syncCharacterAnimation(
   const previousVocabulary = characterRuntime.activeAnimationVocabulary;
 
   nextAction.enabled = true;
-  nextAction.setEffectiveTimeScale(1);
+  nextAction.setEffectiveTimeScale(
+    resolveAnimationPlaybackRate(nextVocabulary, useHumanoidV2PistolLayering)
+  );
   nextAction.setEffectiveWeight(1);
   nextAction.zeroSlopeAtStart = true;
   nextAction.zeroSlopeAtEnd = nextVocabulary === "idle";
@@ -329,7 +356,6 @@ export function syncCharacterAnimation(
       previousVocabulary === "idle" &&
       (nextVocabulary === "walk" || nextVocabulary === "swim")
     ) {
-      nextAction.setEffectiveTimeScale(1.08);
       nextAction.crossFadeFrom(previousAction, 0.24, true);
     } else if (
       (previousVocabulary === "walk" || previousVocabulary === "swim") &&
@@ -343,6 +369,7 @@ export function syncCharacterAnimation(
   }
 
   characterRuntime.activeAnimationActionSetId = nextActionSelection.actionSetId;
+  characterRuntime.activeAnimationCycleId = resolvedAnimationCycleId;
   characterRuntime.activeAnimationVocabulary = nextVocabulary;
 }
 

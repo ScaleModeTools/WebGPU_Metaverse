@@ -8,6 +8,9 @@ import {
 } from "../../../metaverse-world-surface-authoring.js";
 import { resolveMetaverseWorldSurfaceScaleVector } from "../../../metaverse-world-surface-query.js";
 import { defaultMetaverseGameplayProfileId } from "../../metaverse-gameplay-profiles.js";
+import {
+  defaultMetaverseMapBundlePlayerSpawnSelection
+} from "../metaverse-map-bundle.js";
 import type { MetaverseMapBundleSnapshot } from "../metaverse-map-bundle.js";
 
 function createPlacementId(
@@ -25,12 +28,30 @@ function createRgbTuple(
   return Object.freeze([red, green, blue]);
 }
 
+function createSpawnNode(
+  label: string,
+  spawnId: string,
+  teamId: "blue" | "neutral" | "red",
+  x: number,
+  z: number
+) {
+  return Object.freeze({
+    label,
+    position: Object.freeze({
+      x,
+      y: metaverseWorldGroundedSpawnPosition.y,
+      z
+    }),
+    spawnId,
+    teamId,
+    yawRadians: metaverseWorldInitialYawRadians
+  });
+}
+
 function resolveExportedSurfaceColliders(
   surfaceAsset: (typeof metaverseWorldSurfaceAssets)[number]
 ) {
-  return surfaceAsset.collisionPath === null
-    ? surfaceAsset.surfaceColliders
-    : Object.freeze([]);
+  return surfaceAsset.surfaceColliders;
 }
 
 export const stagingGroundMapBundle = Object.freeze({
@@ -98,13 +119,19 @@ export const stagingGroundMapBundle = Object.freeze({
   ]),
   mapId: "staging-ground",
   playerSpawnNodes: Object.freeze([
-    Object.freeze({
-      label: "Default shell spawn",
-      position: metaverseWorldGroundedSpawnPosition,
-      spawnId: "shell-default-spawn",
-      yawRadians: metaverseWorldInitialYawRadians
-    })
+    createSpawnNode(
+      "Default shell spawn",
+      "shell-default-spawn",
+      "neutral",
+      metaverseWorldGroundedSpawnPosition.x,
+      metaverseWorldGroundedSpawnPosition.z
+    ),
+    createSpawnNode("Blue team north", "shell-blue-north", "blue", -17.2, -22.2),
+    createSpawnNode("Blue team south", "shell-blue-south", "blue", -17.2, -7.4),
+    createSpawnNode("Red team north", "shell-red-north", "red", 0.8, -22.2),
+    createSpawnNode("Red team south", "shell-red-south", "red", 0.8, -7.4)
   ]),
+  playerSpawnSelection: defaultMetaverseMapBundlePlayerSpawnSelection,
   presentationProfileIds: Object.freeze({
     cameraProfileId: "shell-default-camera",
     characterPresentationProfileId: "shell-default-character-presentation",

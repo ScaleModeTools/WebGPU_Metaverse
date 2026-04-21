@@ -51,14 +51,14 @@ export interface MetaverseSurfaceDriveBodyStepSnapshot {
   readonly resolvedRootPosition: MetaverseWorldSurfaceVector3Snapshot;
 }
 
-const surfaceDriveBodyContactDeltaEpsilon = 0.000001;
+const surfaceDriveBodyContactDeltaToleranceMeters = 0.01;
 
 function hasSurfaceDriveBodyMovementDeltaDivergence(
   desiredDelta: number,
   appliedDelta: number
 ): boolean {
   return Math.abs(toFiniteNumber(desiredDelta, 0) - toFiniteNumber(appliedDelta, 0)) >
-    surfaceDriveBodyContactDeltaEpsilon;
+    surfaceDriveBodyContactDeltaToleranceMeters;
 }
 
 export function resolveMetaverseSurfaceDriveBodyStep({

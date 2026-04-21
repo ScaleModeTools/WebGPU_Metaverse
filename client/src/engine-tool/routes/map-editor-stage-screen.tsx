@@ -47,6 +47,7 @@ import {
   updateMapEditorEnvironmentPresentationProfileId,
   updateMapEditorGameplayProfileId,
   updateMapEditorPlayerSpawnDraft,
+  updateMapEditorPlayerSpawnSelectionDraft,
   updateMapEditorSceneObjectDraft,
   updateMapEditorPlacement,
   updateMapEditorWaterRegionDraft,
@@ -60,6 +61,9 @@ import {
 } from "@/engine-tool/project/map-editor-project-storage";
 import type { MapEditorLaunchVariationDraftSnapshot } from "@/engine-tool/project/map-editor-project-launch-variations";
 import type {
+  MapEditorPlayerSpawnSelectionDraftSnapshot
+} from "@/engine-tool/project/map-editor-project-player-spawn-selection";
+import type {
   MapEditorPlayerSpawnDraftSnapshot,
   MapEditorSceneObjectDraftSnapshot,
   MapEditorWaterRegionDraftSnapshot
@@ -67,6 +71,7 @@ import type {
 import { validateAndRegisterMapEditorPreviewBundle } from "@/engine-tool/run/map-editor-run-preview";
 import { defaultMapEditorViewportHelperVisibility } from "@/engine-tool/types/map-editor";
 import type {
+  MapEditorPlayerSpawnTransformUpdate,
   MapEditorViewportHelperId,
   MapEditorPlacementUpdate,
   MapEditorViewportToolMode
@@ -283,6 +288,19 @@ export function MapEditorStageScreen({
     );
   };
 
+  const handleCommitViewportPlayerSpawnTransform = (
+    spawnId: string,
+    update: MapEditorPlayerSpawnTransformUpdate
+  ) => {
+    setProject((currentProject) =>
+      updateMapEditorPlayerSpawnDraft(currentProject, spawnId, (spawnDraft) => ({
+        ...spawnDraft,
+        position: update.position,
+        yawRadians: update.yawRadians
+      }))
+    );
+  };
+
   const handleResetSelectedTransformRequest = () => {
     setProject((currentProject) =>
       currentProject.selectedPlacementId === null
@@ -364,6 +382,16 @@ export function MapEditorStageScreen({
   ) => {
     setProject((currentProject) =>
       updateMapEditorPlayerSpawnDraft(currentProject, spawnId, update)
+    );
+  };
+
+  const handleUpdatePlayerSpawnSelection = (
+    update: (
+      draft: MapEditorPlayerSpawnSelectionDraftSnapshot
+    ) => MapEditorPlayerSpawnSelectionDraftSnapshot
+  ) => {
+    setProject((currentProject) =>
+      updateMapEditorPlayerSpawnSelectionDraft(currentProject, update)
     );
   };
 
@@ -544,6 +572,9 @@ export function MapEditorStageScreen({
               bundleId={project.bundleId}
               onBuildPlacementAtPosition={handleBuildPlacementAtPosition}
               onCommitPlacementTransform={handleCommitViewportPlacementTransform}
+              onCommitPlayerSpawnTransform={
+                handleCommitViewportPlayerSpawnTransform
+              }
               onSelectPlacementId={handleSelectPlacementId}
               placementDrafts={project.placementDrafts}
               playerSpawnDrafts={project.playerSpawnDrafts}
@@ -588,6 +619,7 @@ export function MapEditorStageScreen({
                   }
                   onUpdateSelectedPlacement={handleUpdateSelectedPlacement}
                   onUpdateLaunchVariation={handleUpdateLaunchVariation}
+                  onUpdatePlayerSpawnSelection={handleUpdatePlayerSpawnSelection}
                   onUpdatePlayerSpawn={handleUpdatePlayerSpawn}
                   onUpdateSceneObject={handleUpdateSceneObject}
                   onUpdateWaterRegion={handleUpdateWaterRegion}

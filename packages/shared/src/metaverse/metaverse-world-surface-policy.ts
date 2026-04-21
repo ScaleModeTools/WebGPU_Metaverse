@@ -396,7 +396,8 @@ function resolveSurfaceSupportHeightMeters(
   x: number,
   z: number,
   paddingMeters = 0,
-  excludedOwnerEnvironmentAssetId: string | null = null
+  excludedOwnerEnvironmentAssetId: string | null = null,
+  maxSupportHeightMeters: number | null = null
 ): number | null {
   let highestSurfaceY: number | null = null;
 
@@ -420,6 +421,14 @@ function resolveSurfaceSupportHeightMeters(
     );
 
     if (surfaceY === null) {
+      continue;
+    }
+
+    if (
+      maxSupportHeightMeters !== null &&
+      surfaceY >
+        maxSupportHeightMeters + automaticSurfaceBlockingHeightToleranceMeters
+    ) {
       continue;
     }
 
@@ -693,14 +702,16 @@ export function resolveMetaverseWorldSurfaceHeightMeters(
   waterRegionSnapshots: readonly MetaverseWorldPlacedWaterRegionSnapshot[],
   x: number,
   z: number,
-  excludedOwnerEnvironmentAssetId: string | null = null
+  excludedOwnerEnvironmentAssetId: string | null = null,
+  maxSupportHeightMeters: number | null = null
 ): number | null {
   const supportHeightMeters = resolveSurfaceSupportHeightMeters(
     surfaceColliderSnapshots,
     x,
     z,
     config.capsuleRadiusMeters,
-    excludedOwnerEnvironmentAssetId
+    excludedOwnerEnvironmentAssetId,
+    maxSupportHeightMeters
   );
   const waterSurfaceHeightMeters = resolveMetaverseWorldWaterSurfaceHeightMeters(
     waterRegionSnapshots,
@@ -901,7 +912,8 @@ export function resolveMetaverseWorldAutomaticSurfaceLocomotion(
       waterRegionSnapshots,
       position.x,
       position.z,
-      excludedOwnerEnvironmentAssetId
+      excludedOwnerEnvironmentAssetId,
+      position.y
     ) ?? position.y;
   const waterbornePosition = isMetaverseWorldWaterbornePosition(
     config,
@@ -923,7 +935,8 @@ export function resolveMetaverseWorldAutomaticSurfaceLocomotion(
           locomotionMode: "grounded",
           supportHeightMeters:
             supportSnapshot.centerStepSupportHeightMeters ??
-            supportSnapshot.highestStepSupportHeightMeters
+            supportSnapshot.highestStepSupportHeightMeters ??
+            resolvedSupportHeightMeters
         } satisfies MetaverseWorldSurfaceLocomotionDecision)
       : Object.freeze({
           locomotionMode: "swim",

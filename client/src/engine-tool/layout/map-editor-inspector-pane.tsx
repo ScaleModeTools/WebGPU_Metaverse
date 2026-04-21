@@ -10,6 +10,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   type MapEditorLaunchVariationDraftSnapshot
 } from "@/engine-tool/project/map-editor-project-launch-variations";
+import type {
+  MapEditorPlayerSpawnSelectionDraftSnapshot
+} from "@/engine-tool/project/map-editor-project-player-spawn-selection";
 import {
   type MapEditorPlayerSpawnDraftSnapshot,
   type MapEditorSceneObjectDraftSnapshot,
@@ -41,6 +44,11 @@ interface MapEditorInspectorPaneProps {
       draft: MapEditorLaunchVariationDraftSnapshot
     ) => MapEditorLaunchVariationDraftSnapshot
   ) => void;
+  readonly onUpdatePlayerSpawnSelection: (
+    update: (
+      draft: MapEditorPlayerSpawnSelectionDraftSnapshot
+    ) => MapEditorPlayerSpawnSelectionDraftSnapshot
+  ) => void;
   readonly onUpdatePlayerSpawn: (
     spawnId: string,
     update: (draft: MapEditorPlayerSpawnDraftSnapshot) => MapEditorPlayerSpawnDraftSnapshot
@@ -65,6 +73,7 @@ export function MapEditorInspectorPane({
   onUpdateEnvironmentPresentationProfileId,
   onUpdateSelectedPlacement,
   onUpdateLaunchVariation,
+  onUpdatePlayerSpawnSelection,
   onUpdatePlayerSpawn,
   onUpdateSceneObject,
   onUpdateWaterRegion,
@@ -117,9 +126,11 @@ export function MapEditorInspectorPane({
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-3">
               <MapEditorSceneAnchorsPanel
+                onUpdatePlayerSpawnSelection={onUpdatePlayerSpawnSelection}
                 onUpdatePlayerSpawn={onUpdatePlayerSpawn}
                 onUpdateSceneObject={onUpdateSceneObject}
                 playerSpawnDrafts={project.playerSpawnDrafts}
+                playerSpawnSelectionDraft={project.playerSpawnSelectionDraft}
                 sceneObjectDrafts={project.sceneObjectDrafts}
               />
             </CollapsibleContent>

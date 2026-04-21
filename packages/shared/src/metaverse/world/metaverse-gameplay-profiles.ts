@@ -16,7 +16,6 @@ import type { MetaverseWorldSurfacePolicyConfig } from "../metaverse-world-surfa
 export interface MetaverseGameplayProfileSnapshot {
   readonly groundedBodyTraversal: MetaverseGroundedBodyTraversalCoreConfig;
   readonly groundedJumpPhysics: MetaverseGroundedJumpPhysicsConfigSnapshot;
-  readonly groundedJumpSupportVerticalSpeedTolerance: number;
   readonly groundedSurfacePolicy: MetaverseWorldSurfacePolicyConfig;
   readonly id: string;
   readonly label: string;
@@ -112,7 +111,6 @@ function createSurfacePolicyConfig(
 
 function createGameplayProfile(input: {
   readonly groundedBodyTraversal: MetaverseGroundedBodyTraversalCoreConfig;
-  readonly groundedJumpSupportVerticalSpeedTolerance: number;
   readonly id: string;
   readonly label: string;
   readonly swimTraversal: MetaverseSurfaceTraversalConfig;
@@ -127,8 +125,6 @@ function createGameplayProfile(input: {
     groundedBodyTraversal,
     groundedJumpPhysics:
       createMetaverseGroundedJumpPhysicsConfigSnapshot(groundedBodyTraversal),
-    groundedJumpSupportVerticalSpeedTolerance:
-      input.groundedJumpSupportVerticalSpeedTolerance,
     groundedSurfacePolicy: createSurfacePolicyConfig(groundedBodyTraversal),
     id: input.id,
     label: input.label,
@@ -140,7 +136,6 @@ function createGameplayProfile(input: {
 
 export const shellDefaultGameplayProfile = createGameplayProfile({
   groundedBodyTraversal: metaverseGroundedBodyTraversalCoreConfig,
-  groundedJumpSupportVerticalSpeedTolerance: 0.5,
   id: "shell-default-gameplay",
   label: "Shell Default",
   swimTraversal: metaverseSwimSurfaceTraversalConfig,
@@ -158,7 +153,6 @@ export const shellArcadeGameplayProfile = createGameplayProfile({
     jumpImpulseUnitsPerSecond: 7.35,
     maxTurnSpeedRadiansPerSecond: 3.95
   }),
-  groundedJumpSupportVerticalSpeedTolerance: 0.65,
   id: "shell-arcade-gameplay",
   label: "Shell Arcade",
   swimTraversal: Object.freeze({

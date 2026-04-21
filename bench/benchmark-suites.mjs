@@ -277,45 +277,55 @@ function createMetaverseBenchmarkWorldSnapshot({
   const simulationSeconds = simulationTimeMs / 1000;
 
   return createMetaverseRealtimeWorldSnapshot({
+    observerPlayer: {
+      lastProcessedInputSequence: currentTick,
+      lastProcessedLookSequence: currentTick,
+      lastProcessedTraversalOrientationSequence: currentTick,
+      playerId: localPlayerId
+    },
     players: [
       {
         angularVelocityRadiansPerSecond: 0,
         characterId: "mesh2motion-humanoid-v1",
-        linearVelocity: {
-          x: 0,
-          y: 0,
-          z: 0
+        groundedBody: {
+          linearVelocity: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          position: {
+            x: 0,
+            y: 1.62,
+            z: 24
+          },
+          yawRadians: 0
         },
         locomotionMode: "grounded",
         playerId: localPlayerId,
-        position: {
-          x: 0,
-          y: 1.62,
-          z: 24
-        },
         stateSequence: currentTick,
-        username: localUsername,
-        yawRadians: 0
+        username: localUsername
       },
       {
         angularVelocityRadiansPerSecond: 0.9,
         animationVocabulary: "walk",
         characterId: "mesh2motion-humanoid-v1",
-        linearVelocity: {
-          x: Math.cos(simulationSeconds * 1.2) * 7.2,
-          y: 0,
-          z: -Math.sin(simulationSeconds * 0.8) * 2.4
+        groundedBody: {
+          linearVelocity: {
+            x: Math.cos(simulationSeconds * 1.2) * 7.2,
+            y: 0,
+            z: -Math.sin(simulationSeconds * 0.8) * 2.4
+          },
+          position: {
+            x: Math.sin(simulationSeconds * 1.2) * 6,
+            y: 1.62,
+            z: 18 + Math.cos(simulationSeconds * 0.8) * 3
+          },
+          yawRadians: simulationSeconds * 0.9
         },
         locomotionMode: "grounded",
         playerId: remotePlayerId,
-        position: {
-          x: Math.sin(simulationSeconds * 1.2) * 6,
-          y: 1.62,
-          z: 18 + Math.cos(simulationSeconds * 0.8) * 3
-        },
         stateSequence: currentTick,
-        username: remoteUsername,
-        yawRadians: simulationSeconds * 0.9
+        username: remoteUsername
       }
     ],
     snapshotSequence: currentTick + 1,

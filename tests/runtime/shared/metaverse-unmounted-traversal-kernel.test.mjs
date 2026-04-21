@@ -145,7 +145,7 @@ test("shared unmounted traversal state keeps locomotion ownership while queueing
   assert.equal(clearedState.actionState.resolvedActionKind, "none");
 });
 
-test("shared unmounted grounded traversal prep owns jump support plus autostep routing", () => {
+test("shared unmounted grounded traversal prep owns jump acceptance plus autostep routing", () => {
   const actionState = queueMetaverseTraversalAction(
     createMetaverseTraversalActionStateSnapshot(),
     {
@@ -177,7 +177,6 @@ test("shared unmounted grounded traversal prep owns jump support plus autostep r
       verticalSpeedUnitsPerSecond: 0,
       yawRadians: 0
     }),
-    jumpSupportVerticalSpeedTolerance: 0.5,
     preferredLookYawRadians: null,
     surfaceColliderSnapshots: Object.freeze([createSupportCollider(0.2)]),
     surfacePolicyConfig,
@@ -190,12 +189,58 @@ test("shared unmounted grounded traversal prep owns jump support plus autostep r
   });
 
   assert.equal(step.locomotionMode, "grounded");
-  assert.equal(step.surfaceJumpSupported, true);
-  assert.equal(step.groundedJumpSupported, true);
   assert.equal(step.jumpRequested, true);
   assert.equal(step.bodyIntent.jump, true);
-  assert.equal(step.bodyIntent.jumpReadyOverride, true);
   assert.equal(step.bodyIntent.snapToGroundOverrideEnabled, true);
+});
+
+test("shared unmounted grounded traversal prep keeps authored support diagnostic-only until the grounded body is jump-ready", () => {
+  const queuedState = queueMetaverseUnmountedTraversalAction(
+    createMetaverseUnmountedTraversalStateSnapshot({
+      locomotionMode: "grounded"
+    }),
+    {
+      actionIntent: {
+        kind: "jump",
+        pressed: true,
+        sequence: 10
+      },
+      bufferSeconds: 0.2
+    }
+  );
+  const step = prepareMetaverseUnmountedTraversalStep({
+    bodyControl: Object.freeze({
+      boost: false,
+      moveAxis: 0,
+      strafeAxis: 0,
+      turnAxis: 0
+    }),
+    deltaSeconds: 1 / 30,
+    groundedBodyConfig,
+    groundedBodySnapshot: createGroundedBodySnapshot({
+      grounded: true,
+      jumpReady: false,
+      position: Object.freeze({
+        x: 0,
+        y: 0.2,
+        z: 0
+      }),
+      verticalSpeedUnitsPerSecond: 0,
+      yawRadians: 0
+    }),
+    preferredLookYawRadians: null,
+    surfaceColliderSnapshots: Object.freeze([createSupportCollider(0.2)]),
+    surfacePolicyConfig,
+    swimBodySnapshot: null,
+    traversalState: queuedState,
+    waterRegionSnapshots
+  });
+
+  assert.equal(step.locomotionMode, "grounded");
+  assert.equal(step.jumpRequested, false);
+  assert.equal(step.bodyIntent.jump, false);
+  assert.equal(step.bodyIntent.snapToGroundOverrideEnabled, true);
+  assert.equal(step.traversalState.actionState.pendingActionSequence, 10);
 });
 
 test("shared unmounted grounded traversal prep keeps snap-to-ground armed on supported floor when no water region overlaps the player", () => {
@@ -219,7 +264,6 @@ test("shared unmounted grounded traversal prep keeps snap-to-ground armed on sup
       verticalSpeedUnitsPerSecond: 0,
       yawRadians: 0
     }),
-    jumpSupportVerticalSpeedTolerance: 0.5,
     preferredLookYawRadians: null,
     surfaceColliderSnapshots: Object.freeze([
       Object.freeze({
@@ -297,7 +341,6 @@ test("shared unmounted traversal body-step helper sequences grounded prep body a
       verticalSpeedUnitsPerSecond: 0,
       yawRadians: 0
     }),
-    jumpSupportVerticalSpeedTolerance: 0.5,
     preferredLookYawRadians: null,
     surfaceColliderSnapshots: Object.freeze([createSupportCollider(0.2)]),
     surfacePolicyConfig,
@@ -311,7 +354,6 @@ test("shared unmounted traversal body-step helper sequences grounded prep body a
   assert.equal(bodyStep.swimBodySnapshot, null);
   assert.equal(bodyStep.locomotionOutcome.locomotionMode, "grounded");
   assert.equal(groundedAdvanceInput.bodyIntent.jump, true);
-  assert.equal(groundedAdvanceInput.bodyIntent.jumpReadyOverride, true);
   assert.equal(groundedAdvanceInput.bodyIntent.snapToGroundOverrideEnabled, true);
   assert.equal(groundedAdvanceInput.autostepHeightMeters, null);
 });
@@ -343,7 +385,6 @@ test("shared unmounted traversal body-step helper sequences swim prep body advan
     deltaSeconds: 1 / 30,
     groundedBodyConfig,
     groundedBodySnapshot: null,
-    jumpSupportVerticalSpeedTolerance: 0.5,
     preferredLookYawRadians: 0.24,
     surfaceColliderSnapshots: Object.freeze([]),
     surfacePolicyConfig,
@@ -425,16 +466,13 @@ test("shared unmounted grounded traversal outcome keeps airborne travel grounded
     bodyIntent: Object.freeze({
       boost: false,
       jump: false,
-      jumpReadyOverride: false,
       moveAxis: 0,
       snapToGroundOverrideEnabled: false,
       strafeAxis: 0,
       turnAxis: 0
     }),
-    groundedJumpSupported: false,
     jumpRequested: false,
     locomotionMode: "grounded",
-    surfaceJumpSupported: false,
     traversalState: createMetaverseUnmountedTraversalStateSnapshot({
       locomotionMode: "grounded"
     })
@@ -491,16 +529,13 @@ test("shared unmounted grounded traversal outcome does not fabricate water entry
     bodyIntent: Object.freeze({
       boost: false,
       jump: false,
-      jumpReadyOverride: false,
       moveAxis: 0,
       snapToGroundOverrideEnabled: true,
       strafeAxis: 0,
       turnAxis: 0
     }),
-    groundedJumpSupported: true,
     jumpRequested: false,
     locomotionMode: "grounded",
-    surfaceJumpSupported: true,
     traversalState: createMetaverseUnmountedTraversalStateSnapshot({
       locomotionMode: "grounded"
     })
@@ -641,16 +676,13 @@ test("shared unmounted grounded traversal outcome enters swim once airborne trav
       bodyIntent: Object.freeze({
         boost: false,
         jump: false,
-        jumpReadyOverride: false,
         moveAxis: 0,
         snapToGroundOverrideEnabled: false,
         strafeAxis: 0,
         turnAxis: 0
       }),
-      groundedJumpSupported: false,
       jumpRequested: false,
       locomotionMode: "grounded",
-      surfaceJumpSupported: false,
       traversalState: createMetaverseUnmountedTraversalStateSnapshot({
         locomotionMode: "grounded"
       })
@@ -695,7 +727,6 @@ test("shared unmounted grounded traversal prep suppresses snap-to-ground while e
       verticalSpeedUnitsPerSecond: -1,
       yawRadians: 0
     }),
-    jumpSupportVerticalSpeedTolerance: 0.5,
     preferredLookYawRadians: null,
     surfaceColliderSnapshots: Object.freeze([]),
     surfacePolicyConfig,

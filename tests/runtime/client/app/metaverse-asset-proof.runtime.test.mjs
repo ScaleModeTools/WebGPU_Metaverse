@@ -23,7 +23,7 @@ test("metaverse asset proof resolves a socket-compatible attachment config from 
     metaverseAttachmentProofConfig.attachmentId,
     "metaverse-service-pistol-v2"
   );
-  assert.equal(metaverseAttachmentProofConfig.heldMount.socketName, "grip_r_socket");
+  assert.equal(metaverseAttachmentProofConfig.heldMount.socketName, "hand_r_socket");
   assert.equal(
     metaverseAttachmentProofConfig.heldMount.offHandSupportPointId,
     "pistol-support-left"
@@ -35,6 +35,10 @@ test("metaverse asset proof resolves a socket-compatible attachment config from 
   assert.equal(
     metaverseAttachmentProofConfig.heldMount.forwardReferenceNodeName,
     "metaverse_service_pistol_forward_marker"
+  );
+  assert.equal(
+    metaverseAttachmentProofConfig.heldMount.triggerMarkerNodeName,
+    "metaverse_service_pistol_trigger_marker"
   );
   assert.deepEqual(metaverseAttachmentProofConfig.mountedHolsterMount, {
     attachmentSocketNodeName: "metaverse_service_pistol_back_socket",
@@ -183,6 +187,8 @@ test("metaverse asset proof resolves static, instanced, and dynamic environment 
   assert.equal(dockAsset.traversalAffordance, "support");
   assert.ok(dockAsset.lods.length >= 2);
   assert.equal(dockAsset.placements.length, 2);
+  assert.equal(dockAsset.placements[0]?.position.y, 0.26);
+  assert.equal(dockAsset.placements[1]?.position.y, 0.26);
   assert.equal(dockAsset.physicsColliders, null);
 
   assert.ok(pushableCrateAsset);

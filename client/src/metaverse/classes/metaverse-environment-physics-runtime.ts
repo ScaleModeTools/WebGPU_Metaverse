@@ -1,11 +1,16 @@
 import type { Object3D, Scene } from "three/webgpu";
 import {
+  resolveMetaverseDynamicCuboidBodyConfigSnapshotFromSurfaceAsset,
   createMetaverseTraversalColliderMetadataSnapshot,
+  resolveMetaverseGroundedBodyColliderTranslationSnapshot,
   shouldConsiderMetaverseWaterborneTraversalCollider
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 import {
   shouldTreatMetaversePlayerPoseAsTraversalBlocker
 } from "@webgpu-metaverse/shared/metaverse/presence";
+import {
+  readMetaverseRealtimePlayerActiveBodyKinematicSnapshot
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 import type {
   MetaverseRealtimePlayerSnapshot
 } from "@webgpu-metaverse/shared/metaverse/realtime";
@@ -13,8 +18,7 @@ import type {
   MetaverseWorldPlacedSurfaceColliderSnapshot
 } from "@webgpu-metaverse/shared/metaverse/world";
 import {
-  createMetaverseWorldPlacedSurfaceTriMeshSupportSnapshot,
-  resolveMetaverseWorldSurfaceScaleVector
+  createMetaverseWorldPlacedSurfaceTriMeshSupportSnapshot
 } from "@webgpu-metaverse/shared/metaverse/world";
 
 import {
@@ -1013,33 +1017,19 @@ export class MetaverseEnvironmentPhysicsRuntime {
         );
       }
 
-      const placement = environmentAsset.placements[0]!;
-      const collider = environmentAsset.collider;
-      const scaleVector = resolveMetaverseWorldSurfaceScaleVector(placement.scale);
+      const dynamicBodyConfig =
+        resolveMetaverseDynamicCuboidBodyConfigSnapshotFromSurfaceAsset(
+          environmentAsset
+        );
+
+      if (dynamicBodyConfig === null) {
+        throw new Error(
+          `Metaverse dynamic environment body asset ${environmentAsset.label} requires one fully authored dynamic-body placement.`
+        );
+      }
+
       const dynamicBodyRuntime = new MetaverseDynamicCuboidBodyRuntime(
-        {
-          additionalMass: environmentAsset.dynamicBody.additionalMass,
-          angularDamping: environmentAsset.dynamicBody.angularDamping,
-          colliderCenter: freezeVector3(
-            collider.center.x * scaleVector.x,
-            collider.center.y * scaleVector.y,
-            collider.center.z * scaleVector.z
-          ),
-          gravityScale: environmentAsset.dynamicBody.gravityScale,
-          halfExtents: freezeVector3(
-            Math.abs(collider.size.x * scaleVector.x) * 0.5,
-            Math.abs(collider.size.y * scaleVector.y) * 0.5,
-            Math.abs(collider.size.z * scaleVector.z) * 0.5
-          ),
-          linearDamping: environmentAsset.dynamicBody.linearDamping,
-          lockRotations: environmentAsset.dynamicBody.lockRotations,
-          spawnPosition: freezeVector3(
-            placement.position.x,
-            placement.position.y,
-            placement.position.z
-          ),
-          spawnYawRadians: placement.rotationYRadians
-        },
+        dynamicBodyConfig,
         this.#physicsRuntime
       );
 
@@ -1156,15 +1146,20 @@ export class MetaverseEnvironmentPhysicsRuntime {
       this.#config.groundedBody.capsuleHalfHeightMeters;
     const capsuleRadiusMeters =
       this.#config.groundedBody.capsuleRadiusMeters;
-    const playerPosition = remotePlayerSnapshot.position;
+    const playerPosition =
+      readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(
+        remotePlayerSnapshot
+      ).position;
 
     return Object.freeze({
       capsuleHalfHeightMeters,
       capsuleRadiusMeters,
-      translation: freezeVector3(
-        playerPosition.x,
-        playerPosition.y + capsuleHalfHeightMeters + capsuleRadiusMeters,
-        playerPosition.z
+      translation: resolveMetaverseGroundedBodyColliderTranslationSnapshot(
+        {
+          capsuleHalfHeightMeters,
+          capsuleRadiusMeters
+        },
+        playerPosition
       )
     });
   }

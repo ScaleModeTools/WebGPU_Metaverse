@@ -24,22 +24,11 @@ export const metaversePrimaryLocomotionModes = [
     id: "swim",
     label: "Swim",
     description:
-      "Stay waterborne at the ocean surface with a third-person follow camera. Swim keeps character-facing movement active without switching back to fly.",
+      "Stay waterborne at the ocean surface with a third-person follow camera. Swim keeps character-facing movement active while the same capsule-driven traversal truth owns waterborne movement.",
     controlsSummary: [
       "W/S forward and backward, A/D strafe",
       "Move mouse to turn and look",
       "Boost adds a stronger swim stroke instead of flight drift"
-    ]
-  },
-  {
-    id: "fly",
-    label: "Fly",
-    description:
-      "Keep the original free-flight hub camera. This stays available as the fallback traversal path while grounded embodiment is proving out.",
-    controlsSummary: [
-      "Preserves the current camera-truth fly path",
-      "Keeps full altitude freedom over the hub",
-      "Useful for fast portal and environment inspection"
     ]
   }
 ] as const satisfies readonly MetaverseLocomotionModeDefinition[];

@@ -1,10 +1,19 @@
+import assert from "node:assert/strict";
+
 import {
+  resolveMetaverseDynamicCuboidBodyConfigSnapshotFromSurfaceAsset,
   createMetaverseGroundedBodyRuntimeSnapshot,
   createMetaverseSurfaceDriveBodyRuntimeSnapshot,
+  metaversePlaygroundRangeBarrierEnvironmentAssetId,
   metaverseRealtimeWorldCadenceConfig,
+  metaverseWorldSurfaceAssets,
   metaverseWorldGroundedSpawnPosition,
   metaverseWorldInitialYawRadians,
+  readMetaverseWorldSurfaceAssetAuthoring,
   resolveMetaverseTraversalAuthoritySnapshotInput,
+  resolveMetaverseWorldDynamicSurfaceColliders,
+  resolveMetaverseWorldPlacedSurfaceColliders,
+  shouldKeepMetaverseMountedOccupancyFreeRoam,
   shouldConsiderMetaverseWaterborneTraversalCollider
 } from "@webgpu-metaverse/shared";
 
@@ -20,11 +29,118 @@ export function freezeVector3(x, y, z) {
   return Object.freeze({ x, y, z });
 }
 
+export const forwardTravelInput = Object.freeze({
+  boost: false,
+  jump: false,
+  moveAxis: 1,
+  pitchAxis: 0,
+  primaryAction: false,
+  secondaryAction: false,
+  strafeAxis: 0,
+  yawAxis: 0
+});
+
+export const boostedForwardTravelInput = Object.freeze({
+  ...forwardTravelInput,
+  boost: true
+});
+
 export function translateSyntheticWaterBayVector3(vector) {
   return freezeVector3(
     authoredWaterBayOpenWaterSpawn.x + vector.x,
     vector.y,
     authoredWaterBayOpenWaterSpawn.z + (vector.z - 24)
+  );
+}
+
+export function offsetLocalPlanarPosition(
+  position,
+  rotationYRadians,
+  localX,
+  localZ
+) {
+  const sine = Math.sin(rotationYRadians);
+  const cosine = Math.cos(rotationYRadians);
+
+  return Object.freeze({
+    x: position.x + localX * cosine + localZ * sine,
+    y: position.y,
+    z: position.z - localX * sine + localZ * cosine
+  });
+}
+
+export function resolveLocalPlanarOffset(position, origin, rotationYRadians) {
+  const deltaX = position.x - origin.x;
+  const deltaZ = position.z - origin.z;
+  const sine = Math.sin(-rotationYRadians);
+  const cosine = Math.cos(-rotationYRadians);
+
+  return Object.freeze({
+    x: deltaX * cosine + deltaZ * sine,
+    z: -deltaX * sine + deltaZ * cosine
+  });
+}
+
+function requireValue(value, label) {
+  assert.notEqual(value, null, `${label} should resolve`);
+  return value;
+}
+
+export function resolveBarrierPlacement(targetX = 0, targetZ = -14.5) {
+  const barrierAsset = requireValue(
+    metaverseWorldSurfaceAssets.find(
+      (surfaceAsset) =>
+        surfaceAsset.environmentAssetId ===
+        metaversePlaygroundRangeBarrierEnvironmentAssetId
+    ),
+    "range barrier asset"
+  );
+
+  return requireValue(
+    barrierAsset.placements.reduce((closestPlacement, placement) => {
+      if (closestPlacement === null) {
+        return placement;
+      }
+
+      const closestDistanceSquared =
+        (closestPlacement.position.x - targetX) ** 2 +
+        (closestPlacement.position.z - targetZ) ** 2;
+      const nextDistanceSquared =
+        (placement.position.x - targetX) ** 2 +
+        (placement.position.z - targetZ) ** 2;
+
+      return nextDistanceSquared < closestDistanceSquared
+        ? placement
+        : closestPlacement;
+    }, null),
+    "range barrier placement"
+  );
+}
+
+function resolveSurfaceAsset(environmentAssetId) {
+  return requireValue(
+    readMetaverseWorldSurfaceAssetAuthoring(environmentAssetId),
+    `${environmentAssetId} surface asset`
+  );
+}
+
+export function createPlacedSurfaceAssetColliderSnapshots(assetPlacements) {
+  return Object.freeze(
+    assetPlacements.flatMap((assetPlacement) => {
+      const surfaceAsset = resolveSurfaceAsset(assetPlacement.environmentAssetId);
+
+      return resolveMetaverseWorldPlacedSurfaceColliders({
+        environmentAssetId: surfaceAsset.environmentAssetId,
+        placements: Object.freeze([
+          Object.freeze({
+            position: assetPlacement.position,
+            rotationYRadians: assetPlacement.rotationYRadians ?? 0,
+            scale: assetPlacement.scale ?? 1
+          })
+        ]),
+        surfaceColliders: surfaceAsset.surfaceColliders
+      });
+    })
   );
 }
 
@@ -88,7 +204,10 @@ function createAuthoritativeLocalPlayerPoseSnapshot(input) {
     ...authoritativeSnapshot
   } = input;
   const mounted =
-    authoritativeSnapshot.mountedOccupancy !== null ||
+    (authoritativeSnapshot.mountedOccupancy !== null &&
+      !shouldKeepMetaverseMountedOccupancyFreeRoam(
+        authoritativeSnapshot.mountedOccupancy
+      )) ||
     authoritativeSnapshot.locomotionMode === "mounted";
   const resolvedActionSequence =
     lastProcessedJumpActionSequence > lastAcceptedJumpActionSequence
@@ -149,6 +268,47 @@ export function syncAuthoritativeLocalPlayerPose(
   );
 }
 
+export function createTraversalAuthoritySnapshot(
+  previousPose,
+  nextPose,
+  groundedBodySnapshot,
+  deltaSeconds
+) {
+  const sanitizedDeltaSeconds = Math.max(deltaSeconds, 0.000001);
+  const jumpAuthorityState =
+    nextPose.locomotionMode === "swim"
+      ? "none"
+      : groundedBodySnapshot.grounded
+        ? "grounded"
+        : groundedBodySnapshot.jumpBody.verticalSpeedUnitsPerSecond > 0.05
+          ? "rising"
+          : "falling";
+
+  return Object.freeze({
+    jumpAuthorityState,
+    linearVelocity: freezeVector3(
+      (nextPose.position.x - previousPose.position.x) / sanitizedDeltaSeconds,
+      (nextPose.position.y - previousPose.position.y) / sanitizedDeltaSeconds,
+      (nextPose.position.z - previousPose.position.z) / sanitizedDeltaSeconds
+    ),
+    locomotionMode: nextPose.locomotionMode,
+    mountedOccupancy: null,
+    position: nextPose.position,
+    traversalAuthority: resolveMetaverseTraversalAuthoritySnapshotInput({
+      currentTick: 0,
+      jumpAuthorityState,
+      locomotionMode: nextPose.locomotionMode,
+      mounted: false,
+      pendingActionKind: "none",
+      pendingActionSequence: 0,
+      resolvedActionKind: "none",
+      resolvedActionSequence: 0,
+      resolvedActionState: "none"
+    }),
+    yawRadians: nextPose.yawRadians
+  });
+}
+
 export async function createTraversalFixtureContext() {
   const clientLoader = await createClientModuleLoader();
 
@@ -161,17 +321,11 @@ export async function createTraversalFixtureContext() {
   }
 
   async function createShippedSurfaceColliderSnapshots() {
-    const [{ metaverseEnvironmentProofConfig }, { resolvePlacedCuboidColliders }] =
-      await Promise.all([
-        clientLoader.load("/src/metaverse/world/proof/index.ts"),
-        clientLoader.load("/src/metaverse/states/metaverse-environment-collision.ts")
-      ]);
-
     return Object.freeze(
-      metaverseEnvironmentProofConfig.assets.flatMap((environmentAsset) =>
-        environmentAsset.placement === "dynamic"
+      metaverseWorldSurfaceAssets.flatMap((surfaceAsset) =>
+        surfaceAsset.placement === "dynamic"
           ? []
-          : resolvePlacedCuboidColliders(environmentAsset)
+          : resolveMetaverseWorldPlacedSurfaceColliders(surfaceAsset)
       )
     );
   }
@@ -180,7 +334,11 @@ export async function createTraversalFixtureContext() {
     const [
       { MetaverseTraversalRuntime },
       { metaverseRuntimeConfig },
-      { MetaverseGroundedBodyRuntime, RapierPhysicsRuntime }
+      {
+        MetaverseDynamicCuboidBodyRuntime,
+        MetaverseGroundedBodyRuntime,
+        RapierPhysicsRuntime
+      }
     ] = await Promise.all([
       clientLoader.load("/src/metaverse/classes/metaverse-traversal-runtime.ts"),
       clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
@@ -218,7 +376,7 @@ export async function createTraversalFixtureContext() {
         ...(options.config?.groundedBody ?? {})
       }
     };
-    const surfaceColliderSnapshots = (
+    const staticSurfaceColliderSnapshots = (
       options.surfaceColliderSnapshots ?? []
     ).map((collider) =>
       Object.freeze({
@@ -230,8 +388,11 @@ export async function createTraversalFixtureContext() {
         translation: collider.translation
       })
     );
+    const surfaceColliderSnapshots = [...staticSurfaceColliderSnapshots];
     const physicsRuntime = createFakePhysicsRuntime(RapierPhysicsRuntime);
     const colliderMetadataByHandle = new Map();
+    const dynamicSurfaceColliderHandlesByEnvironmentAssetId = new Map();
+    const dynamicSurfaceColliderSnapshotsByEnvironmentAssetId = new Map();
 
     await physicsRuntime.init();
 
@@ -251,7 +412,7 @@ export async function createTraversalFixtureContext() {
       );
     }
 
-    for (const collider of surfaceColliderSnapshots) {
+    for (const collider of staticSurfaceColliderSnapshots) {
       const colliderHandle = physicsRuntime.createFixedCuboidCollider(
         collider.halfExtents,
         collider.translation,
@@ -272,6 +433,7 @@ export async function createTraversalFixtureContext() {
     await groundedBodyRuntime.init(config.camera.initialYawRadians);
 
     const dynamicPoseWrites = [];
+    const dynamicBodyRuntimesByEnvironmentAssetId = new Map();
     const dynamicPresentationPoseMap = new Map(
       Object.entries(options.dynamicEnvironmentPoses ?? {})
     );
@@ -314,6 +476,157 @@ export async function createTraversalFixtureContext() {
         })
       ])
     );
+
+    for (const environmentAssetId of options.dynamicBodyEnvironmentAssetIds ?? []) {
+      const dynamicBodySurfaceAsset = resolveSurfaceAsset(environmentAssetId);
+
+      assert.equal(
+        dynamicBodySurfaceAsset.placement,
+        "dynamic",
+        `${environmentAssetId} should resolve to a dynamic environment asset`
+      );
+      assert.notEqual(
+        dynamicBodySurfaceAsset.dynamicBody,
+        null,
+        `${environmentAssetId} should expose authored dynamic-body config`
+      );
+      assert.notEqual(
+        dynamicBodySurfaceAsset.collider,
+        null,
+        `${environmentAssetId} should expose authored collider config`
+      );
+      assert.equal(
+        dynamicBodySurfaceAsset.placements.length,
+        1,
+        `${environmentAssetId} should expose exactly one authored placement`
+      );
+
+      const dynamicBodyConfig =
+        resolveMetaverseDynamicCuboidBodyConfigSnapshotFromSurfaceAsset(
+          dynamicBodySurfaceAsset
+        );
+
+      assert.notEqual(
+        dynamicBodyConfig,
+        null,
+        `${environmentAssetId} should expose one fully authored dynamic-body placement`
+      );
+      const dynamicBodyRuntime = new MetaverseDynamicCuboidBodyRuntime(
+        dynamicBodyConfig,
+        physicsRuntime
+      );
+
+      await dynamicBodyRuntime.init();
+      dynamicBodyRuntime.syncSnapshot();
+      dynamicBodyRuntimesByEnvironmentAssetId.set(
+        environmentAssetId,
+        dynamicBodyRuntime
+      );
+      dynamicCollisionPoseMap.set(
+        environmentAssetId,
+        Object.freeze({
+          position: dynamicBodyRuntime.snapshot.position,
+          yawRadians: dynamicBodyRuntime.snapshot.yawRadians
+        })
+      );
+      dynamicPresentationPoseMap.set(
+        environmentAssetId,
+        Object.freeze({
+          position: dynamicBodyRuntime.snapshot.position,
+          yawRadians: dynamicBodyRuntime.snapshot.yawRadians
+        })
+      );
+    }
+
+    function syncTraversalHarnessSurfaceColliderSnapshots() {
+      surfaceColliderSnapshots.length = 0;
+      surfaceColliderSnapshots.push(...staticSurfaceColliderSnapshots);
+
+      for (const dynamicSurfaceColliderSnapshots of
+        dynamicSurfaceColliderSnapshotsByEnvironmentAssetId.values()) {
+        surfaceColliderSnapshots.push(...dynamicSurfaceColliderSnapshots);
+      }
+    }
+
+    function disposeDynamicSurfaceColliders(environmentAssetId) {
+      const dynamicSurfaceColliderHandles =
+        dynamicSurfaceColliderHandlesByEnvironmentAssetId.get(
+          environmentAssetId
+        ) ?? [];
+
+      for (const collider of dynamicSurfaceColliderHandles) {
+        colliderMetadataByHandle.delete(collider);
+        physicsRuntime.removeCollider(collider);
+      }
+
+      dynamicSurfaceColliderHandlesByEnvironmentAssetId.delete(
+        environmentAssetId
+      );
+      dynamicSurfaceColliderSnapshotsByEnvironmentAssetId.delete(
+        environmentAssetId
+      );
+    }
+
+    function syncDynamicSurfaceColliders(
+      environmentAssetId,
+      collisionPoseSnapshot
+    ) {
+      disposeDynamicSurfaceColliders(environmentAssetId);
+
+      if (collisionPoseSnapshot === null) {
+        syncTraversalHarnessSurfaceColliderSnapshots();
+        return;
+      }
+
+      const dynamicSurfaceColliderSnapshots =
+        resolveMetaverseWorldDynamicSurfaceColliders(
+          environmentAssetId,
+          collisionPoseSnapshot
+        ).map((collider) =>
+          Object.freeze({
+            ownerEnvironmentAssetId: collider.ownerEnvironmentAssetId ?? null,
+            traversalAffordance: collider.traversalAffordance ?? "support",
+            halfExtents: collider.halfExtents,
+            rotationYRadians: collider.rotationYRadians ?? 0,
+            rotation: collider.rotation,
+            translation: collider.translation
+          })
+        );
+
+      if (dynamicSurfaceColliderSnapshots.length === 0) {
+        syncTraversalHarnessSurfaceColliderSnapshots();
+        return;
+      }
+
+      const dynamicSurfaceColliderHandles = dynamicSurfaceColliderSnapshots.map(
+        (colliderSnapshot) => {
+          const colliderHandle = physicsRuntime.createFixedCuboidCollider(
+            colliderSnapshot.halfExtents,
+            colliderSnapshot.translation,
+            colliderSnapshot.rotation
+          );
+
+          colliderMetadataByHandle.set(colliderHandle, colliderSnapshot);
+
+          return colliderHandle;
+        }
+      );
+
+      dynamicSurfaceColliderHandlesByEnvironmentAssetId.set(
+        environmentAssetId,
+        dynamicSurfaceColliderHandles
+      );
+      dynamicSurfaceColliderSnapshotsByEnvironmentAssetId.set(
+        environmentAssetId,
+        dynamicSurfaceColliderSnapshots
+      );
+      syncTraversalHarnessSurfaceColliderSnapshots();
+    }
+
+    for (const [environmentAssetId, collisionPoseSnapshot] of
+      dynamicCollisionPoseMap.entries()) {
+      syncDynamicSurfaceColliders(environmentAssetId, collisionPoseSnapshot);
+    }
 
     for (const [environmentAssetId, seatConfig] of Object.entries(
       options.mountableEnvironmentConfigs ?? {}
@@ -399,28 +712,47 @@ export async function createTraversalFixtureContext() {
         };
       },
       setDynamicEnvironmentPose(environmentAssetId, poseSnapshot) {
-        dynamicPoseWrites.push({
-          environmentAssetId,
-          poseSnapshot
-        });
-
-        if (poseSnapshot === null) {
-          dynamicCollisionPoseMap.delete(environmentAssetId);
-          dynamicPresentationPoseMap.delete(environmentAssetId);
-          return;
-        }
-
-        dynamicCollisionPoseMap.set(environmentAssetId, poseSnapshot);
-        dynamicPresentationPoseMap.set(environmentAssetId, poseSnapshot);
+        syncDynamicEnvironmentPoses(environmentAssetId, poseSnapshot);
       },
       surfaceColliderSnapshots
     });
 
+    function syncDynamicEnvironmentPoses(
+      environmentAssetId,
+      presentationPoseSnapshot,
+      collisionPoseSnapshot = presentationPoseSnapshot
+    ) {
+      dynamicPoseWrites.push({
+        environmentAssetId,
+        poseSnapshot: presentationPoseSnapshot
+      });
+
+      syncDynamicSurfaceColliders(environmentAssetId, collisionPoseSnapshot);
+
+      if (collisionPoseSnapshot === null) {
+        dynamicCollisionPoseMap.delete(environmentAssetId);
+      } else {
+        dynamicCollisionPoseMap.set(environmentAssetId, collisionPoseSnapshot);
+      }
+
+      if (presentationPoseSnapshot === null) {
+        dynamicPresentationPoseMap.delete(environmentAssetId);
+        return;
+      }
+
+      dynamicPresentationPoseMap.set(
+        environmentAssetId,
+        presentationPoseSnapshot
+      );
+    }
+
     return {
       config,
       dynamicPoseWrites,
+      dynamicBodyRuntimesByEnvironmentAssetId,
       groundedBodyRuntime,
       mountableEnvironmentConfigById,
+      syncDynamicEnvironmentPoses,
       traversalRuntime
     };
   }
@@ -453,6 +785,53 @@ export async function createTraversalFixtureContext() {
           }
         }
       }
+    });
+  }
+
+  async function createShorelineTransitionTraversalHarness(options = {}) {
+    const nextConfig = options.config ?? {};
+    const elevatedSupportHeightMeters = authoredWaterBayOpenWaterSpawn.y + 0.42;
+    const supportCenterX = authoredWaterBayOpenWaterSpawn.x - 1.25;
+    const supportCenterZ = authoredWaterBayOpenWaterSpawn.z;
+
+    return createTraversalHarness({
+      ...options,
+      includeGroundCollider: false,
+      config: {
+        ...nextConfig,
+        camera: {
+          ...(nextConfig.camera ?? {}),
+          initialYawRadians: Math.PI / 2,
+          spawnPosition: {
+            x: supportCenterX,
+            y: elevatedSupportHeightMeters + 1.62,
+            z: supportCenterZ,
+            ...(nextConfig.camera?.spawnPosition ?? {})
+          }
+        },
+        groundedBody: {
+          ...(nextConfig.groundedBody ?? {}),
+          spawnPosition: {
+            x: supportCenterX,
+            y: elevatedSupportHeightMeters,
+            z: supportCenterZ,
+            ...(nextConfig.groundedBody?.spawnPosition ?? {})
+          }
+        }
+      },
+      surfaceColliderSnapshots: [
+        Object.freeze({
+          halfExtents: freezeVector3(1.25, 0.21, 3),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(
+            supportCenterX,
+            elevatedSupportHeightMeters - 0.21,
+            supportCenterZ
+          ),
+          traversalAffordance: "support"
+        }),
+        ...(options.surfaceColliderSnapshots ?? [])
+      ]
     });
   }
 
@@ -493,43 +872,93 @@ export async function createTraversalFixtureContext() {
     };
   }
 
-  async function createShippedTraversalHarness() {
+  async function createAuthoritativeGroundedSimulationHarness(options = {}) {
+    const spawnPosition = options.spawnPosition ?? freezeVector3(0, 0, 24);
+    const spawnYawRadians = options.spawnYawRadians ?? 0;
+    const surfaceColliderSnapshots =
+      options.surfaceColliderSnapshots ??
+      [
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.2, 20),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, -0.1, 24)
+        })
+      ];
+    const [
+      { metaverseRuntimeConfig },
+      { MetaverseGroundedBodyRuntime, RapierPhysicsRuntime }
+    ] = await Promise.all([
+      clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
+      clientLoader.load("/src/physics/index.ts")
+    ]);
+    const physicsRuntime = createFakePhysicsRuntime(RapierPhysicsRuntime);
+
+    await physicsRuntime.init();
+
+    for (const surfaceColliderSnapshot of surfaceColliderSnapshots) {
+      physicsRuntime.createFixedCuboidCollider(
+        surfaceColliderSnapshot.halfExtents,
+        surfaceColliderSnapshot.translation,
+        surfaceColliderSnapshot.rotation
+      );
+    }
+
+    const groundedBodyRuntime = new MetaverseGroundedBodyRuntime(
+      {
+        ...metaverseRuntimeConfig.groundedBody,
+        spawnPosition,
+        worldRadius: metaverseRuntimeConfig.movement.worldRadius
+      },
+      physicsRuntime
+    );
+
+    await groundedBodyRuntime.init(spawnYawRadians);
+    groundedBodyRuntime.syncAuthoritativeState({
+      grounded: true,
+      linearVelocity: freezeVector3(0, 0, 0),
+      position: spawnPosition,
+      yawRadians: spawnYawRadians
+    });
+
+    return {
+      groundedBodyRuntime,
+      physicsRuntime
+    };
+  }
+
+  async function createShippedTraversalHarness(options = {}) {
     const [{ metaverseRuntimeConfig }, surfaceColliderSnapshots] = await Promise.all(
       [
         clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
         createShippedSurfaceColliderSnapshots()
       ]
     );
+    const nextConfig = options.config ?? {};
 
     return createTraversalHarness({
+      ...options,
       config: {
+        ...nextConfig,
         camera: {
-          ...metaverseRuntimeConfig.camera
+          ...metaverseRuntimeConfig.camera,
+          ...(nextConfig.camera ?? {})
         },
         groundedBody: {
-          ...metaverseRuntimeConfig.groundedBody
+          ...metaverseRuntimeConfig.groundedBody,
+          ...(nextConfig.groundedBody ?? {})
         }
       },
       includeGroundCollider: false,
-      surfaceColliderSnapshots
+      surfaceColliderSnapshots:
+        options.surfaceColliderSnapshots === undefined
+          ? surfaceColliderSnapshots
+          : [...surfaceColliderSnapshots, ...options.surfaceColliderSnapshots]
     });
   }
 
   function resolveGroundedEntryFrame(traversalRuntime, maxFrames = 240) {
     for (let frame = 0; frame < maxFrames; frame += 1) {
-      traversalRuntime.advance(
-        Object.freeze({
-          boost: false,
-          jump: false,
-          moveAxis: 1,
-          pitchAxis: 0,
-          primaryAction: false,
-          secondaryAction: false,
-          strafeAxis: 0,
-          yawAxis: 0
-        }),
-        1 / 60
-      );
+      traversalRuntime.advance(forwardTravelInput, 1 / 60);
 
       if (traversalRuntime.locomotionMode === "grounded") {
         return frame + 1;
@@ -540,8 +969,10 @@ export async function createTraversalFixtureContext() {
   }
 
   return Object.freeze({
+    createAuthoritativeGroundedSimulationHarness,
     createGroundedSpawnOwnedTraversalHarness,
     createOpenWaterTraversalHarness,
+    createShorelineTransitionTraversalHarness,
     createShippedTraversalHarness,
     createTraversalHarness,
     dispose: async () => {
@@ -550,4 +981,401 @@ export async function createTraversalFixtureContext() {
     loadMetaverseRuntimeConfig,
     resolveGroundedEntryFrame
   });
+}
+
+export async function runReconciliationFreeAuthorityScenario({
+  authoritativeHarness,
+  authoritativeInput,
+  frameCount,
+  localDeltaSeconds = 1 / 60,
+  localHarness,
+  localInput,
+  onAfterFrame = null,
+  recordSurfaceRouting = false,
+  resolveFrameMetadata = null
+}) {
+  const correctionEvents = [];
+  let authoritativeAccumulatorSeconds = 0;
+  let authoritativeElapsedSeconds = 0;
+  let latestAuthoritativeSnapshot = createTraversalAuthoritySnapshot(
+    authoritativeHarness.traversalRuntime.localTraversalPoseSnapshot,
+    authoritativeHarness.traversalRuntime.localTraversalPoseSnapshot,
+    authoritativeHarness.groundedBodyRuntime.snapshot,
+    groundedFixedStepSeconds
+  );
+  const createFrameMetadata = (frame, deltaSeconds, elapsedSeconds) =>
+    resolveFrameMetadata?.(
+      Object.freeze({
+        authoritativeElapsedSeconds,
+        authoritativeHarness,
+        deltaSeconds,
+        elapsedSeconds,
+        frame,
+        localHarness
+      })
+    ) ?? null;
+
+  const resolveScenarioInput = (
+    input,
+    frame,
+    deltaSeconds,
+    harness,
+    frameMetadata
+  ) =>
+    typeof input === "function"
+      ? input(
+          Object.freeze({
+            deltaSeconds,
+            elapsedSeconds: frame * deltaSeconds,
+            frame,
+            frameMetadata,
+            harness
+          })
+        )
+      : input;
+
+  for (let frame = 0; frame < frameCount; frame += 1) {
+    const localElapsedSeconds = frame * localDeltaSeconds;
+    const frameMetadata = createFrameMetadata(
+      frame,
+      localDeltaSeconds,
+      localElapsedSeconds
+    );
+
+    localHarness.traversalRuntime.advance(
+      resolveScenarioInput(
+        localInput,
+        frame,
+        localDeltaSeconds,
+        localHarness,
+        frameMetadata
+      ),
+      localDeltaSeconds
+    );
+    authoritativeAccumulatorSeconds += localDeltaSeconds;
+
+    while (
+      authoritativeAccumulatorSeconds + 0.000001 >= groundedFixedStepSeconds
+    ) {
+      const previousAuthoritativePose =
+        authoritativeHarness.traversalRuntime.localTraversalPoseSnapshot;
+
+      authoritativeHarness.traversalRuntime.advance(
+        resolveScenarioInput(
+          authoritativeInput,
+          Math.round(authoritativeElapsedSeconds / groundedFixedStepSeconds),
+          groundedFixedStepSeconds,
+          authoritativeHarness,
+          createFrameMetadata(
+            Math.round(authoritativeElapsedSeconds / groundedFixedStepSeconds),
+            groundedFixedStepSeconds,
+            authoritativeElapsedSeconds
+          )
+        ),
+        groundedFixedStepSeconds
+      );
+
+      latestAuthoritativeSnapshot = createTraversalAuthoritySnapshot(
+        previousAuthoritativePose,
+        authoritativeHarness.traversalRuntime.localTraversalPoseSnapshot,
+        authoritativeHarness.groundedBodyRuntime.snapshot,
+        groundedFixedStepSeconds
+      );
+      authoritativeElapsedSeconds += groundedFixedStepSeconds;
+      authoritativeAccumulatorSeconds = Math.max(
+        0,
+        authoritativeAccumulatorSeconds - groundedFixedStepSeconds
+      );
+    }
+
+    syncAuthoritativeLocalPlayerPose(
+      localHarness.traversalRuntime,
+      latestAuthoritativeSnapshot
+    );
+
+    if (
+      localHarness.traversalRuntime.localReconciliationCorrectionCount >
+      correctionEvents.length
+    ) {
+      correctionEvents.push(
+        Object.freeze({
+          correction: localHarness.traversalRuntime
+            .authoritativeCorrectionTelemetrySnapshot,
+          frame: frame + 1,
+          localPose: localHarness.traversalRuntime.localTraversalPoseSnapshot,
+          locomotionMode: localHarness.traversalRuntime.locomotionMode,
+          ...(frameMetadata === null ? {} : frameMetadata),
+          reason:
+            localHarness.traversalRuntime
+              .lastLocalAuthorityPoseCorrectionReason,
+          ...(recordSurfaceRouting
+            ? {
+                surfaceRouting:
+                  localHarness.traversalRuntime
+                    .surfaceRoutingLocalTelemetrySnapshot
+              }
+            : {})
+        })
+      );
+    }
+
+    onAfterFrame?.(
+      Object.freeze({
+        authoritativeElapsedSeconds,
+        authoritativeHarness,
+        correctionEvents,
+        deltaSeconds: localDeltaSeconds,
+        frame,
+        frameMetadata,
+        latestAuthoritativeSnapshot,
+        localElapsedSeconds: (frame + 1) * localDeltaSeconds,
+        localHarness
+      })
+    );
+  }
+
+  return Object.freeze({
+    correctionEvents,
+    latestAuthoritativeSnapshot
+  });
+}
+
+export function formatAuthorityCorrectionEvents(correctionEvents) {
+  return JSON.stringify(
+    correctionEvents.map((event) =>
+      Object.freeze({
+        correction: event.correction,
+        frame: event.frame,
+        locomotionMode: event.locomotionMode ?? null,
+        phaseElapsedSeconds: event.phaseElapsedSeconds ?? null,
+        phaseFrame: event.phaseFrame ?? null,
+        phaseLabel: event.phaseLabel ?? null,
+        reason: event.reason ?? "unknown",
+        surfaceRouting: event.surfaceRouting ?? null
+      })
+    )
+  );
+}
+
+function resolveAuthorityCoursePhaseFrameCount(phase, localDeltaSeconds) {
+  assert.equal(typeof phase.label, "string", "course phase label must be a string");
+  assert.ok(
+    phase.label.length > 0,
+    "course phase label must not be empty"
+  );
+
+  if (phase.frameCount !== undefined) {
+    assert.ok(
+      Number.isInteger(phase.frameCount) && phase.frameCount > 0,
+      `${phase.label} phase frameCount must be a positive integer`
+    );
+
+    return phase.frameCount;
+  }
+
+  assert.equal(
+    typeof phase.durationSeconds,
+    "number",
+    `${phase.label} phase must define frameCount or durationSeconds`
+  );
+  assert.ok(
+    Number.isFinite(phase.durationSeconds) && phase.durationSeconds > 0,
+    `${phase.label} phase durationSeconds must be positive`
+  );
+
+  const roundedFrameCount = Math.round(phase.durationSeconds / localDeltaSeconds);
+  const roundedDurationSeconds = roundedFrameCount * localDeltaSeconds;
+
+  assert.ok(
+    Math.abs(roundedDurationSeconds - phase.durationSeconds) < 0.000001,
+    `${phase.label} phase durationSeconds must align to the local frame cadence`
+  );
+
+  return roundedFrameCount;
+}
+
+function createReconciliationFreeAuthorityCourseTimeline(
+  phases,
+  localDeltaSeconds
+) {
+  assert.ok(Array.isArray(phases) && phases.length > 0, "course phases are required");
+  let startFrame = 0;
+  let startSeconds = 0;
+
+  return Object.freeze(
+    phases.map((phase) => {
+      const frameCount = resolveAuthorityCoursePhaseFrameCount(
+        phase,
+        localDeltaSeconds
+      );
+      const durationSeconds = frameCount * localDeltaSeconds;
+      const resolvedPhase = Object.freeze({
+        ...phase,
+        durationSeconds,
+        endFrameExclusive: startFrame + frameCount,
+        endSecondsExclusive: startSeconds + durationSeconds,
+        frameCount,
+        startFrame,
+        startSeconds
+      });
+
+      startFrame = resolvedPhase.endFrameExclusive;
+      startSeconds = resolvedPhase.endSecondsExclusive;
+
+      return resolvedPhase;
+    })
+  );
+}
+
+function resolveAuthorityCoursePhaseByElapsedSeconds(
+  phaseTimeline,
+  elapsedSeconds
+) {
+  return (
+    phaseTimeline.find(
+      (phase) => elapsedSeconds < phase.endSecondsExclusive - 0.000001
+    ) ?? phaseTimeline.at(-1)
+  );
+}
+
+function resolveAuthorityCoursePhaseMetadata(
+  phaseTimeline,
+  elapsedSeconds,
+  localDeltaSeconds
+) {
+  const phase = resolveAuthorityCoursePhaseByElapsedSeconds(
+    phaseTimeline,
+    elapsedSeconds
+  );
+  const phaseElapsedSeconds = Math.max(0, elapsedSeconds - phase.startSeconds);
+  const phaseFrame = Math.floor(
+    phaseElapsedSeconds / localDeltaSeconds + 0.000001
+  ) + 1;
+
+  return Object.freeze({
+    phaseElapsedSeconds,
+    phaseFrame,
+    phaseLabel: phase.label
+  });
+}
+
+function resolveAuthorityCoursePhaseInput(
+  phaseTimeline,
+  inputOwner,
+  context,
+  localDeltaSeconds
+) {
+  const phase = resolveAuthorityCoursePhaseByElapsedSeconds(
+    phaseTimeline,
+    context.elapsedSeconds
+  );
+  const input =
+    phase[inputOwner] ?? phase.input ?? phase.localInput ?? phase.authoritativeInput;
+  const phaseMetadata = resolveAuthorityCoursePhaseMetadata(
+    phaseTimeline,
+    context.elapsedSeconds,
+    localDeltaSeconds
+  );
+
+  return typeof input === "function"
+    ? input(
+        Object.freeze({
+          ...context,
+          ...phaseMetadata
+        })
+      )
+    : input;
+}
+
+export async function runReconciliationFreeAuthorityCourse({
+  authoritativeHarness,
+  localDeltaSeconds = 1 / 60,
+  localHarness,
+  phases,
+  recordSurfaceRouting = false
+}) {
+  const phaseTimeline = createReconciliationFreeAuthorityCourseTimeline(
+    phases,
+    localDeltaSeconds
+  );
+  const totalFrameCount = phaseTimeline.reduce(
+    (frameCount, phase) => frameCount + phase.frameCount,
+    0
+  );
+  const phaseSnapshots = [];
+
+  const result = await runReconciliationFreeAuthorityScenario({
+    authoritativeHarness,
+    authoritativeInput(context) {
+      return resolveAuthorityCoursePhaseInput(
+        phaseTimeline,
+        "authoritativeInput",
+        context,
+        localDeltaSeconds
+      );
+    },
+    frameCount: totalFrameCount,
+    localDeltaSeconds,
+    localHarness,
+    localInput(context) {
+      return resolveAuthorityCoursePhaseInput(
+        phaseTimeline,
+        "localInput",
+        context,
+        localDeltaSeconds
+      );
+    },
+    onAfterFrame(context) {
+      const completedPhase = phaseTimeline.find(
+        (phase) => phase.endFrameExclusive === context.frame + 1
+      );
+
+      if (completedPhase === undefined) {
+        return;
+      }
+
+      phaseSnapshots.push(
+        Object.freeze({
+          authoritativeLocomotionMode:
+            context.authoritativeHarness.traversalRuntime.locomotionMode,
+          authoritativePose:
+            context.authoritativeHarness.traversalRuntime.localTraversalPoseSnapshot,
+          frame: context.frame + 1,
+          localLocomotionMode: context.localHarness.traversalRuntime.locomotionMode,
+          localPose: context.localHarness.traversalRuntime.localTraversalPoseSnapshot,
+          phaseElapsedSeconds: completedPhase.durationSeconds,
+          phaseLabel: completedPhase.label
+        })
+      );
+    },
+    recordSurfaceRouting,
+    resolveFrameMetadata(context) {
+      return resolveAuthorityCoursePhaseMetadata(
+        phaseTimeline,
+        context.elapsedSeconds,
+        localDeltaSeconds
+      );
+    }
+  });
+
+  return Object.freeze({
+    ...result,
+    phaseSnapshots: Object.freeze(phaseSnapshots),
+    phaseTimeline
+  });
+}
+
+export function assertReconciliationFreeAuthorityScenario(
+  resultOrCorrectionEvents,
+  label
+) {
+  const correctionEvents = Array.isArray(resultOrCorrectionEvents)
+    ? resultOrCorrectionEvents
+    : resultOrCorrectionEvents.correctionEvents;
+
+  assert.equal(
+    correctionEvents.length,
+    0,
+    `expected zero ${label} authority corrections, received ${formatAuthorityCorrectionEvents(correctionEvents)}`
+  );
 }

@@ -15,6 +15,8 @@ import {
 } from "../../metaverse-authored-world-test-fixtures.mjs";
 import {
   createAuthoritativeRuntime,
+  readPlayerActiveBodySnapshot,
+  readPrimaryPlayerActiveBodySnapshot,
   requireValue
 } from "./authoritative-world-test-fixtures.mjs";
 
@@ -69,20 +71,16 @@ test("MetaverseAuthoritativeWorldRuntime simulates driver-controlled vehicles fr
   runtime.advanceToTime(1_000);
 
   const worldSnapshot = runtime.readWorldSnapshot(1_000, playerId);
+  const activeBodySnapshot = readPrimaryPlayerActiveBodySnapshot(worldSnapshot);
 
   assert.equal(worldSnapshot.tick.currentTick, 10);
   assert.equal(worldSnapshot.tick.emittedAtServerTimeMs, 1_000);
   assert.equal(worldSnapshot.tick.simulationTimeMs, 1_000);
   assert.equal(worldSnapshot.players.length, 1);
   assert.equal(worldSnapshot.players[0]?.locomotionMode, "mounted");
-  assert.equal(worldSnapshot.players[0]?.position.y, 0.4);
-  assert.ok(
-    (worldSnapshot.players[0]?.position.x ?? Number.NEGATIVE_INFINITY) >
-      authoredWaterBaySkiffPlacement.x
-  );
-  assert.ok(
-    (worldSnapshot.players[0]?.linearVelocity.x ?? 0) > 0
-  );
+  assert.equal(activeBodySnapshot.position.y, 0.4);
+  assert.ok(activeBodySnapshot.position.x > authoredWaterBaySkiffPlacement.x);
+  assert.ok(activeBodySnapshot.linearVelocity.x > 0);
   assert.equal(
     worldSnapshot.players[0]?.mountedOccupancy?.environmentAssetId,
     "metaverse-hub-skiff-v1"
@@ -201,6 +199,7 @@ test("MetaverseAuthoritativeWorldRuntime coalesces driver control per tick and r
   runtime.advanceToTime(100);
 
   const worldSnapshot = runtime.readWorldSnapshot(100, playerId);
+  const activeBodySnapshot = readPrimaryPlayerActiveBodySnapshot(worldSnapshot);
 
   assert.equal(worldSnapshot.tick.currentTick, 1);
   assert.ok(
@@ -208,11 +207,8 @@ test("MetaverseAuthoritativeWorldRuntime coalesces driver control per tick and r
       authoredWaterBaySkiffPlacement.x
   );
   assert.ok((worldSnapshot.vehicles[0]?.linearVelocity.x ?? 0) < 0);
-  assert.ok(
-    (worldSnapshot.players[0]?.position.x ?? Number.POSITIVE_INFINITY) <
-      authoredWaterBaySkiffPlacement.x
-  );
-  assert.ok((worldSnapshot.players[0]?.linearVelocity.x ?? 0) < 0);
+  assert.ok(activeBodySnapshot.position.x < authoredWaterBaySkiffPlacement.x);
+  assert.ok(activeBodySnapshot.linearVelocity.x < 0);
 });
 
 test("MetaverseAuthoritativeWorldRuntime keeps a claimed driver seat exclusive and ignores conflicting driver control", () => {
@@ -317,6 +313,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps a claimed driver seat exclusive a
   assert.equal(firstDriverSnapshot?.mountedOccupancy?.seatId, "driver-seat");
   assert.equal(conflictingDriverSnapshot?.mountedOccupancy, null);
   assert.equal(conflictingDriverSnapshot?.locomotionMode, "swim");
+  assert.equal(readPlayerActiveBodySnapshot(firstDriverSnapshot).position.x, authoredWaterBaySkiffPlacement.x);
 });
 
 test("MetaverseAuthoritativeWorldRuntime rejects mounted occupancy for unauthored seats", () => {

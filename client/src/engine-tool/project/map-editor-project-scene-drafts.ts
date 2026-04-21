@@ -1,4 +1,7 @@
-import type { ExperienceId } from "@webgpu-metaverse/shared";
+import type {
+  ExperienceId,
+  MetaverseMapPlayerSpawnTeamId
+} from "@webgpu-metaverse/shared";
 
 import {
   readMetaverseMapBundleLaunchTargetCapability,
@@ -15,6 +18,7 @@ export interface MapEditorPlayerSpawnDraftSnapshot {
   readonly label: string;
   readonly position: MapEditorVector3DraftSnapshot;
   readonly spawnId: string;
+  readonly teamId: MetaverseMapPlayerSpawnTeamId;
   readonly yawRadians: number;
 }
 
@@ -112,6 +116,7 @@ export function createPlayerSpawnDrafts(
         label: spawnNode.label,
         position: spawnNode.position,
         spawnId: spawnNode.spawnId,
+        teamId: spawnNode.teamId,
         yawRadians: spawnNode.yawRadians
       })
     )

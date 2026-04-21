@@ -29,6 +29,7 @@ import type {
 } from "@/engine-tool/project/map-editor-project-scene-drafts";
 import type { MapEditorPlacementDraftSnapshot } from "@/engine-tool/project/map-editor-project-state";
 import type {
+  MapEditorPlayerSpawnTransformUpdate,
   MapEditorPlacementUpdate,
   MapEditorViewportHelperVisibilitySnapshot,
   MapEditorViewportToolMode
@@ -76,6 +77,10 @@ interface MapEditorViewportProps {
     placementId: string,
     update: MapEditorPlacementUpdate
   ) => void;
+  readonly onCommitPlayerSpawnTransform: (
+    spawnId: string,
+    update: MapEditorPlayerSpawnTransformUpdate
+  ) => void;
   readonly onSelectPlacementId: (placementId: string) => void;
   readonly placementDrafts: readonly MapEditorPlacementDraftSnapshot[];
   readonly playerSpawnDrafts: readonly MapEditorPlayerSpawnDraftSnapshot[];
@@ -91,6 +96,16 @@ interface PlacementExtents {
   readonly minX: number;
   readonly minZ: number;
 }
+
+type MapEditorViewportTransformTarget =
+  | {
+      readonly id: string;
+      readonly kind: "placement";
+    }
+  | {
+      readonly id: string;
+      readonly kind: "player-spawn";
+    };
 
 function createEmptyPlacementExtents(): PlacementExtents {
   return Object.freeze({
@@ -339,21 +354,33 @@ function createSceneDraftSignature(
   ].join("|");
 }
 
-function readPlacementIdFromObject(
+function readTransformTargetFromObject(
   object: {
     parent: unknown;
     userData?: {
       placementId?: unknown;
+      playerSpawnId?: unknown;
     };
   } | null
-): string | null {
+): MapEditorViewportTransformTarget | null {
   let currentObject = object;
 
   while (currentObject !== null) {
     const candidatePlacementId = currentObject.userData?.placementId;
+    const candidatePlayerSpawnId = currentObject.userData?.playerSpawnId;
 
     if (typeof candidatePlacementId === "string") {
-      return candidatePlacementId;
+      return Object.freeze({
+        id: candidatePlacementId,
+        kind: "placement"
+      });
+    }
+
+    if (typeof candidatePlayerSpawnId === "string") {
+      return Object.freeze({
+        id: candidatePlayerSpawnId,
+        kind: "player-spawn"
+      });
     }
 
     currentObject =
@@ -393,6 +420,7 @@ export function MapEditorViewport({
   helperVisibility,
   onBuildPlacementAtPosition,
   onCommitPlacementTransform,
+  onCommitPlayerSpawnTransform,
   onSelectPlacementId,
   placementDrafts,
   playerSpawnDrafts,
@@ -440,6 +468,15 @@ export function MapEditorViewport({
   const framedBundleIdRef = useRef<string | null>(null);
   const animationFrameRef = useRef(0);
   const lastFrameTimeRef = useRef<number | null>(null);
+  const [selectedTransformTarget, setSelectedTransformTarget] =
+    useState<MapEditorViewportTransformTarget | null>(
+      selectedPlacementId === null
+        ? null
+        : Object.freeze({
+            id: selectedPlacementId,
+            kind: "placement"
+          })
+    );
   const [viewportError, setViewportError] = useState<string | null>(null);
   const previewPlacementSignature = useMemo(
     () => createPlacementPreviewSignature(placementDrafts),
@@ -465,6 +502,14 @@ export function MapEditorViewport({
   const handlePlacementTransformCommit = useEffectEvent(
     (placementId: string, update: MapEditorPlacementUpdate) => {
       onCommitPlacementTransform(placementId, update);
+    }
+  );
+  const handlePlayerSpawnTransformCommit = useEffectEvent(
+    (
+      spawnId: string,
+      update: MapEditorPlayerSpawnTransformUpdate
+    ) => {
+      onCommitPlayerSpawnTransform(spawnId, update);
     }
   );
   const handleBuildPlacement = useEffectEvent(
@@ -497,6 +542,7 @@ export function MapEditorViewport({
     const scene = sceneRef.current;
     const helperHandles = helperHandlesRef.current;
     const transformController = transformControllerRef.current;
+    const sceneDraftHandles = sceneDraftHandlesRef.current;
 
     if (scene === null || helperHandles === null || transformController === null) {
       return;
@@ -504,19 +550,51 @@ export function MapEditorViewport({
 
     transformController.syncToolMode(viewportToolMode);
 
-    const selectedPlacementAnchor =
-      viewportToolMode === "build" || selectedPlacementId === null
-        ? null
-        : placementAnchorByIdRef.current.get(selectedPlacementId) ?? null;
+    let selectedTransformAnchor: Group | null = null;
 
-    transformController.syncAttachedGroup(selectedPlacementAnchor);
+    if (viewportToolMode !== "build" && selectedTransformTarget !== null) {
+      switch (selectedTransformTarget.kind) {
+        case "placement":
+          selectedTransformAnchor =
+            placementAnchorByIdRef.current.get(selectedTransformTarget.id) ?? null;
+          break;
+        case "player-spawn":
+          selectedTransformAnchor =
+            viewportToolMode === "scale" || sceneDraftHandles === null
+              ? null
+              : sceneDraftHandles.playerSpawnGroupsById.get(
+                  selectedTransformTarget.id
+                ) ?? null;
+          break;
+      }
+    }
+
+    if (selectedTransformAnchor === null || selectedTransformTarget === null) {
+      transformController.syncAttachedGroup(null);
+    } else {
+      transformController.syncAttachedGroup(
+        selectedTransformAnchor,
+        selectedTransformTarget.kind
+      );
+    }
     replaceMapEditorViewportSelectionBoundsHelper(
       scene,
       helperHandles,
-      selectedPlacementAnchor,
+      selectedTransformAnchor,
       helperVisibility
     );
   });
+
+  useEffect(() => {
+    setSelectedTransformTarget(
+      selectedPlacementId === null
+        ? null
+        : Object.freeze({
+            id: selectedPlacementId,
+            kind: "placement"
+          })
+    );
+  }, [bundleId, selectedPlacementId]);
 
   useEffect(() => {
     placementDraftsRef.current = placementDrafts;
@@ -591,6 +669,7 @@ export function MapEditorViewport({
       camera,
       canvasElement,
       orbitControls,
+      onCommitPlayerSpawnTransform: handlePlayerSpawnTransformCommit,
       scene,
       onCommitPlacementTransform: handlePlacementTransformCommit
     });
@@ -637,10 +716,10 @@ export function MapEditorViewport({
       }
     };
 
-    const readSelectedPlacementId = (
+    const readSelectedTransformTarget = (
       clientX: number,
       clientY: number
-    ): string | null => {
+    ): MapEditorViewportTransformTarget | null => {
       const pointer = readCanvasPointer(
         canvasElement,
         clientX,
@@ -651,11 +730,13 @@ export function MapEditorViewport({
       raycasterRef.current.setFromCamera(pointer, camera);
 
       const intersections = raycasterRef.current.intersectObjects(
-        placementGroup.children,
+        sceneDraftHandlesRef.current === null
+          ? placementGroup.children
+          : [...placementGroup.children, sceneDraftHandlesRef.current.rootGroup],
         true
       );
 
-      return readPlacementIdFromObject(intersections[0]?.object ?? null);
+      return readTransformTargetFromObject(intersections[0]?.object ?? null);
     };
     const readBuildPlacementPosition = (
       clientX: number,
@@ -796,13 +877,17 @@ export function MapEditorViewport({
         return;
       }
 
-      const nextSelectedPlacementId = readSelectedPlacementId(
+      const nextSelectedTransformTarget = readSelectedTransformTarget(
         event.clientX,
         event.clientY
       );
 
-      if (nextSelectedPlacementId !== null) {
-        handlePlacementSelection(nextSelectedPlacementId);
+      if (nextSelectedTransformTarget !== null) {
+        setSelectedTransformTarget(nextSelectedTransformTarget);
+
+        if (nextSelectedTransformTarget.kind === "placement") {
+          handlePlacementSelection(nextSelectedTransformTarget.id);
+        }
       }
     };
 
@@ -974,6 +1059,7 @@ export function MapEditorViewport({
       sceneObjectDrafts,
       waterRegionDrafts
     });
+    syncSelectionPresentation();
   }, [playerSpawnDrafts, sceneDraftSignature, sceneObjectDrafts, waterRegionDrafts]);
 
   useEffect(() => {
@@ -1085,7 +1171,7 @@ export function MapEditorViewport({
 
   useEffect(() => {
     syncSelectionPresentation();
-  }, [selectedPlacementId, syncSelectionPresentation, viewportToolMode]);
+  }, [selectedTransformTarget, syncSelectionPresentation, viewportToolMode]);
 
   useEffect(() => {
     const camera = cameraRef.current;

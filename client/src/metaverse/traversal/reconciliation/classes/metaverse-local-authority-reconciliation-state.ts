@@ -1,12 +1,15 @@
-import type {
-  MetaversePlayerTraversalIntentSnapshot,
-  MetaverseRealtimePlayerSnapshot,
-} from "@webgpu-metaverse/shared/metaverse/realtime";
+import {
+  shouldKeepMetaverseMountedOccupancyFreeRoam
+} from "@webgpu-metaverse/shared/metaverse/presence";
 import {
   readMetaverseRealtimePlayerActiveBodyKinematicSnapshot
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 import {
-  isMetaverseTraversalAuthorityGroundedLocomotion
+  hasMetaverseTraversalAuthorityConsumedAction,
+  hasMetaverseTraversalAuthorityRejectedAction,
+  isMetaverseTraversalAuthorityActionPendingOrActive,
+  isMetaverseTraversalAuthorityGroundedLocomotion,
+  type MetaverseTraversalAuthoritySnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 
 import {
@@ -21,30 +24,28 @@ import {
   type AuthoritativeCorrectionTelemetrySnapshot,
   type LocalAuthorityPoseCorrectionSnapshot,
   type LocalAuthorityPoseCorrectionDetailSnapshot,
+  type LocalAuthorityPoseIntentionalDiscontinuityCause,
+  type LocalAuthorityPoseHistoricalLocalSampleSelectionReason,
   type LocalAuthorityPoseCorrectionReason,
   type LocalTraversalPoseSnapshot
 } from "../local-authority-pose-correction";
+import type {
+  AuthoritativeLocalPlayerReconciliationSnapshot
+} from "../authoritative-local-player-reconciliation";
+import type { MetaverseIssuedTraversalIntentSnapshot } from "../../types/traversal";
 
 export interface AuthoritativeLocalPlayerPoseSnapshot
-  extends Pick<
-    MetaverseRealtimePlayerSnapshot,
-    | "groundedBody"
-    | "lastProcessedInputSequence"
-    | "lastProcessedTraversalOrientationSequence"
-    | "linearVelocity"
-    | "locomotionMode"
-    | "mountedOccupancy"
-    | "position"
-    | "swimBody"
-    | "traversalAuthority"
-    | "yawRadians"
-  > {}
+  extends AuthoritativeLocalPlayerReconciliationSnapshot {
+  readonly lastProcessedInputSequence: number;
+  readonly lastProcessedTraversalOrientationSequence: number;
+}
 
 export interface ApplyAuthoritativeUnmountedPoseInput {
   readonly authoritativeGrounded: boolean;
   readonly authoritativePlayerSnapshot: AuthoritativeLocalPlayerPoseSnapshot;
   readonly localTraversalPose: LocalTraversalPoseSnapshot;
   readonly positionBlendAlpha: number;
+  readonly syncAuthoritativeLook?: boolean;
   readonly yawBlendAlpha: number;
 }
 
@@ -60,7 +61,7 @@ export interface SyncAuthoritativeLocalPlayerPoseInput {
   readonly createLocalAuthorityPoseCorrectionSnapshot: (input: {
     readonly authoritativePlayerSnapshot: AuthoritativeLocalPlayerPoseSnapshot;
     readonly localGroundedBodySnapshot: AuthoritativeLocalPlayerPoseSnapshot["groundedBody"] | null;
-    readonly localIssuedTraversalIntentSnapshot: MetaversePlayerTraversalIntentSnapshot | null;
+    readonly localIssuedTraversalIntentSnapshot: MetaverseIssuedTraversalIntentSnapshot | null;
     readonly localSwimBodySnapshot: AuthoritativeLocalPlayerPoseSnapshot["swimBody"] | null;
     readonly localTraversalPose: LocalTraversalPoseSnapshot;
   }) => LocalAuthorityPoseCorrectionSnapshot;
@@ -72,11 +73,31 @@ export interface SyncAuthoritativeLocalPlayerPoseInput {
   readonly convergenceStartPlanarDistanceMeters: number;
   readonly convergenceStartVerticalDistanceMeters: number;
   readonly convergenceStartYawRadians: number;
+  readonly historicalLocalSampleMatched?: boolean | null;
+  readonly historicalLocalSampleSelectionReason?:
+    | LocalAuthorityPoseHistoricalLocalSampleSelectionReason
+    | null;
+  readonly historicalLocalSampleTimeDeltaMs?: number | null;
+  readonly forceSnap?: boolean;
+  readonly forceSnapIntentionalDiscontinuityCause?:
+    | LocalAuthorityPoseIntentionalDiscontinuityCause
+    | null;
   readonly localGroundedBodySnapshot: AuthoritativeLocalPlayerPoseSnapshot["groundedBody"] | null;
+  readonly localIssuedTraversalIntentSnapshot?: MetaverseIssuedTraversalIntentSnapshot | null;
+  readonly localTraversalAuthoritySnapshot?: MetaverseTraversalAuthoritySnapshot | null;
   readonly localSwimBodySnapshot: AuthoritativeLocalPlayerPoseSnapshot["swimBody"] | null;
   readonly localGrounded: boolean | null;
   readonly localTraversalApplicationPose?: LocalTraversalPoseSnapshot;
   readonly localTraversalPose: LocalTraversalPoseSnapshot | null;
+  readonly syncAuthoritativeLook?: boolean;
+}
+
+export interface AuthoritativeLocalPlayerPoseSyncOptions {
+  readonly forceSnap?: boolean;
+  readonly intentionalDiscontinuityCause?:
+    | LocalAuthorityPoseIntentionalDiscontinuityCause
+    | null;
+  readonly syncAuthoritativeLook?: boolean;
 }
 
 function wrapRadians(rawValue: number): number {
@@ -112,6 +133,121 @@ function resolveBoundedConvergenceBlendAlpha(
   return Math.min(1, maxStep / magnitude);
 }
 
+function normalizePositiveInteger(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+
+  return Math.floor(value);
+}
+
+function resolveIssuedJumpActionSequence(
+  localIssuedTraversalIntentSnapshot: MetaverseIssuedTraversalIntentSnapshot | null
+): number {
+  if (localIssuedTraversalIntentSnapshot?.actionIntent.kind !== "jump") {
+    return 0;
+  }
+
+  return normalizePositiveInteger(
+    localIssuedTraversalIntentSnapshot.actionIntent.sequence
+  );
+}
+
+function resolveLocalPredictedJumpActionSequence({
+  localIssuedTraversalIntentSnapshot,
+  localTraversalAuthoritySnapshot
+}: {
+  readonly localIssuedTraversalIntentSnapshot: MetaverseIssuedTraversalIntentSnapshot | null;
+  readonly localTraversalAuthoritySnapshot: MetaverseTraversalAuthoritySnapshot | null;
+}): number {
+  const issuedJumpActionSequence = resolveIssuedJumpActionSequence(
+    localIssuedTraversalIntentSnapshot
+  );
+
+  if (issuedJumpActionSequence > 0) {
+    return issuedJumpActionSequence;
+  }
+
+  if (localTraversalAuthoritySnapshot?.currentActionKind !== "jump") {
+    return 0;
+  }
+
+  return normalizePositiveInteger(
+    localTraversalAuthoritySnapshot.currentActionSequence
+  );
+}
+
+function shouldForceRejectedLocalJumpCorrection({
+  authoritativePlayerSnapshot,
+  localGroundedBodySnapshot,
+  localIssuedTraversalIntentSnapshot,
+  localTraversalAuthoritySnapshot,
+  localTraversalPose
+}: {
+  readonly authoritativePlayerSnapshot: AuthoritativeLocalPlayerPoseSnapshot;
+  readonly localGroundedBodySnapshot: AuthoritativeLocalPlayerPoseSnapshot["groundedBody"] | null;
+  readonly localIssuedTraversalIntentSnapshot: MetaverseIssuedTraversalIntentSnapshot | null;
+  readonly localTraversalAuthoritySnapshot: MetaverseTraversalAuthoritySnapshot | null;
+  readonly localTraversalPose: LocalTraversalPoseSnapshot | null;
+}): boolean {
+  if (
+    localTraversalPose?.locomotionMode !== "grounded" ||
+    localGroundedBodySnapshot?.grounded !== false
+  ) {
+    return false;
+  }
+
+  const issuedJumpActionSequence = resolveLocalPredictedJumpActionSequence({
+    localIssuedTraversalIntentSnapshot,
+    localTraversalAuthoritySnapshot
+  });
+
+  if (issuedJumpActionSequence <= 0) {
+    return false;
+  }
+
+  if (
+    hasMetaverseTraversalAuthorityRejectedAction(
+      authoritativePlayerSnapshot.traversalAuthority,
+      "jump",
+      issuedJumpActionSequence
+    )
+  ) {
+    return true;
+  }
+
+  if (localIssuedTraversalIntentSnapshot === null) {
+    return false;
+  }
+
+  const authoritativeProcessedIssuedInput =
+    authoritativePlayerSnapshot.lastProcessedInputSequence >=
+    localIssuedTraversalIntentSnapshot.inputSequence;
+
+  if (!authoritativeProcessedIssuedInput) {
+    return false;
+  }
+
+  if (
+    hasMetaverseTraversalAuthorityConsumedAction(
+      authoritativePlayerSnapshot.traversalAuthority,
+      "jump",
+      issuedJumpActionSequence
+    ) ||
+    isMetaverseTraversalAuthorityActionPendingOrActive(
+      authoritativePlayerSnapshot.traversalAuthority,
+      "jump",
+      issuedJumpActionSequence
+    )
+  ) {
+    return false;
+  }
+
+  return (
+    authoritativePlayerSnapshot.traversalAuthority.currentActionKind === "none"
+  );
+}
+
 export class MetaverseLocalAuthorityReconciliationState {
   #latestAuthoritativeCorrectionTelemetrySnapshot =
     createDefaultAuthoritativeCorrectionTelemetrySnapshot();
@@ -124,6 +260,30 @@ export class MetaverseLocalAuthorityReconciliationState {
     createDefaultLocalAuthorityPoseCorrectionSnapshot();
   #lastLocalAuthorityPoseCorrectionReason: LocalAuthorityPoseCorrectionReason =
     "none";
+  #pendingIntentionalDiscontinuityCause: LocalAuthorityPoseIntentionalDiscontinuityCause =
+    "none";
+  #localAuthorityPoseConvergenceEpisodeStartIntentionalDiscontinuityCause:
+    LocalAuthorityPoseIntentionalDiscontinuityCause = "none";
+  #localAuthorityPoseConvergenceEpisodeStartHistoricalLocalSampleMatched:
+    | boolean
+    | null = null;
+  #localAuthorityPoseConvergenceEpisodeStartHistoricalLocalSampleSelectionReason:
+    | LocalAuthorityPoseHistoricalLocalSampleSelectionReason
+    | null = null;
+  #localAuthorityPoseConvergenceEpisodeStartHistoricalLocalSampleTimeDeltaMs:
+    | number
+    | null = null;
+  #localAuthorityPoseConvergenceEpisodeStartPlanarMagnitudeMeters:
+    | number
+    | null = null;
+  #localAuthorityPoseConvergenceEpisodeStartReason: LocalAuthorityPoseCorrectionReason =
+    "none";
+  #localAuthorityPoseConvergenceEpisodeStartVerticalMagnitudeMeters:
+    | number
+    | null = null;
+  #localAuthorityPoseConvergenceEpisodeStartYawMagnitudeRadians:
+    | number
+    | null = null;
   #localAuthorityPoseConvergenceActive = false;
 
   get authoritativeCorrectionTelemetrySnapshot(): AuthoritativeCorrectionTelemetrySnapshot {
@@ -158,6 +318,12 @@ export class MetaverseLocalAuthorityReconciliationState {
     return this.#lastLocalAuthorityPoseCorrectionReason;
   }
 
+  noteIntentionalDiscontinuity(
+    cause: LocalAuthorityPoseIntentionalDiscontinuityCause
+  ): void {
+    this.#pendingIntentionalDiscontinuityCause = cause;
+  }
+
   reset(): void {
     this.#latestAuthoritativeCorrectionTelemetrySnapshot =
       createDefaultAuthoritativeCorrectionTelemetrySnapshot();
@@ -169,6 +335,19 @@ export class MetaverseLocalAuthorityReconciliationState {
     this.#lastLocalAuthorityPoseCorrectionSnapshot =
       createDefaultLocalAuthorityPoseCorrectionSnapshot();
     this.#lastLocalAuthorityPoseCorrectionReason = "none";
+    this.#pendingIntentionalDiscontinuityCause = "none";
+    this.#localAuthorityPoseConvergenceEpisodeStartIntentionalDiscontinuityCause =
+      "none";
+    this.#localAuthorityPoseConvergenceEpisodeStartHistoricalLocalSampleMatched =
+      null;
+    this.#localAuthorityPoseConvergenceEpisodeStartHistoricalLocalSampleSelectionReason =
+      null;
+    this.#localAuthorityPoseConvergenceEpisodeStartHistoricalLocalSampleTimeDeltaMs =
+      null;
+    this.#localAuthorityPoseConvergenceEpisodeStartPlanarMagnitudeMeters = null;
+    this.#localAuthorityPoseConvergenceEpisodeStartReason = "none";
+    this.#localAuthorityPoseConvergenceEpisodeStartVerticalMagnitudeMeters = null;
+    this.#localAuthorityPoseConvergenceEpisodeStartYawMagnitudeRadians = null;
     this.#localAuthorityPoseConvergenceActive = false;
   }
 
@@ -188,16 +367,29 @@ export class MetaverseLocalAuthorityReconciliationState {
     convergenceStartPlanarDistanceMeters,
     convergenceStartVerticalDistanceMeters,
     convergenceStartYawRadians,
+    forceSnap = false,
+    forceSnapIntentionalDiscontinuityCause = null,
+    historicalLocalSampleMatched = null,
+    historicalLocalSampleSelectionReason = null,
+    historicalLocalSampleTimeDeltaMs = null,
     localGroundedBodySnapshot,
+    localIssuedTraversalIntentSnapshot = null,
+    localTraversalAuthoritySnapshot = null,
     localSwimBodySnapshot,
     localGrounded,
     localTraversalApplicationPose,
-    localTraversalPose
+    localTraversalPose,
+    syncAuthoritativeLook = false
   }: SyncAuthoritativeLocalPlayerPoseInput): boolean {
     this.#lastLocalAuthorityPoseConvergenceEpisodeStarted = false;
+    const keepMountedOccupancyFreeRoam =
+      shouldKeepMetaverseMountedOccupancyFreeRoam(
+        authoritativePlayerSnapshot.mountedOccupancy
+      );
 
     if (
-      authoritativePlayerSnapshot.mountedOccupancy !== null ||
+      (authoritativePlayerSnapshot.mountedOccupancy !== null &&
+        !keepMountedOccupancyFreeRoam) ||
       authoritativePlayerSnapshot.locomotionMode === "mounted" ||
       localTraversalPose === null
     ) {
@@ -222,7 +414,9 @@ export class MetaverseLocalAuthorityReconciliationState {
           authoritativePlayerSnapshot.locomotionMode === "swim"
             ? "swim"
             : "grounded",
-        mounted: authoritativePlayerSnapshot.mountedOccupancy !== null,
+        mounted:
+          authoritativePlayerSnapshot.mountedOccupancy !== null &&
+          !keepMountedOccupancyFreeRoam,
         traversalAuthority: authoritativePlayerSnapshot.traversalAuthority
       });
     const divergenceDiagnostics = resolveLocalAuthorityPoseDivergenceDiagnostics({
@@ -271,19 +465,64 @@ export class MetaverseLocalAuthorityReconciliationState {
         false
       );
 
-    if (!convergenceDecision.shouldConvergePose) {
+    const shouldForceCorrection =
+      forceSnap ||
+      shouldForceRejectedLocalJumpCorrection({
+        authoritativePlayerSnapshot,
+        localGroundedBodySnapshot,
+        localIssuedTraversalIntentSnapshot,
+        localTraversalAuthoritySnapshot,
+        localTraversalPose
+      });
+
+    if (
+      shouldForceCorrection &&
+      forceSnap &&
+      forceSnapIntentionalDiscontinuityCause !== null
+    ) {
+      this.#pendingIntentionalDiscontinuityCause =
+        forceSnapIntentionalDiscontinuityCause;
+    }
+
+    if (!shouldForceCorrection && !convergenceDecision.shouldConvergePose) {
+      this.#pendingIntentionalDiscontinuityCause = "none";
       this.#localAuthorityPoseConvergenceActive = false;
       return false;
     }
 
-    const convergenceEpisodeStarted =
-      !this.#localAuthorityPoseConvergenceActive;
+    const correctionReason = resolveLocalAuthorityPoseCorrectionReason({
+      bodyStateDivergence: divergenceDiagnostics.bodyStateDivergence,
+      grossPositionDivergence: convergenceDecision.grossPositionDivergence,
+      grossYawDivergence: convergenceDecision.grossYawDivergence
+    });
+
+    if (shouldForceCorrection) {
+      this.#localAuthorityPoseConvergenceActive = false;
+    }
+
+    const convergenceEpisodeStarted = !this.#localAuthorityPoseConvergenceActive;
     this.#localAuthorityPoseConvergenceActive = true;
     this.#lastLocalAuthorityPoseConvergenceEpisodeStarted =
       convergenceEpisodeStarted;
 
     if (convergenceEpisodeStarted) {
       this.#localAuthorityPoseConvergenceEpisodeCount += 1;
+      this.#localAuthorityPoseConvergenceEpisodeStartIntentionalDiscontinuityCause =
+        this.#pendingIntentionalDiscontinuityCause;
+      this.#pendingIntentionalDiscontinuityCause = "none";
+      this.#localAuthorityPoseConvergenceEpisodeStartHistoricalLocalSampleMatched =
+        historicalLocalSampleMatched;
+      this.#localAuthorityPoseConvergenceEpisodeStartHistoricalLocalSampleSelectionReason =
+        historicalLocalSampleSelectionReason;
+      this.#localAuthorityPoseConvergenceEpisodeStartHistoricalLocalSampleTimeDeltaMs =
+        historicalLocalSampleTimeDeltaMs;
+      this.#localAuthorityPoseConvergenceEpisodeStartPlanarMagnitudeMeters =
+        planarDistance;
+      this.#localAuthorityPoseConvergenceEpisodeStartReason = correctionReason;
+      this.#localAuthorityPoseConvergenceEpisodeStartVerticalMagnitudeMeters =
+        verticalDistance;
+      this.#localAuthorityPoseConvergenceEpisodeStartYawMagnitudeRadians =
+        yawDistance;
     }
 
     this.#localAuthorityPoseConvergenceStepCount += 1;
@@ -301,12 +540,22 @@ export class MetaverseLocalAuthorityReconciliationState {
         authoritativeTick,
         bodyStateDivergence: divergenceDiagnostics.bodyStateDivergence,
         convergenceEpisodeStarted,
+        convergenceEpisodeStartIntentionalDiscontinuityCause:
+          this.#localAuthorityPoseConvergenceEpisodeStartIntentionalDiscontinuityCause,
+        convergenceEpisodeStartHistoricalLocalSampleMatched:
+          this.#localAuthorityPoseConvergenceEpisodeStartHistoricalLocalSampleMatched,
+        convergenceEpisodeStartHistoricalLocalSampleSelectionReason:
+          this.#localAuthorityPoseConvergenceEpisodeStartHistoricalLocalSampleSelectionReason,
+        convergenceEpisodeStartHistoricalLocalSampleTimeDeltaMs:
+          this.#localAuthorityPoseConvergenceEpisodeStartHistoricalLocalSampleTimeDeltaMs,
         convergenceEpisodeStartPlanarMagnitudeMeters:
-          convergenceEpisodeStarted ? planarDistance : null,
+          this.#localAuthorityPoseConvergenceEpisodeStartPlanarMagnitudeMeters,
+        convergenceEpisodeStartReason:
+          this.#localAuthorityPoseConvergenceEpisodeStartReason,
         convergenceEpisodeStartVerticalMagnitudeMeters:
-          convergenceEpisodeStarted ? verticalDistance : null,
+          this.#localAuthorityPoseConvergenceEpisodeStartVerticalMagnitudeMeters,
         convergenceEpisodeStartYawMagnitudeRadians:
-          convergenceEpisodeStarted ? yawDistance : null,
+          this.#localAuthorityPoseConvergenceEpisodeStartYawMagnitudeRadians,
         groundedBodyStateDivergence:
           divergenceDiagnostics.groundedBodyStateDivergence,
         lastProcessedInputSequence:
@@ -321,16 +570,12 @@ export class MetaverseLocalAuthorityReconciliationState {
       createLocalAuthorityPoseCorrectionSnapshot({
         authoritativePlayerSnapshot,
         localGroundedBodySnapshot,
-        localIssuedTraversalIntentSnapshot: null,
+        localIssuedTraversalIntentSnapshot,
         localSwimBodySnapshot,
         localTraversalPose
       });
     this.#lastLocalAuthorityPoseCorrectionReason =
-      resolveLocalAuthorityPoseCorrectionReason({
-        bodyStateDivergence: divergenceDiagnostics.bodyStateDivergence,
-        grossPositionDivergence: convergenceDecision.grossPositionDivergence,
-        grossYawDivergence: convergenceDecision.grossYawDivergence
-      });
+      correctionReason;
     this.#latestAuthoritativeCorrectionTelemetrySnapshot =
       createAuthoritativeCorrectionTelemetrySnapshot(
         localTraversalPose,
@@ -346,14 +591,19 @@ export class MetaverseLocalAuthorityReconciliationState {
       authoritativePlayerSnapshot:
         authoritativePlayerApplicationSnapshot ?? authoritativePlayerSnapshot,
       localTraversalPose: localTraversalApplicationPose ?? localTraversalPose,
-      positionBlendAlpha: resolveBoundedConvergenceBlendAlpha(
-        positionDistance,
-        convergenceMaxPositionStepMeters
-      ),
-      yawBlendAlpha: resolveBoundedConvergenceBlendAlpha(
-        yawDistance,
-        convergenceMaxYawStepRadians
-      )
+      positionBlendAlpha: shouldForceCorrection
+        ? 1
+        : resolveBoundedConvergenceBlendAlpha(
+            positionDistance,
+            convergenceMaxPositionStepMeters
+          ),
+      syncAuthoritativeLook,
+      yawBlendAlpha: shouldForceCorrection
+        ? 1
+        : resolveBoundedConvergenceBlendAlpha(
+            yawDistance,
+            convergenceMaxYawStepRadians
+          )
     });
 
     return true;

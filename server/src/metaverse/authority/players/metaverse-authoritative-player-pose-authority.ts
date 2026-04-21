@@ -1,5 +1,7 @@
 import {
   createMetaversePresencePoseSnapshot,
+  shouldTreatMetaverseMountedOccupancyAsTraversalMounted,
+  type MetaversePlayerTeamId,
   type MetaverseJoinPresenceCommand,
   type MetaversePlayerId,
   type MetaversePresencePlayerSnapshot,
@@ -26,12 +28,10 @@ export interface MetaverseAuthoritativePlayerPoseRuntimeState<
 > {
   angularVelocityRadiansPerSecond: number;
   lastGroundedBodySnapshot: MetaverseAuthoritativeLastGroundedBodySnapshot;
-  lastGroundedJumpSupported: boolean;
   lastPoseAtMs: number | null;
   lastProcessedInputSequence: number;
   lastProcessedLookSequence: number;
   lastSeenAtMs: number;
-  lastSurfaceJumpSupported: boolean;
   linearVelocityX: number;
   linearVelocityY: number;
   linearVelocityZ: number;
@@ -40,6 +40,7 @@ export interface MetaverseAuthoritativePlayerPoseRuntimeState<
   locomotionMode: MetaversePresencePoseSnapshot["locomotionMode"];
   mountedOccupancy: MountedOccupancy | null;
   readonly playerId: MetaversePlayerId;
+  readonly teamId: MetaversePlayerTeamId;
   positionX: number;
   positionY: number;
   positionZ: number;
@@ -75,6 +76,7 @@ interface MetaverseAuthoritativePlayerPoseAuthorityDependencies<
   readonly createPlayerRuntimeState: (
     playerId: MetaversePlayerId,
     characterId: string,
+    teamId: MetaversePlayerTeamId,
     username: MetaversePresencePlayerSnapshot["username"],
     nowMs: number
   ) => PlayerRuntime;
@@ -82,8 +84,17 @@ interface MetaverseAuthoritativePlayerPoseAuthorityDependencies<
   readonly mountedOccupancyAuthority:
     MetaverseAuthoritativeMountedOccupancyResolver<MountedOccupancy>;
   readonly playersById: Map<MetaversePlayerId, PlayerRuntime>;
+  readonly resolveJoinTeamId: (
+    playerId: MetaversePlayerId,
+    requestedTeamId: MetaversePlayerTeamId
+  ) => MetaversePlayerTeamId;
   readonly resolveAuthoritativeSurfaceColliders:
     () => readonly MetaverseAuthoritativeSurfaceColliderSnapshot[];
+  readonly resolveJoinPose: (
+    playerId: MetaversePlayerId,
+    teamId: MetaversePlayerTeamId,
+    nextPose: MetaversePresencePoseSnapshot
+  ) => MetaversePresencePoseSnapshot;
   readonly resolveConstrainedPlayerLookIntent: (
     playerRuntime: PlayerRuntime,
     pitchRadians: number,
@@ -172,8 +183,18 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
   }
 
   acceptJoinCommand(command: MetaverseJoinPresenceCommand, nowMs: number): void {
-    const nextPose = createMetaversePresencePoseSnapshot(command.pose);
     const currentPlayer = this.#dependencies.playersById.get(command.playerId);
+    const resolvedTeamId =
+      currentPlayer?.teamId ??
+      this.#dependencies.resolveJoinTeamId(command.playerId, command.teamId);
+    const nextPose =
+      currentPlayer === undefined
+        ? this.#dependencies.resolveJoinPose(
+            command.playerId,
+            resolvedTeamId,
+            createMetaversePresencePoseSnapshot(command.pose)
+          )
+        : createMetaversePresencePoseSnapshot(command.pose);
 
     if (
       currentPlayer !== undefined &&
@@ -188,6 +209,7 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
       this.#dependencies.createPlayerRuntimeState(
         command.playerId,
         command.characterId,
+        resolvedTeamId,
         command.username,
         nowMs
       );
@@ -286,12 +308,10 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
                 jumpReady: true
               }
             }
-          : {}),
+        : {}),
         positionYMeters: nextPose.position.y
       });
-    playerRuntime.lastGroundedJumpSupported = false;
     playerRuntime.lastProcessedInputSequence = nextPose.stateSequence;
-    playerRuntime.lastSurfaceJumpSupported = false;
     playerRuntime.locomotionMode =
       acceptedMountedOccupancy === null &&
       requestedMountedEnvironmentAssetId !== null
@@ -314,11 +334,27 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
     playerRuntime.traversalAuthorityState =
       createMetaverseTraversalAuthoritySnapshot();
 
-    if (playerRuntime.mountedOccupancy === null) {
+    const traversalMountedOccupancy =
+      shouldTreatMetaverseMountedOccupancyAsTraversalMounted(
+        playerRuntime.mountedOccupancy
+      );
+
+    if (playerRuntime.mountedOccupancy === null || !traversalMountedOccupancy) {
       this.#dependencies.clearDriverVehicleControl(playerRuntime.playerId);
       this.#applyPlayerWorldPoseFromPresence(playerRuntime, nextPose, nowMs);
 
-      if (requestedMountedOccupancy !== null) {
+      if (playerRuntime.mountedOccupancy !== null) {
+        this.#dependencies.syncVehicleOccupancyAndInitialPoseFromPlayer(
+          playerRuntime,
+          playerRuntime.mountedOccupancy,
+          nowMs
+        );
+        this.#dependencies.syncUnmountedPlayerToAuthoritativeSurface(
+          playerRuntime,
+          this.#dependencies.resolveAuthoritativeSurfaceColliders(),
+          null
+        );
+      } else if (requestedMountedOccupancy !== null) {
         this.#dependencies.syncUnmountedPlayerToAuthoritativeSurface(
           playerRuntime,
           this.#dependencies.resolveAuthoritativeSurfaceColliders(),

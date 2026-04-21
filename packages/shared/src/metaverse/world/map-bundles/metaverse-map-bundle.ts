@@ -16,6 +16,8 @@ import type {
   MetaverseWorldSurfaceVector3Snapshot,
   MetaverseWorldWaterRegionAuthoring
 } from "../../metaverse-world-surface-query.js";
+import type { MetaversePlayerTeamId } from "../../metaverse-player-team.js";
+import { metaversePlayerTeamIds } from "../../metaverse-player-team.js";
 
 export interface MetaverseMapBundlePlacementSnapshot {
   readonly collisionEnabled: boolean;
@@ -41,10 +43,30 @@ export interface MetaverseMapBundleEnvironmentAssetSnapshot {
   readonly traversalAffordance: MetaverseWorldEnvironmentTraversalAffordanceId;
 }
 
+export const metaverseMapPlayerSpawnTeamIds = [
+  "neutral",
+  ...metaversePlayerTeamIds
+] as const;
+
+export type MetaverseMapPlayerSpawnTeamId =
+  (typeof metaverseMapPlayerSpawnTeamIds)[number];
+export type MetaverseMapPlayerTeamId = MetaversePlayerTeamId;
+
+export interface MetaverseMapBundlePlayerSpawnSelectionSnapshot {
+  readonly enemyAvoidanceRadiusMeters: number;
+  readonly homeTeamBiasMeters: number;
+}
+
+export const defaultMetaverseMapBundlePlayerSpawnSelection = Object.freeze({
+  enemyAvoidanceRadiusMeters: 18,
+  homeTeamBiasMeters: 12
+} satisfies MetaverseMapBundlePlayerSpawnSelectionSnapshot);
+
 export interface MetaverseMapBundleSpawnNodeSnapshot {
   readonly label: string;
   readonly position: MetaverseWorldSurfaceVector3Snapshot;
   readonly spawnId: string;
+  readonly teamId: MetaverseMapPlayerSpawnTeamId;
   readonly yawRadians: number;
 }
 
@@ -107,6 +129,7 @@ export interface MetaverseMapBundleSnapshot {
   readonly mapId: string;
   readonly label: string;
   readonly playerSpawnNodes: readonly MetaverseMapBundleSpawnNodeSnapshot[];
+  readonly playerSpawnSelection: MetaverseMapBundlePlayerSpawnSelectionSnapshot;
   readonly presentationProfileIds: MetaverseMapBundlePresentationProfileIds;
   readonly resourceSpawns: readonly MetaverseMapBundleResourceSpawnSnapshot[];
   readonly sceneObjects: readonly MetaverseMapBundleSceneObjectSnapshot[];

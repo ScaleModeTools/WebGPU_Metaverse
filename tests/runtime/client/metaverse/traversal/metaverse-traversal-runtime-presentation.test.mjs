@@ -4,22 +4,12 @@ import test, { after, before } from "node:test";
 import {
   createFlatGroundSurfaceColliderSnapshot,
   createTraversalFixtureContext,
+  forwardTravelInput,
   freezeVector3,
   groundedFixedStepSeconds
 } from "./fixtures/traversal-test-fixtures.mjs";
 
 let fixtureContext;
-
-const forwardTravelInput = Object.freeze({
-  boost: false,
-  jump: false,
-  moveAxis: 1,
-  pitchAxis: 0,
-  primaryAction: false,
-  secondaryAction: false,
-  strafeAxis: 0,
-  yawAxis: 0
-});
 
 before(async () => {
   fixtureContext = await createTraversalFixtureContext();
@@ -109,6 +99,56 @@ test("MetaverseTraversalRuntime routes jump presentation through up, mid, and do
     assert.equal(
       traversalRuntime.characterPresentationSnapshot?.animationVocabulary,
       "idle"
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime restarts the grounded walk presentation cycle on quick strafe direction flips", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await fixtureContext.createTraversalHarness({
+      surfaceColliderSnapshots: [createFlatGroundSurfaceColliderSnapshot()]
+    });
+
+  try {
+    traversalRuntime.boot();
+
+    const strafeLeftInput = Object.freeze({
+      boost: false,
+      jump: false,
+      moveAxis: 0,
+      pitchAxis: 0,
+      primaryAction: false,
+      secondaryAction: false,
+      strafeAxis: -1,
+      yawAxis: 0
+    });
+    const idleInput = Object.freeze({
+      ...strafeLeftInput,
+      strafeAxis: 0
+    });
+    const strafeRightInput = Object.freeze({
+      ...strafeLeftInput,
+      strafeAxis: 1
+    });
+
+    traversalRuntime.advance(strafeLeftInput, groundedFixedStepSeconds);
+
+    const leftBurstPresentation = traversalRuntime.characterPresentationSnapshot;
+
+    assert.equal(leftBurstPresentation?.animationVocabulary, "walk");
+    assert.equal(typeof leftBurstPresentation?.animationCycleId, "number");
+
+    traversalRuntime.advance(idleInput, groundedFixedStepSeconds * 0.5);
+    traversalRuntime.advance(strafeRightInput, groundedFixedStepSeconds);
+
+    const rightBurstPresentation = traversalRuntime.characterPresentationSnapshot;
+
+    assert.equal(rightBurstPresentation?.animationVocabulary, "walk");
+    assert.ok(
+      (rightBurstPresentation?.animationCycleId ?? 0) >
+        (leftBurstPresentation?.animationCycleId ?? 0)
     );
   } finally {
     groundedBodyRuntime.dispose();
@@ -220,6 +260,52 @@ test("MetaverseTraversalRuntime clamps grounded jump descent presentation to aut
 
     assert.ok(
       traversalRuntime.characterPresentationSnapshot.position.y >= 0.1 - 0.0001
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime ignores overhead support when clamping grounded presentation beneath the active capsule bottom", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await fixtureContext.createTraversalHarness({
+      surfaceColliderSnapshots: [
+        createFlatGroundSurfaceColliderSnapshot(),
+        Object.freeze({
+          halfExtents: freezeVector3(4, 0.15, 4),
+          rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+          translation: freezeVector3(0, 1.35, 24),
+          traversalAffordance: "support"
+        })
+      ]
+    });
+
+  try {
+    traversalRuntime.boot();
+
+    groundedBodyRuntime.syncAuthoritativeState({
+      grounded: false,
+      linearVelocity: freezeVector3(0, -5.7, 0),
+      position: freezeVector3(0, 0.3, 24),
+      yawRadians: 0
+    });
+
+    traversalRuntime.advance(
+      Object.freeze({
+        boost: false,
+        moveAxis: 0,
+        pitchAxis: 0,
+        yawAxis: 0
+      }),
+      groundedFixedStepSeconds * 0.9
+    );
+
+    assert.ok(
+      traversalRuntime.characterPresentationSnapshot.position.y >= 0.1 - 0.0001
+    );
+    assert.ok(
+      traversalRuntime.characterPresentationSnapshot.position.y < 0.5,
+      `expected presentation to clamp against reachable floor support, received ${traversalRuntime.characterPresentationSnapshot.position.y}`
     );
   } finally {
     groundedBodyRuntime.dispose();

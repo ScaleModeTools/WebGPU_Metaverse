@@ -23,6 +23,7 @@ import {
 interface SceneDraftMeshUserData {
   mapEditorOwnsGeometry?: boolean;
   mapEditorOwnsMaterial?: boolean;
+  playerSpawnId?: string;
 }
 
 function disposeOwnedMesh(mesh: Mesh): void {
@@ -105,6 +106,7 @@ function createSpawnDraftGroup(
   spawnDraft: MapEditorPlayerSpawnDraftSnapshot
 ): Group {
   const root = new Group();
+  const userData = root.userData as SceneDraftMeshUserData;
   const base = createOwnedMesh(
     new CylinderGeometry(0.65, 0.8, 0.18, 16),
     new MeshStandardMaterial({
@@ -123,6 +125,7 @@ function createSpawnDraftGroup(
   );
 
   root.name = `map_editor_spawn/${spawnDraft.spawnId}`;
+  userData.playerSpawnId = spawnDraft.spawnId;
   base.position.y = 0.09;
   arrow.position.set(0, 1.05, 0);
   arrow.rotation.z = Math.PI;
@@ -214,12 +217,14 @@ function createWaterRegionDraftGroup(
 }
 
 export interface MapEditorViewportSceneDraftHandles {
+  readonly playerSpawnGroupsById: Map<string, Group>;
   readonly portalSharedRenderResources: PortalSharedRenderResources;
   readonly rootGroup: Group;
 }
 
 export function createMapEditorViewportSceneDraftHandles(): MapEditorViewportSceneDraftHandles {
   return Object.freeze({
+    playerSpawnGroupsById: new Map<string, Group>(),
     portalSharedRenderResources: createPortalSharedRenderResources(),
     rootGroup: new Group()
   });
@@ -242,9 +247,13 @@ export function syncMapEditorViewportSceneDrafts(
 ): void {
   disposeOwnedGroup(handles.rootGroup, handles.portalSharedRenderResources);
   handles.rootGroup.clear();
+  handles.playerSpawnGroupsById.clear();
 
   for (const spawnDraft of drafts.playerSpawnDrafts) {
-    handles.rootGroup.add(createSpawnDraftGroup(spawnDraft));
+    const spawnGroup = createSpawnDraftGroup(spawnDraft);
+
+    handles.playerSpawnGroupsById.set(spawnDraft.spawnId, spawnGroup);
+    handles.rootGroup.add(spawnGroup);
   }
 
   for (const sceneObjectDraft of drafts.sceneObjectDrafts) {

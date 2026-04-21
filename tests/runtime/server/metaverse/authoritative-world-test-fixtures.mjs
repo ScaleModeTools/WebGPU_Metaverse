@@ -6,6 +6,9 @@ import {
   createMilliseconds,
   metaverseWorldGroundedSpawnPosition
 } from "@webgpu-metaverse/shared";
+import {
+  readMetaverseRealtimePlayerActiveBodyKinematicSnapshot
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import { MetaverseAuthoritativeWorldRuntime } from "../../../../server/dist/metaverse/classes/metaverse-authoritative-world-runtime.js";
 import {
@@ -18,6 +21,16 @@ export const shippedGroundedSpawnSupportHeightMeters =
 export function requireValue(value, label) {
   assert.notEqual(value, null, `${label} should resolve`);
   return value;
+}
+
+export function readPlayerActiveBodySnapshot(playerSnapshot) {
+  return readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(
+    requireValue(playerSnapshot, "playerSnapshot")
+  );
+}
+
+export function readPrimaryPlayerActiveBodySnapshot(worldSnapshot) {
+  return readPlayerActiveBodySnapshot(worldSnapshot.players[0]);
 }
 
 export function createAuthoritativeRuntime() {

@@ -11,6 +11,10 @@ import {
 
 import { MetaversePresenceHttpAdapter } from "../../../server/dist/metaverse/adapters/metaverse-presence-http-adapter.js";
 import { MetaverseAuthoritativeWorldRuntime } from "../../../server/dist/metaverse/classes/metaverse-authoritative-world-runtime.js";
+import {
+  authoredWaterBaySkiffPlacement,
+  authoredWaterBaySkiffYawRadians
+} from "../metaverse-authored-world-test-fixtures.mjs";
 
 function createResponseCapture() {
   let body = "";
@@ -141,10 +145,20 @@ test("MetaversePresenceHttpAdapter handles nested pose join, sync, and snapshot 
 
   assert.equal(syncHandled, true);
   assert.equal(syncResponse.statusCode, 200);
-  assert.equal(syncResponse.json.roster.players[0]?.pose.position.x, 2.5);
+  assert.equal(
+    syncResponse.json.roster.players[0]?.pose.position.x,
+    authoredWaterBaySkiffPlacement.x
+  );
+  assert.equal(
+    syncResponse.json.roster.players[0]?.pose.position.z,
+    authoredWaterBaySkiffPlacement.z
+  );
   assert.equal(syncResponse.json.roster.players[0]?.pose.stateSequence, 1);
   assert.equal(syncResponse.json.roster.players[0]?.pose.look.pitchRadians, 0.3);
-  assert.equal(syncResponse.json.roster.players[0]?.pose.look.yawRadians, 0.6);
+  assert.equal(
+    syncResponse.json.roster.players[0]?.pose.look.yawRadians,
+    authoredWaterBaySkiffYawRadians
+  );
   assert.equal(syncResponse.json.roster.players[0]?.pose.locomotionMode, "mounted");
   assert.equal(
     syncResponse.json.roster.players[0]?.pose.mountedOccupancy?.seatId,
@@ -164,8 +178,18 @@ test("MetaversePresenceHttpAdapter handles nested pose join, sync, and snapshot 
   assert.equal(pollResponse.json.type, "presence-roster");
   assert.equal(pollResponse.json.roster.players.length, 1);
   assert.equal(pollResponse.json.roster.players[0]?.pose.look.pitchRadians, 0.3);
-  assert.equal(pollResponse.json.roster.players[0]?.pose.look.yawRadians, 0.6);
-  assert.equal(pollResponse.json.roster.players[0]?.pose.position.x, 2.5);
+  assert.equal(
+    pollResponse.json.roster.players[0]?.pose.look.yawRadians,
+    authoredWaterBaySkiffYawRadians
+  );
+  assert.equal(
+    pollResponse.json.roster.players[0]?.pose.position.x,
+    authoredWaterBaySkiffPlacement.x
+  );
+  assert.equal(
+    pollResponse.json.roster.players[0]?.pose.position.z,
+    authoredWaterBaySkiffPlacement.z
+  );
   assert.equal(
     pollResponse.json.roster.players[0]?.pose.mountedOccupancy?.environmentAssetId,
     "metaverse-hub-skiff-v1"

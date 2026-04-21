@@ -298,7 +298,8 @@ export function buildAttachmentAssetFromWeaponArchetype<
     defaultSocketId: weapon.defaultSocketId,
     heldMount: {
       attachmentSocketNodeName: weapon.nodes.rightHandGripSocketNodeName,
-      forwardReferenceNodeName: weapon.nodes.forwardReferenceNodeName
+      forwardReferenceNodeName: weapon.nodes.forwardReferenceNodeName,
+      triggerMarkerNodeName: weapon.nodes.triggerMarkerNodeName
     },
     id: weapon.id,
     label: weapon.label,

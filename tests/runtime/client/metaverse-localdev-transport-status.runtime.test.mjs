@@ -2,13 +2,6 @@ import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import test from "node:test";
 
-import {
-  createMetaversePlayerId,
-  createMetaversePresenceRosterEvent,
-  createMetaverseRealtimeWorldEvent,
-  createMetaverseVehicleId,
-  createUsername
-} from "@webgpu-metaverse/shared";
 import { createServer } from "vite";
 
 const repoRoot = process.cwd();
@@ -24,8 +17,12 @@ function createJsonResponse(payload, ok = true) {
   };
 }
 
-function createPresenceRosterEvent(playerId) {
-  return createMetaversePresenceRosterEvent({
+async function loadSharedContracts(loader) {
+  return loader.load("/../packages/shared/src/index.ts");
+}
+
+function createPresenceRosterEvent(sharedContracts, playerId) {
+  return sharedContracts.createMetaversePresenceRosterEvent({
     players: [
       {
         characterId: "mesh2motion-humanoid-v1",
@@ -49,32 +46,40 @@ function createPresenceRosterEvent(playerId) {
   });
 }
 
-function createRealtimeWorldEvent(playerId, snapshotSequence = 1) {
-  const vehicleId = createMetaverseVehicleId("metaverse-hub-skiff-v1");
+function createRealtimeWorldEvent(
+  sharedContracts,
+  playerId,
+  snapshotSequence = 1
+) {
+  const vehicleId = sharedContracts.createMetaverseVehicleId(
+    "metaverse-hub-skiff-v1"
+  );
 
   assert.notEqual(vehicleId, null);
 
-  return createMetaverseRealtimeWorldEvent({
+  return sharedContracts.createMetaverseRealtimeWorldEvent({
     world: {
       players: [
         {
           animationVocabulary: "idle",
           characterId: "mesh2motion-humanoid-v1",
-          linearVelocity: {
-            x: 0,
-            y: 0,
-            z: 0
+          groundedBody: {
+            linearVelocity: {
+              x: 0,
+              y: 0,
+              z: 0
+            },
+            position: {
+              x: 0,
+              y: 0.4,
+              z: 24
+            },
+            yawRadians: 0
           },
           locomotionMode: "mounted",
           playerId,
-          position: {
-            x: 0,
-            y: 0.4,
-            z: 24
-          },
           stateSequence: snapshotSequence,
-          username: "Harbor Pilot",
-          yawRadians: 0
+          username: "Harbor Pilot"
         }
       ],
       snapshotSequence,
@@ -317,15 +322,18 @@ test("createMetaversePresenceClient reports runtime fallback after a configured 
   });
   const originalFetch = globalThis.fetch;
   const originalWebTransport = globalThis.WebTransport;
-  const playerId = createMetaversePlayerId("harbor-pilot-1");
-  const username = createUsername("Harbor Pilot");
-
-  assert.notEqual(playerId, null);
-  assert.notEqual(username, null);
 
   try {
+    const sharedContracts = await loadSharedContracts(loader);
+    const playerId =
+      sharedContracts.createMetaversePlayerId("harbor-pilot-1");
+    const username = sharedContracts.createUsername("Harbor Pilot");
+
+    assert.notEqual(playerId, null);
+    assert.notEqual(username, null);
+
     globalThis.fetch = async () =>
-      createJsonResponse(createPresenceRosterEvent(playerId));
+      createJsonResponse(createPresenceRosterEvent(sharedContracts, playerId));
     globalThis.WebTransport = createEnvScopedWebTransportConstructor({
       bidirectionalErrorMessage: "WebTransport stream failed.",
       datagramErrorMessage: "Datagram transport unavailable."
@@ -492,15 +500,21 @@ test("createMetaverseWorldClient keeps reliable and datagram lane truth separate
   });
   const originalFetch = globalThis.fetch;
   const originalWebTransport = globalThis.WebTransport;
-  const playerId = createMetaversePlayerId("harbor-pilot-1");
-
-  assert.notEqual(playerId, null);
-
   let snapshotSequence = 1;
 
   try {
+    const sharedContracts = await loadSharedContracts(loader);
+    const playerId =
+      sharedContracts.createMetaversePlayerId("harbor-pilot-1");
+
+    assert.notEqual(playerId, null);
+
     globalThis.fetch = async (_input, init) => {
-      const nextEvent = createRealtimeWorldEvent(playerId, snapshotSequence++);
+      const nextEvent = createRealtimeWorldEvent(
+        sharedContracts,
+        playerId,
+        snapshotSequence++
+      );
 
       return createJsonResponse(
         init?.method === "POST" ? nextEvent : nextEvent

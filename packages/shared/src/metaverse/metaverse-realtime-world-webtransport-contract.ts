@@ -5,7 +5,8 @@ import {
   createMetaverseSyncDriverVehicleControlCommand,
   createMetaverseSyncPlayerLookIntentCommand,
   createMetaverseSyncMountedOccupancyCommand,
-  createMetaverseSyncPlayerTraversalIntentCommand
+  createMetaverseSyncPlayerTraversalIntentCommand,
+  createMetaverseSyncPlayerWeaponStateCommand
 } from "./realtime/metaverse-realtime-world-commands.js";
 import type {
   MetaverseRealtimeWorldClientCommand
@@ -115,6 +116,8 @@ function normalizeMetaverseRealtimeWorldClientCommand(
       return createMetaverseSyncPlayerLookIntentCommand(command);
     case "sync-player-traversal-intent":
       return createMetaverseSyncPlayerTraversalIntentCommand(command);
+    case "sync-player-weapon-state":
+      return createMetaverseSyncPlayerWeaponStateCommand(command);
     default: {
       const exhaustiveCommand: never = command;
 

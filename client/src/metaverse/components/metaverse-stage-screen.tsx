@@ -26,7 +26,11 @@ import {
 } from "../config/metaverse-presence-network";
 import { createMetaverseWorldClient } from "../config/metaverse-world-network";
 import { WebGpuMetaverseRuntime } from "../classes/webgpu-metaverse-runtime";
+import { registerMetaverseWorldBundleOnServer } from "../world/map-bundles";
 import { MetaverseDeveloperOverlay } from "./metaverse-developer-overlay";
+import { MetaversePlayerRadarHud } from "./metaverse-player-radar-hud";
+import { MetaversePlayerTeamPill } from "./metaverse-player-team-pill";
+import { MetaverseWeaponReticleOverlay } from "./metaverse-weapon-reticle-overlay";
 import type { MetaverseControlModeId } from "../types/metaverse-control-mode";
 import type {
   MetaverseAttachmentProofConfig,
@@ -144,14 +148,23 @@ export function MetaverseStageScreen({
         characterProofConfig?.characterId ?? metaverseActiveFullBodyCharacterAssetId
       );
 
-      return new WebGpuMetaverseRuntime(createMetaverseRuntimeConfig(bundleId), {
+      return new WebGpuMetaverseRuntime(
+        createMetaverseRuntimeConfig(
+          bundleId,
+          localPlayerIdentity.playerId,
+          localPlayerIdentity.teamId ?? null
+        ),
+        {
         attachmentProofConfig,
         characterProofConfig,
         createMetaversePresenceClient,
         createMetaverseWorldClient,
+        ensureAuthoritativeWorldBundleSynchronized: () =>
+          registerMetaverseWorldBundleOnServer(bundleId),
         environmentProofConfig,
         localPlayerIdentity
-      });
+        }
+      );
     },
     [
       attachmentProofConfig,
@@ -174,6 +187,16 @@ export function MetaverseStageScreen({
     subscribeUiUpdates,
     () => metaverseRuntime.hudSnapshot,
     () => metaverseRuntime.hudSnapshot
+  );
+  const subscribeWeaponUiUpdates = useCallback(
+    (notifyReact: () => void) =>
+      metaverseRuntime.subscribeWeaponUiUpdates(notifyReact),
+    [metaverseRuntime]
+  );
+  const weaponHudSnapshot = useSyncExternalStore(
+    subscribeWeaponUiUpdates,
+    () => metaverseRuntime.weaponHudSnapshot,
+    () => metaverseRuntime.weaponHudSnapshot
   );
   const showDeveloperOverlay = import.meta.env.DEV;
 
@@ -302,6 +325,11 @@ export function MetaverseStageScreen({
           ref={canvasRef}
         />
 
+        <MetaverseWeaponReticleOverlay
+          hidden={hudSnapshot.boot.phase !== "ready" || runtimeError !== null}
+          weaponHudSnapshot={weaponHudSnapshot}
+        />
+
         <div className="pointer-events-none absolute inset-0 overflow-x-hidden overflow-y-auto">
           <div
             className="flex min-h-full flex-col justify-between gap-[var(--metaverse-hud-gap)] p-[var(--metaverse-hud-edge)]"
@@ -423,26 +451,40 @@ export function MetaverseStageScreen({
                 className="max-w-[min(18rem,100%)]"
                 strong
               >
-                <p className="type-shell-heading truncate">{username}</p>
+                <div className="flex flex-col gap-3">
+                  <p className="type-shell-heading truncate">{username}</p>
+                  {hudSnapshot.presence.localTeamId !== null ? (
+                    <MetaversePlayerTeamPill
+                      className="w-fit"
+                      teamId={hudSnapshot.presence.localTeamId}
+                    />
+                  ) : null}
+                </div>
               </MetaverseHudSurface>
 
-              {focusedPortal?.experienceId === "duck-hunt" ? (
-                <div className="pointer-events-auto w-full max-w-[min(48rem,100%)] max-h-[clamp(18rem,55dvh,34rem)] overflow-y-auto overscroll-contain">
-                  <DuckHuntLaunchPanel
-                    audioStatusLabel={audioStatusLabel}
-                    calibrationQualityLabel={calibrationQualityLabel}
-                    coopRoomIdDraft={coopRoomIdDraft}
-                    inputMode={gameplayInputMode}
-                    onCoopRoomIdDraftChange={onCoopRoomIdDraftChange}
-                    onLaunchRequest={() => {
-                      onExperienceLaunchRequest("duck-hunt");
-                    }}
-                    onRecalibrationRequest={onRecalibrationRequest}
-                    onSessionModeChange={onSessionModeChange}
-                    sessionMode={sessionMode}
-                  />
-                </div>
-              ) : null}
+              <div className="ml-auto flex w-full max-w-[min(48rem,100%)] flex-col items-end gap-[var(--metaverse-hud-gap)] md:w-auto">
+                {focusedPortal?.experienceId === "duck-hunt" ? (
+                  <div className="pointer-events-auto w-full max-h-[clamp(18rem,55dvh,34rem)] overflow-y-auto overscroll-contain">
+                    <DuckHuntLaunchPanel
+                      audioStatusLabel={audioStatusLabel}
+                      calibrationQualityLabel={calibrationQualityLabel}
+                      coopRoomIdDraft={coopRoomIdDraft}
+                      inputMode={gameplayInputMode}
+                      onCoopRoomIdDraftChange={onCoopRoomIdDraftChange}
+                      onLaunchRequest={() => {
+                        onExperienceLaunchRequest("duck-hunt");
+                      }}
+                      onRecalibrationRequest={onRecalibrationRequest}
+                      onSessionModeChange={onSessionModeChange}
+                      sessionMode={sessionMode}
+                    />
+                  </div>
+                ) : null}
+
+                {hudSnapshot.boot.phase === "ready" && runtimeError === null ? (
+                  <MetaversePlayerRadarHud radarSnapshot={hudSnapshot.radar} />
+                ) : null}
+              </div>
             </div>
           </div>
         </div>

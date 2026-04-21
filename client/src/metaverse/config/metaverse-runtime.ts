@@ -1,7 +1,14 @@
 import {
   metaverseUnmountedPlayerLookConstraintBounds,
+  type MetaversePlayerId,
+  type MetaversePlayerTeamId
 } from "@webgpu-metaverse/shared";
-import { resolveMetaverseWorldPlacedWaterRegions } from "@webgpu-metaverse/shared/metaverse/world";
+import {
+  resolveMetaverseMapPlayerSpawnNode,
+  resolveMetaversePlayerTeamId,
+  resolveMetaverseWorldPlacedWaterRegions,
+  type MetaverseMapBundleSpawnNodeSnapshot
+} from "@webgpu-metaverse/shared/metaverse/world";
 import { shellDefaultEnvironmentPresentationProfile } from "../render/environment/profiles";
 import { resolveDefaultMetaverseWorldBundleId } from "../world/bundle-registry";
 import { loadMetaverseMapBundle, resolveMetaversePortalConfigsFromBundle } from "../world/map-bundles";
@@ -12,17 +19,26 @@ const metaverseGroundedFirstPersonHeadClearanceMeters = 0.05;
 const metaverseGroundedFirstPersonHeadOcclusionRadiusMeters = 0.18;
 
 function createMetaverseRuntimeSharedConfig(
-  bundleId: string
+  bundleId: string,
+  localPlayerId: MetaversePlayerId | null,
+  localPlayerTeamId: MetaversePlayerTeamId | null = null
 ): Omit<MetaverseRuntimeConfig, "portals"> {
   const loadedBundle = loadMetaverseMapBundle(bundleId);
-  const defaultSpawnNode = loadedBundle.bundle.playerSpawnNodes[0];
+  const defaultSpawnNode = resolveClientDefaultSpawnNode(
+    loadedBundle.bundle.playerSpawnNodes[0] ?? null,
+    {
+      localPlayerId,
+      localPlayerTeamId,
+      loadedBundle
+    }
+  );
   const environmentPresentationProfile =
     loadedBundle.environmentPresentationProfile ??
     shellDefaultEnvironmentPresentationProfile;
   const gameplayProfile = loadedBundle.gameplayProfile;
   const groundedJumpPhysics = gameplayProfile.groundedJumpPhysics;
 
-  if (defaultSpawnNode === undefined) {
+  if (defaultSpawnNode === null) {
     throw new Error(
       `Metaverse map bundle ${bundleId} requires at least one player spawn node.`
     );
@@ -93,10 +109,6 @@ function createMetaverseRuntimeSharedConfig(
     ocean: {
       ...environmentPresentationProfile.ocean
     },
-    traversal: {
-      groundedJumpSupportVerticalSpeedTolerance:
-        gameplayProfile.groundedJumpSupportVerticalSpeedTolerance
-    },
     skiff: {
       ...gameplayProfile.vehicleTraversal,
       authoritativeCorrection: {
@@ -117,13 +129,47 @@ function createMetaverseRuntimeSharedConfig(
   };
 }
 
+function resolveClientDefaultSpawnNode(
+  fallbackSpawnNode: MetaverseMapBundleSpawnNodeSnapshot | null,
+  {
+    localPlayerId,
+    localPlayerTeamId,
+    loadedBundle
+  }: {
+    readonly localPlayerId: MetaversePlayerId | null;
+    readonly localPlayerTeamId: MetaversePlayerTeamId | null;
+    readonly loadedBundle: ReturnType<typeof loadMetaverseMapBundle>;
+  }
+): MetaverseMapBundleSpawnNodeSnapshot | null {
+  if (fallbackSpawnNode === null || localPlayerId === null) {
+    return fallbackSpawnNode;
+  }
+
+  return (
+    resolveMetaverseMapPlayerSpawnNode({
+      occupiedPlayerSnapshots: Object.freeze([]),
+      playerId: localPlayerId,
+      playerSpawnNodes: loadedBundle.bundle.playerSpawnNodes,
+      playerSpawnSelection: loadedBundle.bundle.playerSpawnSelection,
+      playerTeamId:
+        localPlayerTeamId ?? resolveMetaversePlayerTeamId(localPlayerId)
+    }) ?? fallbackSpawnNode
+  );
+}
+
 export function createMetaverseRuntimeConfig(
-  bundleId = resolveDefaultMetaverseWorldBundleId()
+  bundleId = resolveDefaultMetaverseWorldBundleId(),
+  localPlayerId: MetaversePlayerId | null = null,
+  localPlayerTeamId: MetaversePlayerTeamId | null = null
 ): MetaverseRuntimeConfig {
   const loadedBundle = loadMetaverseMapBundle(bundleId);
 
   return Object.freeze({
-    ...createMetaverseRuntimeSharedConfig(bundleId),
+    ...createMetaverseRuntimeSharedConfig(
+      bundleId,
+      localPlayerId,
+      localPlayerTeamId
+    ),
     portals: resolveMetaversePortalConfigsFromBundle(loadedBundle.bundle)
   });
 }

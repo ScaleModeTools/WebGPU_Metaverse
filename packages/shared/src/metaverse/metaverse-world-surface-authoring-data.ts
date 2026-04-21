@@ -118,7 +118,10 @@ export const metaverseHubDiveBoatEnvironmentAssetId =
   "metaverse-hub-dive-boat-v1";
 
 const metaversePlaygroundFloorTopHeightMeters = 0.6;
-const metaverseHubDockPlacementHeightMeters = 0.43;
+const metaverseHubDockDeckThicknessMeters = 0.34;
+const metaverseHubDockPlacementHeightMeters = 0.26;
+const metaverseHubDockSurfaceColliderCenterHeightMeters =
+  metaverseHubDockDeckThicknessMeters * 0.5;
 const metaverseHubDockCollisionPath =
   "/models/metaverse/environment/metaverse-hub-dock-high.gltf";
 const metaverseHubSkiffCollisionPath =
@@ -186,8 +189,8 @@ const metaverseBuilderBlockTileSurfaceColliders = Object.freeze([
 
 const metaverseHubDockSurfaceColliders = Object.freeze([
   Object.freeze({
-    center: freezeVector3(0, 0, 0),
-    size: freezeVector3(8.4, 0.34, 4.2),
+    center: freezeVector3(0, metaverseHubDockSurfaceColliderCenterHeightMeters, 0),
+    size: freezeVector3(8.4, metaverseHubDockDeckThicknessMeters, 4.2),
     traversalAffordance: "support"
   })
 ] satisfies readonly MetaverseWorldSurfaceColliderAuthoring[]);

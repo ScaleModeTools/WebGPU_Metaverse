@@ -5,7 +5,13 @@ import {
   createMetaverseUnmountedTraversalStateSnapshot,
   type MetaverseSurfaceTraversalConfig
 } from "@webgpu-metaverse/shared/metaverse/traversal";
-import type { MetaversePlayerId } from "@webgpu-metaverse/shared/metaverse/presence";
+import {
+  shouldTreatMetaverseMountedOccupancyAsTraversalMounted,
+  type MetaversePlayerId
+} from "@webgpu-metaverse/shared/metaverse/presence";
+import type {
+  MetaversePlayerTraversalIntentSnapshot
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 import type {
   MetaverseWorldPlacedWaterRegionSnapshot,
   MetaverseWorldSurfacePolicyConfig
@@ -58,7 +64,6 @@ interface MetaverseAuthoritativeUnmountedPlayerSimulationDependencies<
   ) => RapierQueryFilterPredicate;
   readonly groundedBodyConfig: MetaverseWorldSurfacePolicyConfig;
   readonly groundedBodyRuntimeConfig: MetaverseAuthoritativeGroundedTraversalRuntimeConfig;
-  readonly groundedJumpSupportVerticalSpeedTolerance: number;
   readonly playerStateSync: MetaverseAuthoritativePlayerStateSync<
     PlayerRuntime,
     MetaverseAuthoritativeGroundedBodyRuntime,
@@ -92,6 +97,12 @@ function createPhysicsVector3Snapshot(
   });
 }
 
+interface MetaverseAuthoritativePlayerTraversalIntentSegmentRuntimeState {
+  readonly deltaSeconds: number;
+  readonly nowMs: number;
+  readonly traversalIntent: MetaversePlayerTraversalIntentSnapshot | null;
+}
+
 export class MetaverseAuthoritativeUnmountedPlayerSimulation<
   PlayerRuntime extends MetaverseAuthoritativePlayerStateSyncRuntimeState<
     MetaverseAuthoritativeGroundedBodyRuntime,
@@ -122,7 +133,11 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
       this.#dependencies.resolveAuthoritativeSurfaceColliders();
 
     for (const playerRuntime of this.#dependencies.playersById.values()) {
-      if (playerRuntime.mountedOccupancy !== null) {
+      if (
+        shouldTreatMetaverseMountedOccupancyAsTraversalMounted(
+          playerRuntime.mountedOccupancy
+        )
+      ) {
         continue;
       }
 
@@ -145,10 +160,38 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
       return;
     }
 
-    const traversalIntent =
+    const traversalIntentRuntime =
       this.#dependencies.playerTraversalIntentsByPlayerId.get(
         playerRuntime.playerId
       ) ?? null;
+    const traversalIntentSegments = this.#consumeTraversalIntentSegments(
+      traversalIntentRuntime,
+      nowMs - deltaSeconds * 1_000,
+      nowMs
+    );
+
+    for (const traversalIntentSegment of traversalIntentSegments) {
+      this.#advanceUnmountedPlayerRuntimeSegment(
+        playerRuntime,
+        traversalIntentSegment.deltaSeconds,
+        traversalIntentSegment.nowMs,
+        authoritativeSurfaceColliders,
+        traversalIntentSegment.traversalIntent
+      );
+    }
+  }
+
+  #advanceUnmountedPlayerRuntimeSegment(
+    playerRuntime: PlayerRuntime,
+    deltaSeconds: number,
+    nowMs: number,
+    authoritativeSurfaceColliders: readonly MetaverseAuthoritativeSurfaceColliderSnapshot[],
+    traversalIntent: MetaversePlayerTraversalIntentSnapshot | null
+  ): void {
+    if (!Number.isFinite(deltaSeconds) || deltaSeconds <= 0) {
+      return;
+    }
+
     const locomotionMode =
       playerRuntime.locomotionMode === "swim" ? "swim" : "grounded";
     const moveAxis = clampAxis(traversalIntent?.bodyControl.moveAxis ?? 0);
@@ -156,8 +199,6 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
     const preferredFacingYawRadians = traversalIntent?.facing.yawRadians ?? null;
     let lastGroundedBodySnapshot = playerRuntime.lastGroundedBodySnapshot;
     let grounded = false;
-    let surfaceJumpSupported = false;
-    let groundedJumpSupported = false;
     let resolvedLocomotionMode: "grounded" | "swim" = locomotionMode;
     if (locomotionMode === "grounded") {
       lastGroundedBodySnapshot =
@@ -229,8 +270,6 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
         locomotionMode === "grounded"
           ? playerRuntime.groundedBodyRuntime.snapshot
           : null,
-      jumpSupportVerticalSpeedTolerance:
-        this.#dependencies.groundedJumpSupportVerticalSpeedTolerance,
       preferredLookYawRadians: preferredFacingYawRadians,
       surfaceColliderSnapshots: authoritativeSurfaceColliders,
       surfacePolicyConfig: this.#dependencies.groundedBodyConfig,
@@ -269,19 +308,17 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
       );
 
       if (transitionSnapshot.enteredGrounded) {
-        playerRuntime.positionY =
-          transitionSnapshot.positionYMeters ?? playerRuntime.positionY;
-      }
-
-      if (transitionSnapshot.resetVerticalVelocity) {
-        playerRuntime.linearVelocityY = 0;
+        this.#dependencies.playerStateSync.syncUnmountedPlayerToGroundedSupport(
+          playerRuntime,
+          swimTraversalOutcome.supportHeightMeters ?? playerRuntime.positionY,
+          deltaSeconds
+        );
+        lastGroundedBodySnapshot = playerRuntime.lastGroundedBodySnapshot;
       }
 
       grounded = transitionSnapshot.grounded;
       resolvedLocomotionMode = transitionSnapshot.locomotionMode;
     } else {
-      surfaceJumpSupported = preparedTraversalStep.surfaceJumpSupported;
-      groundedJumpSupported = preparedTraversalStep.groundedJumpSupported;
       const groundedBodySnapshot = traversalBodyStep.groundedBodySnapshot;
 
       if (groundedBodySnapshot === null) {
@@ -297,12 +334,11 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
       );
 
       if (transitionSnapshot.enteredSwim) {
-        playerRuntime.positionY =
-          transitionSnapshot.positionYMeters ?? playerRuntime.positionY;
-      }
-
-      if (transitionSnapshot.resetVerticalVelocity) {
-        playerRuntime.linearVelocityY = 0;
+        this.#dependencies.playerStateSync.syncUnmountedPlayerToSwimWaterline(
+          playerRuntime,
+          traversalBodyStep.locomotionOutcome.waterlineHeightMeters,
+          deltaSeconds
+        );
       }
 
       resolvedLocomotionMode = transitionSnapshot.locomotionMode;
@@ -314,8 +350,6 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
     }
 
     playerRuntime.lastGroundedBodySnapshot = lastGroundedBodySnapshot;
-    playerRuntime.lastSurfaceJumpSupported = surfaceJumpSupported;
-    playerRuntime.lastGroundedJumpSupported = groundedJumpSupported;
 
     if (traversalIntent === null) {
       this.#dependencies.playerStateSync.syncImplicitPlayerLookFromBodyYaw(
@@ -358,6 +392,13 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
 
     if (
       traversalIntent !== null &&
+      traversalIntent.sampleId > playerRuntime.lastProcessedTraversalSampleId
+    ) {
+      playerRuntime.lastProcessedTraversalSampleId = traversalIntent.sampleId;
+    }
+
+    if (
+      traversalIntent !== null &&
       traversalIntent.orientationSequence >
         playerRuntime.lastProcessedTraversalOrientationSequence
     ) {
@@ -368,5 +409,81 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
     this.#dependencies.playerStateSync.syncPlayerTraversalAuthorityState(
       playerRuntime
     );
+  }
+
+  #consumeTraversalIntentSegments(
+    traversalIntentRuntime: MetaverseAuthoritativePlayerTraversalIntentRuntimeState | null,
+    tickStartedAtMs: number,
+    tickEndedAtMs: number
+  ): readonly MetaverseAuthoritativePlayerTraversalIntentSegmentRuntimeState[] {
+    if (!Number.isFinite(tickStartedAtMs) || !Number.isFinite(tickEndedAtMs)) {
+      return Object.freeze([]);
+    }
+
+    const clampedTickStartedAtMs = Math.max(0, tickStartedAtMs);
+
+    if (tickEndedAtMs <= clampedTickStartedAtMs) {
+      return Object.freeze([]);
+    }
+
+    if (traversalIntentRuntime === null) {
+      return Object.freeze([
+        Object.freeze({
+          deltaSeconds: (tickEndedAtMs - clampedTickStartedAtMs) / 1_000,
+          nowMs: tickEndedAtMs,
+          traversalIntent: null
+        })
+      ]);
+    }
+
+    let currentIntent = traversalIntentRuntime.currentIntent;
+    let nextTimelineEntry = traversalIntentRuntime.pendingIntentTimeline[0];
+
+    while (
+      nextTimelineEntry !== undefined &&
+      nextTimelineEntry.effectiveAtMs <= clampedTickStartedAtMs
+    ) {
+      currentIntent = nextTimelineEntry.intent;
+      traversalIntentRuntime.pendingIntentTimeline.shift();
+      nextTimelineEntry = traversalIntentRuntime.pendingIntentTimeline[0];
+    }
+
+    const traversalIntentSegments: MetaverseAuthoritativePlayerTraversalIntentSegmentRuntimeState[] =
+      [];
+    let cursorMs = clampedTickStartedAtMs;
+
+    while (
+      nextTimelineEntry !== undefined &&
+      nextTimelineEntry.effectiveAtMs < tickEndedAtMs
+    ) {
+      if (nextTimelineEntry.effectiveAtMs > cursorMs) {
+        traversalIntentSegments.push(
+          Object.freeze({
+            deltaSeconds: (nextTimelineEntry.effectiveAtMs - cursorMs) / 1_000,
+            nowMs: nextTimelineEntry.effectiveAtMs,
+            traversalIntent: currentIntent
+          })
+        );
+      }
+
+      currentIntent = nextTimelineEntry.intent;
+      cursorMs = nextTimelineEntry.effectiveAtMs;
+      traversalIntentRuntime.pendingIntentTimeline.shift();
+      nextTimelineEntry = traversalIntentRuntime.pendingIntentTimeline[0];
+    }
+
+    if (tickEndedAtMs > cursorMs) {
+      traversalIntentSegments.push(
+        Object.freeze({
+          deltaSeconds: (tickEndedAtMs - cursorMs) / 1_000,
+          nowMs: tickEndedAtMs,
+          traversalIntent: currentIntent
+        })
+      );
+    }
+
+    traversalIntentRuntime.currentIntent = currentIntent;
+
+    return Object.freeze(traversalIntentSegments);
   }
 }

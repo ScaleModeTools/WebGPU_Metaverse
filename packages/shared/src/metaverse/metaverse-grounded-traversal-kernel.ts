@@ -29,7 +29,6 @@ import {
 export interface MetaverseGroundedTraversalBodyIntentSnapshot
   extends MetaverseTraversalBodyControlSnapshot {
   readonly jump: boolean;
-  readonly jumpReadyOverride: boolean;
   readonly snapToGroundOverrideEnabled?: boolean;
 }
 
@@ -38,23 +37,12 @@ export interface StepMetaverseGroundedTraversalActionInput {
   readonly bodyControl: MetaverseTraversalBodyControlSnapshot;
   readonly deltaSeconds: number;
   readonly groundedBodyJumpReady: boolean;
-  readonly surfaceJumpSupported: boolean;
 }
 
 export interface StepMetaverseGroundedTraversalActionResult {
   readonly actionState: MetaverseTraversalActionStateSnapshot;
   readonly bodyIntent: MetaverseGroundedTraversalBodyIntentSnapshot;
-  readonly groundedJumpSupported: boolean;
   readonly jumpRequested: boolean;
-}
-
-export interface MetaverseGroundedTraversalSurfaceJumpSupportInput {
-  readonly controllerOffsetMeters: number;
-  readonly positionY: number;
-  readonly snapToGroundDistanceMeters: number;
-  readonly supportHeightMeters: number | null;
-  readonly verticalSpeedTolerance: number;
-  readonly verticalSpeedUnitsPerSecond: number;
 }
 
 export interface MetaverseGroundedBodyStepConfig
@@ -62,7 +50,6 @@ export interface MetaverseGroundedBodyStepConfig
 
 export interface MetaverseGroundedBodyStepIntentSnapshot
   extends MetaverseGroundedTraversalIntentSnapshot {
-  readonly jumpReadyOverride?: boolean;
   readonly snapToGroundOverrideEnabled?: boolean;
 }
 
@@ -123,7 +110,7 @@ export interface SyncMetaverseGroundedBodyStepStateInput {
   readonly yawRadians: number;
 }
 
-const groundedBodyContactDeltaEpsilon = 0.000001;
+const groundedBodyContactDeltaToleranceMeters = 0.01;
 
 function normalizeFiniteNonNegativeSeconds(value: number): number {
   return Math.max(0, toFiniteNumber(value, 0));
@@ -135,7 +122,29 @@ function hasGroundedBodyMovementDeltaDivergence(
 ): boolean {
   return (
     Math.abs(toFiniteNumber(desiredDelta, 0) - toFiniteNumber(appliedDelta, 0)) >
-    groundedBodyContactDeltaEpsilon
+    groundedBodyContactDeltaToleranceMeters
+  );
+}
+
+function hasGroundedBodyVerticalMovementDivergence(
+  desiredDelta: number,
+  appliedDelta: number,
+  supportingContactDetected: boolean
+): boolean {
+  const sanitizedDesiredDelta = toFiniteNumber(desiredDelta, 0);
+  const sanitizedAppliedDelta = toFiniteNumber(appliedDelta, 0);
+
+  if (
+    supportingContactDetected &&
+    sanitizedDesiredDelta <= 0 &&
+    sanitizedAppliedDelta >= 0
+  ) {
+    return false;
+  }
+
+  return hasGroundedBodyMovementDeltaDivergence(
+    sanitizedDesiredDelta,
+    sanitizedAppliedDelta
   );
 }
 
@@ -171,6 +180,9 @@ export function resolveMetaverseGroundedBodyControllerContactSnapshot(
   preparedStepSnapshot: MetaverseGroundedBodyPreparedStepSnapshot,
   controllerResultSnapshot: MetaverseGroundedBodyControllerResultSnapshot
 ): MetaverseGroundedBodyContactSnapshot {
+  const supportingContactDetected =
+    controllerResultSnapshot.computedGrounded === true;
+
   return createMetaverseGroundedBodyContactSnapshot({
     appliedMovementDelta: controllerResultSnapshot.computedMovementDelta,
     blockedPlanarMovement:
@@ -183,12 +195,13 @@ export function resolveMetaverseGroundedBodyControllerContactSnapshot(
         controllerResultSnapshot.computedMovementDelta.z
       ),
     blockedVerticalMovement:
-      hasGroundedBodyMovementDeltaDivergence(
+      hasGroundedBodyVerticalMovementDivergence(
         preparedStepSnapshot.desiredMovementDelta.y,
-        controllerResultSnapshot.computedMovementDelta.y
+        controllerResultSnapshot.computedMovementDelta.y,
+        supportingContactDetected
       ),
     desiredMovementDelta: preparedStepSnapshot.desiredMovementDelta,
-    supportingContactDetected: controllerResultSnapshot.computedGrounded === true
+    supportingContactDetected
   });
 }
 
@@ -196,13 +209,10 @@ export function stepMetaverseGroundedTraversalAction({
   actionState,
   bodyControl,
   deltaSeconds,
-  groundedBodyJumpReady,
-  surfaceJumpSupported
+  groundedBodyJumpReady
 }: StepMetaverseGroundedTraversalActionInput): StepMetaverseGroundedTraversalActionResult {
-  const groundedJumpSupported =
-    groundedBodyJumpReady === true || surfaceJumpSupported === true;
   const nextActionState = advanceMetaverseTraversalActionState(actionState, {
-    canConsumePendingAction: groundedJumpSupported,
+    canConsumePendingAction: groundedBodyJumpReady === true,
     deltaSeconds
   });
   const jumpRequested = nextActionState.actionConsumed;
@@ -211,36 +221,10 @@ export function stepMetaverseGroundedTraversalAction({
     actionState: nextActionState.state,
     bodyIntent: Object.freeze({
       ...bodyControl,
-      jump: jumpRequested,
-      jumpReadyOverride: groundedJumpSupported
+      jump: jumpRequested
     }),
-    groundedJumpSupported,
     jumpRequested
   });
-}
-
-export function isMetaverseGroundedTraversalSurfaceJumpSupported({
-  controllerOffsetMeters,
-  positionY,
-  snapToGroundDistanceMeters,
-  supportHeightMeters,
-  verticalSpeedTolerance,
-  verticalSpeedUnitsPerSecond
-}: MetaverseGroundedTraversalSurfaceJumpSupportInput): boolean {
-  if (
-    supportHeightMeters === null ||
-    !Number.isFinite(supportHeightMeters) ||
-    toFiniteNumber(verticalSpeedUnitsPerSecond, 0) >
-      Math.max(0, toFiniteNumber(verticalSpeedTolerance, 0))
-  ) {
-    return false;
-  }
-
-  return (
-    Math.abs(toFiniteNumber(positionY, 0) - supportHeightMeters) <=
-    Math.max(0, toFiniteNumber(snapToGroundDistanceMeters, 0)) +
-      Math.max(0, toFiniteNumber(controllerOffsetMeters, 0))
-  );
 }
 
 export function createMetaverseGroundedBodyStepStateSnapshot(
@@ -303,7 +287,7 @@ export function prepareMetaverseGroundedBodyStep(
     {
       forwardSpeedUnitsPerSecond: stateSnapshot.forwardSpeedUnitsPerSecond,
       grounded: stateSnapshot.grounded,
-      jumpReady: intentSnapshot.jumpReadyOverride ?? stateSnapshot.jumpReady,
+      jumpReady: stateSnapshot.jumpReady,
       position: stateSnapshot.position,
       strafeSpeedUnitsPerSecond: stateSnapshot.strafeSpeedUnitsPerSecond,
       verticalSpeedUnitsPerSecond: stateSnapshot.verticalSpeedUnitsPerSecond,

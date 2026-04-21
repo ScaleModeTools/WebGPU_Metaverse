@@ -4,6 +4,7 @@ import {
   type MetaverseGroundedBodyRuntimeSnapshot,
   type MetaverseGroundedBodyStepIntentSnapshot,
   createMetaverseGroundedBodyInteractionSnapshot,
+  resolveMetaverseGroundedBodyColliderTranslationSnapshot,
   createMetaverseGroundedJumpPhysicsConfigSnapshot,
   createMetaverseGroundedJumpBodySnapshot,
   clamp,
@@ -380,10 +381,9 @@ export class MetaverseAuthoritativeGroundedBodyRuntime {
   #rootToColliderCenter(
     rootPosition: PhysicsVector3Snapshot
   ): PhysicsVector3Snapshot {
-    return freezeVector3(
-      rootPosition.x,
-      rootPosition.y + this.#standingOffsetMeters,
-      rootPosition.z
+    return resolveMetaverseGroundedBodyColliderTranslationSnapshot(
+      this.#config,
+      rootPosition
     );
   }
 }

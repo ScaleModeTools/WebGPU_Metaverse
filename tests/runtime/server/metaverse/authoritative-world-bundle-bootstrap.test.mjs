@@ -22,7 +22,6 @@ test("authoritative metaverse bootstrap derives bundle, spawn, and authored worl
   const expectedDynamicSeedCount = stagingGroundMapBundle.environmentAssets.filter(
     (environmentAsset) =>
       environmentAsset.placementMode === "dynamic" &&
-      environmentAsset.collisionPath === null &&
       environmentAsset.surfaceColliders.length > 0 &&
       environmentAsset.placements.length > 0
   ).length;
@@ -51,6 +50,20 @@ test("authoritative metaverse bootstrap derives bundle, spawn, and authored worl
   assert.notEqual(expectedDefaultSpawnNode, undefined);
   assert.equal(loadedBundle.bundleId, "staging-ground");
   assert.equal(loadedBundle.bundle.mapId, stagingGroundMapBundle.mapId);
+  assert.equal(
+    loadedBundle.bundle.playerSpawnNodes.length,
+    stagingGroundMapBundle.playerSpawnNodes.length
+  );
+  assert.equal(
+    loadedBundle.bundle.playerSpawnNodes.filter((spawnNode) => spawnNode.teamId === "blue")
+      .length,
+    2
+  );
+  assert.equal(
+    loadedBundle.bundle.playerSpawnNodes.filter((spawnNode) => spawnNode.teamId === "red")
+      .length,
+    2
+  );
   assert.equal(
     bundleInputs.gameplayProfile.id,
     stagingGroundMapBundle.gameplayProfileId
@@ -115,7 +128,7 @@ test("authoritative metaverse bootstrap derives bundle, spawn, and authored worl
   assert.equal(
     bundleInputs.readSurfaceAsset(metaverseHubDockEnvironmentAssetId)
       ?.surfaceColliders.length,
-    0
+    1
   );
   assert.equal(
     bundleInputs.readSurfaceAsset(metaverseHubDockEnvironmentAssetId)
@@ -125,7 +138,7 @@ test("authoritative metaverse bootstrap derives bundle, spawn, and authored worl
   assert.equal(
     bundleInputs.readSurfaceAsset(metaverseHubSkiffEnvironmentAssetId)
       ?.surfaceColliders.length,
-    0
+    8
   );
   assert.equal(
     bundleInputs.readSurfaceAsset(metaverseHubSkiffEnvironmentAssetId)
@@ -140,7 +153,7 @@ test("authoritative metaverse bootstrap derives bundle, spawn, and authored worl
   assert.equal(
     bundleInputs.readSurfaceAsset(metaverseHubDiveBoatEnvironmentAssetId)
       ?.surfaceColliders.length,
-    0
+    9
   );
   assert.equal(
     bundleInputs.readSurfaceAsset(metaverseHubDiveBoatEnvironmentAssetId)

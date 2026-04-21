@@ -27,10 +27,11 @@ export interface HumanoidV2HeldWeaponPoseRuntime {
   readonly leftPalmSocketNode: Object3D;
   readonly leftSupportChain: readonly HeldWeaponSolveChainLink[];
   readonly leftUpperarmBone: Bone;
-  readonly rightGripSocketNode: Object3D;
   readonly rightHandBone: Bone;
+  readonly rightHandSocketNode: Object3D;
   readonly rightLowerarmBone: Bone;
   readonly rightAimChain: readonly HeldWeaponSolveChainLink[];
+  readonly rightTriggerContactNode: Object3D;
   readonly rightUpperarmBone: Bone;
 }
 
@@ -59,6 +60,7 @@ const heldWeaponHandSolveWeight = 0;
 export const heldWeaponSolveDirectionEpsilon = 0.000001;
 const heldWeaponSupportHandPitchRadians = -0.3;
 const heldWeaponSupportHandRollRadians = Math.PI * 0.38;
+const heldWeaponTriggerContactSolveBias = 0.35;
 const heldWeaponUpperarmSolveWeight = 0.9;
 const heldWeaponClampedHandTargetWorldPositionScratch = new Vector3();
 const heldWeaponEffectorWorldPositionScratch = new Vector3();
@@ -73,7 +75,10 @@ const heldWeaponGripAcrossDirectionScratch = new Vector3();
 const heldWeaponGripSocketWorldPositionScratch = new Vector3();
 const heldWeaponLeftHandTargetWorldPositionScratch = new Vector3();
 const heldWeaponShoulderWorldPositionScratch = new Vector3();
+const heldWeaponTriggerContactLocalPositionScratch = new Vector3();
+const heldWeaponTriggerContactWorldPositionScratch = new Vector3();
 const heldWeaponElbowWorldPositionScratch = new Vector3();
+const heldWeaponHandEffectorLocalPositionScratch = new Vector3();
 const heldWeaponRightHandTargetWorldPositionScratch = new Vector3();
 const heldWeaponSocketLocalOffsetScratch = new Vector3();
 const heldWeaponWristWorldPositionScratch = new Vector3();
@@ -103,6 +108,21 @@ const heldWeaponGripAlignmentMatrixScratch = new Matrix4();
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function resolveRequiredHumanoidV2TriggerContactNode(characterScene: Group): Object3D {
+  const triggerContactNode =
+    characterScene.getObjectByName("index_03_r") ??
+    characterScene.getObjectByName("index_02_r") ??
+    characterScene.getObjectByName("index_01_r");
+
+  if (triggerContactNode === undefined) {
+    throw new Error(
+      "Metaverse humanoid_v2 held weapon pose requires an authored right index trigger-contact bone."
+    );
+  }
+
+  return triggerContactNode;
 }
 
 function createHumanoidV2HeldWeaponPoseRuntime(
@@ -198,10 +218,13 @@ function createHumanoidV2HeldWeaponPoseRuntime(
     leftPalmSocketNode: nodeResolvers.findSocketNode(characterScene, "palm_l_socket"),
     leftSupportChain,
     leftUpperarmBone,
-    rightGripSocketNode: nodeResolvers.findSocketNode(characterScene, "grip_r_socket"),
     rightHandBone,
+    rightHandSocketNode: nodeResolvers.findSocketNode(characterScene, "hand_r_socket"),
     rightLowerarmBone,
     rightAimChain,
+    rightTriggerContactNode: resolveRequiredHumanoidV2TriggerContactNode(
+      characterScene
+    ),
     rightUpperarmBone
   };
 }
@@ -379,15 +402,68 @@ function alignBoneTowardWorldPoint(
 }
 
 function resolveHandWorldTargetPosition(
-  gripSocketNode: Object3D,
   handTargetWorldQuaternion: Quaternion,
-  gripTargetWorldPosition: Vector3,
+  handEffectorLocalPosition: Vector3,
+  handEffectorTargetWorldPosition: Vector3,
   outputHandWorldPosition: Vector3
 ): void {
-  outputHandWorldPosition.copy(gripTargetWorldPosition).sub(
+  outputHandWorldPosition.copy(handEffectorTargetWorldPosition).sub(
     heldWeaponSocketLocalOffsetScratch
-      .copy(gripSocketNode.position)
+      .copy(handEffectorLocalPosition)
       .applyQuaternion(handTargetWorldQuaternion)
+  );
+}
+
+function resolveHandEffectorLocalPosition(
+  handBone: Bone,
+  handEffectorNode: Object3D,
+  outputLocalPosition: Vector3
+): Vector3 {
+  return handBone.worldToLocal(
+    outputLocalPosition.copy(
+      handEffectorNode.getWorldPosition(heldWeaponEffectorWorldPositionScratch)
+    )
+  );
+}
+
+function resolveRightHandWorldTargetPosition(
+  heldWeaponPoseRuntime: HumanoidV2HeldWeaponPoseRuntime,
+  attachmentRuntime: MetaverseAttachmentProofRuntime,
+  handTargetWorldQuaternion: Quaternion,
+  outputHandWorldPosition: Vector3
+): void {
+  const handEffectorLocalPosition = resolveHandEffectorLocalPosition(
+    heldWeaponPoseRuntime.rightHandBone,
+    heldWeaponPoseRuntime.rightHandSocketNode,
+    heldWeaponHandEffectorLocalPositionScratch
+  );
+
+  attachmentRuntime.heldGripSocketNode.getWorldPosition(
+    heldWeaponGripSocketWorldPositionScratch
+  );
+
+  if (attachmentRuntime.heldTriggerMarkerNode !== null) {
+    heldWeaponGripSocketWorldPositionScratch.lerp(
+      attachmentRuntime.heldTriggerMarkerNode.getWorldPosition(
+        heldWeaponTriggerContactWorldPositionScratch
+      ),
+      heldWeaponTriggerContactSolveBias
+    );
+    handEffectorLocalPosition.lerp(
+      resolveHandEffectorLocalPosition(
+        heldWeaponPoseRuntime.rightHandBone,
+        heldWeaponPoseRuntime.rightTriggerContactNode,
+        heldWeaponTriggerContactLocalPositionScratch
+      ),
+      heldWeaponTriggerContactSolveBias
+    );
+  }
+
+  resolveHandWorldTargetPosition(
+    handTargetWorldQuaternion,
+    handEffectorLocalPosition,
+    heldWeaponGripSocketWorldPositionScratch,
+    outputHandWorldPosition
   );
 }
 
@@ -778,16 +854,13 @@ export function syncHumanoidV2HeldWeaponPose<
   );
   alignBoneTowardEffectorWorldQuaternion(
     heldWeaponPoseRuntime.rightHandBone,
-    heldWeaponPoseRuntime.rightGripSocketNode,
+    heldWeaponPoseRuntime.rightHandSocketNode,
     heldWeaponTargetWorldQuaternionScratch
   );
-  attachmentRuntime.heldRightHandGripSocketNode.getWorldPosition(
-    heldWeaponGripSocketWorldPositionScratch
-  );
-  resolveHandWorldTargetPosition(
-    heldWeaponPoseRuntime.rightGripSocketNode,
+  resolveRightHandWorldTargetPosition(
+    heldWeaponPoseRuntime,
+    attachmentRuntime,
     heldWeaponTargetWorldQuaternionScratch,
-    heldWeaponGripSocketWorldPositionScratch,
     heldWeaponRightHandTargetWorldPositionScratch
   );
   solveTwoBoneArmToHandWorldTarget(
@@ -797,9 +870,16 @@ export function syncHumanoidV2HeldWeaponPose<
     heldWeaponRightHandTargetWorldPositionScratch,
     heldWeaponRightElbowPoleTargetScratch
   );
+  applyElbowPoleBias(
+    heldWeaponPoseRuntime.rightUpperarmBone,
+    heldWeaponPoseRuntime.rightLowerarmBone,
+    heldWeaponPoseRuntime.rightHandBone,
+    heldWeaponRightElbowPoleTargetScratch,
+    heldWeaponElbowPoleBiasWeight
+  );
   alignBoneTowardEffectorWorldQuaternion(
     heldWeaponPoseRuntime.rightHandBone,
-    heldWeaponPoseRuntime.rightGripSocketNode,
+    heldWeaponPoseRuntime.rightHandSocketNode,
     heldWeaponTargetWorldQuaternionScratch
   );
   characterProofRuntime.anchorGroup.updateMatrixWorld(true);
@@ -880,8 +960,12 @@ export function syncHumanoidV2HeldWeaponPose<
       heldWeaponSupportHandTargetWorldQuaternionScratch
     );
     resolveHandWorldTargetPosition(
-      heldWeaponPoseRuntime.leftGripSocketNode,
       heldWeaponSupportHandTargetWorldQuaternionScratch,
+      resolveHandEffectorLocalPosition(
+        heldWeaponPoseRuntime.leftHandBone,
+        heldWeaponPoseRuntime.leftGripSocketNode,
+        heldWeaponHandEffectorLocalPositionScratch
+      ),
       heldWeaponGripSocketWorldPositionScratch,
       heldWeaponLeftHandTargetWorldPositionScratch
     );
@@ -891,6 +975,13 @@ export function syncHumanoidV2HeldWeaponPose<
       heldWeaponPoseRuntime.leftHandBone,
       heldWeaponLeftHandTargetWorldPositionScratch,
       heldWeaponLeftElbowPoleTargetScratch
+    );
+    applyElbowPoleBias(
+      heldWeaponPoseRuntime.leftUpperarmBone,
+      heldWeaponPoseRuntime.leftLowerarmBone,
+      heldWeaponPoseRuntime.leftHandBone,
+      heldWeaponLeftElbowPoleTargetScratch,
+      heldWeaponElbowPoleBiasWeight
     );
     alignBoneTowardEffectorWorldQuaternion(
       heldWeaponPoseRuntime.leftHandBone,
@@ -915,16 +1006,13 @@ export function syncHumanoidV2HeldWeaponPose<
     );
     alignBoneTowardEffectorWorldQuaternion(
       heldWeaponPoseRuntime.rightHandBone,
-      heldWeaponPoseRuntime.rightGripSocketNode,
+      heldWeaponPoseRuntime.rightHandSocketNode,
       heldWeaponTargetWorldQuaternionScratch
     );
-    attachmentRuntime.heldRightHandGripSocketNode.getWorldPosition(
-      heldWeaponGripSocketWorldPositionScratch
-    );
-    resolveHandWorldTargetPosition(
-      heldWeaponPoseRuntime.rightGripSocketNode,
+    resolveRightHandWorldTargetPosition(
+      heldWeaponPoseRuntime,
+      attachmentRuntime,
       heldWeaponTargetWorldQuaternionScratch,
-      heldWeaponGripSocketWorldPositionScratch,
       heldWeaponRightHandTargetWorldPositionScratch
     );
     solveTwoBoneArmToHandWorldTarget(
@@ -934,9 +1022,16 @@ export function syncHumanoidV2HeldWeaponPose<
       heldWeaponRightHandTargetWorldPositionScratch,
       heldWeaponRightElbowPoleTargetScratch
     );
+    applyElbowPoleBias(
+      heldWeaponPoseRuntime.rightUpperarmBone,
+      heldWeaponPoseRuntime.rightLowerarmBone,
+      heldWeaponPoseRuntime.rightHandBone,
+      heldWeaponRightElbowPoleTargetScratch,
+      heldWeaponElbowPoleBiasWeight
+    );
     alignBoneTowardEffectorWorldQuaternion(
       heldWeaponPoseRuntime.rightHandBone,
-      heldWeaponPoseRuntime.rightGripSocketNode,
+      heldWeaponPoseRuntime.rightHandSocketNode,
       heldWeaponTargetWorldQuaternionScratch
     );
     characterProofRuntime.anchorGroup.updateMatrixWorld(true);

@@ -1,6 +1,7 @@
 import type {
   MetaverseSyncDriverVehicleControlCommand,
   MetaverseSyncPlayerLookIntentCommand,
+  MetaverseSyncPlayerWeaponStateCommand,
   MetaverseSyncPlayerTraversalIntentCommand
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
@@ -14,5 +15,8 @@ export interface MetaverseRealtimeWorldLatestWinsDatagramTransport {
   ): Promise<void>;
   sendPlayerLookIntentDatagram(
     command: MetaverseSyncPlayerLookIntentCommand
+  ): Promise<void>;
+  sendPlayerWeaponStateDatagram(
+    command: MetaverseSyncPlayerWeaponStateCommand
   ): Promise<void>;
 }

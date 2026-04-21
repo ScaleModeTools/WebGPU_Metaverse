@@ -60,7 +60,12 @@ export function MapEditorSceneRuntimePanel({
             key={spawnDraft.spawnId}
           >
             <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-medium">{spawnDraft.label}</span>
+              <span className="text-sm font-medium">
+                {spawnDraft.label}{" "}
+                <span className="text-xs font-normal uppercase tracking-[0.16em] text-muted-foreground">
+                  {spawnDraft.teamId}
+                </span>
+              </span>
               <span className="text-xs text-muted-foreground">
                 {spawnDraft.position.x.toFixed(1)}, {spawnDraft.position.y.toFixed(1)},{" "}
                 {spawnDraft.position.z.toFixed(1)}

@@ -14,17 +14,24 @@ import type {
   MetaverseRemoteVehiclePresentationSnapshot
 } from "../types/presentation";
 import type {
+  AckedAuthoritativeLocalPlayerPose,
   ConsumedAckedAuthoritativeLocalPlayerSample
 } from "../traversal/reconciliation/authoritative-local-player-reconciliation";
+import type {
+  AuthoritativeLocalPlayerPoseSyncOptions
+} from "../traversal/reconciliation/classes/metaverse-local-authority-reconciliation-state";
 
 interface MetaverseAuthoritativeWorldSyncRemoteWorldRuntime {
   readonly remoteEnvironmentBodyPresentations:
     readonly MetaverseRemoteEnvironmentBodyPresentationSnapshot[];
   readonly remoteVehiclePresentations:
     readonly MetaverseRemoteVehiclePresentationSnapshot[];
-  consumeFreshAckedAuthoritativeLocalPlayerSample(
+  consumeFreshAckedAuthoritativeLocalPlayerSample?(
     maxAuthoritativeSnapshotAgeMs: number
   ): ConsumedAckedAuthoritativeLocalPlayerSample | null;
+  consumeFreshAckedAuthoritativeLocalPlayerPose?(
+    maxAuthoritativeSnapshotAgeMs: number
+  ): AckedAuthoritativeLocalPlayerPose | null;
   readFreshAuthoritativeLocalPlayerSnapshot(
     maxAuthoritativeSnapshotAgeMs: number
   ): MetaverseRealtimePlayerSnapshot | null;
@@ -49,7 +56,10 @@ interface MetaverseAuthoritativeWorldSyncTraversalRuntime {
     seatId: string
   ): MountedEnvironmentSnapshot | null;
   syncAuthoritativeLocalPlayerPose(
-    authoritativePlayerSnapshot: ConsumedAckedAuthoritativeLocalPlayerSample
+    authoritativePlayerSnapshot:
+      | AckedAuthoritativeLocalPlayerPose
+      | ConsumedAckedAuthoritativeLocalPlayerSample,
+    syncOptions?: AuthoritativeLocalPlayerPoseSyncOptions
   ): void;
   syncAuthoritativeVehiclePose(
     environmentAssetId: string,
@@ -120,6 +130,7 @@ export class MetaverseAuthoritativeWorldSync {
 
   #mountedEnvironmentAuthorityMismatchKey: string | null = null;
   #mountedEnvironmentAuthorityMismatchSinceMs: number | null = null;
+  #pendingLocalSpawnBootstrap = true;
 
   constructor({
     authoritativePlayerMovementEnabled,
@@ -141,6 +152,11 @@ export class MetaverseAuthoritativeWorldSync {
   }
 
   reset(): void {
+    this.#resetMountedEnvironmentAuthorityMismatch();
+    this.#pendingLocalSpawnBootstrap = true;
+  }
+
+  #resetMountedEnvironmentAuthorityMismatch(): void {
     this.#mountedEnvironmentAuthorityMismatchKey = null;
     this.#mountedEnvironmentAuthorityMismatchSinceMs = null;
   }
@@ -253,16 +269,30 @@ export class MetaverseAuthoritativeWorldSync {
     }
 
     const authoritativeLocalPlayerPose =
-      this.#remoteWorldRuntime.consumeFreshAckedAuthoritativeLocalPlayerSample(
+      this.#remoteWorldRuntime.consumeFreshAckedAuthoritativeLocalPlayerSample?.(
         metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
-      );
+      ) ??
+      this.#remoteWorldRuntime.consumeFreshAckedAuthoritativeLocalPlayerPose?.(
+        metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
+      ) ??
+      null;
 
     if (authoritativeLocalPlayerPose === null) {
       return;
     }
 
+    const syncOptions = this.#pendingLocalSpawnBootstrap
+      ? Object.freeze({
+          forceSnap: true,
+          intentionalDiscontinuityCause: "spawn",
+          syncAuthoritativeLook: true
+        } satisfies AuthoritativeLocalPlayerPoseSyncOptions)
+      : undefined;
+
+    this.#pendingLocalSpawnBootstrap = false;
     this.#traversalRuntime.syncAuthoritativeLocalPlayerPose(
-      authoritativeLocalPlayerPose
+      authoritativeLocalPlayerPose,
+      syncOptions
     );
   }
 
@@ -286,7 +316,7 @@ export class MetaverseAuthoritativeWorldSync {
       );
 
     if (localMountedOccupancyKey === authoritativeMountedOccupancyKey) {
-      this.reset();
+      this.#resetMountedEnvironmentAuthorityMismatch();
       return;
     }
 
@@ -330,6 +360,6 @@ export class MetaverseAuthoritativeWorldSync {
       );
     }
 
-    this.reset();
+    this.#resetMountedEnvironmentAuthorityMismatch();
   }
 }

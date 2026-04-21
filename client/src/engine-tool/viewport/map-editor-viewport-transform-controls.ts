@@ -8,9 +8,12 @@ import {
 import type { Group, PerspectiveCamera, Scene } from "three/webgpu";
 
 import type {
+  MapEditorPlayerSpawnTransformUpdate,
   MapEditorPlacementUpdate,
   MapEditorViewportToolMode
 } from "@/engine-tool/types/map-editor";
+
+type MapEditorViewportTransformTargetKind = "placement" | "player-spawn";
 
 function resolveTransformControlsMode(
   viewportToolMode: MapEditorViewportToolMode
@@ -49,6 +52,19 @@ function readPlacementUpdateFromGroup(group: Group): MapEditorPlacementUpdate {
   });
 }
 
+function readPlayerSpawnTransformUpdateFromGroup(
+  group: Group
+): MapEditorPlayerSpawnTransformUpdate {
+  return Object.freeze({
+    position: Object.freeze({
+      x: group.position.x,
+      y: group.position.y,
+      z: group.position.z
+    }),
+    yawRadians: normalizePlanarYawRadians(group.rotation.y)
+  });
+}
+
 interface MapEditorViewportTransformControllerOptions {
   readonly camera: PerspectiveCamera;
   readonly canvasElement: HTMLCanvasElement;
@@ -57,6 +73,10 @@ interface MapEditorViewportTransformControllerOptions {
   readonly onCommitPlacementTransform: (
     placementId: string,
     update: MapEditorPlacementUpdate
+  ) => void;
+  readonly onCommitPlayerSpawnTransform: (
+    spawnId: string,
+    update: MapEditorPlayerSpawnTransformUpdate
   ) => void;
 }
 
@@ -68,8 +88,13 @@ export class MapEditorViewportTransformController {
     placementId: string,
     update: MapEditorPlacementUpdate
   ) => void;
+  readonly #onCommitPlayerSpawnTransform: (
+    spawnId: string,
+    update: MapEditorPlayerSpawnTransformUpdate
+  ) => void;
 
   #attachedGroup: Group | null = null;
+  #attachedTargetKind: MapEditorViewportTransformTargetKind | null = null;
   #dragging = false;
   #viewportToolMode: MapEditorViewportToolMode = "move";
 
@@ -78,12 +103,14 @@ export class MapEditorViewportTransformController {
     canvasElement,
     orbitControls,
     scene,
-    onCommitPlacementTransform
+    onCommitPlacementTransform,
+    onCommitPlayerSpawnTransform
   }: MapEditorViewportTransformControllerOptions) {
     this.#controls = new TransformControls(camera, canvasElement);
     this.#helper = this.#controls.getHelper();
     this.#orbitControls = orbitControls;
     this.#onCommitPlacementTransform = onCommitPlacementTransform;
+    this.#onCommitPlayerSpawnTransform = onCommitPlayerSpawnTransform;
 
     scene.add(this.#helper);
     this.#controls.size = 1.15;
@@ -136,8 +163,12 @@ export class MapEditorViewportTransformController {
     }
   }
 
-  syncAttachedGroup(group: Group | null): void {
+  syncAttachedGroup(
+    group: Group | null,
+    targetKind: MapEditorViewportTransformTargetKind = "placement"
+  ): void {
     this.#attachedGroup = group;
+    this.#attachedTargetKind = group === null ? null : targetKind;
 
     if (group === null) {
       this.#controls.detach();
@@ -167,15 +198,28 @@ export class MapEditorViewportTransformController {
   readonly #handleMouseUp = () => {
     const attachedGroup = this.#attachedGroup;
     const placementId = attachedGroup?.userData?.placementId;
+    const playerSpawnId = attachedGroup?.userData?.playerSpawnId;
 
-    if (attachedGroup === null || typeof placementId !== "string") {
+    if (attachedGroup === null || this.#attachedTargetKind === null) {
       return;
     }
 
-    this.#onCommitPlacementTransform(
-      placementId,
-      readPlacementUpdateFromGroup(attachedGroup)
-    );
+    if (
+      this.#attachedTargetKind === "player-spawn" &&
+      typeof playerSpawnId === "string"
+    ) {
+      this.#onCommitPlayerSpawnTransform(
+        playerSpawnId,
+        readPlayerSpawnTransformUpdateFromGroup(attachedGroup)
+      );
+      return;
+    }
+
+    if (typeof placementId !== "string") {
+      return;
+    }
+
+    this.#onCommitPlacementTransform(placementId, readPlacementUpdateFromGroup(attachedGroup));
   };
 
   readonly #handleObjectChange = () => {

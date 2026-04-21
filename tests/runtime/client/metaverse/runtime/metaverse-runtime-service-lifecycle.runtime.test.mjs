@@ -86,6 +86,9 @@ test("MetaverseRuntimeServiceLifecycle resets stale services and runs direct boo
         callLog.push("environment:dispose");
       }
     },
+    ensureAuthoritativeWorldBundleSynchronized: async () => {
+      callLog.push("bundleSync:ensure");
+    },
     flightInputRuntime: {
       install() {
         callLog.push("flightInput:install");
@@ -166,6 +169,7 @@ test("MetaverseRuntimeServiceLifecycle resets stale services and runs direct boo
     "presence:dispose",
     "remoteWorld:dispose",
     "hud:publish:booting:none:true",
+    "bundleSync:ensure",
     "bootLifecycle:install:1280x720",
     "flightInput:install",
     "bootLifecycle:bootRuntime",

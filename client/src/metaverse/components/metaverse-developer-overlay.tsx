@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 import type { MetaverseHudSnapshot } from "../types/metaverse-runtime";
+import { formatMetaversePlayerTeamLabel } from "./metaverse-player-team-pill";
 import {
   createDeveloperReport,
   formatCount
@@ -72,6 +73,10 @@ export function MetaverseDeveloperOverlay({
     {
       label: "Connected Players",
       value: formatCount(connectedPlayerCount)
+    },
+    {
+      label: "Team",
+      value: formatMetaversePlayerTeamLabel(hudSnapshot.presence.localTeamId)
     }
   ] as const;
 

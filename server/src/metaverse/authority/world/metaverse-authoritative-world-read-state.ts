@@ -118,6 +118,7 @@ export class MetaverseAuthoritativeWorldReadState<
         this.#dependencies.environmentBodiesByEnvironmentAssetId.values(),
       lastAdvancedAtMs: this.#dependencies.readLastAdvancedAtMs(),
       nowMs: normalizedNowMs,
+      ...(observerPlayerId === undefined ? {} : { observerPlayerId }),
       players: this.#dependencies.playersById.values(),
       snapshotSequence: this.#dependencies.readSnapshotSequence(),
       tickIntervalMs: this.#dependencies.readTickIntervalMs(),

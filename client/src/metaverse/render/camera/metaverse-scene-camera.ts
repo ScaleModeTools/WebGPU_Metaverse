@@ -52,8 +52,18 @@ export function createMetaverseSceneCamera(
 
 export function syncMetaverseSceneCamera(
   camera: PerspectiveCamera,
-  cameraSnapshot: MetaverseCameraSnapshot
+  cameraSnapshot: MetaverseCameraSnapshot,
+  fieldOfViewDegrees: number | null = null
 ): void {
+  if (
+    fieldOfViewDegrees !== null &&
+    Number.isFinite(fieldOfViewDegrees) &&
+    Math.abs(camera.fov - fieldOfViewDegrees) > 0.000001
+  ) {
+    camera.fov = fieldOfViewDegrees;
+    camera.updateProjectionMatrix();
+  }
+
   camera.position.set(
     cameraSnapshot.position.x,
     cameraSnapshot.position.y,

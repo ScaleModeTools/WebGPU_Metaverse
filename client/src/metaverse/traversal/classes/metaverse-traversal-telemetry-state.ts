@@ -3,12 +3,8 @@ import {
   createMetaverseGroundedBodyInteractionSnapshot,
   createMetaverseSurfaceDriveBodyRuntimeSnapshot,
   createMetaverseSurfaceTraversalDriveTargetSnapshot,
-  resolveMetaverseUnmountedGroundedJumpSupport,
   type MetaverseTraversalAuthoritySnapshot
 } from "@webgpu-metaverse/shared";
-import type {
-  MetaversePlayerTraversalIntentSnapshot
-} from "@webgpu-metaverse/shared/metaverse/realtime";
 import {
   readMetaverseRealtimePlayerActiveBodyKinematicSnapshot
 } from "@webgpu-metaverse/shared/metaverse/realtime";
@@ -27,6 +23,7 @@ import type { MetaverseLocalAuthorityReconciliationState } from "../reconciliati
 import type { AuthoritativeLocalPlayerPoseSnapshot } from "../reconciliation/classes/metaverse-local-authority-reconciliation-state";
 import type { LocalTraversalPoseSnapshot } from "../reconciliation/local-authority-pose-correction";
 import type {
+  MetaverseIssuedTraversalIntentSnapshot,
   MetaverseTraversalRuntimeDependencies,
   SurfaceLocomotionSnapshot
 } from "../types/traversal";
@@ -34,8 +31,6 @@ import type { MetaverseUnmountedSurfaceLocomotionState } from "../surface/metave
 
 type LocalSurfaceRoutingTelemetrySnapshot =
   MetaverseTelemetrySnapshot["worldSnapshot"]["surfaceRouting"]["local"];
-type LocalJumpGateTelemetrySnapshot =
-  MetaverseTelemetrySnapshot["worldSnapshot"]["surfaceRouting"]["local"]["jumpDebug"];
 type LocalGroundedBodyTelemetrySnapshot =
   NonNullable<LocalSurfaceRoutingTelemetrySnapshot["groundedBody"]>;
 type LocalGroundedJumpBodyTelemetrySnapshot =
@@ -58,7 +53,7 @@ function freezeVector3Snapshot(snapshot: {
 }
 
 function freezeIssuedTraversalIntentSnapshot(
-  snapshot: MetaversePlayerTraversalIntentSnapshot | null
+  snapshot: MetaverseIssuedTraversalIntentSnapshot | null
 ): NonNullable<
   NonNullable<LocalAuthorityPoseCorrectionSnapshot>["local"]["issuedTraversalIntent"]
 > | null {
@@ -252,41 +247,6 @@ export class MetaverseTraversalTelemetryState {
       .localAuthorityPoseConvergenceStepCount;
   }
 
-  get localGroundedJumpGateTelemetrySnapshot(): LocalJumpGateTelemetrySnapshot {
-    if (
-      !this.#dependencies.groundedBodyRuntime.isInitialized ||
-      this.#dependencies.readLocomotionMode() !== "grounded"
-    ) {
-      return Object.freeze({
-        surfaceJumpSupported: null,
-        supported: null
-      });
-    }
-
-    const groundedBodySnapshot =
-      this.#dependencies.groundedBodyRuntime.snapshot;
-    const groundedJumpSupport = resolveMetaverseUnmountedGroundedJumpSupport({
-      controllerOffsetMeters:
-        this.#dependencies.config.groundedBody.controllerOffsetMeters,
-      groundedBodySnapshot,
-      jumpSupportVerticalSpeedTolerance:
-        this.#dependencies.config.traversal
-          .groundedJumpSupportVerticalSpeedTolerance,
-      snapToGroundDistanceMeters:
-        this.#dependencies.config.groundedBody.snapToGroundDistanceMeters,
-      surfaceColliderSnapshots: this.#dependencies.surfaceColliderSnapshots,
-      surfacePolicyConfig: readMetaverseSurfacePolicyConfig(
-        this.#dependencies.config
-      ),
-      waterRegionSnapshots: this.#dependencies.config.waterRegionSnapshots
-    });
-
-    return Object.freeze({
-      surfaceJumpSupported: groundedJumpSupport.surfaceJumpSupported,
-      supported: groundedJumpSupport.groundedJumpSupported
-    });
-  }
-
   get localReconciliationCorrectionCount(): number {
     return this.#localReconciliationCorrectionCount;
   }
@@ -327,7 +287,6 @@ export class MetaverseTraversalTelemetryState {
               jumpBody: this.#dependencies.groundedBodyRuntime.snapshot.jumpBody
             })
           : null,
-      jumpDebug: this.localGroundedJumpGateTelemetrySnapshot,
       locomotionMode: this.#dependencies.readLocomotionMode(),
       resolvedSupportHeightMeters:
         automaticSurfaceDebug.resolvedSupportHeightMeters,
@@ -350,7 +309,7 @@ export class MetaverseTraversalTelemetryState {
   }: {
     readonly authoritativePlayerSnapshot: AuthoritativeLocalPlayerPoseSnapshot;
     readonly localGroundedBodySnapshot: AuthoritativeLocalPlayerPoseSnapshot["groundedBody"] | null;
-    readonly localIssuedTraversalIntentSnapshot: MetaversePlayerTraversalIntentSnapshot | null;
+    readonly localIssuedTraversalIntentSnapshot: MetaverseIssuedTraversalIntentSnapshot | null;
     readonly localSwimBodySnapshot: AuthoritativeLocalPlayerPoseSnapshot["swimBody"] | null;
     readonly localTraversalPose: LocalTraversalPoseSnapshot;
   }): NonNullable<LocalAuthorityPoseCorrectionSnapshot> {

@@ -12,6 +12,9 @@ import {
   createMilliseconds,
   createUsername
 } from "@webgpu-metaverse/shared";
+import {
+  readMetaverseRealtimePlayerActiveBodyKinematicSnapshot
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import {
   authoredWaterBaySkiffPlacement,
@@ -23,6 +26,12 @@ import { MetaverseAuthoritativeWorldRuntime } from "../../../server/dist/metaver
 function requireValue(value, label) {
   assert.notEqual(value, null, `${label} should resolve`);
   return value;
+}
+
+function readPrimaryPlayerActiveBodySnapshot(worldSnapshot) {
+  return readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(
+    requireValue(worldSnapshot.players[0], "playerSnapshot")
+  );
 }
 
 test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards driver-control datagrams into authoritative world state", () => {
@@ -86,15 +95,14 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards driver-control 
   runtime.advanceToTime(1_000);
 
   const worldSnapshot = runtime.readWorldSnapshot(1_000, playerId);
+  const activeBodySnapshot = readPrimaryPlayerActiveBodySnapshot(worldSnapshot);
 
   assert.equal(worldSnapshot.tick.currentTick, 10);
   assert.ok(
     (worldSnapshot.vehicles[0]?.position.x ?? Number.NEGATIVE_INFINITY) >
       authoredWaterBaySkiffPlacement.x
   );
-  assert.ok(
-    (worldSnapshot.players[0]?.linearVelocity.x ?? 0) > 0
-  );
+  assert.ok(activeBodySnapshot.linearVelocity.x > 0);
 });
 
 test("MetaverseRealtimeWorldWebTransportDatagramAdapter rejects datagrams after disposal", () => {
@@ -193,12 +201,13 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards traversal-inten
   runtime.advanceToTime(200);
 
   const worldSnapshot = runtime.readWorldSnapshot(200, playerId);
+  const activeBodySnapshot = readPrimaryPlayerActiveBodySnapshot(worldSnapshot);
 
-  assert.equal(worldSnapshot.players[0]?.lastProcessedInputSequence, 2);
+  assert.equal(worldSnapshot.observerPlayer?.lastProcessedInputSequence, 2);
   assert.equal(worldSnapshot.players[0]?.locomotionMode, "grounded");
   assert.equal(worldSnapshot.players[0]?.stateSequence, 2);
-  assert.ok((worldSnapshot.players[0]?.position.y ?? 0) > 0);
-  assert.ok((worldSnapshot.players[0]?.position.z ?? 24) < 24);
+  assert.ok(activeBodySnapshot.position.y > 0);
+  assert.ok(activeBodySnapshot.position.z < 24);
 });
 
 test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards player-look datagrams into authoritative world state", () => {
@@ -257,10 +266,11 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards player-look dat
   );
 
   const worldSnapshot = runtime.readWorldSnapshot(50, playerId);
+  const activeBodySnapshot = readPrimaryPlayerActiveBodySnapshot(worldSnapshot);
 
   assert.equal(worldSnapshot.players[0]?.look.pitchRadians, -0.3);
   assert.equal(worldSnapshot.players[0]?.look.yawRadians, 1.1);
-  assert.equal(worldSnapshot.players[0]?.yawRadians, 0.2);
+  assert.equal(activeBodySnapshot.yawRadians, authoredWaterBaySkiffYawRadians);
 });
 
 test("MetaverseRealtimeWorldWebTransportDatagramAdapter binds the session to the first datagram player identity", () => {

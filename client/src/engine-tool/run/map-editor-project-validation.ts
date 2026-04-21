@@ -62,6 +62,14 @@ export function validateMapEditorProject(
     errors.push(`Spawn id ${duplicateSpawnId} is duplicated.`);
   }
 
+  if (project.playerSpawnSelectionDraft.enemyAvoidanceRadiusMeters < 0) {
+    errors.push("Enemy avoidance radius must stay at or above 0.");
+  }
+
+  if (project.playerSpawnSelectionDraft.homeTeamBiasMeters < 0) {
+    errors.push("Home team bias must stay at or above 0.");
+  }
+
   for (const duplicateSceneObjectId of readDuplicateIds(
     project.sceneObjectDrafts.map((sceneObjectDraft) => sceneObjectDraft.objectId)
   )) {

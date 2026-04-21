@@ -243,6 +243,7 @@ function resolvePlayerSpawnNodes(
           z: spawnDraft.position.z
         }),
         spawnId: spawnDraft.spawnId,
+        teamId: spawnDraft.teamId,
         yawRadians: spawnDraft.yawRadians
       } satisfies MetaverseMapBundleSpawnNodeSnapshot)
     )
@@ -320,6 +321,11 @@ export function exportMapEditorProjectToMetaverseMapBundle(
     launchVariations: resolveLaunchVariations(project),
     mapId: project.bundleId,
     playerSpawnNodes: resolvePlayerSpawnNodes(project),
+    playerSpawnSelection: Object.freeze({
+      enemyAvoidanceRadiusMeters:
+        project.playerSpawnSelectionDraft.enemyAvoidanceRadiusMeters,
+      homeTeamBiasMeters: project.playerSpawnSelectionDraft.homeTeamBiasMeters
+    }),
     presentationProfileIds: Object.freeze({
       cameraProfileId: project.cameraProfileId,
       characterPresentationProfileId: project.characterPresentationProfileId,

@@ -371,7 +371,7 @@ test("MetaverseTraversalRuntime preserves a local grounded jump ascent against r
   }
 });
 
-test("MetaverseTraversalRuntime keeps a local jump ascent when the issued jump edge is routine-rejected", async () => {
+test("MetaverseTraversalRuntime cancels a local jump ascent once the issued jump edge is authoritatively rejected", async () => {
   const { groundedBodyRuntime, traversalRuntime } =
     await createFlatGroundedTraversalHarness();
 
@@ -417,18 +417,24 @@ test("MetaverseTraversalRuntime keeps a local jump ascent when the issued jump e
       1
     );
 
-    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 0);
-    assert.equal(traversalRuntime.lastLocalAuthorityPoseCorrectionReason, "none");
-    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(
+      traversalRuntime.lastLocalAuthorityPoseCorrectionReason,
+      "gross-body-divergence"
+    );
+    assert.equal(groundedBodyRuntime.snapshot.grounded, true);
     assert.ok(
-      groundedBodyRuntime.snapshot.position.y >= localJumpSnapshot.position.y
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.y - groundedSnapshot.position.y
+      ) < 0.0001
     );
     assert.ok(
-      readGroundedBodyVerticalSpeed(groundedBodyRuntime.snapshot) > 0
+      Math.abs(readGroundedBodyVerticalSpeed(groundedBodyRuntime.snapshot)) <
+        0.0001
     );
     assert.equal(
       traversalRuntime.characterPresentationSnapshot?.animationVocabulary,
-      "jump-up"
+      "idle"
     );
 
     syncAuthoritativeLocalPlayerPose(
@@ -450,7 +456,7 @@ test("MetaverseTraversalRuntime keeps a local jump ascent when the issued jump e
       1
     );
 
-    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 0);
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
   } finally {
     groundedBodyRuntime.dispose();
   }
@@ -508,7 +514,7 @@ test("MetaverseTraversalRuntime buffers a grounded jump tap in shared local trav
   }
 });
 
-test("MetaverseTraversalRuntime consumes a grounded jump from snap-distance support through shared local traversal authority", async () => {
+test("MetaverseTraversalRuntime consumes a grounded jump once snap-distance support resolves through the shared grounded body owner", async () => {
   const { groundedBodyRuntime, traversalRuntime } =
     await createFlatGroundedTraversalHarness();
 
@@ -518,6 +524,17 @@ test("MetaverseTraversalRuntime consumes a grounded jump from snap-distance supp
       freezeVector3(0, 0.12, 24),
       groundedBodyRuntime.snapshot.yawRadians
     );
+    assert.equal(groundedBodyRuntime.snapshot.jumpBody.jumpReady, false);
+
+    for (let stepIndex = 0; stepIndex < 3; stepIndex += 1) {
+      traversalRuntime.advance(idleInput, groundedFixedStepSeconds);
+
+      if (groundedBodyRuntime.snapshot.jumpBody.jumpReady) {
+        break;
+      }
+    }
+
+    assert.equal(groundedBodyRuntime.snapshot.jumpBody.jumpReady, true);
 
     traversalRuntime.advance(jumpInput, groundedFixedStepSeconds);
 
@@ -1264,6 +1281,83 @@ test("MetaverseTraversalRuntime converges gross position-only divergence without
           authoritativeGroundedBody.position.x
       ) < 0.0001
     );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime preserves the current local velocity when an acked authoritative sample matches older local prediction", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createFlatGroundedTraversalHarness();
+
+  try {
+    traversalRuntime.boot();
+    traversalRuntime.advance(idleInput, groundedFixedStepSeconds);
+
+    const matchedGroundedSnapshot = groundedBodyRuntime.snapshot;
+    const matchedAuthoritativePosition = freezeVector3(
+      matchedGroundedSnapshot.position.x + 4.1,
+      matchedGroundedSnapshot.position.y,
+      matchedGroundedSnapshot.position.z
+    );
+    const matchedAuthoritativeTick = 1;
+    const moveForwardInput = Object.freeze({
+      ...idleInput,
+      moveAxis: 1
+    });
+
+    for (let stepIndex = 0; stepIndex < 18; stepIndex += 1) {
+      traversalRuntime.advance(moveForwardInput, groundedFixedStepSeconds);
+    }
+
+    const preSyncPlanarSpeed = Math.hypot(
+      groundedBodyRuntime.snapshot.linearVelocity.x,
+      groundedBodyRuntime.snapshot.linearVelocity.z
+    );
+
+    assert.ok(preSyncPlanarSpeed > 0.1);
+
+    traversalRuntime.syncAuthoritativeLocalPlayerPose(
+      Object.freeze({
+        authoritativeSnapshotAgeMs: 0,
+        authoritativeTick: matchedAuthoritativeTick,
+        lastProcessedInputSequence: 0,
+        lastProcessedTraversalSampleId: 0,
+        lastProcessedTraversalOrientationSequence: 0,
+        pose: Object.freeze({
+          groundedBody: Object.freeze({
+            ...matchedGroundedSnapshot,
+            position: matchedAuthoritativePosition
+          }),
+          lastProcessedInputSequence: 0,
+          lastProcessedTraversalSampleId: 0,
+          lastProcessedTraversalOrientationSequence: 0,
+          linearVelocity: matchedGroundedSnapshot.linearVelocity,
+          locomotionMode: "grounded",
+          mountedOccupancy: null,
+          position: matchedAuthoritativePosition,
+          swimBody: null,
+          traversalAuthority: traversalRuntime.localTraversalAuthoritySnapshot,
+          yawRadians: matchedGroundedSnapshot.yawRadians
+        }),
+        receivedAtWallClockMs: 0,
+        snapshotSequence: 1
+      })
+    );
+
+    const postSyncPlanarSpeed = Math.hypot(
+      groundedBodyRuntime.snapshot.linearVelocity.x,
+      groundedBodyRuntime.snapshot.linearVelocity.z
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.ok(
+      [
+        "gross-body-divergence",
+        "gross-position-divergence"
+      ].includes(traversalRuntime.lastLocalAuthorityPoseCorrectionReason)
+    );
+    assert.ok(Math.abs(postSyncPlanarSpeed - preSyncPlanarSpeed) < 0.0001);
   } finally {
     groundedBodyRuntime.dispose();
   }

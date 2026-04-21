@@ -4,6 +4,7 @@ import test, { after, before } from "node:test";
 import {
   createMetaversePresenceRosterSnapshot,
   createMetaversePlayerId,
+  resolveMetaversePlayerTeamId,
   createUsername
 } from "@webgpu-metaverse/shared";
 
@@ -112,6 +113,7 @@ test("MetaversePresenceRuntime detects roster object mutations without relying o
     localPlayerIdentity: {
       characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
+      teamId: resolveMetaversePlayerTeamId(localPlayerId),
       username: localUsername
     },
     onPresenceUpdate() {}
@@ -241,6 +243,7 @@ test("MetaversePresenceRuntime syncs canonical mounted occupancy through the pre
     localPlayerIdentity: {
       characterId: "mesh2motion-humanoid-v1",
       playerId: localPlayerId,
+      teamId: resolveMetaversePlayerTeamId(localPlayerId),
       username: localUsername
     },
     onPresenceUpdate() {}
@@ -307,4 +310,74 @@ test("MetaversePresenceRuntime syncs canonical mounted occupancy through the pre
   );
   assert.equal(syncPresenceCalls.at(-1)?.look?.pitchRadians, 0.32);
   assert.equal(syncPresenceCalls.at(-1)?.look?.yawRadians, 1.1);
+});
+
+test("MetaversePresenceRuntime sends the assigned team before first spawn join", async () => {
+  const { MetaversePresenceRuntime } = await clientLoader.load(
+    "/src/metaverse/classes/metaverse-presence-runtime.ts"
+  );
+  const localPlayerId = createMetaversePlayerId("team-aware-join-pilot");
+  const localUsername = createUsername("Team Join Pilot");
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(localUsername, null);
+
+  const ensureJoinedCalls = [];
+  const fakePresenceClient = {
+    rosterSnapshot: createMetaversePresenceRosterSnapshot({
+      players: [],
+      snapshotSequence: 1,
+      tickIntervalMs: 120
+    }),
+    statusSnapshot: Object.freeze({
+      joined: true,
+      lastError: null,
+      lastSnapshotSequence: 1,
+      playerId: localPlayerId,
+      state: "connected"
+    }),
+    dispose() {},
+    ensureJoined(request) {
+      ensureJoinedCalls.push(request);
+      return Promise.resolve(this.rosterSnapshot);
+    },
+    subscribeUpdates() {
+      return () => {};
+    },
+    syncPresence() {}
+  };
+  const assignedTeamId = resolveMetaversePlayerTeamId(localPlayerId);
+  const presenceRuntime = new MetaversePresenceRuntime({
+    createMetaversePresenceClient: () => fakePresenceClient,
+    localPlayerIdentity: {
+      characterId: "mesh2motion-humanoid-v1",
+      playerId: localPlayerId,
+      teamId: assignedTeamId,
+      username: localUsername
+    },
+    onPresenceUpdate() {}
+  });
+
+  presenceRuntime.boot(
+    {
+      animationVocabulary: "idle",
+      position: {
+        x: 0,
+        y: 1,
+        z: 0
+      },
+      yawRadians: 0
+    },
+    {
+      pitchRadians: 0,
+      yawRadians: 0
+    },
+    "grounded",
+    null
+  );
+  await Promise.resolve();
+
+  assert.equal(ensureJoinedCalls.length, 1);
+  assert.equal(ensureJoinedCalls[0]?.teamId, assignedTeamId);
+  assert.equal(presenceRuntime.localTeamId, assignedTeamId);
 });

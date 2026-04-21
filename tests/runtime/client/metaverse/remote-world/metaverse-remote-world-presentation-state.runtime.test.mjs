@@ -4,6 +4,7 @@ import test, { after, before } from "node:test";
 import {
   createMetaversePlayerId,
   createMetaverseRealtimeWorldSnapshot,
+  resolveMetaverseTraversalAuthoritySnapshotInput,
   createUsername
 } from "@webgpu-metaverse/shared";
 
@@ -215,7 +216,94 @@ test("MetaverseRemoteWorldPresentationState keeps remote character root on fresh
   );
 });
 
-test("MetaverseRemoteWorldPresentationState derives remote grounded walk pose from authoritative observed traversal input", async () => {
+test("MetaverseRemoteWorldPresentationState extrapolates remote airborne roots between authoritative snapshots", async () => {
+  const presentationState = await createPresentationState();
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-airborne-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Airborne");
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const airborneSnapshot = createMetaverseRealtimeWorldSnapshot({
+    players: [
+      {
+        characterId: "mesh2motion-humanoid-v1",
+        groundedBody: {
+          linearVelocity: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          position: {
+            x: 0,
+            y: 1.62,
+            z: 24
+          },
+          yawRadians: 0
+        },
+        locomotionMode: "grounded",
+        playerId: localPlayerId,
+        username: localUsername
+      },
+      {
+        characterId: "mesh2motion-humanoid-v1",
+        groundedBody: {
+          jumpBody: {
+            grounded: false,
+            verticalSpeedUnitsPerSecond: 4
+          },
+          linearVelocity: {
+            x: 1.25,
+            y: 4,
+            z: 0
+          },
+          position: {
+            x: 8,
+            y: 0.7,
+            z: 18
+          },
+          yawRadians: 0.2
+        },
+        locomotionMode: "grounded",
+        look: {
+          pitchRadians: -0.1,
+          yawRadians: 0.2
+        },
+        playerId: remotePlayerId,
+        username: remoteUsername
+      }
+    ],
+    snapshotSequence: 1,
+    tick: {
+      currentTick: 10,
+      serverTimeMs: 1_000,
+      tickIntervalMs: 50
+    },
+    vehicles: []
+  });
+
+  presentationState.syncAuthoritativeSample({
+    deltaSeconds: 0.05,
+    localPlayerId,
+    sampledFrame: createSampledFrame({
+      baseSnapshot: airborneSnapshot,
+      extrapolationSeconds: 0.1
+    })
+  });
+
+  const remotePresentation =
+    presentationState.remoteCharacterPresentations[0]?.presentation ?? null;
+
+  assert.notEqual(remotePresentation, null);
+  assert.ok((remotePresentation?.position.x ?? 0) > 8);
+  assert.ok((remotePresentation?.position.y ?? 0) > 0.7);
+});
+
+test("MetaverseRemoteWorldPresentationState derives remote grounded walk pose from authoritative presentation intent", async () => {
   const presentationState = await createPresentationState();
   const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
   const remotePlayerId = createMetaversePlayerId("remote-dock-runner-2");
@@ -300,7 +388,214 @@ test("MetaverseRemoteWorldPresentationState derives remote grounded walk pose fr
   );
 });
 
-test("MetaverseRemoteWorldPresentationState orients unmounted remote character presentation from authoritative observed facing", async () => {
+test("MetaverseRemoteWorldPresentationState restarts remote grounded walk cycles from collider-grounded direction flips", async () => {
+  const presentationState = await createPresentationState();
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-strafer-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Strafer");
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const leftStrafeSnapshot = createMetaverseRealtimeWorldSnapshot({
+    players: [
+      {
+        characterId: "mesh2motion-humanoid-v1",
+        groundedBody: {
+          jumpBody: {
+            grounded: true
+          },
+          linearVelocity: {
+            x: 0.35,
+            y: 0,
+            z: 0
+          },
+          position: {
+            x: 0,
+            y: 1.62,
+            z: 24
+          },
+          yawRadians: 0
+        },
+        playerId: localPlayerId,
+        presentationIntent: {
+          moveAxis: 0,
+          strafeAxis: 0
+        },
+        username: localUsername
+      },
+      {
+        characterId: "mesh2motion-humanoid-v1",
+        groundedBody: {
+          jumpBody: {
+            grounded: true
+          },
+          linearVelocity: {
+            x: 0.4,
+            y: 0,
+            z: 0
+          },
+          position: {
+            x: 8,
+            y: 1.62,
+            z: 18
+          },
+          yawRadians: 0
+        },
+        locomotionMode: "grounded",
+        look: {
+          pitchRadians: 0,
+          yawRadians: 0
+        },
+        playerId: remotePlayerId,
+        presentationIntent: {
+          moveAxis: 0,
+          strafeAxis: -1
+        },
+        traversalAuthority: resolveMetaverseTraversalAuthoritySnapshotInput({
+          activeAction: {
+            kind: "jump",
+            phase: "up"
+          },
+          currentTick: 10,
+          locomotionMode: "grounded",
+          mounted: false,
+          pendingActionKind: "jump",
+          pendingActionSequence: 7,
+          resolvedActionKind: "jump",
+          resolvedActionSequence: 7,
+          resolvedActionState: "accepted"
+        }),
+        username: remoteUsername
+      }
+    ],
+    snapshotSequence: 1,
+    tick: {
+      currentTick: 10,
+      serverTimeMs: 1_000,
+      tickIntervalMs: 50
+    },
+    vehicles: []
+  });
+
+  presentationState.syncAuthoritativeSample({
+    deltaSeconds: 0.05,
+    localPlayerId,
+    sampledFrame: createSampledFrame({
+      baseSnapshot: leftStrafeSnapshot
+    })
+  });
+
+  const leftBurstPresentation =
+    presentationState.remoteCharacterPresentations[0]?.presentation ?? null;
+  const leftBurstCycleId = leftBurstPresentation?.animationCycleId ?? 0;
+
+  assert.equal(leftBurstPresentation?.animationVocabulary, "walk");
+  assert.equal(typeof leftBurstPresentation?.animationCycleId, "number");
+
+  const rightStrafeSnapshot = createMetaverseRealtimeWorldSnapshot({
+    players: [
+      {
+        characterId: "mesh2motion-humanoid-v1",
+        groundedBody: {
+          jumpBody: {
+            grounded: true
+          },
+          linearVelocity: {
+            x: 0.35,
+            y: 0,
+            z: 0
+          },
+          position: {
+            x: 0,
+            y: 1.62,
+            z: 24
+          },
+          yawRadians: 0
+        },
+        playerId: localPlayerId,
+        presentationIntent: {
+          moveAxis: 0,
+          strafeAxis: 0
+        },
+        username: localUsername
+      },
+      {
+        characterId: "mesh2motion-humanoid-v1",
+        groundedBody: {
+          jumpBody: {
+            grounded: true
+          },
+          linearVelocity: {
+            x: 0.4,
+            y: 0,
+            z: 0
+          },
+          position: {
+            x: 8,
+            y: 1.62,
+            z: 18
+          },
+          yawRadians: 0
+        },
+        locomotionMode: "grounded",
+        look: {
+          pitchRadians: 0,
+          yawRadians: 0
+        },
+        playerId: remotePlayerId,
+        presentationIntent: {
+          moveAxis: 0,
+          strafeAxis: 1
+        },
+        traversalAuthority: resolveMetaverseTraversalAuthoritySnapshotInput({
+          activeAction: {
+            kind: "jump",
+            phase: "up"
+          },
+          currentTick: 11,
+          locomotionMode: "grounded",
+          mounted: false,
+          pendingActionKind: "jump",
+          pendingActionSequence: 7,
+          resolvedActionKind: "jump",
+          resolvedActionSequence: 7,
+          resolvedActionState: "accepted"
+        }),
+        username: remoteUsername
+      }
+    ],
+    snapshotSequence: 2,
+    tick: {
+      currentTick: 11,
+      serverTimeMs: 1_050,
+      tickIntervalMs: 50
+    },
+    vehicles: []
+  });
+
+  presentationState.syncAuthoritativeSample({
+    deltaSeconds: 0.05,
+    localPlayerId,
+    sampledFrame: createSampledFrame({
+      baseSnapshot: rightStrafeSnapshot
+    })
+  });
+
+  const rightBurstPresentation =
+    presentationState.remoteCharacterPresentations[0]?.presentation ?? null;
+
+  assert.equal(rightBurstPresentation?.animationVocabulary, "walk");
+  assert.ok(
+    (rightBurstPresentation?.animationCycleId ?? 0) >
+      leftBurstCycleId
+  );
+});
+
+test("MetaverseRemoteWorldPresentationState orients unmounted remote character root and aim from explicit look", async () => {
   const presentationState = await createPresentationState();
   const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
   const remotePlayerId = createMetaversePlayerId("remote-lookout-2");
@@ -323,11 +618,13 @@ test("MetaverseRemoteWorldPresentationState orients unmounted remote character p
       z: 0
     },
     remoteLocomotionMode: "grounded",
-    remoteLookPitchRadians: 0,
-    remoteLookYawRadians: 0,
-    remoteObservedFacingPitchRadians: -0.35,
-    remoteObservedFacingYawRadians: Math.PI * 0.5,
+    remoteLookPitchRadians: -0.35,
+    remoteLookYawRadians: Math.PI * 0.5,
     remotePlayerId,
+    remoteWeaponState: {
+      aimMode: "ads",
+      weaponId: "metaverse-service-pistol-v1"
+    },
     remotePlayerX: 8,
     remoteUsername,
     serverTimeMs: 1_000,
@@ -368,7 +665,162 @@ test("MetaverseRemoteWorldPresentationState orients unmounted remote character p
   assert.ok(presentationState.remoteCharacterPresentations[0]?.aimCamera);
 });
 
-test("MetaverseRemoteWorldPresentationState derives remote jump presentation from authoritative jump state", async () => {
+test("MetaverseRemoteWorldPresentationState starts remote grounded jump presentation from traversal authority before legacy jump-body lift arrives", async () => {
+  const presentationState = await createPresentationState();
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const jumpStartupSnapshot = createMetaverseRealtimeWorldSnapshot({
+    players: [
+      {
+        animationVocabulary: "idle",
+        characterId: "mesh2motion-humanoid-v1",
+        groundedBody: {
+          linearVelocity: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          position: {
+            x: 0,
+            y: 1.62,
+            z: 24
+          },
+          yawRadians: 0
+        },
+        locomotionMode: "grounded",
+        playerId: localPlayerId,
+        username: localUsername
+      },
+      {
+        animationVocabulary: "idle",
+        characterId: "mesh2motion-humanoid-v1",
+        groundedBody: {
+          jumpBody: {
+            grounded: true,
+            verticalSpeedUnitsPerSecond: 0
+          },
+          linearVelocity: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          position: {
+            x: 8,
+            y: 0.6,
+            z: 18
+          },
+          yawRadians: 0
+        },
+        locomotionMode: "grounded",
+        playerId: remotePlayerId,
+        traversalAuthority: resolveMetaverseTraversalAuthoritySnapshotInput({
+          activeAction: {
+            kind: "jump",
+            phase: "startup"
+          },
+          currentTick: 11,
+          locomotionMode: "grounded",
+          mounted: false,
+          pendingActionKind: "jump",
+          pendingActionSequence: 2,
+          resolvedActionKind: "none",
+          resolvedActionSequence: 0,
+          resolvedActionState: "none"
+        }),
+        username: remoteUsername,
+        weaponState: {
+          aimMode: "hip-fire",
+          weaponId: "metaverse-service-pistol-v1"
+        }
+      }
+    ],
+    snapshotSequence: 2,
+    tick: {
+      currentTick: 11,
+      serverTimeMs: 1_050,
+      tickIntervalMs: 50
+    },
+    vehicles: []
+  });
+
+  presentationState.syncAuthoritativeSample({
+    deltaSeconds: 0.05,
+    localPlayerId,
+    sampledFrame: createSampledFrame({
+      baseSnapshot: jumpStartupSnapshot
+    })
+  });
+
+  assert.equal(
+    presentationState.remoteCharacterPresentations[0]?.presentation
+      .animationVocabulary,
+    "jump-up"
+  );
+});
+
+test("MetaverseRemoteWorldPresentationState keeps a remote held-weapon pose camera available during grounded hip-fire", async () => {
+  const presentationState = await createPresentationState();
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sidearm-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sidearm");
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const facingSnapshot = createRealtimeWorldSnapshot({
+    currentTick: 10,
+    includeVehicle: false,
+    localPlayerId,
+    localUsername,
+    remoteLookPitchRadians: -0.2,
+    remoteLookYawRadians: 0.35,
+    remoteLocomotionMode: "grounded",
+    remotePlayerId,
+    remoteWeaponState: {
+      aimMode: "hip-fire",
+      weaponId: "metaverse-service-pistol-v1"
+    },
+    remotePlayerX: 6,
+    remoteUsername,
+    serverTimeMs: 1_000,
+    snapshotSequence: 1,
+    vehicleSeatOccupantPlayerId: null,
+    vehicleX: 8,
+    yawRadians: 0.1
+  });
+
+  presentationState.syncAuthoritativeSample({
+    deltaSeconds: 0,
+    localPlayerId,
+    sampledFrame: createSampledFrame({
+      baseSnapshot: facingSnapshot
+    })
+  });
+
+  const remotePresentation =
+    presentationState.remoteCharacterPresentations[0] ?? null;
+
+  assert.notEqual(remotePresentation, null);
+  assert.ok(remotePresentation?.aimCamera);
+  assert.equal(remotePresentation?.aimCamera?.pitchRadians, -0.2);
+  assert.ok(
+    Math.abs((remotePresentation?.aimCamera?.yawRadians ?? 0) - 0.35) <
+      0.000001
+  );
+});
+
+test("MetaverseRemoteWorldPresentationState derives remote directional jump presentation from grounded-body jump state", async () => {
   const presentationState = await createPresentationState();
   const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
   const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
@@ -385,44 +837,50 @@ test("MetaverseRemoteWorldPresentationState derives remote jump presentation fro
       {
         animationVocabulary: "idle",
         characterId: "mesh2motion-humanoid-v1",
-        jumpAuthorityState: "grounded",
-        linearVelocity: {
-          x: 0,
-          y: 0,
-          z: 0
+        groundedBody: {
+          linearVelocity: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          position: {
+            x: 0,
+            y: 1.62,
+            z: 24
+          },
+          yawRadians: 0
         },
         locomotionMode: "grounded",
         playerId: localPlayerId,
-        position: {
-          x: 0,
-          y: 1.62,
-          z: 24
-        },
-        username: localUsername,
-        yawRadians: 0
+        username: localUsername
       },
       {
         animationVocabulary: "idle",
         characterId: "mesh2motion-humanoid-v1",
-        jumpDebug: {
-          resolvedActionSequence: 2,
-          resolvedActionState: "accepted"
-        },
-        jumpAuthorityState: "rising",
-        linearVelocity: {
-          x: 0,
-          y: 3.4,
-          z: 0
+        groundedBody: {
+          jumpBody: {
+            grounded: false,
+            verticalSpeedUnitsPerSecond: 3.4
+          },
+          linearVelocity: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          position: {
+            x: 8,
+            y: 0.7,
+            z: 18
+          },
+          yawRadians: 0
         },
         locomotionMode: "grounded",
         playerId: remotePlayerId,
-        position: {
-          x: 8,
-          y: 0.7,
-          z: 18
-        },
         username: remoteUsername,
-        yawRadians: 0
+        weaponState: {
+          aimMode: "ads",
+          weaponId: "metaverse-service-pistol-v1"
+        }
       }
     ],
     snapshotSequence: 2,
@@ -447,6 +905,154 @@ test("MetaverseRemoteWorldPresentationState derives remote jump presentation fro
     presentationState.remoteCharacterPresentations[0]?.presentation
       .animationVocabulary,
     "jump-up"
+  );
+
+  const apexSnapshot = createMetaverseRealtimeWorldSnapshot({
+    players: [
+      {
+        animationVocabulary: "idle",
+        characterId: "mesh2motion-humanoid-v1",
+        groundedBody: {
+          linearVelocity: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          position: {
+            x: 0,
+            y: 1.62,
+            z: 24
+          },
+          yawRadians: 0
+        },
+        locomotionMode: "grounded",
+        playerId: localPlayerId,
+        username: localUsername
+      },
+      {
+        animationVocabulary: "idle",
+        characterId: "mesh2motion-humanoid-v1",
+        groundedBody: {
+          jumpBody: {
+            grounded: false,
+            verticalSpeedUnitsPerSecond: 0.1
+          },
+          linearVelocity: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          position: {
+            x: 8,
+            y: 1.25,
+            z: 18
+          },
+          yawRadians: 0
+        },
+        locomotionMode: "grounded",
+        playerId: remotePlayerId,
+        username: remoteUsername,
+        weaponState: {
+          aimMode: "ads",
+          weaponId: "metaverse-service-pistol-v1"
+        }
+      }
+    ],
+    snapshotSequence: 3,
+    tick: {
+      currentTick: 12,
+      serverTimeMs: 1_100,
+      tickIntervalMs: 50
+    },
+    vehicles: []
+  });
+
+  presentationState.syncAuthoritativeSample({
+    deltaSeconds: 0.05,
+    localPlayerId,
+    sampledFrame: createSampledFrame({
+      baseSnapshot: apexSnapshot
+    })
+  });
+
+  assert.equal(
+    presentationState.remoteCharacterPresentations[0]?.presentation
+      .animationVocabulary,
+    "jump-mid"
+  );
+
+  const fallingSnapshot = createMetaverseRealtimeWorldSnapshot({
+    players: [
+      {
+        animationVocabulary: "idle",
+        characterId: "mesh2motion-humanoid-v1",
+        groundedBody: {
+          linearVelocity: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          position: {
+            x: 0,
+            y: 1.62,
+            z: 24
+          },
+          yawRadians: 0
+        },
+        locomotionMode: "grounded",
+        playerId: localPlayerId,
+        username: localUsername
+      },
+      {
+        animationVocabulary: "idle",
+        characterId: "mesh2motion-humanoid-v1",
+        groundedBody: {
+          jumpBody: {
+            grounded: false,
+            verticalSpeedUnitsPerSecond: -2.4
+          },
+          linearVelocity: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          position: {
+            x: 8,
+            y: 0.95,
+            z: 18
+          },
+          yawRadians: 0
+        },
+        locomotionMode: "grounded",
+        playerId: remotePlayerId,
+        username: remoteUsername,
+        weaponState: {
+          aimMode: "ads",
+          weaponId: "metaverse-service-pistol-v1"
+        }
+      }
+    ],
+    snapshotSequence: 4,
+    tick: {
+      currentTick: 13,
+      serverTimeMs: 1_150,
+      tickIntervalMs: 50
+    },
+    vehicles: []
+  });
+
+  presentationState.syncAuthoritativeSample({
+    deltaSeconds: 0.05,
+    localPlayerId,
+    sampledFrame: createSampledFrame({
+      baseSnapshot: fallingSnapshot
+    })
+  });
+
+  assert.equal(
+    presentationState.remoteCharacterPresentations[0]?.presentation
+      .animationVocabulary,
+    "jump-down"
   );
   assert.ok(
     (presentationState.remoteCharacterPresentations[0]?.presentation.position.y ??

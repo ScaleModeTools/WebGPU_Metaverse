@@ -129,6 +129,7 @@ export class MetaverseRemoteWorldPresentationState {
     const {
       alpha: remoteCharacterRootAlpha,
       baseSnapshot: remoteCharacterRootBaseSnapshot,
+      extrapolationSeconds: remoteCharacterRootExtrapolationSeconds,
       nextSnapshot: remoteCharacterRootNextSnapshot
     } = resolvedRemoteCharacterRootFrame;
     const sampleEpoch = this.#sampleEpoch + 1;
@@ -182,6 +183,7 @@ export class MetaverseRemoteWorldPresentationState {
         nextPlayer,
         remoteCharacterRootAlpha,
         remoteCharacterRootBasePlayer,
+        remoteCharacterRootExtrapolationSeconds,
         remoteCharacterRootNextPlayer,
         sampleEpoch
       });

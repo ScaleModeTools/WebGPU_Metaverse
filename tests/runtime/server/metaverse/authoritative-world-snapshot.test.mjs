@@ -112,21 +112,28 @@ test("MetaverseAuthoritativeWorldRuntime does not advance simulation when snapsh
 test("MetaverseAuthoritativeWorldRuntime includes authored environment bodies in world snapshots", () => {
   const runtime = createAuthoritativeRuntime();
   const worldSnapshot = runtime.readWorldSnapshot(0);
+  const crateBodySnapshot = worldSnapshot.environmentBodies[0];
 
-  assert.deepEqual(worldSnapshot.environmentBodies, [
-    Object.freeze({
-      environmentAssetId: metaverseHubPushableCrateEnvironmentAssetId,
-      linearVelocity: Object.freeze({
-        x: 0,
-        y: 0,
-        z: 0
-      }),
-      position: Object.freeze({
-        x: -8,
-        y: 0.46,
-        z: 14
-      }),
-      yawRadians: Math.PI * -0.08
-    })
-  ]);
+  assert.equal(worldSnapshot.environmentBodies.length, 1);
+  assert.equal(
+    crateBodySnapshot?.environmentAssetId,
+    metaverseHubPushableCrateEnvironmentAssetId
+  );
+  assert.deepEqual(crateBodySnapshot?.linearVelocity, {
+    x: 0,
+    y: 0,
+    z: 0
+  });
+  assert.deepEqual(
+    {
+      x: crateBodySnapshot?.position.x,
+      z: crateBodySnapshot?.position.z
+    },
+    {
+      x: -8,
+      z: 14
+    }
+  );
+  assert.ok(Math.abs((crateBodySnapshot?.position.y ?? 0) - 0.931151807308197) < 0.000001);
+  assert.equal(crateBodySnapshot?.yawRadians, Math.PI * -0.08);
 });
