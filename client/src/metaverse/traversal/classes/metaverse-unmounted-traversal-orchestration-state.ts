@@ -601,6 +601,8 @@ export class MetaverseUnmountedTraversalOrchestrationState {
       swimPredictionSeconds:
         this.#dependencies.unmountedTraversalMotionState.swimPredictionSeconds,
       swimSnapshot: this.#dependencies.surfaceLocomotionState.readSwimSnapshot(),
+      traversalAuthoritySnapshot:
+        this.#dependencies.localTraversalAuthorityState.snapshot,
       waterSurfaceHeightMeters:
         this.#dependencies.surfaceLocomotionState.resolveWaterSurfaceHeightMeters(
           groundedSpawnPosition

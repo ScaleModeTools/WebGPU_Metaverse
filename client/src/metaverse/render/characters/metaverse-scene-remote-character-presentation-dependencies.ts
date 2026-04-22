@@ -9,6 +9,7 @@ import {
   type MetaverseCharacterProofRuntimeNodeResolvers
 } from "./metaverse-scene-character-proof-runtime";
 import {
+  captureHumanoidV2HeldWeaponPoseRuntime,
   createHeldWeaponPoseRuntime,
   restoreHumanoidV2HeldWeaponPoseRuntime,
   syncHumanoidV2HeldWeaponPose,
@@ -65,6 +66,7 @@ export function createMetaverseSceneRemoteCharacterPresentationDependencies({
   return {
     applyMountedAnchorTransform: applyCharacterMountedAnchorTransform,
     clearPistolPoseWeights: clearHumanoidV2PistolPoseWeights,
+    captureHeldWeaponPoseRuntime: captureHumanoidV2HeldWeaponPoseRuntime,
     cloneAttachmentRuntime: (sourceAttachmentRuntime, characterRuntime) =>
       cloneMetaverseAttachmentProofRuntime(
         sourceAttachmentRuntime,

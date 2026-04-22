@@ -1,4 +1,5 @@
 import type {
+  MetaversePlayerTeamId,
   MetaversePresenceMountedOccupancySnapshot,
   MetaverseRealtimePlayerWeaponStateSnapshot
 } from "@webgpu-metaverse/shared";
@@ -57,6 +58,8 @@ export interface MetaverseRemoteCharacterPresentationSnapshot {
   readonly playerId: string;
   readonly presentation: MetaverseCharacterPresentationSnapshot;
   readonly poseSyncMode: MetaverseRemoteCharacterPoseSyncMode;
+  readonly teamId: MetaversePlayerTeamId;
+  readonly username: string;
   readonly weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null;
 }
 

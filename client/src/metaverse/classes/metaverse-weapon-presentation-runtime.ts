@@ -85,6 +85,17 @@ function normalizeTransitionMilliseconds(rawSeconds: number): number {
   return Math.max(0, Math.round(rawSeconds * 1000));
 }
 
+function resolveAdsFieldOfViewDegrees(
+  baseFieldOfViewDegrees: number,
+  adsFieldOfViewDegrees: number
+): number {
+  if (!Number.isFinite(adsFieldOfViewDegrees) || adsFieldOfViewDegrees <= 0) {
+    return baseFieldOfViewDegrees;
+  }
+
+  return Math.min(baseFieldOfViewDegrees, adsFieldOfViewDegrees);
+}
+
 function createWeaponHudSnapshot(
   input: {
     readonly adsTransitionMs: number;
@@ -190,11 +201,13 @@ export class MetaverseWeaponPresentationRuntime {
   readonly #resolvedWeapon: ResolvedMetaverseWeaponPresentation | null;
   readonly #uiUpdateListeners = new Set<() => void>();
 
+  #adsLatched = false;
   #adsBlend = 0;
   #aimMode: MetaverseRealtimePlayerWeaponAimModeId = "hip-fire";
   #cameraFieldOfViewDegrees: number;
   #fireTriggerHeld = false;
   #hudSnapshot: MetaverseWeaponHudSnapshot = hiddenWeaponHudSnapshot;
+  #secondaryActionHeld = false;
   #weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null = null;
 
   constructor(
@@ -234,10 +247,12 @@ export class MetaverseWeaponPresentationRuntime {
   }
 
   reset(): void {
+    this.#adsLatched = false;
     this.#adsBlend = 0;
     this.#aimMode = "hip-fire";
     this.#cameraFieldOfViewDegrees = this.#baseFieldOfViewDegrees;
     this.#fireTriggerHeld = false;
+    this.#secondaryActionHeld = false;
     this.#syncPublishedState(false, "hip-fire");
   }
 
@@ -248,8 +263,19 @@ export class MetaverseWeaponPresentationRuntime {
   }: AdvanceWeaponPresentationInput): void {
     const resolvedWeapon = this.#resolvedWeapon;
     const visible = resolvedWeapon !== null && mountedEnvironment === null;
+    const secondaryActionPressedThisFrame =
+      flightInput.secondaryAction && !this.#secondaryActionHeld;
+
+    this.#secondaryActionHeld = flightInput.secondaryAction;
+
+    if (!visible) {
+      this.#adsLatched = false;
+    } else if (secondaryActionPressedThisFrame) {
+      this.#adsLatched = !this.#adsLatched;
+    }
+
     const targetAimMode: MetaverseRealtimePlayerWeaponAimModeId =
-      visible && flightInput.secondaryAction ? "ads" : "hip-fire";
+      visible && this.#adsLatched ? "ads" : "hip-fire";
     const adsTransitionSeconds =
       resolvedWeapon?.loadout.stats.handling.adsTransitionSeconds ?? 0;
     const transitionStep =
@@ -269,7 +295,10 @@ export class MetaverseWeaponPresentationRuntime {
         ? this.#baseFieldOfViewDegrees
         : lerp(
             this.#baseFieldOfViewDegrees,
-            resolvedWeapon.loadout.aimProfile.adsFovDegrees,
+            resolveAdsFieldOfViewDegrees(
+              this.#baseFieldOfViewDegrees,
+              resolvedWeapon.loadout.aimProfile.adsFovDegrees
+            ),
             this.#adsBlend
           );
     this.#syncPublishedState(visible, targetAimMode);

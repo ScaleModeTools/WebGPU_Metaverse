@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
 import { createClientModuleLoader } from "../../load-client-module.mjs";
+import { createHumanoidV2CharacterScene } from "../../metaverse-runtime-proof-slice-fixtures.mjs";
 
 let clientLoader;
 
@@ -70,6 +71,420 @@ test("syncCharacterAnimation uses authored jump vocabularies before locomotion f
   syncCharacterAnimation(characterRuntime, "jump-down", false, 3);
   assert.equal(characterRuntime.activeAnimationVocabulary, "jump-down");
   assert.equal(characterRuntime.activeAnimationCycleId, 3);
+});
+
+test("held weapon pose runtime restores sampled and authored baselines by restore source", async () => {
+  const [
+    { Bone, Quaternion, Vector3 },
+    {
+      captureHumanoidV2HeldWeaponPoseRuntime,
+      restoreHumanoidV2HeldWeaponPoseRuntime
+    }
+  ] = await Promise.all([
+    import("three/webgpu"),
+    clientLoader.load(
+      "/src/metaverse/render/characters/metaverse-scene-held-weapon-pose.ts"
+    )
+  ]);
+  const sampledDrivenBone = new Bone();
+  const authoredDrivenBone = new Bone();
+
+  sampledDrivenBone.name = "clavicle_r";
+  authoredDrivenBone.name = "upperarm_r";
+
+  const sampledDrivenBoneStartupQuaternion =
+    sampledDrivenBone.quaternion.clone();
+  const authoredDrivenBoneStartupQuaternion =
+    authoredDrivenBone.quaternion.clone();
+  const sampledAnimationQuaternion = new Quaternion().setFromAxisAngle(
+    new Vector3(0, 0, 1),
+    0.42
+  );
+  const unsampledAnimationQuaternion = new Quaternion().setFromAxisAngle(
+    new Vector3(0, 1, 0),
+    -0.31
+  );
+  const solvedIkQuaternion = new Quaternion().setFromAxisAngle(
+    new Vector3(1, 0, 0),
+    -0.77
+  );
+  const heldWeaponPoseRuntime = {
+    drivenBones: [
+      {
+        authoredLocalQuaternion: sampledDrivenBoneStartupQuaternion.clone(),
+        bone: sampledDrivenBone,
+        restoreSource: "sampled",
+        sampledLocalQuaternion: new Quaternion()
+      },
+      {
+        authoredLocalQuaternion: authoredDrivenBoneStartupQuaternion.clone(),
+        bone: authoredDrivenBone,
+        restoreSource: "authored",
+        sampledLocalQuaternion: new Quaternion()
+      }
+    ]
+  };
+
+  sampledDrivenBone.quaternion.copy(sampledAnimationQuaternion);
+  authoredDrivenBone.quaternion.copy(unsampledAnimationQuaternion);
+  captureHumanoidV2HeldWeaponPoseRuntime(heldWeaponPoseRuntime);
+  sampledDrivenBone.quaternion.copy(solvedIkQuaternion);
+  authoredDrivenBone.quaternion.copy(solvedIkQuaternion);
+  restoreHumanoidV2HeldWeaponPoseRuntime(heldWeaponPoseRuntime);
+
+  assert.ok(
+    sampledDrivenBone.quaternion.angleTo(sampledAnimationQuaternion) < 0.000001,
+    `Expected sampled held-weapon restore to recover the overlay pose, but delta was ${sampledDrivenBone.quaternion.angleTo(sampledAnimationQuaternion).toFixed(6)} radians.`
+  );
+  assert.ok(
+    sampledDrivenBone.quaternion.angleTo(sampledDrivenBoneStartupQuaternion) > 0.1,
+    `Expected sampled held-weapon restore to avoid snapping back to the authored startup pose, but delta was ${sampledDrivenBone.quaternion.angleTo(sampledDrivenBoneStartupQuaternion).toFixed(6)} radians.`
+  );
+  assert.ok(
+    authoredDrivenBone.quaternion.angleTo(authoredDrivenBoneStartupQuaternion) <
+      0.000001,
+    `Expected authored held-weapon restore to recover the stable arm baseline, but delta was ${authoredDrivenBone.quaternion.angleTo(authoredDrivenBoneStartupQuaternion).toFixed(6)} radians.`
+  );
+  assert.ok(
+    authoredDrivenBone.quaternion.angleTo(unsampledAnimationQuaternion) > 0.1,
+    `Expected authored held-weapon restore to ignore unsampled live arm twist, but delta was ${authoredDrivenBone.quaternion.angleTo(unsampledAnimationQuaternion).toFixed(6)} radians.`
+  );
+});
+
+test("captureHumanoidV2HeldWeaponPoseRuntime initializes the implicit offhand grip from grip_l_socket instead of the palm socket", async () => {
+  const [
+    { Bone, Group, Quaternion, Vector3 },
+    { captureHumanoidV2HeldWeaponPoseRuntime }
+  ] = await Promise.all([
+    import("three/webgpu"),
+    clientLoader.load(
+      "/src/metaverse/render/characters/metaverse-scene-held-weapon-pose.ts"
+    )
+  ]);
+  const sceneRoot = new Group();
+  const characterScene = new Group();
+  const handLBone = new Bone();
+  const leftGripSocketNode = new Bone();
+  const leftPalmSocketNode = new Bone();
+  const attachmentRoot = new Group();
+  const gripLocalQuaternion = new Quaternion().setFromAxisAngle(
+    new Vector3(0, 1, 0),
+    -0.34
+  );
+  const palmLocalQuaternion = new Quaternion().setFromAxisAngle(
+    new Vector3(0, 0, 1),
+    0.41
+  );
+
+  handLBone.name = "hand_l";
+  leftGripSocketNode.name = "grip_l_socket";
+  leftPalmSocketNode.name = "palm_l_socket";
+  handLBone.add(leftGripSocketNode);
+  handLBone.add(leftPalmSocketNode);
+  leftGripSocketNode.position.set(-0.08, 0.04, 0.03);
+  leftGripSocketNode.quaternion.copy(gripLocalQuaternion);
+  leftPalmSocketNode.position.set(-0.03, -0.02, 0.01);
+  leftPalmSocketNode.quaternion.copy(palmLocalQuaternion);
+  characterScene.add(handLBone);
+  sceneRoot.add(characterScene);
+  sceneRoot.add(attachmentRoot);
+  attachmentRoot.position.set(0.18, 0.27, -0.14);
+  attachmentRoot.quaternion.setFromAxisAngle(new Vector3(1, 0, 0), 0.23);
+  sceneRoot.updateMatrixWorld(true);
+
+  const expectedGripLocalPosition = attachmentRoot.worldToLocal(
+    leftGripSocketNode.getWorldPosition(new Vector3())
+  );
+  const expectedPalmLocalPosition = attachmentRoot.worldToLocal(
+    leftPalmSocketNode.getWorldPosition(new Vector3())
+  );
+  const expectedGripLocalQuaternion = attachmentRoot
+    .getWorldQuaternion(new Quaternion())
+    .invert()
+    .multiply(leftGripSocketNode.getWorldQuaternion(new Quaternion()))
+    .normalize();
+  const expectedPalmLocalQuaternion = attachmentRoot
+    .getWorldQuaternion(new Quaternion())
+    .invert()
+    .multiply(leftPalmSocketNode.getWorldQuaternion(new Quaternion()))
+    .normalize();
+  const attachmentRuntime = {
+    attachmentRoot,
+    implicitOffHandGripLocalPosition: null,
+    implicitOffHandGripLocalQuaternion: null
+  };
+
+  captureHumanoidV2HeldWeaponPoseRuntime(
+    {
+      drivenBones: [],
+      leftGripSocketNode
+    },
+    attachmentRuntime
+  );
+
+  assert.ok(attachmentRuntime.implicitOffHandGripLocalPosition);
+  assert.ok(attachmentRuntime.implicitOffHandGripLocalQuaternion);
+  assert.ok(
+    attachmentRuntime.implicitOffHandGripLocalPosition.distanceTo(
+      expectedGripLocalPosition
+    ) < 0.000001,
+    `Expected implicit offhand grip position ${attachmentRuntime.implicitOffHandGripLocalPosition.toArray()} to match left grip socket ${expectedGripLocalPosition.toArray()}.`
+  );
+  assert.ok(
+    attachmentRuntime.implicitOffHandGripLocalPosition.distanceTo(
+      expectedPalmLocalPosition
+    ) > 0.01,
+    `Expected implicit offhand grip position ${attachmentRuntime.implicitOffHandGripLocalPosition.toArray()} to avoid the palm socket ${expectedPalmLocalPosition.toArray()}.`
+  );
+  assert.ok(
+    attachmentRuntime.implicitOffHandGripLocalQuaternion.angleTo(
+      expectedGripLocalQuaternion
+    ) < 0.000001,
+    `Expected implicit offhand grip quaternion to match the left grip socket basis, but delta was ${attachmentRuntime.implicitOffHandGripLocalQuaternion.angleTo(expectedGripLocalQuaternion).toFixed(6)} radians.`
+  );
+  assert.ok(
+    attachmentRuntime.implicitOffHandGripLocalQuaternion.angleTo(
+      expectedPalmLocalQuaternion
+    ) > 0.05,
+    `Expected implicit offhand grip quaternion to avoid the palm socket basis, but delta was ${attachmentRuntime.implicitOffHandGripLocalQuaternion.angleTo(expectedPalmLocalQuaternion).toFixed(6)} radians.`
+  );
+});
+
+test("createHeldWeaponPoseRuntime samples shoulders and elbows but restores hand grip bones from authored baselines", async () => {
+  const [
+    {
+      Bone,
+      BoxGeometry,
+      Float32BufferAttribute,
+      Group,
+      MeshStandardMaterial,
+      Skeleton,
+      SkinnedMesh,
+      Uint16BufferAttribute,
+      Vector3
+    },
+    { createHeldWeaponPoseRuntime },
+    {
+      findMetaverseSceneBoneNode,
+      findMetaverseSceneSocketNode,
+      upsertMetaverseSceneSyntheticSocketNode
+    }
+  ] = await Promise.all([
+    import("three/webgpu"),
+    clientLoader.load(
+      "/src/metaverse/render/characters/metaverse-scene-held-weapon-pose.ts"
+    ),
+    clientLoader.load("/src/metaverse/render/metaverse-scene-proof-node-resolvers.ts")
+  ]);
+  const { characterScene } = createHumanoidV2CharacterScene({
+    Bone,
+    BoxGeometry,
+    Float32BufferAttribute,
+    Group,
+    MeshStandardMaterial,
+    Skeleton,
+    SkinnedMesh,
+    Uint16BufferAttribute,
+    Vector3
+  });
+  const handLBone = findMetaverseSceneBoneNode(
+    characterScene,
+    "hand_l",
+    "held weapon pose runtime test"
+  );
+  const handRBone = findMetaverseSceneBoneNode(
+    characterScene,
+    "hand_r",
+    "held weapon pose runtime test"
+  );
+
+  upsertMetaverseSceneSyntheticSocketNode(
+    characterScene,
+    handLBone,
+    "grip_l_socket",
+    new Vector3(-0.06, 0.05, 0.01),
+    false
+  );
+  upsertMetaverseSceneSyntheticSocketNode(
+    characterScene,
+    handLBone,
+    "palm_l_socket",
+    new Vector3(-0.04, 0.03, 0),
+    false
+  );
+  upsertMetaverseSceneSyntheticSocketNode(
+    characterScene,
+    handRBone,
+    "grip_r_socket",
+    new Vector3(0.06, 0.05, -0.01),
+    false
+  );
+  characterScene.updateMatrixWorld(true);
+
+  const heldWeaponPoseRuntime = createHeldWeaponPoseRuntime(characterScene, {
+    findBoneNode: findMetaverseSceneBoneNode,
+    findSocketNode: findMetaverseSceneSocketNode
+  });
+  const restoreSourceByBoneName = new Map(
+    heldWeaponPoseRuntime.drivenBones.map((drivenBone) => [
+      drivenBone.bone.name,
+      drivenBone.restoreSource
+    ])
+  );
+
+  assert.equal(restoreSourceByBoneName.get("clavicle_l"), "sampled");
+  assert.equal(restoreSourceByBoneName.get("upperarm_l"), "sampled");
+  assert.equal(restoreSourceByBoneName.get("lowerarm_l"), "sampled");
+  assert.equal(restoreSourceByBoneName.get("hand_l"), "sampled");
+  assert.equal(restoreSourceByBoneName.get("clavicle_r"), "sampled");
+  assert.equal(restoreSourceByBoneName.get("upperarm_r"), "sampled");
+  assert.equal(restoreSourceByBoneName.get("lowerarm_r"), "sampled");
+  assert.equal(restoreSourceByBoneName.get("hand_r"), "sampled");
+});
+
+test("createHumanoidV2PitchSelectivePistolPoseClip keeps all tracks on the neutral hold when IK owns pistol pitch response", async () => {
+  const [
+    { AnimationClip, Quaternion, QuaternionKeyframeTrack, Vector3 },
+    { createHumanoidV2PitchSelectivePistolPoseClip }
+  ] = await Promise.all([
+    import("three/webgpu"),
+    clientLoader.load(
+      "/src/metaverse/render/characters/metaverse-scene-character-animation.ts"
+    )
+  ]);
+  const pitchSpineQuaternion = new Quaternion().setFromAxisAngle(
+    new Vector3(1, 0, 0),
+    -0.4
+  );
+  const neutralUpperarmQuaternion = new Quaternion().setFromAxisAngle(
+    new Vector3(0, 0, 1),
+    0.18
+  );
+  const pitchUpperarmQuaternion = new Quaternion().setFromAxisAngle(
+    new Vector3(0, 0, 1),
+    -0.6
+  );
+  const neutralLowerarmQuaternion = new Quaternion().setFromAxisAngle(
+    new Vector3(0, 0, 1),
+    0.05
+  );
+  const pitchLowerarmQuaternion = new Quaternion().setFromAxisAngle(
+    new Vector3(0, 0, 1),
+    -0.34
+  );
+  const neutralHandQuaternion = new Quaternion().setFromAxisAngle(
+    new Vector3(0, 1, 0),
+    0.08
+  );
+  const pitchHandQuaternion = new Quaternion().setFromAxisAngle(
+    new Vector3(0, 1, 0),
+    -0.27
+  );
+  const createStaticQuaternionTrack = (trackName, quaternion) =>
+    new QuaternionKeyframeTrack(trackName, [0, 1], [
+      ...quaternion.toArray(),
+      ...quaternion.toArray()
+    ]);
+  const neutralClip = new AnimationClip("Pistol_Aim_Neutral", 1, [
+    createStaticQuaternionTrack("spine_02.quaternion", new Quaternion()),
+    createStaticQuaternionTrack("upperarm_l.quaternion", neutralUpperarmQuaternion),
+    createStaticQuaternionTrack("lowerarm_l.quaternion", neutralLowerarmQuaternion),
+    createStaticQuaternionTrack("hand_l.quaternion", neutralHandQuaternion)
+  ]);
+  const pitchClip = new AnimationClip("Pistol_Aim_Down", 1, [
+    createStaticQuaternionTrack("spine_02.quaternion", pitchSpineQuaternion),
+    createStaticQuaternionTrack("upperarm_l.quaternion", pitchUpperarmQuaternion),
+    createStaticQuaternionTrack("lowerarm_l.quaternion", pitchLowerarmQuaternion),
+    createStaticQuaternionTrack("hand_l.quaternion", pitchHandQuaternion)
+  ]);
+
+  const stabilizedClip = createHumanoidV2PitchSelectivePistolPoseClip(
+    pitchClip,
+    neutralClip
+  );
+  const stabilizedSpineTrack = stabilizedClip.tracks.find(
+    (track) => track.name === "spine_02.quaternion"
+  );
+  const stabilizedUpperarmTrack = stabilizedClip.tracks.find(
+    (track) => track.name === "upperarm_l.quaternion"
+  );
+  const stabilizedLowerarmTrack = stabilizedClip.tracks.find(
+    (track) => track.name === "lowerarm_l.quaternion"
+  );
+  const stabilizedHandTrack = stabilizedClip.tracks.find(
+    (track) => track.name === "hand_l.quaternion"
+  );
+
+  assert.ok(stabilizedSpineTrack instanceof QuaternionKeyframeTrack);
+  assert.ok(stabilizedUpperarmTrack instanceof QuaternionKeyframeTrack);
+  assert.ok(stabilizedLowerarmTrack instanceof QuaternionKeyframeTrack);
+  assert.ok(stabilizedHandTrack instanceof QuaternionKeyframeTrack);
+  assert.deepEqual(
+    Array.from(stabilizedSpineTrack.values),
+    Array.from(neutralClip.tracks[0].values)
+  );
+  assert.deepEqual(
+    Array.from(stabilizedUpperarmTrack.values),
+    Array.from(neutralClip.tracks[1].values)
+  );
+  assert.deepEqual(
+    Array.from(stabilizedLowerarmTrack.values),
+    Array.from(neutralClip.tracks[2].values)
+  );
+  assert.deepEqual(
+    Array.from(stabilizedHandTrack.values),
+    Array.from(neutralClip.tracks[3].values)
+  );
+});
+
+test("syncHumanoidV2PistolPoseWeights uses neutral as the center pose between down and up", async () => {
+  const {
+    syncHumanoidV2PistolPoseWeights
+  } = await clientLoader.load(
+    "/src/metaverse/render/characters/metaverse-scene-character-animation.ts"
+  );
+  const weightsByPoseId = new Map();
+  const createAction = (poseId) => ({
+    enabled: false,
+    setEffectiveWeight(weight) {
+      weightsByPoseId.set(poseId, weight);
+    }
+  });
+  const pistolPoseRuntime = {
+    actionsByPoseId: new Map([
+      ["down", createAction("down")],
+      ["neutral", createAction("neutral")],
+      ["up", createAction("up")]
+    ])
+  };
+  const orientation = {
+    maxPitchRadians: 1,
+    minPitchRadians: -1
+  };
+  const assertWeight = (poseId, expectedWeight) => {
+    assert.ok(
+      Math.abs((weightsByPoseId.get(poseId) ?? 0) - expectedWeight) < 0.000001,
+      `Expected ${poseId} weight ${(weightsByPoseId.get(poseId) ?? 0).toFixed(6)} to match ${expectedWeight.toFixed(6)}.`
+    );
+  };
+
+  syncHumanoidV2PistolPoseWeights(pistolPoseRuntime, 0.35, orientation);
+
+  assertWeight("neutral", 0.65);
+  assertWeight("down", 0);
+  assertWeight("up", 0.35);
+
+  syncHumanoidV2PistolPoseWeights(pistolPoseRuntime, 0, orientation);
+
+  assertWeight("neutral", 1);
+  assertWeight("down", 0);
+  assertWeight("up", 0);
+
+  syncHumanoidV2PistolPoseWeights(pistolPoseRuntime, -0.6, orientation);
+
+  assertWeight("neutral", 0.4);
+  assertWeight("down", 0.6);
+  assertWeight("up", 0);
 });
 
 test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and remotely", async () => {
@@ -283,25 +698,44 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
     new BoxGeometry(0.28, 0.08, 0.08),
     new MeshStandardMaterial({ color: 0x4b5563 })
   );
+  const adsCameraAnchor = new Group();
+  const forwardMarker = new Group();
   const gripHandSocket = new Group();
   const triggerMarker = new Group();
+  const upMarker = new Group();
 
   attachmentMesh.position.set(0.16, 0, 0);
   attachmentScene.name = "metaverse_service_pistol_root";
+  adsCameraAnchor.name = "metaverse_service_pistol_ads_camera_anchor";
+  adsCameraAnchor.position.set(0.016, 0.059, 0);
+  forwardMarker.name = "metaverse_service_pistol_forward_marker";
+  forwardMarker.position.set(1, 0, 0);
   gripHandSocket.name = "metaverse_service_pistol_grip_hand_r_socket";
-  gripHandSocket.position.set(0.04, -0.045, 0.025);
+  gripHandSocket.position.set(0.052, -0.055, 0);
   triggerMarker.name = "metaverse_service_pistol_trigger_marker";
-  triggerMarker.position.set(0.076, -0.022, 0.025);
-  attachmentScene.add(attachmentMesh, gripHandSocket, triggerMarker);
+  triggerMarker.position.set(0.088, -0.032, 0);
+  upMarker.name = "metaverse_service_pistol_up_marker";
+  upMarker.position.set(0, 1, 0);
+  attachmentScene.add(
+    attachmentMesh,
+    adsCameraAnchor,
+    forwardMarker,
+    gripHandSocket,
+    triggerMarker,
+    upMarker
+  );
 
   const sceneRuntime = createMetaverseScene(metaverseRuntimeConfig, {
     attachmentProofConfig: {
       attachmentId: "metaverse-service-pistol-v1",
       heldMount: {
+        adsCameraAnchorNodeName: "metaverse_service_pistol_ads_camera_anchor",
         attachmentSocketNodeName: "metaverse_service_pistol_grip_hand_r_socket",
+        forwardReferenceNodeName: "metaverse_service_pistol_forward_marker",
         offHandSupportPointId: null,
-        socketName: "hand_r_socket",
-        triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker"
+        socketName: "grip_r_socket",
+        triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker",
+        upReferenceNodeName: "metaverse_service_pistol_up_marker"
       },
       label: "Metaverse service pistol",
       modelPath: "/models/metaverse/attachments/metaverse-service-pistol.gltf",
@@ -394,6 +828,13 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
 
   const lookDirection = new Vector3(0.14, 0.12, -0.982601648);
   const normalizedLookDirection = lookDirection.clone().normalize();
+  const resolvePointToLookRayDistance = (point, origin, direction) => {
+    const pointOffset = point.clone().sub(origin);
+
+    return pointOffset
+      .addScaledVector(direction, -pointOffset.dot(direction))
+      .length();
+  };
 
   const cameraSnapshot = {
     lookDirection: {
@@ -402,7 +843,7 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
       z: normalizedLookDirection.z
     },
     pitchRadians: 0.12,
-    position: { x: 0.25, y: 1.62, z: 0.4 },
+    position: { x: 0, y: 1.62, z: -0.12 },
     yawRadians: 0
   };
   const characterPresentation = {
@@ -410,6 +851,11 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
     position: { x: 0, y: 0, z: 0 },
     yawRadians: 0
   };
+  const traversalCameraPosition = new Vector3(
+    cameraSnapshot.position.x,
+    cameraSnapshot.position.y,
+    cameraSnapshot.position.z
+  );
 
   sceneRuntime.syncPresentation(
     cameraSnapshot,
@@ -425,40 +871,50 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
   const attachmentRoot = sceneRuntime.scene.getObjectByName(
     "metaverse_attachment/metaverse-service-pistol-v1"
   );
+  const adsCameraAnchorNode = sceneRuntime.scene.getObjectByName(
+    "metaverse_service_pistol_ads_camera_anchor"
+  );
   const gripHandSocketNode = sceneRuntime.scene.getObjectByName(
     "metaverse_service_pistol_grip_hand_r_socket"
   );
+  const forwardMarkerNode = sceneRuntime.scene.getObjectByName(
+    "metaverse_service_pistol_forward_marker"
+  );
   const triggerMarkerNode = sceneRuntime.scene.getObjectByName(
     "metaverse_service_pistol_trigger_marker"
+  );
+  const upMarkerNode = sceneRuntime.scene.getObjectByName(
+    "metaverse_service_pistol_up_marker"
   );
   const leftSupportPointNode = sceneRuntime.scene.getObjectByName(
     "metaverse_attachment_support_point/metaverse-service-pistol-v1/hand_l_support"
   );
   const leftGripSocketNode = sceneRuntime.scene.getObjectByName("grip_l_socket");
+  const leftPalmSocketNode = sceneRuntime.scene.getObjectByName("palm_l_socket");
   const rightSupportPointNode = sceneRuntime.scene.getObjectByName(
     "metaverse_attachment_support_point/metaverse-service-pistol-v1/hand_r_support"
   );
-  const rightHandSocketNode = sceneRuntime.scene.getObjectByName("hand_r_socket");
+  const rightGripSocketNode = sceneRuntime.scene.getObjectByName("grip_r_socket");
   const rightTriggerContactNode = sceneRuntime.scene.getObjectByName("index_03_r");
 
   assert.ok(attachmentRoot);
+  assert.ok(adsCameraAnchorNode);
   assert.ok(gripHandSocketNode);
+  assert.ok(forwardMarkerNode);
   assert.ok(triggerMarkerNode);
+  assert.ok(upMarkerNode);
   assert.equal(leftSupportPointNode, undefined);
   assert.equal(rightSupportPointNode, undefined);
   assert.ok(leftGripSocketNode);
-  assert.ok(rightHandSocketNode);
+  assert.ok(leftPalmSocketNode);
+  assert.ok(rightGripSocketNode);
   assert.ok(rightTriggerContactNode);
 
-  const initialWeaponForward = new Vector3(1, 0, 0)
-    .applyQuaternion(attachmentRoot.getWorldQuaternion(new Quaternion()))
+  const initialWeaponForward = forwardMarkerNode
+    .getWorldPosition(new Vector3())
+    .sub(gripHandSocketNode.getWorldPosition(new Vector3()))
     .normalize();
   const renderedCameraPosition = sceneRuntime.camera.position.clone();
-  const traversalCameraPosition = new Vector3(
-    cameraSnapshot.position.x,
-    cameraSnapshot.position.y,
-    cameraSnapshot.position.z
-  );
   const targetGripUp = new Vector3(0, 1, 0);
 
   targetGripUp.addScaledVector(
@@ -467,11 +923,14 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
   );
   targetGripUp.normalize();
   const rightHandForward = new Vector3(1, 0, 0)
-    .applyQuaternion(rightHandSocketNode.getWorldQuaternion(new Quaternion()))
+    .applyQuaternion(rightGripSocketNode.getWorldQuaternion(new Quaternion()))
     .normalize();
   const rightHandUp = new Vector3(0, 1, 0)
-    .applyQuaternion(rightHandSocketNode.getWorldQuaternion(new Quaternion()))
+    .applyQuaternion(rightGripSocketNode.getWorldQuaternion(new Quaternion()))
     .normalize();
+  const initialLeftPalmLocalPosition = attachmentRoot.worldToLocal(
+    leftPalmSocketNode.getWorldPosition(new Vector3())
+  );
   const initialLeftGripLocalPosition = attachmentRoot.worldToLocal(
     leftGripSocketNode.getWorldPosition(new Vector3())
   );
@@ -481,6 +940,22 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
   const triggerMarkerWorldPosition = triggerMarkerNode.getWorldPosition(
     new Vector3()
   );
+  const adsCameraAnchorWorldPosition = adsCameraAnchorNode.getWorldPosition(
+    new Vector3()
+  );
+  const forwardMarkerWorldPosition = forwardMarkerNode.getWorldPosition(new Vector3());
+  const upMarkerWorldPosition = upMarkerNode.getWorldPosition(new Vector3());
+  const weaponUpDirection = upMarkerWorldPosition
+    .sub(gripHandSocketNode.getWorldPosition(new Vector3()))
+    .normalize();
+  const gripCameraForwardDistance = gripHandSocketNode
+    .getWorldPosition(new Vector3())
+    .sub(traversalCameraPosition)
+    .dot(normalizedLookDirection);
+  const shoulderAnchoredGripPosition = clavicleRBone
+    .getWorldPosition(new Vector3())
+    .clone()
+    .addScaledVector(normalizedLookDirection, 0.42);
   const resolveElbowFlexionRadians = (upperarmBone, lowerarmBone, handBone) => {
     const elbowWorldPosition = lowerarmBone.getWorldPosition(new Vector3());
     const elbowToShoulder = upperarmBone
@@ -506,6 +981,24 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
     `Expected weapon forward ${initialWeaponForward.toArray()} to track camera look ${normalizedLookDirection.toArray()}.`
   );
   assert.ok(
+    weaponUpDirection.angleTo(targetGripUp) < 0.12,
+    `Expected weapon up ${weaponUpDirection.toArray()} to stay upright against ${targetGripUp.toArray()}.`
+  );
+  assert.ok(
+    gripCameraForwardDistance > 0,
+    `Expected authored grip ${gripHandSocketNode.getWorldPosition(new Vector3()).toArray()} to stay in front of the traversal camera ${traversalCameraPosition.toArray()} along look ${normalizedLookDirection.toArray()}, but forward distance was ${gripCameraForwardDistance.toFixed(4)} meters.`
+  );
+  assert.ok(
+    rightGripSocketNode
+      .getWorldPosition(new Vector3())
+      .distanceTo(shoulderAnchoredGripPosition) < 0.08,
+    `Expected right grip ${rightGripSocketNode.getWorldPosition(new Vector3()).toArray()} to stay near the right-shoulder hold ${shoulderAnchoredGripPosition.toArray()}.`
+  );
+  assert.ok(
+    adsCameraAnchorWorldPosition.distanceTo(traversalCameraPosition) > 0.08,
+    `Expected hip-fire ADS camera anchor ${adsCameraAnchorWorldPosition.toArray()} to stay offset from traversal camera ${traversalCameraPosition.toArray()} instead of snapping onto it.`
+  );
+  assert.ok(
     rightHandForward.angleTo(normalizedLookDirection) < 0.14,
     `Expected right hand forward ${rightHandForward.toArray()} to track camera look ${normalizedLookDirection.toArray()}.`
   );
@@ -519,23 +1012,23 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
   );
   assert.ok(
     triggerMarkerWorldPosition.distanceTo(
-      rightHandSocketNode.getWorldPosition(new Vector3())
+      rightGripSocketNode.getWorldPosition(new Vector3())
     ) > 0.015,
     `Expected authored trigger marker ${triggerMarkerWorldPosition.toArray()} to remain distinct from the grip-alignment hand socket target.`
   );
   assert.ok(
     gripHandSocketNode
       .getWorldPosition(new Vector3())
-      .distanceTo(rightHandSocketNode.getWorldPosition(new Vector3())) < 0.000001,
-    "Expected the authored weapon grip socket to align exactly with the character hand socket."
+      .distanceTo(rightGripSocketNode.getWorldPosition(new Vector3())) < 0.000001,
+    "Expected the authored weapon grip socket to align exactly with the character grip socket."
   );
   assert.ok(
     renderedCameraPosition.distanceTo(traversalCameraPosition) < 0.000001,
     `Expected rendered held-weapon camera ${renderedCameraPosition.toArray()} to stay locked to the raw traversal camera ${traversalCameraPosition.toArray()}.`
   );
   assert.ok(
-    leftElbowFlexionRadians > 0.1,
-    `Expected left elbow to stay bent in the held-weapon pose, but flexion was ${leftElbowFlexionRadians.toFixed(4)} radians.`
+    leftElbowFlexionRadians > 0.03,
+    `Expected left elbow to avoid fully locking in the held-weapon pose, but flexion was ${leftElbowFlexionRadians.toFixed(4)} radians.`
   );
   assert.ok(
     rightElbowFlexionRadians > 0.16,
@@ -567,13 +1060,19 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
 
   sceneRuntime.scene.updateMatrixWorld(true);
 
-  const repeatedWeaponForward = new Vector3(1, 0, 0)
-    .applyQuaternion(attachmentRoot.getWorldQuaternion(new Quaternion()))
+  const repeatedWeaponForward = forwardMarkerNode
+    .getWorldPosition(new Vector3())
+    .sub(gripHandSocketNode.getWorldPosition(new Vector3()))
     .normalize();
+  const repeatedLeftHandScale = handLBone.getWorldScale(new Vector3());
 
   assert.ok(
     repeatedWeaponForward.angleTo(initialWeaponForward) < 0.02,
     `Expected held weapon forward to stay stable across repeated standing frames, but delta was ${repeatedWeaponForward.angleTo(initialWeaponForward).toFixed(4)} radians.`
+  );
+  assert.ok(
+    repeatedLeftHandScale.distanceTo(new Vector3(1, 1, 1)) < 0.000001,
+    `Expected left hand world scale ${repeatedLeftHandScale.toArray()} to stay normalized across repeated standing frames.`
   );
 
   const pitchedLookDirection = new Vector3(0.1, -0.42, -0.9).normalize();
@@ -586,7 +1085,7 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
         z: pitchedLookDirection.z
       },
       pitchRadians: -0.4,
-      position: { x: 0.25, y: 1.62, z: 0.4 },
+      position: { x: 0, y: 1.62, z: -0.12 },
       yawRadians: 0
     },
     null,
@@ -597,13 +1096,20 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
   );
   sceneRuntime.scene.updateMatrixWorld(true);
 
+  const pitchedLeftPalmLocalPosition = attachmentRoot.worldToLocal(
+    leftPalmSocketNode.getWorldPosition(new Vector3())
+  );
   const pitchedLeftGripLocalPosition = attachmentRoot.worldToLocal(
     leftGripSocketNode.getWorldPosition(new Vector3())
   );
 
   assert.ok(
-    pitchedLeftGripLocalPosition.distanceTo(initialLeftGripLocalPosition) < 0.03,
-    `Expected left-hand grip ${pitchedLeftGripLocalPosition.toArray()} to stay locked near ${initialLeftGripLocalPosition.toArray()} across pitch changes.`
+    pitchedLeftPalmLocalPosition.distanceTo(initialLeftPalmLocalPosition) < 0.24,
+    `Expected left-hand palm ${pitchedLeftPalmLocalPosition.toArray()} to stay anchored near ${initialLeftPalmLocalPosition.toArray()} across pitch changes.`
+  );
+  assert.ok(
+    pitchedLeftGripLocalPosition.distanceTo(initialLeftGripLocalPosition) < 0.24,
+    `Expected left-hand grip ${pitchedLeftGripLocalPosition.toArray()} to stay anchored near ${initialLeftGripLocalPosition.toArray()} across pitch changes.`
   );
 
   const createRemoteAimCameraSnapshot = (position, pitchRadians, yawRadians) => {
@@ -738,8 +1244,9 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
     .normalize();
 
   assert.ok(
-    remoteClaviclePitchUpQuaternion.angleTo(remoteClaviclePitchDownQuaternion) > 0.08,
-    `Expected remote humanoid_v2 clavicle pitch to respond to replicated look pitch, but delta was ${remoteClaviclePitchUpQuaternion.angleTo(remoteClaviclePitchDownQuaternion).toFixed(4)} radians.`
+    remoteClaviclePitchUpQuaternion.angleTo(remoteClaviclePitchDownQuaternion) <
+      0.001,
+    `Expected remote humanoid_v2 clavicle pitch to stay on the neutral pistol overlay while IK owns arm pitch response, but delta was ${remoteClaviclePitchUpQuaternion.angleTo(remoteClaviclePitchDownQuaternion).toFixed(4)} radians.`
   );
   assert.ok(
     remoteHeadNeutralQuaternion.angleTo(remoteHeadPitchedQuaternion) < 0.001,

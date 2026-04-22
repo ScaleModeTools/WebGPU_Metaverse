@@ -38,7 +38,7 @@ import { resolveMetaverseProofLodModelPath } from "./resolve-metaverse-proof-lod
 function resolveHeldAttachmentSocketName(
   socketId: SocketId
 ): MetaverseAttachmentProofConfig["heldMount"]["socketName"] {
-  return socketId;
+  return socketId === "hand_r_socket" ? "grip_r_socket" : socketId;
 }
 
 function resolveAttachmentSupportPoints(
@@ -408,6 +408,15 @@ function resolveMetaverseAttachmentProofConfig(
   return Object.freeze({
     attachmentId: attachmentDescriptor.id,
     heldMount: Object.freeze({
+      adsCameraAnchorNodeName:
+        attachmentDescriptor.heldMount.adsCameraAnchorNodeName === null ||
+        attachmentDescriptor.heldMount.adsCameraAnchorNodeName === undefined
+          ? null
+          : resolveAttachmentNodeName(
+              attachmentDescriptor.label,
+              attachmentDescriptor.heldMount.adsCameraAnchorNodeName,
+              "held ads camera anchor node name"
+            ),
       attachmentSocketNodeName: resolveAttachmentSocketNodeName(
         attachmentDescriptor.label,
         attachmentDescriptor.heldMount,
@@ -439,6 +448,15 @@ function resolveMetaverseAttachmentProofConfig(
               attachmentDescriptor.label,
               attachmentDescriptor.heldMount.triggerMarkerNodeName,
               "held trigger marker node name"
+            ),
+      upReferenceNodeName:
+        attachmentDescriptor.heldMount.upReferenceNodeName === null ||
+        attachmentDescriptor.heldMount.upReferenceNodeName === undefined
+          ? null
+          : resolveAttachmentNodeName(
+              attachmentDescriptor.label,
+              attachmentDescriptor.heldMount.upReferenceNodeName,
+              "held up reference node name"
             )
     }),
     label: attachmentDescriptor.label,

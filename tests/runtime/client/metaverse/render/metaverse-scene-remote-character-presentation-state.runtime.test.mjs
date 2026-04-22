@@ -47,6 +47,7 @@ test("MetaverseSceneRemoteCharacterPresentationState owns remote runtime sync an
       remoteCharacterPresentationDependencies: {
         applyMountedAnchorTransform() {},
         clearPistolPoseWeights() {},
+        captureHeldWeaponPoseRuntime() {},
         cloneAttachmentRuntime() {
           return null;
         },

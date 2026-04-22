@@ -277,6 +277,8 @@ function createRemoteCharacterPresentations(
           position: playerSnapshot.pose.position,
           yawRadians: playerSnapshot.pose.yawRadians
         }),
+        teamId: playerSnapshot.teamId,
+        username: playerSnapshot.username,
         weaponState: null
       })
     );

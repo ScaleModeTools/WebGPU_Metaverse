@@ -216,7 +216,7 @@ test("MetaverseSceneInteractivePresentationState boots manifest-driven character
       attachmentId: "metaverse-service-pistol-v1",
       heldMount: {
         attachmentSocketNodeName: "metaverse_service_pistol_grip_hand_r_socket",
-        socketName: "hand_r_socket",
+        socketName: "grip_r_socket",
         triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker"
       },
       label: "Metaverse service pistol",
@@ -328,7 +328,7 @@ test("MetaverseSceneInteractivePresentationState boots manifest-driven character
     interactivePresentationState.characterProofRuntime?.characterId,
     "mesh2motion-humanoid-v1"
   );
-  assert.equal(attachmentRoot.parent?.name, "hand_r_socket");
+  assert.equal(attachmentRoot.parent?.name, "grip_r_socket");
 
   interactivePresentationState.syncAttachmentMount(
     mountedOccupancyStateModule
@@ -345,7 +345,7 @@ test("MetaverseSceneInteractivePresentationState boots manifest-driven character
 
   interactivePresentationState.syncAttachmentMount(null);
 
-  assert.equal(attachmentRoot.parent?.name, "hand_r_socket");
+  assert.equal(attachmentRoot.parent?.name, "grip_r_socket");
 });
 
 test("MetaverseSceneInteractivePresentationState rejects attachment proof slices without a character proof slice", async () => {
@@ -360,7 +360,7 @@ test("MetaverseSceneInteractivePresentationState rejects attachment proof slices
       attachmentId: "metaverse-service-pistol-v1",
       heldMount: {
         attachmentSocketNodeName: "metaverse_service_pistol_grip_hand_r_socket",
-        socketName: "hand_r_socket",
+        socketName: "grip_r_socket",
         triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker"
       },
       label: "Metaverse service pistol",

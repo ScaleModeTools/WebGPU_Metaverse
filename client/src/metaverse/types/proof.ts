@@ -79,11 +79,13 @@ export type MetaverseAttachmentSocketName =
   | MetaverseSyntheticSocketName;
 
 export interface MetaverseAttachmentMountProofConfig {
+  readonly adsCameraAnchorNodeName?: string | null;
   readonly attachmentSocketNodeName: string;
   readonly forwardReferenceNodeName?: string | null;
   readonly offHandSupportPointId?: string | null;
   readonly socketName: MetaverseAttachmentSocketName;
   readonly triggerMarkerNodeName?: string | null;
+  readonly upReferenceNodeName?: string | null;
 }
 
 export interface MetaverseAttachmentProofConfig {

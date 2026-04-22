@@ -51,7 +51,7 @@ test("MetaverseRuntimeHudPublisher derives boot phases and throttles unforced UI
   assert.equal(publisher.hudSnapshot.boot.phase, "renderer-init");
 
   dependencies.presenceRuntime.isJoined = true;
-  nowMs = 50;
+  nowMs = 10;
   publisher.publishSnapshot(
     createPublishInput({
       lifecycle: "booting"
@@ -64,7 +64,7 @@ test("MetaverseRuntimeHudPublisher derives boot phases and throttles unforced UI
   assert.equal(publisher.hudSnapshot.boot.phase, "world-connecting");
 
   dependencies.remoteWorldRuntime.isConnected = true;
-  nowMs = 250;
+  nowMs = 30;
   publisher.publishSnapshot(
     createPublishInput({
       lifecycle: "booting"
@@ -134,7 +134,7 @@ test("MetaverseRuntimeHudPublisher resolves mounted HUD access copy from one mou
   );
 });
 
-test("MetaverseRuntimeHudPublisher keeps friendly radar contacts live while enemy contacts refresh on the 5s ping cadence", async () => {
+test("MetaverseRuntimeHudPublisher keeps in-range radar contacts live from smoothed remote presentations", async () => {
   const { MetaverseRuntimeHudPublisher } = await clientLoader.load(
     "/src/metaverse/hud/metaverse-runtime-hud-publisher.ts"
   );
@@ -284,33 +284,184 @@ test("MetaverseRuntimeHudPublisher keeps friendly radar contacts live while enem
     teamId: "red",
     username: enemyUsername
   });
-  let remoteSnapshots = Object.freeze([friendlySnapshotNear, enemySnapshotNear]);
+  const enemySnapshotMid = createMetaverseRealtimePlayerSnapshot({
+    characterId: "mesh2motion-humanoid-v1",
+    groundedBody: {
+      linearVelocity: {
+        x: 0,
+        y: 0,
+        z: 0
+      },
+      position: {
+        x: -20,
+        y: 0,
+        z: 0
+      },
+      yawRadians: 0
+    },
+    look: {
+      pitchRadians: 0,
+      yawRadians: 0
+    },
+    playerId: enemyPlayerId,
+    teamId: "red",
+    username: enemyUsername
+  });
+  let remotePresentations = Object.freeze([
+    Object.freeze({
+      aimCamera: null,
+      characterId: friendlySnapshotNear.characterId,
+      look: Object.freeze({
+        pitchRadians: friendlySnapshotNear.look.pitchRadians,
+        yawRadians: friendlySnapshotNear.look.yawRadians
+      }),
+      mountedOccupancy: friendlySnapshotNear.mountedOccupancy,
+      playerId: friendlySnapshotNear.playerId,
+      poseSyncMode: "runtime-server-sampled",
+      presentation: Object.freeze({
+        animationPlaybackRateMultiplier: 1,
+        animationVocabulary: "idle",
+        position: friendlySnapshotNear.groundedBody.position,
+        yawRadians: 0
+      }),
+      teamId: friendlySnapshotNear.teamId,
+      username: friendlySnapshotNear.username,
+      weaponState: friendlySnapshotNear.weaponState
+    }),
+    Object.freeze({
+      aimCamera: null,
+      characterId: enemySnapshotNear.characterId,
+      look: Object.freeze({
+        pitchRadians: enemySnapshotNear.look.pitchRadians,
+        yawRadians: enemySnapshotNear.look.yawRadians
+      }),
+      mountedOccupancy: enemySnapshotNear.mountedOccupancy,
+      playerId: enemySnapshotNear.playerId,
+      poseSyncMode: "runtime-server-sampled",
+      presentation: Object.freeze({
+        animationPlaybackRateMultiplier: 1,
+        animationVocabulary: "idle",
+        position: enemySnapshotNear.groundedBody.position,
+        yawRadians: 0
+      }),
+      teamId: enemySnapshotNear.teamId,
+      username: enemySnapshotNear.username,
+      weaponState: enemySnapshotNear.weaponState
+    })
+  ]);
 
   dependencies.remoteWorldRuntime.readFreshAuthoritativeLocalPlayerSnapshot =
     () => localSnapshot;
-  dependencies.remoteWorldRuntime.readFreshAuthoritativeRemotePlayerSnapshots =
-    () => remoteSnapshots;
+  dependencies.remoteWorldRuntime.remoteCharacterPresentations = remotePresentations;
 
   const publisher = new MetaverseRuntimeHudPublisher(dependencies);
 
   publisher.publishSnapshot(createPublishInput(), true, nowMs);
   const initialFriendlyX = publisher.hudSnapshot.radar.friendlyContacts[0]?.radarX;
   const initialEnemyX = publisher.hudSnapshot.radar.enemyContacts[0]?.radarX;
+  assert.equal(publisher.hudSnapshot.radar.rangeMeters, 25);
+  assert.equal(publisher.hudSnapshot.radar.friendlyContacts[0]?.clamped, false);
+  assert.equal(publisher.hudSnapshot.radar.enemyContacts[0]?.clamped, false);
 
-  remoteSnapshots = Object.freeze([friendlySnapshotFar, enemySnapshotFar]);
+  remotePresentations = Object.freeze([
+    Object.freeze({
+      aimCamera: null,
+      characterId: friendlySnapshotFar.characterId,
+      look: Object.freeze({
+        pitchRadians: friendlySnapshotFar.look.pitchRadians,
+        yawRadians: friendlySnapshotFar.look.yawRadians
+      }),
+      mountedOccupancy: friendlySnapshotFar.mountedOccupancy,
+      playerId: friendlySnapshotFar.playerId,
+      poseSyncMode: "runtime-server-sampled",
+      presentation: Object.freeze({
+        animationPlaybackRateMultiplier: 1,
+        animationVocabulary: "idle",
+        position: friendlySnapshotFar.groundedBody.position,
+        yawRadians: 0
+      }),
+      teamId: friendlySnapshotFar.teamId,
+      username: friendlySnapshotFar.username,
+      weaponState: friendlySnapshotFar.weaponState
+    }),
+    Object.freeze({
+      aimCamera: null,
+      characterId: enemySnapshotMid.characterId,
+      look: Object.freeze({
+        pitchRadians: enemySnapshotMid.look.pitchRadians,
+        yawRadians: enemySnapshotMid.look.yawRadians
+      }),
+      mountedOccupancy: enemySnapshotMid.mountedOccupancy,
+      playerId: enemySnapshotMid.playerId,
+      poseSyncMode: "runtime-server-sampled",
+      presentation: Object.freeze({
+        animationPlaybackRateMultiplier: 1,
+        animationVocabulary: "idle",
+        position: enemySnapshotMid.groundedBody.position,
+        yawRadians: 0
+      }),
+      teamId: enemySnapshotMid.teamId,
+      username: enemySnapshotMid.username,
+      weaponState: enemySnapshotMid.weaponState
+    })
+  ]);
+  dependencies.remoteWorldRuntime.remoteCharacterPresentations = remotePresentations;
   nowMs = 3_000;
   publisher.publishSnapshot(createPublishInput(), true, nowMs);
 
   assert.equal(publisher.hudSnapshot.radar.available, true);
   assert.ok((publisher.hudSnapshot.radar.friendlyContacts[0]?.radarX ?? 0) > (initialFriendlyX ?? 0));
-  assert.equal(publisher.hudSnapshot.radar.enemyContacts[0]?.radarX, initialEnemyX);
-
-  nowMs = 6_000;
-  publisher.publishSnapshot(createPublishInput(), true, nowMs);
-
   assert.ok(
     (publisher.hudSnapshot.radar.enemyContacts[0]?.radarX ?? 0) <
       (initialEnemyX ?? 0)
   );
-  assert.equal(publisher.hudSnapshot.radar.enemyPingAgeMs, 0);
+  assert.equal(publisher.hudSnapshot.radar.enemyContacts[0]?.clamped, false);
+
+  remotePresentations = Object.freeze([
+    Object.freeze({
+      aimCamera: null,
+      characterId: friendlySnapshotFar.characterId,
+      look: Object.freeze({
+        pitchRadians: friendlySnapshotFar.look.pitchRadians,
+        yawRadians: friendlySnapshotFar.look.yawRadians
+      }),
+      mountedOccupancy: friendlySnapshotFar.mountedOccupancy,
+      playerId: friendlySnapshotFar.playerId,
+      poseSyncMode: "runtime-server-sampled",
+      presentation: Object.freeze({
+        animationPlaybackRateMultiplier: 1,
+        animationVocabulary: "idle",
+        position: friendlySnapshotFar.groundedBody.position,
+        yawRadians: 0
+      }),
+      teamId: friendlySnapshotFar.teamId,
+      username: friendlySnapshotFar.username,
+      weaponState: friendlySnapshotFar.weaponState
+    }),
+    Object.freeze({
+      aimCamera: null,
+      characterId: enemySnapshotFar.characterId,
+      look: Object.freeze({
+        pitchRadians: enemySnapshotFar.look.pitchRadians,
+        yawRadians: enemySnapshotFar.look.yawRadians
+      }),
+      mountedOccupancy: enemySnapshotFar.mountedOccupancy,
+      playerId: enemySnapshotFar.playerId,
+      poseSyncMode: "runtime-server-sampled",
+      presentation: Object.freeze({
+        animationPlaybackRateMultiplier: 1,
+        animationVocabulary: "idle",
+        position: enemySnapshotFar.groundedBody.position,
+        yawRadians: 0
+      }),
+      teamId: enemySnapshotFar.teamId,
+      username: enemySnapshotFar.username,
+      weaponState: enemySnapshotFar.weaponState
+    })
+  ]);
+  dependencies.remoteWorldRuntime.remoteCharacterPresentations = remotePresentations;
+  nowMs = 6_000;
+  publisher.publishSnapshot(createPublishInput(), true, nowMs);
+
+  assert.equal(publisher.hudSnapshot.radar.enemyContacts.length, 0);
 });

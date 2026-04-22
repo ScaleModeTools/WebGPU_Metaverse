@@ -297,9 +297,11 @@ export function buildAttachmentAssetFromWeaponArchetype<
     compatibleSkeletons: weapon.compatibleSkeletons,
     defaultSocketId: weapon.defaultSocketId,
     heldMount: {
+      adsCameraAnchorNodeName: weapon.nodes.adsCameraAnchorNodeName,
       attachmentSocketNodeName: weapon.nodes.rightHandGripSocketNodeName,
       forwardReferenceNodeName: weapon.nodes.forwardReferenceNodeName,
-      triggerMarkerNodeName: weapon.nodes.triggerMarkerNodeName
+      triggerMarkerNodeName: weapon.nodes.triggerMarkerNodeName,
+      upReferenceNodeName: weapon.nodes.upReferenceNodeName
     },
     id: weapon.id,
     label: weapon.label,

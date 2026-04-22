@@ -1,5 +1,3 @@
-import type { MetaversePlayerTeamId } from "@webgpu-metaverse/shared";
-
 import type { MetaverseHudSnapshot } from "../types/metaverse-runtime";
 
 interface MetaversePlayerRadarHudProps {
@@ -10,41 +8,43 @@ const radarViewSize = 160;
 const radarCenter = radarViewSize / 2;
 const radarRadius = 68;
 
-function resolveMetaversePlayerTeamAccent(teamId: MetaversePlayerTeamId): {
+const radarFriendlyAccent = Object.freeze({
+  fill: "#38bdf8",
+  glow: "rgba(56, 189, 248, 0.42)",
+  stroke: "#7dd3fc"
+});
+
+const radarEnemyAccent = Object.freeze({
+  fill: "#fb7185",
+  glow: "rgba(251, 113, 133, 0.45)",
+  stroke: "#fda4af"
+});
+
+const radarLocalPlayerAccent = Object.freeze({
+  fill: "#60a5fa",
+  glow: "rgba(96, 165, 250, 0.44)",
+  stroke: "#dbeafe"
+});
+
+function resolveRadarMarkerAccent(kind: "enemy" | "friendly" | "local"): {
   readonly fill: string;
   readonly glow: string;
   readonly stroke: string;
 } {
-  switch (teamId) {
-    case "red":
-      return Object.freeze({
-        fill: "#fb7185",
-        glow: "rgba(251, 113, 133, 0.45)",
-        stroke: "#fda4af"
-      });
-    case "blue":
-      return Object.freeze({
-        fill: "#38bdf8",
-        glow: "rgba(56, 189, 248, 0.42)",
-        stroke: "#7dd3fc"
-      });
-    default: {
-      const exhaustiveCheck: never = teamId;
-      throw new Error(`Unsupported metaverse radar team: ${exhaustiveCheck}`);
-    }
+  switch (kind) {
+    case "enemy":
+      return radarEnemyAccent;
+    case "friendly":
+      return radarFriendlyAccent;
+    case "local":
+      return radarLocalPlayerAccent;
   }
 }
 
 export function MetaversePlayerRadarHud({
   radarSnapshot
 }: MetaversePlayerRadarHudProps) {
-  const pulseProgress =
-    radarSnapshot.enemyPingAgeMs === null
-      ? 1
-      : Math.min(radarSnapshot.enemyPingAgeMs / radarSnapshot.enemyPingIntervalMs, 1);
-  const pulseRadius = radarRadius * pulseProgress;
-  const pulseOpacity =
-    radarSnapshot.enemyPingAgeMs === null ? 0 : Math.max(0, 0.32 - pulseProgress * 0.26);
+  const localPlayerAccent = resolveRadarMarkerAccent("local");
 
   return (
     <svg
@@ -52,16 +52,6 @@ export function MetaversePlayerRadarHud({
       className="h-auto w-full max-w-[13rem]"
       viewBox={`0 0 ${radarViewSize} ${radarViewSize}`}
     >
-      <defs>
-        <filter id="metaverse-radar-contact-glow">
-          <feGaussianBlur result="blur" stdDeviation="2" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
-
       <circle
         cx={radarCenter}
         cy={radarCenter}
@@ -97,61 +87,58 @@ export function MetaversePlayerRadarHud({
         strokeWidth="1"
       />
 
-      {pulseOpacity > 0 ? (
-        <circle
-          cx={radarCenter}
-          cy={radarCenter}
-          fill="none"
-          r={pulseRadius}
-          stroke="rgba(248, 113, 113, 0.7)"
-          strokeOpacity={pulseOpacity}
-          strokeWidth="1.6"
-        />
-      ) : null}
+      <title>You</title>
+      <circle
+        cx={radarCenter}
+        cy={radarCenter}
+        fill={localPlayerAccent.fill}
+        r="4.25"
+        style={{ filter: `drop-shadow(0 0 10px ${localPlayerAccent.glow})` }}
+      />
 
       {radarSnapshot.friendlyContacts.map((contact) => {
-        const accent = resolveMetaversePlayerTeamAccent(contact.teamId);
+        const accent = resolveRadarMarkerAccent("friendly");
+        const contactX = radarCenter + contact.radarX * radarRadius;
+        const contactY = radarCenter + contact.radarY * radarRadius;
 
         return (
-          <g
-            key={`friendly-${contact.username}`}
-            filter="url(#metaverse-radar-contact-glow)"
-          >
+          <g key={`friendly-${contact.username}`}>
             <title>{`${contact.username} · ${contact.distanceMeters.toFixed(0)}m`}</title>
             <circle
-              cx={radarCenter + contact.radarX * radarRadius}
-              cy={radarCenter + contact.radarY * radarRadius}
+              cx={contactX}
+              cy={contactY}
               fill={accent.fill}
-              r={contact.clamped ? 4.5 : 4}
+              r="4"
               stroke={accent.stroke}
               strokeWidth="1.1"
-              style={{ filter: `drop-shadow(0 0 10px ${accent.glow})` }}
+              style={{
+                filter: `drop-shadow(0 0 10px ${accent.glow})`,
+                transition: "cx 80ms linear, cy 80ms linear"
+              }}
             />
           </g>
         );
       })}
 
       {radarSnapshot.enemyContacts.map((contact) => {
-        const accent = resolveMetaversePlayerTeamAccent(contact.teamId);
+        const accent = resolveRadarMarkerAccent("enemy");
         const contactX = radarCenter + contact.radarX * radarRadius;
         const contactY = radarCenter + contact.radarY * radarRadius;
-        const contactSize = contact.clamped ? 10 : 8;
 
         return (
-          <g
-            key={`enemy-${contact.username}`}
-            filter="url(#metaverse-radar-contact-glow)"
-          >
+          <g key={`enemy-${contact.username}`}>
             <title>{`${contact.username} · ${contact.distanceMeters.toFixed(0)}m`}</title>
-            <rect
+            <circle
+              cx={contactX}
+              cy={contactY}
               fill={accent.fill}
-              height={contactSize}
-              rx="1.5"
+              r="4.5"
               stroke={accent.stroke}
-              strokeWidth="1"
-              style={{ filter: `drop-shadow(0 0 12px ${accent.glow})` }}
-              transform={`translate(${contactX} ${contactY}) rotate(45) translate(${contactSize / -2} ${contactSize / -2})`}
-              width={contactSize}
+              strokeWidth="1.25"
+              style={{
+                filter: `drop-shadow(0 0 12px ${accent.glow})`,
+                transition: "cx 80ms linear, cy 80ms linear"
+              }}
             />
           </g>
         );

@@ -23,7 +23,7 @@ test("metaverse asset proof resolves a socket-compatible attachment config from 
     metaverseAttachmentProofConfig.attachmentId,
     "metaverse-service-pistol-v2"
   );
-  assert.equal(metaverseAttachmentProofConfig.heldMount.socketName, "hand_r_socket");
+  assert.equal(metaverseAttachmentProofConfig.heldMount.socketName, "grip_r_socket");
   assert.equal(
     metaverseAttachmentProofConfig.heldMount.offHandSupportPointId,
     "pistol-support-left"
@@ -33,12 +33,20 @@ test("metaverse asset proof resolves a socket-compatible attachment config from 
     "metaverse_service_pistol_grip_hand_r_socket"
   );
   assert.equal(
+    metaverseAttachmentProofConfig.heldMount.adsCameraAnchorNodeName,
+    "metaverse_service_pistol_ads_camera_anchor"
+  );
+  assert.equal(
     metaverseAttachmentProofConfig.heldMount.forwardReferenceNodeName,
     "metaverse_service_pistol_forward_marker"
   );
   assert.equal(
     metaverseAttachmentProofConfig.heldMount.triggerMarkerNodeName,
     "metaverse_service_pistol_trigger_marker"
+  );
+  assert.equal(
+    metaverseAttachmentProofConfig.heldMount.upReferenceNodeName,
+    "metaverse_service_pistol_up_marker"
   );
   assert.deepEqual(metaverseAttachmentProofConfig.mountedHolsterMount, {
     attachmentSocketNodeName: "metaverse_service_pistol_back_socket",

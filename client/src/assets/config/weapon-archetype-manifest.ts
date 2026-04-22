@@ -12,6 +12,13 @@ const unzoomedIronSights = Object.freeze([
   })
 ]);
 
+const sidearmZoomLevels = Object.freeze([
+  Object.freeze({
+    label: "1.5x",
+    magnification: 1.5
+  })
+]);
+
 const twoTimesZoom = Object.freeze([
   Object.freeze({
     label: "2x",
@@ -191,10 +198,10 @@ export const weaponArchetypeManifest = defineWeaponArchetypeManifest([
     },
     weaponAimProfile: {
       poseProfileId: "sidearm",
-      adsFovDegrees: 63,
+      adsFovDegrees: 44,
       defaultReticleId: "default-ring",
       reticleStyleId: "pistol-ring",
-      zoomLevels: unzoomedIronSights
+      zoomLevels: sidearmZoomLevels
     }
   }),
   createWeaponBase({

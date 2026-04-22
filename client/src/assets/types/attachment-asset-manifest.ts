@@ -19,12 +19,14 @@ export interface AttachmentVector3Descriptor {
 }
 
 export interface AttachmentMountSocketDescriptor {
+  readonly adsCameraAnchorNodeName?: string | null;
   readonly attachmentSocketNodeName?: string | null;
   readonly attachmentSocketNodeNameBySocketId?: Partial<
     Record<SocketId, string | null>
   >;
   readonly forwardReferenceNodeName?: string | null;
   readonly triggerMarkerNodeName?: string | null;
+  readonly upReferenceNodeName?: string | null;
 }
 
 export interface AttachmentSupportPointDescriptor {

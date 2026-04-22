@@ -5,8 +5,9 @@ export const humanoidV2HeadAnchorNodeNames = Object.freeze({
   neck: "neck_01"
 } as const);
 
-// The held-weapon IK restores the arm chain before solving, so the authored
-// pistol overlay needs upper-torso support on non-driven spine bones.
+// Held-weapon presentation restores the sampled pistol pose before solving, so
+// the pistol overlay owns only the neutral torso/clavicle/finger hold while
+// the IK runtime owns the arm chain.
 export const humanoidV2PistolAimOverlayTrackPrefixes = Object.freeze([
   "spine_02",
   "spine_03",
@@ -25,6 +26,26 @@ export const humanoidV2PistolAimOverlayTrackPrefixes = Object.freeze([
   "pinky_"
 ] as const);
 
+// Held-weapon aiming now keeps the authored pistol overlay on its neutral hold
+// and lets IK own pitch response for the arm chain.
+export const humanoidV2PistolPitchDrivenTrackPrefixes = Object.freeze([] as const);
+
+export const humanoidV2PistolLowerBodyTrackPrefixes = Object.freeze([
+  "root",
+  "pelvis",
+  "spine_01",
+  "thigh_l",
+  "calf_l",
+  "foot_l",
+  "ball_l",
+  "ball_leaf_l",
+  "thigh_r",
+  "calf_r",
+  "foot_r",
+  "ball_r",
+  "ball_leaf_r"
+] as const);
+
 function matchesAnimationTrackPrefix(
   trackName: string,
   prefix: string
@@ -38,6 +59,20 @@ function matchesAnimationTrackPrefix(
 
 export function isHumanoidV2PistolAimOverlayTrack(trackName: string): boolean {
   return humanoidV2PistolAimOverlayTrackPrefixes.some((prefix) =>
+    matchesAnimationTrackPrefix(trackName, prefix)
+  );
+}
+
+export function isHumanoidV2PistolPitchDrivenTrack(
+  trackName: string
+): boolean {
+  return humanoidV2PistolPitchDrivenTrackPrefixes.some((prefix) =>
+    matchesAnimationTrackPrefix(trackName, prefix)
+  );
+}
+
+export function isHumanoidV2PistolLowerBodyTrack(trackName: string): boolean {
+  return humanoidV2PistolLowerBodyTrackPrefixes.some((prefix) =>
     matchesAnimationTrackPrefix(trackName, prefix)
   );
 }

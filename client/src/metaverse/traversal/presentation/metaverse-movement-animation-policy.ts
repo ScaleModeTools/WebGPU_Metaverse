@@ -1,4 +1,9 @@
 import type { MetaverseGroundedBodySnapshot } from "@/physics";
+import type {
+  MetaverseTraversalActionKindId,
+  MetaverseTraversalActionPhaseId,
+  MetaverseTraversalAuthoritySnapshot
+} from "@webgpu-metaverse/shared/metaverse/traversal";
 
 import type { MetaverseCharacterAnimationVocabularyId } from "../../types/presentation";
 
@@ -13,8 +18,8 @@ export interface MetaverseMovementAnimationPolicyModeConfig {
 export interface MetaverseMovementAnimationPolicyConfig {
   readonly grounded: MetaverseMovementAnimationPolicyModeConfig;
   readonly jump: {
-    readonly downEnterVerticalSpeedUnitsPerSecond: number;
-    readonly upEnterVerticalSpeedUnitsPerSecond: number;
+    readonly landingHoldMs: number;
+    readonly startupHoldMs: number;
   };
   readonly swim: MetaverseMovementAnimationPolicyModeConfig;
 }
@@ -26,6 +31,8 @@ export interface MetaverseMovementAnimationPolicyInput {
   readonly moveAxis: number;
   readonly planarSpeedUnitsPerSecond: number;
   readonly strafeAxis: number;
+  readonly traversalActionKind?: MetaverseTraversalActionKindId;
+  readonly traversalActionPhase?: MetaverseTraversalActionPhaseId;
   readonly verticalSpeedUnitsPerSecond: number;
 }
 
@@ -37,6 +44,10 @@ export interface GroundedMovementAnimationPolicyInputConfig {
   readonly inputMagnitude: number;
   readonly moveAxis: number;
   readonly strafeAxis: number;
+  readonly traversalAuthority?: Pick<
+    MetaverseTraversalAuthoritySnapshot,
+    "currentActionKind" | "currentActionPhase"
+  > | null;
 }
 
 export const metaverseMovementAnimationPolicyConfig = Object.freeze({
@@ -48,8 +59,8 @@ export const metaverseMovementAnimationPolicyConfig = Object.freeze({
     minimumAppliedSpeedUnitsPerSecond: 0.05
   }),
   jump: Object.freeze({
-    downEnterVerticalSpeedUnitsPerSecond: -0.35,
-    upEnterVerticalSpeedUnitsPerSecond: 0.35
+    landingHoldMs: 180,
+    startupHoldMs: 40
   }),
   swim: Object.freeze({
     enterSpeedUnitsPerSecond: 0.4,
@@ -64,7 +75,8 @@ export function createGroundedMovementAnimationPolicyInput({
   groundedBodySnapshot,
   inputMagnitude,
   moveAxis,
-  strafeAxis
+  strafeAxis,
+  traversalAuthority
 }: GroundedMovementAnimationPolicyInputConfig): MetaverseMovementAnimationPolicyInput {
   return {
     grounded: groundedBodySnapshot.grounded,
@@ -76,6 +88,8 @@ export function createGroundedMovementAnimationPolicyInput({
       groundedBodySnapshot.linearVelocity.z
     ),
     strafeAxis,
+    traversalActionKind: traversalAuthority?.currentActionKind ?? "none",
+    traversalActionPhase: traversalAuthority?.currentActionPhase ?? "idle",
     verticalSpeedUnitsPerSecond:
       groundedBodySnapshot.jumpBody.verticalSpeedUnitsPerSecond
   };
@@ -101,28 +115,32 @@ function sanitizeSignedAxis(value: number): number {
   return clamp(toFiniteNumber(value, 0), -1, 1);
 }
 
-function resolveJumpAnimationVocabulary(
-  verticalSpeedUnitsPerSecond: number,
-  config: MetaverseMovementAnimationPolicyConfig["jump"]
-): Extract<
-  MetaverseCharacterAnimationVocabularyId,
-  "jump-down" | "jump-mid" | "jump-up"
-> {
-  if (
-    verticalSpeedUnitsPerSecond >
-    toFiniteNumber(config.upEnterVerticalSpeedUnitsPerSecond, 0.35)
-  ) {
-    return "jump-up";
-  }
+function resolveJumpPresentationHoldMs(
+  value: number,
+  fallback: number
+): number {
+  return Math.max(0, toFiniteNumber(value, fallback));
+}
 
-  if (
-    verticalSpeedUnitsPerSecond <
-    toFiniteNumber(config.downEnterVerticalSpeedUnitsPerSecond, -0.35)
-  ) {
-    return "jump-down";
-  }
+function isJumpStartupActive(
+  input: Pick<
+    MetaverseMovementAnimationPolicyInput,
+    "traversalActionKind" | "traversalActionPhase"
+  >
+): boolean {
+  return (
+    input.traversalActionKind === "jump" &&
+    input.traversalActionPhase === "startup"
+  );
+}
 
-  return "jump-mid";
+function shouldSynthesizeJumpStartupFromAirborneEntry(
+  input: Pick<
+    MetaverseMovementAnimationPolicyInput,
+    "grounded" | "traversalActionPhase"
+  >
+): boolean {
+  return !input.grounded && input.traversalActionPhase !== "falling";
 }
 
 function resolveMovingAnimationVocabulary(
@@ -184,6 +202,9 @@ export class MetaverseMovementAnimationPolicyRuntime {
 
   #animationCycleId = 0;
   #holdRemainingMs = 0;
+  #jumpAirborneActive = false;
+  #jumpLandingHoldRemainingMs = 0;
+  #jumpStartupHoldRemainingMs = 0;
   #movementDirectionKey: string | null = null;
   #vocabulary: MetaverseCharacterAnimationVocabularyId = "idle";
 
@@ -204,6 +225,9 @@ export class MetaverseMovementAnimationPolicyRuntime {
   reset(vocabulary: MetaverseCharacterAnimationVocabularyId = "idle"): void {
     this.#animationCycleId = 0;
     this.#holdRemainingMs = 0;
+    this.#jumpAirborneActive = false;
+    this.#jumpLandingHoldRemainingMs = 0;
+    this.#jumpStartupHoldRemainingMs = 0;
     this.#movementDirectionKey = null;
     this.#vocabulary = vocabulary;
   }
@@ -275,10 +299,29 @@ export class MetaverseMovementAnimationPolicyRuntime {
   ): MetaverseCharacterAnimationVocabularyId {
     const normalizedDeltaMs =
       deltaSeconds > 0 ? Math.max(0, toFiniteNumber(deltaSeconds, 0) * 1000) : 0;
+    const jumpStartupHoldMs = resolveJumpPresentationHoldMs(
+      this.#config.jump.startupHoldMs,
+      40
+    );
+    const jumpLandingHoldMs = resolveJumpPresentationHoldMs(
+      this.#config.jump.landingHoldMs,
+      180
+    );
 
     this.#holdRemainingMs = Math.max(0, this.#holdRemainingMs - normalizedDeltaMs);
+    this.#jumpStartupHoldRemainingMs = Math.max(
+      0,
+      this.#jumpStartupHoldRemainingMs - normalizedDeltaMs
+    );
+    this.#jumpLandingHoldRemainingMs = Math.max(
+      0,
+      this.#jumpLandingHoldRemainingMs - normalizedDeltaMs
+    );
 
     if (input.locomotionMode === "swim") {
+      this.#jumpAirborneActive = false;
+      this.#jumpLandingHoldRemainingMs = 0;
+      this.#jumpStartupHoldRemainingMs = 0;
       const nextState = resolveMovingAnimationVocabulary(
         this.#vocabulary,
         "swim",
@@ -300,15 +343,62 @@ export class MetaverseMovementAnimationPolicyRuntime {
       return this.#vocabulary;
     }
 
+    const jumpStartupActive = isJumpStartupActive(input);
+    const enteringAirborneJump = !input.grounded && !this.#jumpAirborneActive;
+
+    if (jumpStartupActive) {
+      this.#jumpLandingHoldRemainingMs = 0;
+      this.#jumpStartupHoldRemainingMs = Math.max(
+        this.#jumpStartupHoldRemainingMs,
+        jumpStartupHoldMs
+      );
+    }
+
+    if (enteringAirborneJump) {
+      this.#jumpAirborneActive = true;
+      this.#jumpLandingHoldRemainingMs = 0;
+
+      if (
+        this.#jumpStartupHoldRemainingMs <= 0 &&
+        shouldSynthesizeJumpStartupFromAirborneEntry(input)
+      ) {
+        this.#jumpStartupHoldRemainingMs = jumpStartupHoldMs;
+      }
+    }
+
+    const landedThisFrame = input.grounded && this.#jumpAirborneActive;
+
+    if (landedThisFrame) {
+      this.#jumpAirborneActive = false;
+      this.#jumpStartupHoldRemainingMs = 0;
+      this.#jumpLandingHoldRemainingMs = Math.max(
+        this.#jumpLandingHoldRemainingMs,
+        jumpLandingHoldMs
+      );
+    }
+
+    if (jumpStartupActive || (!input.grounded && this.#jumpStartupHoldRemainingMs > 0)) {
+      this.#holdRemainingMs = 0;
+      this.#movementDirectionKey = null;
+      this.#vocabulary = "jump-up";
+      return this.#vocabulary;
+    }
+
+    if (landedThisFrame || this.#jumpLandingHoldRemainingMs > 0) {
+      this.#holdRemainingMs = 0;
+      this.#movementDirectionKey = null;
+      this.#vocabulary = "jump-down";
+      return this.#vocabulary;
+    }
+
     if (!input.grounded) {
       this.#holdRemainingMs = 0;
       this.#movementDirectionKey = null;
-      this.#vocabulary = resolveJumpAnimationVocabulary(
-        input.verticalSpeedUnitsPerSecond,
-        this.#config.jump
-      );
+      this.#vocabulary = "jump-mid";
       return this.#vocabulary;
     }
+
+    this.#jumpStartupHoldRemainingMs = 0;
 
     const nextState = resolveMovingAnimationVocabulary(
       this.#vocabulary,

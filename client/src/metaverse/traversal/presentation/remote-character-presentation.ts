@@ -12,7 +12,6 @@ import type { MetaverseCameraSnapshot, MetaverseRemoteCharacterPresentationSnaps
 import type { MetaverseRuntimeConfig } from "../../types/runtime-config";
 import {
   createGroundedMovementAnimationPolicyInput,
-  metaverseMovementAnimationPolicyConfig,
   MetaverseMovementAnimationPolicyRuntime
 } from "./metaverse-movement-animation-policy";
 import { resolveCharacterAnimationPlaybackRateMultiplier } from "./character-presentation";
@@ -48,6 +47,8 @@ interface MutableRemoteCharacterPresentationSnapshot {
     position: MutableVector3Snapshot;
     yawRadians: number;
   };
+  teamId: MetaverseRemoteCharacterPresentationSnapshot["teamId"];
+  username: MetaverseRemoteCharacterPresentationSnapshot["username"];
   weaponState: MetaverseRemoteCharacterPresentationSnapshot["weaponState"];
 }
 
@@ -353,56 +354,14 @@ function resolveRemoteCharacterAnimationVocabulary(
     return "seated";
   }
 
-  if (
-    playerSnapshot.locomotionMode === "grounded" &&
-    shouldPresentRemotePlayerYawFromLook(playerSnapshot) &&
-    playerSnapshot.traversalAuthority.currentActionKind === "jump"
-  ) {
-    const authoritativeJumpVerticalSpeed =
-      playerSnapshot.traversalAuthority.currentActionPhase === "startup"
-        ? metaverseMovementAnimationPolicyConfig.jump
-            .upEnterVerticalSpeedUnitsPerSecond + 0.01
-        : playerSnapshot.traversalAuthority.currentActionPhase === "falling"
-          ? Math.min(
-              playerSnapshot.groundedBody.jumpBody.verticalSpeedUnitsPerSecond,
-              metaverseMovementAnimationPolicyConfig.jump
-                .downEnterVerticalSpeedUnitsPerSecond - 0.01
-            )
-          : playerSnapshot.groundedBody.jumpBody.verticalSpeedUnitsPerSecond;
-
-    return animationRuntime.advance(
-      {
-        ...createGroundedMovementAnimationPolicyInput({
-          groundedBodySnapshot: playerSnapshot.groundedBody,
-          inputMagnitude,
-          moveAxis,
-          strafeAxis
-        }),
-        grounded: false,
-        verticalSpeedUnitsPerSecond: authoritativeJumpVerticalSpeed
-      },
-      deltaSeconds
-    );
-  }
-
-  if (
-    playerSnapshot.mountedOccupancy === null &&
-    playerSnapshot.locomotionMode === "grounded" &&
-    playerSnapshot.groundedBody.grounded &&
-    playerSnapshot.weaponState?.aimMode === "ads" &&
-    inputMagnitude < 0.08
-  ) {
-    animationRuntime.reset("aim");
-    return "aim";
-  }
-
   if (playerSnapshot.locomotionMode === "grounded") {
     return animationRuntime.advance(
       createGroundedMovementAnimationPolicyInput({
         groundedBodySnapshot: playerSnapshot.groundedBody,
         inputMagnitude,
         moveAxis,
-        strafeAxis
+        strafeAxis,
+        traversalAuthority: playerSnapshot.traversalAuthority
       }),
       deltaSeconds
     );
@@ -471,6 +430,8 @@ export class MetaverseRemoteCharacterPresentationOwner {
           0
         )
       },
+      teamId: playerSnapshot.teamId,
+      username: playerSnapshot.username,
       weaponState: playerSnapshot.weaponState
     };
   }
@@ -514,6 +475,8 @@ export class MetaverseRemoteCharacterPresentationOwner {
     );
     this.#snapshot.mountedOccupancy =
       sampledDiscretePlayerSnapshot.mountedOccupancy;
+    this.#snapshot.teamId = sampledDiscretePlayerSnapshot.teamId;
+    this.#snapshot.username = sampledDiscretePlayerSnapshot.username;
     this.#snapshot.weaponState = sampledDiscretePlayerSnapshot.weaponState;
     this.#snapshot.presentation.animationVocabulary =
       resolveRemoteCharacterAnimationVocabulary(

@@ -94,14 +94,10 @@ export function MetaverseWeaponReticleOverlay({
   const reticleStyle = resolveMetaverseWeaponReticleStyleConfig(
     weaponHudSnapshot.reticleStyleId
   );
-  const scale =
-    weaponHudSnapshot.aimMode === "ads"
-      ? reticleStyle.adsScale
-      : reticleStyle.hipScale;
   const reticleStyleVariables = {
     "--weapon-reticle-color": resolveReticleColor(weaponHudSnapshot.reticleColor),
     "--weapon-reticle-duration": `${weaponHudSnapshot.adsTransitionMs}ms`,
-    "--weapon-reticle-scale": `${scale}`,
+    "--weapon-reticle-scale": `${reticleStyle.hipScale}`,
     "--weapon-reticle-size": `${reticleStyle.sizePx}px`
   } as CSSProperties;
   const showScopeShade = reticleStyle.shape === "scope";

@@ -204,7 +204,7 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
       attachmentId: "metaverse-service-pistol-v1",
       heldMount: {
         attachmentSocketNodeName: "metaverse_service_pistol_grip_hand_r_socket",
-        socketName: "hand_r_socket",
+        socketName: "grip_r_socket",
         triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker"
       },
       label: "Metaverse service pistol",
@@ -343,7 +343,7 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
   assert.equal(gripSocket.parent?.name, "hand_r");
   assert.equal(leftPalmSocket.parent?.name, "hand_l");
   assert.equal(palmSocket.parent?.name, "hand_r");
-  assert.equal(attachmentRoot.parent?.name, "hand_r_socket");
+  assert.equal(attachmentRoot.parent?.name, "grip_r_socket");
   assert.ok(
     leftGripSocket.position.distanceTo(leftExpectedPalmBasis.gripLocalPosition) <
       0.000001,
@@ -398,14 +398,14 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
   assert.ok(
     heldGripSocketNode
       .getWorldPosition(new Vector3())
-      .distanceTo(handSocket.getWorldPosition(new Vector3())) < 0.000001,
-    "Humanoid_v2 held attachment should land its authored grip socket on hand_r_socket."
+      .distanceTo(gripSocket.getWorldPosition(new Vector3())) < 0.000001,
+    "Humanoid_v2 held attachment should land its authored grip socket on grip_r_socket."
   );
   assertQuaternionArraysEquivalent(
     heldGripSocketNode.getWorldQuaternion(new Quaternion()).toArray(),
-    handSocket.getWorldQuaternion(new Quaternion()).toArray(),
+    gripSocket.getWorldQuaternion(new Quaternion()).toArray(),
     0.000001,
-    "Humanoid_v2 held attachment should align its authored grip socket to hand_r_socket."
+    "Humanoid_v2 held attachment should align its authored grip socket to grip_r_socket."
   );
 });
 

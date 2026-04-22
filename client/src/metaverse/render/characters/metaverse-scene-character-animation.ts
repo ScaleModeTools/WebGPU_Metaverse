@@ -5,7 +5,11 @@ import {
   Group
 } from "three/webgpu";
 
-import { isHumanoidV2PistolAimOverlayTrack } from "../humanoid-v2-rig";
+import {
+  isHumanoidV2PistolAimOverlayTrack,
+  isHumanoidV2PistolPitchDrivenTrack,
+  isHumanoidV2PistolLowerBodyTrack
+} from "../humanoid-v2-rig";
 
 import type {
   MetaverseCharacterAnimationVocabularyId,
@@ -100,8 +104,8 @@ function resolveAnimationPlaybackRate(
 function createHumanoidV2LowerBodyLocomotionClip(
   clip: AnimationClip
 ): AnimationClip {
-  const lowerBodyTracks = clip.tracks.filter(
-    (track) => !isHumanoidV2PistolAimOverlayTrack(track.name)
+  const lowerBodyTracks = clip.tracks.filter((track) =>
+    isHumanoidV2PistolLowerBodyTrack(track.name)
   );
 
   if (lowerBodyTracks.length === 0) {
@@ -136,6 +140,34 @@ export function createHumanoidV2UpperBodyPistolPoseClip(
     clip.duration,
     upperBodyTracks,
     clip.blendMode
+  );
+}
+
+export function createHumanoidV2PitchSelectivePistolPoseClip(
+  pitchClip: AnimationClip,
+  neutralClip: AnimationClip
+): AnimationClip {
+  const pitchTracksByName = new Map(
+    pitchClip.tracks.map((track) => [track.name, track])
+  );
+  const hybridTracks = neutralClip.tracks.map((track) => {
+    const pitchTrack = pitchTracksByName.get(track.name);
+
+    if (
+      pitchTrack !== undefined &&
+      isHumanoidV2PistolPitchDrivenTrack(track.name)
+    ) {
+      return pitchTrack.clone();
+    }
+
+    return track.clone();
+  });
+
+  return new AnimationClip(
+    `${pitchClip.name}__metaverse_pitch_selective`,
+    neutralClip.duration,
+    hybridTracks,
+    neutralClip.blendMode
   );
 }
 
@@ -439,10 +471,11 @@ export function syncHumanoidV2PistolPoseWeights(
     clampedPitchRadians > 0
       ? clamp(clampedPitchRadians / upRangeRadians, 0, 1)
       : 0;
+  const neutralWeight = clamp(1 - Math.max(downWeight, upWeight), 0, 1);
 
   setHumanoidV2PistolPoseWeights(pistolPoseRuntime, {
     down: downWeight,
-    neutral: clamp(1 - Math.max(downWeight, upWeight), 0, 1),
+    neutral: neutralWeight,
     up: upWeight
   });
 }

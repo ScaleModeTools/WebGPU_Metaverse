@@ -81,8 +81,6 @@ export interface MetaverseHudRadarContactSnapshot {
 export interface MetaverseHudRadarSnapshot {
   readonly available: boolean;
   readonly enemyContacts: readonly MetaverseHudRadarContactSnapshot[];
-  readonly enemyPingAgeMs: number | null;
-  readonly enemyPingIntervalMs: number;
   readonly friendlyContacts: readonly MetaverseHudRadarContactSnapshot[];
   readonly localTeamId: MetaversePlayerTeamId | null;
   readonly rangeMeters: number;

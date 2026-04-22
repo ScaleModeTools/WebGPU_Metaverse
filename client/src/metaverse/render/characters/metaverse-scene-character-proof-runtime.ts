@@ -15,6 +15,7 @@ import {
 import { clone as cloneSkinnedGroup } from "three/addons/utils/SkeletonUtils.js";
 
 import {
+  createHumanoidV2PitchSelectivePistolPoseClip,
   createHumanoidV2PistolLowerBodyActionsByVocabulary,
   createHumanoidV2PistolPoseRuntime,
   createHumanoidV2UpperBodyPistolPoseClip,
@@ -630,8 +631,29 @@ export async function loadMetaverseCharacterProofRuntime<
       }
 
       if (missingClipName === null) {
+        const downClip = clipsByPoseId.get("down");
+        const neutralClip = clipsByPoseId.get("neutral");
+        const upClip = clipsByPoseId.get("up");
+
+        if (
+          downClip !== undefined &&
+          neutralClip !== undefined &&
+          upClip !== undefined
+        ) {
+          clipsByPoseId.set(
+            "down",
+            createHumanoidV2PitchSelectivePistolPoseClip(downClip, neutralClip)
+          );
+          clipsByPoseId.set(
+            "up",
+            createHumanoidV2PitchSelectivePistolPoseClip(upClip, neutralClip)
+          );
+        }
+
         humanoidV2PistolPoseClipsByPoseId = clipsByPoseId;
-      } else {
+      }
+
+      if (missingClipName !== null) {
         dependencies.warn(
           `Metaverse humanoid_v2 pistol pose overlay disabled because ${pistolPoseProofConfig.sourcePath} is missing ${missingClipName}.`
         );

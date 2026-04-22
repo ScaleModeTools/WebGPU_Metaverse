@@ -47,6 +47,7 @@ interface MetaverseSceneLocalCharacterPresentationStateDependencies {
       MountedCharacterRuntime<MetaverseMountableEnvironmentDynamicAssetRuntime>,
       MetaverseMountableEnvironmentDynamicAssetRuntime
     >,
+    | "captureHeldWeaponPoseRuntime"
     | "applyMountedAnchorTransform"
     | "restoreHeldWeaponPoseRuntime"
     | "syncHeldWeaponPose"
@@ -99,7 +100,8 @@ export class MetaverseSceneLocalCharacterPresentationState {
         mountInteractionState.readMountedCharacterRuntime(),
         cameraSnapshot,
         deltaSeconds,
-        config.orientation
+        config.orientation,
+        localCharacterPresentationDependencies
       );
     }
 

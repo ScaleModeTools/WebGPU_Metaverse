@@ -2,6 +2,7 @@ import type {
   MetaverseGroundedBodySnapshot,
   PhysicsVector3Snapshot
 } from "@/physics";
+import type { MetaverseTraversalAuthoritySnapshot } from "@webgpu-metaverse/shared/metaverse/traversal";
 
 import type { MetaverseLocomotionModeId } from "../../types/metaverse-locomotion-mode";
 import type {
@@ -46,6 +47,12 @@ interface MetaverseTraversalCharacterPresentationStateInput {
   ) => number | null;
   readonly swimPredictionSeconds: number;
   readonly swimSnapshot: SurfaceLocomotionSnapshot | null;
+  readonly traversalAuthoritySnapshot:
+    | Pick<
+        MetaverseTraversalAuthoritySnapshot,
+        "currentActionKind" | "currentActionPhase"
+      >
+    | null;
   readonly waterSurfaceHeightMeters: number;
 }
 
@@ -89,6 +96,7 @@ export class MetaverseTraversalCharacterPresentationState {
     readGroundedSupportHeightMeters,
     swimPredictionSeconds,
     swimSnapshot,
+    traversalAuthoritySnapshot,
     waterSurfaceHeightMeters
   }: MetaverseTraversalCharacterPresentationStateInput): void {
     const resolvedSwimSnapshot =
@@ -112,6 +120,7 @@ export class MetaverseTraversalCharacterPresentationState {
         latestMovementInputMagnitude,
         latestMovementMoveAxis,
         latestMovementStrafeAxis,
+        traversalAuthoritySnapshot,
         deltaSeconds
       ),
       animationCycleId: this.#movementAnimationRuntime.animationCycleId,
@@ -147,6 +156,12 @@ export class MetaverseTraversalCharacterPresentationState {
     latestMovementInputMagnitude: number,
     latestMovementMoveAxis: number,
     latestMovementStrafeAxis: number,
+    traversalAuthoritySnapshot:
+      | Pick<
+          MetaverseTraversalAuthoritySnapshot,
+          "currentActionKind" | "currentActionPhase"
+        >
+      | null,
     deltaSeconds: number
   ): MetaverseCharacterPresentationSnapshot["animationVocabulary"] {
     if (locomotionMode === "grounded") {
@@ -160,7 +175,8 @@ export class MetaverseTraversalCharacterPresentationState {
           groundedBodySnapshot,
           inputMagnitude: latestMovementInputMagnitude,
           moveAxis: latestMovementMoveAxis,
-          strafeAxis: latestMovementStrafeAxis
+          strafeAxis: latestMovementStrafeAxis,
+          traversalAuthority: traversalAuthoritySnapshot
         }),
         deltaSeconds
       );

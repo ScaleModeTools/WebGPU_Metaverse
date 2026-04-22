@@ -77,7 +77,14 @@ test("MetaverseSceneLocalCharacterPresentationState owns local animation advance
   const characterRuntime = {
     activeAnimationActionSetId: "full-body",
     activeAnimationVocabulary: "idle",
-    actionsByVocabulary: new Map([["idle", Object.freeze({})]]),
+    actionsByVocabulary: new Map([
+      [
+        "idle",
+        Object.freeze({
+          setEffectiveTimeScale() {}
+        })
+      ]
+    ]),
     anchorGroup: new Group(),
     firstPersonHeadAnchorNodes: [],
     heldWeaponPoseRuntime: null,
@@ -110,6 +117,9 @@ test("MetaverseSceneLocalCharacterPresentationState owns local animation advance
         }
       },
       localCharacterPresentationDependencies: {
+        captureHeldWeaponPoseRuntime() {
+          calls.push("capture-held-weapon-pose-runtime");
+        },
         applyMountedAnchorTransform() {
           calls.push("apply-mounted-anchor-transform");
         },

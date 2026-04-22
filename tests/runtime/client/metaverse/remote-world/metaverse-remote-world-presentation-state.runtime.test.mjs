@@ -820,7 +820,7 @@ test("MetaverseRemoteWorldPresentationState keeps a remote held-weapon pose came
   );
 });
 
-test("MetaverseRemoteWorldPresentationState derives remote directional jump presentation from grounded-body jump state", async () => {
+test("MetaverseRemoteWorldPresentationState keeps remote jump loop airborne and lands on ground contact", async () => {
   const presentationState = await createPresentationState();
   const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
   const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
@@ -876,6 +876,20 @@ test("MetaverseRemoteWorldPresentationState derives remote directional jump pres
         },
         locomotionMode: "grounded",
         playerId: remotePlayerId,
+        traversalAuthority: resolveMetaverseTraversalAuthoritySnapshotInput({
+          activeAction: {
+            kind: "jump",
+            phase: "rising"
+          },
+          currentTick: 11,
+          locomotionMode: "grounded",
+          mounted: false,
+          pendingActionKind: "none",
+          pendingActionSequence: 0,
+          resolvedActionKind: "jump",
+          resolvedActionSequence: 1,
+          resolvedActionState: "accepted"
+        }),
         username: remoteUsername,
         weaponState: {
           aimMode: "ads",
@@ -951,6 +965,20 @@ test("MetaverseRemoteWorldPresentationState derives remote directional jump pres
         },
         locomotionMode: "grounded",
         playerId: remotePlayerId,
+        traversalAuthority: resolveMetaverseTraversalAuthoritySnapshotInput({
+          activeAction: {
+            kind: "jump",
+            phase: "rising"
+          },
+          currentTick: 12,
+          locomotionMode: "grounded",
+          mounted: false,
+          pendingActionKind: "none",
+          pendingActionSequence: 0,
+          resolvedActionKind: "jump",
+          resolvedActionSequence: 1,
+          resolvedActionState: "accepted"
+        }),
         username: remoteUsername,
         weaponState: {
           aimMode: "ads",
@@ -1025,6 +1053,20 @@ test("MetaverseRemoteWorldPresentationState derives remote directional jump pres
         },
         locomotionMode: "grounded",
         playerId: remotePlayerId,
+        traversalAuthority: resolveMetaverseTraversalAuthoritySnapshotInput({
+          activeAction: {
+            kind: "jump",
+            phase: "falling"
+          },
+          currentTick: 13,
+          locomotionMode: "grounded",
+          mounted: false,
+          pendingActionKind: "none",
+          pendingActionSequence: 0,
+          resolvedActionKind: "jump",
+          resolvedActionSequence: 1,
+          resolvedActionState: "accepted"
+        }),
         username: remoteUsername,
         weaponState: {
           aimMode: "ads",
@@ -1052,6 +1094,94 @@ test("MetaverseRemoteWorldPresentationState derives remote directional jump pres
   assert.equal(
     presentationState.remoteCharacterPresentations[0]?.presentation
       .animationVocabulary,
+    "jump-mid"
+  );
+
+  const landingSnapshot = createMetaverseRealtimeWorldSnapshot({
+    players: [
+      {
+        animationVocabulary: "idle",
+        characterId: "mesh2motion-humanoid-v1",
+        groundedBody: {
+          linearVelocity: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          position: {
+            x: 0,
+            y: 1.62,
+            z: 24
+          },
+          yawRadians: 0
+        },
+        locomotionMode: "grounded",
+        playerId: localPlayerId,
+        username: localUsername
+      },
+      {
+        animationVocabulary: "idle",
+        characterId: "mesh2motion-humanoid-v1",
+        groundedBody: {
+          jumpBody: {
+            grounded: true,
+            verticalSpeedUnitsPerSecond: 0
+          },
+          linearVelocity: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          position: {
+            x: 8,
+            y: 0.7,
+            z: 18
+          },
+          yawRadians: 0
+        },
+        locomotionMode: "grounded",
+        playerId: remotePlayerId,
+        traversalAuthority: resolveMetaverseTraversalAuthoritySnapshotInput({
+          activeAction: {
+            kind: "none",
+            phase: "idle"
+          },
+          currentTick: 14,
+          locomotionMode: "grounded",
+          mounted: false,
+          pendingActionKind: "none",
+          pendingActionSequence: 0,
+          resolvedActionKind: "jump",
+          resolvedActionSequence: 1,
+          resolvedActionState: "accepted"
+        }),
+        username: remoteUsername,
+        weaponState: {
+          aimMode: "ads",
+          weaponId: "metaverse-service-pistol-v1"
+        }
+      }
+    ],
+    snapshotSequence: 5,
+    tick: {
+      currentTick: 14,
+      serverTimeMs: 1_200,
+      tickIntervalMs: 50
+    },
+    vehicles: []
+  });
+
+  presentationState.syncAuthoritativeSample({
+    deltaSeconds: 0.05,
+    localPlayerId,
+    sampledFrame: createSampledFrame({
+      baseSnapshot: landingSnapshot
+    })
+  });
+
+  assert.equal(
+    presentationState.remoteCharacterPresentations[0]?.presentation
+      .animationVocabulary,
     "jump-down"
   );
   assert.ok(
@@ -1059,6 +1189,7 @@ test("MetaverseRemoteWorldPresentationState derives remote directional jump pres
       0) > 0.45
   );
 });
+
 
 test("MetaverseRemoteWorldPresentationState reuses owner snapshots and drops stale remote entities across samples", async () => {
   const presentationState = await createPresentationState();

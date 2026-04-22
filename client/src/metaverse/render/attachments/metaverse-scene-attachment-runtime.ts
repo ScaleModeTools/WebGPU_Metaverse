@@ -1,4 +1,10 @@
-import { Group, Object3D, Quaternion, Vector3 } from "three/webgpu";
+import {
+  Group,
+  Matrix4,
+  Object3D,
+  Quaternion,
+  Vector3
+} from "three/webgpu";
 
 import type { MetaverseAttachmentProofConfig } from "../../types/metaverse-runtime";
 import type {
@@ -24,7 +30,9 @@ export interface MetaverseAttachmentMountRuntime {
 export interface MetaverseAttachmentProofRuntime {
   activeMountKind: "held" | "mounted-holster" | null;
   readonly attachmentRoot: Group;
-  readonly heldForwardReferenceNode: Object3D | null;
+  readonly heldGripLocalAimQuaternion: Quaternion;
+  readonly heldGripToAdsCameraAnchorLocalPosition: Vector3 | null;
+  readonly heldGripToForwardReferenceLocalPosition: Vector3;
   readonly heldGripSocketNode: Object3D;
   readonly heldMount: MetaverseAttachmentMountRuntime;
   readonly heldTriggerMarkerNode: Object3D | null;
@@ -76,6 +84,109 @@ function resolveHeldForwardReferenceNode(
   attachmentSocketNode.add(forwardReferenceNode);
 
   return forwardReferenceNode;
+}
+
+function resolveOptionalAttachmentNode(
+  nodeName: string | null | undefined,
+  attachmentScene: Group,
+  label: string,
+  nodeResolvers: Pick<MetaverseAttachmentRuntimeNodeResolvers, "findNamedNode">
+): Object3D | null {
+  if (nodeName === null || nodeName === undefined) {
+    return null;
+  }
+
+  return nodeResolvers.findNamedNode(attachmentScene, nodeName, label);
+}
+
+function resolveAttachmentNodeLocalPositionFromGrip(
+  heldGripSocketNode: Object3D,
+  attachmentNode: Object3D
+): Vector3 {
+  return heldGripSocketNode
+    .worldToLocal(attachmentNode.getWorldPosition(new Vector3()))
+    .clone();
+}
+
+function resolveHeldGripLocalAimQuaternion(
+  heldGripSocketNode: Object3D,
+  heldForwardReferenceNode: Object3D,
+  heldUpReferenceNode: Object3D | null,
+  heldWeaponSolveDirectionEpsilon: number
+): {
+  readonly gripLocalAimQuaternion: Quaternion;
+  readonly gripToForwardReferenceLocalPosition: Vector3;
+} {
+  const gripToForwardReferenceLocalPosition =
+    resolveAttachmentNodeLocalPositionFromGrip(
+      heldGripSocketNode,
+      heldForwardReferenceNode
+    );
+
+  if (
+    gripToForwardReferenceLocalPosition.lengthSq() <=
+    heldWeaponSolveDirectionEpsilon
+  ) {
+    throw new Error(
+      "Metaverse attachment held forward reference must stay offset from the grip socket."
+    );
+  }
+
+  const localForwardDirection = gripToForwardReferenceLocalPosition.clone().normalize();
+  const localUpDirection =
+    heldUpReferenceNode === null
+      ? new Vector3(0, 1, 0).applyQuaternion(
+          heldGripSocketNode
+            .getWorldQuaternion(new Quaternion())
+            .invert()
+            .multiply(heldForwardReferenceNode.getWorldQuaternion(new Quaternion()))
+        )
+      : resolveAttachmentNodeLocalPositionFromGrip(
+          heldGripSocketNode,
+          heldUpReferenceNode
+        );
+
+  localUpDirection.addScaledVector(
+    localForwardDirection,
+    -localUpDirection.dot(localForwardDirection)
+  );
+
+  if (localUpDirection.lengthSq() <= heldWeaponSolveDirectionEpsilon) {
+    localUpDirection.set(0, 0, 1);
+    localUpDirection.addScaledVector(
+      localForwardDirection,
+      -localUpDirection.dot(localForwardDirection)
+    );
+  }
+
+  if (localUpDirection.lengthSq() <= heldWeaponSolveDirectionEpsilon) {
+    throw new Error(
+      "Metaverse attachment held up reference must define a stable basis against the grip socket."
+    );
+  }
+
+  localUpDirection.normalize();
+  const localAcrossDirection = localForwardDirection.clone().cross(localUpDirection);
+
+  if (localAcrossDirection.lengthSq() <= heldWeaponSolveDirectionEpsilon) {
+    throw new Error(
+      "Metaverse attachment held aim basis must produce a valid across direction."
+    );
+  }
+
+  localAcrossDirection.normalize();
+  localUpDirection.copy(localAcrossDirection).cross(localForwardDirection).normalize();
+
+  return {
+    gripLocalAimQuaternion: new Quaternion().setFromRotationMatrix(
+      new Matrix4().makeBasis(
+        localForwardDirection,
+        localUpDirection,
+        localAcrossDirection
+      )
+    ),
+    gripToForwardReferenceLocalPosition
+  };
 }
 
 function resolveAttachmentSocketLocalTransform(
@@ -223,14 +334,11 @@ export function cloneMetaverseAttachmentProofRuntime<
       sourceRuntime.attachmentRoot.name,
       cloneLabel
     ),
-    heldForwardReferenceNode:
-      sourceRuntime.heldForwardReferenceNode === null
-        ? null
-        : nodeResolvers.findNamedNode(
-            characterProofRuntime.scene,
-            sourceRuntime.heldForwardReferenceNode.name,
-            cloneLabel
-          ),
+    heldGripLocalAimQuaternion: sourceRuntime.heldGripLocalAimQuaternion.clone(),
+    heldGripToAdsCameraAnchorLocalPosition:
+      sourceRuntime.heldGripToAdsCameraAnchorLocalPosition?.clone() ?? null,
+    heldGripToForwardReferenceLocalPosition:
+      sourceRuntime.heldGripToForwardReferenceLocalPosition.clone(),
     heldGripSocketNode: nodeResolvers.findNamedNode(
       characterProofRuntime.scene,
       sourceRuntime.heldGripSocketNode.name,
@@ -318,6 +426,35 @@ export async function loadMetaverseAttachmentProofRuntime<
     attachmentAsset.scene,
     dependencies
   );
+  const heldUpReferenceNode = resolveOptionalAttachmentNode(
+    attachmentProofConfig.heldMount.upReferenceNodeName,
+    attachmentAsset.scene,
+    "Metaverse attachment up reference",
+    dependencies
+  );
+  const heldAdsCameraAnchorNode = resolveOptionalAttachmentNode(
+    attachmentProofConfig.heldMount.adsCameraAnchorNodeName,
+    attachmentAsset.scene,
+    "Metaverse attachment ADS camera anchor",
+    dependencies
+  );
+  attachmentAsset.scene.updateMatrixWorld(true);
+  const {
+    gripLocalAimQuaternion: heldGripLocalAimQuaternion,
+    gripToForwardReferenceLocalPosition: heldGripToForwardReferenceLocalPosition
+  } = resolveHeldGripLocalAimQuaternion(
+    heldGripSocketNode,
+    heldForwardReferenceNode,
+    heldUpReferenceNode,
+    dependencies.heldWeaponSolveDirectionEpsilon
+  );
+  const heldGripToAdsCameraAnchorLocalPosition =
+    heldAdsCameraAnchorNode === null
+      ? null
+      : resolveAttachmentNodeLocalPositionFromGrip(
+          heldGripSocketNode,
+          heldAdsCameraAnchorNode
+        );
   const mountedHolsterMount =
     attachmentProofConfig.mountedHolsterMount === null
       ? null
@@ -390,7 +527,9 @@ export async function loadMetaverseAttachmentProofRuntime<
   const attachmentRuntime: MetaverseAttachmentProofRuntime = {
     activeMountKind: null,
     attachmentRoot,
-    heldForwardReferenceNode,
+    heldGripLocalAimQuaternion,
+    heldGripToAdsCameraAnchorLocalPosition,
+    heldGripToForwardReferenceLocalPosition,
     heldGripSocketNode,
     heldMount,
     heldTriggerMarkerNode,

@@ -92,6 +92,7 @@ function createFakeHudPublisherDependencies(readNowMs) {
     }),
     isConnected: false,
     latestAuthoritativeTickIntervalMs: 50,
+    remoteCharacterPresentations: Object.freeze([]),
     readFreshAuthoritativeLocalPlayerSnapshot() {
       return null;
     },

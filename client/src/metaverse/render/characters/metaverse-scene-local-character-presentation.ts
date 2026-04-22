@@ -37,7 +37,13 @@ export function advanceLocalCharacterAnimation<
   orientation: Pick<
     MetaverseRuntimeConfig["orientation"],
     "maxPitchRadians" | "minPitchRadians"
-  >
+  >,
+  dependencies: {
+    readonly captureHeldWeaponPoseRuntime: (
+      heldWeaponPoseRuntime: NonNullable<TCharacterRuntime["heldWeaponPoseRuntime"]>,
+      attachmentRuntime: TAttachmentRuntime | null
+    ) => void;
+  }
 ): void {
   const useHumanoidV2PistolLayering =
     attachmentRuntime !== null &&
@@ -74,6 +80,13 @@ export function advanceLocalCharacterAnimation<
   }
 
   characterRuntime.mixer.update(deltaSeconds);
+
+  if (characterRuntime.heldWeaponPoseRuntime !== null) {
+    dependencies.captureHeldWeaponPoseRuntime(
+      characterRuntime.heldWeaponPoseRuntime,
+      attachmentRuntime
+    );
+  }
 }
 
 export function syncLocalCharacterPresentation<

@@ -288,11 +288,15 @@ test("canonical humanoid rig definitions keep stable bone and socket parentage",
   assert.deepEqual(skeletonSocketParentById.humanoid_v2, humanoidV2SocketParentById);
 });
 
-test("humanoid_v2 rig metadata keeps upper-torso aim layering and head anchors explicit", async () => {
+test("humanoid_v2 rig metadata keeps aim and lower-body ownership plus head anchors explicit", async () => {
   const {
     humanoidV2HeadAnchorNodeNames,
     humanoidV2PistolAimOverlayTrackPrefixes,
-    isHumanoidV2PistolAimOverlayTrack
+    humanoidV2PistolPitchDrivenTrackPrefixes,
+    humanoidV2PistolLowerBodyTrackPrefixes,
+    isHumanoidV2PistolAimOverlayTrack,
+    isHumanoidV2PistolPitchDrivenTrack,
+    isHumanoidV2PistolLowerBodyTrack
   } = await clientLoader.load("/src/metaverse/render/humanoid-v2-rig.ts");
   const humanoidDocument = await loadMetaverseAssetDocument(
     "/models/metaverse/characters/mesh2motion-humanoid.glb"
@@ -322,12 +326,41 @@ test("humanoid_v2 rig metadata keeps upper-torso aim layering and head anchors e
     "ring_",
     "pinky_"
   ]);
+  assert.deepEqual(humanoidV2PistolPitchDrivenTrackPrefixes, []);
+  assert.deepEqual(humanoidV2PistolLowerBodyTrackPrefixes, [
+    "root",
+    "pelvis",
+    "spine_01",
+    "thigh_l",
+    "calf_l",
+    "foot_l",
+    "ball_l",
+    "ball_leaf_l",
+    "thigh_r",
+    "calf_r",
+    "foot_r",
+    "ball_r",
+    "ball_leaf_r"
+  ]);
+  assert.equal(isHumanoidV2PistolAimOverlayTrack("clavicle_l.quaternion"), true);
   assert.equal(isHumanoidV2PistolAimOverlayTrack("upperarm_l.quaternion"), true);
+  assert.equal(isHumanoidV2PistolAimOverlayTrack("hand_r.quaternion"), true);
   assert.equal(isHumanoidV2PistolAimOverlayTrack("index_02_r.rotation"), true);
   assert.equal(isHumanoidV2PistolAimOverlayTrack("spine_02.quaternion"), true);
   assert.equal(isHumanoidV2PistolAimOverlayTrack("spine_03.quaternion"), true);
   assert.equal(isHumanoidV2PistolAimOverlayTrack("head.quaternion"), false);
   assert.equal(isHumanoidV2PistolAimOverlayTrack("thigh_r.quaternion"), false);
+  assert.equal(isHumanoidV2PistolPitchDrivenTrack("lowerarm_l.quaternion"), false);
+  assert.equal(isHumanoidV2PistolPitchDrivenTrack("hand_r.quaternion"), false);
+  assert.equal(isHumanoidV2PistolPitchDrivenTrack("thumb_02_l.rotation"), false);
+  assert.equal(isHumanoidV2PistolPitchDrivenTrack("upperarm_l.quaternion"), false);
+  assert.equal(isHumanoidV2PistolPitchDrivenTrack("spine_03.quaternion"), false);
+  assert.equal(isHumanoidV2PistolLowerBodyTrack("root.position"), true);
+  assert.equal(isHumanoidV2PistolLowerBodyTrack("pelvis.quaternion"), true);
+  assert.equal(isHumanoidV2PistolLowerBodyTrack("spine_01.quaternion"), true);
+  assert.equal(isHumanoidV2PistolLowerBodyTrack("thigh_r.quaternion"), true);
+  assert.equal(isHumanoidV2PistolLowerBodyTrack("upperarm_r.quaternion"), false);
+  assert.equal(isHumanoidV2PistolLowerBodyTrack("head.quaternion"), false);
 
   for (const nodeName of Object.values(humanoidV2HeadAnchorNodeNames)) {
     assert.equal(
@@ -481,9 +514,11 @@ test("attachment manifests keep explicit attachment socket ownership for held an
   assert.ok(pistolAttachment);
   assert.equal(pistolAttachment.defaultSocketId, "hand_r_socket");
   assert.deepEqual(pistolAttachment.heldMount, {
+    adsCameraAnchorNodeName: "metaverse_service_pistol_ads_camera_anchor",
     attachmentSocketNodeName: "metaverse_service_pistol_grip_hand_r_socket",
     forwardReferenceNodeName: "metaverse_service_pistol_forward_marker",
-    triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker"
+    triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker",
+    upReferenceNodeName: "metaverse_service_pistol_up_marker"
   });
   assert.deepEqual(pistolAttachment.offHandSupportPointIdBySocketId, {
     hand_r_socket: "pistol-support-left"
