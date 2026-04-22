@@ -36,7 +36,7 @@ test("MetaverseAuthoritativeWorldRuntime simulates unmounted grounded and swim t
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 2,
+        sequence: 2,
         jump: false,
         locomotionMode: "swim",
         moveAxis: 1,
@@ -55,7 +55,7 @@ test("MetaverseAuthoritativeWorldRuntime simulates unmounted grounded and swim t
     readPrimaryPlayerActiveBodySnapshot(groundedWorldSnapshot);
 
   assert.equal(groundedWorldSnapshot.tick.currentTick, 2);
-  assert.equal(groundedWorldSnapshot.observerPlayer?.lastProcessedInputSequence, 2);
+  assert.equal(groundedWorldSnapshot.observerPlayer?.lastProcessedTraversalSequence, 2);
   assert.equal(groundedWorldSnapshot.players[0]?.locomotionMode, "grounded");
   assert.ok(groundedActiveBodySnapshot.position.y > 0.4);
   assert.ok(
@@ -93,7 +93,7 @@ test("MetaverseAuthoritativeWorldRuntime simulates unmounted grounded and swim t
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: true,
-        inputSequence: 3,
+        sequence: 3,
         jump: false,
         locomotionMode: "grounded",
         moveAxis: 1,
@@ -110,7 +110,7 @@ test("MetaverseAuthoritativeWorldRuntime simulates unmounted grounded and swim t
   const swimActiveBodySnapshot =
     readPrimaryPlayerActiveBodySnapshot(swimWorldSnapshot);
 
-  assert.equal(swimWorldSnapshot.observerPlayer?.lastProcessedInputSequence, 3);
+  assert.equal(swimWorldSnapshot.observerPlayer?.lastProcessedTraversalSequence, 3);
   assert.equal(swimWorldSnapshot.players[0]?.locomotionMode, "swim");
   assert.equal(swimActiveBodySnapshot.position.y, 0);
   assert.equal(swimActiveBodySnapshot.linearVelocity.y, 0);
@@ -170,7 +170,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps other grounded players as solid t
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: true,
-        inputSequence: 2,
+        sequence: 2,
         jump: false,
         locomotionMode: "grounded",
         moveAxis: 1,
@@ -198,7 +198,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps other grounded players as solid t
   assert.notEqual(blockedMover, undefined);
   assert.notEqual(blockedStaticPlayer, undefined);
   assert.equal(
-    blockedWorldSnapshot.observerPlayer?.lastProcessedInputSequence,
+    blockedWorldSnapshot.observerPlayer?.lastProcessedTraversalSequence,
     2
   );
   assert.equal(blockedMover?.locomotionMode, "grounded");
@@ -230,7 +230,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps other grounded players as solid t
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: true,
-        inputSequence: 2,
+        sequence: 2,
         jump: false,
         locomotionMode: "grounded",
         moveAxis: 1,

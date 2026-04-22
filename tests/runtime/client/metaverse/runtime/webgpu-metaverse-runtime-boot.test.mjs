@@ -106,8 +106,7 @@ test("WebGpuMetaverseRuntime starts from an idle snapshot and rejects missing na
         convergenceEpisodeStartVerticalMagnitudeMeters: null,
         convergenceEpisodeStartYawMagnitudeRadians: null,
         groundedBodyStateDivergence: null,
-        lastProcessedInputSequence: null,
-        lastProcessedTraversalOrientationSequence: null,
+        lastProcessedTraversalSequence: null,
         localGrounded: null,
         planarMagnitudeMeters: null,
         planarVelocityMagnitudeUnitsPerSecond: null,
@@ -188,7 +187,7 @@ test("WebGpuMetaverseRuntime starts from an idle snapshot and rejects missing na
   );
   assert.equal(
     runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
-      .lastProcessedInputSequence,
+      .lastProcessedTraversalSequence,
     null
   );
   assert.equal(
@@ -419,7 +418,7 @@ test("WebGpuMetaverseRuntime publishes boot-phase progression and per-lane trans
     get currentPollIntervalMs() {
       return 33;
     },
-    get latestPlayerInputSequence() {
+    get latestPlayerTraversalSequence() {
       return 0;
     },
     get driverVehicleControlDatagramStatusSnapshot() {

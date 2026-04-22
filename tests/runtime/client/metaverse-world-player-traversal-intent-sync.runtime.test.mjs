@@ -24,7 +24,7 @@ after(async () => {
   await clientLoader?.close();
 });
 
-test("MetaverseWorldPlayerTraversalIntentSync resends traversal intent until authoritative input and orientation acks catch up", async () => {
+test("MetaverseWorldPlayerTraversalIntentSync resends traversal intent until authoritative traversal ack catches up", async () => {
   const { MetaverseWorldPlayerTraversalIntentSync } = await clientLoader.load(
     "/src/network/classes/metaverse-world-player-traversal-intent-sync.ts"
   );
@@ -37,8 +37,7 @@ test("MetaverseWorldPlayerTraversalIntentSync resends traversal intent until aut
   let localPlayerSnapshot = readLocalPlayerSnapshot(
     createWorldEvent({
       currentTick: 10,
-      lastProcessedInputSequence: 0,
-      lastProcessedTraversalOrientationSequence: 0,
+      lastProcessedTraversalSequence: 0,
       playerId,
       serverTimeMs: 10_000,
       snapshotSequence: 1
@@ -80,22 +79,19 @@ test("MetaverseWorldPlayerTraversalIntentSync resends traversal intent until aut
   await flushAsyncWork();
 
   assert.equal(sentTraversalCommands.length, 1);
-  assert.equal(sentTraversalCommands[0]?.intent.inputSequence, 1);
-  assert.equal(sentTraversalCommands[0]?.intent.orientationSequence, 1);
+  assert.equal(sentTraversalCommands[0]?.intent.sequence, 1);
   assert.equal(scheduler.pendingTasks.at(-1)?.delay, 50);
 
   scheduler.runNext(50);
   await flushAsyncWork();
 
   assert.equal(sentTraversalCommands.length, 2);
-  assert.equal(sentTraversalCommands[1]?.intent.inputSequence, 1);
-  assert.equal(sentTraversalCommands[1]?.intent.orientationSequence, 1);
+  assert.equal(sentTraversalCommands[1]?.intent.sequence, 1);
 
   localPlayerSnapshot = readLocalPlayerSnapshot(
     createWorldEvent({
       currentTick: 11,
-      lastProcessedInputSequence: 1,
-      lastProcessedTraversalOrientationSequence: 1,
+      lastProcessedTraversalSequence: 1,
       playerId,
       serverTimeMs: 10_050,
       snapshotSequence: 2
@@ -121,8 +117,7 @@ test("MetaverseWorldPlayerTraversalIntentSync rebases queued traversal sequences
     createWorldEvent({
       authoritativeJumpActionSequence: 52,
       currentTick: 10,
-      lastProcessedInputSequence: 734,
-      lastProcessedTraversalOrientationSequence: 734,
+      lastProcessedTraversalSequence: 734,
       playerId,
       serverTimeMs: 10_000,
       snapshotSequence: 1
@@ -157,14 +152,14 @@ test("MetaverseWorldPlayerTraversalIntentSync rebases queued traversal sequences
     playerId
   });
 
-  assert.equal(traversalSync.latestPlayerInputSequence, 1);
-  assert.equal(traversalSync.latestPlayerTraversalOrientationSequence, 1);
+  assert.equal(traversalSync.latestPlayerTraversalSequence, 734);
+  assert.equal(traversalSync.latestPlayerTraversalSequence, 734);
 
   connected = true;
   traversalSync.syncFromAuthoritativeWorld();
 
-  assert.equal(traversalSync.latestPlayerInputSequence, 735);
-  assert.equal(traversalSync.latestPlayerTraversalOrientationSequence, 735);
+  assert.equal(traversalSync.latestPlayerTraversalSequence, 734);
+  assert.equal(traversalSync.latestPlayerTraversalSequence, 734);
   assert.equal(scheduler.pendingTasks.length, 1);
   assert.equal(scheduler.pendingTasks[0]?.delay, 0);
 
@@ -172,15 +167,14 @@ test("MetaverseWorldPlayerTraversalIntentSync rebases queued traversal sequences
   await flushAsyncWork();
 
   assert.equal(sentTraversalCommands.length, 1);
-  assert.equal(sentTraversalCommands[0]?.intent.inputSequence, 735);
-  assert.equal(sentTraversalCommands[0]?.intent.orientationSequence, 735);
+  assert.equal(sentTraversalCommands[0]?.intent.sequence, 735);
   assert.equal(sentTraversalCommands[0]?.intent.bodyControl.moveAxis, 1);
-  assert.equal(sentTraversalCommands[0]?.intent.actionIntent.kind, "jump");
-  assert.equal(sentTraversalCommands[0]?.intent.actionIntent.sequence, 53);
+  assert.equal(sentTraversalCommands[0]?.intent.actionIntent.kind, "none");
+  assert.equal(sentTraversalCommands[0]?.intent.actionIntent.sequence, 0);
   assert.equal(sentTraversalCommands[0]?.estimatedServerTimeMs, undefined);
 });
 
-test("MetaverseWorldPlayerTraversalIntentSync exposes previewed traversal sequences before the command is synced", async () => {
+test("MetaverseWorldPlayerTraversalIntentSync keeps previewed traversal sequences out of issued authority state until the command is synced", async () => {
   const { MetaverseWorldPlayerTraversalIntentSync } = await clientLoader.load(
     "/src/network/classes/metaverse-world-player-traversal-intent-sync.ts"
   );
@@ -199,8 +193,7 @@ test("MetaverseWorldPlayerTraversalIntentSync exposes previewed traversal sequen
       readLocalPlayerSnapshot(
         createWorldEvent({
           currentTick: 10,
-          lastProcessedInputSequence: 0,
-          lastProcessedTraversalOrientationSequence: 0,
+          lastProcessedTraversalSequence: 0,
           playerId,
           serverTimeMs: 10_000,
           snapshotSequence: 1
@@ -228,12 +221,8 @@ test("MetaverseWorldPlayerTraversalIntentSync exposes previewed traversal sequen
   });
 
   assert.notEqual(previewIntent, null);
-  assert.equal(traversalSync.latestPlayerInputSequence, 1);
-  assert.equal(traversalSync.latestPlayerTraversalOrientationSequence, 1);
-  assert.equal(
-    traversalSync.latestPlayerTraversalIntentSnapshot?.sampleId,
-    previewIntent?.sampleId
-  );
+  assert.equal(traversalSync.latestPlayerTraversalSequence, 0);
+  assert.equal(traversalSync.latestPlayerTraversalIntentSnapshot, null);
 
   const syncedIntent = traversalSync.syncPlayerTraversalIntent({
     intent: createTraversalIntentInput({
@@ -247,15 +236,15 @@ test("MetaverseWorldPlayerTraversalIntentSync exposes previewed traversal sequen
     playerId
   });
 
-  assert.equal(syncedIntent?.inputSequence, previewIntent?.inputSequence);
+  assert.equal(syncedIntent?.sequence, previewIntent?.sequence);
+  assert.equal(traversalSync.latestPlayerTraversalSequence, 0);
   assert.equal(
-    syncedIntent?.orientationSequence,
-    previewIntent?.orientationSequence
+    traversalSync.latestPlayerTraversalIntentSnapshot?.sequence,
+    undefined
   );
-  assert.equal(syncedIntent?.sampleId, previewIntent?.sampleId);
 });
 
-test("MetaverseWorldPlayerTraversalIntentSync issues a fresh traversal sample on every tick even when held input is unchanged", async () => {
+test("MetaverseWorldPlayerTraversalIntentSync reuses the latest traversal sample when held input is unchanged", async () => {
   const { MetaverseWorldPlayerTraversalIntentSync } = await clientLoader.load(
     "/src/network/classes/metaverse-world-player-traversal-intent-sync.ts"
   );
@@ -275,8 +264,7 @@ test("MetaverseWorldPlayerTraversalIntentSync issues a fresh traversal sample on
       readLocalPlayerSnapshot(
         createWorldEvent({
           currentTick: 10,
-          lastProcessedInputSequence: 0,
-          lastProcessedTraversalOrientationSequence: 0,
+          lastProcessedTraversalSequence: 0,
           playerId,
           serverTimeMs: 10_000,
           snapshotSequence: 1
@@ -315,42 +303,91 @@ test("MetaverseWorldPlayerTraversalIntentSync issues a fresh traversal sample on
     playerId
   });
 
-  assert.equal(firstIntent?.inputSequence, 1);
-  assert.equal(firstIntent?.orientationSequence, 1);
-  assert.equal(firstIntent?.sampleId, 1);
-  assert.equal(secondIntent?.inputSequence, 2);
-  assert.equal(secondIntent?.orientationSequence, 2);
-  assert.equal(secondIntent?.sampleId, 2);
+  assert.equal(firstIntent?.sequence, 1);
+  assert.equal(secondIntent?.sequence, 1);
 
   scheduler.runNext(0);
   await flushAsyncWork();
 
   assert.equal(sentTraversalCommands.length, 1);
-  assert.equal(sentTraversalCommands[0]?.intent.inputSequence, 2);
-  assert.equal(sentTraversalCommands[0]?.intent.orientationSequence, 2);
-  assert.deepEqual(sentTraversalCommands[0]?.pendingIntentSamples, [
-    Object.freeze({
-      actionIntent: Object.freeze({
-        kind: "none",
-        pressed: false,
-        sequence: 0
-      }),
-      bodyControl: Object.freeze({
-        boost: false,
-        moveAxis: 1,
-        strafeAxis: 0,
-        turnAxis: 0.25
-      }),
-      facing: Object.freeze({
-        pitchRadians: 0,
-        yawRadians: 0
-      }),
-      inputSequence: 1,
+  assert.equal(sentTraversalCommands[0]?.intent.sequence, 1);
+  assert.equal(sentTraversalCommands[0]?.pendingIntentSamples, undefined);
+});
+
+test("MetaverseWorldPlayerTraversalIntentSync collapses a fast jump tap into one sequenced traversal sample", async () => {
+  const { MetaverseWorldPlayerTraversalIntentSync } = await clientLoader.load(
+    "/src/network/classes/metaverse-world-player-traversal-intent-sync.ts"
+  );
+  const playerId = createMetaversePlayerId("intent-sync-traversal-jump-tap-1");
+
+  assert.notEqual(playerId, null);
+
+  const scheduler = createManualTimerScheduler();
+  const sentTraversalCommands = [];
+  const traversalSync = new MetaverseWorldPlayerTraversalIntentSync({
+    acceptWorldEvent() {},
+    applyWorldAccessError(error) {
+      throw error;
+    },
+    clearTimeout: scheduler.clearTimeout,
+    readLatestLocalPlayerSnapshot: () =>
+      readLocalPlayerSnapshot(
+        createWorldEvent({
+          currentTick: 10,
+          lastProcessedTraversalSequence: 0,
+          playerId,
+          serverTimeMs: 10_000,
+          snapshotSequence: 1
+        })
+      ),
+    readPlayerId: () => playerId,
+    readStatusSnapshot: () => createConnectedStatusSnapshot(playerId),
+    resolveCommandDelayMs: () => 50,
+    async sendPlayerTraversalIntentCommand(command) {
+      sentTraversalCommands.push(command);
+      return null;
+    },
+    setTimeout: scheduler.setTimeout
+  });
+
+  const pressedIntent = traversalSync.syncPlayerTraversalIntent({
+    intent: createTraversalIntentInput({
+      boost: false,
+      jump: true,
       locomotionMode: "grounded",
-      orientationSequence: 1,
-      sampleId: 1
-    })
-  ]);
+      moveAxis: 0,
+      strafeAxis: 0,
+      yawAxis: 0
+    }),
+    playerId
+  });
+  const releasedIntent = traversalSync.syncPlayerTraversalIntent({
+    intent: createTraversalIntentInput({
+      boost: false,
+      jump: false,
+      locomotionMode: "grounded",
+      moveAxis: 0,
+      strafeAxis: 0,
+      yawAxis: 0
+    }),
+    playerId
+  });
+
+  assert.equal(pressedIntent?.sequence, 1);
+  assert.equal(releasedIntent?.sequence, 1);
+  assert.equal(releasedIntent?.actionIntent.kind, "jump");
+  assert.equal(releasedIntent?.actionIntent.pressed, false);
+  assert.equal(releasedIntent?.actionIntent.sequence, 1);
+
+  scheduler.runNext(0);
+  await flushAsyncWork();
+
+  assert.equal(sentTraversalCommands.length, 1);
+  assert.equal(sentTraversalCommands[0]?.intent.sequence, 1);
+  assert.equal(sentTraversalCommands[0]?.intent.actionIntent.kind, "jump");
+  assert.equal(sentTraversalCommands[0]?.intent.actionIntent.pressed, false);
+  assert.equal(sentTraversalCommands[0]?.intent.actionIntent.sequence, 1);
+  assert.equal(sentTraversalCommands[0]?.pendingIntentSamples, undefined);
 });
 
 test("MetaverseWorldPlayerTraversalIntentSync bundles unacked traversal samples inside the latest sent command", async () => {
@@ -367,8 +404,7 @@ test("MetaverseWorldPlayerTraversalIntentSync bundles unacked traversal samples 
   let localPlayerSnapshot = readLocalPlayerSnapshot(
     createWorldEvent({
       currentTick: 10,
-      lastProcessedInputSequence: 0,
-      lastProcessedTraversalOrientationSequence: 0,
+      lastProcessedTraversalSequence: 0,
       playerId,
       serverTimeMs: 10_000,
       snapshotSequence: 1
@@ -435,8 +471,7 @@ test("MetaverseWorldPlayerTraversalIntentSync bundles unacked traversal samples 
   await flushAsyncWork();
 
   assert.equal(sentTraversalCommands.length, 1);
-  assert.equal(sentTraversalCommands[0]?.intent.inputSequence, 3);
-  assert.equal(sentTraversalCommands[0]?.intent.orientationSequence, 3);
+  assert.equal(sentTraversalCommands[0]?.intent.sequence, 3);
   assert.deepEqual(
     sentTraversalCommands[0]?.pendingIntentSamples,
     Object.freeze([
@@ -456,10 +491,9 @@ test("MetaverseWorldPlayerTraversalIntentSync bundles unacked traversal samples 
           pitchRadians: 0,
           yawRadians: 0
         }),
-        inputSequence: 1,
         locomotionMode: "grounded",
-        orientationSequence: 1,
-        sampleId: 1
+        sequence: 1,
+        sequence: 1
       }),
       Object.freeze({
         actionIntent: Object.freeze({
@@ -477,10 +511,9 @@ test("MetaverseWorldPlayerTraversalIntentSync bundles unacked traversal samples 
           pitchRadians: 0,
           yawRadians: 0
         }),
-        inputSequence: 2,
         locomotionMode: "grounded",
-        orientationSequence: 2,
-        sampleId: 2
+        sequence: 2,
+        sequence: 2
       })
     ])
   );
@@ -488,8 +521,7 @@ test("MetaverseWorldPlayerTraversalIntentSync bundles unacked traversal samples 
   localPlayerSnapshot = readLocalPlayerSnapshot(
     createWorldEvent({
       currentTick: 11,
-      lastProcessedInputSequence: 3,
-      lastProcessedTraversalOrientationSequence: 3,
+      lastProcessedTraversalSequence: 3,
       playerId,
       serverTimeMs: 10_050,
       snapshotSequence: 2
@@ -498,6 +530,98 @@ test("MetaverseWorldPlayerTraversalIntentSync bundles unacked traversal samples 
   traversalSync.syncFromAuthoritativeWorld();
 
   assert.equal(scheduler.pendingTasks.length, 0);
+});
+
+test("MetaverseWorldPlayerTraversalIntentSync caps bundled traversal history to the newest two pending samples", async () => {
+  const { MetaverseWorldPlayerTraversalIntentSync } = await clientLoader.load(
+    "/src/network/classes/metaverse-world-player-traversal-intent-sync.ts"
+  );
+  const playerId = createMetaversePlayerId("intent-sync-traversal-history-cap-1");
+
+  assert.notEqual(playerId, null);
+
+  const scheduler = createManualTimerScheduler();
+  const sentTraversalCommands = [];
+  const traversalSync = new MetaverseWorldPlayerTraversalIntentSync({
+    acceptWorldEvent() {},
+    applyWorldAccessError(error) {
+      throw error;
+    },
+    clearTimeout: scheduler.clearTimeout,
+    readLatestLocalPlayerSnapshot: () =>
+      readLocalPlayerSnapshot(
+        createWorldEvent({
+          currentTick: 10,
+          lastProcessedTraversalSequence: 0,
+          playerId,
+          serverTimeMs: 10_000,
+          snapshotSequence: 1
+        })
+      ),
+    readPlayerId: () => playerId,
+    readStatusSnapshot: () => createConnectedStatusSnapshot(playerId),
+    resolveCommandDelayMs: () => 50,
+    async sendPlayerTraversalIntentCommand(command) {
+      sentTraversalCommands.push(command);
+      return null;
+    },
+    setTimeout: scheduler.setTimeout
+  });
+
+  traversalSync.syncPlayerTraversalIntent({
+    intent: createTraversalIntentInput({
+      boost: false,
+      jump: false,
+      locomotionMode: "grounded",
+      moveAxis: 1,
+      strafeAxis: 0,
+      yawAxis: 0
+    }),
+    playerId
+  });
+  traversalSync.syncPlayerTraversalIntent({
+    intent: createTraversalIntentInput({
+      boost: false,
+      jump: false,
+      locomotionMode: "grounded",
+      moveAxis: 0,
+      strafeAxis: 1,
+      yawAxis: 0.1
+    }),
+    playerId
+  });
+  traversalSync.syncPlayerTraversalIntent({
+    intent: createTraversalIntentInput({
+      boost: true,
+      jump: false,
+      locomotionMode: "grounded",
+      moveAxis: -1,
+      strafeAxis: 0,
+      yawAxis: 0.2
+    }),
+    playerId
+  });
+  traversalSync.syncPlayerTraversalIntent({
+    intent: createTraversalIntentInput({
+      boost: true,
+      jump: false,
+      locomotionMode: "grounded",
+      moveAxis: 0,
+      strafeAxis: -1,
+      yawAxis: 0.3
+    }),
+    playerId
+  });
+
+  scheduler.runNext(0);
+  await flushAsyncWork();
+
+  assert.equal(sentTraversalCommands.length, 1);
+  assert.deepEqual(
+    sentTraversalCommands[0]?.pendingIntentSamples?.map((sample) => sample.sequence),
+    [2, 3]
+  );
+  assert.equal(sentTraversalCommands[0]?.intent.sequence, 4);
 });
 
 test("MetaverseWorldPlayerTraversalIntentSync resends the exact previously sent traversal command so bundled traversal samples do not reorder", async () => {
@@ -514,8 +638,7 @@ test("MetaverseWorldPlayerTraversalIntentSync resends the exact previously sent 
   let localPlayerSnapshot = readLocalPlayerSnapshot(
     createWorldEvent({
       currentTick: 10,
-      lastProcessedInputSequence: 0,
-      lastProcessedTraversalOrientationSequence: 0,
+      lastProcessedTraversalSequence: 0,
       playerId,
       serverTimeMs: 10_000,
       snapshotSequence: 1
@@ -616,8 +739,7 @@ test("MetaverseWorldPlayerTraversalIntentSync emits explicit pending traversal s
       readLocalPlayerSnapshot(
         createWorldEvent({
           currentTick: 10,
-          lastProcessedInputSequence: 0,
-          lastProcessedTraversalOrientationSequence: 0,
+          lastProcessedTraversalSequence: 0,
           playerId,
           serverTimeMs: 10_000,
           snapshotSequence: 1
@@ -678,10 +800,9 @@ test("MetaverseWorldPlayerTraversalIntentSync emits explicit pending traversal s
         pitchRadians: 0,
         yawRadians: 0
       }),
-      inputSequence: 1,
       locomotionMode: "grounded",
-      orientationSequence: 1,
-      sampleId: 1
+      sequence: 1,
+      sequence: 1
     })
   ]);
 });

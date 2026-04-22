@@ -420,7 +420,7 @@ type MetaverseRealtimePlayerSnapshotAckUsesNumber = AssertTrue<
   IsEqual<
     NonNullable<
       MetaverseRealtimeWorldSnapshot["observerPlayer"]
-    >["lastProcessedInputSequence"],
+    >["lastProcessedTraversalSequence"],
     number
   >
 >;
@@ -428,12 +428,12 @@ type MetaverseRealtimePlayerOrientationAckUsesNumber = AssertTrue<
   IsEqual<
     NonNullable<
       MetaverseRealtimeWorldSnapshot["observerPlayer"]
-    >["lastProcessedTraversalOrientationSequence"],
+    >["lastProcessedTraversalSequence"],
     number
   >
 >;
 type MetaversePlayerTraversalIntentOrientationSequenceUsesNumber = AssertTrue<
-  IsEqual<MetaversePlayerTraversalIntentSnapshot["orientationSequence"], number>
+  IsEqual<MetaversePlayerTraversalIntentSnapshot["sequence"], number>
 >;
 type MetaverseRealtimeWorldWebTransportServerMessageWrapsWorldEvent = AssertTrue<
   IsEqual<

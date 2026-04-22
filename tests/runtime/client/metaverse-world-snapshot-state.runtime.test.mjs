@@ -70,9 +70,8 @@ function createWorldEvent({
   return createMetaverseRealtimeWorldEvent({
     world: {
       observerPlayer: {
-        lastProcessedInputSequence: snapshotSequence,
         lastProcessedLookSequence: snapshotSequence,
-        lastProcessedTraversalOrientationSequence: snapshotSequence,
+        lastProcessedTraversalSequence: snapshotSequence,
         playerId
       },
       players: [

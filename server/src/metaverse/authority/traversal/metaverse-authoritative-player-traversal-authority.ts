@@ -1,7 +1,5 @@
 import {
   createMetaverseTraversalFacingSnapshot,
-  metaverseTraversalActionBufferSeconds,
-  queueMetaverseUnmountedTraversalAction,
   type MetaverseTraversalBodyControlSnapshot,
   type MetaverseTraversalFacingSnapshot,
   type MetaverseUnmountedTraversalStateSnapshot
@@ -266,9 +264,7 @@ export class MetaverseAuthoritativePlayerTraversalAuthority<
         ?.effectiveAtMs ?? firstQueuedActivationAtMs - tickIntervalMs) +
         tickIntervalMs
     );
-    let latestAcceptedTraversalIntent:
-      | MetaversePlayerTraversalIntentSnapshot
-      | null = null;
+    let acceptedTraversalIntent = false;
 
     for (const intentSample of [
       ...(normalizedCommand.pendingIntentSamples ?? []),
@@ -305,11 +301,11 @@ export class MetaverseAuthoritativePlayerTraversalAuthority<
         })
       );
       latestComparableIntent = nextTraversalIntent;
-      latestAcceptedTraversalIntent = nextTraversalIntent;
+      acceptedTraversalIntent = true;
       nextEffectiveAtMs += tickIntervalMs;
     }
 
-    if (latestAcceptedTraversalIntent === null) {
+    if (!acceptedTraversalIntent) {
       playerRuntime.lastSeenAtMs = nowMs;
       this.#dependencies.syncPlayerTraversalAuthorityState(playerRuntime);
       return;
@@ -322,18 +318,6 @@ export class MetaverseAuthoritativePlayerTraversalAuthority<
         pendingIntentTimeline: [...nextTraversalIntentTimeline]
       }
     );
-    playerRuntime.lookPitchRadians =
-      latestAcceptedTraversalIntent.facing.pitchRadians;
-    playerRuntime.lookYawRadians =
-      latestAcceptedTraversalIntent.facing.yawRadians;
-    playerRuntime.unmountedTraversalState =
-      queueMetaverseUnmountedTraversalAction(
-        playerRuntime.unmountedTraversalState,
-        {
-          actionIntent: latestAcceptedTraversalIntent.actionIntent,
-          bufferSeconds: metaverseTraversalActionBufferSeconds
-        }
-      );
 
     playerRuntime.lastSeenAtMs = nowMs;
     this.#dependencies.syncPlayerTraversalAuthorityState(playerRuntime);

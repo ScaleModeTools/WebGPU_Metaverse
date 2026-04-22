@@ -31,7 +31,7 @@ test("MetaverseAuthoritativeWorldSync forwards fresh authoritative local pose wi
     "/src/metaverse/classes/metaverse-authoritative-world-sync.ts"
   );
   const authoritativeLocalPlayerPose = Object.freeze({
-    inputSequence: 17,
+    sequence: 17,
     position: Object.freeze({
       x: 4,
       y: 1.6,
@@ -129,8 +129,7 @@ test("MetaverseAuthoritativeWorldSync force-snaps only the first fresh authorita
     Object.freeze({
       authoritativeSnapshotAgeMs: 0,
       authoritativeTick: 10,
-      lastProcessedInputSequence: 3,
-      lastProcessedTraversalOrientationSequence: 3,
+      lastProcessedTraversalSequence: 3,
       pose: Object.freeze({
         look: Object.freeze({
           pitchRadians: -0.2,
@@ -143,8 +142,7 @@ test("MetaverseAuthoritativeWorldSync force-snaps only the first fresh authorita
     Object.freeze({
       authoritativeSnapshotAgeMs: 0,
       authoritativeTick: 11,
-      lastProcessedInputSequence: 4,
-      lastProcessedTraversalOrientationSequence: 4,
+      lastProcessedTraversalSequence: 4,
       pose: Object.freeze({
         look: Object.freeze({
           pitchRadians: -0.1,
@@ -241,8 +239,7 @@ test("MetaverseAuthoritativeWorldSync does not rearm spawn bootstrap after a tra
     Object.freeze({
       authoritativeSnapshotAgeMs: 0,
       authoritativeTick: 10,
-      lastProcessedInputSequence: 3,
-      lastProcessedTraversalOrientationSequence: 3,
+      lastProcessedTraversalSequence: 3,
       pose: Object.freeze({
         look: Object.freeze({
           pitchRadians: -0.2,
@@ -256,8 +253,7 @@ test("MetaverseAuthoritativeWorldSync does not rearm spawn bootstrap after a tra
     Object.freeze({
       authoritativeSnapshotAgeMs: 0,
       authoritativeTick: 12,
-      lastProcessedInputSequence: 5,
-      lastProcessedTraversalOrientationSequence: 5,
+      lastProcessedTraversalSequence: 5,
       pose: Object.freeze({
         look: Object.freeze({
           pitchRadians: -0.05,
@@ -366,8 +362,7 @@ test("MetaverseAuthoritativeWorldSync rearms the spawn bootstrap when a mid-sess
     Object.freeze({
       authoritativeSnapshotAgeMs: 0,
       authoritativeTick: 10,
-      lastProcessedInputSequence: 3,
-      lastProcessedTraversalOrientationSequence: 3,
+      lastProcessedTraversalSequence: 3,
       pose: Object.freeze({
         look: Object.freeze({
           pitchRadians: -0.2,
@@ -380,8 +375,7 @@ test("MetaverseAuthoritativeWorldSync rearms the spawn bootstrap when a mid-sess
     Object.freeze({
       authoritativeSnapshotAgeMs: 0,
       authoritativeTick: 11,
-      lastProcessedInputSequence: 4,
-      lastProcessedTraversalOrientationSequence: 4,
+      lastProcessedTraversalSequence: 4,
       pose: Object.freeze({
         look: Object.freeze({
           pitchRadians: -0.1,
@@ -394,8 +388,7 @@ test("MetaverseAuthoritativeWorldSync rearms the spawn bootstrap when a mid-sess
     Object.freeze({
       authoritativeSnapshotAgeMs: 0,
       authoritativeTick: 12,
-      lastProcessedInputSequence: 5,
-      lastProcessedTraversalOrientationSequence: 5,
+      lastProcessedTraversalSequence: 5,
       pose: Object.freeze({
         look: Object.freeze({
           pitchRadians: -0.05,

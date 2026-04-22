@@ -97,9 +97,8 @@ function createMetaverseSyncPlayerTraversalIntentCommand(input) {
         turnAxis: nextIntent.yawAxis
       },
       facing: normalizedFacing,
-      inputSequence: nextIntent.inputSequence,
       locomotionMode: nextIntent.locomotionMode,
-      orientationSequence: nextIntent.orientationSequence
+      sequence: nextIntent.sequence
     }
   });
 }
@@ -480,8 +479,7 @@ test("metaverse realtime world contracts freeze snapshots and derive seated occu
       }
     ],
     observerPlayer: {
-      lastProcessedInputSequence: 7.8,
-      lastProcessedTraversalOrientationSequence: 9.3,
+      lastProcessedTraversalSequence: 9.3,
       playerId
     },
     players: playerInputs,
@@ -530,7 +528,7 @@ test("metaverse realtime world contracts freeze snapshots and derive seated occu
   assert.equal(worldSnapshot.players[0]?.characterId, "mesh2motion-humanoid-v1");
   assert.equal(worldSnapshot.players[0]?.angularVelocityRadiansPerSecond, 1.25);
   assert.equal(
-    worldSnapshot.observerPlayer?.lastProcessedTraversalOrientationSequence,
+    worldSnapshot.observerPlayer?.lastProcessedTraversalSequence,
     9
   );
   assert.equal(worldSnapshot.players[0]?.stateSequence, 7);
@@ -544,7 +542,7 @@ test("metaverse realtime world contracts freeze snapshots and derive seated occu
     worldSnapshot.players[0]?.mountedOccupancy?.occupantRole,
     "driver"
   );
-  assert.equal(worldSnapshot.observerPlayer?.lastProcessedInputSequence, 7);
+  assert.equal(worldSnapshot.observerPlayer?.lastProcessedTraversalSequence, 7);
   assert.equal(
     worldSnapshot.players[0]?.traversalAuthority.currentActionKind,
     "none"
@@ -1106,11 +1104,11 @@ test("metaverse realtime world traversal intent commands normalize explicit tran
   const command = createMetaverseSyncPlayerTraversalIntentCommand({
     intent: {
       boost: true,
-      inputSequence: 4.9,
+      sequence: 4.9,
       jump: true,
       locomotionMode: "swim",
       moveAxis: 2.4,
-      orientationSequence: 8.2,
+      sequence: 8.2,
       strafeAxis: -4,
       yawAxis: 0.5
     },
@@ -1122,9 +1120,9 @@ test("metaverse realtime world traversal intent commands normalize explicit tran
     });
 
   assert.equal(command.type, "sync-player-traversal-intent");
-  assert.equal(command.intent.inputSequence, 4);
+  assert.equal(command.intent.sequence, 4);
   assert.equal(command.intent.locomotionMode, "swim");
-  assert.equal(command.intent.orientationSequence, 8);
+  assert.equal(command.intent.sequence, 8);
   assert.equal(command.intent.bodyControl.moveAxis, 1);
   assert.equal(command.intent.bodyControl.strafeAxis, -1);
   assert.equal(command.intent.actionIntent.kind, "jump");
@@ -1133,7 +1131,7 @@ test("metaverse realtime world traversal intent commands normalize explicit tran
     webTransportRequest.command.type,
     "sync-player-traversal-intent"
   );
-  assert.equal(webTransportRequest.command.intent.inputSequence, 4);
+  assert.equal(webTransportRequest.command.intent.sequence, 4);
 });
 
 test("metaverse realtime world traversal intent commands normalize explicit pending intent samples without traversal timestamps", () => {
@@ -1144,11 +1142,11 @@ test("metaverse realtime world traversal intent commands normalize explicit pend
   const command = createMetaverseSyncPlayerTraversalIntentCommand({
     intent: {
       boost: false,
-      inputSequence: 3,
+      sequence: 3,
       jump: false,
       locomotionMode: "grounded",
       moveAxis: 0,
-      orientationSequence: 2,
+      sequence: 2,
       strafeAxis: 1,
       yawAxis: 0.5
     },
@@ -1168,9 +1166,9 @@ test("metaverse realtime world traversal intent commands normalize explicit pend
           pitchRadians: 0,
           yawRadians: 0
         },
-        inputSequence: 1,
+        sequence: 1,
         locomotionMode: "grounded",
-        orientationSequence: 1
+        sequence: 1
       }
     ],
     playerId
@@ -1193,10 +1191,9 @@ test("metaverse realtime world traversal intent commands normalize explicit pend
         pitchRadians: 0,
         yawRadians: 0
       },
-      inputSequence: 1,
       locomotionMode: "grounded",
-      orientationSequence: 1,
-      sampleId: 0
+      sequence: 1,
+      sequence: 0
     }
   ]);
 });
@@ -1227,7 +1224,8 @@ test("metaverse gameplay traversal intent snapshots normalize supported locomoti
   assert.deepEqual(groundedIntent, {
     actionIntent: {
       kind: "none",
-      pressed: false
+      pressed: false,
+      sequence: 0
     },
     bodyControl: {
       boost: false,
@@ -1241,24 +1239,11 @@ test("metaverse gameplay traversal intent snapshots normalize supported locomoti
     },
     locomotionMode: "grounded"
   });
-  assert.deepEqual(unsupportedIntent, {
-    actionIntent: {
-      kind: "none",
-      pressed: false
-    },
-    bodyControl: {
-      boost: false,
-      moveAxis: 0,
-      strafeAxis: 0,
-      turnAxis: 0
-    },
-    facing: {
-      pitchRadians: 0,
-      yawRadians: 0
-    },
-    locomotionMode: "grounded"
-  });
+  assert.equal(unsupportedIntent, null);
 });
+
+test("metaverse gameplay traversal intent snapshots gate jump to grounded locomotion only", () => {
+  const groundedIntent = createMetaverseGameplayTraversalIntentSnapshotInput({
     boost: true,
     jump: true,
     locomotionMode: "grounded",
@@ -1574,11 +1559,11 @@ test("webtransport datagram shared contracts wrap latest-wins channels with expl
       command: createMetaverseSyncPlayerTraversalIntentCommand({
         intent: {
           boost: true,
-          inputSequence: 7.2,
+          sequence: 7.2,
           jump: false,
           locomotionMode: "grounded",
           moveAxis: 1.5,
-          orientationSequence: 11.7,
+          sequence: 11.7,
           strafeAxis: -0.25,
           yawAxis: 0.8
         },
@@ -1643,9 +1628,9 @@ test("webtransport datagram shared contracts wrap latest-wins channels with expl
     playerTraversalIntentDatagram.command.type,
     "sync-player-traversal-intent"
   );
-  assert.equal(playerTraversalIntentDatagram.command.intent.inputSequence, 7);
+  assert.equal(playerTraversalIntentDatagram.command.intent.sequence, 7);
   assert.equal(
-    playerTraversalIntentDatagram.command.intent.orientationSequence,
+    playerTraversalIntentDatagram.command.intent.sequence,
     11
   );
   assert.equal(

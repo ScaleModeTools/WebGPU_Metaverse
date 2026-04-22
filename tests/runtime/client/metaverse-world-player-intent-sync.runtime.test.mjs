@@ -40,9 +40,8 @@ test("MetaverseWorldPlayerIntentSync coordinates delegated look and traversal la
     createWorldEvent({
       authoritativeJumpActionSequence: 52,
       currentTick: 10,
-      lastProcessedInputSequence: 734,
       lastProcessedLookSequence: 418,
-      lastProcessedTraversalOrientationSequence: 734,
+      lastProcessedTraversalSequence: 734,
       playerId,
       serverTimeMs: 10_000,
       snapshotSequence: 1
@@ -88,13 +87,13 @@ test("MetaverseWorldPlayerIntentSync coordinates delegated look and traversal la
     playerId
   });
 
-  assert.equal(intentSync.latestPlayerInputSequence, 1);
+  assert.equal(intentSync.latestPlayerTraversalSequence, 734);
   assert.equal(intentSync.latestPlayerLookSequence, 1);
 
   connected = true;
   intentSync.syncFromAuthoritativeWorld();
 
-  assert.equal(intentSync.latestPlayerInputSequence, 735);
+  assert.equal(intentSync.latestPlayerTraversalSequence, 734);
   assert.equal(intentSync.latestPlayerLookSequence, 419);
   assert.equal(scheduler.pendingTasks.length, 2);
   assert.equal(
@@ -108,11 +107,10 @@ test("MetaverseWorldPlayerIntentSync coordinates delegated look and traversal la
   await flushAsyncWork();
 
   assert.equal(sentTraversalCommands.length, 1);
-  assert.equal(sentTraversalCommands[0]?.intent.inputSequence, 735);
-  assert.equal(sentTraversalCommands[0]?.intent.orientationSequence, 735);
+  assert.equal(sentTraversalCommands[0]?.intent.sequence, 735);
   assert.equal(sentTraversalCommands[0]?.intent.bodyControl.moveAxis, 1);
-  assert.equal(sentTraversalCommands[0]?.intent.actionIntent.kind, "jump");
-  assert.equal(sentTraversalCommands[0]?.intent.actionIntent.sequence, 53);
+  assert.equal(sentTraversalCommands[0]?.intent.actionIntent.kind, "none");
+  assert.equal(sentTraversalCommands[0]?.intent.actionIntent.sequence, 0);
   assert.equal(sentTraversalCommands[0]?.estimatedServerTimeMs, undefined);
   assert.equal(sentLookCommands.length, 1);
   assert.equal(sentLookCommands[0]?.lookSequence, 419);

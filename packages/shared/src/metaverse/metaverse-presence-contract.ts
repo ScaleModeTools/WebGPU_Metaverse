@@ -6,7 +6,7 @@ import {
   createMilliseconds,
   createRadians
 } from "../unit-measurements.js";
-import { createMetaversePlayerTeamId } from "./metaverse-player-team.js";
+import { normalizeMetaversePlayerTeamId } from "./metaverse-player-team.js";
 
 export const metaversePresenceAnimationVocabularyIds = [
   "idle",
@@ -169,6 +169,7 @@ export interface MetaverseJoinPresenceCommand {
   readonly characterId: string;
   readonly playerId: MetaversePlayerId;
   readonly pose: MetaversePresencePoseSnapshot;
+  readonly teamId: MetaversePlayerTeamId;
   readonly type: "join-presence";
   readonly username: Username;
 }
@@ -177,6 +178,7 @@ export interface MetaverseJoinPresenceCommandInput {
   readonly characterId: string;
   readonly playerId: MetaversePlayerId;
   readonly pose: MetaversePresencePoseSnapshotInput;
+  readonly teamId?: MetaversePlayerTeamId;
   readonly username: Username;
 }
 
@@ -312,19 +314,6 @@ function normalizeOptionalIdentifier(
   }
 
   return normalizeRequiredIdentifier(rawValue, label);
-}
-
-function resolveRequiredMetaversePlayerTeamId(
-  rawValue: string | null | undefined,
-  label: string
-): MetaversePlayerTeamId {
-  const resolvedTeamId = createMetaversePlayerTeamId(rawValue);
-
-  if (resolvedTeamId === null) {
-    throw new Error(`${label} must be a supported metaverse team id.`);
-  }
-
-  return resolvedTeamId;
 }
 
 function resolveAnimationVocabulary(
@@ -510,10 +499,7 @@ export function createMetaversePresencePlayerSnapshot({
     characterId: normalizeCharacterId(characterId),
     playerId,
     pose: createMetaversePresencePoseSnapshot(pose),
-    teamId: resolveRequiredMetaversePlayerTeamId(
-      teamId,
-      "Metaverse presence player teamId"
-    ),
+    teamId: normalizeMetaversePlayerTeamId(teamId, playerId),
     username
   });
 }
@@ -547,12 +533,14 @@ export function createMetaverseJoinPresenceCommand({
   characterId,
   playerId,
   pose,
+  teamId,
   username
 }: MetaverseJoinPresenceCommandInput): MetaverseJoinPresenceCommand {
   return Object.freeze({
     characterId: normalizeCharacterId(characterId),
     playerId,
     pose: createMetaversePresencePoseSnapshot(pose),
+    teamId: normalizeMetaversePlayerTeamId(teamId, playerId),
     type: "join-presence",
     username
   });

@@ -554,20 +554,20 @@ test("MetaverseWorldClient uses WebTransport datagrams for grounded move and tur
       }),
       playerId
     });
-    const expectedMoveTraversalSampleId =
-      client.latestPlayerIssuedTraversalIntentSnapshot?.sampleId ?? 0;
-    const expectedMoveInputSequence = client.latestPlayerInputSequence;
-    const expectedMoveOrientationSequence =
-      client.latestPlayerTraversalOrientationSequence;
-
-    assert.ok(expectedMoveInputSequence > 0);
-    assert.ok(expectedMoveOrientationSequence > 0);
-    assert.ok(expectedMoveTraversalSampleId > 0);
-
     assert.equal(scheduler.pendingTasks.at(-1)?.delay, 0);
 
     scheduler.runNext(0);
     await flushAsyncWork();
+
+    const expectedMoveTraversalSampleId =
+      client.latestPlayerIssuedTraversalIntentSnapshot?.sequence ?? 0;
+    const expectedMoveInputSequence = client.latestPlayerTraversalSequence;
+    const expectedMoveOrientationSequence =
+      client.latestPlayerTraversalSequence;
+
+    assert.ok(expectedMoveInputSequence > 0);
+    assert.ok(expectedMoveOrientationSequence > 0);
+    assert.ok(expectedMoveTraversalSampleId > 0);
 
     assert.equal(loopback.telemetry.datagramTraversalCount, 1);
     assert.equal(loopback.telemetry.reliableCommandRequestCount, 0);
@@ -577,16 +577,16 @@ test("MetaverseWorldClient uses WebTransport datagrams for grounded move and tur
     const authoritativeMovedSnapshot = runtime.readWorldSnapshot(nowMs, playerId);
 
     assert.equal(
-      authoritativeMovedSnapshot.observerPlayer?.lastProcessedInputSequence,
+      authoritativeMovedSnapshot.observerPlayer?.lastProcessedTraversalSequence,
       expectedMoveInputSequence
     );
     assert.equal(
-      authoritativeMovedSnapshot.observerPlayer?.lastProcessedTraversalSampleId,
+      authoritativeMovedSnapshot.observerPlayer?.lastProcessedTraversalSequence,
       expectedMoveTraversalSampleId
     );
     assert.equal(
       authoritativeMovedSnapshot.observerPlayer
-        ?.lastProcessedTraversalOrientationSequence,
+        ?.lastProcessedTraversalSequence,
       expectedMoveOrientationSequence
     );
 
@@ -594,9 +594,9 @@ test("MetaverseWorldClient uses WebTransport datagrams for grounded move and tur
       const snapshot = client.worldSnapshotBuffer.at(-1);
 
       if (
-        snapshot?.observerPlayer?.lastProcessedInputSequence !==
+        snapshot?.observerPlayer?.lastProcessedTraversalSequence !==
           expectedMoveInputSequence ||
-        snapshot.observerPlayer?.lastProcessedTraversalSampleId !==
+        snapshot.observerPlayer?.lastProcessedTraversalSequence !==
           expectedMoveTraversalSampleId
       ) {
         return null;
@@ -610,11 +610,11 @@ test("MetaverseWorldClient uses WebTransport datagrams for grounded move and tur
       );
 
     assert.equal(
-      movedSnapshot.observerPlayer?.lastProcessedTraversalSampleId,
+      movedSnapshot.observerPlayer?.lastProcessedTraversalSequence,
       expectedMoveTraversalSampleId
     );
     assert.equal(
-      movedSnapshot.observerPlayer?.lastProcessedTraversalOrientationSequence,
+      movedSnapshot.observerPlayer?.lastProcessedTraversalSequence,
       expectedMoveOrientationSequence
     );
     assert.ok(movedBodySnapshot.position.z < 24);
@@ -630,9 +630,9 @@ test("MetaverseWorldClient uses WebTransport datagrams for grounded move and tur
       }),
       playerId
     });
-    const expectedTurnInputSequence = client.latestPlayerInputSequence;
+    const expectedTurnInputSequence = client.latestPlayerTraversalSequence;
     const expectedTurnOrientationSequence =
-      client.latestPlayerTraversalOrientationSequence;
+      client.latestPlayerTraversalSequence;
 
     assert.equal(expectedTurnInputSequence, expectedMoveInputSequence);
     assert.ok(
@@ -652,12 +652,12 @@ test("MetaverseWorldClient uses WebTransport datagrams for grounded move and tur
     const authoritativeTurnedSnapshot = runtime.readWorldSnapshot(nowMs, playerId);
 
     assert.equal(
-      authoritativeTurnedSnapshot.observerPlayer?.lastProcessedInputSequence,
+      authoritativeTurnedSnapshot.observerPlayer?.lastProcessedTraversalSequence,
       expectedTurnInputSequence
     );
     assert.equal(
       authoritativeTurnedSnapshot.observerPlayer
-        ?.lastProcessedTraversalOrientationSequence,
+        ?.lastProcessedTraversalSequence,
       expectedTurnOrientationSequence
     );
 
@@ -665,21 +665,21 @@ test("MetaverseWorldClient uses WebTransport datagrams for grounded move and tur
       const snapshot = client.worldSnapshotBuffer.at(-1);
 
       if (
-        snapshot?.observerPlayer?.lastProcessedTraversalOrientationSequence !==
+        snapshot?.observerPlayer?.lastProcessedTraversalSequence !==
         expectedTurnOrientationSequence
       ) {
         return null;
       }
 
       return snapshot;
-    }, "grounded traversal orientation ack over snapshot stream");
+    }, "grounded traversal ack over snapshot stream");
     const turnedBodySnapshot =
       readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(
         requireValue(turnedSnapshot.players[0], "turnedPlayerSnapshot")
       );
 
     assert.equal(
-      turnedSnapshot.observerPlayer?.lastProcessedInputSequence,
+      turnedSnapshot.observerPlayer?.lastProcessedTraversalSequence,
       expectedTurnInputSequence
     );
     assert.ok(turnedBodySnapshot.yawRadians > 0.35);
@@ -808,9 +808,9 @@ test("MetaverseRemoteWorldRuntime keeps remote root motion live while the mover 
       }),
       playerId: moverPlayerId
     });
-    const expectedMoveInputSequence = moverClient.latestPlayerInputSequence;
+    const expectedMoveInputSequence = moverClient.latestPlayerTraversalSequence;
     const expectedMoveOrientationSequence =
-      moverClient.latestPlayerTraversalOrientationSequence;
+      moverClient.latestPlayerTraversalSequence;
 
     moverScheduler.runNext(0);
     await flushAsyncWork();
@@ -842,9 +842,9 @@ test("MetaverseRemoteWorldRuntime keeps remote root motion live while the mover 
       }),
       playerId: moverPlayerId
     });
-    const expectedTurnInputSequence = moverClient.latestPlayerInputSequence;
+    const expectedTurnInputSequence = moverClient.latestPlayerTraversalSequence;
     const expectedTurnOrientationSequence =
-      moverClient.latestPlayerTraversalOrientationSequence;
+      moverClient.latestPlayerTraversalSequence;
 
     assert.equal(expectedTurnInputSequence, expectedMoveInputSequence);
     assert.ok(
@@ -998,34 +998,6 @@ test("WebGpuMetaverseRuntime preserves brief grounded tap travel locally and sta
     nowMs += 1000 / 60;
     windowHarness.advanceFrame(nowMs);
 
-    const seededTraversalIntent =
-      runtimeWorldClient.latestPlayerIssuedTraversalIntentSnapshot;
-
-    assert.notEqual(seededTraversalIntent, null);
-    assert.ok(seededTraversalIntent.inputSequence > 0);
-
-    await runScheduledTasksWithDelay(scheduler, 0);
-    await waitFor(
-      () => (loopback.telemetry.datagramTraversalCount > 0 ? true : null),
-      "runtime seeded idle traversal datagram send"
-    );
-    nowMs = 50;
-    await publishAuthoritativeWorld(runtime, worldAdapter, nowMs);
-    await waitFor(() => {
-      const latestSnapshot = runtimeWorldClient?.worldSnapshotBuffer.at(-1);
-
-      if (
-        latestSnapshot?.observerPlayer?.lastProcessedInputSequence !==
-        seededTraversalIntent.inputSequence
-      ) {
-        return null;
-      }
-
-      return latestSnapshot;
-    }, "runtime seeded authoritative idle acknowledgement");
-    nowMs += 1000 / 60;
-    windowHarness.advanceFrame(nowMs);
-
     const baselineCorrectionCount =
       clientRuntime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount;
     const baselineLocalReconciliation =
@@ -1072,12 +1044,6 @@ test("WebGpuMetaverseRuntime preserves brief grounded tap travel locally and sta
         clientRuntime,
         metaverseRuntimeConfig
       );
-    const previewTraversalIntent =
-      runtimeWorldClient.latestPlayerIssuedTraversalIntentSnapshot;
-
-    assert.notEqual(previewTraversalIntent, null);
-    assert.ok(previewTraversalIntent.inputSequence >= 2);
-    assert.equal(previewTraversalIntent.bodyControl.moveAxis, 0);
     assert.ok(
       localPlanarDisplacementBeforeAuthority > 0.004,
       `expected local grounded prediction to preserve brief tap travel before authoritative replay, received ${localPlanarDisplacementBeforeAuthority}`
@@ -1097,6 +1063,13 @@ test("WebGpuMetaverseRuntime preserves brief grounded tap travel locally and sta
       "runtime tapped traversal datagram send"
     );
 
+    const previewTraversalIntent =
+      runtimeWorldClient.latestPlayerIssuedTraversalIntentSnapshot;
+
+    assert.notEqual(previewTraversalIntent, null);
+    assert.ok(previewTraversalIntent.sequence > 0);
+    assert.equal(previewTraversalIntent.bodyControl.moveAxis, 0);
+
     let authoritativePublishTimeMs = Math.max(150, nowMs + 50);
     let authoritativeSnapshot = null;
 
@@ -1110,8 +1083,8 @@ test("WebGpuMetaverseRuntime preserves brief grounded tap travel locally and sta
       );
 
       if (
-        nextAuthoritativeSnapshot.observerPlayer?.lastProcessedInputSequence ===
-        previewTraversalIntent.inputSequence
+        nextAuthoritativeSnapshot.observerPlayer?.lastProcessedTraversalSequence ===
+        previewTraversalIntent.sequence
       ) {
         authoritativeSnapshot = nextAuthoritativeSnapshot;
         break;
@@ -1152,8 +1125,8 @@ test("WebGpuMetaverseRuntime preserves brief grounded tap travel locally and sta
       const latestSnapshot = runtimeWorldClient?.worldSnapshotBuffer.at(-1);
 
       if (
-        latestSnapshot?.observerPlayer?.lastProcessedInputSequence !==
-        previewTraversalIntent.inputSequence
+        latestSnapshot?.observerPlayer?.lastProcessedTraversalSequence !==
+        previewTraversalIntent.sequence
       ) {
         return null;
       }
@@ -1297,34 +1270,6 @@ test("WebGpuMetaverseRuntime keeps an ordinary grounded jump accepted over WebTr
     nowMs += 1000 / 60;
     windowHarness.advanceFrame(nowMs);
 
-    const seededTraversalIntent =
-      runtimeWorldClient.latestPlayerIssuedTraversalIntentSnapshot;
-
-    assert.notEqual(seededTraversalIntent, null);
-    assert.ok(seededTraversalIntent.inputSequence > 0);
-
-    await runScheduledTasksWithDelay(scheduler, 0);
-    await waitFor(
-      () => (loopback.telemetry.datagramTraversalCount > 0 ? true : null),
-      "runtime seeded idle traversal datagram send"
-    );
-    nowMs = 50;
-    await publishAuthoritativeWorld(runtime, worldAdapter, nowMs);
-    await waitFor(() => {
-      const latestSnapshot = runtimeWorldClient?.worldSnapshotBuffer.at(-1);
-
-      if (
-        latestSnapshot?.observerPlayer?.lastProcessedInputSequence !==
-        seededTraversalIntent.inputSequence
-      ) {
-        return null;
-      }
-
-      return latestSnapshot;
-    }, "runtime seeded authoritative idle acknowledgement");
-    nowMs += 1000 / 60;
-    windowHarness.advanceFrame(nowMs);
-
     const baselineCorrectionCount =
       clientRuntime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount;
     const baselineLocalReconciliation =
@@ -1351,30 +1296,11 @@ test("WebGpuMetaverseRuntime keeps an ordinary grounded jump accepted over WebTr
     });
     windowHarness.advanceFrame(nowMs);
 
-    const jumpPressedTraversalIntent =
-      runtimeWorldClient.latestPlayerIssuedTraversalIntentSnapshot;
-
-    assert.notEqual(jumpPressedTraversalIntent, null);
-    assert.equal(jumpPressedTraversalIntent.actionIntent.kind, "jump");
-    assert.equal(jumpPressedTraversalIntent.actionIntent.pressed, true);
-    assert.ok(jumpPressedTraversalIntent.actionIntent.sequence > 0);
-
     nowMs += 1000 / 60;
     windowHarness.dispatch("keyup", {
       code: "Space"
     });
     windowHarness.advanceFrame(nowMs);
-
-    const jumpReleasedTraversalIntent =
-      runtimeWorldClient.latestPlayerIssuedTraversalIntentSnapshot;
-
-    assert.notEqual(jumpReleasedTraversalIntent, null);
-    assert.equal(jumpReleasedTraversalIntent.actionIntent.kind, "jump");
-    assert.equal(jumpReleasedTraversalIntent.actionIntent.pressed, false);
-    assert.equal(
-      jumpReleasedTraversalIntent.actionIntent.sequence,
-      jumpPressedTraversalIntent.actionIntent.sequence
-    );
 
     await runScheduledTasksWithDelay(scheduler, 0);
     await waitFor(
@@ -1385,6 +1311,14 @@ test("WebGpuMetaverseRuntime keeps an ordinary grounded jump accepted over WebTr
           : null,
       "runtime jump traversal datagram send"
     );
+
+    const jumpReleasedTraversalIntent =
+      runtimeWorldClient.latestPlayerIssuedTraversalIntentSnapshot;
+
+    assert.notEqual(jumpReleasedTraversalIntent, null);
+    assert.equal(jumpReleasedTraversalIntent.actionIntent.kind, "jump");
+    assert.equal(jumpReleasedTraversalIntent.actionIntent.pressed, false);
+    assert.ok(jumpReleasedTraversalIntent.actionIntent.sequence > 0);
 
     let authoritativePublishTimeMs = Math.max(150, nowMs + 50);
     let authoritativeJumpSnapshot = null;
@@ -1399,8 +1333,8 @@ test("WebGpuMetaverseRuntime keeps an ordinary grounded jump accepted over WebTr
       );
 
       if (
-        nextAuthoritativeSnapshot.observerPlayer?.lastProcessedInputSequence ===
-          jumpReleasedTraversalIntent.inputSequence &&
+        nextAuthoritativeSnapshot.observerPlayer?.lastProcessedTraversalSequence ===
+          jumpReleasedTraversalIntent.sequence &&
         nextAuthoritativeSnapshot.players[0]?.traversalAuthority
           .lastConsumedActionKind === "jump"
       ) {
@@ -1425,8 +1359,8 @@ test("WebGpuMetaverseRuntime keeps an ordinary grounded jump accepted over WebTr
       const latestSnapshot = runtimeWorldClient?.worldSnapshotBuffer.at(-1);
 
       if (
-        latestSnapshot?.observerPlayer?.lastProcessedInputSequence !==
-        jumpReleasedTraversalIntent.inputSequence
+        latestSnapshot?.observerPlayer?.lastProcessedTraversalSequence !==
+        jumpReleasedTraversalIntent.sequence
       ) {
         return null;
       }
@@ -1611,16 +1545,17 @@ test("MetaverseWorldClient preserves rapid short-lived traversal edges over the 
       }),
       playerId
     });
-    const expectedInputSequence = client.latestPlayerInputSequence;
-    const expectedOrientationSequence =
-      client.latestPlayerTraversalOrientationSequence;
-
-    assert.ok(expectedInputSequence >= 3);
-    assert.ok(expectedOrientationSequence >= 2);
     assert.equal(scheduler.pendingTasks.at(-1)?.delay, 0);
 
     scheduler.runNext(0);
     await flushAsyncWork();
+
+    const expectedInputSequence = client.latestPlayerTraversalSequence;
+    const expectedOrientationSequence =
+      client.latestPlayerTraversalSequence;
+
+    assert.ok(expectedInputSequence > 0);
+    assert.ok(expectedOrientationSequence > 0);
 
     assert.equal(loopback.telemetry.datagramTraversalCount, 1);
     assert.equal(loopback.telemetry.reliableCommandRequestCount, 0);
@@ -1637,12 +1572,12 @@ test("MetaverseWorldClient preserves rapid short-lived traversal edges over the 
       );
 
     assert.equal(
-      authoritativeSnapshot.observerPlayer?.lastProcessedInputSequence,
+      authoritativeSnapshot.observerPlayer?.lastProcessedTraversalSequence,
       expectedInputSequence
     );
     assert.equal(
       authoritativeSnapshot.observerPlayer
-        ?.lastProcessedTraversalOrientationSequence,
+        ?.lastProcessedTraversalSequence,
       expectedOrientationSequence
     );
     assert.ok(
@@ -1659,9 +1594,9 @@ test("MetaverseWorldClient preserves rapid short-lived traversal edges over the 
       const snapshot = client.worldSnapshotBuffer.at(-1);
 
       if (
-        snapshot?.observerPlayer?.lastProcessedInputSequence !==
+        snapshot?.observerPlayer?.lastProcessedTraversalSequence !==
           expectedInputSequence ||
-        snapshot.observerPlayer?.lastProcessedTraversalOrientationSequence !==
+        snapshot.observerPlayer?.lastProcessedTraversalSequence !==
           expectedOrientationSequence
       ) {
         return null;
@@ -1783,14 +1718,14 @@ test("MetaverseWorldClient keeps jump acceptance on the WebTransport traversal d
       }),
       playerId
     });
-    const expectedJumpInputSequence = client.latestPlayerInputSequence;
-
-    assert.ok(expectedJumpInputSequence > 0);
-
     assert.equal(scheduler.pendingTasks.at(-1)?.delay, 0);
 
     scheduler.runNext(0);
     await flushAsyncWork();
+
+    const expectedJumpInputSequence = client.latestPlayerTraversalSequence;
+
+    assert.ok(expectedJumpInputSequence > 0);
 
     assert.equal(loopback.telemetry.datagramTraversalCount, 1);
     assert.equal(loopback.telemetry.reliableCommandRequestCount, 0);
@@ -1800,7 +1735,7 @@ test("MetaverseWorldClient keeps jump acceptance on the WebTransport traversal d
     const authoritativeJumpSnapshot = runtime.readWorldSnapshot(nowMs, playerId);
 
     assert.equal(
-      authoritativeJumpSnapshot.observerPlayer?.lastProcessedInputSequence,
+      authoritativeJumpSnapshot.observerPlayer?.lastProcessedTraversalSequence,
       expectedJumpInputSequence
     );
     assert.equal(
@@ -1816,7 +1751,7 @@ test("MetaverseWorldClient keeps jump acceptance on the WebTransport traversal d
       const snapshot = client.worldSnapshotBuffer.at(-1);
 
       if (
-        snapshot?.observerPlayer?.lastProcessedInputSequence !==
+        snapshot?.observerPlayer?.lastProcessedTraversalSequence !==
         expectedJumpInputSequence
       ) {
         return null;

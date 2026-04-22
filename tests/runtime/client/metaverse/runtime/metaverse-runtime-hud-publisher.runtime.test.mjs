@@ -188,10 +188,8 @@ test("MetaverseRuntimeHudPublisher keeps friendly radar contacts live while enem
       resolvedActionSequence: 0,
       resolvedActionState: "none"
     }),
-    lastProcessedInputSequence: 0,
     lastProcessedLookSequence: 0,
-    lastProcessedTraversalOrientationSequence: 0,
-    lastProcessedTraversalSampleId: 0,
+    lastProcessedTraversalSequence: 0,
     lastProcessedWeaponSequence: 0
   });
   const friendlySnapshotNear = createMetaverseRealtimePlayerSnapshot({

@@ -139,16 +139,19 @@ export function resolvePredictedLocalReconciliationSampleFromMatchingHistory(
     Number.isFinite(authoritativeTraversalSampleId) &&
     authoritativeTraversalSampleId > 0
       ? matchingSamplesNewestToOldest.filter(
-          (sample) => sample.traversalSampleId === authoritativeTraversalSampleId
+          (sample) => sample.traversalSequence === authoritativeTraversalSampleId
         )
       : null;
 
-  if (
+  const exactTraversalSequenceMatch =
     samplesMatchingTraversalSampleId !== null &&
     samplesMatchingTraversalSampleId.length === 1
-  ) {
+      ? (samplesMatchingTraversalSampleId[0] ?? null)
+      : null;
+
+  if (exactTraversalSequenceMatch !== null) {
     return Object.freeze({
-      sample: samplesMatchingTraversalSampleId[0],
+      sample: exactTraversalSequenceMatch,
       selectionReason: "exact-traversal-sample-id",
       timeDeltaMs: null
     });

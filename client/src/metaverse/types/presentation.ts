@@ -39,6 +39,7 @@ export interface MetaverseCharacterLookSnapshot {
 
 export interface MetaverseCharacterPresentationSnapshot {
   readonly animationCycleId?: number;
+  readonly animationPlaybackRateMultiplier: number;
   readonly animationVocabulary: MetaverseCharacterAnimationVocabularyId;
   readonly position: MetaverseVector3Snapshot;
   readonly yawRadians: number;

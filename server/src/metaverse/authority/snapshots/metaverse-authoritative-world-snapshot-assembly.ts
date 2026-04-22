@@ -138,9 +138,7 @@ function createPlayerPresentationIntentSnapshot(
   readonly moveAxis: number;
   readonly strafeAxis: number;
 } {
-  const presentationIntent =
-    traversalIntent?.pendingIntentTimeline.at(-1)?.intent ??
-    traversalIntent?.currentIntent;
+  const presentationIntent = traversalIntent?.currentIntent;
 
   return Object.freeze({
     moveAxis: presentationIntent?.bodyControl.moveAxis ?? 0,

@@ -60,9 +60,8 @@ function createWorldEvent({
   return createMetaverseRealtimeWorldEvent({
     world: {
       observerPlayer: {
-        lastProcessedInputSequence: 0,
         lastProcessedLookSequence: 0,
-        lastProcessedTraversalOrientationSequence: 0,
+        lastProcessedTraversalSequence: 0,
         playerId
       },
       players: [

@@ -1,4 +1,5 @@
 interface WebTransportDatagramStreamLike {
+  readonly maxDatagramSize?: number;
   readonly writable: WritableStream<Uint8Array>;
 }
 
@@ -13,9 +14,18 @@ interface WebTransportLike {
 }
 
 interface LatestWinsWebTransportJsonDatagramConnection {
+  readonly maxDatagramSize: number;
   readonly transport: WebTransportLike;
   readonly writer: WritableStreamDefaultWriter<Uint8Array>;
 }
+
+interface LatestWinsWebTransportJsonDatagramPendingWrite<Datagram> {
+  readonly datagram: Datagram;
+  reject(error: unknown): void;
+  resolve(): void;
+}
+
+const fallbackWebTransportMaxDatagramSizeBytes = 1_000;
 
 export class LatestWinsWebTransportJsonDatagramChannelError extends Error {
   override readonly cause: unknown;
@@ -70,6 +80,9 @@ export class LatestWinsWebTransportJsonDatagramChannel<Datagram> {
   #connectionPromise: Promise<LatestWinsWebTransportJsonDatagramConnection> | null =
     null;
   #disposed = false;
+  #flushPromise: Promise<void> | null = null;
+  #pendingWrite: LatestWinsWebTransportJsonDatagramPendingWrite<Datagram> | null =
+    null;
 
   constructor(
     config: LatestWinsWebTransportJsonDatagramChannelConfig<Datagram>,
@@ -87,26 +100,14 @@ export class LatestWinsWebTransportJsonDatagramChannel<Datagram> {
   async sendDatagram(datagram: Datagram): Promise<void> {
     this.#assertNotDisposed();
 
-    try {
-      const connection = await this.#ensureConnection();
-      await connection.writer.write(
-        this.#encodeText.encode(JSON.stringify(this.#serializeDatagram(datagram)))
-      );
-    } catch (error) {
-      this.#resetConnection();
-      if (error instanceof LatestWinsWebTransportJsonDatagramChannelError) {
-        throw error;
-      }
-
-      const message =
-        error instanceof Error &&
-        typeof error.message === "string" &&
-        error.message.trim().length > 0
-          ? error.message
-          : "Latest-wins WebTransport JSON datagram send failed.";
-
-      throw new LatestWinsWebTransportJsonDatagramChannelError(message, error);
-    }
+    return new Promise((resolve, reject) => {
+      this.#replacePendingWrite({
+        datagram,
+        reject,
+        resolve
+      });
+      this.#ensureFlushLoop();
+    });
   }
 
   dispose(): void {
@@ -115,7 +116,86 @@ export class LatestWinsWebTransportJsonDatagramChannel<Datagram> {
     }
 
     this.#disposed = true;
+    this.#rejectPendingWrite(
+      new Error(
+        "Latest-wins WebTransport JSON datagram channel has already been disposed."
+      )
+    );
     this.#resetConnection();
+  }
+
+  #encodeDatagram(
+    datagram: Datagram,
+    maxDatagramSize: number
+  ): Uint8Array {
+    try {
+      const encodedDatagram = this.#encodeText.encode(
+        JSON.stringify(this.#serializeDatagram(datagram))
+      );
+
+      if (encodedDatagram.byteLength > maxDatagramSize) {
+        throw new Error(
+          `Latest-wins WebTransport JSON datagram payload ${encodedDatagram.byteLength} bytes exceeds max datagram size ${maxDatagramSize} bytes.`
+        );
+      }
+
+      return encodedDatagram;
+    } catch (error) {
+      throw this.#normalizeSendError(error);
+    }
+  }
+
+  #replacePendingWrite(
+    nextPendingWrite: LatestWinsWebTransportJsonDatagramPendingWrite<Datagram>
+  ): void {
+    const supersededPendingWrite = this.#pendingWrite;
+
+    this.#pendingWrite = nextPendingWrite;
+    supersededPendingWrite?.resolve();
+  }
+
+  #ensureFlushLoop(): void {
+    if (this.#flushPromise !== null) {
+      return;
+    }
+
+    const flushPromise = this.#flushPendingWrites();
+    this.#flushPromise = flushPromise;
+    void flushPromise.finally(() => {
+      if (this.#flushPromise === flushPromise) {
+        this.#flushPromise = null;
+      }
+    });
+  }
+
+  async #flushPendingWrites(): Promise<void> {
+    while (!this.#disposed) {
+      const pendingWrite = this.#pendingWrite;
+
+      if (pendingWrite === null) {
+        return;
+      }
+
+      this.#pendingWrite = null;
+
+      try {
+        const connection = await this.#ensureConnection();
+        await connection.writer.write(
+          this.#encodeDatagram(
+            pendingWrite.datagram,
+            connection.maxDatagramSize
+          )
+        );
+        pendingWrite.resolve();
+      } catch (error) {
+        const normalizedError = this.#normalizeSendError(error);
+
+        pendingWrite.reject(normalizedError);
+        this.#rejectPendingWrite(normalizedError);
+        this.#resetConnection();
+        return;
+      }
+    }
   }
 
   async #ensureConnection(): Promise<LatestWinsWebTransportJsonDatagramConnection> {
@@ -152,9 +232,44 @@ export class LatestWinsWebTransportJsonDatagramChannel<Datagram> {
     }
 
     return {
+      maxDatagramSize: this.#resolveMaxDatagramSize(datagramStream.maxDatagramSize),
       transport,
       writer: datagramStream.writable.getWriter()
     };
+  }
+
+  #rejectPendingWrite(error: unknown): void {
+    const pendingWrite = this.#pendingWrite;
+
+    if (pendingWrite === null) {
+      return;
+    }
+
+    this.#pendingWrite = null;
+    pendingWrite.reject(error);
+  }
+
+  #normalizeSendError(
+    error: unknown
+  ): LatestWinsWebTransportJsonDatagramChannelError {
+    if (error instanceof LatestWinsWebTransportJsonDatagramChannelError) {
+      return error;
+    }
+
+    const message =
+      error instanceof Error &&
+      typeof error.message === "string" &&
+      error.message.trim().length > 0
+        ? error.message
+        : "Latest-wins WebTransport JSON datagram send failed.";
+
+    return new LatestWinsWebTransportJsonDatagramChannelError(message, error);
+  }
+
+  #resolveMaxDatagramSize(rawValue: number | undefined): number {
+    return Number.isFinite(rawValue) && rawValue !== undefined && rawValue > 0
+      ? Math.max(1, Math.floor(rawValue))
+      : fallbackWebTransportMaxDatagramSizeBytes;
   }
 
   #resetConnection(): void {

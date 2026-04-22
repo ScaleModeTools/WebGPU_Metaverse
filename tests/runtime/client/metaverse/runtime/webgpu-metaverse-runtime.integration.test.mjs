@@ -121,13 +121,13 @@ function captureCurrentGroundedBodySample({
       position,
       yawRadians: cameraSnapshot.yawRadians
     }),
-    inputSequence:
-      fakeWorldClient.latestPlayerIssuedTraversalIntentSnapshot?.inputSequence ??
+    sequence:
+      fakeWorldClient.latestPlayerIssuedTraversalIntentSnapshot?.sequence ??
       0,
     lookYawRadians: cameraSnapshot.yawRadians,
-    orientationSequence:
+    sequence:
       fakeWorldClient.latestPlayerIssuedTraversalIntentSnapshot
-        ?.orientationSequence ?? 0,
+        ?.sequence ?? 0,
     wallClockMs
   });
 }
@@ -1207,7 +1207,7 @@ test("WebGpuMetaverseRuntime derives authoritative surface-routing telemetry fro
         },
         localJumpAuthorityState: "none",
         localLastAcceptedJumpActionSequence: 0,
-        localLastProcessedInputSequence: 0,
+        localLastProcessedTraversalSequence: 0,
         localLastProcessedJumpActionSequence: 0,
         localLinearVelocity: {
           x: 0,
@@ -1600,14 +1600,14 @@ test("WebGpuMetaverseRuntime converges acked pose-only traversal drift without h
   const { metaverseRuntimeConfig, runtime, windowHarness } = harness;
 
   try {
-    const localPoseInputSequence = fakeWorldClient.latestPlayerInputSequence;
+    const localPoseInputSequence = fakeWorldClient.latestPlayerTraversalSequence;
     const localWeaponSequence = fakeWorldClient.latestPlayerWeaponSequence;
     const capturedGroundedSamples = [];
 
     assert.ok(localPoseInputSequence > 0);
     assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.issuedTraversalIntent
-        ?.inputSequence,
+        ?.sequence,
       localPoseInputSequence
     );
 
@@ -1625,9 +1625,9 @@ test("WebGpuMetaverseRuntime converges acked pose-only traversal drift without h
         includeRemotePlayer: false,
         includeVehicle: false,
         localGroundedBody: bootstrapAuthoritativeSample.groundedBody,
-        localLastProcessedInputSequence: bootstrapAuthoritativeSample.inputSequence,
-        localLastProcessedTraversalOrientationSequence:
-          bootstrapAuthoritativeSample.orientationSequence,
+        localLastProcessedTraversalSequence: bootstrapAuthoritativeSample.sequence,
+        localLastProcessedTraversalSequence:
+          bootstrapAuthoritativeSample.sequence,
         localLastProcessedWeaponSequence: localWeaponSequence,
         localLookYawRadians: bootstrapAuthoritativeSample.lookYawRadians,
         localPlayerId,
@@ -1676,9 +1676,9 @@ test("WebGpuMetaverseRuntime converges acked pose-only traversal drift without h
             z: baselineAuthoritativeSample.groundedBody.position.z
           }
         },
-        localLastProcessedInputSequence: baselineAuthoritativeSample.inputSequence,
-        localLastProcessedTraversalOrientationSequence:
-          baselineAuthoritativeSample.orientationSequence,
+        localLastProcessedTraversalSequence: baselineAuthoritativeSample.sequence,
+        localLastProcessedTraversalSequence:
+          baselineAuthoritativeSample.sequence,
         localLastProcessedWeaponSequence: localWeaponSequence,
         localLookYawRadians: baselineAuthoritativeSample.lookYawRadians,
         localLinearVelocity: {
@@ -1722,7 +1722,7 @@ test("WebGpuMetaverseRuntime converges acked pose-only traversal drift without h
     );
     assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
-        .lastProcessedInputSequence,
+        .lastProcessedTraversalSequence,
       localPoseInputSequence
     );
     assert.equal(
@@ -1779,7 +1779,7 @@ test("WebGpuMetaverseRuntime rearms the spawn-labeled authority snap when respaw
   const { metaverseRuntimeConfig, runtime, windowHarness } = harness;
 
   try {
-    const localPoseInputSequence = fakeWorldClient.latestPlayerInputSequence;
+    const localPoseInputSequence = fakeWorldClient.latestPlayerTraversalSequence;
     const localWeaponSequence = fakeWorldClient.latestPlayerWeaponSequence;
     const localGroundedBodyTelemetry =
       runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.groundedBody;
@@ -1795,9 +1795,9 @@ test("WebGpuMetaverseRuntime rearms the spawn-labeled authority snap when respaw
         currentTick: 10,
         includeRemotePlayer: false,
         includeVehicle: false,
-        localLastProcessedInputSequence: localPoseInputSequence,
-        localLastProcessedTraversalOrientationSequence:
-          fakeWorldClient.latestPlayerTraversalOrientationSequence,
+        localLastProcessedTraversalSequence: localPoseInputSequence,
+        localLastProcessedTraversalSequence:
+          fakeWorldClient.latestPlayerTraversalSequence,
         localLastProcessedWeaponSequence: localWeaponSequence,
         localLinearVelocity: {
           x: 0,
@@ -1858,9 +1858,9 @@ test("WebGpuMetaverseRuntime rearms the spawn-labeled authority snap when respaw
       y: localBodyY,
       z: 18
     };
-    const respawnInputSequence = fakeWorldClient.latestPlayerInputSequence;
+    const respawnInputSequence = fakeWorldClient.latestPlayerTraversalSequence;
     const respawnOrientationSequence =
-      fakeWorldClient.latestPlayerTraversalOrientationSequence;
+      fakeWorldClient.latestPlayerTraversalSequence;
     const respawnWeaponSequence = fakeWorldClient.latestPlayerWeaponSequence;
     const respawnGroundedBodyTelemetry =
       runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.groundedBody;
@@ -1872,8 +1872,8 @@ test("WebGpuMetaverseRuntime rearms the spawn-labeled authority snap when respaw
         currentTick: 11,
         includeRemotePlayer: false,
         includeVehicle: false,
-        localLastProcessedInputSequence: respawnInputSequence,
-        localLastProcessedTraversalOrientationSequence:
+        localLastProcessedTraversalSequence: respawnInputSequence,
+        localLastProcessedTraversalSequence:
           respawnOrientationSequence,
         localLastProcessedWeaponSequence: respawnWeaponSequence,
         localLinearVelocity: {
@@ -1965,7 +1965,7 @@ test("WebGpuMetaverseRuntime keeps neutral authoritative local updates correctio
   const { metaverseRuntimeConfig, runtime, windowHarness } = harness;
 
   try {
-    const localPoseInputSequence = fakeWorldClient.latestPlayerInputSequence;
+    const localPoseInputSequence = fakeWorldClient.latestPlayerTraversalSequence;
     const localWeaponSequence = fakeWorldClient.latestPlayerWeaponSequence;
 
     assert.ok(localPoseInputSequence > 0);
@@ -2017,7 +2017,7 @@ test("WebGpuMetaverseRuntime keeps neutral authoritative local updates correctio
         includeVehicle: false,
         localJumpAuthorityState:
           localLocomotionModeBeforeAuthority === "grounded" ? "grounded" : "none",
-        localLastProcessedInputSequence: localPoseInputSequence,
+        localLastProcessedTraversalSequence: localPoseInputSequence,
         localLastProcessedWeaponSequence: localWeaponSequence,
         localLookYawRadians: localCameraYawBeforeAuthority,
         localLinearVelocity: {
@@ -2090,7 +2090,7 @@ test("WebGpuMetaverseRuntime keeps local traversal client-owned under routine ac
   const { metaverseRuntimeConfig, runtime, windowHarness } = harness;
 
   try {
-    const localPoseInputSequence = fakeWorldClient.latestPlayerInputSequence;
+    const localPoseInputSequence = fakeWorldClient.latestPlayerTraversalSequence;
     const localWeaponSequence = fakeWorldClient.latestPlayerWeaponSequence;
 
     assert.ok(localPoseInputSequence > 0);
@@ -2127,7 +2127,7 @@ test("WebGpuMetaverseRuntime keeps local traversal client-owned under routine ac
           localLocomotionModeBeforeAuthority === "grounded"
             ? "grounded"
             : "none",
-        localLastProcessedInputSequence: localPoseInputSequence,
+        localLastProcessedTraversalSequence: localPoseInputSequence,
         localLastProcessedWeaponSequence: localWeaponSequence,
         localLookYawRadians: localCameraYawBeforeAuthority,
         localLinearVelocity: {
@@ -2213,14 +2213,14 @@ test("WebGpuMetaverseRuntime does not run a full frame when authoritative world 
       runtime.hudSnapshot.telemetry.renderedFrameCount;
     const traversalRequestCountBeforePublish =
       fakeWorldClient.playerTraversalIntentRequests.length;
-    const localPoseInputSequence = fakeWorldClient.latestPlayerInputSequence;
+    const localPoseInputSequence = fakeWorldClient.latestPlayerTraversalSequence;
 
     fakeWorldClient.publishWorldSnapshotBuffer([
       createRealtimeWorldSnapshot({
         currentTick: 11,
         includeRemotePlayer: false,
         includeVehicle: false,
-        localLastProcessedInputSequence: localPoseInputSequence,
+        localLastProcessedTraversalSequence: localPoseInputSequence,
         localPlayerId,
         localPlayerX: 3,
         localUsername: username,
@@ -2243,7 +2243,7 @@ test("WebGpuMetaverseRuntime does not run a full frame when authoritative world 
     );
     assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
-        .lastProcessedInputSequence,
+        .lastProcessedTraversalSequence,
       localPoseInputSequence
     );
 
@@ -2344,7 +2344,7 @@ test("WebGpuMetaverseRuntime keeps fully acknowledged held traversal intent corr
           localLocomotionModeBeforeAuthority === "grounded"
             ? "grounded"
             : "none",
-        localLastProcessedInputSequence: latestTraversalIntent.inputSequence,
+        localLastProcessedTraversalSequence: latestTraversalIntent.sequence,
         localLookYawRadians: localCameraYawBeforeAuthority,
         localLinearVelocity: {
           x: 0,
@@ -2481,7 +2481,7 @@ test("WebGpuMetaverseRuntime keeps sustained swim correction-free under delayed 
       );
       capturedSamples.push(
         Object.freeze({
-          inputSequence: latestTraversalIntent.inputSequence,
+          sequence: latestTraversalIntent.sequence,
           linearVelocity: Object.freeze({
             x:
               (currentSample.position.x - previousSample.position.x) / deltaSeconds,
@@ -2505,7 +2505,7 @@ test("WebGpuMetaverseRuntime keeps sustained swim correction-free under delayed 
           includeRemotePlayer: false,
           includeVehicle: false,
           localJumpAuthorityState: "none",
-          localLastProcessedInputSequence: authoritativeSample.inputSequence,
+          localLastProcessedTraversalSequence: authoritativeSample.sequence,
           localLinearVelocity: authoritativeSample.linearVelocity,
           localLocomotionMode: "swim",
           localLookYawRadians: authoritativeSample.yawRadians,
@@ -2584,7 +2584,7 @@ test("WebGpuMetaverseRuntime ignores acked authoritative local yaw drift while u
   const { metaverseRuntimeConfig, runtime, windowHarness } = harness;
 
   try {
-    const localPoseInputSequence = fakeWorldClient.latestPlayerInputSequence;
+    const localPoseInputSequence = fakeWorldClient.latestPlayerTraversalSequence;
 
     assert.ok(localPoseInputSequence > 0);
 
@@ -2622,7 +2622,7 @@ test("WebGpuMetaverseRuntime ignores acked authoritative local yaw drift while u
           localLocomotionModeBeforeAuthority === "grounded"
             ? "grounded"
             : "none",
-        localLastProcessedInputSequence: localPoseInputSequence,
+        localLastProcessedTraversalSequence: localPoseInputSequence,
         localLookYawRadians: localCameraYawBeforeAuthority - 0.85,
         localLinearVelocity: {
           x: 0,
@@ -2738,7 +2738,7 @@ test("WebGpuMetaverseRuntime keeps grounded boost-strafe-turn authority aligned 
       assert.equal(latestTraversalIntent.bodyControl.boost, true);
       assert.equal(latestTraversalIntent.bodyControl.moveAxis, 1);
       assert.equal(latestTraversalIntent.bodyControl.strafeAxis, 1);
-      assert.ok(latestTraversalIntent.orientationSequence > 0);
+      assert.ok(latestTraversalIntent.sequence > 0);
 
       capturedSamples.push(
         captureCurrentGroundedBodySample({
@@ -2759,9 +2759,9 @@ test("WebGpuMetaverseRuntime keeps grounded boost-strafe-turn authority aligned 
           includeRemotePlayer: false,
           includeVehicle: false,
           localGroundedBody: authoritativeSample.groundedBody,
-          localLastProcessedInputSequence: authoritativeSample.inputSequence,
-          localLastProcessedTraversalOrientationSequence:
-            authoritativeSample.orientationSequence,
+          localLastProcessedTraversalSequence: authoritativeSample.sequence,
+          localLastProcessedTraversalSequence:
+            authoritativeSample.sequence,
           localLinearVelocity: authoritativeSample.groundedBody.linearVelocity,
           localLookYawRadians: authoritativeSample.lookYawRadians,
           localPlayerId,
@@ -2873,9 +2873,9 @@ test("WebGpuMetaverseRuntime keeps grounded diagonal travel correction-free acro
       assert.equal(latestTraversalIntent.bodyControl.moveAxis, 1);
       assert.equal(latestTraversalIntent.bodyControl.strafeAxis, 1);
       diagonalOrientationSequence ??=
-        latestTraversalIntent.orientationSequence;
+        latestTraversalIntent.sequence;
       assert.equal(
-        latestTraversalIntent.orientationSequence,
+        latestTraversalIntent.sequence,
         diagonalOrientationSequence
       );
 
@@ -2898,9 +2898,9 @@ test("WebGpuMetaverseRuntime keeps grounded diagonal travel correction-free acro
           includeRemotePlayer: false,
           includeVehicle: false,
           localGroundedBody: authoritativeSample.groundedBody,
-          localLastProcessedInputSequence: authoritativeSample.inputSequence,
-          localLastProcessedTraversalOrientationSequence:
-            authoritativeSample.orientationSequence,
+          localLastProcessedTraversalSequence: authoritativeSample.sequence,
+          localLastProcessedTraversalSequence:
+            authoritativeSample.sequence,
           localLinearVelocity: authoritativeSample.groundedBody.linearVelocity,
           localLookYawRadians: authoritativeSample.lookYawRadians,
           localPlayerId,
@@ -3008,9 +3008,9 @@ test("WebGpuMetaverseRuntime cancels opposite grounded inputs without corrective
       assert.equal(latestTraversalIntent.bodyControl.moveAxis, 1);
       assert.equal(latestTraversalIntent.bodyControl.strafeAxis, -1);
       cancellationOrientationSequence ??=
-        latestTraversalIntent.orientationSequence;
+        latestTraversalIntent.sequence;
       assert.equal(
-        latestTraversalIntent.orientationSequence,
+        latestTraversalIntent.sequence,
         cancellationOrientationSequence
       );
 
@@ -3033,9 +3033,9 @@ test("WebGpuMetaverseRuntime cancels opposite grounded inputs without corrective
           includeRemotePlayer: false,
           includeVehicle: false,
           localGroundedBody: authoritativeSample.groundedBody,
-          localLastProcessedInputSequence: authoritativeSample.inputSequence,
-          localLastProcessedTraversalOrientationSequence:
-            authoritativeSample.orientationSequence,
+          localLastProcessedTraversalSequence: authoritativeSample.sequence,
+          localLastProcessedTraversalSequence:
+            authoritativeSample.sequence,
           localLinearVelocity: authoritativeSample.groundedBody.linearVelocity,
           localLookYawRadians: authoritativeSample.lookYawRadians,
           localPlayerId,
@@ -3073,7 +3073,7 @@ test("WebGpuMetaverseRuntime cancels opposite grounded inputs without corrective
       assert.equal(latestTraversalIntent.bodyControl.moveAxis, 0);
       assert.equal(latestTraversalIntent.bodyControl.strafeAxis, 0);
       assert.equal(
-        latestTraversalIntent.orientationSequence,
+        latestTraversalIntent.sequence,
         cancellationOrientationSequence
       );
 
@@ -3096,9 +3096,9 @@ test("WebGpuMetaverseRuntime cancels opposite grounded inputs without corrective
           includeRemotePlayer: false,
           includeVehicle: false,
           localGroundedBody: authoritativeSample.groundedBody,
-          localLastProcessedInputSequence: authoritativeSample.inputSequence,
-          localLastProcessedTraversalOrientationSequence:
-            authoritativeSample.orientationSequence,
+          localLastProcessedTraversalSequence: authoritativeSample.sequence,
+          localLastProcessedTraversalSequence:
+            authoritativeSample.sequence,
           localLinearVelocity: authoritativeSample.groundedBody.linearVelocity,
           localLookYawRadians: authoritativeSample.lookYawRadians,
           localPlayerId,
@@ -3244,7 +3244,7 @@ test("WebGpuMetaverseRuntime stays correction-free against the authoritative ser
       assert.equal(latestTraversalIntent.bodyControl.boost, true);
       assert.equal(latestTraversalIntent.bodyControl.moveAxis, 1);
       assert.equal(latestTraversalIntent.bodyControl.strafeAxis, 1);
-      assert.ok(latestTraversalIntent.orientationSequence > 0);
+      assert.ok(latestTraversalIntent.sequence > 0);
 
       authoritativeRuntime.acceptWorldCommand(
         createMetaverseSyncPlayerTraversalIntentCommand({

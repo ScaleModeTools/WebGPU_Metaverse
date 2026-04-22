@@ -100,8 +100,8 @@ export function createMetaverseSyncPlayerTraversalIntentCommand(input) {
         turnAxis: nextIntent.yawAxis
       },
       facing: normalizedFacing,
-      inputSequence: nextIntent.inputSequence,
-      locomotionMode: nextIntent.locomotionMode
+      locomotionMode: nextIntent.locomotionMode,
+      sequence: nextIntent.sequence
     }
   });
 }

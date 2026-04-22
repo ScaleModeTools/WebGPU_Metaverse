@@ -97,10 +97,8 @@ function createTraversalIntentInput(input) {
         input.yawRadians ??
         0
     },
-    inputSequence: input.inputSequence,
     locomotionMode: input.locomotionMode ?? "grounded",
-    sampleId: input.sampleId,
-    orientationSequence: input.orientationSequence
+    sequence: input.sequence
   };
 }
 
@@ -146,9 +144,8 @@ function createMetaverseSyncPlayerTraversalIntentCommand(input) {
         turnAxis: nextIntent.yawAxis ?? 0
       },
       facing: normalizedFacing,
-      inputSequence: nextIntent.inputSequence,
       locomotionMode: nextIntent.locomotionMode ?? "grounded",
-      orientationSequence: nextIntent.orientationSequence
+      sequence: nextIntent.sequence
     }
   });
 }
@@ -194,15 +191,14 @@ function createWorldEvent({
     yawRadians: 0
   }),
   includeDefaultVehicle = true,
-  lastProcessedInputSequence,
+  lastProcessedTraversalSequence,
   lastProcessedLookSequence = 0,
   lastProcessedWeaponSequence = 0,
-  lastProcessedTraversalSampleId,
-  lastProcessedTraversalOrientationSequence,
   locomotionMode = "grounded",
   playerCharacterId = "mesh2motion-humanoid-v1",
   playerId,
   playerStateSequence,
+  teamId = "red",
   serverTimeMs,
   snapshotSequence,
   tickIntervalMs = 50,
@@ -210,13 +206,8 @@ function createWorldEvent({
   vehicleX = 8,
   vehicles = null
 }) {
-  const resolvedLastProcessedInputSequence =
-    lastProcessedInputSequence ?? snapshotSequence;
-  const resolvedLastProcessedTraversalOrientationSequence =
-    lastProcessedTraversalOrientationSequence ??
-    resolvedLastProcessedInputSequence;
-  const resolvedLastProcessedTraversalSampleId =
-    lastProcessedTraversalSampleId ?? resolvedLastProcessedInputSequence;
+  const resolvedLastProcessedTraversalSequence =
+    lastProcessedTraversalSequence ?? snapshotSequence;
   const resolvedPlayerStateSequence = playerStateSequence ?? snapshotSequence;
   const resolvedVehicles =
     vehicles ??
@@ -235,13 +226,9 @@ function createWorldEvent({
               }
             }
           : {}),
-        lastProcessedInputSequence: resolvedLastProcessedInputSequence,
+        lastProcessedTraversalSequence: resolvedLastProcessedTraversalSequence,
         lastProcessedLookSequence,
         lastProcessedWeaponSequence,
-        lastProcessedTraversalSampleId:
-          resolvedLastProcessedTraversalSampleId,
-        lastProcessedTraversalOrientationSequence:
-          resolvedLastProcessedTraversalOrientationSequence,
         playerId
       },
       players: [
@@ -250,6 +237,7 @@ function createWorldEvent({
           groundedBody,
           locomotionMode,
           playerId,
+          teamId,
           ...(authoritativeJumpActionSequence > 0
             ? {
                 traversalAuthority: {

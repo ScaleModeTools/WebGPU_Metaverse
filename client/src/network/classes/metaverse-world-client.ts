@@ -258,7 +258,8 @@ export class MetaverseWorldClient {
       });
     this.#playerIntentSync = new MetaverseWorldPlayerIntentSync({
       acceptWorldEvent: (playerId, worldEvent) => {
-        this.#snapshotState.acceptWorldEvent(playerId, worldEvent, "command");
+        void playerId;
+        void worldEvent;
       },
       applyWorldAccessError: (error, fallbackMessage) => {
         this.#applyWorldAccessError(error, fallbackMessage);
@@ -282,7 +283,8 @@ export class MetaverseWorldClient {
     });
     this.#driverControlSync = new MetaverseWorldDriverControlSync({
       acceptWorldEvent: (playerId, worldEvent) => {
-        this.#snapshotState.acceptWorldEvent(playerId, worldEvent, "command");
+        void playerId;
+        void worldEvent;
       },
       applyWorldAccessError: (error, fallbackMessage) => {
         this.#applyWorldAccessError(error, fallbackMessage);
@@ -301,7 +303,8 @@ export class MetaverseWorldClient {
     });
     this.#mountedOccupancySync = new MetaverseWorldMountedOccupancySync({
       acceptWorldEvent: (playerId, worldEvent) => {
-        this.#snapshotState.acceptWorldEvent(playerId, worldEvent, "command");
+        void playerId;
+        void worldEvent;
       },
       applyWorldAccessError: (error, fallbackMessage) => {
         this.#applyWorldAccessError(error, fallbackMessage);
@@ -518,12 +521,12 @@ export class MetaverseWorldClient {
   async #sendPlayerLookIntentCommand(
     command: PendingPlayerLookIntentCommand
   ): Promise<MetaverseRealtimeWorldEvent | null> {
-    if (
-      (await this.#playerLookDatagramLane.send(
-        command,
-        "Metaverse player look intent datagram send failed."
-      )) === "datagram"
-    ) {
+    const datagramResult = await this.#playerLookDatagramLane.send(
+      command,
+      "Metaverse player look intent datagram send failed."
+    );
+
+    if (datagramResult === "datagram" || datagramResult === "superseded") {
       return null;
     }
 
@@ -533,12 +536,12 @@ export class MetaverseWorldClient {
   async #sendPlayerTraversalIntentCommand(
     command: PendingPlayerTraversalIntentCommand
   ): Promise<MetaverseRealtimeWorldEvent | null> {
-    if (
-      (await this.#playerTraversalDatagramLane.send(
-        command,
-        "Metaverse player traversal intent datagram send failed."
-      )) === "datagram"
-    ) {
+    const datagramResult = await this.#playerTraversalDatagramLane.send(
+      command,
+      "Metaverse player traversal intent datagram send failed."
+    );
+
+    if (datagramResult === "datagram" || datagramResult === "superseded") {
       return null;
     }
 
@@ -548,12 +551,12 @@ export class MetaverseWorldClient {
   async #sendPlayerWeaponStateCommand(
     command: PendingPlayerWeaponStateCommand
   ): Promise<MetaverseRealtimeWorldEvent | null> {
-    if (
-      (await this.#playerWeaponStateDatagramLane.send(
-        command,
-        "Metaverse player weapon state datagram send failed."
-      )) === "datagram"
-    ) {
+    const datagramResult = await this.#playerWeaponStateDatagramLane.send(
+      command,
+      "Metaverse player weapon state datagram send failed."
+    );
+
+    if (datagramResult === "datagram" || datagramResult === "superseded") {
       return null;
     }
 

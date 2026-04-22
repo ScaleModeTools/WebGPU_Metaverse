@@ -212,7 +212,7 @@ test("MetaverseWorldHttpAdapter accepts traversal intent commands on the explici
           pitchRadians: 0,
           yawRadians: 0.25
         },
-        inputSequence: 2,
+        sequence: 2,
         locomotionMode: "grounded",
       },
       playerId
@@ -239,13 +239,13 @@ test("MetaverseWorldHttpAdapter accepts traversal intent commands on the explici
   assert.equal(handled, true);
   assert.equal(response.statusCode, 200);
   assert.equal(response.json.type, "world-snapshot");
-  assert.equal(response.json.world.observerPlayer?.lastProcessedInputSequence, 1);
+  assert.equal(response.json.world.observerPlayer?.lastProcessedTraversalSequence, 1);
 
   runtime.advanceToTime(200);
 
   const worldSnapshot = runtime.readWorldSnapshot(200, playerId);
 
-  assert.equal(worldSnapshot.observerPlayer?.lastProcessedInputSequence, 2);
+  assert.equal(worldSnapshot.observerPlayer?.lastProcessedTraversalSequence, 2);
   assert.equal(worldSnapshot.players[0]?.locomotionMode, "grounded");
   assert.equal(worldSnapshot.players[0]?.stateSequence, 2);
 });

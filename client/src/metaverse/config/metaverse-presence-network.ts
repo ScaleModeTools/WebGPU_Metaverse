@@ -24,6 +24,11 @@ export interface MetaverseLocalPlayerIdentity {
   readonly username: Username;
 }
 
+const metaverseLocalPlayerIdStorageKey =
+  "webgpu-metaverse:local-player-id" as const;
+
+let cachedMetaverseLocalPlayerId: MetaversePlayerId | null | undefined;
+
 function normalizePlayerIdSegment(rawValue: string): string {
   const normalizedValue = rawValue
     .trim()
@@ -32,6 +37,61 @@ function normalizePlayerIdSegment(rawValue: string): string {
     .replace(/^-+|-+$/g, "");
 
   return normalizedValue.length === 0 ? "player" : normalizedValue;
+}
+
+function readStoredMetaverseLocalPlayerId(): MetaversePlayerId | null {
+  if (cachedMetaverseLocalPlayerId !== undefined) {
+    return cachedMetaverseLocalPlayerId;
+  }
+
+  try {
+    const storedPlayerId =
+      globalThis.sessionStorage?.getItem(metaverseLocalPlayerIdStorageKey) ??
+      null;
+
+    cachedMetaverseLocalPlayerId =
+      storedPlayerId === null ? null : createMetaversePlayerId(storedPlayerId);
+  } catch {
+    cachedMetaverseLocalPlayerId = null;
+  }
+
+  return cachedMetaverseLocalPlayerId;
+}
+
+function storeMetaverseLocalPlayerId(playerId: MetaversePlayerId): void {
+  cachedMetaverseLocalPlayerId = playerId;
+
+  try {
+    globalThis.sessionStorage?.setItem(
+      metaverseLocalPlayerIdStorageKey,
+      playerId
+    );
+  } catch {
+    // Ignore session storage unavailability and keep the in-memory identity.
+  }
+}
+
+function resolveMetaverseLocalPlayerId(username: string): MetaversePlayerId {
+  const storedPlayerId = readStoredMetaverseLocalPlayerId();
+
+  if (storedPlayerId !== null) {
+    return storedPlayerId;
+  }
+
+  const randomSuffix =
+    globalThis.crypto?.randomUUID?.().slice(0, 8) ??
+    Math.random().toString(36).slice(2, 10);
+  const playerId = createMetaversePlayerId(
+    `${normalizePlayerIdSegment(username)}-${randomSuffix}`
+  );
+
+  if (playerId === null) {
+    throw new Error("Unable to create a metaverse player id.");
+  }
+
+  storeMetaverseLocalPlayerId(playerId);
+
+  return playerId;
 }
 
 function resolveMetaverseServerOrigin(): string {
@@ -286,16 +346,7 @@ export function createMetaverseLocalPlayerIdentity(
     throw new Error("Metaverse local player identity requires a valid username.");
   }
 
-  const randomSuffix =
-    globalThis.crypto?.randomUUID?.().slice(0, 8) ??
-    Math.random().toString(36).slice(2, 10);
-  const playerId = createMetaversePlayerId(
-    `${normalizePlayerIdSegment(username)}-${randomSuffix}`
-  );
-
-  if (playerId === null) {
-    throw new Error("Unable to create a metaverse player id.");
-  }
+  const playerId = resolveMetaverseLocalPlayerId(username);
 
   const normalizedCharacterId = characterId.trim();
 

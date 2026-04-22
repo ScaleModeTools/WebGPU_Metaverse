@@ -190,7 +190,7 @@ test("MetaverseTraversalTelemetryState captures local and authoritative surface-
           strafeAxis: -0.25,
           turnAxis: 0.5
         }),
-        inputSequence: 19,
+        sequence: 19,
         locomotionMode: "grounded"
       }),
       snapshot: createMetaverseTraversalAuthoritySnapshot()
@@ -232,7 +232,7 @@ test("MetaverseTraversalTelemetryState captures local and authoritative surface-
         position: Object.freeze({ x: 0, y: 0, z: 24 }),
         yawRadians: 0
       }),
-      lastProcessedInputSequence: 18,
+      lastProcessedTraversalSequence: 18,
       linearVelocity: Object.freeze({ x: 0.5, y: 0, z: -1.2 }),
       locomotionMode: "grounded",
       mountedOccupancy: null,
@@ -253,7 +253,7 @@ test("MetaverseTraversalTelemetryState captures local and authoritative surface-
         strafeAxis: -0.25,
         turnAxis: 0.5
       }),
-      inputSequence: 19,
+      sequence: 19,
       locomotionMode: "grounded"
     }),
     localSwimBodySnapshot: null,
@@ -279,7 +279,7 @@ test("MetaverseTraversalTelemetryState captures local and authoritative surface-
         strafeAxis: -0.25,
         turnAxis: 0.5
       },
-      inputSequence: 19,
+      sequence: 19,
       locomotionMode: "grounded"
     },
     linearVelocity: {
@@ -347,7 +347,7 @@ test("MetaverseTraversalTelemetryState captures local and authoritative surface-
       verticalSpeedUnitsPerSecond: 0
     }
   });
-  assert.equal(snapshot.authoritative.lastProcessedInputSequence, 18);
+  assert.equal(snapshot.authoritative.lastProcessedTraversalSequence, 18);
   assert.equal(snapshot.authoritative.locomotionMode, "grounded");
   assert.equal(snapshot.authoritative.swimBody, null);
   assert.equal(

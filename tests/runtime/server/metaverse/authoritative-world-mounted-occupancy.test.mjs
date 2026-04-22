@@ -115,7 +115,7 @@ test("MetaverseAuthoritativeWorldRuntime accepts mounted occupancy updates throu
 
   const mountedWorldSnapshot = runtime.readWorldSnapshot(100, playerId);
 
-  assert.equal(mountedWorldSnapshot.observerPlayer?.lastProcessedInputSequence, 1);
+  assert.equal(mountedWorldSnapshot.observerPlayer?.lastProcessedTraversalSequence, 1);
   assert.equal(mountedWorldSnapshot.players[0]?.locomotionMode, "mounted");
   assert.equal(
     mountedWorldSnapshot.players[0]?.mountedOccupancy?.seatId,
@@ -198,7 +198,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps authored entry occupancy grounded
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 2,
+        sequence: 2,
         jump: false,
         locomotionMode: "grounded",
         moveAxis: 1,
@@ -223,7 +223,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps authored entry occupancy grounded
 
   const worldSnapshot = runtime.readWorldSnapshot(200, playerId);
   const activeBodySnapshot = readPrimaryPlayerActiveBodySnapshot(worldSnapshot);
-  assert.equal(worldSnapshot.observerPlayer?.lastProcessedInputSequence, 2);
+  assert.equal(worldSnapshot.observerPlayer?.lastProcessedTraversalSequence, 2);
   assert.equal(worldSnapshot.players[0]?.locomotionMode, "grounded");
   assert.equal(
     worldSnapshot.players[0]?.mountedOccupancy?.occupancyKind,

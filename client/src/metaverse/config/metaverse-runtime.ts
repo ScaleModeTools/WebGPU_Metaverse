@@ -140,11 +140,19 @@ function resolveClientDefaultSpawnNode(
     readonly loadedBundle: ReturnType<typeof loadMetaverseMapBundle>;
   }
 ): MetaverseMapBundleSpawnNodeSnapshot | null {
-  if (
-    fallbackSpawnNode === null ||
-    localPlayerId === null ||
-    localPlayerTeamId === null
-  ) {
+  if (fallbackSpawnNode === null) {
+    return null;
+  }
+
+  if (localPlayerTeamId === null) {
+    return (
+      loadedBundle.bundle.playerSpawnNodes.find(
+        (spawnNode) => spawnNode.teamId === "neutral"
+      ) ?? fallbackSpawnNode
+    );
+  }
+
+  if (localPlayerId === null) {
     return fallbackSpawnNode;
   }
 

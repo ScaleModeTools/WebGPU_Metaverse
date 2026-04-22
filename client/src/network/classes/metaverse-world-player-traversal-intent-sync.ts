@@ -1,4 +1,5 @@
 import type {
+  MetaversePlayerTraversalIntentSnapshotInput,
   MetaversePlayerTraversalIntentSnapshot,
   MetaverseRealtimePlayerTraversalAuthoritySnapshot,
   MetaverseRealtimeWorldEvent,
@@ -15,12 +16,18 @@ type TimeoutHandle = ReturnType<typeof globalThis.setTimeout>;
 type PendingPlayerTraversalIntentCommand = ReturnType<
   typeof createMetaverseSyncPlayerTraversalIntentCommand
 >;
+type PlayerTraversalActionIntentInput = NonNullable<
+  MetaversePlayerTraversalIntentSnapshotInput["actionIntent"]
+>;
 type LocalPlayerTraversalCommandAckSnapshot = {
   readonly lastProcessedTraversalSequence: number;
   readonly traversalAuthority: MetaverseRealtimePlayerTraversalAuthoritySnapshot;
 };
 const metaverseSequencedTraversalActionKind = "jump";
-const metaversePlayerTraversalPendingIntentMaxEntries = 8;
+// Keep enough history to preserve compressed jump and direction edges without
+// letting latest-wins traversal datagrams grow past practical QUIC payload
+// budgets.
+const metaversePlayerTraversalPendingIntentMaxEntries = 2;
 
 export interface MetaverseWorldPlayerTraversalIntentSyncDependencies {
   readonly acceptWorldEvent: (
@@ -76,6 +83,69 @@ function playerTraversalIntentMatches(
   );
 }
 
+function playerTraversalContinuousStateMatches(
+  leftIntent: MetaversePlayerTraversalIntentSnapshot | null,
+  rightIntent: MetaversePlayerTraversalIntentSnapshot
+): boolean {
+  if (leftIntent === null) {
+    return false;
+  }
+
+  return (
+    leftIntent.bodyControl.boost === rightIntent.bodyControl.boost &&
+    leftIntent.bodyControl.moveAxis === rightIntent.bodyControl.moveAxis &&
+    leftIntent.bodyControl.strafeAxis === rightIntent.bodyControl.strafeAxis &&
+    leftIntent.bodyControl.turnAxis === rightIntent.bodyControl.turnAxis &&
+    leftIntent.facing.pitchRadians === rightIntent.facing.pitchRadians &&
+    leftIntent.facing.yawRadians === rightIntent.facing.yawRadians &&
+    leftIntent.locomotionMode === rightIntent.locomotionMode
+  );
+}
+
+function createInactivePlayerTraversalActionIntent():
+  PlayerTraversalActionIntentInput {
+  return {
+    kind: "none",
+    pressed: false
+  };
+}
+
+function createSequencedPlayerTraversalActionIntent({
+  pressed,
+  sequence
+}: {
+  readonly pressed: boolean;
+  readonly sequence: number;
+}): PlayerTraversalActionIntentInput {
+  return {
+    kind: metaverseSequencedTraversalActionKind,
+    pressed,
+    sequence
+  };
+}
+
+function createPlayerTraversalIntentSnapshotInput({
+  actionIntent,
+  baseIntent,
+  sequence
+}: {
+  readonly actionIntent: PlayerTraversalActionIntentInput;
+  readonly baseIntent: MetaverseSyncPlayerTraversalIntentCommandInput["intent"];
+  readonly sequence: number;
+}): MetaversePlayerTraversalIntentSnapshotInput {
+  return {
+    ...(baseIntent.bodyControl === undefined
+      ? {}
+      : { bodyControl: baseIntent.bodyControl }),
+    ...(baseIntent.facing === undefined ? {} : { facing: baseIntent.facing }),
+    ...(baseIntent.locomotionMode === undefined
+      ? {}
+      : { locomotionMode: baseIntent.locomotionMode }),
+    actionIntent,
+    sequence
+  };
+}
+
 function resolveLatestProcessedTraversalSequence(
   localPlayerSnapshot: LocalPlayerTraversalCommandAckSnapshot | null
 ): number {
@@ -94,6 +164,8 @@ export class MetaverseWorldPlayerTraversalIntentSync {
   readonly #setTimeout: typeof globalThis.setTimeout;
 
   #lastTraversalActionPressed = false;
+  #lastIssuedPlayerTraversalIntent: MetaversePlayerTraversalIntentSnapshot | null =
+    null;
   #lastPlayerTraversalIntent: MetaversePlayerTraversalIntentSnapshot | null = null;
   #lastPlayerTraversalIntentCommand: PendingPlayerTraversalIntentCommand | null =
     null;
@@ -123,15 +195,17 @@ export class MetaverseWorldPlayerTraversalIntentSync {
 
   get latestPlayerTraversalSequence(): number {
     return Math.max(
-      this.#nextTraversalSequence,
-      this.#previewPlayerTraversalIntent?.sequence ?? 0
+      resolveLatestProcessedTraversalSequence(
+        this.#readLatestLocalPlayerSnapshot()
+      ),
+      this.#lastIssuedPlayerTraversalIntent?.sequence ?? 0
     );
   }
 
   get latestPlayerTraversalIntentSnapshot():
     | MetaversePlayerTraversalIntentSnapshot
     | null {
-    return this.#previewPlayerTraversalIntent ?? this.#lastPlayerTraversalIntent;
+    return this.#lastIssuedPlayerTraversalIntent;
   }
 
   previewPlayerTraversalIntent(
@@ -165,6 +239,7 @@ export class MetaverseWorldPlayerTraversalIntentSync {
     commandInput: MetaverseSyncPlayerTraversalIntentCommandInput | null
   ): MetaversePlayerTraversalIntentSnapshot | null {
     if (commandInput === null) {
+      this.#lastIssuedPlayerTraversalIntent = null;
       this.#lastTraversalActionPressed = false;
       this.#lastPlayerTraversalIntentCommand = null;
       this.#lastPlayerTraversalIntent = null;
@@ -189,7 +264,11 @@ export class MetaverseWorldPlayerTraversalIntentSync {
     }
 
     this.#nextTraversalSequence = intentSnapshot.sequence;
-    this.#appendPendingPlayerTraversalIntentSample(this.#lastPlayerTraversalIntent);
+    if (this.#lastPlayerTraversalIntent?.sequence !== intentSnapshot.sequence) {
+      this.#appendPendingPlayerTraversalIntentSample(
+        this.#lastPlayerTraversalIntent
+      );
+    }
     this.#lastPlayerTraversalIntent =
       intentSnapshot;
     this.#playerTraversalIntentSyncDirty = true;
@@ -292,6 +371,7 @@ export class MetaverseWorldPlayerTraversalIntentSync {
     }
 
     this.#lastPlayerTraversalIntentCommand = pendingCommand;
+    this.#lastIssuedPlayerTraversalIntent = pendingCommand.intent;
     this.#playerTraversalIntentSyncDirty = false;
     this.#playerTraversalInputSyncInFlight = true;
 
@@ -490,30 +570,78 @@ export class MetaverseWorldPlayerTraversalIntentSync {
     readonly actionPressed: boolean;
     readonly traversalIntentChanged: boolean;
   } {
+    const previousIntent = this.#lastPlayerTraversalIntent;
     const actionPressed =
       commandInput.intent.actionIntent?.kind ===
         metaverseSequencedTraversalActionKind &&
       commandInput.intent.actionIntent.pressed === true;
-    const traversalSequence = this.#nextTraversalSequence + 1;
-    const nextActionKind: "jump" | "none" = actionPressed
-      ? metaverseSequencedTraversalActionKind
-      : "none";
-    const nextIntent = {
-      ...commandInput.intent,
-      actionIntent: {
-        kind: nextActionKind,
-        pressed: actionPressed
-      }
-    };
-    const nextIntentSnapshot = createMetaversePlayerTraversalIntentSnapshot({
-      ...nextIntent,
-      sequence: traversalSequence
+    const previousActionIntent = previousIntent?.actionIntent ?? null;
+    const nextActionIntent: PlayerTraversalActionIntentInput =
+      actionPressed
+        ? previousActionIntent !== null &&
+          previousActionIntent.kind === metaverseSequencedTraversalActionKind &&
+          previousActionIntent.sequence > 0
+          ? createSequencedPlayerTraversalActionIntent({
+              pressed: true,
+              sequence: previousActionIntent.sequence
+            })
+          : createSequencedPlayerTraversalActionIntent({
+              pressed: true,
+              sequence: this.#nextTraversalSequence + 1
+            })
+        : previousActionIntent !== null &&
+            previousActionIntent.kind === metaverseSequencedTraversalActionKind &&
+            previousActionIntent.sequence > 0 &&
+            (this.#lastTraversalActionPressed || previousActionIntent.pressed)
+          ? createSequencedPlayerTraversalActionIntent({
+              pressed: false,
+              sequence: previousActionIntent.sequence
+            })
+          : createInactivePlayerTraversalActionIntent();
+    const sameSequenceCandidate = createPlayerTraversalIntentSnapshotInput({
+      actionIntent: nextActionIntent,
+      baseIntent: commandInput.intent,
+      sequence: previousIntent?.sequence ?? this.#nextTraversalSequence + 1
     });
+    const sameSequenceIntentSnapshot =
+      createMetaversePlayerTraversalIntentSnapshot(sameSequenceCandidate);
+    const traversalIntentChanged = !playerTraversalIntentMatches(
+      previousIntent,
+      sameSequenceIntentSnapshot
+    );
+
+    if (!traversalIntentChanged) {
+      return Object.freeze({
+        intentSnapshot: previousIntent ?? sameSequenceIntentSnapshot,
+        actionPressed,
+        traversalIntentChanged: false
+      });
+    }
+
+    const requiresNewTraversalSequence =
+      previousIntent === null ||
+      !playerTraversalContinuousStateMatches(
+        previousIntent,
+        sameSequenceIntentSnapshot
+      ) ||
+      previousIntent.actionIntent.sequence !==
+        sameSequenceIntentSnapshot.actionIntent.sequence;
+    const nextIntentSnapshot =
+      !requiresNewTraversalSequence ||
+      sameSequenceIntentSnapshot.sequence === this.#nextTraversalSequence + 1
+        ? sameSequenceIntentSnapshot
+        : createMetaversePlayerTraversalIntentSnapshot(
+            createPlayerTraversalIntentSnapshotInput({
+              actionIntent: nextActionIntent,
+              baseIntent: commandInput.intent,
+              sequence: this.#nextTraversalSequence + 1
+            })
+          );
 
     return Object.freeze({
       intentSnapshot: nextIntentSnapshot,
       actionPressed,
-      traversalIntentChanged: true
+      traversalIntentChanged
     });
   }
 }

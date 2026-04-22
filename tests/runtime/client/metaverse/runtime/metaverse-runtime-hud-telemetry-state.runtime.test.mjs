@@ -52,8 +52,7 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
       convergenceEpisodeStartVerticalMagnitudeMeters: 0.3,
       convergenceEpisodeStartYawMagnitudeRadians: 0.2,
       groundedBodyStateDivergence: true,
-      lastProcessedInputSequence: 24,
-      lastProcessedTraversalOrientationSequence: 31,
+      lastProcessedTraversalSequence: 31,
       localGrounded: false,
       planarMagnitudeMeters: 1.2,
       planarVelocityMagnitudeUnitsPerSecond: 2.8,
@@ -64,8 +63,7 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
     Object.freeze({
       authoritative: Object.freeze({
         groundedBody: null,
-        lastProcessedInputSequence: 24,
-        lastProcessedTraversalOrientationSequence: 31,
+        lastProcessedTraversalSequence: 31,
         linearVelocity: Object.freeze({
           x: 2.4,
           y: 0,
@@ -129,7 +127,7 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
             strafeAxis: -0.25,
             turnAxis: 0.5
           }),
-          inputSequence: 25,
+          sequence: 25,
           locomotionMode: "swim"
         }),
         linearVelocity: Object.freeze({
@@ -224,8 +222,7 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
     {
       authoritative: {
         groundedBody: null,
-        lastProcessedInputSequence: 24,
-        lastProcessedTraversalOrientationSequence: 31,
+        lastProcessedTraversalSequence: 31,
         linearVelocity: {
           x: 2.4,
           y: 0,
@@ -297,7 +294,7 @@ test("MetaverseRuntimeHudTelemetryState tracks camera snap and local reconciliat
             strafeAxis: -0.25,
             turnAxis: 0.5
           },
-          inputSequence: 25,
+          sequence: 25,
           locomotionMode: "swim"
         },
         linearVelocity: {
@@ -400,7 +397,7 @@ test("MetaverseRuntimeHudTelemetryState carries authoritative local-player groun
           resolvedActionSequence: 8,
           resolvedActionState: "accepted"
         }),
-        lastProcessedInputSequence: 8,
+        lastProcessedTraversalSequence: 8,
         locomotionMode: "grounded",
         position: Object.freeze({
           x: 0,
@@ -507,7 +504,7 @@ test("MetaverseRuntimeHudTelemetryState resolves authoritative swim telemetry fr
           resolvedActionSequence: 55,
           resolvedActionState: "accepted"
         }),
-        lastProcessedInputSequence: 12,
+        lastProcessedTraversalSequence: 12,
         linearVelocity: Object.freeze({
           x: 9,
           y: 0,

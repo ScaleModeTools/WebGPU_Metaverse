@@ -17,7 +17,7 @@ function createPredictedLocalReconciliationSample({
 }) {
   return Object.freeze({
     groundedBody: null,
-    inputSequence: 8,
+    sequence: 8,
     issuedTraversalIntent: null,
     localGrounded: true,
     localPredictionTick,

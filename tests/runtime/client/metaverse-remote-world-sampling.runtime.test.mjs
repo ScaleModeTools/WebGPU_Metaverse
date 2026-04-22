@@ -6,7 +6,8 @@ import {
   createMetaversePlayerId,
   createMetaverseRealtimeWorldSnapshot,
   createMetaverseVehicleId,
-  createUsername
+  createUsername,
+  resolveMetaversePlayerTeamId
 } from "@webgpu-metaverse/shared";
 
 import { createClientModuleLoader } from "./load-client-module.mjs";
@@ -23,6 +24,8 @@ function createWorldSnapshot({
   vehicleX = 0,
   worldPlayerX
 }) {
+  const teamId = resolveMetaversePlayerTeamId(playerId);
+
   return createMetaverseRealtimeWorldSnapshot({
     players: [
       {
@@ -50,6 +53,7 @@ function createWorldSnapshot({
         mountedOccupancy: null,
         playerId,
         stateSequence: snapshotSequence,
+        teamId,
         username: createUsername("Harbor Pilot")
       }
     ],

@@ -197,7 +197,7 @@ function createGroundColliderConfig(config) {
 function createAuthoritativeLocalPlayerPoseSnapshot(input) {
   const {
     jumpAuthorityState = "grounded",
-    lastProcessedInputSequence = 0,
+    lastProcessedTraversalSequence = 0,
     lastAcceptedJumpActionSequence = 0,
     lastProcessedJumpActionSequence = 0,
     pendingActionSequence: pendingActionSequenceOverride = 0,
@@ -231,7 +231,7 @@ function createAuthoritativeLocalPlayerPoseSnapshot(input) {
         position: authoritativeSnapshot.position,
         yawRadians: authoritativeSnapshot.yawRadians
       }),
-    lastProcessedInputSequence,
+    lastProcessedTraversalSequence,
     swimBody:
       authoritativeSnapshot.swimBody ??
       (authoritativeSnapshot.locomotionMode === "swim"

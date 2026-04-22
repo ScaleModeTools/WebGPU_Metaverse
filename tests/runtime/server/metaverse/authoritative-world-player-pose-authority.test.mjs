@@ -32,7 +32,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps presence resyncs from overriding 
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 2,
+        sequence: 2,
         jump: false,
         locomotionMode: "grounded",
         moveAxis: 1,
@@ -51,7 +51,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps presence resyncs from overriding 
 
   assert.notEqual(authoritativePlayerSnapshot, undefined);
   assert.equal(
-    authoritativeWorldSnapshot.observerPlayer?.lastProcessedInputSequence,
+    authoritativeWorldSnapshot.observerPlayer?.lastProcessedTraversalSequence,
     2
   );
   assert.equal(authoritativePlayerSnapshot?.stateSequence, 2);
@@ -84,7 +84,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps presence resyncs from overriding 
     readPlayerActiveBodySnapshot(worldSnapshot.players[0]).position,
     readPlayerActiveBodySnapshot(authoritativePlayerSnapshot).position
   );
-  assert.equal(worldSnapshot.observerPlayer?.lastProcessedInputSequence, 2);
+  assert.equal(worldSnapshot.observerPlayer?.lastProcessedTraversalSequence, 2);
   assert.equal(worldSnapshot.players[0]?.locomotionMode, "grounded");
   assert.equal(worldSnapshot.players[0]?.stateSequence, 2);
 
@@ -127,7 +127,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps presence resyncs from overriding 
     readPlayerActiveBodySnapshot(worldSnapshot.players[0]).position,
     readPlayerActiveBodySnapshot(authoritativePlayerSnapshot).position
   );
-  assert.equal(worldSnapshot.observerPlayer?.lastProcessedInputSequence, 2);
+  assert.equal(worldSnapshot.observerPlayer?.lastProcessedTraversalSequence, 2);
   assert.equal(worldSnapshot.players[0]?.stateSequence, 2);
   assert.deepEqual(
     presenceSnapshot.players[0]?.pose.position,

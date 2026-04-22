@@ -153,7 +153,7 @@ test("MetaverseAuthoritativeWorldCommandIntake routes world commands through the
             turnAxis: 0
           },
           facing: { pitchRadians: 0, yawRadians: 0.2 },
-          inputSequence: 3,
+          sequence: 3,
           locomotionMode: "grounded"
         },
         playerId

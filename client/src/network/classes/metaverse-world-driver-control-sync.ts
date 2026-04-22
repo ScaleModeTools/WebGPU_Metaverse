@@ -366,12 +366,12 @@ export class MetaverseWorldDriverControlSync {
   async #sendDriverVehicleControlCommand(
     command: PendingDriverVehicleControlCommand
   ): Promise<MetaverseRealtimeWorldEvent | null> {
-    if (
-      (await this.#commandLane.send(
-        command,
-        "Metaverse driver vehicle control datagram send failed."
-      )) === "datagram"
-    ) {
+    const datagramResult = await this.#commandLane.send(
+      command,
+      "Metaverse driver vehicle control datagram send failed."
+    );
+
+    if (datagramResult === "datagram" || datagramResult === "superseded") {
       return null;
     }
 

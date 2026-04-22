@@ -29,7 +29,7 @@ test("MetaverseAuthoritativeWorldRuntime includes player turn rate in authoritat
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 2,
+        sequence: 2,
         jump: false,
         locomotionMode: "grounded",
         moveAxis: 0,

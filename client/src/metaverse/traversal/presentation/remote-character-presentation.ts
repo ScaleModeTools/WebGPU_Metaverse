@@ -15,6 +15,7 @@ import {
   metaverseMovementAnimationPolicyConfig,
   MetaverseMovementAnimationPolicyRuntime
 } from "./metaverse-movement-animation-policy";
+import { resolveCharacterAnimationPlaybackRateMultiplier } from "./character-presentation";
 import {
   createTraversalSurfaceCameraPresentationSnapshot
 } from "./camera-presentation";
@@ -41,6 +42,7 @@ interface MutableRemoteCharacterPresentationSnapshot {
   poseSyncMode: "runtime-server-sampled";
   presentation: {
     animationCycleId?: number;
+    animationPlaybackRateMultiplier: number;
     animationVocabulary:
       MetaverseRemoteCharacterPresentationSnapshot["presentation"]["animationVocabulary"];
     position: MutableVector3Snapshot;
@@ -454,6 +456,7 @@ export class MetaverseRemoteCharacterPresentationOwner {
       poseSyncMode: "runtime-server-sampled",
       presentation: {
         animationCycleId: 0,
+        animationPlaybackRateMultiplier: 1,
         animationVocabulary: "idle",
         position: writeMutableVector3(
           createMutableVector3(),
@@ -520,6 +523,15 @@ export class MetaverseRemoteCharacterPresentationOwner {
       );
     this.#snapshot.presentation.animationCycleId =
       this.#animationRuntime.animationCycleId;
+    this.#snapshot.presentation.animationPlaybackRateMultiplier =
+      resolveCharacterAnimationPlaybackRateMultiplier({
+        animationVocabulary: this.#snapshot.presentation.animationVocabulary,
+        boost:
+          sampledDiscretePlayerSnapshot.locomotionMode === "grounded" &&
+          sampledDiscretePlayerSnapshot.groundedBody.driveTarget.boost,
+        config: this.#config,
+        locomotionMode: sampledDiscretePlayerSnapshot.locomotionMode
+      });
     sampleRemotePlayerRootPositionInto(
       this.#snapshot.presentation.position,
       this.#config,

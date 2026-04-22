@@ -83,10 +83,11 @@ function resolveCharacterRenderYawRadians(yawRadians: number): number {
 
 function resolveAnimationPlaybackRate(
   vocabulary: MetaverseCharacterAnimationVocabularyId,
-  useHumanoidV2PistolLayering: boolean
+  useHumanoidV2PistolLayering: boolean,
+  playbackRateMultiplier: number
 ): number {
   if (vocabulary === "walk") {
-    return useHumanoidV2PistolLayering ? 1 : 1.1;
+    return (useHumanoidV2PistolLayering ? 1 : 1.1) * playbackRateMultiplier;
   }
 
   if (vocabulary === "swim") {
@@ -253,7 +254,8 @@ export function syncCharacterAnimation(
   characterRuntime: MetaverseCharacterAnimationRuntimeLike,
   targetVocabulary: MetaverseCharacterAnimationVocabularyId,
   useHumanoidV2PistolLayering: boolean = false,
-  animationCycleId?: number | null
+  animationCycleId?: number | null,
+  animationPlaybackRateMultiplier: number = 1
 ): void {
   const resolveNextVocabulary = (): MetaverseCharacterAnimationVocabularyId => {
     const fallbackCandidates: readonly MetaverseCharacterAnimationVocabularyId[] =
@@ -314,6 +316,15 @@ export function syncCharacterAnimation(
     animationCycleId === null || animationCycleId === undefined
       ? characterRuntime.activeAnimationCycleId
       : Math.max(0, Math.trunc(animationCycleId));
+  const resolvedAnimationPlaybackRateMultiplier =
+    Number.isFinite(animationPlaybackRateMultiplier)
+      ? Math.max(0.01, animationPlaybackRateMultiplier)
+      : 1;
+  const nextPlaybackRate = resolveAnimationPlaybackRate(
+    nextVocabulary,
+    useHumanoidV2PistolLayering,
+    resolvedAnimationPlaybackRateMultiplier
+  );
   const shouldRestartCurrentAction =
     resolvedAnimationCycleId !== null &&
     resolvedAnimationCycleId !== characterRuntime.activeAnimationCycleId;
@@ -328,6 +339,7 @@ export function syncCharacterAnimation(
       characterRuntime.activeAnimationActionSetId &&
     !shouldRestartCurrentAction
   ) {
+    nextActionSelection.action.setEffectiveTimeScale(nextPlaybackRate);
     return;
   }
 
@@ -341,9 +353,7 @@ export function syncCharacterAnimation(
   const previousVocabulary = characterRuntime.activeAnimationVocabulary;
 
   nextAction.enabled = true;
-  nextAction.setEffectiveTimeScale(
-    resolveAnimationPlaybackRate(nextVocabulary, useHumanoidV2PistolLayering)
-  );
+  nextAction.setEffectiveTimeScale(nextPlaybackRate);
   nextAction.setEffectiveWeight(1);
   nextAction.zeroSlopeAtStart = true;
   nextAction.zeroSlopeAtEnd = nextVocabulary === "idle";

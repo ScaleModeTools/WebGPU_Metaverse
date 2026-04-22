@@ -302,6 +302,11 @@ export class MetaversePresenceRuntime {
         locomotionMode,
         mountedEnvironment
       ),
+      ...(this.#localPlayerIdentity.teamId === undefined
+        ? {}
+        : {
+            teamId: this.#localPlayerIdentity.teamId
+          }),
       username: this.#localPlayerIdentity.username
     };
   }

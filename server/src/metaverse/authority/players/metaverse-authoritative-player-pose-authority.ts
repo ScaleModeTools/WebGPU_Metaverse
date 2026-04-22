@@ -179,18 +179,27 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
     this.#dependencies = dependencies;
   }
 
+  #resolvePreAuthoritySpawnPose(
+    playerId: MetaversePlayerId,
+    teamId: MetaversePlayerTeamId,
+    nextPose: MetaversePresencePoseSnapshot,
+    realtimeWorldAuthorityActive: boolean
+  ): MetaversePresencePoseSnapshot {
+    return realtimeWorldAuthorityActive
+      ? nextPose
+      : this.#dependencies.resolveJoinPose(playerId, teamId, nextPose);
+  }
+
   acceptJoinCommand(command: MetaverseJoinPresenceCommand, nowMs: number): void {
     const currentPlayer = this.#dependencies.playersById.get(command.playerId);
     const resolvedTeamId =
       currentPlayer?.teamId ?? this.#dependencies.resolveJoinTeamId();
-    const nextPose =
-      currentPlayer === undefined
-        ? this.#dependencies.resolveJoinPose(
-            command.playerId,
-            resolvedTeamId,
-            createMetaversePresencePoseSnapshot(command.pose)
-          )
-        : createMetaversePresencePoseSnapshot(command.pose);
+    const nextPose = this.#resolvePreAuthoritySpawnPose(
+      command.playerId,
+      resolvedTeamId,
+      createMetaversePresencePoseSnapshot(command.pose),
+      currentPlayer?.realtimeWorldAuthorityActive ?? false
+    );
 
     if (
       currentPlayer !== undefined &&
@@ -249,9 +258,16 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
       throw new Error(`Unknown metaverse player: ${playerId}`);
     }
 
+    const resolvedPose = this.#resolvePreAuthoritySpawnPose(
+      playerId,
+      playerRuntime.teamId,
+      nextPose,
+      playerRuntime.realtimeWorldAuthorityActive
+    );
+
     playerRuntime.lastSeenAtMs = nowMs;
 
-    if (isOlderPresenceUpdate(playerRuntime.stateSequence, nextPose)) {
+    if (isOlderPresenceUpdate(playerRuntime.stateSequence, resolvedPose)) {
       return;
     }
 
@@ -259,7 +275,7 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
       return;
     }
 
-    this.#applyPlayerPose(playerRuntime, nextPose, nowMs, lookProvided);
+    this.#applyPlayerPose(playerRuntime, resolvedPose, nowMs, lookProvided);
     this.#dependencies.incrementSnapshotSequence();
   }
 

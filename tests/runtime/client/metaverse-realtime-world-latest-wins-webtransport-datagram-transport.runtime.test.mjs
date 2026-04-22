@@ -62,7 +62,7 @@ test("createMetaverseRealtimeWorldLatestWinsWebTransportDatagramTransport sends 
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: true,
-        inputSequence: 5,
+        sequence: 5,
         jump: false,
         locomotionMode: "grounded",
         moveAxis: 1,

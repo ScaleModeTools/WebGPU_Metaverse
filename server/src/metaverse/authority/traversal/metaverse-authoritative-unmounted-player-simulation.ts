@@ -3,6 +3,8 @@ import {
   clamp,
   createMetaverseSurfaceDriveBodyRuntimeSnapshot,
   createMetaverseUnmountedTraversalStateSnapshot,
+  metaverseTraversalActionBufferSeconds,
+  queueMetaverseUnmountedTraversalAction,
   type MetaverseSurfaceTraversalConfig
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 import {
@@ -174,6 +176,7 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
         playerRuntime.playerId
       ) ?? null;
     const traversalIntentSegments = this.#consumeTraversalIntentSegments(
+      playerRuntime,
       traversalIntentRuntime,
       nowMs - deltaSeconds * 1_000,
       nowMs
@@ -407,6 +410,7 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
   }
 
   #consumeTraversalIntentSegments(
+    playerRuntime: PlayerRuntime,
     traversalIntentRuntime: MetaverseAuthoritativePlayerTraversalIntentRuntimeState | null,
     tickStartedAtMs: number,
     tickEndedAtMs: number
@@ -440,6 +444,16 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
     ) {
       currentIntent = nextTimelineEntry.intent;
       traversalIntentRuntime.pendingIntentTimeline.shift();
+      playerRuntime.lookPitchRadians = currentIntent.facing.pitchRadians;
+      playerRuntime.lookYawRadians = currentIntent.facing.yawRadians;
+      playerRuntime.unmountedTraversalState =
+        queueMetaverseUnmountedTraversalAction(
+          playerRuntime.unmountedTraversalState,
+          {
+            actionIntent: currentIntent.actionIntent,
+            bufferSeconds: metaverseTraversalActionBufferSeconds
+          }
+        );
     }
 
     traversalIntentRuntime.currentIntent = currentIntent;

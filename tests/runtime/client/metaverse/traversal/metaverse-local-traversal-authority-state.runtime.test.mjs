@@ -91,7 +91,7 @@ test("MetaverseLocalTraversalAuthorityState prefers an issued jump edge over loc
         strafeAxis: 0,
         turnAxis: 0
       }),
-      inputSequence: 9,
+      sequence: 9,
       locomotionMode: "grounded"
     }),
     {

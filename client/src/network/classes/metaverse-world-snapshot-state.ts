@@ -93,11 +93,13 @@ export class MetaverseWorldSnapshotState {
   readonly #snapshotStreamTransport: MetaverseWorldSnapshotStreamTransport | null;
 
   #latestAcceptedSnapshotReceivedAtMs: number | null = null;
+  #latestAcceptedSnapshotStreamReceivedAtMs: number | null = null;
   #previousAcceptedSnapshotReceivedAtMs: number | null = null;
   #snapshotStreamDeliveredAcceptedWorldEvent = false;
   #snapshotStreamLastError: string | null = null;
   #snapshotStreamReconnectCount = 0;
   #snapshotStreamReconnectHandle: TimeoutHandle | null = null;
+  #snapshotStreamStallHandle: TimeoutHandle | null = null;
   #snapshotStreamSubscription:
     | ReturnType<MetaverseWorldSnapshotStreamTransport["subscribeWorldSnapshots"]>
     | null = null;
@@ -177,7 +179,15 @@ export class MetaverseWorldSnapshotState {
     worldEvent: MetaverseRealtimeWorldEvent,
     source: SnapshotAcceptanceSource
   ): boolean {
-    if (this.isDisposed || !this.#shouldAcceptWorldSnapshot(worldEvent.world)) {
+    if (
+      this.isDisposed ||
+      !this.#shouldAcceptWorldSnapshot(worldEvent.world) ||
+      !this.#shouldAcceptObserverQualifiedLocalWorldSnapshot(
+        playerId,
+        worldEvent.world,
+        source
+      )
+    ) {
       return false;
     }
 
@@ -187,6 +197,11 @@ export class MetaverseWorldSnapshotState {
       this.#previousAcceptedSnapshotReceivedAtMs =
         this.#latestAcceptedSnapshotReceivedAtMs;
       this.#latestAcceptedSnapshotReceivedAtMs = acceptedAtMs;
+
+      if (source === "snapshot-stream") {
+        this.#latestAcceptedSnapshotStreamReceivedAtMs = acceptedAtMs;
+        this.#scheduleSnapshotStreamStallWatchdog();
+      }
     }
 
     const nextBuffer = [
@@ -235,6 +250,7 @@ export class MetaverseWorldSnapshotState {
     }
 
     this.#cancelScheduledSnapshotStreamReconnect();
+    this.#cancelSnapshotStreamStallWatchdog();
     this.#closeSnapshotStreamSubscription();
     this.#snapshotStreamDeliveredAcceptedWorldEvent = false;
     this.#statusSnapshot = freezeStatusSnapshot(
@@ -325,6 +341,8 @@ export class MetaverseWorldSnapshotState {
   }
 
   shouldUsePollingHappyPath(): boolean {
+    this.#demoteStalledSnapshotStream();
+
     return (
       this.#snapshotStreamTransport === null ||
       this.#usingSnapshotStreamFallback ||
@@ -347,8 +365,10 @@ export class MetaverseWorldSnapshotState {
       this.#snapshotStreamReconnectHandle !== null;
 
     this.#snapshotStreamDeliveredAcceptedWorldEvent = false;
+    this.#latestAcceptedSnapshotStreamReceivedAtMs = null;
     this.#usingSnapshotStreamFallback = false;
     this.#cancelScheduledSnapshotStreamReconnect();
+    this.#cancelSnapshotStreamStallWatchdog();
     this.#snapshotStreamSubscription =
       this.#snapshotStreamTransport.subscribeWorldSnapshots(playerId, {
         onClose: () => {
@@ -383,6 +403,7 @@ export class MetaverseWorldSnapshotState {
 
           if (acceptedWorldEvent) {
             this.#snapshotStreamDeliveredAcceptedWorldEvent = true;
+            this.#scheduleSnapshotStreamStallWatchdog();
           }
 
           this.#cancelScheduledSnapshotStreamReconnect();
@@ -406,6 +427,7 @@ export class MetaverseWorldSnapshotState {
     const subscription = this.#snapshotStreamSubscription;
 
     this.#snapshotStreamSubscription = null;
+    this.#cancelSnapshotStreamStallWatchdog();
     subscription.close();
   }
 
@@ -477,10 +499,20 @@ export class MetaverseWorldSnapshotState {
       return;
     }
 
+    if (this.#snapshotStreamSubscription === null && this.#usingSnapshotStreamFallback) {
+      return;
+    }
+
+    const snapshotStreamSubscription = this.#snapshotStreamSubscription;
+
     this.#snapshotStreamSubscription = null;
     this.#snapshotStreamDeliveredAcceptedWorldEvent = false;
+    this.#latestAcceptedSnapshotStreamReceivedAtMs = null;
     this.#snapshotStreamLastError = message.trim().length > 0 ? message : null;
     this.#usingSnapshotStreamFallback = true;
+    this.#cancelSnapshotStreamStallWatchdog();
+
+    snapshotStreamSubscription?.close();
 
     if (this.#statusSnapshot.playerId !== null) {
       this.#scheduleSnapshotStreamReconnect(this.#statusSnapshot.playerId);
@@ -488,6 +520,80 @@ export class MetaverseWorldSnapshotState {
 
     this.#notifyUpdates();
     this.#onSnapshotStreamFailure?.(message);
+  }
+
+  #demoteStalledSnapshotStream(): void {
+    if (
+      this.#snapshotStreamSubscription === null ||
+      this.#usingSnapshotStreamFallback ||
+      !this.#snapshotStreamDeliveredAcceptedWorldEvent
+    ) {
+      return;
+    }
+
+    const latestAcceptedSnapshotStreamReceivedAtMs =
+      this.#latestAcceptedSnapshotStreamReceivedAtMs;
+
+    if (latestAcceptedSnapshotStreamReceivedAtMs === null) {
+      return;
+    }
+
+    const nowMs = this.#readWallClockMs();
+
+    if (!Number.isFinite(nowMs)) {
+      return;
+    }
+
+    if (
+      nowMs - latestAcceptedSnapshotStreamReceivedAtMs <=
+      this.#resolveSnapshotStreamStallThresholdMs()
+    ) {
+      return;
+    }
+
+    this.#handleSnapshotStreamFailure("Metaverse world snapshot stream stalled.");
+  }
+
+  #resolveSnapshotStreamStallThresholdMs(): number {
+    const latestSnapshot =
+      this.#worldSnapshotBuffer[this.#worldSnapshotBuffer.length - 1] ?? null;
+    const tickIntervalMs =
+      latestSnapshot === null
+        ? null
+        : Number(latestSnapshot.tick.tickIntervalMs);
+
+    return Math.max(
+      500,
+      Number.isFinite(tickIntervalMs) && tickIntervalMs !== null
+        ? tickIntervalMs * 8
+        : this.#snapshotStreamReconnectDelayMs
+    );
+  }
+
+  #scheduleSnapshotStreamStallWatchdog(): void {
+    this.#cancelSnapshotStreamStallWatchdog();
+
+    if (
+      this.#snapshotStreamSubscription === null ||
+      this.#usingSnapshotStreamFallback ||
+      this.isDisposed
+    ) {
+      return;
+    }
+
+    this.#snapshotStreamStallHandle = this.#setTimeout(() => {
+      this.#snapshotStreamStallHandle = null;
+      this.#demoteStalledSnapshotStream();
+    }, this.#resolveSnapshotStreamStallThresholdMs());
+  }
+
+  #cancelSnapshotStreamStallWatchdog(): void {
+    if (this.#snapshotStreamStallHandle === null) {
+      return;
+    }
+
+    this.#clearTimeout(this.#snapshotStreamStallHandle);
+    this.#snapshotStreamStallHandle = null;
   }
 
   #shouldAcceptWorldSnapshot(
@@ -501,5 +607,41 @@ export class MetaverseWorldSnapshotState {
     }
 
     return nextSnapshot.snapshotSequence >= latestSnapshot.snapshotSequence;
+  }
+
+  #shouldAcceptObserverQualifiedLocalWorldSnapshot(
+    playerId: MetaversePlayerId | null,
+    nextSnapshot: MetaverseRealtimeWorldSnapshot,
+    source: SnapshotAcceptanceSource
+  ): boolean {
+    if (playerId === null) {
+      return true;
+    }
+
+    const observerPlayerSnapshot = nextSnapshot.observerPlayer;
+    const localPlayerSnapshot = nextSnapshot.players.find(
+      (playerSnapshot) => playerSnapshot.playerId === playerId
+    );
+
+    if (
+      observerPlayerSnapshot !== null &&
+      observerPlayerSnapshot.playerId === playerId &&
+      localPlayerSnapshot !== undefined
+    ) {
+      return true;
+    }
+
+    const message =
+      "Metaverse world snapshot no longer contains the local authoritative player.";
+
+    if (source === "snapshot-stream") {
+      this.#handleSnapshotStreamFailure(message);
+    } else {
+      this.setError(playerId, message, {
+        clearBufferedSnapshots: true
+      });
+    }
+
+    return false;
   }
 }

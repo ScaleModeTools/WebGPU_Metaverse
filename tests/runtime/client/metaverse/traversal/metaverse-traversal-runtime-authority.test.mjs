@@ -38,7 +38,7 @@ function readGroundedBodyVerticalSpeed(snapshot) {
 function createTraversalIntentSnapshot(input) {
   const {
     boost = false,
-    inputSequence = 0,
+    sequence = 0,
     jump = false,
     jumpActionSequence = 0,
     locomotionMode = "grounded",
@@ -61,7 +61,7 @@ function createTraversalIntentSnapshot(input) {
       strafeAxis,
       turnAxis: yawAxis
     }),
-    inputSequence,
+    sequence,
     locomotionMode
   });
 }
@@ -106,7 +106,7 @@ test("MetaverseTraversalRuntime reports local traversal startup once a buffered 
     traversalRuntime.syncIssuedTraversalIntentSnapshot(
       createTraversalIntentSnapshot({
         boost: false,
-        inputSequence: 1,
+        sequence: 1,
         jump: true,
         jumpActionSequence: 1,
         locomotionMode: "grounded",
@@ -146,7 +146,7 @@ test("MetaverseTraversalRuntime advances local traversal authority from rising b
     traversalRuntime.syncIssuedTraversalIntentSnapshot(
       createTraversalIntentSnapshot({
         boost: false,
-        inputSequence: 1,
+        sequence: 1,
         jump: true,
         jumpActionSequence: 1,
         locomotionMode: "grounded",
@@ -176,7 +176,7 @@ test("MetaverseTraversalRuntime advances local traversal authority from rising b
       traversalRuntime.syncIssuedTraversalIntentSnapshot(
         createTraversalIntentSnapshot({
           boost: false,
-          inputSequence: 1,
+          sequence: 1,
           jump: false,
           jumpActionSequence: 1,
           locomotionMode: "grounded",
@@ -218,7 +218,7 @@ test("MetaverseTraversalRuntime preserves the latest predicted jump sequence aft
     traversalRuntime.syncIssuedTraversalIntentSnapshot(
       createTraversalIntentSnapshot({
         boost: false,
-        inputSequence: 1,
+        sequence: 1,
         jump: true,
         jumpActionSequence: 1,
         locomotionMode: "grounded",
@@ -250,7 +250,7 @@ test("MetaverseTraversalRuntime preserves the latest predicted jump sequence aft
           strafeAxis: 0,
           turnAxis: 0
         }),
-        inputSequence: 1,
+        sequence: 1,
         locomotionMode: "grounded"
       })
     );
@@ -476,7 +476,7 @@ test("MetaverseTraversalRuntime ignores a stale rejected jump once a newer jump 
     traversalRuntime.syncIssuedTraversalIntentSnapshot(
       createTraversalIntentSnapshot({
         boost: false,
-        inputSequence: 2,
+        sequence: 2,
         jump: true,
         jumpActionSequence: 2,
         locomotionMode: "grounded",
@@ -494,7 +494,7 @@ test("MetaverseTraversalRuntime ignores a stale rejected jump once a newer jump 
     syncAuthoritativeLocalPlayerPose(
       traversalRuntime,
       {
-        lastProcessedInputSequence: 2,
+        lastProcessedTraversalSequence: 2,
         linearVelocity: Object.freeze({
           x: 0,
           y: 0,
@@ -1424,17 +1424,13 @@ test("MetaverseTraversalRuntime preserves the current local velocity when an ack
       Object.freeze({
         authoritativeSnapshotAgeMs: 0,
         authoritativeTick: null,
-        lastProcessedInputSequence: 0,
-        lastProcessedTraversalSampleId: 0,
-        lastProcessedTraversalOrientationSequence: 0,
+        lastProcessedTraversalSequence: 0,
         pose: Object.freeze({
           groundedBody: Object.freeze({
             ...matchedGroundedSnapshot,
             position: matchedAuthoritativePosition
           }),
-          lastProcessedInputSequence: 0,
-          lastProcessedTraversalSampleId: 0,
-          lastProcessedTraversalOrientationSequence: 0,
+          lastProcessedTraversalSequence: 0,
           linearVelocity: matchedGroundedSnapshot.linearVelocity,
           locomotionMode: "grounded",
           mountedOccupancy: null,

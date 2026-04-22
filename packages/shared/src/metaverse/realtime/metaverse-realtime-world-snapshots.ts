@@ -6,7 +6,7 @@ import {
   createMilliseconds,
   createRadians
 } from "../../unit-measurements.js";
-import { createMetaversePlayerTeamId } from "../metaverse-player-team.js";
+import { normalizeMetaversePlayerTeamId } from "../metaverse-player-team.js";
 import type {
   MetaversePlayerId,
   MetaversePresenceLocomotionModeId,
@@ -225,19 +225,6 @@ export interface MetaverseRealtimePlayerSnapshotInput {
   readonly traversalAuthority?: MetaverseRealtimePlayerTraversalAuthoritySnapshotInput;
   readonly weaponState?: MetaverseRealtimePlayerWeaponStateSnapshotInput | null;
   readonly username: Username;
-}
-
-function resolveRequiredMetaversePlayerTeamId(
-  rawValue: string | null | undefined,
-  label: string
-): MetaversePlayerTeamId {
-  const resolvedTeamId = createMetaversePlayerTeamId(rawValue);
-
-  if (resolvedTeamId === null) {
-    throw new Error(`${label} must be a supported metaverse team id.`);
-  }
-
-  return resolvedTeamId;
 }
 
 export interface MetaverseRealtimeObserverPlayerSnapshot {
@@ -716,10 +703,7 @@ function freezePlayerSnapshot(
     playerId: input.playerId,
     stateSequence: normalizeFiniteNonNegativeInteger(input.stateSequence ?? 0),
     swimBody,
-    teamId: resolveRequiredMetaversePlayerTeamId(
-      input.teamId,
-      "Metaverse realtime player teamId"
-    ),
+    teamId: normalizeMetaversePlayerTeamId(input.teamId, input.playerId),
     traversalAuthority:
       createMetaverseTraversalAuthoritySnapshot(traversalAuthorityInput),
     weaponState,

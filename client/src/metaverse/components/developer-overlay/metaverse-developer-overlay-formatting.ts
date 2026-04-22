@@ -379,7 +379,7 @@ function createDeveloperReport(hudSnapshot: MetaverseHudSnapshot): string {
         `Presence reliable: ${formatReliableTransportSummary(hudSnapshot.transport.presenceReliable)}`,
         `World reliable: ${formatReliableTransportSummary(hudSnapshot.transport.worldReliable)}`,
         `World snapshot stream: ${formatSnapshotStreamSummary(hudSnapshot.transport.worldSnapshotStream)}`,
-        `World latest-wins datagram: ${formatDatagramTransportSummary(hudSnapshot.transport.worldDriverDatagram)}`,
+        `World latest-wins datagram: ${formatDatagramTransportSummary(hudSnapshot.transport.worldDriverDatagram)} · ${formatCount(hudSnapshot.telemetry.worldSnapshot.datagramSendFailureCount)} send failures`,
         `World debug: ${formatReliableHandshakeDebugLine(hudSnapshot.transport.worldReliable, metaverseWorldWebTransportTarget)}`
       ]
     }

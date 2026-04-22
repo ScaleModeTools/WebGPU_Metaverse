@@ -22,6 +22,8 @@ async function loadSharedContracts(loader) {
 }
 
 function createPresenceRosterEvent(sharedContracts, playerId) {
+  const teamId = sharedContracts.resolveMetaversePlayerTeamId(playerId);
+
   return sharedContracts.createMetaversePresenceRosterEvent({
     players: [
       {
@@ -38,6 +40,7 @@ function createPresenceRosterEvent(sharedContracts, playerId) {
           stateSequence: 1,
           yawRadians: 0
         },
+        teamId,
         username: "Harbor Pilot"
       }
     ],
@@ -51,6 +54,7 @@ function createRealtimeWorldEvent(
   playerId,
   snapshotSequence = 1
 ) {
+  const teamId = sharedContracts.resolveMetaversePlayerTeamId(playerId);
   const vehicleId = sharedContracts.createMetaverseVehicleId(
     "metaverse-hub-skiff-v1"
   );
@@ -59,6 +63,12 @@ function createRealtimeWorldEvent(
 
   return sharedContracts.createMetaverseRealtimeWorldEvent({
     world: {
+      observerPlayer: {
+        lastProcessedLookSequence: 0,
+        lastProcessedTraversalSequence: 0,
+        lastProcessedWeaponSequence: 0,
+        playerId
+      },
       players: [
         {
           animationVocabulary: "idle",
@@ -79,6 +89,7 @@ function createRealtimeWorldEvent(
           locomotionMode: "mounted",
           playerId,
           stateSequence: snapshotSequence,
+          teamId,
           username: "Harbor Pilot"
         }
       ],
@@ -228,6 +239,25 @@ function waitForTimers(ms) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+async function waitForCondition(
+  predicate,
+  {
+    failureMessage = "Timed out waiting for condition.",
+    intervalMs = 5,
+    timeoutMs = 200
+  } = {}
+) {
+  const deadlineMs = Date.now() + timeoutMs;
+
+  while (!predicate()) {
+    if (Date.now() >= deadlineMs) {
+      throw new Error(failureMessage);
+    }
+
+    await waitForTimers(intervalMs);
+  }
 }
 
 test("createMetaversePresenceClient reports default HTTP when WebTransport is not requested", async () => {
@@ -556,7 +586,17 @@ test("createMetaverseWorldClient keeps reliable and datagram lane truth separate
       playerId
     });
 
-    await waitForTimers(40);
+    await waitForCondition(
+      () =>
+        client.driverVehicleControlDatagramStatusSnapshot.activeTransport ===
+          "reliable-command-fallback" &&
+        client.driverVehicleControlDatagramStatusSnapshot.state ===
+          "degraded-to-reliable",
+      {
+        failureMessage:
+          "Timed out waiting for the driver datagram lane to degrade to reliable fallback."
+      }
+    );
 
     assert.equal(client.reliableTransportStatusSnapshot.activeTransport, "http");
     assert.equal(client.reliableTransportStatusSnapshot.fallbackActive, true);
@@ -577,7 +617,18 @@ test("createMetaverseWorldClient keeps reliable and datagram lane truth separate
       "Datagram transport unavailable."
     );
 
-    await waitForTimers(40);
+    await waitForCondition(
+      () =>
+        client.driverVehicleControlDatagramStatusSnapshot.activeTransport ===
+          "webtransport-datagram" &&
+        client.driverVehicleControlDatagramStatusSnapshot.state === "active" &&
+        client.driverVehicleControlDatagramStatusSnapshot.lastTransportError ===
+          "Datagram transport unavailable.",
+      {
+        failureMessage:
+          "Timed out waiting for the driver datagram lane to recover after fallback."
+      }
+    );
 
     assert.equal(
       client.driverVehicleControlDatagramStatusSnapshot.activeTransport,
@@ -600,7 +651,20 @@ test("createMetaverseWorldClient keeps reliable and datagram lane truth separate
       playerId
     });
 
-    await waitForTimers(80);
+    await waitForCondition(
+      () =>
+        client.driverVehicleControlDatagramStatusSnapshot.activeTransport ===
+          "webtransport-datagram" &&
+        client.driverVehicleControlDatagramStatusSnapshot.state === "active" &&
+        client.driverVehicleControlDatagramStatusSnapshot.webTransportStatus ===
+          "active" &&
+        client.driverVehicleControlDatagramStatusSnapshot.lastTransportError ===
+          null,
+      {
+        failureMessage:
+          "Timed out waiting for the driver datagram lane to clear the prior transport error after a successful resend."
+      }
+    );
 
     assert.equal(
       client.driverVehicleControlDatagramStatusSnapshot.activeTransport,

@@ -156,21 +156,6 @@ export function MetaversePlayerRadarHud({
           </g>
         );
       })}
-
-      <g>
-        <circle
-          cx={radarCenter}
-          cy={radarCenter}
-          fill="#f8fafc"
-          r="4.5"
-          stroke="rgba(148, 163, 184, 0.65)"
-          strokeWidth="1.2"
-        />
-        <path
-          d={`M ${radarCenter} ${radarCenter - 14} L ${radarCenter - 5.5} ${radarCenter - 2} L ${radarCenter + 5.5} ${radarCenter - 2} Z`}
-          fill="rgba(248, 250, 252, 0.92)"
-        />
-      </g>
     </svg>
   );
 }

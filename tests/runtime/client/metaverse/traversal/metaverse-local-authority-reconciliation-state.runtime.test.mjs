@@ -62,7 +62,7 @@ function createSwimBodySnapshot(input = {}) {
 function createCorrectionSnapshotStub() {
   return Object.freeze({
     authoritative: Object.freeze({
-      lastProcessedInputSequence: 0,
+      lastProcessedTraversalSequence: 0,
       locomotionMode: "grounded",
       position: freezeVector3(0, 0, 0),
       surfaceRouting: Object.freeze({
@@ -125,7 +125,7 @@ test("MetaverseLocalAuthorityReconciliationState ignores routine grounded drift"
       groundedBody: createGroundedBodySnapshot({
         position: freezeVector3(0.05, 0, 24.02)
       }),
-      lastProcessedInputSequence: 0,
+      lastProcessedTraversalSequence: 0,
       linearVelocity: freezeVector3(0, 0, 0),
       locomotionMode: "grounded",
       mountedOccupancy: null,
@@ -176,7 +176,7 @@ test("MetaverseLocalAuthorityReconciliationState preserves a locally predicted a
       groundedBody: createGroundedBodySnapshot({
         grounded: false
       }),
-      lastProcessedInputSequence: 1,
+      lastProcessedTraversalSequence: 1,
       linearVelocity: freezeVector3(0, 0, 0),
       locomotionMode: "grounded",
       mountedOccupancy: null,
@@ -228,7 +228,7 @@ test("MetaverseLocalAuthorityReconciliationState force-snaps a locally predicted
       groundedBody: createGroundedBodySnapshot({
         grounded: true
       }),
-      lastProcessedInputSequence: 4,
+      lastProcessedTraversalSequence: 4,
       linearVelocity: freezeVector3(0, 0, 0),
       locomotionMode: "grounded",
       mountedOccupancy: null,
@@ -266,9 +266,9 @@ test("MetaverseLocalAuthorityReconciliationState force-snaps a locally predicted
         strafeAxis: 0,
         turnAxis: 0
       }),
-      inputSequence: 4,
+      sequence: 4,
       locomotionMode: "grounded",
-      sampleId: 9
+      sequence: 9
     }),
     localSwimBodySnapshot: null,
     localGrounded: false,
@@ -306,7 +306,7 @@ test("MetaverseLocalAuthorityReconciliationState ignores a stale rejected jump s
       groundedBody: createGroundedBodySnapshot({
         grounded: true
       }),
-      lastProcessedInputSequence: 8,
+      lastProcessedTraversalSequence: 8,
       linearVelocity: freezeVector3(0, 0, 0),
       locomotionMode: "grounded",
       mountedOccupancy: null,
@@ -344,9 +344,9 @@ test("MetaverseLocalAuthorityReconciliationState ignores a stale rejected jump s
         strafeAxis: 0,
         turnAxis: 0
       }),
-      inputSequence: 8,
+      sequence: 8,
       locomotionMode: "grounded",
-      sampleId: 10
+      sequence: 10
     }),
     localTraversalAuthoritySnapshot: Object.freeze({
       currentActionKind: "jump",
@@ -398,7 +398,7 @@ test("MetaverseLocalAuthorityReconciliationState reconciles grounded free-roam m
       groundedBody: createGroundedBodySnapshot({
         position: freezeVector3(1.6, 0, 24)
       }),
-      lastProcessedInputSequence: 5,
+      lastProcessedTraversalSequence: 5,
       linearVelocity: freezeVector3(0.4, 0, 0),
       locomotionMode: "grounded",
       mountedOccupancy: Object.freeze({
@@ -455,7 +455,7 @@ test("MetaverseLocalAuthorityReconciliationState starts bounded convergence on g
       groundedBody: createGroundedBodySnapshot({
         position: authoritativePosition
       }),
-      lastProcessedInputSequence: 6,
+      lastProcessedTraversalSequence: 6,
       linearVelocity: freezeVector3(0, 0, 0),
       locomotionMode: "grounded",
       mountedOccupancy: null,
@@ -520,7 +520,7 @@ test("MetaverseLocalAuthorityReconciliationState starts bounded convergence on g
       groundedBody: createGroundedBodySnapshot({
         yawRadians: authoritativeYawRadians
       }),
-      lastProcessedInputSequence: 7,
+      lastProcessedTraversalSequence: 7,
       linearVelocity: freezeVector3(0, 0, 0),
       locomotionMode: "grounded",
       mountedOccupancy: null,
@@ -567,8 +567,7 @@ test("MetaverseLocalAuthorityReconciliationState preserves episode start context
       groundedBody: createGroundedBodySnapshot({
         position: authoritativePosition
       }),
-      lastProcessedInputSequence: 11,
-      lastProcessedTraversalOrientationSequence: 12,
+      lastProcessedTraversalSequence: 12,
       linearVelocity: freezeVector3(0, 0, 0),
       locomotionMode: "grounded",
       mountedOccupancy: null,
@@ -726,8 +725,7 @@ test("MetaverseLocalAuthorityReconciliationState preserves the last intentional 
       groundedBody: createGroundedBodySnapshot({
         position: authoritativePosition
       }),
-      lastProcessedInputSequence: 11,
-      lastProcessedTraversalOrientationSequence: 12,
+      lastProcessedTraversalSequence: 12,
       linearVelocity: freezeVector3(0, 0, 0),
       locomotionMode: "grounded",
       mountedOccupancy: null,
@@ -813,7 +811,7 @@ test("MetaverseLocalAuthorityReconciliationState clears a pending intentional di
         groundedBody: createGroundedBodySnapshot({
           position: freezeVector3(0.05, 0, 24.02)
         }),
-        lastProcessedInputSequence: 0,
+        lastProcessedTraversalSequence: 0,
         linearVelocity: freezeVector3(0, 0, 0),
         locomotionMode: "grounded",
         mountedOccupancy: null,
@@ -844,7 +842,7 @@ test("MetaverseLocalAuthorityReconciliationState clears a pending intentional di
       groundedBody: createGroundedBodySnapshot({
         position: freezeVector3(3.2, 0, 24)
       }),
-      lastProcessedInputSequence: 6,
+      lastProcessedTraversalSequence: 6,
       linearVelocity: freezeVector3(0, 0, 0),
       locomotionMode: "grounded",
       mountedOccupancy: null,
@@ -893,8 +891,7 @@ test("MetaverseLocalAuthorityReconciliationState carries moving-support disconti
       groundedBody: createGroundedBodySnapshot({
         position: authoritativePosition
       }),
-      lastProcessedInputSequence: 14,
-      lastProcessedTraversalOrientationSequence: 14,
+      lastProcessedTraversalSequence: 14,
       linearVelocity: freezeVector3(0, 0, 0),
       locomotionMode: "grounded",
       mountedOccupancy: null,
@@ -941,7 +938,7 @@ test("MetaverseLocalAuthorityReconciliationState leaves routine planar and verti
       groundedBody: createGroundedBodySnapshot({
         position: freezeVector3(0.2, 1.2, 24)
       }),
-      lastProcessedInputSequence: 0,
+      lastProcessedTraversalSequence: 0,
       linearVelocity: freezeVector3(0, 0, 0),
       locomotionMode: "grounded",
       mountedOccupancy: null,
@@ -985,7 +982,7 @@ test("MetaverseLocalAuthorityReconciliationState converges only on gross diverge
   const appliedInputs = [];
   const correctionSnapshot = Object.freeze({
     authoritative: Object.freeze({
-      lastProcessedInputSequence: 12,
+      lastProcessedTraversalSequence: 12,
       locomotionMode: "grounded",
       position: freezeVector3(3.2, 0.4, 24),
       surfaceRouting: Object.freeze({
@@ -1022,7 +1019,7 @@ test("MetaverseLocalAuthorityReconciliationState converges only on gross diverge
         position: freezeVector3(3.2, 0.4, 24),
         yawRadians: Math.PI * 0.1
       }),
-      lastProcessedInputSequence: 12,
+      lastProcessedTraversalSequence: 12,
       linearVelocity: freezeVector3(3.4, 0, -2.6),
       locomotionMode: "grounded",
       mountedOccupancy: null,
@@ -1079,7 +1076,7 @@ test("MetaverseLocalAuthorityReconciliationState keeps blocked-planar swim conta
     },
     authoritativePlayerSnapshot: Object.freeze({
       groundedBody: createGroundedBodySnapshot(),
-      lastProcessedInputSequence: 38,
+      lastProcessedTraversalSequence: 38,
       linearVelocity: freezeVector3(-3.26, 0, 0),
       locomotionMode: "swim",
       mountedOccupancy: null,

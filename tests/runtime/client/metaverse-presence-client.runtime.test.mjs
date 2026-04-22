@@ -8,7 +8,8 @@ import {
   createMetaversePresenceRosterEvent,
   createMetaverseSyncPresenceCommand,
   createMilliseconds,
-  createUsername
+  createUsername,
+  resolveMetaversePlayerTeamId
 } from "@webgpu-metaverse/shared";
 
 import { createClientModuleLoader } from "./load-client-module.mjs";
@@ -38,6 +39,10 @@ function createRosterEvent({
   x = 0,
   yawRadians = 0
 }) {
+  const localTeamId = resolveMetaversePlayerTeamId(localPlayerId);
+  const remoteTeamId =
+    remotePlayerId === null ? null : resolveMetaversePlayerTeamId(remotePlayerId);
+
   return createMetaversePresenceRosterEvent({
     players: [
       {
@@ -54,6 +59,7 @@ function createRosterEvent({
           stateSequence: snapshotSequence,
           yawRadians
         },
+        teamId: localTeamId,
         username: "Harbor Pilot"
       },
       ...(remotePlayerId === null
@@ -73,6 +79,7 @@ function createRosterEvent({
                 stateSequence: snapshotSequence,
                 yawRadians: 0.4
               },
+              teamId: remoteTeamId,
               username: remoteUsername
             }
           ])

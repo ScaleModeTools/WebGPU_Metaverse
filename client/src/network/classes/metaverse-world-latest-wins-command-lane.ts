@@ -8,7 +8,18 @@ interface MetaverseWorldLatestWinsCommandLaneDependencies<Command> {
   readonly setTimeout: typeof globalThis.setTimeout;
 }
 
+interface LatestWinsQueuedCommand<Command> {
+  readonly command: Command;
+  readonly fallbackMessage: string;
+  resolve(result: MetaverseWorldLatestWinsCommandLaneSendResult): void;
+}
+
 const latestWinsDatagramFallbackRecoveryDelayMultiplier = 1;
+
+export type MetaverseWorldLatestWinsCommandLaneSendResult =
+  | "datagram"
+  | "reliable-fallback"
+  | "superseded";
 
 export class MetaverseWorldLatestWinsCommandLane<Command> {
   readonly #clearTimeout: typeof globalThis.clearTimeout;
@@ -17,9 +28,12 @@ export class MetaverseWorldLatestWinsCommandLane<Command> {
   readonly #sendDatagram: ((command: Command) => Promise<void>) | null;
   readonly #setTimeout: typeof globalThis.setTimeout;
 
+  #disposed = false;
   #failureCount = 0;
+  #flushPromise: Promise<void> | null = null;
   #hasSuccessfulDatagramSend = false;
   #lastTransportError: string | null = null;
+  #pendingCommand: LatestWinsQueuedCommand<Command> | null = null;
   #recoveryHandle: TimeoutHandle | null = null;
   #usingReliableFallback = false;
 
@@ -62,33 +76,33 @@ export class MetaverseWorldLatestWinsCommandLane<Command> {
   }
 
   dispose(): void {
+    this.#disposed = true;
+    this.#resolvePendingCommand("reliable-fallback");
     this.#cancelScheduledRecovery();
   }
 
   async send(
     command: Command,
     fallbackMessage: string
-  ): Promise<"datagram" | "reliable-fallback"> {
-    if (this.#sendDatagram === null || this.#usingReliableFallback) {
+  ): Promise<MetaverseWorldLatestWinsCommandLaneSendResult> {
+    if (
+      this.#disposed ||
+      this.#sendDatagram === null ||
+      this.#usingReliableFallback
+    ) {
       return "reliable-fallback";
     }
 
-    try {
-      await this.#sendDatagram(command);
-      this.#handleSuccessfulSend();
-      return "datagram";
-    } catch (error) {
-      this.#failureCount += 1;
-      this.#handleSendFailure(
-        error instanceof Error &&
-          typeof error.message === "string" &&
-          error.message.trim().length > 0
-          ? error.message
-          : fallbackMessage
+    return new Promise((resolve) => {
+      this.#replacePendingCommand(
+        Object.freeze({
+          command,
+          fallbackMessage,
+          resolve
+        })
       );
-
-      return "reliable-fallback";
-    }
+      this.#ensureFlushLoop();
+    });
   }
 
   #resolveRecoveryDelayMs(): number {
@@ -103,7 +117,7 @@ export class MetaverseWorldLatestWinsCommandLane<Command> {
   #scheduleRecovery(): void {
     this.#cancelScheduledRecovery();
 
-    if (this.#sendDatagram === null) {
+    if (this.#sendDatagram === null || this.#disposed) {
       return;
     }
 
@@ -148,12 +162,128 @@ export class MetaverseWorldLatestWinsCommandLane<Command> {
     const stateChanged =
       !this.#usingReliableFallback || this.#lastTransportError !== nextError;
 
+    this.#resolvePendingCommand("reliable-fallback");
     this.#lastTransportError = nextError;
     this.#usingReliableFallback = true;
     this.#scheduleRecovery();
 
     if (stateChanged) {
       this.#onStateChange();
+    }
+  }
+
+  #replacePendingCommand(nextPendingCommand: LatestWinsQueuedCommand<Command>): void {
+    const supersededCommand = this.#pendingCommand;
+
+    this.#pendingCommand = nextPendingCommand;
+    supersededCommand?.resolve("superseded");
+  }
+
+  #resolvePendingCommand(
+    result: MetaverseWorldLatestWinsCommandLaneSendResult
+  ): void {
+    const pendingCommand = this.#pendingCommand;
+
+    if (pendingCommand === null) {
+      return;
+    }
+
+    this.#pendingCommand = null;
+    pendingCommand.resolve(result);
+  }
+
+  #ensureFlushLoop(): void {
+    if (
+      this.#disposed ||
+      this.#sendDatagram === null ||
+      this.#usingReliableFallback ||
+      this.#flushPromise !== null
+    ) {
+      return;
+    }
+
+    const flushPromise = this.#flushQueuedCommands();
+    this.#flushPromise = flushPromise;
+    void flushPromise.finally(() => {
+      if (this.#flushPromise === flushPromise) {
+        this.#flushPromise = null;
+      }
+
+      if (
+        !this.#disposed &&
+        !this.#usingReliableFallback &&
+        this.#pendingCommand !== null
+      ) {
+        this.#ensureFlushLoop();
+      }
+    });
+  }
+
+  async #flushQueuedCommands(): Promise<void> {
+    while (
+      !this.#disposed &&
+      !this.#usingReliableFallback &&
+      this.#sendDatagram !== null
+    ) {
+      const pendingCommand = this.#pendingCommand;
+
+      if (pendingCommand === null) {
+        return;
+      }
+
+      this.#pendingCommand = null;
+
+      try {
+        await this.#sendDatagramWithTimeout(
+          pendingCommand.command,
+          pendingCommand.fallbackMessage
+        );
+        pendingCommand.resolve("datagram");
+        this.#handleSuccessfulSend();
+      } catch (error) {
+        pendingCommand.resolve("reliable-fallback");
+        this.#failureCount += 1;
+        this.#handleSendFailure(
+          error instanceof Error &&
+            typeof error.message === "string" &&
+            error.message.trim().length > 0
+            ? error.message
+            : pendingCommand.fallbackMessage
+        );
+        return;
+      }
+    }
+  }
+
+  async #sendDatagramWithTimeout(
+    command: Command,
+    fallbackMessage: string
+  ): Promise<void> {
+    const sendDatagram = this.#sendDatagram;
+
+    if (sendDatagram === null) {
+      throw new Error(fallbackMessage);
+    }
+
+    const sendPromise = sendDatagram(command);
+    void sendPromise.catch(() => undefined);
+
+    let timeoutHandle: TimeoutHandle | null = null;
+
+    try {
+      await Promise.race([
+        sendPromise,
+        new Promise<never>((_, reject) => {
+          timeoutHandle = this.#setTimeout(() => {
+            timeoutHandle = null;
+            reject(new Error(fallbackMessage));
+          }, this.#resolveRecoveryDelayMs());
+        })
+      ]);
+    } finally {
+      if (timeoutHandle !== null) {
+        this.#clearTimeout(timeoutHandle);
+      }
     }
   }
 }

@@ -4,7 +4,6 @@ import {
   createMetaverseRealtimePlayerWeaponStateSnapshot,
   createMetaverseRealtimeWorldSnapshot,
   createMetaverseVehicleId,
-  doMetaversePlayerTraversalSequencedInputsMatch,
   resolveMetaverseTraversalAuthoritySnapshotInput
 } from "@webgpu-metaverse/shared";
 
@@ -77,12 +76,10 @@ export function createRealtimeWorldSnapshot({
   localJumpDebug,
   localGroundedBody,
   localLastAcceptedJumpActionSequence = 0,
-  localLastProcessedInputSequence,
   localLastProcessedJumpActionSequence = 0,
   localLastProcessedLookSequence,
-  localLastProcessedTraversalSampleId,
+  localLastProcessedTraversalSequence,
   localLastProcessedWeaponSequence = 0,
-  localLastProcessedTraversalOrientationSequence,
   localLinearVelocity = {
     x: 0,
     y: 0,
@@ -128,16 +125,10 @@ export function createRealtimeWorldSnapshot({
   yawRadians = 0
 }) {
   const vehicleId = createMetaverseVehicleId("metaverse-hub-skiff-v1");
-  const resolvedLocalLastProcessedInputSequence =
-    localLastProcessedInputSequence ?? snapshotSequence;
+  const resolvedLocalLastProcessedTraversalSequence =
+    localLastProcessedTraversalSequence ?? snapshotSequence;
   const resolvedLocalLastProcessedLookSequence =
-    localLastProcessedLookSequence ?? resolvedLocalLastProcessedInputSequence;
-  const resolvedLocalLastProcessedTraversalSampleId =
-    localLastProcessedTraversalSampleId ??
-    resolvedLocalLastProcessedInputSequence;
-  const resolvedLocalLastProcessedTraversalOrientationSequence =
-    localLastProcessedTraversalOrientationSequence ??
-    resolvedLocalLastProcessedInputSequence;
+    localLastProcessedLookSequence ?? resolvedLocalLastProcessedTraversalSequence;
   const resolvedLocalLookYawRadians = localLookYawRadians ?? localYawRadians;
   const resolvedRemoteLookYawRadians = remoteLookYawRadians ?? yawRadians;
   const hasRemoteCanonicalSeatOccupancy =
@@ -268,12 +259,9 @@ export function createRealtimeWorldSnapshot({
   return createMetaverseRealtimeWorldSnapshot({
     observerPlayer: {
       jumpDebug: resolvedLocalJumpDebug,
-      lastProcessedInputSequence: resolvedLocalLastProcessedInputSequence,
+      lastProcessedTraversalSequence:
+        resolvedLocalLastProcessedTraversalSequence,
       lastProcessedLookSequence: resolvedLocalLastProcessedLookSequence,
-      lastProcessedTraversalSampleId:
-        resolvedLocalLastProcessedTraversalSampleId,
-      lastProcessedTraversalOrientationSequence:
-        resolvedLocalLastProcessedTraversalOrientationSequence,
       lastProcessedWeaponSequence: localLastProcessedWeaponSequence,
       playerId: localPlayerId
     },
@@ -418,11 +406,10 @@ export class FakeMetaverseWorldClient {
     this.lastPlayerLookIntentRequestKey = null;
     this.lastPlayerWeaponStateRequestKey = null;
     this.lastPlayerTraversalIntentRequestKey = null;
-    this.latestPlayerInputSequence = 0;
     this.latestPlayerIssuedTraversalIntentSnapshot = null;
     this.latestPlayerLookSequence = 0;
+    this.latestPlayerTraversalSequence = 0;
     this.latestPlayerWeaponSequence = 0;
-    this.latestPlayerTraversalOrientationSequence = 0;
     this.latestPlayerLookIntentSnapshot = null;
     this.latestPlayerWeaponStateSnapshot = null;
     this.mountedOccupancyRequests = [];
@@ -548,27 +535,7 @@ export class FakeMetaverseWorldClient {
       commandInput.intent.actionIntent?.kind === "jump"
         ? commandInput.intent.actionIntent.pressed === true
         : commandInput.intent.jump === true;
-    const sequencedInputChanged =
-      !doMetaversePlayerTraversalSequencedInputsMatch(
-        this._latestPlayerTraversalIntentSnapshot,
-        nextTraversalIntentSnapshot
-      );
-    const orientationInputChanged =
-      this._latestPlayerTraversalIntentSnapshot === null ||
-      this._latestPlayerTraversalIntentSnapshot.bodyControl.turnAxis !==
-        nextTraversalIntentSnapshot.bodyControl.turnAxis ||
-      this._latestPlayerTraversalIntentSnapshot.facing.pitchRadians !==
-        nextTraversalIntentSnapshot.facing.pitchRadians ||
-      this._latestPlayerTraversalIntentSnapshot.facing.yawRadians !==
-        nextTraversalIntentSnapshot.facing.yawRadians;
-
-    if (sequencedInputChanged) {
-      this.latestPlayerInputSequence += 1;
-    }
-
-    if (orientationInputChanged) {
-      this.latestPlayerTraversalOrientationSequence += 1;
-    }
+    this.latestPlayerTraversalSequence += 1;
 
     this.lastPlayerTraversalIntentRequestKey =
       nextPlayerTraversalIntentRequestKey;
@@ -580,8 +547,7 @@ export class FakeMetaverseWorldClient {
     this.lastJumpPressed = jumpPressed;
     this._latestPlayerTraversalIntentSnapshot = Object.freeze({
       ...nextTraversalIntentSnapshot,
-      inputSequence: this.latestPlayerInputSequence,
-      orientationSequence: this.latestPlayerTraversalOrientationSequence,
+      sequence: this.latestPlayerTraversalSequence,
       actionIntent: Object.freeze({
         ...nextTraversalIntentSnapshot.actionIntent,
         kind:
@@ -600,10 +566,8 @@ export class FakeMetaverseWorldClient {
     this.latestPlayerIssuedTraversalIntentSnapshot = Object.freeze({
       actionIntent: this._latestPlayerTraversalIntentSnapshot.actionIntent,
       bodyControl: this._latestPlayerTraversalIntentSnapshot.bodyControl,
-      inputSequence: this._latestPlayerTraversalIntentSnapshot.inputSequence,
       locomotionMode: this._latestPlayerTraversalIntentSnapshot.locomotionMode,
-      orientationSequence:
-        this._latestPlayerTraversalIntentSnapshot.orientationSequence
+      sequence: this._latestPlayerTraversalIntentSnapshot.sequence
     });
 
     return this.latestPlayerIssuedTraversalIntentSnapshot;
@@ -620,9 +584,8 @@ export class FakeMetaverseWorldClient {
     return Object.freeze({
       actionIntent: nextTraversalIntentSnapshot.actionIntent,
       bodyControl: nextTraversalIntentSnapshot.bodyControl,
-      inputSequence: nextTraversalIntentSnapshot.inputSequence,
       locomotionMode: nextTraversalIntentSnapshot.locomotionMode,
-      orientationSequence: nextTraversalIntentSnapshot.orientationSequence
+      sequence: nextTraversalIntentSnapshot.sequence
     });
   }
 
@@ -678,34 +641,15 @@ export class FakeMetaverseWorldClient {
           commandInput.intent.yawRadians ??
           0
       }),
-      inputSequence: this.latestPlayerInputSequence,
       locomotionMode: commandInput.intent.locomotionMode
     });
-    const nextInputSequence =
-      !doMetaversePlayerTraversalSequencedInputsMatch(
-        this._latestPlayerTraversalIntentSnapshot,
-        normalizedTraversalIntentSnapshot
-      )
-        ? this.latestPlayerInputSequence + 1
-        : this.latestPlayerInputSequence;
-    const nextOrientationSequence =
-      this._latestPlayerTraversalIntentSnapshot === null ||
-      this._latestPlayerTraversalIntentSnapshot.bodyControl.turnAxis !==
-        normalizedTraversalIntentSnapshot.bodyControl.turnAxis ||
-      this._latestPlayerTraversalIntentSnapshot.facing.pitchRadians !==
-        normalizedTraversalIntentSnapshot.facing.pitchRadians ||
-      this._latestPlayerTraversalIntentSnapshot.facing.yawRadians !==
-        normalizedTraversalIntentSnapshot.facing.yawRadians
-        ? this.latestPlayerTraversalOrientationSequence + 1
-        : this.latestPlayerTraversalOrientationSequence;
 
     return Object.freeze({
       actionIntent: normalizedTraversalIntentSnapshot.actionIntent,
       bodyControl: normalizedTraversalIntentSnapshot.bodyControl,
       facing: normalizedTraversalIntentSnapshot.facing,
-      inputSequence: nextInputSequence,
       locomotionMode: normalizedTraversalIntentSnapshot.locomotionMode,
-      orientationSequence: nextOrientationSequence
+      sequence: this.latestPlayerTraversalSequence + 1
     });
   }
 

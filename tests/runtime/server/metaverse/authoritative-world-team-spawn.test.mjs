@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createMetaverseJoinPresenceCommand,
   createMetaversePlayerId,
+  createMetaverseSyncPresenceCommand,
   createUsername,
   readMetaverseRealtimePlayerActiveBodyKinematicSnapshot,
   resolveMetaversePlayerTeamId,
@@ -87,6 +88,28 @@ function createTeamSpawnPreviewBundle(mapId) {
       enemyAvoidanceRadiusMeters: 12,
       homeTeamBiasMeters: 8
     })
+  });
+}
+
+function createNeutralStartupSpawnPreviewBundle(mapId) {
+  const baseBundle = createTeamSpawnPreviewBundle(mapId);
+
+  return Object.freeze({
+    ...baseBundle,
+    playerSpawnNodes: Object.freeze([
+      Object.freeze({
+        label: "Shared staging spawn",
+        position: Object.freeze({
+          x: 0,
+          y: 0,
+          z: 0
+        }),
+        spawnId: "shared-staging-spawn",
+        teamId: "neutral",
+        yawRadians: 0
+      }),
+      ...baseBundle.playerSpawnNodes
+    ])
   });
 }
 
@@ -270,6 +293,70 @@ test("authoritative default joins rebalance deterministic default lanes so the s
     readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(secondSnapshot).position.x,
     24
   );
+});
+
+test("pre-authority presence sync keeps spawn-like startup poses on the authored team lane until traversal authority takes over", () => {
+  const bundle = createNeutralStartupSpawnPreviewBundle(
+    "server-team-spawn-presence-startup-lock-test"
+  );
+
+  registerAuthoritativeMetaverseMapBundlePreview(bundle, "staging-ground");
+
+  const runtime = new MetaverseAuthoritativeWorldRuntime({}, bundle.mapId);
+  const redPlayerId = requireValue(createMetaversePlayerId("startup-red-player"), "redPlayerId");
+  const bluePlayerId = requireValue(createMetaversePlayerId("startup-blue-player"), "bluePlayerId");
+  const redUsername = requireValue(createUsername("Startup Red"), "redUsername");
+  const blueUsername = requireValue(createUsername("Startup Blue"), "blueUsername");
+  const startupSpawnPose = {
+    position: bundle.playerSpawnNodes[0].position,
+    stateSequence: 1,
+    yawRadians: bundle.playerSpawnNodes[0].yawRadians
+  };
+
+  runtime.acceptPresenceCommand(
+    createMetaverseJoinPresenceCommand({
+      characterId: "mesh2motion-humanoid-v1",
+      playerId: redPlayerId,
+      pose: startupSpawnPose,
+      username: redUsername
+    }),
+    0
+  );
+  runtime.acceptPresenceCommand(
+    createMetaverseJoinPresenceCommand({
+      characterId: "mesh2motion-humanoid-v1",
+      playerId: bluePlayerId,
+      pose: startupSpawnPose,
+      username: blueUsername
+    }),
+    0
+  );
+
+  let worldSnapshot = runtime.readWorldSnapshot(0);
+  let blueSnapshot = readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(
+    readPlayerSnapshot(worldSnapshot, bluePlayerId)
+  );
+
+  assert.equal(blueSnapshot.position.x, -24);
+
+  runtime.acceptPresenceCommand(
+    createMetaverseSyncPresenceCommand({
+      playerId: bluePlayerId,
+      pose: {
+        ...startupSpawnPose,
+        stateSequence: 2
+      }
+    }),
+    50
+  );
+
+  worldSnapshot = runtime.readWorldSnapshot(50);
+  blueSnapshot = readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(
+    readPlayerSnapshot(worldSnapshot, bluePlayerId)
+  );
+
+  assert.equal(readPlayerSnapshot(worldSnapshot, bluePlayerId).teamId, "blue");
+  assert.equal(blueSnapshot.position.x, -24);
 });
 
 test("authoritative default joins fan same-team players across authored home spawns instead of reusing one occupied start", () => {

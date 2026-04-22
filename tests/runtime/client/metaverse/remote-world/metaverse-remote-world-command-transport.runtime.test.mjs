@@ -91,7 +91,7 @@ test("MetaverseRemoteWorldCommandTransport adapts grounded traversal, look, moun
 
   assert.equal(previewSnapshot?.actionIntent.kind, "jump");
   assert.equal(syncedSnapshot?.actionIntent.kind, "jump");
-  assert.equal(syncedSnapshot?.inputSequence, 1);
+  assert.equal(syncedSnapshot?.sequence, 1);
   assert.equal(
     worldClient.playerTraversalIntentRequests[0]?.playerId,
     localPlayerId

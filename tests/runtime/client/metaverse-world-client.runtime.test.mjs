@@ -111,7 +111,7 @@ test("MetaverseWorldClient prefers latest-wins traversal intent datagrams over r
   const sentDatagrams = [];
   const initialWorldEvent = createWorldEvent({
     currentTick: 10,
-    lastProcessedInputSequence: 0,
+    lastProcessedTraversalSequence: 0,
     playerId,
     serverTimeMs: 10_000,
     snapshotSequence: 1,
@@ -175,7 +175,7 @@ test("MetaverseWorldClient prefers latest-wins traversal intent datagrams over r
     playerId,
   });
 
-  assert.equal(client.latestPlayerInputSequence, 2);
+  assert.equal(client.latestPlayerTraversalSequence, 0);
   assert.equal(scheduler.pendingTasks.at(-1)?.delay, 0);
 
   scheduler.runNext(0);
@@ -186,6 +186,27 @@ test("MetaverseWorldClient prefers latest-wins traversal intent datagrams over r
   assert.deepEqual(
     sentDatagrams[0],
     createMetaverseSyncPlayerTraversalIntentCommand({
+      pendingIntentSamples: [
+        {
+          actionIntent: {
+            kind: "none",
+            pressed: false,
+            sequence: 0
+          },
+          bodyControl: {
+            boost: false,
+            moveAxis: 0.5,
+            strafeAxis: 0.2,
+            turnAxis: 0.3
+          },
+          facing: {
+            pitchRadians: 0,
+            yawRadians: 0
+          },
+          locomotionMode: "grounded",
+          sequence: 1
+        }
+      ],
       intent: {
         actionIntent: {
           kind: "none",
@@ -202,10 +223,8 @@ test("MetaverseWorldClient prefers latest-wins traversal intent datagrams over r
           pitchRadians: 0,
           yawRadians: 0
         },
-        inputSequence: 2,
         locomotionMode: "grounded",
-        orientationSequence: 2,
-        sampleId: 2,
+        sequence: 2,
       },
       playerId,
     })
@@ -227,7 +246,7 @@ test("MetaverseWorldClient flushes traversal intent changes immediately and rese
   let wallClockMs = 10_000;
   const initialWorldEvent = createWorldEvent({
     currentTick: 10,
-    lastProcessedInputSequence: 0,
+    lastProcessedTraversalSequence: 0,
     playerId,
     serverTimeMs: 10_000,
     snapshotSequence: 1,
@@ -287,14 +306,14 @@ test("MetaverseWorldClient flushes traversal intent changes immediately and rese
   await flushAsyncWork();
 
   assert.equal(sentDatagrams.length, 1);
-  assert.equal(sentDatagrams[0]?.intent.inputSequence, 1);
+  assert.equal(sentDatagrams[0]?.intent.sequence, 1);
   assert.equal(scheduler.pendingTasks.at(-1)?.delay, 50);
 
   scheduler.runNext(50);
   await flushAsyncWork();
 
   assert.equal(sentDatagrams.length, 2);
-  assert.equal(sentDatagrams[1]?.intent.inputSequence, 1);
+  assert.equal(sentDatagrams[1]?.intent.sequence, 1);
 });
 
 test("MetaverseWorldClient keeps pure facing turns on the traversal lane without advancing movement ack sequence", async () => {
@@ -308,7 +327,7 @@ test("MetaverseWorldClient keeps pure facing turns on the traversal lane without
   let wallClockMs = 10_000;
   const initialWorldEvent = createWorldEvent({
     currentTick: 10,
-    lastProcessedInputSequence: 0,
+    lastProcessedTraversalSequence: 0,
     playerId,
     serverTimeMs: 10_000,
     snapshotSequence: 1,
@@ -375,25 +394,24 @@ test("MetaverseWorldClient keeps pure facing turns on the traversal lane without
     playerId
   });
 
-  assert.equal(client.latestPlayerInputSequence, 1);
-  assert.equal(client.latestPlayerTraversalOrientationSequence, 2);
-  assert.equal(client.latestPlayerIssuedTraversalIntentSnapshot?.inputSequence, 1);
-  assert.equal(
-    client.latestPlayerIssuedTraversalIntentSnapshot?.orientationSequence,
-    2
-  );
+  assert.equal(client.latestPlayerTraversalSequence, 0);
+  assert.equal(client.latestPlayerIssuedTraversalIntentSnapshot, null);
 
   scheduler.runNext(0);
   await flushAsyncWork();
 
+  assert.equal(client.latestPlayerTraversalSequence, 2);
+  assert.equal(
+    client.latestPlayerIssuedTraversalIntentSnapshot?.sequence,
+    2
+  );
   assert.equal(sentDatagrams.length, 1);
-  assert.equal(sentDatagrams[0]?.intent.inputSequence, 1);
-  assert.equal(sentDatagrams[0]?.intent.orientationSequence, 2);
+  assert.equal(sentDatagrams[0]?.intent.sequence, 2);
   assert.equal(sentDatagrams[0]?.intent.bodyControl.turnAxis, 0.25);
   assert.equal(sentDatagrams[0]?.intent.facing.yawRadians, Math.PI * 0.5);
 });
 
-test("MetaverseWorldClient keeps resending stationary traversal facing refreshes until orientation ack catches up", async () => {
+test("MetaverseWorldClient keeps resending stationary traversal facing refreshes until traversal ack catches up", async () => {
   const { MetaverseWorldClient } = await clientLoader.load("/src/network/index.ts");
   const playerId = createMetaversePlayerId("stationary-facing-ack-harbor-pilot-1");
 
@@ -404,8 +422,7 @@ test("MetaverseWorldClient keeps resending stationary traversal facing refreshes
   let snapshotStreamHandlers = null;
   const initialWorldEvent = createWorldEvent({
     currentTick: 10,
-    lastProcessedInputSequence: 0,
-    lastProcessedTraversalOrientationSequence: 0,
+    lastProcessedTraversalSequence: 0,
     playerId,
     serverTimeMs: 10_000,
     snapshotSequence: 1,
@@ -468,14 +485,12 @@ test("MetaverseWorldClient keeps resending stationary traversal facing refreshes
   await flushAsyncWork();
 
   assert.equal(sentDatagrams.length, 1);
-  assert.equal(sentDatagrams[0]?.intent.inputSequence, 1);
-  assert.equal(sentDatagrams[0]?.intent.orientationSequence, 1);
+  assert.equal(sentDatagrams[0]?.intent.sequence, 1);
 
   snapshotStreamHandlers?.onWorldEvent(
     createWorldEvent({
       currentTick: 11,
-      lastProcessedInputSequence: 1,
-      lastProcessedTraversalOrientationSequence: 1,
+      lastProcessedTraversalSequence: 1,
       playerId,
       serverTimeMs: 10_050,
       snapshotSequence: 2,
@@ -496,30 +511,27 @@ test("MetaverseWorldClient keeps resending stationary traversal facing refreshes
     playerId
   });
 
-  assert.equal(client.latestPlayerInputSequence, 1);
-  assert.equal(client.latestPlayerTraversalOrientationSequence, 2);
+  assert.equal(client.latestPlayerTraversalSequence, 1);
   assert.equal(scheduler.pendingTasks.at(-1)?.delay, 0);
 
   scheduler.runNext(0);
   await flushAsyncWork();
 
+  assert.equal(client.latestPlayerTraversalSequence, 2);
   assert.equal(sentDatagrams.length, 2);
-  assert.equal(sentDatagrams[1]?.intent.inputSequence, 1);
-  assert.equal(sentDatagrams[1]?.intent.orientationSequence, 2);
+  assert.equal(sentDatagrams[1]?.intent.sequence, 2);
   assert.equal(scheduler.pendingTasks.at(-1)?.delay, 50);
 
   scheduler.runNext(50);
   await flushAsyncWork();
 
   assert.equal(sentDatagrams.length, 3);
-  assert.equal(sentDatagrams[2]?.intent.inputSequence, 1);
-  assert.equal(sentDatagrams[2]?.intent.orientationSequence, 2);
+  assert.equal(sentDatagrams[2]?.intent.sequence, 2);
 
   snapshotStreamHandlers?.onWorldEvent(
     createWorldEvent({
       currentTick: 12,
-      lastProcessedInputSequence: 1,
-      lastProcessedTraversalOrientationSequence: 2,
+      lastProcessedTraversalSequence: 2,
       playerId,
       serverTimeMs: 10_100,
       snapshotSequence: 3,
@@ -527,7 +539,9 @@ test("MetaverseWorldClient keeps resending stationary traversal facing refreshes
     })
   );
 
-  assert.equal(scheduler.pendingTasks.length, 0);
+  await flushAsyncWork();
+  assert.equal(scheduler.pendingTasks.length, 1);
+  assert.equal(scheduler.pendingTasks[0]?.delay, 500);
 });
 
 test("MetaverseWorldClient prefers latest-wins player look datagrams over reliable commands when available", async () => {
@@ -661,7 +675,7 @@ test("MetaverseWorldClient rebases queued traversal jump and look sequences abov
   const sentTraversalDatagrams = [];
   const initialWorldEvent = createWorldEvent({
     currentTick: 10,
-    lastProcessedInputSequence: 734,
+    lastProcessedTraversalSequence: 734,
     authoritativeJumpActionSequence: 52,
     lastProcessedLookSequence: 418,
     playerId,
@@ -723,11 +737,11 @@ test("MetaverseWorldClient rebases queued traversal jump and look sequences abov
     playerId
   });
 
-  assert.equal(client.latestPlayerInputSequence, 1);
+  assert.equal(client.latestPlayerTraversalSequence, 0);
 
   await client.ensureConnected(playerId);
 
-  assert.equal(client.latestPlayerInputSequence, 735);
+  assert.equal(client.latestPlayerTraversalSequence, 734);
   assert.equal(scheduler.pendingTasks.length, 2);
   assert.equal(
     scheduler.pendingTasks.every((task) => task.delay === 0),
@@ -740,10 +754,11 @@ test("MetaverseWorldClient rebases queued traversal jump and look sequences abov
   await flushAsyncWork();
 
   assert.equal(sentTraversalDatagrams.length, 1);
-  assert.equal(sentTraversalDatagrams[0]?.intent.inputSequence, 735);
+  assert.equal(sentTraversalDatagrams[0]?.intent.sequence, 735);
+  assert.equal(sentTraversalDatagrams[0]?.intent.actionIntent.kind, "none");
   assert.equal(
     sentTraversalDatagrams[0]?.intent.actionIntent.sequence,
-    53
+    0
   );
   assert.equal(sentLookDatagrams.length, 1);
   assert.equal(sentLookDatagrams[0]?.lookSequence, 419);
@@ -759,7 +774,7 @@ test("MetaverseWorldClient preserves a fast jump tap as an acknowledged edge thr
   const sentDatagrams = [];
   const initialWorldEvent = createWorldEvent({
     currentTick: 10,
-    lastProcessedInputSequence: 0,
+    lastProcessedTraversalSequence: 0,
     playerId,
     serverTimeMs: 10_000,
     snapshotSequence: 1,
@@ -826,8 +841,7 @@ test("MetaverseWorldClient preserves a fast jump tap as an acknowledged edge thr
   await flushAsyncWork();
 
   assert.equal(sentDatagrams.length, 1);
-  assert.equal(sentDatagrams[0]?.intent.inputSequence, 2);
-  assert.equal(sentDatagrams[0]?.intent.orientationSequence, 1);
+  assert.equal(sentDatagrams[0]?.intent.sequence, 1);
   assert.equal(sentDatagrams[0]?.intent.actionIntent.kind, "jump");
   assert.equal(sentDatagrams[0]?.intent.actionIntent.pressed, false);
   assert.equal(sentDatagrams[0]?.intent.actionIntent.sequence, 1);
@@ -846,10 +860,8 @@ test("MetaverseWorldClient does not leak estimated server time into traversal da
   const initialWorldEvent = createMetaverseRealtimeWorldEvent({
     world: {
       observerPlayer: {
-        lastProcessedInputSequence: 0,
         lastProcessedLookSequence: 0,
-        lastProcessedTraversalOrientationSequence: 0,
-        lastProcessedTraversalSampleId: 0,
+        lastProcessedTraversalSequence: 0,
         lastProcessedWeaponSequence: 0,
         playerId
       },
@@ -952,7 +964,7 @@ test("MetaverseWorldClient falls back to reliable commands after a traversal int
   let remainingDatagramFailures = 1;
   const initialWorldEvent = createWorldEvent({
     currentTick: 10,
-    lastProcessedInputSequence: 0,
+    lastProcessedTraversalSequence: 0,
     playerId,
     serverTimeMs: 10_000,
     snapshotSequence: 1,
@@ -1009,7 +1021,7 @@ test("MetaverseWorldClient falls back to reliable commands after a traversal int
     playerId,
   });
 
-  assert.equal(client.latestPlayerInputSequence, 1);
+  assert.equal(client.latestPlayerTraversalSequence, 0);
 
   scheduler.runNext(0);
   await flushAsyncWork();

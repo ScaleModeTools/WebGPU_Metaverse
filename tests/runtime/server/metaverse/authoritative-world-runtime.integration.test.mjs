@@ -151,7 +151,7 @@ function createMetaverseSyncPlayerTraversalIntentCommand(input) {
         turnAxis: nextIntent.yawAxis
       },
       facing: normalizedFacing,
-      inputSequence: nextIntent.inputSequence,
+      sequence: nextIntent.sequence,
       locomotionMode: nextIntent.locomotionMode
     }
   });
@@ -179,7 +179,7 @@ test("MetaverseAuthoritativeWorldRuntime routes an authored dock entry into the 
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 2,
+        sequence: 2,
         jump: false,
         locomotionMode: "grounded",
         moveAxis: 1,
@@ -205,7 +205,7 @@ test("MetaverseAuthoritativeWorldRuntime routes an authored dock entry into the 
 
   assert.notEqual(worldSnapshot, null);
   assert.equal(worldSnapshot.players[0]?.locomotionMode, "swim");
-  assert.equal(worldSnapshot.observerPlayer?.lastProcessedInputSequence, 2);
+  assert.equal(worldSnapshot.observerPlayer?.lastProcessedTraversalSequence, 2);
   const dockEntryOffset = resolveLocalPlanarOffset(
     readPrimaryPlayerActiveBodySnapshot(worldSnapshot).position,
     authoredDockEdgeEntryPosition,
@@ -239,7 +239,7 @@ test("MetaverseAuthoritativeWorldRuntime holds sustained swim after authored doc
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 2,
+        sequence: 2,
         jump: false,
         locomotionMode: "grounded",
         moveAxis: 1,
@@ -314,7 +314,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps idle dynamic skiff collision auth
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 2,
+        sequence: 2,
         jump: false,
         locomotionMode: "swim",
         moveAxis: 1,
@@ -336,7 +336,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps idle dynamic skiff collision auth
 
   assert.notEqual(swimmerPosition, undefined);
   assert.equal(worldSnapshot.players[0]?.locomotionMode, "swim");
-  assert.equal(worldSnapshot.observerPlayer?.lastProcessedInputSequence, 2);
+  assert.equal(worldSnapshot.observerPlayer?.lastProcessedTraversalSequence, 2);
 
   const swimmerLocalOffset = resolveLocalPlanarOffset(
     swimmerPosition,
@@ -367,7 +367,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps a grounded-spawn jump airborne be
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 2,
+        sequence: 2,
         jump: true,
         locomotionMode: "grounded",
         moveAxis: 1,
@@ -417,7 +417,7 @@ test("MetaverseAuthoritativeWorldRuntime exits onto the shipped shoreline suppor
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 2,
+        sequence: 2,
         jump: false,
         locomotionMode: "grounded",
         moveAxis: 1,
@@ -484,7 +484,7 @@ test("MetaverseAuthoritativeWorldRuntime simulates grounded jump ascent, descent
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 2,
+        sequence: 2,
         jump: true,
         locomotionMode: "grounded",
         moveAxis: 0,
@@ -520,7 +520,7 @@ test("MetaverseAuthoritativeWorldRuntime simulates grounded jump ascent, descent
       shippedGroundedSpawnSupportHeightMeters
   );
   assert.ok(jumpAscentActiveBodySnapshot.linearVelocity.y > 0);
-  assert.equal(jumpAscentSnapshot.observerPlayer?.lastProcessedInputSequence, 2);
+  assert.equal(jumpAscentSnapshot.observerPlayer?.lastProcessedTraversalSequence, 2);
   assert.equal(
     jumpAscentSnapshot.players[0]?.traversalAuthority.lastConsumedActionSequence,
     2
@@ -530,7 +530,7 @@ test("MetaverseAuthoritativeWorldRuntime simulates grounded jump ascent, descent
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 3,
+        sequence: 3,
         jump: false,
         locomotionMode: "grounded",
         moveAxis: 0,
@@ -557,7 +557,7 @@ test("MetaverseAuthoritativeWorldRuntime simulates grounded jump ascent, descent
       shippedGroundedSpawnSupportHeightMeters
   );
   assert.ok(jumpDescentActiveBodySnapshot.linearVelocity.y < 0);
-  assert.equal(jumpDescentSnapshot.observerPlayer?.lastProcessedInputSequence, 3);
+  assert.equal(jumpDescentSnapshot.observerPlayer?.lastProcessedTraversalSequence, 3);
   assert.equal(
     jumpDescentSnapshot.players[0]?.traversalAuthority.lastConsumedActionSequence,
     2
@@ -611,7 +611,7 @@ test("MetaverseAuthoritativeWorldRuntime exposes buffered jump startup as traver
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 2,
+        sequence: 2,
         jump: true,
         locomotionMode: "grounded",
         moveAxis: 0,
@@ -674,7 +674,7 @@ test("MetaverseAuthoritativeWorldRuntime does not let snap-to-ground clip the fi
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 2,
+        sequence: 2,
         jump: true,
         locomotionMode: "grounded",
         moveAxis: 0,
@@ -735,7 +735,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps a grounded-spawn jump airborne be
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 2,
+        sequence: 2,
         jump: true,
         locomotionMode: "grounded",
         moveAxis: 0,
@@ -751,7 +751,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps a grounded-spawn jump airborne be
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 3,
+        sequence: 3,
         jump: false,
         locomotionMode: "grounded",
         moveAxis: 0,
@@ -819,7 +819,7 @@ test("MetaverseAuthoritativeWorldRuntime accepts a grounded-spawn jump after rec
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 2,
+        sequence: 2,
         jump: false,
         locomotionMode: "grounded",
         moveAxis: 1,
@@ -844,7 +844,7 @@ test("MetaverseAuthoritativeWorldRuntime accepts a grounded-spawn jump after rec
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 3,
+        sequence: 3,
         jump: true,
         locomotionMode: "grounded",
         moveAxis: 1,
@@ -911,7 +911,7 @@ test("MetaverseAuthoritativeWorldRuntime accepts a grounded jump when shared spa
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 2,
+        sequence: 2,
         jump: true,
         locomotionMode: "grounded",
         moveAxis: 0,
@@ -987,7 +987,7 @@ test("MetaverseAuthoritativeWorldRuntime accepts a grounded jump from a latest-w
           pitchRadians: 0,
           yawRadians: 0
         },
-        inputSequence: 2,
+        sequence: 2,
         locomotionMode: "grounded"
       },
       playerId
@@ -1042,7 +1042,7 @@ test("MetaverseAuthoritativeWorldRuntime briefly buffers an airborne jump edge b
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 2,
+        sequence: 2,
         jump: true,
         locomotionMode: "grounded",
         moveAxis: 0,
@@ -1058,7 +1058,7 @@ test("MetaverseAuthoritativeWorldRuntime briefly buffers an airborne jump edge b
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 3,
+        sequence: 3,
         jump: false,
         locomotionMode: "grounded",
         moveAxis: 0,
@@ -1074,7 +1074,7 @@ test("MetaverseAuthoritativeWorldRuntime briefly buffers an airborne jump edge b
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
         boost: false,
-        inputSequence: 4,
+        sequence: 4,
         jump: true,
         locomotionMode: "grounded",
         moveAxis: 0,

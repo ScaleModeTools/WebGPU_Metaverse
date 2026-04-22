@@ -55,7 +55,8 @@ export function advanceLocalCharacterAnimation<
       mountedCharacterRuntime
     ),
     useHumanoidV2PistolLayering,
-    characterPresentation?.animationCycleId
+    characterPresentation?.animationCycleId,
+    characterPresentation?.animationPlaybackRateMultiplier
   );
 
   if (characterRuntime.humanoidV2PistolPoseRuntime !== null) {

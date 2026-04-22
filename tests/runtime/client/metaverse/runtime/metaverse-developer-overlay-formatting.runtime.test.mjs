@@ -100,7 +100,10 @@ test("createDeveloperReport stays focused on live runtime summary instead of rec
   );
   assert.match(report, /Local locomotion routing: grounded · capability maintained/);
   assert.match(report, /Authority \/ ack: n\/a/);
-  assert.match(report, /World latest-wins datagram: WebTransport datagrams active/);
+  assert.match(
+    report,
+    /World latest-wins datagram: WebTransport datagrams active · 3 send failures/
+  );
 
   assert.doesNotMatch(report, /Reconciliation:/);
   assert.doesNotMatch(report, /Jump \/ traversal:/);

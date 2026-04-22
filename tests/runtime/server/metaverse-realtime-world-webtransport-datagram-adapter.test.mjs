@@ -190,7 +190,7 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards traversal-inten
             pitchRadians: 0,
             yawRadians: 0
           },
-          inputSequence: 2,
+          sequence: 2,
           locomotionMode: "grounded",
         },
         playerId
@@ -203,7 +203,7 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards traversal-inten
   const worldSnapshot = runtime.readWorldSnapshot(200, playerId);
   const activeBodySnapshot = readPrimaryPlayerActiveBodySnapshot(worldSnapshot);
 
-  assert.equal(worldSnapshot.observerPlayer?.lastProcessedInputSequence, 2);
+  assert.equal(worldSnapshot.observerPlayer?.lastProcessedTraversalSequence, 2);
   assert.equal(worldSnapshot.players[0]?.locomotionMode, "grounded");
   assert.equal(worldSnapshot.players[0]?.stateSequence, 2);
   assert.ok(activeBodySnapshot.position.y > 0);
@@ -333,7 +333,7 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter binds the session to the
           command: {
             intent: {
               boost: false,
-              inputSequence: 1,
+              sequence: 1,
               jump: false,
               locomotionMode: "grounded",
               moveAxis: 0,

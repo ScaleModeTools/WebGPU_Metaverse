@@ -268,6 +268,11 @@ function createRemoteCharacterPresentations(
         playerId: playerSnapshot.playerId,
         poseSyncMode: "scene-arrival-smoothed",
         presentation: Object.freeze({
+          animationPlaybackRateMultiplier:
+            playerSnapshot.pose.locomotionMode === "grounded" &&
+            playerSnapshot.pose.animationVocabulary === "walk"
+              ? 3
+              : 1,
           animationVocabulary: playerSnapshot.pose.animationVocabulary,
           position: playerSnapshot.pose.position,
           yawRadians: playerSnapshot.pose.yawRadians

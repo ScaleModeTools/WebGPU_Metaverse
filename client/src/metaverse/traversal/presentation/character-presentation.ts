@@ -31,16 +31,52 @@ interface TraversalCharacterPresentationInput {
   readonly swimPresentationPosition?: PhysicsVector3Snapshot | null;
 }
 
+const groundedWalkAnimationPlaybackRateMultiplier = 3;
+
+function sanitizeAnimationPlaybackRateMultiplier(
+  value: number | null | undefined
+): number {
+  if (!Number.isFinite(value) || value === undefined || value === null) {
+    return 1;
+  }
+
+  return Math.max(0.01, value);
+}
+
+export function resolveCharacterAnimationPlaybackRateMultiplier({
+  animationVocabulary,
+  boost,
+  config,
+  locomotionMode
+}: {
+  readonly animationVocabulary: MetaverseCharacterPresentationSnapshot["animationVocabulary"];
+  readonly boost: boolean;
+  readonly config: Pick<MetaverseRuntimeConfig, "groundedBody">;
+  readonly locomotionMode: MetaverseLocomotionModeId;
+}): number {
+  if (locomotionMode !== "grounded" || animationVocabulary !== "walk") {
+    return 1;
+  }
+
+  return sanitizeAnimationPlaybackRateMultiplier(
+    groundedWalkAnimationPlaybackRateMultiplier *
+      (boost ? Math.max(1, config.groundedBody.boostMultiplier) : 1)
+  );
+}
+
 function createCharacterPresentationSnapshot(
   position: PhysicsVector3Snapshot,
   yawRadians: number,
   animationVocabulary: MetaverseCharacterPresentationSnapshot["animationVocabulary"],
-  animationCycleId?: number | null
+  animationCycleId?: number | null,
+  animationPlaybackRateMultiplier: number = 1
 ): MetaverseCharacterPresentationSnapshot {
   return Object.freeze({
     ...(animationCycleId === null || animationCycleId === undefined
       ? {}
       : { animationCycleId }),
+    animationPlaybackRateMultiplier:
+      sanitizeAnimationPlaybackRateMultiplier(animationPlaybackRateMultiplier),
     animationVocabulary,
     position: Object.freeze({
       x: position.x,
@@ -55,12 +91,15 @@ function createFixedCharacterPresentationSnapshot(
   position: PhysicsVector3Snapshot,
   yawRadians: number,
   animationVocabulary: MetaverseCharacterPresentationSnapshot["animationVocabulary"],
-  animationCycleId?: number | null
+  animationCycleId?: number | null,
+  animationPlaybackRateMultiplier: number = 1
 ): MetaverseCharacterPresentationSnapshot {
   return Object.freeze({
     ...(animationCycleId === null || animationCycleId === undefined
       ? {}
       : { animationCycleId }),
+    animationPlaybackRateMultiplier:
+      sanitizeAnimationPlaybackRateMultiplier(animationPlaybackRateMultiplier),
     animationVocabulary,
     position: Object.freeze({
       x: position.x,
@@ -75,6 +114,7 @@ function createGroundedCharacterPresentationSnapshot(
   bodySnapshot: MetaverseGroundedBodySnapshot,
   animationVocabulary: MetaverseCharacterPresentationSnapshot["animationVocabulary"],
   animationCycleId: number | null = null,
+  animationPlaybackRateMultiplier: number = 1,
   yawRadians: number = bodySnapshot.yawRadians,
   position: PhysicsVector3Snapshot = bodySnapshot.position
 ): MetaverseCharacterPresentationSnapshot {
@@ -82,7 +122,8 @@ function createGroundedCharacterPresentationSnapshot(
     position,
     yawRadians,
     animationVocabulary,
-    animationCycleId
+    animationCycleId,
+    animationPlaybackRateMultiplier
   );
 }
 
@@ -91,6 +132,7 @@ function createSwimCharacterPresentationSnapshot(
   animationVocabulary: MetaverseCharacterPresentationSnapshot["animationVocabulary"],
   config: MetaverseRuntimeConfig,
   animationCycleId: number | null = null,
+  animationPlaybackRateMultiplier: number = 1,
   yawRadians: number = swimSnapshot.yawRadians,
   position: PhysicsVector3Snapshot = swimSnapshot.position
 ): MetaverseCharacterPresentationSnapshot {
@@ -107,7 +149,8 @@ function createSwimCharacterPresentationSnapshot(
     ),
     yawRadians,
     moving ? "swim" : "swim-idle",
-    animationCycleId
+    animationCycleId,
+    animationPlaybackRateMultiplier
   );
 }
 
@@ -132,7 +175,8 @@ export function createTraversalCharacterPresentationSnapshot({
         mountedVehicleSnapshot.position,
         mountedVehicleSnapshot.yawRadians,
         mountedOccupancyPresentationState.mountedCharacterAnimationVocabulary,
-        animationCycleId
+        animationCycleId,
+        1
       );
   }
 
@@ -143,6 +187,12 @@ export function createTraversalCharacterPresentationSnapshot({
           groundedBodySnapshot,
           animationVocabulary,
           animationCycleId ?? null,
+          resolveCharacterAnimationPlaybackRateMultiplier({
+            animationVocabulary,
+            boost: groundedBodySnapshot.driveTarget.boost,
+            config,
+            locomotionMode
+          }),
           presentationYawRadians ?? groundedBodySnapshot.yawRadians,
           groundedPresentationPosition ?? groundedBodySnapshot.position
         );
@@ -154,6 +204,7 @@ export function createTraversalCharacterPresentationSnapshot({
       animationVocabulary,
       config,
       animationCycleId ?? null,
+      1,
       presentationYawRadians ?? swimSnapshot.yawRadians,
       swimPresentationPosition ?? swimSnapshot.position
     );
