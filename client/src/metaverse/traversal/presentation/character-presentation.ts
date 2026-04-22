@@ -31,7 +31,7 @@ interface TraversalCharacterPresentationInput {
   readonly swimPresentationPosition?: PhysicsVector3Snapshot | null;
 }
 
-const groundedWalkAnimationPlaybackRateMultiplier = 3;
+const groundedWalkAnimationPlaybackRateMultiplier = 1.5;
 
 function sanitizeAnimationPlaybackRateMultiplier(
   value: number | null | undefined

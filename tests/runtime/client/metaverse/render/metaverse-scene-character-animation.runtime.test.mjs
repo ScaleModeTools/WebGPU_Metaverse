@@ -340,6 +340,8 @@ test("createHeldWeaponPoseRuntime samples shoulders and elbows but restores hand
   assert.equal(restoreSourceByBoneName.get("upperarm_r"), "sampled");
   assert.equal(restoreSourceByBoneName.get("lowerarm_r"), "sampled");
   assert.equal(restoreSourceByBoneName.get("hand_r"), "sampled");
+  assert.equal(restoreSourceByBoneName.get("index_01_r"), "sampled");
+  assert.equal(restoreSourceByBoneName.get("index_02_r"), "sampled");
 });
 
 test("createHumanoidV2PitchSelectivePistolPoseClip keeps all tracks on the neutral hold when IK owns pistol pitch response", async () => {
@@ -835,6 +837,28 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
       .addScaledVector(direction, -pointOffset.dot(direction))
       .length();
   };
+  const resolveClosestPointOnSegment = (segmentStart, segmentEnd, targetPoint) => {
+    const segmentOffset = segmentEnd.clone().sub(segmentStart);
+    const segmentLengthSq = segmentOffset.lengthSq();
+
+    if (segmentLengthSq <= 0.000001) {
+      return segmentStart.clone();
+    }
+
+    return segmentStart
+      .clone()
+      .addScaledVector(
+        segmentOffset,
+        Math.max(
+          0,
+          Math.min(
+            1,
+            targetPoint.clone().sub(segmentStart).dot(segmentOffset) /
+              segmentLengthSq
+          )
+        )
+      );
+  };
 
   const cameraSnapshot = {
     lookDirection: {
@@ -895,7 +919,9 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
     "metaverse_attachment_support_point/metaverse-service-pistol-v1/hand_r_support"
   );
   const rightGripSocketNode = sceneRuntime.scene.getObjectByName("grip_r_socket");
-  const rightTriggerContactNode = sceneRuntime.scene.getObjectByName("index_03_r");
+  const rightIndexBaseNode = sceneRuntime.scene.getObjectByName("index_01_r");
+  const rightIndexMiddleNode = sceneRuntime.scene.getObjectByName("index_02_r");
+  const rightIndexTipNode = sceneRuntime.scene.getObjectByName("index_03_r");
 
   assert.ok(attachmentRoot);
   assert.ok(adsCameraAnchorNode);
@@ -908,7 +934,9 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
   assert.ok(leftGripSocketNode);
   assert.ok(leftPalmSocketNode);
   assert.ok(rightGripSocketNode);
-  assert.ok(rightTriggerContactNode);
+  assert.ok(rightIndexBaseNode);
+  assert.ok(rightIndexMiddleNode);
+  assert.ok(rightIndexTipNode);
 
   const initialWeaponForward = forwardMarkerNode
     .getWorldPosition(new Vector3())
@@ -934,12 +962,35 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
   const initialLeftGripLocalPosition = attachmentRoot.worldToLocal(
     leftGripSocketNode.getWorldPosition(new Vector3())
   );
-  const rightTriggerContactWorldPosition = rightTriggerContactNode.getWorldPosition(
-    new Vector3()
-  );
   const triggerMarkerWorldPosition = triggerMarkerNode.getWorldPosition(
     new Vector3()
   );
+  const rightIndexBaseWorldPosition = rightIndexBaseNode.getWorldPosition(
+    new Vector3()
+  );
+  const rightIndexMiddleWorldPosition = rightIndexMiddleNode.getWorldPosition(
+    new Vector3()
+  );
+  const rightIndexTipWorldPosition = rightIndexTipNode.getWorldPosition(
+    new Vector3()
+  );
+  const rightTriggerContactWorldPosition = (() => {
+    const baseSegmentClosestPoint = resolveClosestPointOnSegment(
+      rightIndexBaseWorldPosition,
+      rightIndexMiddleWorldPosition,
+      triggerMarkerWorldPosition
+    );
+    const tipSegmentClosestPoint = resolveClosestPointOnSegment(
+      rightIndexMiddleWorldPosition,
+      rightIndexTipWorldPosition,
+      triggerMarkerWorldPosition
+    );
+
+    return baseSegmentClosestPoint.distanceTo(triggerMarkerWorldPosition) <=
+      tipSegmentClosestPoint.distanceTo(triggerMarkerWorldPosition)
+      ? baseSegmentClosestPoint
+      : tipSegmentClosestPoint;
+  })();
   const adsCameraAnchorWorldPosition = adsCameraAnchorNode.getWorldPosition(
     new Vector3()
   );
@@ -1007,8 +1058,8 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
     `Expected right hand up ${rightHandUp.toArray()} to stay upright against ${targetGripUp.toArray()}.`
   );
   assert.ok(
-    rightTriggerContactWorldPosition.distanceTo(triggerMarkerWorldPosition) < 0.05,
-    `Expected right trigger contact ${rightTriggerContactWorldPosition.toArray()} to stay near the authored trigger marker ${triggerMarkerWorldPosition.toArray()} without overextending the arm.`
+    rightTriggerContactWorldPosition.distanceTo(triggerMarkerWorldPosition) < 0.02,
+    `Expected the visible right index chain contact ${rightTriggerContactWorldPosition.toArray()} to stay near the authored trigger marker ${triggerMarkerWorldPosition.toArray()} without overextending the finger chain.`
   );
   assert.ok(
     triggerMarkerWorldPosition.distanceTo(

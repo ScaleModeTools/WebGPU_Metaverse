@@ -33,6 +33,7 @@ export interface MetaverseAttachmentProofRuntime {
   readonly heldGripLocalAimQuaternion: Quaternion;
   readonly heldGripToAdsCameraAnchorLocalPosition: Vector3 | null;
   readonly heldGripToForwardReferenceLocalPosition: Vector3;
+  readonly heldGripToTriggerMarkerLocalPosition: Vector3 | null;
   readonly heldGripSocketNode: Object3D;
   readonly heldMount: MetaverseAttachmentMountRuntime;
   readonly heldTriggerMarkerNode: Object3D | null;
@@ -339,6 +340,8 @@ export function cloneMetaverseAttachmentProofRuntime<
       sourceRuntime.heldGripToAdsCameraAnchorLocalPosition?.clone() ?? null,
     heldGripToForwardReferenceLocalPosition:
       sourceRuntime.heldGripToForwardReferenceLocalPosition.clone(),
+    heldGripToTriggerMarkerLocalPosition:
+      sourceRuntime.heldGripToTriggerMarkerLocalPosition?.clone() ?? null,
     heldGripSocketNode: nodeResolvers.findNamedNode(
       characterProofRuntime.scene,
       sourceRuntime.heldGripSocketNode.name,
@@ -473,6 +476,13 @@ export async function loadMetaverseAttachmentProofRuntime<
           attachmentProofConfig.heldMount.triggerMarkerNodeName,
           "Metaverse attachment trigger marker"
         );
+  const heldGripToTriggerMarkerLocalPosition =
+    heldTriggerMarkerNode === null
+      ? null
+      : resolveAttachmentNodeLocalPositionFromGrip(
+          heldGripSocketNode,
+          heldTriggerMarkerNode
+        );
   const heldOffHandSupportPointId =
     attachmentProofConfig.heldMount.offHandSupportPointId ?? null;
   let offHandSupportNode: Object3D | null = null;
@@ -530,6 +540,7 @@ export async function loadMetaverseAttachmentProofRuntime<
     heldGripLocalAimQuaternion,
     heldGripToAdsCameraAnchorLocalPosition,
     heldGripToForwardReferenceLocalPosition,
+    heldGripToTriggerMarkerLocalPosition,
     heldGripSocketNode,
     heldMount,
     heldTriggerMarkerNode,
