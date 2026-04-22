@@ -153,6 +153,10 @@ export class MetaverseAuthoritativeWorldSync {
 
   reset(): void {
     this.#resetMountedEnvironmentAuthorityMismatch();
+    this.armLocalSpawnBootstrap();
+  }
+
+  armLocalSpawnBootstrap(): void {
     this.#pendingLocalSpawnBootstrap = true;
   }
 
@@ -303,7 +307,7 @@ export class MetaverseAuthoritativeWorldSync {
       );
 
     if (authoritativeLocalPlayerSnapshot === null) {
-      this.reset();
+      this.#resetMountedEnvironmentAuthorityMismatch();
       return;
     }
 

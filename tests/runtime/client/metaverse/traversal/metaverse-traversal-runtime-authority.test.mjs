@@ -462,6 +462,76 @@ test("MetaverseTraversalRuntime cancels a local jump ascent once the issued jump
   }
 });
 
+test("MetaverseTraversalRuntime ignores a stale rejected jump once a newer jump sequence is already issued locally", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createFlatGroundedTraversalHarness();
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    const groundedSnapshot = groundedBodyRuntime.snapshot;
+
+    traversalRuntime.advance(jumpInput, groundedFixedStepSeconds);
+    traversalRuntime.syncIssuedTraversalIntentSnapshot(
+      createTraversalIntentSnapshot({
+        boost: false,
+        inputSequence: 2,
+        jump: true,
+        jumpActionSequence: 2,
+        locomotionMode: "grounded",
+        moveAxis: 0,
+        strafeAxis: 0,
+        yawAxis: 0
+      })
+    );
+
+    const localJumpSnapshot = groundedBodyRuntime.snapshot;
+
+    assert.equal(localJumpSnapshot.grounded, false);
+    assert.ok(localJumpSnapshot.position.y > groundedSnapshot.position.y);
+
+    syncAuthoritativeLocalPlayerPose(
+      traversalRuntime,
+      {
+        lastProcessedInputSequence: 2,
+        linearVelocity: Object.freeze({
+          x: 0,
+          y: 0,
+          z: 0
+        }),
+        locomotionMode: "grounded",
+        mountedOccupancy: null,
+        position: groundedSnapshot.position,
+        traversalAuthority: Object.freeze({
+          currentActionKind: "none",
+          currentActionPhase: "idle",
+          currentActionSequence: 0,
+          lastConsumedActionKind: "none",
+          lastConsumedActionSequence: 0,
+          lastRejectedActionKind: "jump",
+          lastRejectedActionReason: "buffer-expired",
+          lastRejectedActionSequence: 1,
+          phaseStartedAtTick: 3
+        }),
+        yawRadians: groundedSnapshot.yawRadians
+      }
+    );
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 0);
+    assert.equal(
+      traversalRuntime.lastLocalAuthorityPoseCorrectionReason,
+      "none"
+    );
+    assert.equal(groundedBodyRuntime.snapshot.grounded, false);
+    assert.ok(
+      groundedBodyRuntime.snapshot.position.y > groundedSnapshot.position.y
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
 test("MetaverseTraversalRuntime buffers a grounded jump tap in shared local traversal authority until the body becomes jump-ready", async () => {
   const { groundedBodyRuntime, traversalRuntime } =
     await createFlatGroundedTraversalHarness();
@@ -508,6 +578,40 @@ test("MetaverseTraversalRuntime buffers a grounded jump tap in shared local trav
     assert.ok(
       readGroundedBodyVerticalSpeed(groundedBodyRuntime.snapshot) > 0 ||
         groundedBodyRuntime.snapshot.position.y > 0.35
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime consumes a grounded jump immediately when authored support is already inside snap distance", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createFlatGroundedTraversalHarness();
+
+  try {
+    traversalRuntime.boot();
+    groundedBodyRuntime.teleport(
+      freezeVector3(0, 0.12, 24),
+      groundedBodyRuntime.snapshot.yawRadians
+    );
+    assert.equal(groundedBodyRuntime.snapshot.jumpBody.jumpReady, false);
+
+    traversalRuntime.advance(jumpInput, groundedFixedStepSeconds);
+
+    assert.equal(
+      traversalRuntime.localTraversalAuthoritySnapshot.lastConsumedActionKind,
+      "jump"
+    );
+    assert.ok(
+      traversalRuntime.localTraversalAuthoritySnapshot.lastConsumedActionSequence > 0
+    );
+    assert.equal(
+      traversalRuntime.localTraversalAuthoritySnapshot.lastRejectedActionReason,
+      "none"
+    );
+    assert.ok(
+      readGroundedBodyVerticalSpeed(groundedBodyRuntime.snapshot) > 0 ||
+        groundedBodyRuntime.snapshot.position.y > 0.12
     );
   } finally {
     groundedBodyRuntime.dispose();
@@ -1300,7 +1404,6 @@ test("MetaverseTraversalRuntime preserves the current local velocity when an ack
       matchedGroundedSnapshot.position.y,
       matchedGroundedSnapshot.position.z
     );
-    const matchedAuthoritativeTick = 1;
     const moveForwardInput = Object.freeze({
       ...idleInput,
       moveAxis: 1
@@ -1320,7 +1423,7 @@ test("MetaverseTraversalRuntime preserves the current local velocity when an ack
     traversalRuntime.syncAuthoritativeLocalPlayerPose(
       Object.freeze({
         authoritativeSnapshotAgeMs: 0,
-        authoritativeTick: matchedAuthoritativeTick,
+        authoritativeTick: null,
         lastProcessedInputSequence: 0,
         lastProcessedTraversalSampleId: 0,
         lastProcessedTraversalOrientationSequence: 0,

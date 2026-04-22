@@ -85,6 +85,7 @@ export interface MetaverseTelemetrySnapshot {
         readonly convergenceEpisodeStartIntentionalDiscontinuityCause:
           | "none"
           | "spawn"
+          | "moving-support-carry"
           | "mounted-boarding"
           | "mounted-unboarding";
         readonly convergenceEpisodeStartHistoricalLocalSampleMatched:
@@ -92,7 +93,6 @@ export interface MetaverseTelemetrySnapshot {
           | null;
         readonly convergenceEpisodeStartHistoricalLocalSampleSelectionReason:
           | "exact-traversal-sample-id"
-          | "exact-authoritative-tick"
           | "latest-at-or-before-authoritative-time"
           | "earliest-after-authoritative-time"
           | "latest-matching-sample"
@@ -109,8 +109,7 @@ export interface MetaverseTelemetrySnapshot {
         readonly convergenceEpisodeStartVerticalMagnitudeMeters: number | null;
         readonly convergenceEpisodeStartYawMagnitudeRadians: number | null;
         readonly groundedBodyStateDivergence: boolean | null;
-        readonly lastProcessedInputSequence: number | null;
-        readonly lastProcessedTraversalOrientationSequence: number | null;
+        readonly lastProcessedTraversalSequence: number | null;
         readonly localGrounded: boolean | null;
         readonly planarMagnitudeMeters: number | null;
         readonly planarVelocityMagnitudeUnitsPerSecond: number | null;
@@ -120,8 +119,7 @@ export interface MetaverseTelemetrySnapshot {
       readonly lastLocalAuthorityPoseCorrectionSnapshot: {
         readonly authoritative: {
           readonly groundedBody: MetaverseTelemetryGroundedBodySnapshot | null;
-          readonly lastProcessedInputSequence: number;
-          readonly lastProcessedTraversalOrientationSequence: number;
+          readonly lastProcessedTraversalSequence: number;
           readonly linearVelocity: MetaverseVector3Snapshot;
           readonly locomotionMode: MetaverseLocomotionModeId;
           readonly position: MetaverseVector3Snapshot;
@@ -138,7 +136,7 @@ export interface MetaverseTelemetrySnapshot {
           readonly issuedTraversalIntent: {
             readonly actionIntent: MetaversePlayerTraversalActionIntentSnapshot;
             readonly bodyControl: MetaversePlayerTraversalBodyControlSnapshot;
-            readonly inputSequence: number;
+            readonly sequence: number;
             readonly locomotionMode: "grounded" | "swim";
           } | null;
           readonly linearVelocity: MetaverseVector3Snapshot;
@@ -206,7 +204,7 @@ export interface MetaverseTelemetrySnapshot {
           readonly resolvedActionSequence: number | null;
           readonly resolvedActionState: MetaverseRealtimePlayerTraversalActionResolutionStateId | null;
         };
-        readonly lastProcessedInputSequence: number | null;
+        readonly lastProcessedTraversalSequence: number | null;
         readonly locomotionMismatch: boolean;
         readonly locomotionMode: MetaverseLocomotionModeId | null;
         readonly position: MetaverseVector3Snapshot | null;
@@ -249,7 +247,7 @@ export interface MetaverseTelemetrySnapshot {
       readonly issuedTraversalIntent: {
         readonly actionIntent: MetaversePlayerTraversalActionIntentSnapshot;
         readonly bodyControl: MetaversePlayerTraversalBodyControlSnapshot;
-        readonly inputSequence: number;
+        readonly sequence: number;
         readonly locomotionMode: "grounded" | "swim";
       } | null;
     };

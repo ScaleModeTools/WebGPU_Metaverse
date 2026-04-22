@@ -40,15 +40,13 @@ export interface LocalTraversalPoseSnapshot {
 
 export interface PredictedLocalReconciliationSample {
   readonly groundedBody: CorrectionGroundedBodySnapshot | null;
-  readonly inputSequence: number;
   readonly issuedTraversalIntent: MetaverseIssuedTraversalIntentSnapshot | null;
   readonly localGrounded: boolean | null;
   readonly localPredictionTick: number;
   readonly localWallClockMs: number;
   readonly pose: LocalTraversalPoseSnapshot;
   readonly swimBody: CorrectionSwimBodySnapshot | null;
-  readonly traversalSampleId: number;
-  readonly traversalOrientationSequence: number;
+  readonly traversalSequence: number;
 }
 
 export interface CorrectionTargetPoseSnapshot {
@@ -126,8 +124,7 @@ export function createDefaultLocalAuthorityPoseCorrectionDetailSnapshot(): Local
     convergenceEpisodeStartVerticalMagnitudeMeters: null,
     convergenceEpisodeStartYawMagnitudeRadians: null,
     groundedBodyStateDivergence: null,
-    lastProcessedInputSequence: null,
-    lastProcessedTraversalOrientationSequence: null,
+    lastProcessedTraversalSequence: null,
     localGrounded: null,
     planarMagnitudeMeters: null,
     planarVelocityMagnitudeUnitsPerSecond: null,
@@ -177,8 +174,7 @@ export function createLocalAuthorityPoseCorrectionDetailSnapshot({
   convergenceEpisodeStartVerticalMagnitudeMeters,
   convergenceEpisodeStartYawMagnitudeRadians,
   groundedBodyStateDivergence,
-  lastProcessedInputSequence,
-  lastProcessedTraversalOrientationSequence,
+  lastProcessedTraversalSequence,
   localGrounded,
   localTraversalPose
 }: {
@@ -201,8 +197,7 @@ export function createLocalAuthorityPoseCorrectionDetailSnapshot({
   readonly convergenceEpisodeStartVerticalMagnitudeMeters: number | null;
   readonly convergenceEpisodeStartYawMagnitudeRadians: number | null;
   readonly groundedBodyStateDivergence: boolean;
-  readonly lastProcessedInputSequence: number | null;
-  readonly lastProcessedTraversalOrientationSequence: number | null;
+  readonly lastProcessedTraversalSequence: number | null;
   readonly localGrounded: boolean | null;
   readonly localTraversalPose: LocalTraversalPoseSnapshot;
 }): LocalAuthorityPoseCorrectionDetailSnapshot {
@@ -222,8 +217,7 @@ export function createLocalAuthorityPoseCorrectionDetailSnapshot({
     convergenceEpisodeStartVerticalMagnitudeMeters,
     convergenceEpisodeStartYawMagnitudeRadians,
     groundedBodyStateDivergence,
-    lastProcessedInputSequence,
-    lastProcessedTraversalOrientationSequence,
+    lastProcessedTraversalSequence,
     localGrounded,
     planarMagnitudeMeters: Math.hypot(
       authoritativePosition.x - localTraversalPose.position.x,

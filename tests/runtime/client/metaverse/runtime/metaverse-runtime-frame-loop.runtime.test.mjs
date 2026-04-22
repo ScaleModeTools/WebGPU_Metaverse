@@ -295,16 +295,37 @@ test("MetaverseRuntimeFrameLoop owns the live frame sequencing and frame state o
     nowMs: 1016,
     renderer
   });
+  frameLoop.syncFrame({
+    canvas: {
+      clientHeight: 720,
+      clientWidth: 1280
+    },
+    nowMs: 1034,
+    renderer
+  });
 
-  assert.ok(callLog.indexOf("previewLocalTraversalIntent") < callLog.indexOf("advance"));
+  assert.ok(
+    callLog.indexOf("previewLocalTraversalIntent") <
+      callLog.indexOf("syncAuthoritativeWorldSnapshots")
+  );
+  assert.ok(
+    callLog.indexOf("syncIssuedTraversalIntentSnapshot") <
+      callLog.indexOf("syncAuthoritativeWorldSnapshots")
+  );
+  assert.ok(
+    callLog.indexOf("previewLocalTraversalIntent") < callLog.indexOf("advance")
+  );
   assert.ok(callLog.indexOf("advance") < callLog.indexOf("syncLocalTraversalIntent"));
   assert.ok(callLog.indexOf("syncViewport") < callLog.indexOf("syncPresentation"));
   assert.ok(callLog.indexOf("syncPresentation") < callLog.indexOf("render"));
-  assert.deepEqual(issuedIntents.slice(0, 2), [
+  assert.deepEqual(issuedIntents, [
+    "preview-intent",
+    "preview-intent",
     "preview-intent",
     "synced-intent"
   ]);
-  assert.deepEqual(advancedDeltas, [0, 0.016]);
+  assert.equal(advancedDeltas.length, 1);
+  assert.ok(Math.abs(advancedDeltas[0] - 0.033) < 0.0001);
   assert.equal(previewInputs[0].bodyControl.moveAxis, 1);
   assert.equal(syncedTraversalInputs[0].actionIntent.pressed, true);
   assert.equal(scenePresentationCalls[0].characterPresentationSnapshot, localCharacterPresentation);
@@ -315,9 +336,9 @@ test("MetaverseRuntimeFrameLoop owns the live frame sequencing and frame state o
   assert.equal(frameLoop.mountedInteraction.focusedMountable, focusedMountable);
   assert.equal(frameLoop.focusedPortal, null);
   assert.equal(frameLoop.mountedInteraction.mountedEnvironment, null);
-  assert.equal(frameLoop.frameDeltaMs, 16);
-  assert.equal(frameLoop.frameRate, 62.5);
-  assert.equal(frameLoop.renderedFrameCount, 2);
+  assert.equal(frameLoop.frameDeltaMs, 18);
+  assert.equal(frameLoop.frameRate, 1000 / 18);
+  assert.equal(frameLoop.renderedFrameCount, 3);
 });
 
 test("MetaverseRuntimeFrameLoop keeps blocked camera-phase frames neutral and suppresses live interaction focus", async () => {

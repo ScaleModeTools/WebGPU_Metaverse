@@ -1,5 +1,4 @@
 import type {
-  MetaversePlayerTeamId,
   MetaversePlayerId,
   MetaversePresencePoseSnapshotInput,
   MetaversePresenceRosterSnapshot,
@@ -28,7 +27,6 @@ export interface MetaversePresenceJoinRequest {
   readonly characterId: string;
   readonly playerId: MetaversePlayerId;
   readonly pose: Omit<MetaversePresencePoseSnapshotInput, "stateSequence">;
-  readonly teamId: MetaversePlayerTeamId;
   readonly username: Username;
 }
 

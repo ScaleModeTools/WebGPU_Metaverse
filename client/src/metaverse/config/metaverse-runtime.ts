@@ -5,7 +5,6 @@ import {
 } from "@webgpu-metaverse/shared";
 import {
   resolveMetaverseMapPlayerSpawnNode,
-  resolveMetaversePlayerTeamId,
   resolveMetaverseWorldPlacedWaterRegions,
   type MetaverseMapBundleSpawnNodeSnapshot
 } from "@webgpu-metaverse/shared/metaverse/world";
@@ -141,7 +140,11 @@ function resolveClientDefaultSpawnNode(
     readonly loadedBundle: ReturnType<typeof loadMetaverseMapBundle>;
   }
 ): MetaverseMapBundleSpawnNodeSnapshot | null {
-  if (fallbackSpawnNode === null || localPlayerId === null) {
+  if (
+    fallbackSpawnNode === null ||
+    localPlayerId === null ||
+    localPlayerTeamId === null
+  ) {
     return fallbackSpawnNode;
   }
 
@@ -151,8 +154,7 @@ function resolveClientDefaultSpawnNode(
       playerId: localPlayerId,
       playerSpawnNodes: loadedBundle.bundle.playerSpawnNodes,
       playerSpawnSelection: loadedBundle.bundle.playerSpawnSelection,
-      playerTeamId:
-        localPlayerTeamId ?? resolveMetaversePlayerTeamId(localPlayerId)
+      playerTeamId: localPlayerTeamId
     }) ?? fallbackSpawnNode
   );
 }

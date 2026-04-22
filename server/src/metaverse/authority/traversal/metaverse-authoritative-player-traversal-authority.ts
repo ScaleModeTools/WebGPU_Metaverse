@@ -15,10 +15,8 @@ import {
   createMetaverseSyncPlayerLookIntentCommand,
   createMetaversePlayerTraversalIntentSnapshot,
   createMetaverseSyncPlayerTraversalIntentCommand,
-  doMetaversePlayerTraversalSequencedInputsMatch,
   type MetaversePlayerTraversalActionIntentSnapshot,
   type MetaversePlayerTraversalIntentSnapshot,
-  type MetaversePlayerTraversalRecentIntentHistoryEntry,
   type MetaverseSyncPlayerLookIntentCommand,
   type MetaverseSyncPlayerTraversalIntentCommand
 } from "@webgpu-metaverse/shared/metaverse/realtime";
@@ -58,6 +56,7 @@ interface MetaverseAuthoritativePlayerTraversalAuthorityDependencies<
   >;
   readonly playersById: ReadonlyMap<MetaversePlayerId, PlayerRuntime>;
   readonly readLastAdvancedAtMs: () => number | null;
+  readonly readTickIntervalMs: () => number;
   readonly resolveConstrainedPlayerLookIntent: (
     playerRuntime: PlayerRuntime,
     pitchRadians: number,
@@ -71,6 +70,15 @@ interface MetaverseAuthoritativePlayerTraversalAuthorityDependencies<
   ) => void;
 }
 
+function resolveTraversalIntentSequence(
+  intent: Pick<
+    MetaversePlayerTraversalIntentSnapshot,
+    "sequence"
+  >
+): number {
+  return intent.sequence;
+}
+
 function playerTraversalIntentMatches(
   leftIntent: MetaversePlayerTraversalIntentSnapshot,
   rightIntent: Pick<
@@ -78,9 +86,8 @@ function playerTraversalIntentMatches(
     | "actionIntent"
     | "bodyControl"
     | "facing"
-    | "inputSequence"
     | "locomotionMode"
-    | "orientationSequence"
+    | "sequence"
   >
 ): boolean {
   return (
@@ -93,31 +100,10 @@ function playerTraversalIntentMatches(
     leftIntent.bodyControl.turnAxis === rightIntent.bodyControl.turnAxis &&
     leftIntent.facing.pitchRadians === rightIntent.facing.pitchRadians &&
     leftIntent.facing.yawRadians === rightIntent.facing.yawRadians &&
-    leftIntent.inputSequence === rightIntent.inputSequence &&
     leftIntent.locomotionMode === rightIntent.locomotionMode &&
-    leftIntent.orientationSequence === rightIntent.orientationSequence
+    resolveTraversalIntentSequence(leftIntent) ===
+      resolveTraversalIntentSequence(rightIntent)
   );
-}
-
-function playerTraversalIntentTimelineMatches(
-  leftTimeline:
-    | readonly MetaverseAuthoritativePlayerTraversalIntentTimelineEntryRuntimeState[]
-    | null,
-  rightTimeline: readonly MetaverseAuthoritativePlayerTraversalIntentTimelineEntryRuntimeState[]
-): boolean {
-  if (leftTimeline === null || leftTimeline.length !== rightTimeline.length) {
-    return false;
-  }
-
-  return leftTimeline.every((leftEntry, entryIndex) => {
-    const rightEntry = rightTimeline[entryIndex];
-
-    return (
-      rightEntry !== undefined &&
-      leftEntry.effectiveAtMs === rightEntry.effectiveAtMs &&
-      playerTraversalIntentMatches(leftEntry.intent, rightEntry.intent)
-    );
-  });
 }
 
 function createConstrainedTraversalIntentSnapshot<
@@ -132,127 +118,81 @@ function createConstrainedTraversalIntentSnapshot<
     inputIntent.facing.pitchRadians,
     inputIntent.facing.yawRadians
   );
+  const traversalSequence = resolveTraversalIntentSequence(inputIntent);
 
   return createMetaversePlayerTraversalIntentSnapshot({
     actionIntent: inputIntent.actionIntent,
     bodyControl: inputIntent.bodyControl,
     facing: constrainedTraversalFacing,
-    inputSequence: inputIntent.inputSequence,
     locomotionMode: inputIntent.locomotionMode,
-    orientationSequence: inputIntent.orientationSequence,
-    sampleId: inputIntent.sampleId
+    sequence: traversalSequence
   });
 }
 
-function createTraversalIntentTimelineFromRecentHistory<
+function createIdleTraversalIntentSnapshot<
   PlayerRuntime extends MetaverseAuthoritativePlayerTraversalRuntimeState
 >(
-  playerRuntime: PlayerRuntime,
-  resolveConstrainedPlayerLookIntent: MetaverseAuthoritativePlayerTraversalAuthorityDependencies<PlayerRuntime>["resolveConstrainedPlayerLookIntent"],
-  currentIntent: MetaversePlayerTraversalIntentSnapshot,
-  recentIntentHistory:
-    | readonly MetaversePlayerTraversalRecentIntentHistoryEntry[]
-    | undefined,
-  timelineEndedAtMs: number
-): readonly MetaverseAuthoritativePlayerTraversalIntentTimelineEntryRuntimeState[] {
-  const timelineEntries =
-    recentIntentHistory === undefined ? [] : recentIntentHistory.slice();
-  const nextTimeline = [];
-  let cursorMs = Math.max(0, timelineEndedAtMs);
-
-  for (
-    let entryIndex = timelineEntries.length - 1;
-    entryIndex >= 0;
-    entryIndex -= 1
-  ) {
-    const historyEntry = timelineEntries[entryIndex];
-
-    if (historyEntry === undefined) {
-      continue;
-    }
-
-    const effectiveAtMs = Math.max(0, cursorMs - historyEntry.durationMs);
-
-    nextTimeline.unshift(
-      Object.freeze({
-        effectiveAtMs,
-        intent: createConstrainedTraversalIntentSnapshot(
-          playerRuntime,
-          resolveConstrainedPlayerLookIntent,
-          historyEntry.intent
-        )
-      })
-    );
-    cursorMs = effectiveAtMs;
-  }
-
-  const constrainedCurrentIntent = createConstrainedTraversalIntentSnapshot(
-    playerRuntime,
-    resolveConstrainedPlayerLookIntent,
-    currentIntent
-  );
-  const lastTimelineIntent = nextTimeline.at(-1)?.intent ?? null;
-
-  if (
-    lastTimelineIntent === null ||
-    !playerTraversalIntentMatches(lastTimelineIntent, constrainedCurrentIntent)
-  ) {
-    nextTimeline.push(
-      Object.freeze({
-        effectiveAtMs: Math.max(0, timelineEndedAtMs),
-        intent: constrainedCurrentIntent
-      })
-    );
-  }
-
-  return Object.freeze(nextTimeline);
+  playerRuntime: PlayerRuntime
+): MetaversePlayerTraversalIntentSnapshot {
+  return createMetaversePlayerTraversalIntentSnapshot({
+    actionIntent: {
+      kind: "none",
+      pressed: false,
+      sequence: 0
+    },
+    bodyControl: {
+      boost: false,
+      moveAxis: 0,
+      strafeAxis: 0,
+      turnAxis: 0
+    },
+    facing: createMetaverseTraversalFacingSnapshot({
+      pitchRadians: playerRuntime.lookPitchRadians,
+      yawRadians: playerRuntime.lookYawRadians
+    }),
+    locomotionMode:
+      playerRuntime.unmountedTraversalState.locomotionMode === "swim"
+        ? "swim"
+        : "grounded",
+    sequence: 0
+  });
 }
 
-function mergeTraversalIntentTimeline(
-  existingTimeline:
-    | readonly MetaverseAuthoritativePlayerTraversalIntentTimelineEntryRuntimeState[]
-    | null,
-  incomingTimeline: readonly MetaverseAuthoritativePlayerTraversalIntentTimelineEntryRuntimeState[],
-  lastAdvancedAtMs: number | null
-): readonly MetaverseAuthoritativePlayerTraversalIntentTimelineEntryRuntimeState[] {
-  if (incomingTimeline.length === 0) {
-    return existingTimeline ?? Object.freeze([]);
+function shouldRejectTraversalIntentAfterBaseline(
+  baselineIntent: MetaversePlayerTraversalIntentSnapshot,
+  nextIntent: MetaversePlayerTraversalIntentSnapshot
+): boolean {
+  const baselineTraversalSequence =
+    resolveTraversalIntentSequence(baselineIntent);
+  const nextTraversalSequence = resolveTraversalIntentSequence(nextIntent);
+
+  return (
+    nextTraversalSequence < baselineTraversalSequence ||
+    (nextTraversalSequence === baselineTraversalSequence &&
+      !playerTraversalIntentMatches(baselineIntent, nextIntent))
+  );
+}
+
+function resolveNextTraversalIntentActivationAtMs(
+  nowMs: number,
+  lastAdvancedAtMs: number | null,
+  tickIntervalMs: number
+): number {
+  const normalizedTickIntervalMs = Math.max(1, Math.floor(tickIntervalMs));
+  const normalizedLastAdvancedAtMs = Math.max(0, lastAdvancedAtMs ?? 0);
+
+  if (nowMs <= normalizedLastAdvancedAtMs) {
+    return normalizedLastAdvancedAtMs;
   }
 
-  const minEffectiveAtMs = lastAdvancedAtMs ?? Number.NEGATIVE_INFINITY;
-  const filteredIncomingTimeline = incomingTimeline.filter(
-    (timelineEntry) => timelineEntry.effectiveAtMs >= minEffectiveAtMs
+  const elapsedSinceLastAdvanceMs = nowMs - normalizedLastAdvancedAtMs;
+  const elapsedTickCount = Math.ceil(
+    elapsedSinceLastAdvanceMs / normalizedTickIntervalMs
   );
 
-  if (filteredIncomingTimeline.length === 0) {
-    return existingTimeline ?? Object.freeze([]);
-  }
-
-  const firstIncomingAtMs = filteredIncomingTimeline[0]?.effectiveAtMs;
-  const preservedExistingTimeline =
-    existingTimeline?.filter(
-      (timelineEntry) =>
-        timelineEntry.effectiveAtMs >= minEffectiveAtMs &&
-        firstIncomingAtMs !== undefined &&
-        timelineEntry.effectiveAtMs < firstIncomingAtMs
-    ) ?? [];
-  const mergedTimeline = [
-    ...preservedExistingTimeline,
-    ...filteredIncomingTimeline
-  ].filter((timelineEntry, entryIndex, timeline) => {
-    const previousEntry = timeline[entryIndex - 1];
-
-    if (previousEntry === undefined) {
-      return true;
-    }
-
-    return !(
-      previousEntry.effectiveAtMs === timelineEntry.effectiveAtMs &&
-      playerTraversalIntentMatches(previousEntry.intent, timelineEntry.intent)
-    );
-  });
-
-  return Object.freeze(mergedTimeline);
+  return (
+    normalizedLastAdvancedAtMs + elapsedTickCount * normalizedTickIntervalMs
+  );
 }
 
 export class MetaverseAuthoritativePlayerTraversalAuthority<
@@ -302,85 +242,74 @@ export class MetaverseAuthoritativePlayerTraversalAuthority<
       this.#dependencies.playerTraversalIntentsByPlayerId.get(
         normalizedCommand.playerId
       );
-    const existingCurrentIntent = existingTraversalIntent?.currentIntent;
-
-    if (
-      existingCurrentIntent !== undefined &&
-      normalizedCommand.intent.inputSequence < existingCurrentIntent.inputSequence
-    ) {
-      playerRuntime.lastSeenAtMs = nowMs;
-      this.#dependencies.syncPlayerTraversalAuthorityState(playerRuntime);
-      return;
-    }
-
-    if (
-      existingCurrentIntent !== undefined &&
-      normalizedCommand.intent.inputSequence ===
-        existingCurrentIntent.inputSequence &&
-      !doMetaversePlayerTraversalSequencedInputsMatch(
-        existingCurrentIntent,
-        normalizedCommand.intent
-      )
-    ) {
-      playerRuntime.lastSeenAtMs = nowMs;
-      this.#dependencies.syncPlayerTraversalAuthorityState(playerRuntime);
-      return;
-    }
-
-    if (
-      existingCurrentIntent !== undefined &&
-      normalizedCommand.intent.inputSequence ===
-        existingCurrentIntent.inputSequence &&
-      normalizedCommand.intent.orientationSequence <
-        existingCurrentIntent.orientationSequence
-    ) {
-      playerRuntime.lastSeenAtMs = nowMs;
-      this.#dependencies.syncPlayerTraversalAuthorityState(playerRuntime);
-      return;
-    }
-
-    const nextTraversalIntent = createConstrainedTraversalIntentSnapshot(
-      playerRuntime,
-      this.#dependencies.resolveConstrainedPlayerLookIntent,
-      normalizedCommand.intent
+    const tickIntervalMs = Math.max(
+      1,
+      Math.floor(this.#dependencies.readTickIntervalMs())
     );
-    const incomingTraversalIntentTimeline =
-      createTraversalIntentTimelineFromRecentHistory(
+    const existingCurrentIntent =
+      existingTraversalIntent?.currentIntent ??
+      createIdleTraversalIntentSnapshot(playerRuntime);
+    const nextTraversalIntentTimeline = [
+      ...(existingTraversalIntent?.pendingIntentTimeline ?? [])
+    ];
+    const firstQueuedActivationAtMs = resolveNextTraversalIntentActivationAtMs(
+      nowMs,
+      this.#dependencies.readLastAdvancedAtMs(),
+      tickIntervalMs
+    );
+    let latestComparableIntent =
+      nextTraversalIntentTimeline[nextTraversalIntentTimeline.length - 1]?.intent ??
+      existingCurrentIntent;
+    let nextEffectiveAtMs = Math.max(
+      firstQueuedActivationAtMs,
+      (nextTraversalIntentTimeline[nextTraversalIntentTimeline.length - 1]
+        ?.effectiveAtMs ?? firstQueuedActivationAtMs - tickIntervalMs) +
+        tickIntervalMs
+    );
+    let latestAcceptedTraversalIntent:
+      | MetaversePlayerTraversalIntentSnapshot
+      | null = null;
+
+    for (const intentSample of [
+      ...(normalizedCommand.pendingIntentSamples ?? []),
+      normalizedCommand.intent
+    ]) {
+      const nextTraversalIntent = createConstrainedTraversalIntentSnapshot(
         playerRuntime,
         this.#dependencies.resolveConstrainedPlayerLookIntent,
-        normalizedCommand.intent,
-        normalizedCommand.recentIntentHistory,
-        Math.min(
-          nowMs,
-          normalizedCommand.estimatedServerTimeMs ?? nowMs
-        )
+        intentSample
       );
-    const nextTraversalIntentTimeline = mergeTraversalIntentTimeline(
-      existingTraversalIntent?.pendingIntentTimeline ?? null,
-      incomingTraversalIntentTimeline,
-      this.#dependencies.readLastAdvancedAtMs()
-    );
 
-    if (
-      existingCurrentIntent !== undefined &&
-      nextTraversalIntent.inputSequence === existingCurrentIntent.inputSequence &&
-      nextTraversalIntent.orientationSequence ===
-        existingCurrentIntent.orientationSequence &&
-      !playerTraversalIntentMatches(existingCurrentIntent, nextTraversalIntent)
-    ) {
-      playerRuntime.lastSeenAtMs = nowMs;
-      this.#dependencies.syncPlayerTraversalAuthorityState(playerRuntime);
-      return;
+      if (
+        playerTraversalIntentMatches(
+          latestComparableIntent,
+          nextTraversalIntent
+        )
+      ) {
+        continue;
+      }
+
+      if (
+        shouldRejectTraversalIntentAfterBaseline(
+          latestComparableIntent,
+          nextTraversalIntent
+        )
+      ) {
+        continue;
+      }
+
+      nextTraversalIntentTimeline.push(
+        Object.freeze({
+          effectiveAtMs: nextEffectiveAtMs,
+          intent: nextTraversalIntent
+        })
+      );
+      latestComparableIntent = nextTraversalIntent;
+      latestAcceptedTraversalIntent = nextTraversalIntent;
+      nextEffectiveAtMs += tickIntervalMs;
     }
 
-    if (
-      existingCurrentIntent !== undefined &&
-      playerTraversalIntentMatches(existingCurrentIntent, nextTraversalIntent) &&
-      playerTraversalIntentTimelineMatches(
-        existingTraversalIntent?.pendingIntentTimeline ?? null,
-        nextTraversalIntentTimeline
-      )
-    ) {
+    if (latestAcceptedTraversalIntent === null) {
       playerRuntime.lastSeenAtMs = nowMs;
       this.#dependencies.syncPlayerTraversalAuthorityState(playerRuntime);
       return;
@@ -389,26 +318,22 @@ export class MetaverseAuthoritativePlayerTraversalAuthority<
     this.#dependencies.playerTraversalIntentsByPlayerId.set(
       normalizedCommand.playerId,
       {
-        currentIntent: nextTraversalIntent,
+        currentIntent: existingCurrentIntent,
         pendingIntentTimeline: [...nextTraversalIntentTimeline]
       }
     );
-    playerRuntime.lookPitchRadians = nextTraversalIntent.facing.pitchRadians;
-    playerRuntime.lookYawRadians = nextTraversalIntent.facing.yawRadians;
-
-    if (
-      existingCurrentIntent === undefined ||
-      nextTraversalIntent.inputSequence > existingCurrentIntent.inputSequence
-    ) {
-      playerRuntime.unmountedTraversalState =
-        queueMetaverseUnmountedTraversalAction(
-          playerRuntime.unmountedTraversalState,
-          {
-            actionIntent: nextTraversalIntent.actionIntent,
-            bufferSeconds: metaverseTraversalActionBufferSeconds
-          }
-        );
-    }
+    playerRuntime.lookPitchRadians =
+      latestAcceptedTraversalIntent.facing.pitchRadians;
+    playerRuntime.lookYawRadians =
+      latestAcceptedTraversalIntent.facing.yawRadians;
+    playerRuntime.unmountedTraversalState =
+      queueMetaverseUnmountedTraversalAction(
+        playerRuntime.unmountedTraversalState,
+        {
+          actionIntent: latestAcceptedTraversalIntent.actionIntent,
+          bufferSeconds: metaverseTraversalActionBufferSeconds
+        }
+      );
 
     playerRuntime.lastSeenAtMs = nowMs;
     this.#dependencies.syncPlayerTraversalAuthorityState(playerRuntime);

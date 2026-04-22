@@ -251,27 +251,16 @@ function parseWorldTraversalIntent(intentBody: Record<string, unknown>) {
   }
 
   return {
-    ...(intentBody.inputSequence === undefined
-      ? {}
-      : {
-          inputSequence: readNumberField(
-            intentBody.inputSequence,
-            "intent.inputSequence"
-          )
-        }),
     ...(locomotionMode === undefined
       ? {}
       : {
           locomotionMode:
             locomotionMode as MetaversePlayerTraversalIntentLocomotionModeId
         }),
-    ...(intentBody.orientationSequence === undefined
+    ...(intentBody.sequence === undefined
       ? {}
       : {
-          orientationSequence: readNumberField(
-            intentBody.orientationSequence,
-            "intent.orientationSequence"
-          )
+          sequence: readNumberField(intentBody.sequence, "intent.sequence")
         }),
     ...(intentBody.bodyControl === undefined
       ? {}
@@ -299,36 +288,19 @@ function parseWorldTraversalIntent(intentBody: Record<string, unknown>) {
   };
 }
 
-function parseWorldTraversalRecentIntentHistory(
-  historyBody: unknown,
+function parseWorldTraversalPendingIntentSamples(
+  pendingIntentSamplesBody: unknown,
   fieldName: string
 ) {
-  if (!Array.isArray(historyBody)) {
+  if (!Array.isArray(pendingIntentSamplesBody)) {
     throw new Error(`${fieldName} must be an array.`);
   }
 
-  return historyBody.map((historyEntryBody, historyEntryIndex) => {
-    if (!isRecord(historyEntryBody)) {
-      throw new Error(`${fieldName}[${historyEntryIndex}] must be an object.`);
-    }
-
-    return {
-      ...(historyEntryBody.durationMs === undefined
-        ? {}
-        : {
-            durationMs: readNumberField(
-              historyEntryBody.durationMs,
-              `${fieldName}[${historyEntryIndex}].durationMs`
-            )
-          }),
-      intent: parseWorldTraversalIntent(
-        readRecordField(
-          historyEntryBody.intent,
-          `${fieldName}[${historyEntryIndex}].intent`
-        )
-      )
-    };
-  });
+  return pendingIntentSamplesBody.map((intentBody, intentIndex) =>
+    parseWorldTraversalIntent(
+      readRecordField(intentBody, `${fieldName}[${intentIndex}]`)
+    )
+  );
 }
 
 function parseWorldTraversalBodyControl(
@@ -405,11 +377,6 @@ function parseWorldTraversalActionIntent(
       ? {}
       : {
           pressed: readBooleanField(actionIntent.pressed, `${fieldName}.pressed`)
-        }),
-    ...(actionIntent.sequence === undefined
-      ? {}
-      : {
-          sequence: readNumberField(actionIntent.sequence, `${fieldName}.sequence`)
         })
   };
 }
@@ -483,21 +450,13 @@ function parseWorldCommand(
       });
     case "sync-player-traversal-intent":
       return createMetaverseSyncPlayerTraversalIntentCommand({
-        ...(body.estimatedServerTimeMs === undefined
-          ? {}
-          : {
-              estimatedServerTimeMs: readNumberField(
-                body.estimatedServerTimeMs,
-                "estimatedServerTimeMs"
-              )
-            }),
         intent: parseWorldTraversalIntent(readRecordField(body.intent, "intent")),
-        ...(body.recentIntentHistory === undefined
+        ...(body.pendingIntentSamples === undefined
           ? {}
           : {
-              recentIntentHistory: parseWorldTraversalRecentIntentHistory(
-                body.recentIntentHistory,
-                "recentIntentHistory"
+              pendingIntentSamples: parseWorldTraversalPendingIntentSamples(
+                body.pendingIntentSamples,
+                "pendingIntentSamples"
               )
             }),
         playerId: resolvePlayerId(readStringField(body.playerId, "playerId"))

@@ -64,13 +64,7 @@ export interface MetaverseRemoteWorldSamplingConfig
 
 interface MetaverseRemoteWorldRuntimeDependencies {
   readonly createMetaverseWorldClient:
-    | ((
-        dependencies?: {
-          readonly readEstimatedServerTimeMs?:
-            | ((localWallClockMs: number) => number)
-            | undefined;
-        }
-      ) => MetaverseWorldClientRuntime)
+    | (() => MetaverseWorldClientRuntime)
     | null;
   readonly localPlayerIdentity: MetaverseLocalPlayerIdentity | null;
   readonly onRemoteWorldUpdate: () => void;
@@ -113,13 +107,7 @@ export class MetaverseRemoteWorldRuntime {
       createMetaverseWorldClient:
         createMetaverseWorldClient === null
           ? null
-          : () =>
-              createMetaverseWorldClient({
-                readEstimatedServerTimeMs: (localWallClockMs) =>
-                  authoritativeServerClock.readEstimatedServerTimeMs(
-                    localWallClockMs
-                  )
-              }),
+          : () => createMetaverseWorldClient(),
       localPlayerIdentity,
       onRemoteWorldUpdate
     });
@@ -129,13 +117,14 @@ export class MetaverseRemoteWorldRuntime {
     this.#remoteWorldAuthoritativeSnapshotState =
       new MetaverseRemoteWorldAuthoritativeSnapshotState({
         authoritativeServerClock,
-        readLatestPlayerInputSequence: () =>
-          this.#connectionLifecycle.worldClient?.latestPlayerInputSequence ?? 0,
-        readLatestPlayerTraversalOrientationSequence: () =>
+        readLatestPlayerTraversalSequence: () =>
+          this.#connectionLifecycle.worldClient?.latestPlayerTraversalSequence ??
           this.#connectionLifecycle.worldClient
-            ?.latestPlayerTraversalOrientationSequence ?? 0,
-        readLatestPlayerWeaponSequence: () =>
-          this.#connectionLifecycle.worldClient?.latestPlayerWeaponSequence ?? 0,
+            ?.latestPlayerIssuedTraversalIntentSnapshot?.sequence ??
+          0,
+        readLatestAcceptedSnapshotReceivedAtMs: () =>
+          this.#connectionLifecycle.worldClient
+            ?.latestAcceptedSnapshotReceivedAtMs ?? null,
         readLocalPlayerId: () => localPlayerIdentity?.playerId ?? null,
         readWallClockMs: resolvedReadWallClockMs,
         readWorldSnapshotBuffer: () =>

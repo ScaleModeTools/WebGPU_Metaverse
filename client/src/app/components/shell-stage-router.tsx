@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useMemo } from "react";
 import type { FormEvent } from "react";
 
 import {
@@ -176,6 +176,14 @@ export function ShellStageRouter({
       ? mouseGameplayAimCalibrationSnapshot
       : profile?.snapshot.aimCalibration ?? null;
   const gameplayCoopRoomId = resolveDuckHuntGameplayCoopRoomId(coopRoomIdDraft);
+  const metaverseEnvironmentProofConfig = useMemo(
+    () =>
+      loadMetaverseEnvironmentProofConfig(
+        activeMetaverseBundleId,
+        metaverseCharacterProofConfig
+      ),
+    [activeMetaverseBundleId]
+  );
 
   return (
     <section>
@@ -226,10 +234,7 @@ export function ShellStageRouter({
             calibrationQualityLabel={calibrationQualityLabel}
             characterProofConfig={metaverseCharacterProofConfig}
             coopRoomIdDraft={coopRoomIdDraft}
-            environmentProofConfig={loadMetaverseEnvironmentProofConfig(
-              activeMetaverseBundleId,
-              metaverseCharacterProofConfig
-            )}
+            environmentProofConfig={metaverseEnvironmentProofConfig}
             gameplayInputMode={inputMode}
             metaverseControlMode={metaverseControlMode}
             onCoopRoomIdDraftChange={onCoopRoomIdDraftChange}

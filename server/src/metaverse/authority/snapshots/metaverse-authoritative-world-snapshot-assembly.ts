@@ -49,10 +49,8 @@ export interface MetaverseAuthoritativeSnapshotPlayerRuntimeState {
   angularVelocityRadiansPerSecond: number;
   readonly characterId: string;
   lastGroundedBodySnapshot: MetaverseAuthoritativeLastGroundedBodySnapshot;
-  lastProcessedInputSequence: number;
   lastProcessedLookSequence: number;
-  lastProcessedTraversalSampleId: number;
-  lastProcessedTraversalOrientationSequence: number;
+  lastProcessedTraversalSequence: number;
   lastProcessedWeaponSequence: number;
   linearVelocityX: number;
   linearVelocityY: number;
@@ -82,6 +80,11 @@ export interface MetaverseAuthoritativeSnapshotPlayerTraversalIntentRuntimeState
   readonly currentIntent: {
     readonly bodyControl: MetaverseTraversalBodyControlSnapshot;
   };
+  readonly pendingIntentTimeline: readonly {
+    readonly intent: {
+      readonly bodyControl: MetaverseTraversalBodyControlSnapshot;
+    };
+  }[];
 }
 
 export interface MetaverseAuthoritativeSnapshotVehicleSeatRuntimeState {
@@ -135,9 +138,13 @@ function createPlayerPresentationIntentSnapshot(
   readonly moveAxis: number;
   readonly strafeAxis: number;
 } {
+  const presentationIntent =
+    traversalIntent?.pendingIntentTimeline.at(-1)?.intent ??
+    traversalIntent?.currentIntent;
+
   return Object.freeze({
-    moveAxis: traversalIntent?.currentIntent.bodyControl.moveAxis ?? 0,
-    strafeAxis: traversalIntent?.currentIntent.bodyControl.strafeAxis ?? 0
+    moveAxis: presentationIntent?.bodyControl.moveAxis ?? 0,
+    strafeAxis: presentationIntent?.bodyControl.strafeAxis ?? 0
   });
 }
 
@@ -174,12 +181,9 @@ function createObserverPlayerSnapshot(
               .resolvedActionState
           : "none"
     },
-    lastProcessedInputSequence: playerRuntime.lastProcessedInputSequence,
     lastProcessedLookSequence: playerRuntime.lastProcessedLookSequence,
-    lastProcessedTraversalSampleId:
-      playerRuntime.lastProcessedTraversalSampleId,
-    lastProcessedTraversalOrientationSequence:
-      playerRuntime.lastProcessedTraversalOrientationSequence,
+    lastProcessedTraversalSequence:
+      playerRuntime.lastProcessedTraversalSequence,
     lastProcessedWeaponSequence: playerRuntime.lastProcessedWeaponSequence,
     playerId: playerRuntime.playerId
   };

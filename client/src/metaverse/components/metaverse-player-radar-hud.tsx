@@ -1,7 +1,6 @@
 import type { MetaversePlayerTeamId } from "@webgpu-metaverse/shared";
 
 import type { MetaverseHudSnapshot } from "../types/metaverse-runtime";
-import { formatMetaversePlayerTeamLabel } from "./metaverse-player-team-pill";
 
 interface MetaversePlayerRadarHudProps {
   readonly radarSnapshot: MetaverseHudSnapshot["radar"];
@@ -42,184 +41,136 @@ export function MetaversePlayerRadarHud({
   const pulseProgress =
     radarSnapshot.enemyPingAgeMs === null
       ? 1
-      : Math.min(
-          radarSnapshot.enemyPingAgeMs / radarSnapshot.enemyPingIntervalMs,
-          1
-        );
+      : Math.min(radarSnapshot.enemyPingAgeMs / radarSnapshot.enemyPingIntervalMs, 1);
   const pulseRadius = radarRadius * pulseProgress;
   const pulseOpacity =
     radarSnapshot.enemyPingAgeMs === null ? 0 : Math.max(0, 0.32 - pulseProgress * 0.26);
-  const nextEnemyPingInMs =
-    radarSnapshot.enemyPingAgeMs === null
-      ? radarSnapshot.enemyPingIntervalMs
-      : Math.max(
-          0,
-          radarSnapshot.enemyPingIntervalMs - radarSnapshot.enemyPingAgeMs
-        );
 
   return (
-    <div className="pointer-events-none w-full max-w-[min(20rem,100%)] rounded-[var(--metaverse-hud-panel-radius)] bg-[radial-gradient(circle_at_top,rgba(15,23,42,0.92),rgba(2,6,23,0.94))] p-[var(--metaverse-hud-panel-padding)] text-slate-50 shadow-[0_22px_70px_rgb(2_6_23_/_0.38)] ring-1 ring-white/10 backdrop-blur-md">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="type-shell-banner text-slate-300/80">Tactical radar</p>
-          <p className="mt-2 truncate text-base font-semibold tracking-[0.08em] text-slate-50 uppercase">
-            {formatMetaversePlayerTeamLabel(radarSnapshot.localTeamId)}
-          </p>
-        </div>
-        <div className="text-right text-[0.7rem] uppercase tracking-[0.2em] text-slate-300/75">
-          <p>{radarSnapshot.rangeMeters}m range</p>
-          <p className="mt-1">
-            {radarSnapshot.available
-              ? `Next ping ${(nextEnemyPingInMs / 1000).toFixed(1)}s`
-              : "Syncing"}
-          </p>
-        </div>
-      </div>
+    <svg
+      aria-label="Player radar"
+      className="h-auto w-full max-w-[13rem]"
+      viewBox={`0 0 ${radarViewSize} ${radarViewSize}`}
+    >
+      <defs>
+        <filter id="metaverse-radar-contact-glow">
+          <feGaussianBlur result="blur" stdDeviation="2" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
 
-      <div className="mt-5 flex justify-center">
-        <svg
-          aria-label="Player radar"
-          className="h-auto w-full max-w-[13rem]"
-          viewBox={`0 0 ${radarViewSize} ${radarViewSize}`}
-        >
-          <defs>
-            <filter id="metaverse-radar-contact-glow">
-              <feGaussianBlur result="blur" stdDeviation="2" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
+      <circle
+        cx={radarCenter}
+        cy={radarCenter}
+        fill="rgba(15, 23, 42, 0.78)"
+        r={radarRadius}
+        stroke="rgba(148, 163, 184, 0.22)"
+        strokeWidth="1.2"
+      />
+      <circle
+        cx={radarCenter}
+        cy={radarCenter}
+        fill="none"
+        r={radarRadius * 0.66}
+        stroke="rgba(148, 163, 184, 0.14)"
+        strokeWidth="1"
+      />
+      <circle
+        cx={radarCenter}
+        cy={radarCenter}
+        fill="none"
+        r={radarRadius * 0.33}
+        stroke="rgba(148, 163, 184, 0.12)"
+        strokeWidth="1"
+      />
+      <path
+        d={`M ${radarCenter} ${radarCenter - radarRadius} L ${radarCenter} ${radarCenter + radarRadius}`}
+        stroke="rgba(148, 163, 184, 0.12)"
+        strokeWidth="1"
+      />
+      <path
+        d={`M ${radarCenter - radarRadius} ${radarCenter} L ${radarCenter + radarRadius} ${radarCenter}`}
+        stroke="rgba(148, 163, 184, 0.12)"
+        strokeWidth="1"
+      />
 
-          <circle
-            cx={radarCenter}
-            cy={radarCenter}
-            fill="rgba(15, 23, 42, 0.78)"
-            r={radarRadius}
-            stroke="rgba(148, 163, 184, 0.22)"
-            strokeWidth="1.2"
-          />
-          <circle
-            cx={radarCenter}
-            cy={radarCenter}
-            fill="none"
-            r={radarRadius * 0.66}
-            stroke="rgba(148, 163, 184, 0.14)"
-            strokeWidth="1"
-          />
-          <circle
-            cx={radarCenter}
-            cy={radarCenter}
-            fill="none"
-            r={radarRadius * 0.33}
-            stroke="rgba(148, 163, 184, 0.12)"
-            strokeWidth="1"
-          />
-          <path
-            d={`M ${radarCenter} ${radarCenter - radarRadius} L ${radarCenter} ${
-              radarCenter + radarRadius
-            }`}
-            stroke="rgba(148, 163, 184, 0.12)"
-            strokeWidth="1"
-          />
-          <path
-            d={`M ${radarCenter - radarRadius} ${radarCenter} L ${
-              radarCenter + radarRadius
-            } ${radarCenter}`}
-            stroke="rgba(148, 163, 184, 0.12)"
-            strokeWidth="1"
-          />
+      {pulseOpacity > 0 ? (
+        <circle
+          cx={radarCenter}
+          cy={radarCenter}
+          fill="none"
+          r={pulseRadius}
+          stroke="rgba(248, 113, 113, 0.7)"
+          strokeOpacity={pulseOpacity}
+          strokeWidth="1.6"
+        />
+      ) : null}
 
-          {pulseOpacity > 0 ? (
+      {radarSnapshot.friendlyContacts.map((contact) => {
+        const accent = resolveMetaversePlayerTeamAccent(contact.teamId);
+
+        return (
+          <g
+            key={`friendly-${contact.username}`}
+            filter="url(#metaverse-radar-contact-glow)"
+          >
+            <title>{`${contact.username} · ${contact.distanceMeters.toFixed(0)}m`}</title>
             <circle
-              cx={radarCenter}
-              cy={radarCenter}
-              fill="none"
-              r={pulseRadius}
-              stroke="rgba(248, 113, 113, 0.7)"
-              strokeOpacity={pulseOpacity}
-              strokeWidth="1.6"
-            />
-          ) : null}
-
-          {radarSnapshot.friendlyContacts.map((contact) => {
-            const accent = resolveMetaversePlayerTeamAccent(contact.teamId);
-
-            return (
-              <g
-                key={`friendly-${contact.username}`}
-                filter="url(#metaverse-radar-contact-glow)"
-              >
-                <title>{`${contact.username} · ${contact.distanceMeters.toFixed(0)}m`}</title>
-                <circle
-                  cx={radarCenter + contact.radarX * radarRadius}
-                  cy={radarCenter + contact.radarY * radarRadius}
-                  fill={accent.fill}
-                  r={contact.clamped ? 4.5 : 4}
-                  stroke={accent.stroke}
-                  strokeWidth="1.1"
-                  style={{
-                    filter: `drop-shadow(0 0 10px ${accent.glow})`
-                  }}
-                />
-              </g>
-            );
-          })}
-
-          {radarSnapshot.enemyContacts.map((contact) => {
-            const accent = resolveMetaversePlayerTeamAccent(contact.teamId);
-            const contactX = radarCenter + contact.radarX * radarRadius;
-            const contactY = radarCenter + contact.radarY * radarRadius;
-            const contactSize = contact.clamped ? 10 : 8;
-
-            return (
-              <g
-                key={`enemy-${contact.username}`}
-                filter="url(#metaverse-radar-contact-glow)"
-              >
-                <title>{`${contact.username} · ${contact.distanceMeters.toFixed(0)}m`}</title>
-                <rect
-                  fill={accent.fill}
-                  height={contactSize}
-                  rx="1.5"
-                  stroke={accent.stroke}
-                  strokeWidth="1"
-                  style={{
-                    filter: `drop-shadow(0 0 12px ${accent.glow})`
-                  }}
-                  transform={`translate(${contactX} ${contactY}) rotate(45) translate(${
-                    contactSize / -2
-                  } ${contactSize / -2})`}
-                  width={contactSize}
-                />
-              </g>
-            );
-          })}
-
-          <g>
-            <circle
-              cx={radarCenter}
-              cy={radarCenter}
-              fill="#f8fafc"
-              r="4.5"
-              stroke="rgba(148, 163, 184, 0.65)"
-              strokeWidth="1.2"
-            />
-            <path
-              d={`M ${radarCenter} ${radarCenter - 14} L ${radarCenter - 5.5} ${
-                radarCenter - 2
-              } L ${radarCenter + 5.5} ${radarCenter - 2} Z`}
-              fill="rgba(248, 250, 252, 0.92)"
+              cx={radarCenter + contact.radarX * radarRadius}
+              cy={radarCenter + contact.radarY * radarRadius}
+              fill={accent.fill}
+              r={contact.clamped ? 4.5 : 4}
+              stroke={accent.stroke}
+              strokeWidth="1.1"
+              style={{ filter: `drop-shadow(0 0 10px ${accent.glow})` }}
             />
           </g>
-        </svg>
-      </div>
+        );
+      })}
 
-      <div className="mt-4 flex items-center justify-between gap-4 text-[0.7rem] uppercase tracking-[0.2em] text-slate-300/78">
-        <p>Allies {radarSnapshot.friendlyContacts.length}</p>
-        <p>Enemies {radarSnapshot.enemyContacts.length}</p>
-      </div>
-    </div>
+      {radarSnapshot.enemyContacts.map((contact) => {
+        const accent = resolveMetaversePlayerTeamAccent(contact.teamId);
+        const contactX = radarCenter + contact.radarX * radarRadius;
+        const contactY = radarCenter + contact.radarY * radarRadius;
+        const contactSize = contact.clamped ? 10 : 8;
+
+        return (
+          <g
+            key={`enemy-${contact.username}`}
+            filter="url(#metaverse-radar-contact-glow)"
+          >
+            <title>{`${contact.username} · ${contact.distanceMeters.toFixed(0)}m`}</title>
+            <rect
+              fill={accent.fill}
+              height={contactSize}
+              rx="1.5"
+              stroke={accent.stroke}
+              strokeWidth="1"
+              style={{ filter: `drop-shadow(0 0 12px ${accent.glow})` }}
+              transform={`translate(${contactX} ${contactY}) rotate(45) translate(${contactSize / -2} ${contactSize / -2})`}
+              width={contactSize}
+            />
+          </g>
+        );
+      })}
+
+      <g>
+        <circle
+          cx={radarCenter}
+          cy={radarCenter}
+          fill="#f8fafc"
+          r="4.5"
+          stroke="rgba(148, 163, 184, 0.65)"
+          strokeWidth="1.2"
+        />
+        <path
+          d={`M ${radarCenter} ${radarCenter - 14} L ${radarCenter - 5.5} ${radarCenter - 2} L ${radarCenter + 5.5} ${radarCenter - 2} Z`}
+          fill="rgba(248, 250, 252, 0.92)"
+        />
+      </g>
+    </svg>
   );
 }

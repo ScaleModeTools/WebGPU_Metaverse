@@ -34,7 +34,7 @@ function createPredictedLocalReconciliationSample({
   });
 }
 
-test("resolvePredictedLocalReconciliationSampleFromMatchingHistory prefers an exact traversal sample id before tick or time fallback", async () => {
+test("resolvePredictedLocalReconciliationSampleFromMatchingHistory prefers a unique exact traversal sample id before time fallback", async () => {
   const {
     resolvePredictedLocalReconciliationSampleFromMatchingHistory
   } = await clientLoader.load(
@@ -84,7 +84,7 @@ after(async () => {
   await clientLoader?.close();
 });
 
-test("resolvePredictedLocalReconciliationSampleFromMatchingHistory prefers an exact authoritative tick match inside a repeated ack bucket", async () => {
+test("resolvePredictedLocalReconciliationSampleFromMatchingHistory ignores authoritative tick coincidence inside a repeated ack bucket and uses authoritative time instead", async () => {
   const {
     resolvePredictedLocalReconciliationSampleFromMatchingHistory
   } = await clientLoader.load(
@@ -93,34 +93,85 @@ test("resolvePredictedLocalReconciliationSampleFromMatchingHistory prefers an ex
   const oldestSample = createPredictedLocalReconciliationSample({
     localPredictionTick: 101,
     localWallClockMs: 1_000,
-    positionX: 1
+    positionX: 1,
+    traversalSampleId: 22
   });
-  const exactTickSample = createPredictedLocalReconciliationSample({
+  const coincidentalTickSample = createPredictedLocalReconciliationSample({
     localPredictionTick: 102,
     localWallClockMs: 1_016,
-    positionX: 2
+    positionX: 2,
+    traversalSampleId: 22
   });
   const newestSample = createPredictedLocalReconciliationSample({
     localPredictionTick: 103,
     localWallClockMs: 1_032,
-    positionX: 3
+    positionX: 3,
+    traversalSampleId: 22
   });
 
   const matchedSample =
     resolvePredictedLocalReconciliationSampleFromMatchingHistory(
-      [newestSample, exactTickSample, oldestSample],
+      [newestSample, coincidentalTickSample, oldestSample],
       {
-        authoritativeSnapshotAgeMs: 10,
-        authoritativeTraversalSampleId: null,
+        authoritativeSnapshotAgeMs: 31,
+        authoritativeTraversalSampleId: 22,
         authoritativeTick: 102,
-        receivedAtWallClockMs: 1_040
+        receivedAtWallClockMs: 1_035
       }
     );
 
   assert.notEqual(matchedSample, null);
-  assert.equal(matchedSample.sample, exactTickSample);
-  assert.equal(matchedSample.selectionReason, "exact-authoritative-tick");
-  assert.equal(matchedSample.timeDeltaMs, null);
+  assert.equal(matchedSample.sample, oldestSample);
+  assert.equal(
+    matchedSample.selectionReason,
+    "latest-at-or-before-authoritative-time"
+  );
+  assert.equal(matchedSample.timeDeltaMs, -4);
+});
+
+test("resolvePredictedLocalReconciliationSampleFromMatchingHistory uses authoritative time inside a repeated traversal sample-id bucket when tick does not match exactly", async () => {
+  const {
+    resolvePredictedLocalReconciliationSampleFromMatchingHistory
+  } = await clientLoader.load(
+    "/src/metaverse/traversal/classes/metaverse-unmounted-traversal-motion-state.ts"
+  );
+  const oldestSample = createPredictedLocalReconciliationSample({
+    localPredictionTick: 111,
+    localWallClockMs: 1_100,
+    positionX: 1,
+    traversalSampleId: 24
+  });
+  const expectedTimeMatchedSample = createPredictedLocalReconciliationSample({
+    localPredictionTick: 112,
+    localWallClockMs: 1_116,
+    positionX: 2,
+    traversalSampleId: 24
+  });
+  const newestSample = createPredictedLocalReconciliationSample({
+    localPredictionTick: 113,
+    localWallClockMs: 1_132,
+    positionX: 3,
+    traversalSampleId: 24
+  });
+
+  const matchedSample =
+    resolvePredictedLocalReconciliationSampleFromMatchingHistory(
+      [newestSample, expectedTimeMatchedSample, oldestSample],
+      {
+        authoritativeSnapshotAgeMs: 14,
+        authoritativeTraversalSampleId: 24,
+        authoritativeTick: 999,
+        receivedAtWallClockMs: 1_132
+      }
+    );
+
+  assert.notEqual(matchedSample, null);
+  assert.equal(matchedSample.sample, expectedTimeMatchedSample);
+  assert.equal(
+    matchedSample.selectionReason,
+    "latest-at-or-before-authoritative-time"
+  );
+  assert.equal(matchedSample.timeDeltaMs, -2);
 });
 
 test("resolvePredictedLocalReconciliationSampleFromMatchingHistory prefers the latest sample at or before the authoritative target time over a nearer future sample", async () => {

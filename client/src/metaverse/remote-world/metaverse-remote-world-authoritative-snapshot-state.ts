@@ -24,9 +24,8 @@ interface MetaverseRemoteWorldAuthoritativeSnapshotClock {
 
 interface MetaverseRemoteWorldAuthoritativeSnapshotStateDependencies {
   readonly authoritativeServerClock: MetaverseRemoteWorldAuthoritativeSnapshotClock;
-  readonly readLatestPlayerInputSequence: () => number;
-  readonly readLatestPlayerTraversalOrientationSequence: () => number;
-  readonly readLatestPlayerWeaponSequence: () => number;
+  readonly readLatestAcceptedSnapshotReceivedAtMs?: () => number | null;
+  readonly readLatestPlayerTraversalSequence: () => number;
   readonly readLocalPlayerId: () => MetaversePlayerId | null;
   readonly readWallClockMs?: () => number;
   readonly readWorldSnapshotBuffer: () => readonly MetaverseRealtimeWorldSnapshot[];
@@ -39,14 +38,18 @@ interface FreshLocalPlayerSnapshot {
   readonly playerSnapshot: MetaverseRealtimePlayerSnapshot;
 }
 
+function resolveTraversalMovementSequence(input: {
+  readonly lastProcessedTraversalSequence: number;
+}): number {
+  return input.lastProcessedTraversalSequence;
+}
+
 export type MetaverseRealtimeAuthoritativeLocalPlayerSnapshot =
   MetaverseRealtimePlayerSnapshot & {
     readonly jumpDebug:
       NonNullable<MetaverseRealtimeWorldSnapshot["observerPlayer"]>["jumpDebug"];
-    readonly lastProcessedInputSequence: number;
     readonly lastProcessedLookSequence: number;
-    readonly lastProcessedTraversalSampleId: number;
-    readonly lastProcessedTraversalOrientationSequence: number;
+    readonly lastProcessedTraversalSequence: number;
     readonly lastProcessedWeaponSequence: number;
   };
 
@@ -67,9 +70,8 @@ export class MetaverseRemoteWorldAuthoritativeSnapshotState {
     string,
     MetaverseRealtimeVehicleSnapshot
   >();
-  readonly #readLatestPlayerInputSequence: () => number;
-  readonly #readLatestPlayerTraversalOrientationSequence: () => number;
-  readonly #readLatestPlayerWeaponSequence: () => number;
+  readonly #readLatestAcceptedSnapshotReceivedAtMs: () => number | null;
+  readonly #readLatestPlayerTraversalSequence: () => number;
   readonly #readLocalPlayerId: () => MetaversePlayerId | null;
   readonly #readWallClockMs: () => number;
   readonly #readWorldSnapshotBuffer: () => readonly MetaverseRealtimeWorldSnapshot[];
@@ -80,18 +82,16 @@ export class MetaverseRemoteWorldAuthoritativeSnapshotState {
 
   constructor({
     authoritativeServerClock,
-    readLatestPlayerInputSequence,
-    readLatestPlayerTraversalOrientationSequence,
-    readLatestPlayerWeaponSequence,
+    readLatestAcceptedSnapshotReceivedAtMs,
+    readLatestPlayerTraversalSequence,
     readLocalPlayerId,
     readWallClockMs,
     readWorldSnapshotBuffer
   }: MetaverseRemoteWorldAuthoritativeSnapshotStateDependencies) {
     this.#authoritativeServerClock = authoritativeServerClock;
-    this.#readLatestPlayerInputSequence = readLatestPlayerInputSequence;
-    this.#readLatestPlayerTraversalOrientationSequence =
-      readLatestPlayerTraversalOrientationSequence;
-    this.#readLatestPlayerWeaponSequence = readLatestPlayerWeaponSequence;
+    this.#readLatestAcceptedSnapshotReceivedAtMs =
+      readLatestAcceptedSnapshotReceivedAtMs ?? (() => null);
+    this.#readLatestPlayerTraversalSequence = readLatestPlayerTraversalSequence;
     this.#readLocalPlayerId = readLocalPlayerId;
     this.#readWallClockMs = readWallClockMs ?? Date.now;
     this.#readWorldSnapshotBuffer = readWorldSnapshotBuffer;
@@ -179,15 +179,9 @@ export class MetaverseRemoteWorldAuthoritativeSnapshotState {
             {
               latestWorldSnapshot: freshAckedLocalPlayerSnapshot.latestWorldSnapshot,
               playerSnapshot: {
-                lastProcessedInputSequence:
+                lastProcessedTraversalSequence:
                   freshAckedLocalPlayerSnapshot.observerPlayerSnapshot
-                    .lastProcessedInputSequence,
-                lastProcessedTraversalSampleId:
-                  freshAckedLocalPlayerSnapshot.observerPlayerSnapshot
-                    .lastProcessedTraversalSampleId,
-                lastProcessedTraversalOrientationSequence:
-                  freshAckedLocalPlayerSnapshot.observerPlayerSnapshot
-                    .lastProcessedTraversalOrientationSequence
+                    .lastProcessedTraversalSequence
               }
             }
           );
@@ -281,14 +275,12 @@ export class MetaverseRemoteWorldAuthoritativeSnapshotState {
     if (latestWorldSnapshot === null) {
       return null;
     }
-
-    this.#authoritativeServerClock.observeServerTime(
-      Number(latestWorldSnapshot.tick.emittedAtServerTimeMs),
-      localWallClockMs
-    );
     return resolveMetaverseRemoteWorldFreshLatestSnapshot(
       worldSnapshotBuffer,
-      this.#authoritativeServerClock.readEstimatedServerTimeMs(localWallClockMs),
+      this.#resolveAuthoritativeSimulationTimeMs(
+        latestWorldSnapshot,
+        localWallClockMs
+      ),
       maxAuthoritativeSnapshotAgeMs
     );
   }
@@ -339,20 +331,22 @@ export class MetaverseRemoteWorldAuthoritativeSnapshotState {
     const freshLocalPlayerSnapshot = this.#readFreshLocalPlayerSnapshot(
       maxAuthoritativeSnapshotAgeMs
     );
-    const latestPlayerInputSequence = this.#readLatestPlayerInputSequence();
-    const latestPlayerTraversalOrientationSequence =
-      this.#readLatestPlayerTraversalOrientationSequence();
-    const latestPlayerWeaponSequence = this.#readLatestPlayerWeaponSequence();
+    const latestPlayerTraversalSequence = resolveTraversalMovementSequence({
+      lastProcessedTraversalSequence:
+        this.#readLatestPlayerTraversalSequence()
+    });
+    const authoritativeTraversalSequence =
+      freshLocalPlayerSnapshot === null
+        ? 0
+        : resolveTraversalMovementSequence({
+            lastProcessedTraversalSequence:
+              freshLocalPlayerSnapshot.observerPlayerSnapshot
+                .lastProcessedTraversalSequence
+          });
 
     if (
       freshLocalPlayerSnapshot === null ||
-      freshLocalPlayerSnapshot.observerPlayerSnapshot.lastProcessedInputSequence <
-        latestPlayerInputSequence ||
-      freshLocalPlayerSnapshot.observerPlayerSnapshot
-        .lastProcessedTraversalOrientationSequence <
-        latestPlayerTraversalOrientationSequence ||
-      freshLocalPlayerSnapshot.observerPlayerSnapshot.lastProcessedWeaponSequence <
-        latestPlayerWeaponSequence
+      authoritativeTraversalSequence < latestPlayerTraversalSequence
     ) {
       return null;
     }
@@ -366,24 +360,16 @@ export class MetaverseRemoteWorldAuthoritativeSnapshotState {
     playerSnapshot
   }: FreshLocalPlayerSnapshot): ConsumedAckedAuthoritativeLocalPlayerSample {
     const receivedAtWallClockMs = this.#readWallClockMs();
-    const estimatedServerTimeMs =
-      this.#authoritativeServerClock.readEstimatedServerTimeMs(
-        receivedAtWallClockMs
-      );
-    const authoritativeSnapshotAgeMs = Math.max(
-      0,
-      estimatedServerTimeMs - Number(latestWorldSnapshot.tick.simulationTimeMs)
+    const authoritativeSnapshotAgeMs = this.#resolveAuthoritativeSnapshotAgeMs(
+      latestWorldSnapshot,
+      receivedAtWallClockMs
     );
 
     return Object.freeze({
       authoritativeSnapshotAgeMs,
       authoritativeTick: latestWorldSnapshot.tick.currentTick,
-      lastProcessedInputSequence:
-        observerPlayerSnapshot.lastProcessedInputSequence,
-      lastProcessedTraversalSampleId:
-        observerPlayerSnapshot.lastProcessedTraversalSampleId,
-      lastProcessedTraversalOrientationSequence:
-        observerPlayerSnapshot.lastProcessedTraversalOrientationSequence,
+      lastProcessedTraversalSequence:
+        observerPlayerSnapshot.lastProcessedTraversalSequence,
       pose: readAckedAuthoritativeLocalPlayerPose(
         this.#composeAuthoritativeLocalPlayerSnapshot({
           latestWorldSnapshot,
@@ -396,6 +382,59 @@ export class MetaverseRemoteWorldAuthoritativeSnapshotState {
     });
   }
 
+  #resolveAuthoritativeSimulationTimeMs(
+    latestWorldSnapshot: MetaverseRealtimeWorldSnapshot,
+    localWallClockMs: number
+  ): number {
+    const latestAcceptedSnapshotReceivedAtMs =
+      this.#readLatestAcceptedSnapshotReceivedAtMs();
+
+    if (
+      Number.isFinite(localWallClockMs) &&
+      latestAcceptedSnapshotReceivedAtMs !== null &&
+      Number.isFinite(latestAcceptedSnapshotReceivedAtMs)
+    ) {
+      return Math.max(
+        0,
+        Number(latestWorldSnapshot.tick.simulationTimeMs) +
+          Math.max(0, localWallClockMs - latestAcceptedSnapshotReceivedAtMs)
+      );
+    }
+
+    this.#authoritativeServerClock.observeServerTime(
+      Number(latestWorldSnapshot.tick.emittedAtServerTimeMs),
+      localWallClockMs
+    );
+
+    return this.#authoritativeServerClock.readEstimatedServerTimeMs(
+      localWallClockMs
+    );
+  }
+
+  #resolveAuthoritativeSnapshotAgeMs(
+    latestWorldSnapshot: MetaverseRealtimeWorldSnapshot,
+    localWallClockMs: number
+  ): number {
+    const latestAcceptedSnapshotReceivedAtMs =
+      this.#readLatestAcceptedSnapshotReceivedAtMs();
+
+    if (
+      Number.isFinite(localWallClockMs) &&
+      latestAcceptedSnapshotReceivedAtMs !== null &&
+      Number.isFinite(latestAcceptedSnapshotReceivedAtMs)
+    ) {
+      return Math.max(0, localWallClockMs - latestAcceptedSnapshotReceivedAtMs);
+    }
+
+    return Math.max(
+      0,
+      this.#resolveAuthoritativeSimulationTimeMs(
+        latestWorldSnapshot,
+        localWallClockMs
+      ) - Number(latestWorldSnapshot.tick.simulationTimeMs)
+    );
+  }
+
   #composeAuthoritativeLocalPlayerSnapshot({
     observerPlayerSnapshot,
     playerSnapshot
@@ -403,14 +442,10 @@ export class MetaverseRemoteWorldAuthoritativeSnapshotState {
     return Object.freeze({
       ...playerSnapshot,
       jumpDebug: observerPlayerSnapshot.jumpDebug,
-      lastProcessedInputSequence:
-        observerPlayerSnapshot.lastProcessedInputSequence,
       lastProcessedLookSequence:
         observerPlayerSnapshot.lastProcessedLookSequence,
-      lastProcessedTraversalSampleId:
-        observerPlayerSnapshot.lastProcessedTraversalSampleId,
-      lastProcessedTraversalOrientationSequence:
-        observerPlayerSnapshot.lastProcessedTraversalOrientationSequence,
+      lastProcessedTraversalSequence:
+        observerPlayerSnapshot.lastProcessedTraversalSequence,
       lastProcessedWeaponSequence:
         observerPlayerSnapshot.lastProcessedWeaponSequence
     });

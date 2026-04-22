@@ -370,7 +370,7 @@ function createDeveloperReport(hudSnapshot: MetaverseHudSnapshot): string {
       heading: "Traversal",
       lines: [
         `Local locomotion routing: ${hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.locomotionMode} · ${formatDecisionReason(hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.decisionReason)}`,
-        `Authority / ack: ${authoritativeLocalPlayer.locomotionMode === null ? "n/a" : `${authoritativeLocalPlayer.locomotionMode} · ack ${formatCount(authoritativeLocalPlayer.lastProcessedInputSequence ?? 0)}`}`
+        `Authority / ack: ${authoritativeLocalPlayer.locomotionMode === null ? "n/a" : `${authoritativeLocalPlayer.locomotionMode} · ack ${formatCount(authoritativeLocalPlayer.lastProcessedTraversalSequence ?? 0)}`}`
       ]
     },
     {

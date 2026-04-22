@@ -20,13 +20,13 @@ import type { MetaversePlayerIssuedTraversalIntentSnapshot } from "./metaverse-p
 export interface MetaverseWorldClientRuntime {
   readonly currentPollIntervalMs: number;
   readonly driverVehicleControlDatagramStatusSnapshot: RealtimeDatagramTransportStatusSnapshot;
-  readonly latestPlayerInputSequence: number;
+  readonly latestAcceptedSnapshotReceivedAtMs: number | null;
+  readonly latestPlayerTraversalSequence: number;
   readonly latestPlayerIssuedTraversalIntentSnapshot:
     | MetaversePlayerIssuedTraversalIntentSnapshot
     | null;
   readonly latestPlayerLookSequence: number;
   readonly latestPlayerWeaponSequence: number;
-  readonly latestPlayerTraversalOrientationSequence: number;
   readonly reliableTransportStatusSnapshot: RealtimeReliableTransportStatusSnapshot;
   readonly statusSnapshot: MetaverseWorldClientStatusSnapshot;
   readonly telemetrySnapshot: MetaverseWorldClientTelemetrySnapshot;

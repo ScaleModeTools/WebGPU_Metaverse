@@ -1601,6 +1601,8 @@ test("WebGpuMetaverseRuntime converges acked pose-only traversal drift without h
 
   try {
     const localPoseInputSequence = fakeWorldClient.latestPlayerInputSequence;
+    const localWeaponSequence = fakeWorldClient.latestPlayerWeaponSequence;
+    const capturedGroundedSamples = [];
 
     assert.ok(localPoseInputSequence > 0);
     assert.equal(
@@ -1609,23 +1611,29 @@ test("WebGpuMetaverseRuntime converges acked pose-only traversal drift without h
       localPoseInputSequence
     );
 
-    const localCameraXBeforeCorrection = runtime.hudSnapshot.camera.position.x;
-    const localBodyYBeforeCorrection =
-      runtime.hudSnapshot.camera.position.y -
-      metaverseRuntimeConfig.groundedBody.eyeHeightMeters;
-    const localGroundedBodyTelemetry =
-      runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.groundedBody;
+    const bootstrapAuthoritativeSample = captureCurrentGroundedBodySample({
+      capturedSamples: capturedGroundedSamples,
+      fakeWorldClient,
+      metaverseRuntimeConfig,
+      runtime,
+      wallClockMs
+    });
 
-    assert.notEqual(localGroundedBodyTelemetry, null);
     fakeWorldClient.publishWorldSnapshotBuffer([
       createRealtimeWorldSnapshot({
         currentTick: 10,
         includeRemotePlayer: false,
         includeVehicle: false,
-        localLastProcessedInputSequence: localPoseInputSequence - 1,
-        localPlayerY: localBodyYBeforeCorrection,
+        localGroundedBody: bootstrapAuthoritativeSample.groundedBody,
+        localLastProcessedInputSequence: bootstrapAuthoritativeSample.inputSequence,
+        localLastProcessedTraversalOrientationSequence:
+          bootstrapAuthoritativeSample.orientationSequence,
+        localLastProcessedWeaponSequence: localWeaponSequence,
+        localLookYawRadians: bootstrapAuthoritativeSample.lookYawRadians,
         localPlayerId,
-        localPlayerX: 3,
+        localPlayerX: bootstrapAuthoritativeSample.groundedBody.position.x,
+        localPlayerY: bootstrapAuthoritativeSample.groundedBody.position.y,
+        localPlayerZ: bootstrapAuthoritativeSample.groundedBody.position.z,
         localUsername: username,
         remotePlayerId,
         remotePlayerX: 10,
@@ -1639,51 +1647,24 @@ test("WebGpuMetaverseRuntime converges acked pose-only traversal drift without h
     wallClockMs = 1_120;
     nowMs += 1000 / 60;
     windowHarness.advanceFrame(nowMs);
-    assert.equal(
-      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount,
-      0
-    );
-    assert.equal(
-      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
-        .lastCorrectionSource,
-      "none"
-    );
-    assert.equal(
-      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
-        .recentCorrectionCountPast5Seconds,
-      0
-    );
-    assert.equal(
-      runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
-        .lastProcessedInputSequence,
-      localPoseInputSequence - 1
-    );
-    assert.equal(
-      runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeCorrection
-        .applied,
-      false
-    );
-    assert.ok(
-      Math.abs(runtime.hudSnapshot.camera.position.x - localCameraXBeforeCorrection) <
-        0.2
-    );
+    const baselineCorrectionCount =
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount;
+    const baselineAuthoritativeSample = captureCurrentGroundedBodySample({
+      capturedSamples: capturedGroundedSamples,
+      fakeWorldClient,
+      metaverseRuntimeConfig,
+      runtime,
+      wallClockMs
+    });
+    const localCameraXBeforeCorrection = runtime.hudSnapshot.camera.position.x;
 
     fakeWorldClient.publishWorldSnapshotBuffer([
       createRealtimeWorldSnapshot({
         currentTick: 11,
         includeRemotePlayer: false,
         includeVehicle: false,
-        localLastProcessedInputSequence: localPoseInputSequence,
-        localLinearVelocity: {
-          x: 0,
-          y: 0,
-          z: 0
-        },
         localGroundedBody: {
-          contact: localGroundedBodyTelemetry.contact,
-          driveTarget: localGroundedBodyTelemetry.driveTarget,
-          interaction: localGroundedBodyTelemetry.interaction,
-          jumpBody: localGroundedBodyTelemetry.jumpBody,
+          ...baselineAuthoritativeSample.groundedBody,
           linearVelocity: {
             x: 0,
             y: 0,
@@ -1691,14 +1672,24 @@ test("WebGpuMetaverseRuntime converges acked pose-only traversal drift without h
           },
           position: {
             x: 3,
-            y: localBodyYBeforeCorrection,
-            z: 24
-          },
-          yawRadians: runtime.hudSnapshot.camera.yawRadians
+            y: baselineAuthoritativeSample.groundedBody.position.y,
+            z: baselineAuthoritativeSample.groundedBody.position.z
+          }
         },
-        localPlayerY: localBodyYBeforeCorrection,
+        localLastProcessedInputSequence: baselineAuthoritativeSample.inputSequence,
+        localLastProcessedTraversalOrientationSequence:
+          baselineAuthoritativeSample.orientationSequence,
+        localLastProcessedWeaponSequence: localWeaponSequence,
+        localLookYawRadians: baselineAuthoritativeSample.lookYawRadians,
+        localLinearVelocity: {
+          x: 0,
+          y: 0,
+          z: 0
+        },
         localPlayerId,
         localPlayerX: 3,
+        localPlayerY: baselineAuthoritativeSample.groundedBody.position.y,
+        localPlayerZ: baselineAuthoritativeSample.groundedBody.position.z,
         localUsername: username,
         remotePlayerId,
         remotePlayerX: 10,
@@ -1717,12 +1708,12 @@ test("WebGpuMetaverseRuntime converges acked pose-only traversal drift without h
     windowHarness.advanceFrame(nowMs);
     assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount,
-      1
+      baselineCorrectionCount + 1
     );
     assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
         .lastCorrectionSource,
-      "local-authority-convergence-episode"
+      "local-authority-convergence-step"
     );
     assert.equal(
       runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
@@ -1748,6 +1739,193 @@ test("WebGpuMetaverseRuntime converges acked pose-only traversal drift without h
         1
     );
 
+  } finally {
+    harness.dispose();
+  }
+});
+
+test("WebGpuMetaverseRuntime rearms the spawn-labeled authority snap when respawn wait resolves mid-session", async () => {
+  const localPlayerId = createMetaversePlayerId("respawn-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("respawn-remote-2");
+  const username = createUsername("Respawn Pilot");
+  const remoteUsername = createUsername("Respawn Remote");
+  let nowMs = 0;
+  let wallClockMs = 1_100;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(username, null);
+  assert.notEqual(remoteUsername, null);
+
+  const fakePresenceClient = new FakeMetaversePresenceClient(
+    localPlayerId,
+    username,
+    remotePlayerId
+  );
+  const fakeWorldClient = new FakeMetaverseWorldClient();
+  const harness = await createStartedClientMetaverseRuntimeHarness({
+    authoritativePlayerMovementEnabled: true,
+    createMetaversePresenceClient: () => fakePresenceClient,
+    createMetaverseWorldClient: () => fakeWorldClient,
+    localPlayerIdentity: {
+      characterId: "mesh2motion-humanoid-v1",
+      playerId: localPlayerId,
+      username
+    },
+    proofSliceFactory: () => createStaticSurfaceProofSlice(clientLoader),
+    readNowMs: () => nowMs,
+    readWallClockMs: () => wallClockMs
+  });
+  const { metaverseRuntimeConfig, runtime, windowHarness } = harness;
+
+  try {
+    const localPoseInputSequence = fakeWorldClient.latestPlayerInputSequence;
+    const localWeaponSequence = fakeWorldClient.latestPlayerWeaponSequence;
+    const localGroundedBodyTelemetry =
+      runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.groundedBody;
+    const localBodyY =
+      runtime.hudSnapshot.camera.position.y -
+      metaverseRuntimeConfig.groundedBody.eyeHeightMeters;
+
+    assert.ok(localPoseInputSequence > 0);
+    assert.notEqual(localGroundedBodyTelemetry, null);
+
+    fakeWorldClient.publishWorldSnapshotBuffer([
+      createRealtimeWorldSnapshot({
+        currentTick: 10,
+        includeRemotePlayer: false,
+        includeVehicle: false,
+        localLastProcessedInputSequence: localPoseInputSequence,
+        localLastProcessedTraversalOrientationSequence:
+          fakeWorldClient.latestPlayerTraversalOrientationSequence,
+        localLastProcessedWeaponSequence: localWeaponSequence,
+        localLinearVelocity: {
+          x: 0,
+          y: 0,
+          z: 0
+        },
+        localGroundedBody: {
+          contact: localGroundedBodyTelemetry.contact,
+          driveTarget: localGroundedBodyTelemetry.driveTarget,
+          interaction: localGroundedBodyTelemetry.interaction,
+          jumpBody: localGroundedBodyTelemetry.jumpBody,
+          linearVelocity: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          position: {
+            x: metaverseRuntimeConfig.groundedBody.spawnPosition.x,
+            y: localBodyY,
+            z: metaverseRuntimeConfig.groundedBody.spawnPosition.z
+          },
+          yawRadians: runtime.hudSnapshot.camera.yawRadians
+        },
+        localPlayerId,
+        localPlayerX: metaverseRuntimeConfig.groundedBody.spawnPosition.x,
+        localPlayerY: localBodyY,
+        localPlayerZ: metaverseRuntimeConfig.groundedBody.spawnPosition.z,
+        localUsername: username,
+        remotePlayerId,
+        remotePlayerX: 10,
+        remoteUsername,
+        serverTimeMs: 1_140,
+        snapshotSequence: 1,
+        vehicleX: 10
+      })
+    ]);
+
+    wallClockMs = 1_160;
+    nowMs += 1000 / 60;
+    windowHarness.advanceFrame(nowMs);
+
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount,
+      1
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .lastLocalAuthorityPoseCorrectionDetail
+        .convergenceEpisodeStartIntentionalDiscontinuityCause,
+      "spawn"
+    );
+
+    runtime.setRespawnControlLocked(true);
+    runtime.setRespawnControlLocked(false);
+
+    const respawnPosition = {
+      x: 8,
+      y: localBodyY,
+      z: 18
+    };
+    const respawnInputSequence = fakeWorldClient.latestPlayerInputSequence;
+    const respawnOrientationSequence =
+      fakeWorldClient.latestPlayerTraversalOrientationSequence;
+    const respawnWeaponSequence = fakeWorldClient.latestPlayerWeaponSequence;
+    const respawnGroundedBodyTelemetry =
+      runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.groundedBody;
+
+    assert.notEqual(respawnGroundedBodyTelemetry, null);
+
+    fakeWorldClient.publishWorldSnapshotBuffer([
+      createRealtimeWorldSnapshot({
+        currentTick: 11,
+        includeRemotePlayer: false,
+        includeVehicle: false,
+        localLastProcessedInputSequence: respawnInputSequence,
+        localLastProcessedTraversalOrientationSequence:
+          respawnOrientationSequence,
+        localLastProcessedWeaponSequence: respawnWeaponSequence,
+        localLinearVelocity: {
+          x: 0,
+          y: 0,
+          z: 0
+        },
+        localGroundedBody: {
+          contact: respawnGroundedBodyTelemetry.contact,
+          driveTarget: respawnGroundedBodyTelemetry.driveTarget,
+          interaction: respawnGroundedBodyTelemetry.interaction,
+          jumpBody: respawnGroundedBodyTelemetry.jumpBody,
+          linearVelocity: {
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          position: respawnPosition,
+          yawRadians: runtime.hudSnapshot.camera.yawRadians
+        },
+        localPlayerId,
+        localPlayerX: respawnPosition.x,
+        localPlayerY: respawnPosition.y,
+        localPlayerZ: respawnPosition.z,
+        localUsername: username,
+        remotePlayerId,
+        remotePlayerX: 10,
+        remoteUsername,
+        serverTimeMs: 1_220,
+        snapshotSequence: 2,
+        vehicleX: 10
+      })
+    ]);
+
+    wallClockMs = 1_240;
+    nowMs += 1000 / 60;
+    windowHarness.advanceFrame(nowMs);
+
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount,
+      2
+    );
+    assert.equal(
+      runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation
+        .lastLocalAuthorityPoseCorrectionDetail
+        .convergenceEpisodeStartIntentionalDiscontinuityCause,
+      "spawn"
+    );
+    assert.ok(
+      Math.abs(runtime.hudSnapshot.camera.position.x - respawnPosition.x) < 0.3,
+      `expected respawn snap to move directly onto the new authoritative spawn, received ${JSON.stringify(runtime.hudSnapshot.camera)}`
+    );
   } finally {
     harness.dispose();
   }
@@ -1788,6 +1966,7 @@ test("WebGpuMetaverseRuntime keeps neutral authoritative local updates correctio
 
   try {
     const localPoseInputSequence = fakeWorldClient.latestPlayerInputSequence;
+    const localWeaponSequence = fakeWorldClient.latestPlayerWeaponSequence;
 
     assert.ok(localPoseInputSequence > 0);
     assert.equal(
@@ -1839,6 +2018,7 @@ test("WebGpuMetaverseRuntime keeps neutral authoritative local updates correctio
         localJumpAuthorityState:
           localLocomotionModeBeforeAuthority === "grounded" ? "grounded" : "none",
         localLastProcessedInputSequence: localPoseInputSequence,
+        localLastProcessedWeaponSequence: localWeaponSequence,
         localLookYawRadians: localCameraYawBeforeAuthority,
         localLinearVelocity: {
           x: 70,
@@ -1911,6 +2091,7 @@ test("WebGpuMetaverseRuntime keeps local traversal client-owned under routine ac
 
   try {
     const localPoseInputSequence = fakeWorldClient.latestPlayerInputSequence;
+    const localWeaponSequence = fakeWorldClient.latestPlayerWeaponSequence;
 
     assert.ok(localPoseInputSequence > 0);
 
@@ -1947,6 +2128,7 @@ test("WebGpuMetaverseRuntime keeps local traversal client-owned under routine ac
             ? "grounded"
             : "none",
         localLastProcessedInputSequence: localPoseInputSequence,
+        localLastProcessedWeaponSequence: localWeaponSequence,
         localLookYawRadians: localCameraYawBeforeAuthority,
         localLinearVelocity: {
           x: 0,

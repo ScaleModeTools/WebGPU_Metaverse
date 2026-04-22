@@ -113,7 +113,7 @@ test("MetaverseWorldPlayerIntentSync coordinates delegated look and traversal la
   assert.equal(sentTraversalCommands[0]?.intent.bodyControl.moveAxis, 1);
   assert.equal(sentTraversalCommands[0]?.intent.actionIntent.kind, "jump");
   assert.equal(sentTraversalCommands[0]?.intent.actionIntent.sequence, 53);
-  assert.equal(typeof sentTraversalCommands[0]?.estimatedServerTimeMs, "number");
+  assert.equal(sentTraversalCommands[0]?.estimatedServerTimeMs, undefined);
   assert.equal(sentLookCommands.length, 1);
   assert.equal(sentLookCommands[0]?.lookSequence, 419);
 });

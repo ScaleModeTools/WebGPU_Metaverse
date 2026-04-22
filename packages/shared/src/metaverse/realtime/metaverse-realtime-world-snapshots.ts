@@ -6,7 +6,7 @@ import {
   createMilliseconds,
   createRadians
 } from "../../unit-measurements.js";
-import { normalizeMetaversePlayerTeamId } from "../metaverse-player-team.js";
+import { createMetaversePlayerTeamId } from "../metaverse-player-team.js";
 import type {
   MetaversePlayerId,
   MetaversePresenceLocomotionModeId,
@@ -227,22 +227,31 @@ export interface MetaverseRealtimePlayerSnapshotInput {
   readonly username: Username;
 }
 
+function resolveRequiredMetaversePlayerTeamId(
+  rawValue: string | null | undefined,
+  label: string
+): MetaversePlayerTeamId {
+  const resolvedTeamId = createMetaversePlayerTeamId(rawValue);
+
+  if (resolvedTeamId === null) {
+    throw new Error(`${label} must be a supported metaverse team id.`);
+  }
+
+  return resolvedTeamId;
+}
+
 export interface MetaverseRealtimeObserverPlayerSnapshot {
   readonly jumpDebug: MetaverseRealtimePlayerJumpDebugSnapshot;
-  readonly lastProcessedInputSequence: number;
   readonly lastProcessedLookSequence: number;
-  readonly lastProcessedTraversalSampleId: number;
-  readonly lastProcessedTraversalOrientationSequence: number;
+  readonly lastProcessedTraversalSequence: number;
   readonly lastProcessedWeaponSequence: number;
   readonly playerId: MetaversePlayerId;
 }
 
 export interface MetaverseRealtimeObserverPlayerSnapshotInput {
   readonly jumpDebug?: MetaverseRealtimePlayerJumpDebugSnapshotInput;
-  readonly lastProcessedInputSequence?: number;
   readonly lastProcessedLookSequence?: number;
-  readonly lastProcessedTraversalSampleId?: number;
-  readonly lastProcessedTraversalOrientationSequence?: number;
+  readonly lastProcessedTraversalSequence?: number;
   readonly lastProcessedWeaponSequence?: number;
   readonly playerId: MetaversePlayerId;
 }
@@ -467,17 +476,11 @@ function freezeObserverPlayerSnapshot(
 ): MetaverseRealtimeObserverPlayerSnapshot {
   return Object.freeze({
     jumpDebug: freezePlayerJumpDebugSnapshot(input.jumpDebug),
-    lastProcessedInputSequence: normalizeFiniteNonNegativeInteger(
-      input.lastProcessedInputSequence ?? 0
-    ),
     lastProcessedLookSequence: normalizeFiniteNonNegativeInteger(
       input.lastProcessedLookSequence ?? 0
     ),
-    lastProcessedTraversalSampleId: normalizeFiniteNonNegativeInteger(
-      input.lastProcessedTraversalSampleId ?? 0
-    ),
-    lastProcessedTraversalOrientationSequence: normalizeFiniteNonNegativeInteger(
-      input.lastProcessedTraversalOrientationSequence ?? 0
+    lastProcessedTraversalSequence: normalizeFiniteNonNegativeInteger(
+      input.lastProcessedTraversalSequence ?? 0
     ),
     lastProcessedWeaponSequence: normalizeFiniteNonNegativeInteger(
       input.lastProcessedWeaponSequence ?? 0
@@ -713,7 +716,10 @@ function freezePlayerSnapshot(
     playerId: input.playerId,
     stateSequence: normalizeFiniteNonNegativeInteger(input.stateSequence ?? 0),
     swimBody,
-    teamId: normalizeMetaversePlayerTeamId(input.teamId, input.playerId),
+    teamId: resolveRequiredMetaversePlayerTeamId(
+      input.teamId,
+      "Metaverse realtime player teamId"
+    ),
     traversalAuthority:
       createMetaverseTraversalAuthoritySnapshot(traversalAuthorityInput),
     weaponState,

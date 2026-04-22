@@ -19,9 +19,7 @@ export type AuthoritativeLocalPlayerReconciliationSnapshot = Pick<
 
 type AckedAuthoritativeLocalPlayerSnapshot =
   AuthoritativeLocalPlayerReconciliationSnapshot & {
-    readonly lastProcessedInputSequence: number;
-    readonly lastProcessedTraversalSampleId: number;
-    readonly lastProcessedTraversalOrientationSequence: number;
+    readonly lastProcessedTraversalSequence: number;
   };
 
 export type AckedAuthoritativeLocalPlayerPose =
@@ -41,21 +39,23 @@ export interface FreshAckedAuthoritativeLocalPlayerSnapshot {
   >;
   readonly playerSnapshot: Pick<
     AckedAuthoritativeLocalPlayerSnapshot,
-    | "lastProcessedInputSequence"
-    | "lastProcessedTraversalSampleId"
-    | "lastProcessedTraversalOrientationSequence"
+    "lastProcessedTraversalSequence"
   >;
 }
 
 export interface ConsumedAckedAuthoritativeLocalPlayerSample {
   readonly authoritativeSnapshotAgeMs: number;
   readonly authoritativeTick: number;
-  readonly lastProcessedInputSequence: number;
-  readonly lastProcessedTraversalSampleId: number;
-  readonly lastProcessedTraversalOrientationSequence: number;
+  readonly lastProcessedTraversalSequence: number;
   readonly pose: AckedAuthoritativeLocalPlayerPose;
   readonly receivedAtWallClockMs: number;
   readonly snapshotSequence: number;
+}
+
+function resolveTraversalMovementSequence(input: {
+  readonly lastProcessedTraversalSequence: number;
+}): number {
+  return input.lastProcessedTraversalSequence;
 }
 
 export function createAckedAuthoritativeLocalPlayerDeliveryKey(
@@ -66,9 +66,7 @@ export function createAckedAuthoritativeLocalPlayerDeliveryKey(
   return [
     latestWorldSnapshot.snapshotSequence,
     latestWorldSnapshot.tick.currentTick,
-    playerSnapshot.lastProcessedInputSequence,
-    playerSnapshot.lastProcessedTraversalSampleId,
-    playerSnapshot.lastProcessedTraversalOrientationSequence
+    resolveTraversalMovementSequence(playerSnapshot)
   ].join("|");
 }
 
@@ -80,11 +78,8 @@ export function readAckedAuthoritativeLocalPlayerPose(
 
   return {
     groundedBody: playerSnapshot.groundedBody,
-    lastProcessedInputSequence: playerSnapshot.lastProcessedInputSequence,
-    lastProcessedTraversalSampleId:
-      playerSnapshot.lastProcessedTraversalSampleId,
-    lastProcessedTraversalOrientationSequence:
-      playerSnapshot.lastProcessedTraversalOrientationSequence,
+    lastProcessedTraversalSequence:
+      playerSnapshot.lastProcessedTraversalSequence,
     linearVelocity: activeBodySnapshot.linearVelocity,
     look: playerSnapshot.look,
     locomotionMode: playerSnapshot.locomotionMode,

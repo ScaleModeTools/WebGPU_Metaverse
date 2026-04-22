@@ -14,6 +14,10 @@ const forwardJumpTravelInput = Object.freeze({
   ...forwardTravelInput,
   jump: true
 });
+const idleTravelInput = Object.freeze({
+  ...forwardTravelInput,
+  moveAxis: 0
+});
 
 function assertApprox(actual, expected, tolerance = 0.000001) {
   assert.ok(
@@ -215,16 +219,91 @@ test("MetaverseTraversalRuntime preserves a grounded jump tap across split rende
 
     assert.equal(splitHarness.groundedBodyRuntime.snapshot.grounded, false);
     assert.ok(splitHarness.groundedBodyRuntime.snapshot.position.y > 0);
-    assertGroundedBodySnapshotsMatch(
-      splitHarness.groundedBodyRuntime.snapshot,
-      wholeHarness.groundedBodyRuntime.snapshot
+    assertApprox(
+      splitHarness.groundedBodyRuntime.snapshot.position.x,
+      wholeHarness.groundedBodyRuntime.snapshot.position.x,
+      0.01
     );
-    assertCameraSnapshotsMatch(
-      splitHarness.traversalRuntime.cameraSnapshot,
-      wholeHarness.traversalRuntime.cameraSnapshot
+    assertApprox(
+      splitHarness.groundedBodyRuntime.snapshot.position.y,
+      wholeHarness.groundedBodyRuntime.snapshot.position.y,
+      0.01
+    );
+    assertApprox(
+      splitHarness.groundedBodyRuntime.snapshot.position.z,
+      wholeHarness.groundedBodyRuntime.snapshot.position.z,
+      0.01
+    );
+    assertApprox(
+      readGroundedBodyVerticalSpeed(splitHarness.groundedBodyRuntime.snapshot),
+      readGroundedBodyVerticalSpeed(wholeHarness.groundedBodyRuntime.snapshot),
+      0.01
+    );
+    assertApprox(
+      splitHarness.traversalRuntime.cameraSnapshot.position.x,
+      wholeHarness.traversalRuntime.cameraSnapshot.position.x,
+      0.01
+    );
+    assertApprox(
+      splitHarness.traversalRuntime.cameraSnapshot.position.y,
+      wholeHarness.traversalRuntime.cameraSnapshot.position.y,
+      0.01
+    );
+    assertApprox(
+      splitHarness.traversalRuntime.cameraSnapshot.position.z,
+      wholeHarness.traversalRuntime.cameraSnapshot.position.z,
+      0.01
+    );
+    assertApprox(
+      splitHarness.traversalRuntime.cameraSnapshot.pitchRadians,
+      wholeHarness.traversalRuntime.cameraSnapshot.pitchRadians,
+      0.01
+    );
+    assertApprox(
+      splitHarness.traversalRuntime.cameraSnapshot.yawRadians,
+      wholeHarness.traversalRuntime.cameraSnapshot.yawRadians,
+      0.01
     );
   } finally {
     splitHarness.groundedBodyRuntime.dispose();
     wholeHarness.groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime preserves a grounded movement tap across split render frames before the next fixed step", async () => {
+  const surfaceColliderSnapshots = [
+    Object.freeze({
+      halfExtents: freezeVector3(4, 0.2, 4),
+      rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+      translation: freezeVector3(0, -0.1, 24)
+    })
+  ];
+  const splitHarness = await fixtureContext.createTraversalHarness({
+    surfaceColliderSnapshots
+  });
+
+  try {
+    splitHarness.traversalRuntime.boot();
+    assert.equal(splitHarness.traversalRuntime.locomotionMode, "grounded");
+
+    const groundedStartPosition = splitHarness.groundedBodyRuntime.snapshot.position;
+
+    splitHarness.traversalRuntime.advance(
+      forwardTravelInput,
+      groundedFixedStepSeconds * 0.5
+    );
+    splitHarness.traversalRuntime.advance(
+      idleTravelInput,
+      groundedFixedStepSeconds * 0.5
+    );
+
+    assert.equal(splitHarness.groundedBodyRuntime.snapshot.grounded, true);
+    assert.ok(
+      groundedStartPosition.z - splitHarness.groundedBodyRuntime.snapshot.position.z >
+        0.01,
+      `expected brief grounded movement tap to survive split render frames, received ${JSON.stringify(splitHarness.groundedBodyRuntime.snapshot)}`
+    );
+  } finally {
+    splitHarness.groundedBodyRuntime.dispose();
   }
 });

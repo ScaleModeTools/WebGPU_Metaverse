@@ -80,6 +80,7 @@ export function createRealtimeWorldSnapshot({
   localLastProcessedInputSequence,
   localLastProcessedJumpActionSequence = 0,
   localLastProcessedLookSequence,
+  localLastProcessedTraversalSampleId,
   localLastProcessedWeaponSequence = 0,
   localLastProcessedTraversalOrientationSequence,
   localLinearVelocity = {
@@ -131,6 +132,9 @@ export function createRealtimeWorldSnapshot({
     localLastProcessedInputSequence ?? snapshotSequence;
   const resolvedLocalLastProcessedLookSequence =
     localLastProcessedLookSequence ?? resolvedLocalLastProcessedInputSequence;
+  const resolvedLocalLastProcessedTraversalSampleId =
+    localLastProcessedTraversalSampleId ??
+    resolvedLocalLastProcessedInputSequence;
   const resolvedLocalLastProcessedTraversalOrientationSequence =
     localLastProcessedTraversalOrientationSequence ??
     resolvedLocalLastProcessedInputSequence;
@@ -266,6 +270,8 @@ export function createRealtimeWorldSnapshot({
       jumpDebug: resolvedLocalJumpDebug,
       lastProcessedInputSequence: resolvedLocalLastProcessedInputSequence,
       lastProcessedLookSequence: resolvedLocalLastProcessedLookSequence,
+      lastProcessedTraversalSampleId:
+        resolvedLocalLastProcessedTraversalSampleId,
       lastProcessedTraversalOrientationSequence:
         resolvedLocalLastProcessedTraversalOrientationSequence,
       lastProcessedWeaponSequence: localLastProcessedWeaponSequence,

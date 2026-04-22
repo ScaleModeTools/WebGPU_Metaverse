@@ -13,9 +13,8 @@ import type {
 type TimeoutHandle = ReturnType<typeof globalThis.setTimeout>;
 type SnapshotAcceptanceSource = "command" | "polling" | "snapshot-stream";
 type LocalPlayerWorldSnapshot = {
-  readonly lastProcessedInputSequence: number;
   readonly lastProcessedLookSequence: number;
-  readonly lastProcessedTraversalOrientationSequence: number;
+  readonly lastProcessedTraversalSequence: number;
   readonly lastProcessedWeaponSequence: number;
   readonly traversalAuthority:
     MetaverseRealtimeWorldSnapshot["players"][number]["traversalAuthority"];
@@ -146,6 +145,10 @@ export class MetaverseWorldSnapshotState {
       : null;
   }
 
+  get latestAcceptedSnapshotReceivedAtMs(): number | null {
+    return this.#latestAcceptedSnapshotReceivedAtMs;
+  }
+
   get snapshotStreamTelemetrySnapshot(): MetaverseWorldSnapshotStreamTelemetrySnapshot {
     return freezeSnapshotStreamTelemetrySnapshot({
       available: this.#snapshotStreamTransport !== null,
@@ -271,12 +274,10 @@ export class MetaverseWorldSnapshotState {
     }
 
     return Object.freeze({
-      lastProcessedInputSequence:
-        observerPlayerSnapshot.lastProcessedInputSequence,
       lastProcessedLookSequence:
         observerPlayerSnapshot.lastProcessedLookSequence,
-      lastProcessedTraversalOrientationSequence:
-        observerPlayerSnapshot.lastProcessedTraversalOrientationSequence,
+      lastProcessedTraversalSequence:
+        observerPlayerSnapshot.lastProcessedTraversalSequence,
       lastProcessedWeaponSequence:
         observerPlayerSnapshot.lastProcessedWeaponSequence,
       traversalAuthority: localPlayerSnapshot.traversalAuthority

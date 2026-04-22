@@ -137,7 +137,7 @@ export class MetaverseLocalTraversalAuthorityState {
   #currentTick = 0;
   #latestIssuedTraversalIntentSnapshot: MetaverseIssuedTraversalIntentSnapshot | null =
     null;
-  #latestIssuedTraversalOrientationSequence = 0;
+  #latestIssuedTraversalSequence = 0;
 
   get currentTick(): number {
     return this.#currentTick;
@@ -149,8 +149,8 @@ export class MetaverseLocalTraversalAuthorityState {
     return this.#latestIssuedTraversalIntentSnapshot;
   }
 
-  get latestIssuedTraversalOrientationSequence(): number {
-    return this.#latestIssuedTraversalOrientationSequence;
+  get latestIssuedTraversalSequence(): number {
+    return this.#latestIssuedTraversalSequence;
   }
 
   get snapshot(): MetaverseTraversalAuthoritySnapshot {
@@ -161,7 +161,7 @@ export class MetaverseLocalTraversalAuthorityState {
     this.#snapshot = createDefaultTraversalAuthoritySnapshot();
     this.#currentTick = 0;
     this.#latestIssuedTraversalIntentSnapshot = null;
-    this.#latestIssuedTraversalOrientationSequence = 0;
+    this.#latestIssuedTraversalSequence = 0;
   }
 
   sync({
@@ -194,8 +194,8 @@ export class MetaverseLocalTraversalAuthorityState {
   ): void {
     this.#latestIssuedTraversalIntentSnapshot =
       createMetaverseIssuedTraversalIntentSnapshot(traversalIntentSnapshot);
-    this.#latestIssuedTraversalOrientationSequence =
-      traversalIntentSnapshot?.orientationSequence ?? 0;
+    this.#latestIssuedTraversalSequence =
+      traversalIntentSnapshot?.sequence ?? 0;
     this.sync({
       ...input,
       advanceTick: false

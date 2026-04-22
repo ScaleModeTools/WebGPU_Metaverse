@@ -430,7 +430,7 @@ export class MetaverseTraversalRuntime {
     }
   ): void {
     const authoritativeSyncResult =
-        this.#mountedVehicleState.syncAuthoritativeVehiclePose(
+      this.#mountedVehicleState.syncAuthoritativeVehiclePose(
         environmentAssetId,
         poseSnapshot,
         this.#unmountedTraversalMotionState.traversalCameraPitchRadians
@@ -438,6 +438,11 @@ export class MetaverseTraversalRuntime {
 
     if (authoritativeSyncResult.applied) {
       if (authoritativeSyncResult.poseChanged) {
+        if (authoritativeSyncResult.keepsFreeRoam) {
+          this.#localAuthorityReconciliationState.noteIntentionalDiscontinuity(
+            "moving-support-carry"
+          );
+        }
         this.#telemetryState.recordMountedVehicleAuthorityCorrection();
       }
 

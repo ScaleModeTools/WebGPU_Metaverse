@@ -210,14 +210,75 @@ test("MetaverseAuthoritativeWorldRuntime accepts same-sequence unmounted facing 
   assert.equal(postTickSnapshot.players[0]?.look.yawRadians, Math.PI * 0.5);
 });
 
-test("MetaverseAuthoritativeWorldRuntime replays short-lived traversal history inside a single authoritative tick", () => {
-  const runtime = createAuthoritativeRuntime();
+test("MetaverseAuthoritativeWorldRuntime does not backfill a mid-tick traversal intent to tick start", () => {
+  const immediateRuntime = createAuthoritativeRuntime();
+  const delayedRuntime = createAuthoritativeRuntime();
   const playerId = requireValue(
-    createMetaversePlayerId("short-lived-history-pilot"),
+    createMetaversePlayerId("mid-tick-traversal-pilot"),
     "playerId"
   );
   const username = requireValue(
-    createUsername("Short Lived History Pilot"),
+    createUsername("Mid Tick Traversal Pilot"),
+    "username"
+  );
+
+  joinSurfacePlayer(immediateRuntime, playerId, username, {
+    yawRadians: 0
+  });
+  joinSurfacePlayer(delayedRuntime, playerId, username, {
+    yawRadians: 0
+  });
+
+  const traversalCommand = createMetaverseSyncPlayerTraversalIntentCommand({
+    intent: {
+      actionIntent: {
+        kind: "none",
+        pressed: false
+      },
+      bodyControl: {
+        boost: false,
+        moveAxis: 1,
+        strafeAxis: 0,
+        turnAxis: 0
+      },
+      facing: {
+        pitchRadians: 0,
+        yawRadians: 0
+      },
+      inputSequence: 1,
+      locomotionMode: "grounded",
+      orientationSequence: 1
+    },
+    playerId
+  });
+
+  immediateRuntime.acceptWorldCommand(traversalCommand, 0);
+  delayedRuntime.acceptWorldCommand(traversalCommand, 90);
+
+  immediateRuntime.advanceToTime(100);
+  delayedRuntime.advanceToTime(100);
+
+  const immediateSnapshot = readPrimaryPlayerActiveBodySnapshot(
+    immediateRuntime.readWorldSnapshot(100, playerId)
+  );
+  const delayedSnapshot = readPrimaryPlayerActiveBodySnapshot(
+    delayedRuntime.readWorldSnapshot(100, playerId)
+  );
+
+  assert.ok(
+    delayedSnapshot.position.z > immediateSnapshot.position.z + 0.02,
+    `expected a mid-tick traversal command to preserve materially less forward travel, immediate=${JSON.stringify(immediateSnapshot)} delayed=${JSON.stringify(delayedSnapshot)}`
+  );
+});
+
+test("MetaverseAuthoritativeWorldRuntime schedules bundled traversal samples across authoritative ticks", () => {
+  const runtime = createAuthoritativeRuntime();
+  const playerId = requireValue(
+    createMetaversePlayerId("bundled-traversal-samples-pilot"),
+    "playerId"
+  );
+  const username = requireValue(
+    createUsername("Bundled Traversal Samples Pilot"),
     "username"
   );
 
@@ -248,122 +309,122 @@ test("MetaverseAuthoritativeWorldRuntime replays short-lived traversal history i
         },
         inputSequence: 3,
         locomotionMode: "grounded",
-        orientationSequence: 1
+        orientationSequence: 1,
+        sampleId: 3
       },
-      playerId,
-      recentIntentHistory: [
+      pendingIntentSamples: [
         {
-          durationMs: 30,
-          intent: {
-            actionIntent: {
-              kind: "none",
-              pressed: false
-            },
-            bodyControl: {
-              boost: false,
-              moveAxis: 1,
-              strafeAxis: 0,
-              turnAxis: 0
-            },
-            facing: {
-              pitchRadians: 0,
-              yawRadians: 0
-            },
-            inputSequence: 1,
-            locomotionMode: "grounded",
-            orientationSequence: 1
-          }
+          actionIntent: {
+            kind: "none",
+            pressed: false
+          },
+          bodyControl: {
+            boost: false,
+            moveAxis: 1,
+            strafeAxis: 0,
+            turnAxis: 0
+          },
+          facing: {
+            pitchRadians: 0,
+            yawRadians: 0
+          },
+          inputSequence: 1,
+          locomotionMode: "grounded",
+          orientationSequence: 1,
+          sampleId: 1
         },
         {
-          durationMs: 30,
-          intent: {
-            actionIntent: {
-              kind: "none",
-              pressed: false
-            },
-            bodyControl: {
-              boost: false,
-              moveAxis: 0,
-              strafeAxis: 0,
-              turnAxis: 0
-            },
-            facing: {
-              pitchRadians: 0,
-              yawRadians: 0
-            },
-            inputSequence: 2,
-            locomotionMode: "grounded",
-            orientationSequence: 1
-          }
-        },
-        {
-          durationMs: 30,
-          intent: {
-            actionIntent: {
-              kind: "none",
-              pressed: false
-            },
-            bodyControl: {
-              boost: false,
-              moveAxis: 0,
-              strafeAxis: 1,
-              turnAxis: 0
-            },
-            facing: {
-              pitchRadians: 0,
-              yawRadians: 0
-            },
-            inputSequence: 3,
-            locomotionMode: "grounded",
-            orientationSequence: 1
-          }
+          actionIntent: {
+            kind: "none",
+            pressed: false
+          },
+          bodyControl: {
+            boost: false,
+            moveAxis: 0,
+            strafeAxis: 0,
+            turnAxis: 0
+          },
+          facing: {
+            pitchRadians: 0,
+            yawRadians: 0
+          },
+          inputSequence: 2,
+          locomotionMode: "grounded",
+          orientationSequence: 1,
+          sampleId: 2
         }
-      ]
+      ],
+      playerId
     }),
     90
   );
 
   runtime.advanceToTime(100);
 
-  const postTickSnapshot = runtime.readWorldSnapshot(100, playerId);
-  const postTickActiveBodySnapshot =
-    readPrimaryPlayerActiveBodySnapshot(postTickSnapshot);
+  const firstTickSnapshot = runtime.readWorldSnapshot(100, playerId);
+  const firstTickActiveBodySnapshot =
+    readPrimaryPlayerActiveBodySnapshot(firstTickSnapshot);
 
-  assert.equal(postTickSnapshot.observerPlayer?.lastProcessedInputSequence, 3);
+  assert.equal(firstTickSnapshot.observerPlayer?.lastProcessedInputSequence, 0);
   assert.equal(
-    postTickSnapshot.observerPlayer?.lastProcessedTraversalOrientationSequence,
+    firstTickSnapshot.observerPlayer?.lastProcessedTraversalOrientationSequence,
+    0
+  );
+  assert.ok(
+    Math.abs(firstTickActiveBodySnapshot.position.x - preTickActiveBodySnapshot.position.x) <
+      0.001 &&
+      Math.abs(firstTickActiveBodySnapshot.position.z - preTickActiveBodySnapshot.position.z) <
+        0.001,
+    `expected bundled traversal samples to wait for the next authoritative tick, received ${JSON.stringify(firstTickActiveBodySnapshot)}`
+  );
+
+  runtime.advanceToTime(200);
+
+  const secondTickSnapshot = runtime.readWorldSnapshot(200, playerId);
+  const secondTickActiveBodySnapshot =
+    readPrimaryPlayerActiveBodySnapshot(secondTickSnapshot);
+
+  assert.equal(secondTickSnapshot.observerPlayer?.lastProcessedInputSequence, 1);
+  assert.ok(
+    secondTickActiveBodySnapshot.position.z <
+      preTickActiveBodySnapshot.position.z - 0.02,
+    `expected the first bundled traversal sample to move forward on the next authoritative tick, received ${JSON.stringify(secondTickActiveBodySnapshot)}`
+  );
+
+  runtime.advanceToTime(400);
+
+  const finalTickSnapshot = runtime.readWorldSnapshot(400, playerId);
+  const finalTickActiveBodySnapshot =
+    readPrimaryPlayerActiveBodySnapshot(finalTickSnapshot);
+
+  assert.equal(finalTickSnapshot.observerPlayer?.lastProcessedInputSequence, 3);
+  assert.equal(
+    finalTickSnapshot.observerPlayer?.lastProcessedTraversalOrientationSequence,
     1
   );
   assert.ok(
-    postTickActiveBodySnapshot.position.z < preTickActiveBodySnapshot.position.z - 0.02,
-    `expected traversal history to preserve early forward movement, received ${JSON.stringify(postTickActiveBodySnapshot)}`
-  );
-  assert.ok(
-    postTickActiveBodySnapshot.position.x > preTickActiveBodySnapshot.position.x + 0.02,
-    `expected traversal history to preserve later strafe movement, received ${JSON.stringify(postTickActiveBodySnapshot)}`
+    finalTickActiveBodySnapshot.position.x >
+      preTickActiveBodySnapshot.position.x + 0.02,
+    `expected the latest bundled traversal sample to preserve later strafe movement, received ${JSON.stringify(finalTickActiveBodySnapshot)}`
   );
 });
 
-test("MetaverseAuthoritativeWorldRuntime anchors delayed traversal history to estimated server time instead of receive time", () => {
-  const groundedRuntime = createAuthoritativeRuntime();
-  const delayedReceiveRuntime = createAuthoritativeRuntime();
-  const anchoredDelayedRuntime = createAuthoritativeRuntime();
+test("MetaverseAuthoritativeWorldRuntime quantizes bundled traversal samples to the same next tick boundary within a server tick", () => {
+  const earlierReceiveRuntime = createAuthoritativeRuntime();
+  const laterReceiveRuntime = createAuthoritativeRuntime();
   const playerId = requireValue(
-    createMetaversePlayerId("short-lived-history-anchor-pilot"),
+    createMetaversePlayerId("bundled-traversal-anchor-pilot"),
     "playerId"
   );
   const username = requireValue(
-    createUsername("Short Lived History Anchor Pilot"),
+    createUsername("Bundled Traversal Anchor Pilot"),
     "username"
   );
 
-  joinSurfacePlayer(groundedRuntime, playerId, username, {
+  joinSurfacePlayer(earlierReceiveRuntime, playerId, username, {
     yawRadians: 0
   });
-  joinSurfacePlayer(delayedReceiveRuntime, playerId, username, {
-    yawRadians: 0
-  });
-  joinSurfacePlayer(anchoredDelayedRuntime, playerId, username, {
+  joinSurfacePlayer(laterReceiveRuntime, playerId, username, {
     yawRadians: 0
   });
 
@@ -385,100 +446,161 @@ test("MetaverseAuthoritativeWorldRuntime anchors delayed traversal history to es
       },
       inputSequence: 2,
       locomotionMode: "grounded",
-      orientationSequence: 1
+      orientationSequence: 1,
+      sampleId: 2
     },
-    playerId,
-    recentIntentHistory: [
+    pendingIntentSamples: [
       {
-        durationMs: 30,
-        intent: {
-          actionIntent: {
-            kind: "none",
-            pressed: false
-          },
-          bodyControl: {
-            boost: false,
-            moveAxis: 1,
-            strafeAxis: 0,
-            turnAxis: 0
-          },
-          facing: {
-            pitchRadians: 0,
-            yawRadians: 0
-          },
-          inputSequence: 1,
-          locomotionMode: "grounded",
-          orientationSequence: 1
-        }
-      },
-      {
-        durationMs: 30,
-        intent: {
-          actionIntent: {
-            kind: "none",
-            pressed: false
-          },
-          bodyControl: {
-            boost: false,
-            moveAxis: 0,
-            strafeAxis: 0,
-            turnAxis: 0
-          },
-          facing: {
-            pitchRadians: 0,
-            yawRadians: 0
-          },
-          inputSequence: 2,
-          locomotionMode: "grounded",
-          orientationSequence: 1
-        }
+        actionIntent: {
+          kind: "none",
+          pressed: false
+        },
+        bodyControl: {
+          boost: false,
+          moveAxis: 1,
+          strafeAxis: 0,
+          turnAxis: 0
+        },
+        facing: {
+          pitchRadians: 0,
+          yawRadians: 0
+        },
+        inputSequence: 1,
+        locomotionMode: "grounded",
+        orientationSequence: 1,
+        sampleId: 1
       }
-    ]
+    ],
+    playerId
   };
 
-  groundedRuntime.acceptWorldCommand(
+  earlierReceiveRuntime.acceptWorldCommand(
     createMetaverseSyncPlayerTraversalIntentCommand(delayedStopCommandInput),
     60
   );
-  delayedReceiveRuntime.acceptWorldCommand(
+  laterReceiveRuntime.acceptWorldCommand(
     createMetaverseSyncPlayerTraversalIntentCommand(delayedStopCommandInput),
     90
   );
-  anchoredDelayedRuntime.acceptWorldCommand(
-    createMetaverseSyncPlayerTraversalIntentCommand({
-      ...delayedStopCommandInput,
-      estimatedServerTimeMs: 60
-    }),
-    90
+
+  earlierReceiveRuntime.advanceToTime(300);
+  laterReceiveRuntime.advanceToTime(300);
+
+  const earlierReceiveSnapshot = readPrimaryPlayerActiveBodySnapshot(
+    earlierReceiveRuntime.readWorldSnapshot(300, playerId)
+  );
+  const laterReceiveSnapshot = readPrimaryPlayerActiveBodySnapshot(
+    laterReceiveRuntime.readWorldSnapshot(300, playerId)
   );
 
-  groundedRuntime.advanceToTime(100);
-  delayedReceiveRuntime.advanceToTime(100);
-  anchoredDelayedRuntime.advanceToTime(100);
-
-  const groundedSnapshot = readPrimaryPlayerActiveBodySnapshot(
-    groundedRuntime.readWorldSnapshot(100, playerId)
-  );
-  const delayedReceiveSnapshot = readPrimaryPlayerActiveBodySnapshot(
-    delayedReceiveRuntime.readWorldSnapshot(100, playerId)
-  );
-  const anchoredDelayedSnapshot = readPrimaryPlayerActiveBodySnapshot(
-    anchoredDelayedRuntime.readWorldSnapshot(100, playerId)
-  );
-
-  assert.ok(
-    delayedReceiveSnapshot.linearVelocity.z <
-      groundedSnapshot.linearVelocity.z - 0.1,
-    `expected receive-time anchored history to leave excess residual forward velocity, grounded=${JSON.stringify(groundedSnapshot)} delayed=${JSON.stringify(delayedReceiveSnapshot)}`
-  );
   assert.ok(
     Math.abs(
-      anchoredDelayedSnapshot.linearVelocity.z -
-        groundedSnapshot.linearVelocity.z
+      laterReceiveSnapshot.linearVelocity.z -
+        earlierReceiveSnapshot.linearVelocity.z
     ) < 0.001 &&
-      Math.abs(anchoredDelayedSnapshot.position.z - groundedSnapshot.position.z) <
+      Math.abs(laterReceiveSnapshot.position.z - earlierReceiveSnapshot.position.z) <
         0.001,
-    `expected estimated server-time anchoring to preserve grounded truth, grounded=${JSON.stringify(groundedSnapshot)} anchored=${JSON.stringify(anchoredDelayedSnapshot)}`
+    `expected bundled traversal samples accepted within the same authoritative tick to quantize to the same next boundary, earlier=${JSON.stringify(earlierReceiveSnapshot)} later=${JSON.stringify(laterReceiveSnapshot)}`
+  );
+});
+
+test("MetaverseAuthoritativeWorldRuntime does not replay duplicate bundled traversal samples when the same accepted intent is resent before ack", () => {
+  const singleSendRuntime = createAuthoritativeRuntime();
+  const duplicateSendRuntime = createAuthoritativeRuntime();
+  const playerId = requireValue(
+    createMetaversePlayerId("duplicate-traversal-history-pilot"),
+    "playerId"
+  );
+  const username = requireValue(
+    createUsername("Duplicate Traversal History Pilot"),
+    "username"
+  );
+
+  joinSurfacePlayer(singleSendRuntime, playerId, username, {
+    yawRadians: 0
+  });
+  joinSurfacePlayer(duplicateSendRuntime, playerId, username, {
+    yawRadians: 0
+  });
+
+  const delayedStopCommand = createMetaverseSyncPlayerTraversalIntentCommand({
+    intent: {
+      actionIntent: {
+        kind: "none",
+        pressed: false
+      },
+      bodyControl: {
+        boost: false,
+        moveAxis: 0,
+        strafeAxis: 0,
+        turnAxis: 0
+      },
+      facing: {
+        pitchRadians: 0,
+        yawRadians: 0
+      },
+      inputSequence: 2,
+      locomotionMode: "grounded",
+      orientationSequence: 1,
+      sampleId: 2
+    },
+    pendingIntentSamples: [
+      {
+        actionIntent: {
+          kind: "none",
+          pressed: false
+        },
+        bodyControl: {
+          boost: false,
+          moveAxis: 0,
+          strafeAxis: 1,
+          turnAxis: 0
+        },
+        facing: {
+          pitchRadians: 0,
+          yawRadians: 0
+        },
+        inputSequence: 1,
+        locomotionMode: "grounded",
+        orientationSequence: 1,
+        sampleId: 1
+      }
+    ],
+    playerId
+  });
+
+  singleSendRuntime.acceptWorldCommand(delayedStopCommand, 90);
+  duplicateSendRuntime.acceptWorldCommand(delayedStopCommand, 90);
+
+  singleSendRuntime.advanceToTime(100);
+  duplicateSendRuntime.advanceToTime(100);
+
+  duplicateSendRuntime.acceptWorldCommand(delayedStopCommand, 140);
+
+  singleSendRuntime.advanceToTime(200);
+  duplicateSendRuntime.advanceToTime(200);
+
+  const singleSendSnapshot = readPrimaryPlayerActiveBodySnapshot(
+    singleSendRuntime.readWorldSnapshot(200, playerId)
+  );
+  const duplicateSendSnapshot = readPrimaryPlayerActiveBodySnapshot(
+    duplicateSendRuntime.readWorldSnapshot(200, playerId)
+  );
+
+  assert.ok(
+    Math.abs(duplicateSendSnapshot.position.x - singleSendSnapshot.position.x) <
+      0.001 &&
+      Math.abs(duplicateSendSnapshot.position.z - singleSendSnapshot.position.z) <
+        0.001 &&
+      Math.abs(
+        duplicateSendSnapshot.linearVelocity.x -
+          singleSendSnapshot.linearVelocity.x
+      ) < 0.001 &&
+      Math.abs(
+        duplicateSendSnapshot.linearVelocity.z -
+          singleSendSnapshot.linearVelocity.z
+      ) < 0.001,
+    `expected duplicate resend to preserve single-send authority truth, single=${JSON.stringify(singleSendSnapshot)} duplicate=${JSON.stringify(duplicateSendSnapshot)}`
   );
 });
 

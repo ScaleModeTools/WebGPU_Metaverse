@@ -254,7 +254,7 @@ function freezeIssuedTraversalIntentSnapshot(
     bodyControl: Object.freeze({
       ...snapshot.bodyControl
     }),
-    inputSequence: snapshot.inputSequence,
+    sequence: snapshot.sequence,
     locomotionMode: snapshot.locomotionMode
   });
 }
@@ -274,9 +274,7 @@ function freezeLocalAuthorityPoseCorrectionSnapshot(
           : freezeGroundedBodyTelemetrySnapshot(
               snapshot.authoritative.groundedBody
             ),
-      lastProcessedInputSequence: snapshot.authoritative.lastProcessedInputSequence,
-      lastProcessedTraversalOrientationSequence:
-        snapshot.authoritative.lastProcessedTraversalOrientationSequence,
+      lastProcessedTraversalSequence: snapshot.authoritative.lastProcessedTraversalSequence,
       linearVelocity: freezeVector3Snapshot(
         snapshot.authoritative.linearVelocity
       ),
@@ -566,14 +564,10 @@ function freezeTelemetrySnapshot(
             snapshot.worldSnapshot.localReconciliation
               .lastLocalAuthorityPoseCorrectionDetail
               .groundedBodyStateDivergence,
-          lastProcessedInputSequence:
+          lastProcessedTraversalSequence:
             snapshot.worldSnapshot.localReconciliation
               .lastLocalAuthorityPoseCorrectionDetail
-              .lastProcessedInputSequence,
-          lastProcessedTraversalOrientationSequence:
-            snapshot.worldSnapshot.localReconciliation
-              .lastLocalAuthorityPoseCorrectionDetail
-              .lastProcessedTraversalOrientationSequence,
+              .lastProcessedTraversalSequence,
           localGrounded:
             snapshot.worldSnapshot.localReconciliation
               .lastLocalAuthorityPoseCorrectionDetail.localGrounded,
@@ -678,9 +672,9 @@ function freezeTelemetrySnapshot(
               snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
                 .jumpDebug.resolvedActionState,
           }),
-          lastProcessedInputSequence:
+          lastProcessedTraversalSequence:
             snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
-              .lastProcessedInputSequence,
+              .lastProcessedTraversalSequence,
           locomotionMismatch:
             snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
               .locomotionMismatch,
@@ -995,8 +989,8 @@ export class MetaverseRuntimeHudTelemetryState {
               : authoritativeLocalPlayerSnapshot?.jumpDebug.resolvedActionState ??
             null
         }),
-        lastProcessedInputSequence:
-          authoritativeLocalPlayerSnapshot?.lastProcessedInputSequence ?? null,
+        lastProcessedTraversalSequence:
+          authoritativeLocalPlayerSnapshot?.lastProcessedTraversalSequence ?? null,
         locomotionMismatch:
           authoritativeLocalPlayerSnapshot?.locomotionMode !== undefined &&
           authoritativeLocalPlayerSnapshot.locomotionMode !== localLocomotionMode,
@@ -1066,7 +1060,7 @@ export class MetaverseRuntimeHudTelemetryState {
           : Object.freeze({
               actionIntent: issuedTraversalIntent.actionIntent,
               bodyControl: issuedTraversalIntent.bodyControl,
-              inputSequence: issuedTraversalIntent.inputSequence,
+              sequence: issuedTraversalIntent.sequence,
               locomotionMode: issuedTraversalIntent.locomotionMode
             }),
       local: this.#traversalRuntime.surfaceRoutingLocalTelemetrySnapshot

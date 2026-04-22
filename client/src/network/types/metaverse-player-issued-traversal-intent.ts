@@ -7,10 +7,8 @@ import type {
 export interface MetaversePlayerIssuedTraversalIntentSnapshot {
   readonly actionIntent: MetaversePlayerTraversalActionIntentSnapshot;
   readonly bodyControl: MetaversePlayerTraversalBodyControlSnapshot;
-  readonly inputSequence: number;
   readonly locomotionMode: "grounded" | "swim";
-  readonly orientationSequence: number;
-  readonly sampleId: number;
+  readonly sequence: number;
 }
 
 export function createMetaversePlayerIssuedTraversalIntentSnapshot(
@@ -19,10 +17,8 @@ export function createMetaversePlayerIssuedTraversalIntentSnapshot(
         MetaversePlayerTraversalIntentSnapshot,
         | "actionIntent"
         | "bodyControl"
-        | "inputSequence"
         | "locomotionMode"
-        | "orientationSequence"
-        | "sampleId"
+        | "sequence"
       >
     | null
     | undefined
@@ -34,9 +30,7 @@ export function createMetaversePlayerIssuedTraversalIntentSnapshot(
   return Object.freeze({
     actionIntent: snapshot.actionIntent,
     bodyControl: snapshot.bodyControl,
-    inputSequence: snapshot.inputSequence,
     locomotionMode: snapshot.locomotionMode,
-    orientationSequence: snapshot.orientationSequence,
-    sampleId: snapshot.sampleId
+    sequence: snapshot.sequence
   });
 }

@@ -653,6 +653,11 @@ test("MetaverseTraversalRuntime leaves grounded free-roam deck occupancy on the 
     assert.ok(
       groundedBodyRuntime.snapshot.position.x < boardedSnapshot.position.x + 0.21
     );
+    assert.equal(
+      traversalRuntime.lastLocalAuthorityPoseCorrectionDetail
+        .convergenceEpisodeStartIntentionalDiscontinuityCause,
+      "moving-support-carry"
+    );
   } finally {
     groundedBodyRuntime.dispose();
   }

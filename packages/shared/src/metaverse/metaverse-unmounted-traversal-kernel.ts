@@ -334,6 +334,49 @@ function resolveMetaverseUnmountedGroundedAutostepProbeYawRadians(
   );
 }
 
+function canConsumeMetaverseUnmountedGroundedJumpFromDirectSupport(input: {
+  readonly currentDirectSupportKeepsGrounded: boolean;
+  readonly groundedBodyConfig: MetaverseUnmountedGroundedTraversalConfigSnapshot;
+  readonly groundedBodySnapshot: MetaverseUnmountedGroundedBodySnapshot;
+  readonly supportHeightMeters: number | null;
+}): boolean {
+  if (input.groundedBodySnapshot.jumpBody.jumpReady === true) {
+    return true;
+  }
+
+  if (
+    input.currentDirectSupportKeepsGrounded !== true ||
+    input.supportHeightMeters === null
+  ) {
+    return false;
+  }
+
+  if (input.groundedBodySnapshot.jumpBody.jumpSnapSuppressionActive === true) {
+    return false;
+  }
+
+  if (
+    toFiniteNumber(
+      input.groundedBodySnapshot.jumpBody.verticalSpeedUnitsPerSecond,
+      0
+    ) > 0
+  ) {
+    return false;
+  }
+
+  const supportGapMeters =
+    toFiniteNumber(input.groundedBodySnapshot.position.y, 0) -
+    input.supportHeightMeters;
+
+  return (
+    supportGapMeters <=
+    Math.max(
+      0,
+      toFiniteNumber(input.groundedBodyConfig.snapToGroundDistanceMeters, 0)
+    )
+  );
+}
+
 function prepareMetaverseUnmountedGroundedTraversalStep({
   actionState,
   bodyControl,
@@ -375,7 +418,13 @@ function prepareMetaverseUnmountedGroundedTraversalStep({
     actionState,
     bodyControl,
     deltaSeconds,
-    groundedBodyJumpReady: groundedBodySnapshot.jumpBody.jumpReady
+    groundedBodyJumpReady:
+      canConsumeMetaverseUnmountedGroundedJumpFromDirectSupport({
+        currentDirectSupportKeepsGrounded,
+        groundedBodyConfig,
+        groundedBodySnapshot,
+        supportHeightMeters
+      })
   });
 
   return Object.freeze({

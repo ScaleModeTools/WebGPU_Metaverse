@@ -233,6 +233,264 @@ test("MetaverseAuthoritativeWorldSync force-snaps only the first fresh authorita
   assert.equal(authoritativeSyncCalls[1]?.syncOptions, null);
 });
 
+test("MetaverseAuthoritativeWorldSync does not rearm spawn bootstrap after a transient stale-local snapshot gap", async () => {
+  const { MetaverseAuthoritativeWorldSync } = await clientLoader.load(
+    "/src/metaverse/classes/metaverse-authoritative-world-sync.ts"
+  );
+  const authoritativeLocalPlayerSamples = [
+    Object.freeze({
+      authoritativeSnapshotAgeMs: 0,
+      authoritativeTick: 10,
+      lastProcessedInputSequence: 3,
+      lastProcessedTraversalOrientationSequence: 3,
+      pose: Object.freeze({
+        look: Object.freeze({
+          pitchRadians: -0.2,
+          yawRadians: 1.25
+        })
+      }),
+      receivedAtWallClockMs: 1_000,
+      snapshotSequence: 1
+    }),
+    null,
+    Object.freeze({
+      authoritativeSnapshotAgeMs: 0,
+      authoritativeTick: 12,
+      lastProcessedInputSequence: 5,
+      lastProcessedTraversalOrientationSequence: 5,
+      pose: Object.freeze({
+        look: Object.freeze({
+          pitchRadians: -0.05,
+          yawRadians: 1.55
+        })
+      }),
+      receivedAtWallClockMs: 1_100,
+      snapshotSequence: 3
+    })
+  ];
+  const authoritativeFreshLocalSnapshots = [
+    Object.freeze({
+      mountedOccupancy: null
+    }),
+    null,
+    Object.freeze({
+      mountedOccupancy: null
+    })
+  ];
+  const authoritativeSyncCalls = [];
+
+  const worldSync = new MetaverseAuthoritativeWorldSync({
+    authoritativePlayerMovementEnabled: true,
+    dynamicEnvironmentPresentationRuntime: {
+      syncRemoteVehiclePresentationPose() {},
+      syncRemoteEnvironmentBodyPresentationPose() {}
+    },
+    environmentBodyCollisionRuntime: {
+      beginAuthoritativeEnvironmentBodyCollisionSync() {},
+      syncAuthoritativeEnvironmentBodyCollisionPose() {}
+    },
+    readWallClockMs: () => 1_250,
+    remoteWorldRuntime: {
+      remoteEnvironmentBodyPresentations: Object.freeze([]),
+      remoteVehiclePresentations: Object.freeze([]),
+      consumeFreshAckedAuthoritativeLocalPlayerSample() {
+        return authoritativeLocalPlayerSamples.shift() ?? null;
+      },
+      readFreshAuthoritativeLocalPlayerSnapshot() {
+        return authoritativeFreshLocalSnapshots.shift() ?? null;
+      },
+      readFreshAuthoritativeEnvironmentBodySnapshots() {
+        return Object.freeze([]);
+      },
+      readFreshAuthoritativeVehicleSnapshot() {
+        return null;
+      }
+    },
+    traversalRuntime: {
+      mountedEnvironmentSnapshot: null,
+      boardEnvironment() {
+        throw new Error(
+          "boardEnvironment should stay idle for stale-gap bootstrap sync."
+        );
+      },
+      leaveMountedEnvironment() {
+        throw new Error(
+          "leaveMountedEnvironment should stay idle for stale-gap bootstrap sync."
+        );
+      },
+      occupySeat() {
+        throw new Error(
+          "occupySeat should stay idle for stale-gap bootstrap sync."
+        );
+      },
+      syncAuthoritativeLocalPlayerPose(
+        authoritativePlayerSnapshot,
+        syncOptions
+      ) {
+        authoritativeSyncCalls.push(
+          Object.freeze({
+            authoritativePlayerSnapshot,
+            syncOptions: syncOptions ?? null
+          })
+        );
+      },
+      syncAuthoritativeVehiclePose() {
+        throw new Error(
+          "syncAuthoritativeVehiclePose should stay idle for stale-gap bootstrap sync."
+        );
+      }
+    },
+    vehicleCollisionRuntime: {
+      syncAuthoritativeVehicleCollisionPose() {}
+    }
+  });
+
+  worldSync.syncAuthoritativeWorldSnapshots();
+  worldSync.syncAuthoritativeWorldSnapshots();
+  worldSync.syncAuthoritativeWorldSnapshots();
+
+  assert.equal(authoritativeSyncCalls.length, 2);
+  assert.deepEqual(authoritativeSyncCalls[0]?.syncOptions, {
+    forceSnap: true,
+    intentionalDiscontinuityCause: "spawn",
+    syncAuthoritativeLook: true
+  });
+  assert.equal(authoritativeSyncCalls[1]?.syncOptions, null);
+});
+
+test("MetaverseAuthoritativeWorldSync rearms the spawn bootstrap when a mid-session respawn explicitly requests it", async () => {
+  const { MetaverseAuthoritativeWorldSync } = await clientLoader.load(
+    "/src/metaverse/classes/metaverse-authoritative-world-sync.ts"
+  );
+  const authoritativeLocalPlayerSamples = [
+    Object.freeze({
+      authoritativeSnapshotAgeMs: 0,
+      authoritativeTick: 10,
+      lastProcessedInputSequence: 3,
+      lastProcessedTraversalOrientationSequence: 3,
+      pose: Object.freeze({
+        look: Object.freeze({
+          pitchRadians: -0.2,
+          yawRadians: 1.25
+        })
+      }),
+      receivedAtWallClockMs: 1_000,
+      snapshotSequence: 1
+    }),
+    Object.freeze({
+      authoritativeSnapshotAgeMs: 0,
+      authoritativeTick: 11,
+      lastProcessedInputSequence: 4,
+      lastProcessedTraversalOrientationSequence: 4,
+      pose: Object.freeze({
+        look: Object.freeze({
+          pitchRadians: -0.1,
+          yawRadians: 1.4
+        })
+      }),
+      receivedAtWallClockMs: 1_050,
+      snapshotSequence: 2
+    }),
+    Object.freeze({
+      authoritativeSnapshotAgeMs: 0,
+      authoritativeTick: 12,
+      lastProcessedInputSequence: 5,
+      lastProcessedTraversalOrientationSequence: 5,
+      pose: Object.freeze({
+        look: Object.freeze({
+          pitchRadians: -0.05,
+          yawRadians: 1.55
+        })
+      }),
+      receivedAtWallClockMs: 1_100,
+      snapshotSequence: 3
+    })
+  ];
+  const authoritativeSyncCalls = [];
+
+  const worldSync = new MetaverseAuthoritativeWorldSync({
+    authoritativePlayerMovementEnabled: true,
+    dynamicEnvironmentPresentationRuntime: {
+      syncRemoteVehiclePresentationPose() {},
+      syncRemoteEnvironmentBodyPresentationPose() {}
+    },
+    environmentBodyCollisionRuntime: {
+      beginAuthoritativeEnvironmentBodyCollisionSync() {},
+      syncAuthoritativeEnvironmentBodyCollisionPose() {}
+    },
+    readWallClockMs: () => 1_250,
+    remoteWorldRuntime: {
+      remoteEnvironmentBodyPresentations: Object.freeze([]),
+      remoteVehiclePresentations: Object.freeze([]),
+      consumeFreshAckedAuthoritativeLocalPlayerSample() {
+        return authoritativeLocalPlayerSamples.shift() ?? null;
+      },
+      readFreshAuthoritativeLocalPlayerSnapshot() {
+        return Object.freeze({
+          mountedOccupancy: null
+        });
+      },
+      readFreshAuthoritativeEnvironmentBodySnapshots() {
+        return Object.freeze([]);
+      },
+      readFreshAuthoritativeVehicleSnapshot() {
+        return null;
+      }
+    },
+    traversalRuntime: {
+      mountedEnvironmentSnapshot: null,
+      boardEnvironment() {
+        throw new Error("boardEnvironment should stay idle for respawn bootstrap.");
+      },
+      leaveMountedEnvironment() {
+        throw new Error(
+          "leaveMountedEnvironment should stay idle for respawn bootstrap."
+        );
+      },
+      occupySeat() {
+        throw new Error("occupySeat should stay idle for respawn bootstrap.");
+      },
+      syncAuthoritativeLocalPlayerPose(
+        authoritativePlayerSnapshot,
+        syncOptions
+      ) {
+        authoritativeSyncCalls.push(
+          Object.freeze({
+            authoritativePlayerSnapshot,
+            syncOptions: syncOptions ?? null
+          })
+        );
+      },
+      syncAuthoritativeVehiclePose() {
+        throw new Error(
+          "syncAuthoritativeVehiclePose should stay idle for respawn bootstrap."
+        );
+      }
+    },
+    vehicleCollisionRuntime: {
+      syncAuthoritativeVehicleCollisionPose() {}
+    }
+  });
+
+  worldSync.syncAuthoritativeWorldSnapshots();
+  worldSync.syncAuthoritativeWorldSnapshots();
+  worldSync.armLocalSpawnBootstrap();
+  worldSync.syncAuthoritativeWorldSnapshots();
+
+  assert.equal(authoritativeSyncCalls.length, 3);
+  assert.deepEqual(authoritativeSyncCalls[0]?.syncOptions, {
+    forceSnap: true,
+    intentionalDiscontinuityCause: "spawn",
+    syncAuthoritativeLook: true
+  });
+  assert.equal(authoritativeSyncCalls[1]?.syncOptions, null);
+  assert.deepEqual(authoritativeSyncCalls[2]?.syncOptions, {
+    forceSnap: true,
+    intentionalDiscontinuityCause: "spawn",
+    syncAuthoritativeLook: true
+  });
+});
+
 test("MetaverseAuthoritativeWorldSync reconciles the locally mounted vehicle from fresh authoritative vehicle truth", async () => {
   const { MetaverseAuthoritativeWorldSync } = await clientLoader.load(
     "/src/metaverse/classes/metaverse-authoritative-world-sync.ts"

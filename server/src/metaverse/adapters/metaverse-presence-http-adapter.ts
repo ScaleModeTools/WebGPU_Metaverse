@@ -4,7 +4,6 @@ import type {
 } from "node:http";
 
 import {
-  createMetaversePlayerTeamId,
   createMetaverseJoinPresenceCommand,
   createMetaverseLeavePresenceCommand,
   createMetaversePlayerId,
@@ -241,26 +240,15 @@ function parsePresencePose(poseBody: Record<string, unknown>) {
 
 function parseJoinPresenceCommand(body: Record<string, unknown>) {
   const username = createUsername(readStringField(body.username, "username"));
-  const requestedTeamId =
-    body.teamId === undefined
-      ? undefined
-      : createMetaversePlayerTeamId(readStringField(body.teamId, "teamId"));
 
   if (username === null) {
     throw new Error("Invalid username.");
   }
 
-  if (body.teamId !== undefined && requestedTeamId === null) {
-    throw new Error("Invalid teamId.");
-  }
-
-  const resolvedTeamId = requestedTeamId ?? undefined;
-
   return createMetaverseJoinPresenceCommand({
     characterId: readStringField(body.characterId, "characterId"),
     playerId: resolvePlayerId(readStringField(body.playerId, "playerId")),
     pose: parsePresencePose(readRecordField(body.pose, "pose")),
-    ...(resolvedTeamId === undefined ? {} : { teamId: resolvedTeamId }),
     username
   });
 }

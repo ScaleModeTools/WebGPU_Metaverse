@@ -194,7 +194,7 @@ test("shared unmounted grounded traversal prep owns jump acceptance plus autoste
   assert.equal(step.bodyIntent.snapToGroundOverrideEnabled, true);
 });
 
-test("shared unmounted grounded traversal prep keeps authored support diagnostic-only until the grounded body is jump-ready", () => {
+test("shared unmounted grounded traversal prep keeps authored support diagnostic-only when it remains outside grounded snap distance", () => {
   const queuedState = queueMetaverseUnmountedTraversalAction(
     createMetaverseUnmountedTraversalStateSnapshot({
       locomotionMode: "grounded"
@@ -218,11 +218,60 @@ test("shared unmounted grounded traversal prep keeps authored support diagnostic
     deltaSeconds: 1 / 30,
     groundedBodyConfig,
     groundedBodySnapshot: createGroundedBodySnapshot({
-      grounded: true,
+      grounded: false,
       jumpReady: false,
       position: Object.freeze({
         x: 0,
-        y: 0.2,
+        y: 0.5,
+        z: 0
+      }),
+      verticalSpeedUnitsPerSecond: 0,
+      yawRadians: 0
+    }),
+    preferredLookYawRadians: null,
+    surfaceColliderSnapshots: Object.freeze([createSupportCollider(0.2)]),
+    surfacePolicyConfig,
+    swimBodySnapshot: null,
+    traversalState: queuedState,
+    waterRegionSnapshots: Object.freeze([])
+  });
+
+  assert.equal(step.locomotionMode, "grounded");
+  assert.equal(step.jumpRequested, false);
+  assert.equal(step.bodyIntent.jump, false);
+  assert.equal(step.bodyIntent.snapToGroundOverrideEnabled, true);
+  assert.equal(step.traversalState.actionState.pendingActionSequence, 10);
+});
+
+test("shared unmounted grounded traversal prep consumes a buffered jump once direct support is already inside snap distance", () => {
+  const queuedState = queueMetaverseUnmountedTraversalAction(
+    createMetaverseUnmountedTraversalStateSnapshot({
+      locomotionMode: "grounded"
+    }),
+    {
+      actionIntent: {
+        kind: "jump",
+        pressed: true,
+        sequence: 11
+      },
+      bufferSeconds: 0.2
+    }
+  );
+  const step = prepareMetaverseUnmountedTraversalStep({
+    bodyControl: Object.freeze({
+      boost: false,
+      moveAxis: 0,
+      strafeAxis: 0,
+      turnAxis: 0
+    }),
+    deltaSeconds: 1 / 30,
+    groundedBodyConfig,
+    groundedBodySnapshot: createGroundedBodySnapshot({
+      grounded: false,
+      jumpReady: false,
+      position: Object.freeze({
+        x: 0,
+        y: 0.34,
         z: 0
       }),
       verticalSpeedUnitsPerSecond: 0,
@@ -237,10 +286,14 @@ test("shared unmounted grounded traversal prep keeps authored support diagnostic
   });
 
   assert.equal(step.locomotionMode, "grounded");
-  assert.equal(step.jumpRequested, false);
-  assert.equal(step.bodyIntent.jump, false);
+  assert.equal(step.jumpRequested, true);
+  assert.equal(step.bodyIntent.jump, true);
   assert.equal(step.bodyIntent.snapToGroundOverrideEnabled, true);
-  assert.equal(step.traversalState.actionState.pendingActionSequence, 10);
+  assert.equal(step.traversalState.actionState.pendingActionKind, "none");
+  assert.equal(step.traversalState.actionState.pendingActionSequence, 0);
+  assert.equal(step.traversalState.actionState.resolvedActionKind, "jump");
+  assert.equal(step.traversalState.actionState.resolvedActionSequence, 11);
+  assert.equal(step.traversalState.actionState.resolvedActionState, "accepted");
 });
 
 test("shared unmounted grounded traversal prep keeps snap-to-ground armed on supported floor when no water region overlaps the player", () => {

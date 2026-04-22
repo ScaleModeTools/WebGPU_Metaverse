@@ -5,7 +5,8 @@ import type {
 } from "@webgpu-metaverse/shared";
 
 import {
-  metaverseLocalAuthorityReconciliationConfig
+  metaverseLocalAuthorityReconciliationConfig,
+  metaverseWorldCadenceConfig
 } from "../config/metaverse-world-network";
 import { resolveFocusedPortalSnapshot } from "../states/metaverse-flight";
 import {
@@ -35,6 +36,11 @@ const neutralMetaverseFlightInputSnapshot = Object.freeze({
   strafeAxis: 0,
   yawAxis: 0
 });
+const metaverseRuntimeTraversalFixedStepSeconds =
+  Number(metaverseWorldCadenceConfig.authoritativeTickIntervalMs) / 1000;
+const metaverseRuntimeTraversalFixedStepEpsilonSeconds = 0.000001;
+const metaverseRuntimeTraversalMaxAccumulatedSeconds =
+  metaverseRuntimeTraversalFixedStepSeconds * 4;
 
 interface MetaverseRuntimeFrameCanvasHost {
   readonly clientHeight: number;
@@ -231,6 +237,7 @@ export class MetaverseRuntimeFrameLoop {
   #lastFrameAtMs: number | null = null;
   #mountedInteraction = createMetaverseMountedInteractionSnapshot(null, null);
   #renderedFrameCount = 0;
+  #traversalAccumulatorSeconds = 0;
 
   constructor({
     authoritativeWorldSync,
@@ -290,6 +297,7 @@ export class MetaverseRuntimeFrameLoop {
       null
     );
     this.#renderedFrameCount = 0;
+    this.#traversalAccumulatorSeconds = 0;
   }
 
   syncFrame({
@@ -305,6 +313,10 @@ export class MetaverseRuntimeFrameLoop {
     this.#frameDeltaMs = deltaSeconds * 1000;
     this.#frameRate = deltaSeconds > 0 ? 1 / deltaSeconds : 0;
     this.#lastFrameAtMs = nowMs;
+    this.#traversalAccumulatorSeconds = Math.min(
+      this.#traversalAccumulatorSeconds + deltaSeconds,
+      metaverseRuntimeTraversalMaxAccumulatedSeconds
+    );
     const presenceReady =
       !this.#presenceRuntime.connectionRequired || this.#presenceRuntime.isJoined;
     const worldReady =
@@ -314,16 +326,6 @@ export class MetaverseRuntimeFrameLoop {
     this.#remoteWorldRuntime.syncConnection(presenceReady);
     this.#remoteWorldRuntime.sampleRemoteWorld();
     this.#presenceRuntime.syncRemoteCharacterPresentations();
-    this.#authoritativeWorldSync.syncAuthoritativeWorldSnapshots();
-
-    const remoteCharacterPresentations =
-      this.#remoteWorldRuntime.remoteCharacterPresentations;
-
-    this.#environmentPhysicsRuntime.syncAuthoritativeRemotePlayerBlockers(
-      this.#remoteWorldRuntime.readFreshAuthoritativeRemotePlayerSnapshots(
-        metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
-      )
-    );
 
     const preAdvanceCameraSnapshot = this.#traversalRuntime.cameraSnapshot;
     const preAdvanceFocusedPortal = resolveFocusedPortalSnapshot(
@@ -341,22 +343,71 @@ export class MetaverseRuntimeFrameLoop {
     const movementInput = preAdvanceCameraPhaseState.blocksMovementInput
       ? neutralMetaverseFlightInputSnapshot
       : this.#flightInputRuntime.readSnapshot();
-    const localTraversalIntentInput =
-      this.#traversalRuntime.resolveLocalTraversalIntentInput(
-        movementInput,
-        deltaSeconds
-      );
+    let authoritativeWorldPrepared = false;
+    const prepareAuthoritativeWorld = () => {
+      if (authoritativeWorldPrepared) {
+        return;
+      }
 
-    this.#traversalRuntime.syncIssuedTraversalIntentSnapshot(
-      this.#remoteWorldRuntime.previewLocalTraversalIntent(
+      this.#authoritativeWorldSync.syncAuthoritativeWorldSnapshots();
+      this.#environmentPhysicsRuntime.syncAuthoritativeRemotePlayerBlockers(
+        this.#remoteWorldRuntime.readFreshAuthoritativeRemotePlayerSnapshots(
+          metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
+        )
+      );
+      authoritativeWorldPrepared = true;
+    };
+    while (
+      this.#traversalAccumulatorSeconds +
+        metaverseRuntimeTraversalFixedStepEpsilonSeconds >=
+      metaverseRuntimeTraversalFixedStepSeconds
+    ) {
+      const localTraversalIntentInput =
+        this.#traversalRuntime.resolveLocalTraversalIntentInput(
+          movementInput,
+          metaverseRuntimeTraversalFixedStepSeconds
+        );
+
+      this.#traversalRuntime.syncIssuedTraversalIntentSnapshot(
+        this.#remoteWorldRuntime.previewLocalTraversalIntent(
+          localTraversalIntentInput
+        )
+      );
+      prepareAuthoritativeWorld();
+      this.#traversalRuntime.advance(
+        movementInput,
+        metaverseRuntimeTraversalFixedStepSeconds,
         localTraversalIntentInput
-      )
-    );
-    this.#traversalRuntime.advance(
-      movementInput,
-      deltaSeconds,
-      localTraversalIntentInput
-    );
+      );
+      this.#traversalRuntime.syncIssuedTraversalIntentSnapshot(
+        this.#remoteWorldRuntime.syncLocalTraversalIntent(
+          localTraversalIntentInput
+        )
+      );
+      this.#traversalAccumulatorSeconds = Math.max(
+        0,
+        this.#traversalAccumulatorSeconds -
+          metaverseRuntimeTraversalFixedStepSeconds
+      );
+    }
+
+    if (!authoritativeWorldPrepared) {
+      const previewTraversalIntentInput =
+        this.#traversalRuntime.resolveLocalTraversalIntentInput(
+          movementInput,
+          metaverseRuntimeTraversalFixedStepSeconds
+        );
+
+      this.#traversalRuntime.syncIssuedTraversalIntentSnapshot(
+        this.#remoteWorldRuntime.previewLocalTraversalIntent(
+          previewTraversalIntentInput
+        )
+      );
+      prepareAuthoritativeWorld();
+    }
+
+    const remoteCharacterPresentations =
+      this.#remoteWorldRuntime.remoteCharacterPresentations;
 
     const cameraSnapshot = this.#traversalRuntime.cameraSnapshot;
     const mountedEnvironment = this.#traversalRuntime.mountedEnvironmentSnapshot;
@@ -387,9 +438,6 @@ export class MetaverseRuntimeFrameLoop {
       this.#traversalRuntime.routedDriverVehicleControlIntentSnapshot
     );
     this.#environmentPhysicsRuntime.syncDynamicEnvironmentBodyPresentations();
-    this.#traversalRuntime.syncIssuedTraversalIntentSnapshot(
-      this.#remoteWorldRuntime.syncLocalTraversalIntent(localTraversalIntentInput)
-    );
 
     const liveFocusedPortal = resolveFocusedPortalSnapshot(
       cameraSnapshot,

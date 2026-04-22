@@ -1136,13 +1136,12 @@ test("metaverse realtime world traversal intent commands normalize explicit tran
   assert.equal(webTransportRequest.command.intent.inputSequence, 4);
 });
 
-test("metaverse realtime world traversal intent commands normalize bounded recent intent history", () => {
+test("metaverse realtime world traversal intent commands normalize explicit pending intent samples without traversal timestamps", () => {
   const playerId = createMetaversePlayerId(" harbor-pilot-history-1 ");
 
   assert.notEqual(playerId, null);
 
   const command = createMetaverseSyncPlayerTraversalIntentCommand({
-    estimatedServerTimeMs: 123.8,
     intent: {
       boost: false,
       inputSequence: 3,
@@ -1153,63 +1152,11 @@ test("metaverse realtime world traversal intent commands normalize bounded recen
       strafeAxis: 1,
       yawAxis: 0.5
     },
-    playerId,
-    recentIntentHistory: [
+    pendingIntentSamples: [
       {
-        durationMs: 8.9,
-        intent: {
-          actionIntent: {
-            kind: "none",
-            pressed: false
-          },
-          bodyControl: {
-            boost: false,
-            moveAxis: 1,
-            strafeAxis: 0,
-            turnAxis: 0
-          },
-          facing: {
-            pitchRadians: 0,
-            yawRadians: 0
-          },
-          inputSequence: 1,
-          locomotionMode: "grounded",
-          orientationSequence: 1
-        }
-      },
-      {
-        durationMs: -4,
-        intent: {
-          actionIntent: {
-            kind: "none",
-            pressed: false
-          },
-          bodyControl: {
-            boost: false,
-            moveAxis: 0,
-            strafeAxis: 0,
-            turnAxis: 0
-          },
-          facing: {
-            pitchRadians: 0,
-            yawRadians: 0
-          },
-          inputSequence: 2,
-          locomotionMode: "grounded",
-          orientationSequence: 1
-        }
-      }
-    ]
-  });
-
-  assert.deepEqual(command.recentIntentHistory, [
-    {
-      durationMs: 8,
-      intent: {
         actionIntent: {
           kind: "none",
-          pressed: false,
-          sequence: 0
+          pressed: false
         },
         bodyControl: {
           boost: false,
@@ -1223,16 +1170,95 @@ test("metaverse realtime world traversal intent commands normalize bounded recen
         },
         inputSequence: 1,
         locomotionMode: "grounded",
-        orientationSequence: 1,
-        sampleId: 0
+        orientationSequence: 1
       }
+    ],
+    playerId
+  });
+
+  assert.deepEqual(command.pendingIntentSamples, [
+    {
+      actionIntent: {
+        kind: "none",
+        pressed: false,
+        sequence: 0
+      },
+      bodyControl: {
+        boost: false,
+        moveAxis: 1,
+        strafeAxis: 0,
+        turnAxis: 0
+      },
+      facing: {
+        pitchRadians: 0,
+        yawRadians: 0
+      },
+      inputSequence: 1,
+      locomotionMode: "grounded",
+      orientationSequence: 1,
+      sampleId: 0
     }
   ]);
-  assert.equal(command.estimatedServerTimeMs, 123);
 });
 
 test("metaverse gameplay traversal intent snapshots normalize supported locomotion and drop unsupported routing", () => {
   const groundedIntent = createMetaverseGameplayTraversalIntentSnapshotInput({
+    boost: false,
+    jump: false,
+    locomotionMode: "grounded",
+    moveAxis: 1,
+    pitchRadians: 0.25,
+    strafeAxis: -1,
+    turnAxis: 0.5,
+    yawRadians: 1.5
+  });
+
+  const unsupportedIntent = createMetaverseGameplayTraversalIntentSnapshotInput({
+    boost: true,
+    jump: true,
+    locomotionMode: "mounted",
+    moveAxis: 1,
+    pitchRadians: 0.25,
+    strafeAxis: -1,
+    turnAxis: 0.5,
+    yawRadians: 1.5
+  });
+
+  assert.deepEqual(groundedIntent, {
+    actionIntent: {
+      kind: "none",
+      pressed: false
+    },
+    bodyControl: {
+      boost: false,
+      moveAxis: 1,
+      strafeAxis: -1,
+      turnAxis: 0.5
+    },
+    facing: {
+      pitchRadians: 0.25,
+      yawRadians: 1.5
+    },
+    locomotionMode: "grounded"
+  });
+  assert.deepEqual(unsupportedIntent, {
+    actionIntent: {
+      kind: "none",
+      pressed: false
+    },
+    bodyControl: {
+      boost: false,
+      moveAxis: 0,
+      strafeAxis: 0,
+      turnAxis: 0
+    },
+    facing: {
+      pitchRadians: 0,
+      yawRadians: 0
+    },
+    locomotionMode: "grounded"
+  });
+});
     boost: true,
     jump: true,
     locomotionMode: "grounded",

@@ -9,6 +9,7 @@ import {
   hasMetaverseTraversalAuthorityRejectedAction,
   isMetaverseTraversalAuthorityActionPendingOrActive,
   isMetaverseTraversalAuthorityGroundedLocomotion,
+  readMetaverseTraversalAuthorityLatestActionSequence,
   type MetaverseTraversalAuthoritySnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 
@@ -36,8 +37,7 @@ import type { MetaverseIssuedTraversalIntentSnapshot } from "../../types/travers
 
 export interface AuthoritativeLocalPlayerPoseSnapshot
   extends AuthoritativeLocalPlayerReconciliationSnapshot {
-  readonly lastProcessedInputSequence: number;
-  readonly lastProcessedTraversalOrientationSequence: number;
+  readonly lastProcessedTraversalSequence: number;
 }
 
 export interface ApplyAuthoritativeUnmountedPoseInput {
@@ -221,10 +221,19 @@ function shouldForceRejectedLocalJumpCorrection({
   }
 
   const authoritativeProcessedIssuedInput =
-    authoritativePlayerSnapshot.lastProcessedInputSequence >=
-    localIssuedTraversalIntentSnapshot.inputSequence;
+    authoritativePlayerSnapshot.lastProcessedTraversalSequence >=
+    localIssuedTraversalIntentSnapshot.sequence;
 
   if (!authoritativeProcessedIssuedInput) {
+    return false;
+  }
+
+  if (
+    readMetaverseTraversalAuthorityLatestActionSequence(
+      authoritativePlayerSnapshot.traversalAuthority,
+      "jump"
+    ) < issuedJumpActionSequence
+  ) {
     return false;
   }
 
@@ -558,11 +567,8 @@ export class MetaverseLocalAuthorityReconciliationState {
           this.#localAuthorityPoseConvergenceEpisodeStartYawMagnitudeRadians,
         groundedBodyStateDivergence:
           divergenceDiagnostics.groundedBodyStateDivergence,
-        lastProcessedInputSequence:
-          authoritativePlayerSnapshot.lastProcessedInputSequence ?? null,
-        lastProcessedTraversalOrientationSequence:
-          authoritativePlayerSnapshot
-            .lastProcessedTraversalOrientationSequence ?? null,
+        lastProcessedTraversalSequence:
+          authoritativePlayerSnapshot.lastProcessedTraversalSequence ?? null,
         localGrounded,
         localTraversalPose,
       });

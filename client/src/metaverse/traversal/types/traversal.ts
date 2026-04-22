@@ -42,19 +42,16 @@ export interface DynamicEnvironmentPoseSnapshot {
 export interface MetaverseIssuedTraversalIntentSnapshot {
   readonly actionIntent: MetaversePlayerTraversalActionIntentSnapshot;
   readonly bodyControl: MetaversePlayerTraversalBodyControlSnapshot;
-  readonly inputSequence: number;
   readonly locomotionMode: "grounded" | "swim";
-  readonly sampleId: number;
+  readonly sequence: number;
 }
 
 export type MetaverseIssuedTraversalIntentInputSnapshot = Pick<
   MetaversePlayerTraversalIntentSnapshot,
   | "actionIntent"
   | "bodyControl"
-  | "inputSequence"
   | "locomotionMode"
-  | "sampleId"
-  | "orientationSequence"
+  | "sequence"
 >;
 
 export function createMetaverseIssuedTraversalIntentSnapshot(
@@ -63,9 +60,8 @@ export function createMetaverseIssuedTraversalIntentSnapshot(
         MetaversePlayerTraversalIntentSnapshot,
         | "actionIntent"
         | "bodyControl"
-        | "inputSequence"
         | "locomotionMode"
-        | "sampleId"
+        | "sequence"
       >
     | null
     | undefined
@@ -77,9 +73,8 @@ export function createMetaverseIssuedTraversalIntentSnapshot(
   return Object.freeze({
     actionIntent: snapshot.actionIntent,
     bodyControl: snapshot.bodyControl,
-    inputSequence: snapshot.inputSequence,
     locomotionMode: snapshot.locomotionMode,
-    sampleId: snapshot.sampleId
+    sequence: snapshot.sequence
   });
 }
 

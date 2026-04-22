@@ -460,12 +460,8 @@ export class MetaverseUnmountedTraversalOrchestrationState {
               authoritativeSnapshotAgeMs:
                 authoritativeSample.authoritativeSnapshotAgeMs,
               authoritativeTick: authoritativeSample.authoritativeTick,
-              lastProcessedInputSequence:
-                authoritativeSample.lastProcessedInputSequence,
-              lastProcessedTraversalSampleId:
-                authoritativeSample.lastProcessedTraversalSampleId,
-              lastProcessedTraversalOrientationSequence:
-                authoritativeSample.lastProcessedTraversalOrientationSequence,
+              lastProcessedTraversalSequence:
+                authoritativeSample.lastProcessedTraversalSequence,
               receivedAtWallClockMs: authoritativeSample.receivedAtWallClockMs
             });
     const matchedPredictedLocalSample = matchedPredictedLocalSampleMatch?.sample ?? null;

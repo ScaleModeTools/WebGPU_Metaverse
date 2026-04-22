@@ -68,7 +68,7 @@ function freezeIssuedTraversalIntentSnapshot(
     bodyControl: Object.freeze({
       ...snapshot.bodyControl
     }),
-    inputSequence: snapshot.inputSequence,
+    sequence: snapshot.sequence,
     locomotionMode: snapshot.locomotionMode
   });
 }
@@ -351,11 +351,8 @@ export class MetaverseTraversalTelemetryState {
                 authoritativePlayerSnapshot.groundedBody
               )
             : null,
-        lastProcessedInputSequence:
-          authoritativePlayerSnapshot.lastProcessedInputSequence ?? 0,
-        lastProcessedTraversalOrientationSequence:
-          authoritativePlayerSnapshot
-            .lastProcessedTraversalOrientationSequence ?? 0,
+        lastProcessedTraversalSequence:
+          authoritativePlayerSnapshot.lastProcessedTraversalSequence ?? 0,
         linearVelocity: freezeVector3Snapshot(
           authoritativeActiveBodySnapshot.linearVelocity
         ),

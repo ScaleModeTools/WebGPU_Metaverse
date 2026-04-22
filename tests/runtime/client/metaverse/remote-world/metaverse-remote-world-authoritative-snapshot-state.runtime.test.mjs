@@ -4,6 +4,7 @@ import test, { after, before } from "node:test";
 import {
   createMetaverseGroundedBodyRuntimeSnapshot,
   createMetaversePlayerId,
+  createMetaverseRealtimeWorldSnapshot,
   createUsername
 } from "@webgpu-metaverse/shared";
 
@@ -37,9 +38,12 @@ class FakeAuthoritativeServerClock {
 }
 
 async function createAuthoritativeSnapshotHarness({
+  latestAcceptedSnapshotReceivedAtMs = null,
   latestPlayerInputSequence = 0,
   latestPlayerLookSequence = 0,
+  latestPlayerTraversalSampleId = 0,
   latestPlayerTraversalOrientationSequence = 0,
+  latestPlayerWeaponSequence = 0,
   localPlayerId,
   readWallClockMs,
   worldSnapshots
@@ -52,14 +56,25 @@ async function createAuthoritativeSnapshotHarness({
 
   fakeWorldClient.latestPlayerInputSequence = latestPlayerInputSequence;
   fakeWorldClient.latestPlayerLookSequence = latestPlayerLookSequence;
+  fakeWorldClient.latestPlayerIssuedTraversalIntentSnapshot =
+    latestPlayerTraversalSampleId > 0
+      ? Object.freeze({
+          sampleId: latestPlayerTraversalSampleId
+        })
+      : null;
   fakeWorldClient.latestPlayerTraversalOrientationSequence =
     latestPlayerTraversalOrientationSequence;
+  fakeWorldClient.latestPlayerWeaponSequence = latestPlayerWeaponSequence;
 
   return {
     authoritativeSnapshotState: new MetaverseRemoteWorldAuthoritativeSnapshotState(
       {
         authoritativeServerClock: new FakeAuthoritativeServerClock(),
+        readLatestAcceptedSnapshotReceivedAtMs: () =>
+          latestAcceptedSnapshotReceivedAtMs,
         readLatestPlayerInputSequence: () => fakeWorldClient.latestPlayerInputSequence,
+        readLatestPlayerTraversalSampleId: () =>
+          fakeWorldClient.latestPlayerIssuedTraversalIntentSnapshot?.sampleId ?? 0,
         readLatestPlayerTraversalOrientationSequence: () =>
           fakeWorldClient.latestPlayerTraversalOrientationSequence,
         readLocalPlayerId: () => localPlayerId,
@@ -349,6 +364,84 @@ test("MetaverseRemoteWorldAuthoritativeSnapshotState ignores look-sequence drift
     authoritativeSnapshotState.readFreshAckedAuthoritativeLocalPlayerSnapshot(120)
       ?.lastProcessedLookSequence,
     4
+  );
+});
+
+test("MetaverseRemoteWorldAuthoritativeSnapshotState waits for traversal sample-id ack before exposing acked local authority", async () => {
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-sample-ack-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-sample-ack-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let currentWallClockMs = 1_100;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const { authoritativeSnapshotState, fakeWorldClient } =
+    await createAuthoritativeSnapshotHarness({
+      latestPlayerInputSequence: 6,
+      latestPlayerTraversalSampleId: 7,
+      latestPlayerTraversalOrientationSequence: 2,
+      localPlayerId,
+      readWallClockMs: () => currentWallClockMs,
+      worldSnapshots: [
+        createRealtimeWorldSnapshot({
+          currentTick: 10,
+          localLastProcessedInputSequence: 6,
+          localLastProcessedTraversalSampleId: 6,
+          localLastProcessedTraversalOrientationSequence: 2,
+          localPlayerId,
+          localUsername,
+          remotePlayerId,
+          remotePlayerX: 10,
+          remoteUsername,
+          serverTimeMs: 1_000,
+          snapshotSequence: 1,
+          vehicleX: 10,
+          yawRadians: 0.2
+        })
+      ]
+    });
+
+  assert.equal(
+    authoritativeSnapshotState.readFreshAckedAuthoritativeLocalPlayerSnapshot(120),
+    null
+  );
+  assert.equal(
+    authoritativeSnapshotState.consumeFreshAckedAuthoritativeLocalPlayerPose(120),
+    null
+  );
+
+  fakeWorldClient.publishWorldSnapshotBuffer([
+    createRealtimeWorldSnapshot({
+      currentTick: 11,
+      localLastProcessedInputSequence: 6,
+      localLastProcessedTraversalSampleId: 7,
+      localLastProcessedTraversalOrientationSequence: 2,
+      localPlayerId,
+      localUsername,
+      remotePlayerId,
+      remotePlayerX: 12,
+      remoteUsername,
+      serverTimeMs: 1_050,
+      snapshotSequence: 2,
+      vehicleX: 12,
+      yawRadians: 0.2
+    })
+  ]);
+  currentWallClockMs = 1_050;
+
+  assert.equal(
+    authoritativeSnapshotState.readFreshAckedAuthoritativeLocalPlayerSnapshot(120)
+      ?.lastProcessedTraversalSampleId,
+    7
+  );
+  assert.equal(
+    authoritativeSnapshotState.consumeFreshAckedAuthoritativeLocalPlayerPose(120)
+      ?.lastProcessedTraversalSampleId,
+    7
   );
 });
 
@@ -815,5 +908,118 @@ test("MetaverseRemoteWorldAuthoritativeSnapshotState does not redeliver local au
   assert.equal(
     authoritativeSnapshotState.consumeFreshAckedAuthoritativeLocalPlayerPose(120),
     null
+  );
+});
+
+test("MetaverseRemoteWorldAuthoritativeSnapshotState keeps pose reconciliation acked when only weapon acknowledgement lags", async () => {
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let currentWallClockMs = 1_050;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const worldSnapshot = createRealtimeWorldSnapshot({
+    currentTick: 11,
+    localJumpAuthorityState: "grounded",
+    localLastProcessedInputSequence: 6,
+    localLastProcessedTraversalOrientationSequence: 6,
+    localLastProcessedWeaponSequence: 0,
+    localLinearVelocity: {
+      x: 0,
+      y: 0,
+      z: -6
+    },
+    localLocomotionMode: "grounded",
+    localPlayerId,
+    localPlayerY: 0.6,
+    localPlayerZ: 23.7,
+    localUsername,
+    remotePlayerId,
+    remotePlayerX: 12,
+    remoteUsername,
+    serverTimeMs: 1_050,
+    snapshotSequence: 1,
+    vehicleX: 12
+  });
+  const { authoritativeSnapshotState } =
+    await createAuthoritativeSnapshotHarness({
+      latestPlayerInputSequence: 6,
+      latestPlayerTraversalOrientationSequence: 6,
+      latestPlayerWeaponSequence: 3,
+      localPlayerId,
+      readWallClockMs: () => currentWallClockMs,
+      worldSnapshots: [worldSnapshot]
+    });
+
+  assert.equal(
+    authoritativeSnapshotState.consumeFreshAckedAuthoritativeLocalPlayerPose(120)
+      ?.position.z,
+    23.7
+  );
+});
+
+test("MetaverseRemoteWorldAuthoritativeSnapshotState ages acked local authority from local receipt time instead of emitted server time", async () => {
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-local-receive-anchor-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-local-receive-anchor-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  let currentWallClockMs = 1_200;
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const baselineSnapshot = createRealtimeWorldSnapshot({
+    currentTick: 10,
+    localLastProcessedInputSequence: 6,
+    localLastProcessedTraversalSampleId: 6,
+    localLastProcessedTraversalOrientationSequence: 6,
+    localPlayerId,
+    localUsername,
+    remotePlayerId,
+    remotePlayerX: 10,
+    remoteUsername,
+    serverTimeMs: 1_120,
+    snapshotSequence: 1,
+    vehicleX: 10,
+    yawRadians: 0
+  });
+  const receivedSnapshot = createMetaverseRealtimeWorldSnapshot({
+    ...baselineSnapshot,
+    tick: {
+      ...baselineSnapshot.tick,
+      emittedAtServerTimeMs: 1_120,
+      simulationTimeMs: 1_000
+    }
+  });
+  const { authoritativeSnapshotState } =
+    await createAuthoritativeSnapshotHarness({
+      latestAcceptedSnapshotReceivedAtMs: 1_200,
+      latestPlayerInputSequence: 6,
+      latestPlayerTraversalSampleId: 6,
+      latestPlayerTraversalOrientationSequence: 6,
+      localPlayerId,
+      readWallClockMs: () => currentWallClockMs,
+      worldSnapshots: [receivedSnapshot]
+    });
+
+  assert.equal(
+    authoritativeSnapshotState.readFreshAckedAuthoritativeLocalPlayerSample(120)
+      ?.authoritativeSnapshotAgeMs,
+    0
+  );
+
+  currentWallClockMs = 1_260;
+
+  assert.equal(
+    authoritativeSnapshotState.readFreshAckedAuthoritativeLocalPlayerSample(120)
+      ?.authoritativeSnapshotAgeMs,
+    60
   );
 });

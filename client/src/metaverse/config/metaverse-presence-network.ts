@@ -1,5 +1,4 @@
 import {
-  resolveMetaversePlayerTeamId,
   createMetaversePlayerId,
   createMilliseconds,
   createUsername,
@@ -307,7 +306,6 @@ export function createMetaverseLocalPlayerIdentity(
   return Object.freeze({
     characterId: normalizedCharacterId,
     playerId,
-    teamId: resolveMetaversePlayerTeamId(playerId),
     username: resolvedUsername
   });
 }

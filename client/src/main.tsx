@@ -1,4 +1,3 @@
-import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { MetaverseShell } from "./app/metaverse-shell";
@@ -10,8 +9,4 @@ if (rootElement === null) {
   throw new Error("WebGPU Metaverse root element was not found.");
 }
 
-createRoot(rootElement).render(
-  <StrictMode>
-    <MetaverseShell />
-  </StrictMode>
-);
+createRoot(rootElement).render(<MetaverseShell />);

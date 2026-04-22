@@ -166,15 +166,7 @@ export const metaverseLocalAuthorityReconciliationConfig = Object.freeze({
   mountedOccupancyMismatchHoldMs: 50
 });
 
-export interface MetaverseWorldClientFactoryDependencies {
-  readonly readEstimatedServerTimeMs?:
-    | ((localWallClockMs: number) => number)
-    | undefined;
-}
-
-export function createMetaverseWorldClient(
-  dependencies: MetaverseWorldClientFactoryDependencies = {}
-): MetaverseWorldClient {
+export function createMetaverseWorldClient(): MetaverseWorldClient {
   const preferredTransportMode = resolveMetaverseRealtimeTransportMode();
   const localdevWebTransportBootStatus = resolveLocaldevWebTransportBootStatus();
   const localdevWebTransportBootError = resolveLocaldevWebTransportBootError();
@@ -241,11 +233,6 @@ export function createMetaverseWorldClient(
       ? {}
       : {
       latestWinsDatagramTransport
-        }),
-    ...(dependencies.readEstimatedServerTimeMs === undefined
-      ? {}
-      : {
-          readEstimatedServerTimeMs: dependencies.readEstimatedServerTimeMs
         }),
     ...(snapshotStreamTransport === null
       ? {}

@@ -29,8 +29,8 @@ export interface MetaverseAuthoritativePlayerPoseRuntimeState<
   angularVelocityRadiansPerSecond: number;
   lastGroundedBodySnapshot: MetaverseAuthoritativeLastGroundedBodySnapshot;
   lastPoseAtMs: number | null;
-  lastProcessedInputSequence: number;
   lastProcessedLookSequence: number;
+  lastProcessedTraversalSequence: number;
   lastSeenAtMs: number;
   linearVelocityX: number;
   linearVelocityY: number;
@@ -84,10 +84,7 @@ interface MetaverseAuthoritativePlayerPoseAuthorityDependencies<
   readonly mountedOccupancyAuthority:
     MetaverseAuthoritativeMountedOccupancyResolver<MountedOccupancy>;
   readonly playersById: Map<MetaversePlayerId, PlayerRuntime>;
-  readonly resolveJoinTeamId: (
-    playerId: MetaversePlayerId,
-    requestedTeamId: MetaversePlayerTeamId
-  ) => MetaversePlayerTeamId;
+  readonly resolveJoinTeamId: () => MetaversePlayerTeamId;
   readonly resolveAuthoritativeSurfaceColliders:
     () => readonly MetaverseAuthoritativeSurfaceColliderSnapshot[];
   readonly resolveJoinPose: (
@@ -185,8 +182,7 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
   acceptJoinCommand(command: MetaverseJoinPresenceCommand, nowMs: number): void {
     const currentPlayer = this.#dependencies.playersById.get(command.playerId);
     const resolvedTeamId =
-      currentPlayer?.teamId ??
-      this.#dependencies.resolveJoinTeamId(command.playerId, command.teamId);
+      currentPlayer?.teamId ?? this.#dependencies.resolveJoinTeamId();
     const nextPose =
       currentPlayer === undefined
         ? this.#dependencies.resolveJoinPose(
@@ -311,7 +307,7 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
         : {}),
         positionYMeters: nextPose.position.y
       });
-    playerRuntime.lastProcessedInputSequence = nextPose.stateSequence;
+    playerRuntime.lastProcessedTraversalSequence = nextPose.stateSequence;
     playerRuntime.locomotionMode =
       acceptedMountedOccupancy === null &&
       requestedMountedEnvironmentAssetId !== null

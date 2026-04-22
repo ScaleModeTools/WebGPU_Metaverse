@@ -17,9 +17,8 @@ import { MetaverseWorldPlayerTraversalIntentSync } from "./metaverse-world-playe
 import { MetaverseWorldPlayerWeaponStateSync } from "./metaverse-world-player-weapon-state-sync";
 
 type LocalPlayerCommandAckSnapshot = {
-  readonly lastProcessedInputSequence: number;
   readonly lastProcessedLookSequence: number;
-  readonly lastProcessedTraversalOrientationSequence: number;
+  readonly lastProcessedTraversalSequence: number;
   readonly lastProcessedWeaponSequence: number;
   readonly traversalAuthority: MetaverseRealtimePlayerTraversalAuthoritySnapshot;
 };
@@ -34,7 +33,6 @@ interface MetaverseWorldPlayerIntentSyncDependencies {
     fallbackMessage: string
   ) => void;
   readonly clearTimeout: typeof globalThis.clearTimeout;
-  readonly readEstimatedServerTimeMs?: ((localWallClockMs: number) => number) | undefined;
   readonly readLatestLocalPlayerSnapshot: () => LocalPlayerCommandAckSnapshot | null;
   readonly readPlayerId: () => MetaversePlayerId | null;
   readonly readWallClockMs: () => number;
@@ -81,10 +79,8 @@ export class MetaverseWorldPlayerIntentSync {
       acceptWorldEvent: dependencies.acceptWorldEvent,
       applyWorldAccessError: dependencies.applyWorldAccessError,
       clearTimeout: dependencies.clearTimeout,
-      readEstimatedServerTimeMs: dependencies.readEstimatedServerTimeMs,
       readLatestLocalPlayerSnapshot: dependencies.readLatestLocalPlayerSnapshot,
       readPlayerId: dependencies.readPlayerId,
-      readWallClockMs: dependencies.readWallClockMs,
       readStatusSnapshot: dependencies.readStatusSnapshot,
       resolveCommandDelayMs: dependencies.resolveCommandDelayMs,
       sendPlayerTraversalIntentCommand:
@@ -93,8 +89,8 @@ export class MetaverseWorldPlayerIntentSync {
     });
   }
 
-  get latestPlayerInputSequence(): number {
-    return this.#playerTraversalIntentSync.latestPlayerInputSequence;
+  get latestPlayerTraversalSequence(): number {
+    return this.#playerTraversalIntentSync.latestPlayerTraversalSequence;
   }
 
   get latestPlayerLookSequence(): number {
@@ -111,10 +107,6 @@ export class MetaverseWorldPlayerIntentSync {
     return createMetaversePlayerIssuedTraversalIntentSnapshot(
       this.#playerTraversalIntentSync.latestPlayerTraversalIntentSnapshot
     );
-  }
-
-  get latestPlayerTraversalOrientationSequence(): number {
-    return this.#playerTraversalIntentSync.latestPlayerTraversalOrientationSequence;
   }
 
   previewPlayerTraversalIntent(

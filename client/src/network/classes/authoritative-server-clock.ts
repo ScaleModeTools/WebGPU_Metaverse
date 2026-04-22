@@ -55,10 +55,14 @@ export class AuthoritativeServerClock {
       return;
     }
 
+    if (observedClockOffsetMs <= this.#clockOffsetMs) {
+      return;
+    }
+
     const correctionStepMs = clamp(
       (observedClockOffsetMs - this.#clockOffsetMs) *
         normalizeFiniteNumber(this.#config.clockOffsetCorrectionAlpha, 0),
-      -Math.max(0, normalizeFiniteNumber(this.#config.clockOffsetMaxStepMs, 0)),
+      0,
       Math.max(0, normalizeFiniteNumber(this.#config.clockOffsetMaxStepMs, 0))
     );
 

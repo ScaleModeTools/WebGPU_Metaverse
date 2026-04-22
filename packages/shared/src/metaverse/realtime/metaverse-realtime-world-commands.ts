@@ -101,30 +101,16 @@ export interface MetaversePlayerTraversalIntentSnapshot {
   readonly actionIntent: MetaversePlayerTraversalActionIntentSnapshot;
   readonly bodyControl: MetaversePlayerTraversalBodyControlSnapshot;
   readonly facing: MetaversePlayerTraversalFacingSnapshot;
-  readonly inputSequence: number;
   readonly locomotionMode: MetaversePlayerTraversalIntentLocomotionModeId;
-  readonly orientationSequence: number;
-  readonly sampleId: number;
+  readonly sequence: number;
 }
 
 export interface MetaversePlayerTraversalIntentSnapshotInput {
   readonly actionIntent?: MetaversePlayerTraversalActionIntentSnapshotInput;
   readonly bodyControl?: MetaversePlayerTraversalBodyControlSnapshotInput;
   readonly facing?: MetaversePlayerTraversalFacingSnapshotInput;
-  readonly inputSequence?: number;
   readonly locomotionMode?: MetaversePlayerTraversalIntentLocomotionModeId;
-  readonly orientationSequence?: number;
-  readonly sampleId?: number;
-}
-
-export interface MetaversePlayerTraversalRecentIntentHistoryEntry {
-  readonly durationMs: number;
-  readonly intent: MetaversePlayerTraversalIntentSnapshot;
-}
-
-export interface MetaversePlayerTraversalRecentIntentHistoryEntryInput {
-  readonly durationMs?: number;
-  readonly intent: MetaversePlayerTraversalIntentSnapshotInput;
+  readonly sequence?: number;
 }
 
 export interface MetaverseGameplayTraversalIntentInput {
@@ -188,22 +174,20 @@ export interface MetaverseSyncMountedOccupancyCommandInput {
 }
 
 export interface MetaverseSyncPlayerTraversalIntentCommand {
-  readonly estimatedServerTimeMs?: number | undefined;
   readonly intent: MetaversePlayerTraversalIntentSnapshot;
-  readonly playerId: MetaversePlayerId;
-  readonly recentIntentHistory?:
-    | readonly MetaversePlayerTraversalRecentIntentHistoryEntry[]
+  readonly pendingIntentSamples?:
+    | readonly MetaversePlayerTraversalIntentSnapshot[]
     | undefined;
+  readonly playerId: MetaversePlayerId;
   readonly type: "sync-player-traversal-intent";
 }
 
 export interface MetaverseSyncPlayerTraversalIntentCommandInput {
-  readonly estimatedServerTimeMs?: number | undefined;
   readonly intent: MetaversePlayerTraversalIntentSnapshotInput;
-  readonly playerId: MetaversePlayerId;
-  readonly recentIntentHistory?:
-    | readonly MetaversePlayerTraversalRecentIntentHistoryEntryInput[]
+  readonly pendingIntentSamples?:
+    | readonly MetaversePlayerTraversalIntentSnapshotInput[]
     | undefined;
+  readonly playerId: MetaversePlayerId;
 }
 
 export interface MetaverseSyncPlayerLookIntentCommand {
@@ -337,59 +321,34 @@ function freezeDriverVehicleControlIntentSnapshot(
 function freezePlayerTraversalIntentSnapshot(
   input: MetaversePlayerTraversalIntentSnapshotInput
 ): MetaversePlayerTraversalIntentSnapshot {
-  const inputSequence = normalizeFiniteNonNegativeInteger(input.inputSequence ?? 0);
-  const orientationSequence = normalizeFiniteNonNegativeInteger(
-    input.orientationSequence ?? 0
-  );
-  const sampleId = normalizeFiniteNonNegativeInteger(input.sampleId ?? 0);
+  const sequence = normalizeFiniteNonNegativeInteger(input.sequence ?? 0);
 
   return Object.freeze({
     actionIntent: createMetaverseTraversalActionIntentSnapshot(
       input.actionIntent,
-      inputSequence
+      sequence
     ),
     bodyControl: createMetaverseTraversalBodyControlSnapshot(input.bodyControl),
     facing: createMetaverseTraversalFacingSnapshot(input.facing),
-    inputSequence,
     locomotionMode: resolveTraversalIntentLocomotionMode(input.locomotionMode),
-    orientationSequence,
-    sampleId
+    sequence
   });
 }
 
-function freezePlayerTraversalRecentIntentHistoryEntry(
-  input: MetaversePlayerTraversalRecentIntentHistoryEntryInput
-): MetaversePlayerTraversalRecentIntentHistoryEntry | null {
-  const durationMs = normalizeFiniteNonNegativeInteger(input.durationMs ?? 0);
-
-  if (durationMs <= 0) {
-    return null;
-  }
-
-  return Object.freeze({
-    durationMs,
-    intent: freezePlayerTraversalIntentSnapshot(input.intent)
-  });
-}
-
-function freezePlayerTraversalRecentIntentHistory(
+function freezePlayerTraversalPendingIntentSamples(
   input:
-    | readonly MetaversePlayerTraversalRecentIntentHistoryEntryInput[]
+    | readonly MetaversePlayerTraversalIntentSnapshotInput[]
     | undefined
-): readonly MetaversePlayerTraversalRecentIntentHistoryEntry[] | undefined {
+): readonly MetaversePlayerTraversalIntentSnapshot[] | undefined {
   if (input === undefined || input.length === 0) {
     return undefined;
   }
 
-  const normalizedHistory = input
-    .map((entry) => freezePlayerTraversalRecentIntentHistoryEntry(entry))
-    .filter(
-      (
-        entry
-      ): entry is MetaversePlayerTraversalRecentIntentHistoryEntry => entry !== null
-    );
+  const normalizedSamples = input.map((entry) =>
+    freezePlayerTraversalIntentSnapshot(entry)
+  );
 
-  return normalizedHistory.length > 0 ? Object.freeze(normalizedHistory) : undefined;
+  return normalizedSamples.length > 0 ? Object.freeze(normalizedSamples) : undefined;
 }
 
 export function createMetaverseDriverVehicleControlIntentSnapshot(
@@ -433,16 +392,12 @@ export function createMetaverseSyncMountedOccupancyCommand(
 export function createMetaverseSyncPlayerTraversalIntentCommand(
   input: MetaverseSyncPlayerTraversalIntentCommandInput
 ): MetaverseSyncPlayerTraversalIntentCommand {
-  const recentIntentHistory = freezePlayerTraversalRecentIntentHistory(
-    input.recentIntentHistory
-  );
-  const estimatedServerTimeMs = normalizeFiniteNonNegativeInteger(
-    input.estimatedServerTimeMs ?? 0
+  const pendingIntentSamples = freezePlayerTraversalPendingIntentSamples(
+    input.pendingIntentSamples
   );
 
   return Object.freeze({
-    ...(estimatedServerTimeMs > 0 ? { estimatedServerTimeMs } : {}),
-    ...(recentIntentHistory === undefined ? {} : { recentIntentHistory }),
+    ...(pendingIntentSamples === undefined ? {} : { pendingIntentSamples }),
     intent: freezePlayerTraversalIntentSnapshot(input.intent),
     playerId: input.playerId,
     type: "sync-player-traversal-intent"

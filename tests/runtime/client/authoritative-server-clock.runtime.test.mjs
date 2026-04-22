@@ -55,3 +55,24 @@ test("AuthoritativeServerClock resets its offset state explicitly", async () => 
   assert.equal(clock.clockOffsetEstimateMs, null);
   assert.equal(clock.readEstimatedServerTimeMs(4_920), 4_920);
 });
+
+test("AuthoritativeServerClock preserves the best observed offset instead of drifting backward on delayed samples", async () => {
+  const { AuthoritativeServerClock } = await clientLoader.load(
+    "/src/network/index.ts"
+  );
+  const clock = new AuthoritativeServerClock({
+    clockOffsetCorrectionAlpha: 1,
+    clockOffsetMaxStepMs: 1_000
+  });
+
+  clock.observeServerTime(1_000, 900);
+  assert.equal(clock.clockOffsetEstimateMs, 100);
+
+  clock.observeServerTime(1_050, 970);
+  assert.equal(clock.clockOffsetEstimateMs, 100);
+  assert.equal(clock.readEstimatedServerTimeMs(970), 1_070);
+
+  clock.observeServerTime(1_100, 995);
+  assert.equal(clock.clockOffsetEstimateMs, 105);
+  assert.equal(clock.readEstimatedServerTimeMs(995), 1_100);
+});

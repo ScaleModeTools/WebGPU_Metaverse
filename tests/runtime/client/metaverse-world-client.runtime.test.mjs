@@ -3,6 +3,7 @@ import test, { after, before } from "node:test";
 
 import {
   createMetaverseSyncPlayerLookIntentCommand,
+  createMetaverseRealtimeWorldEvent,
   createMetaversePlayerId,
   createMilliseconds
 } from "@webgpu-metaverse/shared";
@@ -830,7 +831,113 @@ test("MetaverseWorldClient preserves a fast jump tap as an acknowledged edge thr
   assert.equal(sentDatagrams[0]?.intent.actionIntent.kind, "jump");
   assert.equal(sentDatagrams[0]?.intent.actionIntent.pressed, false);
   assert.equal(sentDatagrams[0]?.intent.actionIntent.sequence, 1);
-  assert.equal(typeof sentDatagrams[0]?.estimatedServerTimeMs, "number");
+  assert.equal(sentDatagrams[0]?.estimatedServerTimeMs, undefined);
+});
+
+test("MetaverseWorldClient does not leak estimated server time into traversal datagrams", async () => {
+  const { MetaverseWorldClient } = await clientLoader.load("/src/network/index.ts");
+  const playerId = createMetaversePlayerId("sim-time-traversal-stamp-1");
+
+  assert.notEqual(playerId, null);
+
+  const scheduler = createManualTimerScheduler();
+  const sentDatagrams = [];
+  let wallClockMs = 20_000;
+  const initialWorldEvent = createMetaverseRealtimeWorldEvent({
+    world: {
+      observerPlayer: {
+        lastProcessedInputSequence: 0,
+        lastProcessedLookSequence: 0,
+        lastProcessedTraversalOrientationSequence: 0,
+        lastProcessedTraversalSampleId: 0,
+        lastProcessedWeaponSequence: 0,
+        playerId
+      },
+      players: [
+        {
+          characterId: "mesh2motion-humanoid-v1",
+          groundedBody: {
+            linearVelocity: {
+              x: 0,
+              y: 0,
+              z: 0
+            },
+            position: {
+              x: 0,
+              y: 1.62,
+              z: 24
+            },
+            yawRadians: 0
+          },
+          locomotionMode: "grounded",
+          playerId,
+          stateSequence: 1,
+          username: "Harbor Pilot"
+        }
+      ],
+      snapshotSequence: 1,
+      tick: {
+        currentTick: 10,
+        emittedAtServerTimeMs: 10_100,
+        simulationTimeMs: 10_000,
+        tickIntervalMs: 50
+      },
+      vehicles: []
+    }
+  });
+  const client = new MetaverseWorldClient(
+    {
+      defaultCommandIntervalMs: createMilliseconds(50),
+      defaultPollIntervalMs: createMilliseconds(50),
+      maxBufferedSnapshots: 2,
+      serverOrigin: "http://127.0.0.1:3210",
+      worldCommandPath: "/metaverse/world/commands",
+      worldPath: "/metaverse/world"
+    },
+    {
+      latestWinsDatagramTransport: {
+        async sendDriverVehicleControlDatagram() {},
+        async sendPlayerTraversalIntentDatagram(command) {
+          sentDatagrams.push(command);
+        }
+      },
+      readWallClockMs: () => wallClockMs,
+      snapshotStreamTransport: createPassiveSnapshotStreamTransport(
+        initialWorldEvent
+      ),
+      transport: {
+        async pollWorldSnapshot() {
+          return initialWorldEvent;
+        },
+        async sendCommand() {
+          return initialWorldEvent;
+        }
+      },
+      clearTimeout: scheduler.clearTimeout,
+      setTimeout: scheduler.setTimeout
+    }
+  );
+
+  await client.ensureConnected(playerId);
+
+  wallClockMs = 20_040;
+  client.syncPlayerTraversalIntent({
+    intent: createTraversalIntentInput({
+      boost: false,
+      jump: false,
+      locomotionMode: "grounded",
+      moveAxis: 1,
+      strafeAxis: 0,
+      yawAxis: 0
+    }),
+    playerId
+  });
+
+  scheduler.runNext(0);
+  await flushAsyncWork();
+
+  assert.equal(sentDatagrams.length, 1);
+  assert.equal(sentDatagrams[0]?.estimatedServerTimeMs, undefined);
 });
 
 test("MetaverseWorldClient falls back to reliable commands after a traversal intent datagram send failure and recovers datagram sends after the cooldown", async () => {

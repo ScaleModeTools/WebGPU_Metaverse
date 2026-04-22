@@ -10,7 +10,6 @@ import {
 } from "@webgpu-metaverse/shared/metaverse/world";
 import {
   createMetaversePresencePoseSnapshot,
-  resolveMetaversePlayerTeamId,
   shouldTreatMetaverseMountedOccupancyAsTraversalMounted,
   shouldTreatMetaversePlayerPoseAsTraversalBlocker,
   type MetaversePlayerId,
@@ -549,8 +548,7 @@ export class MetaverseAuthoritativeWorldRuntime
       },
       mountedOccupancyAuthority: this.#mountedOccupancyAuthority,
       playersById: this.#playersById,
-      resolveJoinTeamId: (playerId, requestedTeamId) =>
-        this.#resolveJoinTeamId(playerId, requestedTeamId),
+      resolveJoinTeamId: () => this.#resolveJoinTeamId(),
       resolveAuthoritativeSurfaceColliders: () =>
         this.#surfaceState.resolveAuthoritativeSurfaceColliders(),
       resolveJoinPose: (playerId, teamId, nextPose) =>
@@ -617,6 +615,7 @@ export class MetaverseAuthoritativeWorldRuntime
         playerTraversalIntentsByPlayerId: this.#playerTraversalIntentsByPlayerId,
         playersById: this.#playersById,
         readLastAdvancedAtMs: () => this.#tickState.lastAdvancedAtMs,
+        readTickIntervalMs: () => Number(this.#config.tickIntervalMs),
         resolveConstrainedPlayerLookIntent: (
           playerRuntime,
           pitchRadians,
@@ -884,14 +883,7 @@ export class MetaverseAuthoritativeWorldRuntime
     });
   }
 
-  #resolveJoinTeamId(
-    playerId: MetaversePlayerId,
-    requestedTeamId: MetaversePlayerTeamId
-  ): MetaversePlayerTeamId {
-    if (requestedTeamId !== resolveMetaversePlayerTeamId(playerId)) {
-      return requestedTeamId;
-    }
-
+  #resolveJoinTeamId(): MetaversePlayerTeamId {
     let bluePlayerCount = 0;
     let redPlayerCount = 0;
 
@@ -904,15 +896,7 @@ export class MetaverseAuthoritativeWorldRuntime
       redPlayerCount += 1;
     }
 
-    if (requestedTeamId === "blue" && bluePlayerCount > redPlayerCount) {
-      return "red";
-    }
-
-    if (requestedTeamId === "red" && redPlayerCount > bluePlayerCount) {
-      return "blue";
-    }
-
-    return requestedTeamId;
+    return redPlayerCount <= bluePlayerCount ? "red" : "blue";
   }
 
   #createPlayerGroundedTraversalColliderPredicate(

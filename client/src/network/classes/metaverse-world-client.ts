@@ -46,9 +46,6 @@ interface MetaverseWorldClientDependencies {
   readonly clearTimeout?: typeof globalThis.clearTimeout;
   readonly fetch?: typeof globalThis.fetch;
   readonly latestWinsDatagramTransport?: MetaverseRealtimeWorldLatestWinsDatagramTransport;
-  readonly readEstimatedServerTimeMs?:
-    | ((localWallClockMs: number) => number)
-    | undefined;
   readonly readWallClockMs?: () => number;
   readonly resolveDriverVehicleControlDatagramTransportStatusSnapshot?:
     | ((
@@ -267,7 +264,6 @@ export class MetaverseWorldClient {
         this.#applyWorldAccessError(error, fallbackMessage);
       },
       clearTimeout: this.#clearTimeout,
-      readEstimatedServerTimeMs: dependencies.readEstimatedServerTimeMs,
       readLatestLocalPlayerSnapshot: () =>
         this.#snapshotState.readLatestLocalPlayerSnapshot(
           this.#connectionLifecycle.playerId
@@ -344,8 +340,12 @@ export class MetaverseWorldClient {
     return this.#worldSnapshotBuffer;
   }
 
-  get latestPlayerInputSequence(): number {
-    return this.#playerIntentSync.latestPlayerInputSequence;
+  get latestAcceptedSnapshotReceivedAtMs(): number | null {
+    return this.#snapshotState.latestAcceptedSnapshotReceivedAtMs;
+  }
+
+  get latestPlayerTraversalSequence(): number {
+    return this.#playerIntentSync.latestPlayerTraversalSequence;
   }
 
   get latestPlayerLookSequence(): number {
@@ -354,10 +354,6 @@ export class MetaverseWorldClient {
 
   get latestPlayerWeaponSequence(): number {
     return this.#playerIntentSync.latestPlayerWeaponSequence;
-  }
-
-  get latestPlayerTraversalOrientationSequence(): number {
-    return this.#playerIntentSync.latestPlayerTraversalOrientationSequence;
   }
 
   get latestPlayerIssuedTraversalIntentSnapshot():

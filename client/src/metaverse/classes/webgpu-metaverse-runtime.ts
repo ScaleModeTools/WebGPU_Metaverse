@@ -87,13 +87,7 @@ interface MetaverseRuntimeDependencies {
     | null;
   readonly createMetaversePresenceClient?: (() => MetaversePresenceClientRuntime) | null;
   readonly createMetaverseWorldClient?:
-    | ((
-        dependencies?: {
-          readonly readEstimatedServerTimeMs?:
-            | ((localWallClockMs: number) => number)
-            | undefined;
-        }
-      ) => MetaverseWorldClientRuntime)
+    | (() => MetaverseWorldClientRuntime)
     | null;
   readonly createRenderer?: (
     canvas: HTMLCanvasElement
@@ -152,6 +146,10 @@ function readNowMs(): number {
 }
 
 export class WebGpuMetaverseRuntime {
+  readonly #authoritativeWorldSync: Pick<
+    MetaverseAuthoritativeWorldSync,
+    "armLocalSpawnBootstrap"
+  >;
   readonly #bootLifecycle: MetaverseRuntimeBootLifecycle;
   readonly #flightInputRuntime = new MetaverseFlightInputRuntime();
   readonly #hudPublisher: MetaverseRuntimeHudPublisher;
@@ -161,6 +159,7 @@ export class WebGpuMetaverseRuntime {
   readonly #weaponPresentationRuntime: MetaverseWeaponPresentationRuntime;
 
   #controlMode: MetaverseControlModeId = defaultMetaverseControlMode;
+  #respawnControlLocked = false;
 
   constructor(
     config: MetaverseRuntimeConfig = metaverseRuntimeConfig,
@@ -311,6 +310,7 @@ export class WebGpuMetaverseRuntime {
           )
       }
     });
+    this.#authoritativeWorldSync = authoritativeWorldSync;
     const cameraPhaseState = new MetaverseRuntimeCameraPhaseState({
       cameraConfig: config.camera,
       config: runtimeCameraPhaseConfig,
@@ -453,6 +453,11 @@ export class WebGpuMetaverseRuntime {
   }
 
   setRespawnControlLocked(locked: boolean): void {
+    if (this.#respawnControlLocked && !locked) {
+      this.#authoritativeWorldSync.armLocalSpawnBootstrap();
+    }
+
+    this.#respawnControlLocked = locked;
     this.#bootLifecycle.setRespawnControlLocked(locked);
     this.#renderSession.syncOrPublishRuntimeState(true);
   }

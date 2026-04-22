@@ -141,28 +141,25 @@ export function MetaverseStageScreen({
 }: MetaverseStageScreenProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const overlayRef = useRef<HTMLDivElement | null>(null);
+  const localCharacterId =
+    characterProofConfig?.characterId ?? metaverseActiveFullBodyCharacterAssetId;
+  const localPlayerIdentity = useMemo(
+    () => createMetaverseLocalPlayerIdentity(username, localCharacterId),
+    [localCharacterId, username]
+  );
   const metaverseRuntime = useMemo(
     () => {
-      const localPlayerIdentity = createMetaverseLocalPlayerIdentity(
-        username,
-        characterProofConfig?.characterId ?? metaverseActiveFullBodyCharacterAssetId
-      );
-
       return new WebGpuMetaverseRuntime(
-        createMetaverseRuntimeConfig(
-          bundleId,
-          localPlayerIdentity.playerId,
-          localPlayerIdentity.teamId ?? null
-        ),
+        createMetaverseRuntimeConfig(bundleId, localPlayerIdentity.playerId, null),
         {
-        attachmentProofConfig,
-        characterProofConfig,
-        createMetaversePresenceClient,
-        createMetaverseWorldClient,
-        ensureAuthoritativeWorldBundleSynchronized: () =>
-          registerMetaverseWorldBundleOnServer(bundleId),
-        environmentProofConfig,
-        localPlayerIdentity
+          attachmentProofConfig,
+          characterProofConfig,
+          createMetaversePresenceClient,
+          createMetaverseWorldClient,
+          ensureAuthoritativeWorldBundleSynchronized: () =>
+            registerMetaverseWorldBundleOnServer(bundleId),
+          environmentProofConfig,
+          localPlayerIdentity
         }
       );
     },
@@ -171,7 +168,7 @@ export function MetaverseStageScreen({
       bundleId,
       characterProofConfig,
       environmentProofConfig,
-      username
+      localPlayerIdentity
     ]
   );
   const [hudViewport, setHudViewport] = useState({

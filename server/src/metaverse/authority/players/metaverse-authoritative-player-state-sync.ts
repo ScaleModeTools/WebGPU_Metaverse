@@ -100,10 +100,8 @@ export interface MetaverseAuthoritativePlayerStateSyncRuntimeState<
   readonly groundedBodyRuntime: GroundedBodyRuntime;
   lastGroundedBodySnapshot: MetaverseAuthoritativeLastGroundedBodySnapshot;
   lastPoseAtMs: number | null;
-  lastProcessedInputSequence: number;
   lastProcessedLookSequence: number;
-  lastProcessedTraversalSampleId: number;
-  lastProcessedTraversalOrientationSequence: number;
+  lastProcessedTraversalSequence: number;
   lastProcessedWeaponSequence: number;
   lastSeenAtMs: number;
   linearVelocityX: number;
@@ -258,10 +256,8 @@ export class MetaverseAuthoritativePlayerStateSync<
         captureMetaverseAuthoritativeLastGroundedBodySnapshot(
           groundedBodyRuntime.snapshot
         ),
-      lastProcessedInputSequence: 0,
       lastProcessedLookSequence: 0,
-      lastProcessedTraversalSampleId: 0,
-      lastProcessedTraversalOrientationSequence: 0,
+      lastProcessedTraversalSequence: 0,
       lastProcessedWeaponSequence: 0,
       lastPoseAtMs: null,
       lastSeenAtMs: nowMs,

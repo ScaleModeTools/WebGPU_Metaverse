@@ -81,11 +81,39 @@ export interface PredictedLocalReconciliationSampleMatch {
   readonly sample: PredictedLocalReconciliationSample;
   readonly selectionReason:
     | "exact-traversal-sample-id"
-    | "exact-authoritative-tick"
     | "latest-at-or-before-authoritative-time"
     | "earliest-after-authoritative-time"
     | "latest-matching-sample";
   readonly timeDeltaMs: number | null;
+}
+
+interface PendingTraversalInputSegment {
+  deltaSeconds: number;
+  movementInput: MetaverseFlightInputSnapshot;
+  preferredLookYawRadians: number;
+  traversalCameraPitchRadians: number;
+}
+
+function pendingTraversalInputSegmentsMatch(
+  leftSegment: PendingTraversalInputSegment | null,
+  rightSegment: PendingTraversalInputSegment
+): boolean {
+  if (leftSegment === null) {
+    return false;
+  }
+
+  return (
+    leftSegment.movementInput.boost === rightSegment.movementInput.boost &&
+    leftSegment.movementInput.jump === rightSegment.movementInput.jump &&
+    leftSegment.movementInput.moveAxis === rightSegment.movementInput.moveAxis &&
+    leftSegment.movementInput.strafeAxis ===
+      rightSegment.movementInput.strafeAxis &&
+    leftSegment.movementInput.yawAxis === rightSegment.movementInput.yawAxis &&
+    leftSegment.preferredLookYawRadians ===
+      rightSegment.preferredLookYawRadians &&
+    leftSegment.traversalCameraPitchRadians ===
+      rightSegment.traversalCameraPitchRadians
+  );
 }
 
 export function resolvePredictedLocalReconciliationSampleFromMatchingHistory(
@@ -106,33 +134,31 @@ export function resolvePredictedLocalReconciliationSampleFromMatchingHistory(
     return null;
   }
 
-  if (
+  const samplesMatchingTraversalSampleId =
     authoritativeTraversalSampleId !== null &&
     Number.isFinite(authoritativeTraversalSampleId) &&
     authoritativeTraversalSampleId > 0
+      ? matchingSamplesNewestToOldest.filter(
+          (sample) => sample.traversalSampleId === authoritativeTraversalSampleId
+        )
+      : null;
+
+  if (
+    samplesMatchingTraversalSampleId !== null &&
+    samplesMatchingTraversalSampleId.length === 1
   ) {
-    for (const sample of matchingSamplesNewestToOldest) {
-      if (sample.traversalSampleId === authoritativeTraversalSampleId) {
-        return Object.freeze({
-          sample,
-          selectionReason: "exact-traversal-sample-id",
-          timeDeltaMs: null
-        });
-      }
-    }
+    return Object.freeze({
+      sample: samplesMatchingTraversalSampleId[0],
+      selectionReason: "exact-traversal-sample-id",
+      timeDeltaMs: null
+    });
   }
 
-  if (authoritativeTick !== null && Number.isFinite(authoritativeTick)) {
-    for (const sample of matchingSamplesNewestToOldest) {
-      if (sample.localPredictionTick === authoritativeTick) {
-        return Object.freeze({
-          sample,
-          selectionReason: "exact-authoritative-tick",
-          timeDeltaMs: null
-        });
-      }
-    }
-  }
+  const candidateSamplesNewestToOldest =
+    samplesMatchingTraversalSampleId !== null &&
+    samplesMatchingTraversalSampleId.length > 0
+      ? samplesMatchingTraversalSampleId
+      : matchingSamplesNewestToOldest;
 
   const targetWallClockMs =
     receivedAtWallClockMs !== null &&
@@ -143,7 +169,7 @@ export function resolvePredictedLocalReconciliationSampleFromMatchingHistory(
       : null;
 
   if (targetWallClockMs === null) {
-    const sample = matchingSamplesNewestToOldest[0] ?? null;
+    const sample = candidateSamplesNewestToOldest[0] ?? null;
 
     return sample === null
       ? null
@@ -161,7 +187,7 @@ export function resolvePredictedLocalReconciliationSampleFromMatchingHistory(
     null;
   let earliestSampleAfterTargetMs = Number.POSITIVE_INFINITY;
 
-  for (const sample of matchingSamplesNewestToOldest) {
+  for (const sample of candidateSamplesNewestToOldest) {
     if (sample.localWallClockMs <= targetWallClockMs) {
       if (sample.localWallClockMs > latestSampleAtOrBeforeTargetMs) {
         latestSampleAtOrBeforeTarget = sample;
@@ -193,7 +219,7 @@ export function resolvePredictedLocalReconciliationSampleFromMatchingHistory(
     });
   }
 
-  const sample = matchingSamplesNewestToOldest[0] ?? null;
+  const sample = candidateSamplesNewestToOldest[0] ?? null;
 
   return sample === null
     ? null
@@ -212,6 +238,8 @@ export class MetaverseUnmountedTraversalMotionState {
   readonly #predictedReconciliationSamples:
     PredictedLocalReconciliationSample[] = [];
   #predictedReconciliationSampleWriteIndex = 0;
+  readonly #pendingGroundedTraversalInputSegments:
+    PendingTraversalInputSegment[] = [];
   #swimLocomotionAccumulatorSeconds = 0;
   #traversalCameraPitchRadians: number;
   #unmountedLookYawRadians: number;
@@ -245,6 +273,7 @@ export class MetaverseUnmountedTraversalMotionState {
     this.#predictedReconciliationSampleCount = 0;
     this.#predictedReconciliationSamples.length = 0;
     this.#predictedReconciliationSampleWriteIndex = 0;
+    this.#pendingGroundedTraversalInputSegments.length = 0;
     this.#swimLocomotionAccumulatorSeconds = 0;
     this.#traversalCameraPitchRadians =
       this.#dependencies.config.camera.initialPitchRadians;
@@ -256,6 +285,7 @@ export class MetaverseUnmountedTraversalMotionState {
     traversalState: MetaverseUnmountedTraversalStateSnapshot
   ): MetaverseUnmountedTraversalStateSnapshot {
     this.#groundedLocomotionAccumulatorSeconds = 0;
+    this.#pendingGroundedTraversalInputSegments.length = 0;
 
     return clearMetaverseUnmountedTraversalPendingActions(traversalState);
   }
@@ -369,16 +399,12 @@ export class MetaverseUnmountedTraversalMotionState {
   readPredictedLocalReconciliationSampleMatch({
     authoritativeSnapshotAgeMs,
     authoritativeTick,
-    lastProcessedInputSequence,
-    lastProcessedTraversalSampleId,
-    lastProcessedTraversalOrientationSequence,
+    lastProcessedTraversalSequence,
     receivedAtWallClockMs
   }: {
     readonly authoritativeSnapshotAgeMs: number | null;
     readonly authoritativeTick: number | null;
-    readonly lastProcessedInputSequence: number;
-    readonly lastProcessedTraversalSampleId: number;
-    readonly lastProcessedTraversalOrientationSequence: number;
+    readonly lastProcessedTraversalSequence: number;
     readonly receivedAtWallClockMs: number | null;
   }): PredictedLocalReconciliationSampleMatch | null {
     const matchingSamplesNewestToOldest: PredictedLocalReconciliationSample[] =
@@ -399,13 +425,7 @@ export class MetaverseUnmountedTraversalMotionState {
 
       if (
         sample === undefined ||
-        (
-          lastProcessedTraversalSampleId > 0
-            ? sample.traversalSampleId !== lastProcessedTraversalSampleId
-            : sample.inputSequence !== lastProcessedInputSequence ||
-              sample.traversalOrientationSequence !==
-                lastProcessedTraversalOrientationSequence
-        )
+        sample.traversalSequence !== lastProcessedTraversalSequence
       ) {
         continue;
       }
@@ -418,24 +438,13 @@ export class MetaverseUnmountedTraversalMotionState {
       {
         authoritativeSnapshotAgeMs,
         authoritativeTraversalSampleId:
-          lastProcessedTraversalSampleId > 0
-            ? lastProcessedTraversalSampleId
+          lastProcessedTraversalSequence > 0
+            ? lastProcessedTraversalSequence
             : null,
         authoritativeTick,
         receivedAtWallClockMs
       }
     );
-  }
-
-  readPredictedLocalReconciliationSample(input: {
-    readonly authoritativeSnapshotAgeMs: number | null;
-    readonly authoritativeTick: number | null;
-    readonly lastProcessedInputSequence: number;
-    readonly lastProcessedTraversalSampleId: number;
-    readonly lastProcessedTraversalOrientationSequence: number;
-    readonly receivedAtWallClockMs: number | null;
-  }): PredictedLocalReconciliationSample | null {
-    return this.readPredictedLocalReconciliationSampleMatch(input)?.sample ?? null;
   }
 
   applyAuthoritativeUnmountedPose({
@@ -559,6 +568,12 @@ export class MetaverseUnmountedTraversalMotionState {
       deltaSeconds,
       this.#dependencies.config.groundedBody.maxTurnSpeedRadiansPerSecond
     );
+    this.#appendPendingGroundedTraversalInputSegment({
+      deltaSeconds,
+      movementInput: resolvedMovementInput,
+      preferredLookYawRadians: this.#unmountedLookYawRadians,
+      traversalCameraPitchRadians: this.#traversalCameraPitchRadians
+    });
     this.#groundedLocomotionAccumulatorSeconds += Math.max(
       0,
       toFiniteNumber(deltaSeconds, 0)
@@ -570,20 +585,61 @@ export class MetaverseUnmountedTraversalMotionState {
         authoritativeTraversalFixedStepSeconds &&
       this.#dependencies.readLocomotionMode() === "grounded"
     ) {
-      const groundedLocomotionResult = this.#dependencies.surfaceLocomotionState.advanceGroundedStep(
-        {
-          deltaSeconds: authoritativeTraversalFixedStepSeconds,
-          movementInput: resolvedMovementInput,
-          preferredLookYawRadians: this.#unmountedLookYawRadians,
-          resolveGroundedPresentationPosition: (bodyPosition) => bodyPosition,
-          traversalCameraPitchRadians: this.#traversalCameraPitchRadians,
-          traversalState: nextTraversalState
+      const groundedTraversalInputSegments =
+        this.#consumePendingGroundedTraversalInputSegments(
+          authoritativeTraversalFixedStepSeconds
+        );
+      const resolvedGroundedTraversalInputSegments =
+        groundedTraversalInputSegments.length > 0
+          ? groundedTraversalInputSegments
+          : [
+              {
+                deltaSeconds: authoritativeTraversalFixedStepSeconds,
+                movementInput: resolvedMovementInput,
+                preferredLookYawRadians: this.#unmountedLookYawRadians,
+                traversalCameraPitchRadians: this.#traversalCameraPitchRadians
+              }
+            ];
+
+      for (
+        let segmentIndex = 0;
+        segmentIndex < resolvedGroundedTraversalInputSegments.length;
+        segmentIndex += 1
+      ) {
+        const groundedTraversalInputSegment =
+          resolvedGroundedTraversalInputSegments[segmentIndex];
+
+        if (groundedTraversalInputSegment === undefined) {
+          continue;
         }
-      );
-      nextTraversalState = groundedLocomotionResult.nextTraversalState;
-      this.#dependencies.writeTraversalState(nextTraversalState);
-      cameraSnapshot =
-        this.#resolveGroundedLocomotionStepCameraSnapshot(groundedLocomotionResult);
+
+        const groundedLocomotionResult =
+          this.#dependencies.surfaceLocomotionState.advanceGroundedStep({
+            deltaSeconds: groundedTraversalInputSegment.deltaSeconds,
+            movementInput: groundedTraversalInputSegment.movementInput,
+            preferredLookYawRadians:
+              groundedTraversalInputSegment.preferredLookYawRadians,
+            resolveGroundedPresentationPosition: (bodyPosition) => bodyPosition,
+            traversalCameraPitchRadians:
+              groundedTraversalInputSegment.traversalCameraPitchRadians,
+            traversalState: nextTraversalState
+          });
+        nextTraversalState = groundedLocomotionResult.nextTraversalState;
+        this.#dependencies.writeTraversalState(nextTraversalState);
+        cameraSnapshot = this.#resolveGroundedLocomotionStepCameraSnapshot(
+          groundedLocomotionResult,
+          segmentIndex === resolvedGroundedTraversalInputSegments.length - 1
+        );
+
+        if (this.#dependencies.readLocomotionMode() !== "grounded") {
+          nextTraversalState =
+            this.clearGroundedPredictionAccumulator(nextTraversalState);
+          return {
+            cameraSnapshot,
+            traversalState: nextTraversalState
+          };
+        }
+      }
       this.#recordPredictedLocalReconciliationSample();
 
       this.#groundedLocomotionAccumulatorSeconds = Math.max(
@@ -818,7 +874,6 @@ export class MetaverseUnmountedTraversalMotionState {
 
     return Object.freeze({
       groundedBody,
-      inputSequence: issuedTraversalIntent?.inputSequence ?? 0,
       issuedTraversalIntent,
       localGrounded: groundedBody?.grounded ?? null,
       localPredictionTick:
@@ -826,17 +881,96 @@ export class MetaverseUnmountedTraversalMotionState {
       localWallClockMs: this.#dependencies.readWallClockMs(),
       pose,
       swimBody,
-      traversalSampleId: issuedTraversalIntent?.sampleId ?? 0,
-      traversalOrientationSequence:
+      traversalSequence:
+        issuedTraversalIntent?.sequence ??
         this.#dependencies.localTraversalAuthorityState
-          .latestIssuedTraversalOrientationSequence
+          .latestIssuedTraversalSequence
     });
+  }
+
+  #appendPendingGroundedTraversalInputSegment(
+    segment: PendingTraversalInputSegment
+  ): void {
+    if (
+      !Number.isFinite(segment.deltaSeconds) ||
+      segment.deltaSeconds <= 0
+    ) {
+      return;
+    }
+
+    const lastSegment =
+      this.#pendingGroundedTraversalInputSegments[
+        this.#pendingGroundedTraversalInputSegments.length - 1
+      ] ?? null;
+
+    if (
+      lastSegment !== null &&
+      pendingTraversalInputSegmentsMatch(lastSegment, segment)
+    ) {
+      lastSegment.deltaSeconds += segment.deltaSeconds;
+      return;
+    }
+
+    this.#pendingGroundedTraversalInputSegments.push({
+      deltaSeconds: segment.deltaSeconds,
+      movementInput: segment.movementInput,
+      preferredLookYawRadians: segment.preferredLookYawRadians,
+      traversalCameraPitchRadians: segment.traversalCameraPitchRadians
+    });
+  }
+
+  #consumePendingGroundedTraversalInputSegments(
+    targetDeltaSeconds: number
+  ): PendingTraversalInputSegment[] {
+    const consumedSegments: PendingTraversalInputSegment[] = [];
+    let remainingDeltaSeconds = Math.max(
+      0,
+      toFiniteNumber(targetDeltaSeconds, 0)
+    );
+
+    while (
+      remainingDeltaSeconds > authoritativeTraversalFixedStepEpsilon &&
+      this.#pendingGroundedTraversalInputSegments.length > 0
+    ) {
+      const nextSegment =
+        this.#pendingGroundedTraversalInputSegments[0];
+
+      if (nextSegment === undefined) {
+        break;
+      }
+
+      const consumedDeltaSeconds = Math.min(
+        nextSegment.deltaSeconds,
+        remainingDeltaSeconds
+      );
+
+      if (consumedDeltaSeconds <= authoritativeTraversalFixedStepEpsilon) {
+        break;
+      }
+
+      consumedSegments.push({
+        deltaSeconds: consumedDeltaSeconds,
+        movementInput: nextSegment.movementInput,
+        preferredLookYawRadians: nextSegment.preferredLookYawRadians,
+        traversalCameraPitchRadians: nextSegment.traversalCameraPitchRadians
+      });
+
+      nextSegment.deltaSeconds -= consumedDeltaSeconds;
+      remainingDeltaSeconds -= consumedDeltaSeconds;
+
+      if (nextSegment.deltaSeconds <= authoritativeTraversalFixedStepEpsilon) {
+        this.#pendingGroundedTraversalInputSegments.shift();
+      }
+    }
+
+    return consumedSegments;
   }
 
   #resolveGroundedLocomotionStepCameraSnapshot(
     groundedLocomotionResult: ReturnType<
       MetaverseUnmountedSurfaceLocomotionState["advanceGroundedStep"]
-    >
+    >,
+    advanceAuthorityTick = true
   ): MetaverseCameraSnapshot {
     if (groundedLocomotionResult.transitionSnapshot.enteredSwim) {
       const groundedBodySnapshot = this.#dependencies.groundedBodyRuntime.snapshot;
@@ -875,7 +1009,7 @@ export class MetaverseUnmountedTraversalMotionState {
       return nextCameraSnapshot;
     }
 
-    this.#dependencies.syncLocalTraversalAuthorityState(true);
+    this.#dependencies.syncLocalTraversalAuthorityState(advanceAuthorityTick);
 
     return groundedLocomotionResult.cameraSnapshot;
   }

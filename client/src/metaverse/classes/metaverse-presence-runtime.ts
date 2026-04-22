@@ -6,10 +6,7 @@ import type {
   MetaversePresencePoseSnapshotInput,
   MetaversePresenceRosterSnapshot
 } from "@webgpu-metaverse/shared/metaverse/presence";
-import {
-  resolveMetaversePlayerTeamId,
-  type MetaversePlayerTeamId
-} from "@webgpu-metaverse/shared";
+import { type MetaversePlayerTeamId } from "@webgpu-metaverse/shared";
 
 import type {
   MetaversePresenceClientStatusSnapshot,
@@ -135,10 +132,7 @@ export class MetaversePresenceRuntime {
       return null;
     }
 
-    return (
-      this.#localPlayerIdentity.teamId ??
-      resolveMetaversePlayerTeamId(this.#localPlayerIdentity.playerId)
-    );
+    return this.#localPlayerIdentity.teamId ?? null;
   }
 
   boot(
@@ -307,9 +301,6 @@ export class MetaversePresenceRuntime {
         lookSnapshot,
         locomotionMode,
         mountedEnvironment
-      ),
-      teamId: this.localTeamId ?? resolveMetaversePlayerTeamId(
-        this.#localPlayerIdentity.playerId
       ),
       username: this.#localPlayerIdentity.username
     };
