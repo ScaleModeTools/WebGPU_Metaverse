@@ -4,6 +4,9 @@ import test from "node:test";
 import {
   advanceMetaverseSurfaceTraversalMotion,
   advanceMetaverseSurfaceTraversalSnapshot,
+  metaverseBuilderBlockTileEnvironmentAssetId,
+  metaverseBuilderStepTileEnvironmentAssetId,
+  metaverseBuilderWallTileEnvironmentAssetId,
   createMetaverseSurfaceTraversalSnapshot,
   metaverseHubDockEnvironmentAssetId,
   metaverseHubSkiffEnvironmentAssetId,
@@ -106,7 +109,7 @@ test("shared metaverse surface authoring exposes the shipped range floor slice w
   );
 });
 
-test("shared metaverse barrier authoring stays instanced and blocker-only", () => {
+test("shared metaverse barrier authoring stays instanced and support-authored", () => {
   const barrierSurfaceAsset = readMetaverseWorldSurfaceAssetAuthoring(
     metaversePlaygroundRangeBarrierEnvironmentAssetId
   );
@@ -120,8 +123,57 @@ test("shared metaverse barrier authoring stays instanced and blocker-only", () =
   );
   assert.equal(
     barrierSurfaceAsset?.surfaceColliders[0]?.traversalAffordance,
-    "blocker"
+    "support"
   );
+  assert.deepEqual(barrierSurfaceAsset?.surfaceColliders[0]?.center, {
+    x: 0,
+    y: 1.6,
+    z: 0
+  });
+  assert.deepEqual(barrierSurfaceAsset?.surfaceColliders[0]?.size, {
+    x: 8.5,
+    y: 3.2,
+    z: 1.4
+  });
+});
+
+test("shared builder box authoring stays exact-match single-support geometry", () => {
+  const proceduralBuilderAssets = [
+    {
+      environmentAssetId: metaverseBuilderWallTileEnvironmentAssetId,
+      expectedCenter: { x: 0, y: 2, z: 0 },
+      expectedSize: { x: 4, y: 4, z: 0.5 }
+    },
+    {
+      environmentAssetId: metaverseBuilderStepTileEnvironmentAssetId,
+      expectedCenter: { x: 0, y: 0.5, z: 0 },
+      expectedSize: { x: 4, y: 1, z: 4 }
+    },
+    {
+      environmentAssetId: metaverseBuilderBlockTileEnvironmentAssetId,
+      expectedCenter: { x: 0, y: 2, z: 0 },
+      expectedSize: { x: 4, y: 4, z: 4 }
+    }
+  ];
+
+  for (const {
+    environmentAssetId,
+    expectedCenter,
+    expectedSize
+  } of proceduralBuilderAssets) {
+    const surfaceAsset = readMetaverseWorldSurfaceAssetAuthoring(
+      environmentAssetId
+    );
+
+    assert.notEqual(surfaceAsset, null);
+    assert.equal(surfaceAsset?.surfaceColliders.length, 1);
+    assert.equal(
+      surfaceAsset?.surfaceColliders[0]?.traversalAffordance,
+      "support"
+    );
+    assert.deepEqual(surfaceAsset?.surfaceColliders[0]?.center, expectedCenter);
+    assert.deepEqual(surfaceAsset?.surfaceColliders[0]?.size, expectedSize);
+  }
 });
 
 test("shared traversal state resolver keeps range support, open water, and bay-edge exit distinct", () => {

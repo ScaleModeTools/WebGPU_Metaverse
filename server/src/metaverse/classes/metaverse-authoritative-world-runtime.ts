@@ -548,7 +548,6 @@ export class MetaverseAuthoritativeWorldRuntime
       },
       mountedOccupancyAuthority: this.#mountedOccupancyAuthority,
       playersById: this.#playersById,
-      resolveJoinTeamId: () => this.#resolveJoinTeamId(),
       resolveAuthoritativeSurfaceColliders: () =>
         this.#surfaceState.resolveAuthoritativeSurfaceColliders(),
       resolveJoinPose: (playerId, teamId, nextPose) =>
@@ -881,22 +880,6 @@ export class MetaverseAuthoritativeWorldRuntime
       stateSequence: requestedPose.stateSequence,
       yawRadians: selectedSpawnNode.yawRadians
     });
-  }
-
-  #resolveJoinTeamId(): MetaversePlayerTeamId {
-    let bluePlayerCount = 0;
-    let redPlayerCount = 0;
-
-    for (const playerRuntime of this.#playersById.values()) {
-      if (playerRuntime.teamId === "blue") {
-        bluePlayerCount += 1;
-        continue;
-      }
-
-      redPlayerCount += 1;
-    }
-
-    return redPlayerCount <= bluePlayerCount ? "red" : "blue";
   }
 
   #createPlayerGroundedTraversalColliderPredicate(

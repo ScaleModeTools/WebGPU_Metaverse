@@ -38,7 +38,7 @@ import { resolveMetaverseProofLodModelPath } from "./resolve-metaverse-proof-lod
 function resolveHeldAttachmentSocketName(
   socketId: SocketId
 ): MetaverseAttachmentProofConfig["heldMount"]["socketName"] {
-  return socketId === "hand_r_socket" ? "grip_r_socket" : socketId;
+  return socketId === "hand_r_socket" ? "palm_r_socket" : socketId;
 }
 
 function resolveAttachmentSupportPoints(
@@ -430,6 +430,15 @@ function resolveMetaverseAttachmentProofConfig(
               attachmentDescriptor.label,
               attachmentDescriptor.heldMount.forwardReferenceNodeName,
               "held forward reference node name"
+            ),
+      supportMarkerNodeName:
+        attachmentDescriptor.heldMount.supportMarkerNodeName === null ||
+        attachmentDescriptor.heldMount.supportMarkerNodeName === undefined
+          ? null
+          : resolveAttachmentNodeName(
+              attachmentDescriptor.label,
+              attachmentDescriptor.heldMount.supportMarkerNodeName,
+              "held support marker node name"
             ),
       offHandSupportPointId: resolveOffHandSupportPointId(
         attachmentDescriptor.label,

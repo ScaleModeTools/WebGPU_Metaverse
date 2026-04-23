@@ -146,6 +146,103 @@ function resolveSharedEnvironmentPhysicsColliders(
   );
 }
 
+function environmentVector3sMatch(
+  actual: { readonly x: number; readonly y: number; readonly z: number },
+  expected: { readonly x: number; readonly y: number; readonly z: number },
+  tolerance = 0.000001
+): boolean {
+  return (
+    Math.abs(actual.x - expected.x) <= tolerance &&
+    Math.abs(actual.y - expected.y) <= tolerance &&
+    Math.abs(actual.z - expected.z) <= tolerance
+  );
+}
+
+function assertProceduralBoxColliderMatchesVisualBounds(
+  environmentDescriptor: EnvironmentAssetDescriptor,
+  bundleEnvironmentAsset: Pick<
+    MetaverseEnvironmentAssetProofConfig,
+    never
+  > & {
+    readonly surfaceColliders: readonly {
+      readonly center: { readonly x: number; readonly y: number; readonly z: number };
+      readonly size: { readonly x: number; readonly y: number; readonly z: number };
+      readonly traversalAffordance: "support" | "blocker";
+    }[];
+    readonly traversalAffordance: "support" | "blocker" | "mount";
+  }
+): void {
+  if (
+    environmentDescriptor.dynamicBody != null ||
+    environmentDescriptor.collisionPath !== null ||
+    environmentDescriptor.traversalAffordance === "mount"
+  ) {
+    return;
+  }
+
+  if (
+    !environmentDescriptor.renderModel.lods.every(
+      isEnvironmentProceduralBoxLodDescriptor
+    )
+  ) {
+    return;
+  }
+
+  const [firstProceduralLod] = environmentDescriptor.renderModel.lods;
+
+  if (firstProceduralLod === undefined) {
+    return;
+  }
+
+  for (const lod of environmentDescriptor.renderModel.lods) {
+    if (
+      !environmentVector3sMatch(lod.size, firstProceduralLod.size)
+    ) {
+      throw new Error(
+        `Metaverse procedural box asset ${environmentDescriptor.label} requires every procedural LOD to share the same size.`
+      );
+    }
+  }
+
+  if (bundleEnvironmentAsset.surfaceColliders.length !== 1) {
+    throw new Error(
+      `Metaverse procedural box asset ${environmentDescriptor.label} requires exactly one exact-match surface collider.`
+    );
+  }
+
+  const [surfaceCollider] = bundleEnvironmentAsset.surfaceColliders;
+
+  if (
+    surfaceCollider === undefined ||
+    !environmentVector3sMatch(surfaceCollider.size, firstProceduralLod.size)
+  ) {
+    throw new Error(
+      `Metaverse procedural box asset ${environmentDescriptor.label} requires collider size to match render size exactly.`
+    );
+  }
+
+  const expectedCenter = {
+    x: 0,
+    y: firstProceduralLod.size.y * 0.5,
+    z: 0
+  };
+
+  if (!environmentVector3sMatch(surfaceCollider.center, expectedCenter)) {
+    throw new Error(
+      `Metaverse procedural box asset ${environmentDescriptor.label} requires collider center to match render bounds exactly.`
+    );
+  }
+
+  if (
+    surfaceCollider.traversalAffordance !==
+    environmentDescriptor.traversalAffordance
+  ) {
+    throw new Error(
+      `Metaverse procedural box asset ${environmentDescriptor.label} requires collider affordance to match the asset affordance.`
+    );
+  }
+}
+
 function resolveEnvironmentSeats(
   seats: readonly EnvironmentSeatDescriptor[] | null
 ): readonly MetaverseEnvironmentSeatProofConfig[] | null {
@@ -359,6 +456,15 @@ function resolveMetaverseEnvironmentAssetProofConfig(
     );
   }
 
+  if (
+    bundleEnvironmentAsset.traversalAffordance !==
+    environmentDescriptor.traversalAffordance
+  ) {
+    throw new Error(
+      `Metaverse environment asset ${environmentDescriptor.label} traversal affordance drifted from shared world authoring.`
+    );
+  }
+
   assertSharedMountedSeatAuthoringMatchesEnvironmentDescriptor(
     environmentDescriptor,
     bundleEnvironmentAsset
@@ -379,6 +485,11 @@ function resolveMetaverseEnvironmentAssetProofConfig(
     : resolveSharedEnvironmentPhysicsColliders(
         bundleEnvironmentAsset.surfaceColliders
       );
+
+  assertProceduralBoxColliderMatchesVisualBounds(
+    environmentDescriptor,
+    bundleEnvironmentAsset
+  );
 
   if (bundleEnvironmentAsset.traversalAffordance === "mount") {
     if (environmentDescriptor.placement !== "dynamic") {

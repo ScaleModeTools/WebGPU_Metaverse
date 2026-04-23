@@ -33,6 +33,10 @@ import { metaverseHumanoidV2PistolPoseIds } from "../../types/metaverse-runtime"
 
 const humanoidV2GripSocketBlendAlpha = 0.72;
 const humanoidV2PalmSocketBlendAlpha = 0.45;
+const humanoidV2SupportSocketBlendAlpha = humanoidV2PalmSocketBlendAlpha;
+const humanoidV2SupportSocketBackwardOffsetMeters = 0.07;
+const humanoidV2SupportSocketPalmNormalOffsetMeters = 0.11;
+const humanoidV2SupportSocketThumbOffsetMeters = 0.03;
 const humanoidV2BackSocketLowerOffsetMeters = 0.02;
 const humanoidV2BackSocketRearwardScale = 0.7;
 const metaverseCharacterAnchorPosition = Object.freeze({
@@ -133,6 +137,7 @@ function synthesizeHumanoidV2PalmSockets(
       ] as const,
       parentBoneName: "hand_l",
       sourceSocketName: "hand_l_socket",
+      supportSocketName: "support_l_socket",
       synthesizedSocketName: "palm_l_socket",
       thumbBaseBoneName: "thumb_01_l"
     },
@@ -146,6 +151,7 @@ function synthesizeHumanoidV2PalmSockets(
       ] as const,
       parentBoneName: "hand_r",
       sourceSocketName: "hand_r_socket",
+      supportSocketName: "support_r_socket",
       synthesizedSocketName: "palm_r_socket",
       thumbBaseBoneName: "thumb_01_r"
     }
@@ -229,6 +235,21 @@ function synthesizeHumanoidV2PalmSockets(
     const gripLocalPosition = sourceSocketNode.position
       .clone()
       .lerp(knuckleBaseCentroid, humanoidV2GripSocketBlendAlpha);
+    const supportLocalPosition = sourceSocketNode.position
+      .clone()
+      .lerp(knuckleBaseCentroid, humanoidV2SupportSocketBlendAlpha)
+      .addScaledVector(
+        palmForwardAxis,
+        -humanoidV2SupportSocketBackwardOffsetMeters
+      )
+      .addScaledVector(
+        correctedPalmUpAxis,
+        humanoidV2SupportSocketThumbOffsetMeters
+      )
+      .addScaledVector(
+        palmSideAxis,
+        humanoidV2SupportSocketPalmNormalOffsetMeters
+      );
     const synthesizedHandQuaternion = new Quaternion().setFromRotationMatrix(
       new Matrix4().makeBasis(
         palmForwardAxis,
@@ -250,6 +271,14 @@ function synthesizeHumanoidV2PalmSockets(
       parentBone,
       palmSocketDescriptor.gripSocketName,
       gripLocalPosition,
+      showSocketDebug,
+      synthesizedHandQuaternion
+    );
+    nodeResolvers.upsertSyntheticSocketNode(
+      characterScene,
+      parentBone,
+      palmSocketDescriptor.supportSocketName,
+      supportLocalPosition,
       showSocketDebug,
       synthesizedHandQuaternion
     );

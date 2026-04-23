@@ -25,6 +25,7 @@ export interface AttachmentMountSocketDescriptor {
     Record<SocketId, string | null>
   >;
   readonly forwardReferenceNodeName?: string | null;
+  readonly supportMarkerNodeName?: string | null;
   readonly triggerMarkerNodeName?: string | null;
   readonly upReferenceNodeName?: string | null;
 }

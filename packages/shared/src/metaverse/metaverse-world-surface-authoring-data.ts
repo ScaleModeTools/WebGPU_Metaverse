@@ -141,7 +141,7 @@ const metaversePlaygroundRangeBarrierSurfaceColliders = Object.freeze([
   Object.freeze({
     center: freezeVector3(0, 1.6, 0),
     size: freezeVector3(8.5, 3.2, 1.4),
-    traversalAffordance: "blocker"
+    traversalAffordance: "support"
   })
 ] satisfies readonly MetaverseWorldSurfaceColliderAuthoring[]);
 
@@ -157,7 +157,7 @@ const metaverseBuilderWallTileSurfaceColliders = Object.freeze([
   Object.freeze({
     center: freezeVector3(0, 2, 0),
     size: freezeVector3(4, 4, 0.5),
-    traversalAffordance: "blocker"
+    traversalAffordance: "support"
   })
 ] satisfies readonly MetaverseWorldSurfaceColliderAuthoring[]);
 
@@ -165,11 +165,6 @@ const metaverseBuilderStepTileSurfaceColliders = Object.freeze([
   Object.freeze({
     center: freezeVector3(0, 0.5, 0),
     size: freezeVector3(4, 1, 4),
-    traversalAffordance: "blocker"
-  }),
-  Object.freeze({
-    center: freezeVector3(0, 1.02, 0),
-    size: freezeVector3(4, 0.08, 4),
     traversalAffordance: "support"
   })
 ] satisfies readonly MetaverseWorldSurfaceColliderAuthoring[]);
@@ -178,11 +173,6 @@ const metaverseBuilderBlockTileSurfaceColliders = Object.freeze([
   Object.freeze({
     center: freezeVector3(0, 2, 0),
     size: freezeVector3(4, 4, 4),
-    traversalAffordance: "blocker"
-  }),
-  Object.freeze({
-    center: freezeVector3(0, 4.02, 0),
-    size: freezeVector3(4, 0.08, 4),
     traversalAffordance: "support"
   })
 ] satisfies readonly MetaverseWorldSurfaceColliderAuthoring[]);
@@ -505,7 +495,7 @@ export const metaverseWorldSurfaceAssets = Object.freeze([
       })
     ]),
     surfaceColliders: metaversePlaygroundRangeBarrierSurfaceColliders,
-    traversalAffordance: "blocker"
+    traversalAffordance: "support"
   }),
   Object.freeze({
     collisionPath: null,
@@ -525,7 +515,7 @@ export const metaverseWorldSurfaceAssets = Object.freeze([
     placement: "instanced",
     placements: Object.freeze([]),
     surfaceColliders: metaverseBuilderWallTileSurfaceColliders,
-    traversalAffordance: "blocker"
+    traversalAffordance: "support"
   }),
   Object.freeze({
     collisionPath: null,

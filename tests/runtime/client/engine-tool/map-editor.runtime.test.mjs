@@ -661,6 +661,181 @@ test("metaverse environment proof loads from the bundle-backed staging-ground ma
   );
 });
 
+test("map editor library hides hidden environment assets while existing placed content still loads", async () => {
+  const {
+    environmentPropManifest,
+    metaversePlaygroundRangeBarrierEnvironmentAssetId
+  } = await clientLoader.load("/src/assets/config/environment-prop-manifest.ts");
+  const { groupMapEditorLibraryAssets } = await clientLoader.load(
+    "/src/engine-tool/library/map-editor-library-asset-groups.ts"
+  );
+  const { createMapEditorProject } = await clientLoader.load(
+    "/src/engine-tool/project/map-editor-project-state.ts"
+  );
+  const { loadMetaverseMapBundle } = await clientLoader.load(
+    "/src/metaverse/world/map-bundles/load-metaverse-map-bundle.ts"
+  );
+
+  const libraryGroups = groupMapEditorLibraryAssets(
+    environmentPropManifest.environmentAssets
+  );
+  const project = createMapEditorProject(loadMetaverseMapBundle("staging-ground"));
+
+  assert.equal(
+    environmentPropManifest.byId[metaversePlaygroundRangeBarrierEnvironmentAssetId]
+      .editorCatalogVisibility,
+    "hidden"
+  );
+  assert.equal(
+    libraryGroups.props.some(
+      (asset) => asset.id === metaversePlaygroundRangeBarrierEnvironmentAssetId
+    ),
+    false
+  );
+  assert.equal(
+    libraryGroups.vehicles.some(
+      (asset) => asset.id === metaversePlaygroundRangeBarrierEnvironmentAssetId
+    ),
+    false
+  );
+  assert.equal(
+    project.placementDrafts.some(
+      (placement) =>
+        placement.assetId === metaversePlaygroundRangeBarrierEnvironmentAssetId
+    ),
+    true
+  );
+});
+
+test("metaverse environment proof rejects procedural box drift away from exact-match colliders", async () => {
+  const {
+    clearMetaverseWorldBundlePreviewEntry,
+    registerMetaverseWorldBundlePreviewEntry
+  } = await clientLoader.load("/src/metaverse/world/bundle-registry/index.ts");
+  const { loadMetaverseEnvironmentProofConfig } = await clientLoader.load(
+    "/src/metaverse/world/proof/load-metaverse-environment-proof-config.ts"
+  );
+  const {
+    environmentPropManifest,
+    metaversePlaygroundRangeBarrierEnvironmentAssetId
+  } = await clientLoader.load("/src/assets/config/environment-prop-manifest.ts");
+
+  const barrierAsset =
+    environmentPropManifest.byId[metaversePlaygroundRangeBarrierEnvironmentAssetId];
+  const originalBarrierLods = barrierAsset.renderModel.lods;
+
+  const createPreviewBundleWithBarrier = (previewId, mutateBarrierAsset) => {
+    const previewBundle = structuredClone(stagingGroundMapBundle);
+
+    previewBundle.label = `Exact Match Proof ${previewId}`;
+    previewBundle.mapId = previewId;
+    previewBundle.environmentAssets = Object.freeze(
+      previewBundle.environmentAssets.map((environmentAsset) => {
+        if (environmentAsset.assetId !== metaversePlaygroundRangeBarrierEnvironmentAssetId) {
+          return Object.freeze(environmentAsset);
+        }
+
+        return Object.freeze(mutateBarrierAsset(structuredClone(environmentAsset)));
+      })
+    );
+
+    return Object.freeze(previewBundle);
+  };
+
+  const previewScenarios = [
+    {
+      bundleId: "exact-match-barrier-double-collider",
+      expectedError: /requires exactly one exact-match surface collider/,
+      mutateBarrierAsset(barrierEnvironmentAsset) {
+        barrierEnvironmentAsset.surfaceColliders = Object.freeze([
+          ...barrierEnvironmentAsset.surfaceColliders,
+          structuredClone(barrierEnvironmentAsset.surfaceColliders[0])
+        ]);
+
+        return barrierEnvironmentAsset;
+      }
+    },
+    {
+      bundleId: "exact-match-barrier-size-drift",
+      expectedError: /requires collider size to match render size exactly/,
+      mutateBarrierAsset(barrierEnvironmentAsset) {
+        barrierEnvironmentAsset.surfaceColliders = Object.freeze([
+          Object.freeze({
+            ...barrierEnvironmentAsset.surfaceColliders[0],
+            size: Object.freeze({
+              ...barrierEnvironmentAsset.surfaceColliders[0].size,
+              y: barrierEnvironmentAsset.surfaceColliders[0].size.y + 0.2
+            })
+          })
+        ]);
+
+        return barrierEnvironmentAsset;
+      }
+    },
+    {
+      bundleId: "exact-match-barrier-center-drift",
+      expectedError: /requires collider center to match render bounds exactly/,
+      mutateBarrierAsset(barrierEnvironmentAsset) {
+        barrierEnvironmentAsset.surfaceColliders = Object.freeze([
+          Object.freeze({
+            ...barrierEnvironmentAsset.surfaceColliders[0],
+            center: Object.freeze({
+              ...barrierEnvironmentAsset.surfaceColliders[0].center,
+              y: barrierEnvironmentAsset.surfaceColliders[0].center.y - 0.2
+            })
+          })
+        ]);
+
+        return barrierEnvironmentAsset;
+      }
+    }
+  ];
+
+  try {
+    for (const scenario of previewScenarios) {
+      registerMetaverseWorldBundlePreviewEntry({
+        bundle: createPreviewBundleWithBarrier(
+          scenario.bundleId,
+          scenario.mutateBarrierAsset
+        ),
+        bundleId: scenario.bundleId,
+        label: `Exact Match Proof ${scenario.bundleId}`,
+        sourceBundleId: "staging-ground"
+      });
+
+      assert.throws(
+        () => loadMetaverseEnvironmentProofConfig(scenario.bundleId),
+        scenario.expectedError
+      );
+
+      clearMetaverseWorldBundlePreviewEntry(scenario.bundleId);
+    }
+
+    barrierAsset.renderModel.lods = [
+      ...originalBarrierLods,
+      {
+        ...originalBarrierLods[0],
+        size: {
+          ...originalBarrierLods[0].size,
+          y: originalBarrierLods[0].size.y + 0.2
+        },
+        tier: "low"
+      }
+    ];
+
+    assert.throws(
+      () => loadMetaverseEnvironmentProofConfig("staging-ground"),
+      /requires every procedural LOD to share the same size/
+    );
+  } finally {
+    barrierAsset.renderModel.lods = originalBarrierLods;
+
+    for (const scenario of previewScenarios) {
+      clearMetaverseWorldBundlePreviewEntry(scenario.bundleId);
+    }
+  }
+});
+
 test("map editor validate-and-run exports a bundle-backed preview through the runtime registry", async () => {
   const { createMapEditorProject } = await clientLoader.load(
     "/src/engine-tool/project/map-editor-project-state.ts"

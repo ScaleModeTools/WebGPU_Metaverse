@@ -23,11 +23,8 @@ test("metaverse asset proof resolves a socket-compatible attachment config from 
     metaverseAttachmentProofConfig.attachmentId,
     "metaverse-service-pistol-v2"
   );
-  assert.equal(metaverseAttachmentProofConfig.heldMount.socketName, "grip_r_socket");
-  assert.equal(
-    metaverseAttachmentProofConfig.heldMount.offHandSupportPointId,
-    "pistol-support-left"
-  );
+  assert.equal(metaverseAttachmentProofConfig.heldMount.socketName, "palm_r_socket");
+  assert.equal(metaverseAttachmentProofConfig.heldMount.offHandSupportPointId, null);
   assert.equal(
     metaverseAttachmentProofConfig.heldMount.attachmentSocketNodeName,
     "metaverse_service_pistol_grip_hand_r_socket"
@@ -39,6 +36,10 @@ test("metaverse asset proof resolves a socket-compatible attachment config from 
   assert.equal(
     metaverseAttachmentProofConfig.heldMount.forwardReferenceNodeName,
     "metaverse_service_pistol_forward_marker"
+  );
+  assert.equal(
+    metaverseAttachmentProofConfig.heldMount.supportMarkerNodeName,
+    "metaverse_service_pistol_support_marker"
   );
   assert.equal(
     metaverseAttachmentProofConfig.heldMount.triggerMarkerNodeName,
@@ -60,13 +61,7 @@ test("metaverse asset proof resolves a socket-compatible attachment config from 
       "metaverse-pistol-compensator-v1"
     ]
   );
-  assert.deepEqual(metaverseAttachmentProofConfig.supportPoints, [
-    {
-      authoringNodeName: "metaverse_service_pistol_support_grip_marker",
-      localPosition: { x: 0.04, y: -0.01, z: 0.025 },
-      supportPointId: "pistol-support-left"
-    }
-  ]);
+  assert.equal(metaverseAttachmentProofConfig.supportPoints, null);
   assert.equal(metaverseCharacterProofConfig.skeletonId, "humanoid_v2");
 });
 
@@ -170,10 +165,11 @@ test("metaverse asset proof resolves static, instanced, and dynamic environment 
   assert.ok(barrierAsset);
   assert.equal(barrierAsset.collisionPath, null);
   assert.equal(barrierAsset.placement, "instanced");
-  assert.equal(barrierAsset.traversalAffordance, "blocker");
+  assert.equal(barrierAsset.traversalAffordance, "support");
   assert.equal(barrierAsset.lods.length, 1);
   assert.equal(barrierAsset.placements.length, 6);
   assert.equal(barrierAsset.physicsColliders?.length, 1);
+  assert.equal(barrierAsset.physicsColliders?.[0]?.traversalAffordance, "support");
   assert.deepEqual(barrierAsset.lods[0], {
     kind: "procedural-box",
     materialPreset: "training-range-accent",

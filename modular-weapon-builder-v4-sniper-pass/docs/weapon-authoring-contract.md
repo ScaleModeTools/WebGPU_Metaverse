@@ -18,7 +18,7 @@ That means your fixed character/weapon alignment work stays the same:
 
 - right hand grips `*_grip_hand_r_socket`
 - trigger marker stays separate for later finger IK
-- left hand still uses a support point
+- left hand uses a position-only `*_support_marker`
 - ADS lines up from `*_ads_camera_anchor`
 
 ## New weapon families in this bundle
@@ -75,8 +75,16 @@ Every weapon should still expose these nodes:
 - `<weapon>_front_sight_socket`
 - `<weapon>_rear_sight_socket`
 - `<weapon>_optic_mount_socket`
-- `<weapon>_support_grip_marker`
+- `<weapon>_support_marker`
 - `<weapon>_back_socket`
+
+## Hand authoring rules
+
+- `*_grip_hand_r_socket` is the only authored right-hand mount point.
+- `*_trigger_marker` is a position-only right index contact target inside the trigger area.
+- `*_support_marker` is a position-only left-hand support target on the actual weapon surface.
+- For pistols, place `*_support_marker` on the bottom of the grip where the underside of the left palm should contact.
+- Do not float `*_support_marker` in space to compensate for bad IK. The character runtime now owns a dedicated `support_l_socket` on the underside/inside of the left palm.
 
 ### Optional module sockets
 
@@ -116,4 +124,3 @@ For the sniper family, the clean split is now:
 - **backup sight modules** are optional and sit on the front / rear sight sockets only when equipped
 
 This is a better fit for the way you want to build premium sniper variants first and then solve final hand/socket transforms against `humanoid_v2` afterward.
-

@@ -578,7 +578,7 @@ export async function createHeldWeaponProofSlice() {
       attachmentId: "metaverse-service-pistol-v1",
       heldMount: {
         attachmentSocketNodeName: "metaverse_service_pistol_grip_hand_r_socket",
-        socketName: "grip_r_socket",
+        socketName: "palm_r_socket",
         triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker"
       },
       label: "Metaverse service pistol",

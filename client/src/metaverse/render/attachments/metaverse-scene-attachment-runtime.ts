@@ -27,6 +27,11 @@ export interface MetaverseAttachmentMountRuntime {
   readonly socketName: MetaverseAttachmentProofConfig["heldMount"]["socketName"];
 }
 
+export interface MetaverseAttachmentOffHandGripRuntime {
+  readonly localPosition: Vector3;
+  readonly localQuaternion: Quaternion;
+}
+
 export interface MetaverseAttachmentProofRuntime {
   activeMountKind: "held" | "mounted-holster" | null;
   readonly attachmentRoot: Group;
@@ -36,11 +41,11 @@ export interface MetaverseAttachmentProofRuntime {
   readonly heldGripToTriggerMarkerLocalPosition: Vector3 | null;
   readonly heldGripSocketNode: Object3D;
   readonly heldMount: MetaverseAttachmentMountRuntime;
+  readonly heldSupportMarkerNode: Object3D | null;
   readonly heldTriggerMarkerNode: Object3D | null;
-  implicitOffHandGripLocalPosition: Vector3 | null;
-  implicitOffHandGripLocalQuaternion: Quaternion | null;
   readonly mountedHolsterMount: MetaverseAttachmentMountRuntime | null;
-  readonly offHandSupportNode: Object3D | null;
+  readonly offHandGripMount: MetaverseAttachmentOffHandGripRuntime | null;
+  readonly offHandSupportMarkerNode: Object3D | null;
   readonly presentationGroup: Group;
 }
 
@@ -199,21 +204,15 @@ function resolveAttachmentSocketLocalTransform(
   readonly localPosition: Vector3;
   readonly localQuaternion: Quaternion;
 } {
-  attachmentScene.updateMatrixWorld(true);
-
   const attachmentSocketNode = nodeResolvers.findNamedNode(
     attachmentScene,
     attachmentSocketNodeName,
     "Metaverse attachment mount"
   );
-  const sceneWorldQuaternion = attachmentScene.getWorldQuaternion(new Quaternion());
-  const localPosition = attachmentScene.worldToLocal(
-    attachmentSocketNode.getWorldPosition(new Vector3())
+  const { localPosition, localQuaternion } = resolveAttachmentNodeLocalTransform(
+    attachmentScene,
+    attachmentSocketNode
   );
-  const localQuaternion = sceneWorldQuaternion
-    .invert()
-    .multiply(attachmentSocketNode.getWorldQuaternion(new Quaternion()))
-    .normalize();
 
   if (localPosition.lengthSq() <= heldWeaponSolveDirectionEpsilon) {
     throw new Error(
@@ -224,6 +223,28 @@ function resolveAttachmentSocketLocalTransform(
   return {
     localPosition,
     localQuaternion
+  };
+}
+
+function resolveAttachmentNodeLocalTransform(
+  attachmentRoot: Group,
+  attachmentNode: Object3D
+): {
+  readonly localPosition: Vector3;
+  readonly localQuaternion: Quaternion;
+} {
+  attachmentRoot.updateMatrixWorld(true);
+  const attachmentRootWorldQuaternion =
+    attachmentRoot.getWorldQuaternion(new Quaternion());
+
+  return {
+    localPosition: attachmentRoot.worldToLocal(
+      attachmentNode.getWorldPosition(new Vector3())
+    ),
+    localQuaternion: attachmentRootWorldQuaternion
+      .invert()
+      .multiply(attachmentNode.getWorldQuaternion(new Quaternion()))
+      .normalize()
   };
 }
 
@@ -316,6 +337,15 @@ export function cloneMetaverseAttachmentMountRuntime(
   };
 }
 
+export function cloneMetaverseAttachmentOffHandGripRuntime(
+  sourceRuntime: MetaverseAttachmentOffHandGripRuntime
+): MetaverseAttachmentOffHandGripRuntime {
+  return {
+    localPosition: sourceRuntime.localPosition.clone(),
+    localQuaternion: sourceRuntime.localQuaternion.clone()
+  };
+}
+
 export function cloneMetaverseAttachmentProofRuntime<
   TCharacterRuntime extends CharacterRuntimeLike
 >(
@@ -348,6 +378,14 @@ export function cloneMetaverseAttachmentProofRuntime<
       cloneLabel
     ),
     heldMount: cloneMetaverseAttachmentMountRuntime(sourceRuntime.heldMount),
+    heldSupportMarkerNode:
+      sourceRuntime.heldSupportMarkerNode === null
+        ? null
+        : nodeResolvers.findNamedNode(
+            characterProofRuntime.scene,
+            sourceRuntime.heldSupportMarkerNode.name,
+            cloneLabel
+          ),
     heldTriggerMarkerNode:
       sourceRuntime.heldTriggerMarkerNode === null
         ? null
@@ -356,18 +394,22 @@ export function cloneMetaverseAttachmentProofRuntime<
             sourceRuntime.heldTriggerMarkerNode.name,
             cloneLabel
           ),
-    implicitOffHandGripLocalPosition: null,
-    implicitOffHandGripLocalQuaternion: null,
     mountedHolsterMount:
       sourceRuntime.mountedHolsterMount === null
         ? null
         : cloneMetaverseAttachmentMountRuntime(sourceRuntime.mountedHolsterMount),
-    offHandSupportNode:
-      sourceRuntime.offHandSupportNode === null
+    offHandGripMount:
+      sourceRuntime.offHandGripMount === null
+        ? null
+        : cloneMetaverseAttachmentOffHandGripRuntime(
+            sourceRuntime.offHandGripMount
+          ),
+    offHandSupportMarkerNode:
+      sourceRuntime.offHandSupportMarkerNode === null
         ? null
         : nodeResolvers.findNamedNode(
             characterProofRuntime.scene,
-            sourceRuntime.offHandSupportNode.name,
+            sourceRuntime.offHandSupportMarkerNode.name,
             cloneLabel
           ),
     presentationGroup: nodeResolvers.findGroupNode(
@@ -476,6 +518,12 @@ export async function loadMetaverseAttachmentProofRuntime<
           attachmentProofConfig.heldMount.triggerMarkerNodeName,
           "Metaverse attachment trigger marker"
         );
+  const heldSupportMarkerNode = resolveOptionalAttachmentNode(
+    attachmentProofConfig.heldMount.supportMarkerNodeName,
+    attachmentAsset.scene,
+    "Metaverse attachment support marker",
+    dependencies
+  );
   const heldGripToTriggerMarkerLocalPosition =
     heldTriggerMarkerNode === null
       ? null
@@ -485,7 +533,7 @@ export async function loadMetaverseAttachmentProofRuntime<
         );
   const heldOffHandSupportPointId =
     attachmentProofConfig.heldMount.offHandSupportPointId ?? null;
-  let offHandSupportNode: Object3D | null = null;
+  let offHandSupportMarkerNode: Object3D | null = heldSupportMarkerNode;
 
   attachmentRoot.name = `metaverse_attachment/${attachmentProofConfig.attachmentId}`;
   attachmentPresentationGroup.name = `${attachmentRoot.name}/presentation`;
@@ -501,8 +549,11 @@ export async function loadMetaverseAttachmentProofRuntime<
           );
 
     if (supportPointNode !== null) {
-      if (heldOffHandSupportPointId === supportPoint.supportPointId) {
-        offHandSupportNode = supportPointNode;
+      if (
+        offHandSupportMarkerNode === null &&
+        heldOffHandSupportPointId === supportPoint.supportPointId
+      ) {
+        offHandSupportMarkerNode = supportPointNode;
       }
 
       continue;
@@ -522,18 +573,29 @@ export async function loadMetaverseAttachmentProofRuntime<
     );
     attachmentPresentationGroup.add(supportPointAnchor);
 
-    if (heldOffHandSupportPointId === supportPoint.supportPointId) {
-      offHandSupportNode = supportPointAnchor;
+    if (
+      offHandSupportMarkerNode === null &&
+      heldOffHandSupportPointId === supportPoint.supportPointId
+    ) {
+      offHandSupportMarkerNode = supportPointAnchor;
     }
   }
   attachmentRoot.add(attachmentPresentationGroup);
+  attachmentRoot.updateMatrixWorld(true);
 
-  if (heldOffHandSupportPointId !== null && offHandSupportNode === null) {
+  if (heldOffHandSupportPointId !== null && offHandSupportMarkerNode === null) {
     throw new Error(
       `Metaverse attachment ${attachmentProofConfig.attachmentId} is missing held off-hand support point ${heldOffHandSupportPointId}.`
     );
   }
 
+  const offHandGripMount =
+    offHandSupportMarkerNode === null
+      ? null
+      : resolveAttachmentNodeLocalTransform(
+          attachmentRoot,
+          offHandSupportMarkerNode
+        );
   const attachmentRuntime: MetaverseAttachmentProofRuntime = {
     activeMountKind: null,
     attachmentRoot,
@@ -543,11 +605,11 @@ export async function loadMetaverseAttachmentProofRuntime<
     heldGripToTriggerMarkerLocalPosition,
     heldGripSocketNode,
     heldMount,
+    heldSupportMarkerNode,
     heldTriggerMarkerNode,
-    implicitOffHandGripLocalPosition: null,
-    implicitOffHandGripLocalQuaternion: null,
     mountedHolsterMount,
-    offHandSupportNode,
+    offHandGripMount,
+    offHandSupportMarkerNode,
     presentationGroup: attachmentPresentationGroup
   };
 

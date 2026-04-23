@@ -149,8 +149,8 @@ export const shellArcadeGameplayProfile = createGameplayProfile({
     accelerationUnitsPerSecondSquared: 24,
     baseSpeedUnitsPerSecond: 9.1,
     boostMultiplier: 1.92,
-    gravityUnitsPerSecond: 16.5,
-    jumpImpulseUnitsPerSecond: 7.35,
+    gravityUnitsPerSecond: 15.6,
+    jumpImpulseUnitsPerSecond: 9.68,
     maxTurnSpeedRadiansPerSecond: 3.95
   }),
   id: "shell-arcade-gameplay",

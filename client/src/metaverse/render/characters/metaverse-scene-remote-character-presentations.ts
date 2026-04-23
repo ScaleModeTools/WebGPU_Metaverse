@@ -48,8 +48,7 @@ export interface MetaverseRemoteCharacterPresentationDependencies<
     pistolPoseRuntime: NonNullable<TCharacterRuntime["humanoidV2PistolPoseRuntime"]>
   ) => void;
   readonly captureHeldWeaponPoseRuntime: (
-    heldWeaponPoseRuntime: NonNullable<TCharacterRuntime["heldWeaponPoseRuntime"]>,
-    attachmentRuntime: TAttachmentRuntime | null
+    heldWeaponPoseRuntime: NonNullable<TCharacterRuntime["heldWeaponPoseRuntime"]>
   ) => void;
   readonly cloneAttachmentRuntime: (
     sourceAttachmentRuntime: TAttachmentRuntime,
@@ -363,8 +362,7 @@ export function syncRemoteCharacterPresentations<
 
     if (remoteCharacterRuntime.characterRuntime.heldWeaponPoseRuntime !== null) {
       dependencies.captureHeldWeaponPoseRuntime(
-        remoteCharacterRuntime.characterRuntime.heldWeaponPoseRuntime,
-        remoteCharacterRuntime.attachmentRuntime
+        remoteCharacterRuntime.characterRuntime.heldWeaponPoseRuntime
       );
     }
 

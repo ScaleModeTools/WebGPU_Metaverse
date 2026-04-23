@@ -24,6 +24,8 @@ const socketDebugMarkerColors = {
   hip_socket: [0.45, 1, 0.56],
   palm_l_socket: [0.28, 0.9, 1],
   palm_r_socket: [1, 0.6, 0.48],
+  support_l_socket: [0.42, 0.96, 1],
+  support_r_socket: [1, 0.74, 0.56],
   seat_socket: [0.62, 0.96, 0.96]
 } as const satisfies Readonly<Record<string, readonly [number, number, number]>>;
 

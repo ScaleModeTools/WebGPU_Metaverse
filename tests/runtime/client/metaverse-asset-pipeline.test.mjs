@@ -517,23 +517,16 @@ test("attachment manifests keep explicit attachment socket ownership for held an
     adsCameraAnchorNodeName: "metaverse_service_pistol_ads_camera_anchor",
     attachmentSocketNodeName: "metaverse_service_pistol_grip_hand_r_socket",
     forwardReferenceNodeName: "metaverse_service_pistol_forward_marker",
+    supportMarkerNodeName: "metaverse_service_pistol_support_marker",
     triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker",
     upReferenceNodeName: "metaverse_service_pistol_up_marker"
   });
-  assert.deepEqual(pistolAttachment.offHandSupportPointIdBySocketId, {
-    hand_r_socket: "pistol-support-left"
-  });
+  assert.equal(pistolAttachment.offHandSupportPointIdBySocketId, null);
   assert.deepEqual(pistolAttachment.mountedHolster, {
     attachmentSocketNodeName: "metaverse_service_pistol_back_socket",
     socketName: "back_socket"
   });
-  assert.deepEqual(pistolAttachment.supportPoints, [
-    {
-      authoringNodeName: "metaverse_service_pistol_support_grip_marker",
-      localPosition: { x: 0.04, y: -0.01, z: 0.025 },
-      supportPointId: "pistol-support-left"
-    }
-  ]);
+  assert.equal(pistolAttachment.supportPoints, null);
 });
 
 test("pistol proof asset keeps explicit grip, sighting, and holster socket nodes", async () => {
@@ -544,11 +537,15 @@ test("pistol proof asset keeps explicit grip, sighting, and holster socket nodes
 
   assert.deepEqual(
     nodesByName.get("metaverse_service_pistol_grip_hand_r_socket")?.translation,
-    [0.052, -0.055, 0]
+    [0.079, -0.048, 0]
   );
   assert.deepEqual(
     nodesByName.get("metaverse_service_pistol_trigger_marker")?.translation,
-    [0.088, -0.032, 0]
+    [0.082, -0.061, -0.008]
+  );
+  assert.deepEqual(
+    nodesByName.get("metaverse_service_pistol_support_marker")?.translation,
+    [0.018, -0.137, 0]
   );
   assert.deepEqual(
     nodesByName.get("metaverse_service_pistol_muzzle_socket")?.translation,
@@ -707,6 +704,9 @@ test("dock gltf LODs keep a flush deck support plane", async () => {
 test("environment manifest keeps the shipped playground surfaces explicit as procedural range geometry", async () => {
   const {
     environmentPropManifest,
+    metaverseBuilderBlockTileEnvironmentAssetId,
+    metaverseBuilderStepTileEnvironmentAssetId,
+    metaverseBuilderWallTileEnvironmentAssetId,
     metaversePlaygroundRangeBarrierEnvironmentAssetId,
     metaversePlaygroundRangeFloorEnvironmentAssetId
   } = await clientLoader.load("/src/assets/config/environment-prop-manifest.ts");
@@ -714,11 +714,53 @@ test("environment manifest keeps the shipped playground surfaces explicit as pro
     environmentPropManifest.byId[metaversePlaygroundRangeFloorEnvironmentAssetId];
   const barrierAsset =
     environmentPropManifest.byId[metaversePlaygroundRangeBarrierEnvironmentAssetId];
+  const wallAsset =
+    environmentPropManifest.byId[metaverseBuilderWallTileEnvironmentAssetId];
+  const stepAsset =
+    environmentPropManifest.byId[metaverseBuilderStepTileEnvironmentAssetId];
+  const blockAsset =
+    environmentPropManifest.byId[metaverseBuilderBlockTileEnvironmentAssetId];
 
   assert.ok(floorAsset);
   assert.ok(barrierAsset);
+  assert.ok(wallAsset);
+  assert.ok(stepAsset);
+  assert.ok(blockAsset);
   assert.equal(floorAsset.placement, "static");
   assert.equal(barrierAsset.placement, "instanced");
+  assert.equal(barrierAsset.traversalAffordance, "support");
+  assert.equal(floorAsset.editorCatalogVisibility, "visible");
+  assert.equal(barrierAsset.editorCatalogVisibility, "hidden");
+  assert.equal(wallAsset.editorCatalogVisibility, "visible");
+  assert.equal(stepAsset.editorCatalogVisibility, "visible");
+  assert.equal(blockAsset.editorCatalogVisibility, "visible");
+  assert.equal(wallAsset.traversalAffordance, "support");
+  assert.equal(stepAsset.traversalAffordance, "support");
+  assert.equal(blockAsset.traversalAffordance, "support");
+  assert.deepEqual(wallAsset.physicsColliders, [
+    {
+      center: { x: 0, y: 2, z: 0 },
+      shape: "box",
+      size: { x: 4, y: 4, z: 0.5 },
+      traversalAffordance: "support"
+    }
+  ]);
+  assert.deepEqual(stepAsset.physicsColliders, [
+    {
+      center: { x: 0, y: 0.5, z: 0 },
+      shape: "box",
+      size: { x: 4, y: 1, z: 4 },
+      traversalAffordance: "support"
+    }
+  ]);
+  assert.deepEqual(blockAsset.physicsColliders, [
+    {
+      center: { x: 0, y: 2, z: 0 },
+      shape: "box",
+      size: { x: 4, y: 4, z: 4 },
+      traversalAffordance: "support"
+    }
+  ]);
   assert.deepEqual(floorAsset.renderModel.lods, [
     {
       kind: "procedural-box",

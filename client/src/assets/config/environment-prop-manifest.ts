@@ -84,6 +84,7 @@ export const metaverseHubDiveBoatForwardModelYawRadians = Math.PI * 0.5;
 export const environmentPropManifest = defineEnvironmentAssetManifest([
   {
     id: metaversePlaygroundRangeFloorEnvironmentAssetId,
+    editorCatalogVisibility: "visible",
     label: "Metaverse playground range floor",
     placement: "static",
     traversalAffordance: "support",
@@ -114,9 +115,10 @@ export const environmentPropManifest = defineEnvironmentAssetManifest([
   },
   {
     id: metaversePlaygroundRangeBarrierEnvironmentAssetId,
+    editorCatalogVisibility: "hidden",
     label: "Metaverse playground range barrier",
     placement: "instanced",
-    traversalAffordance: "blocker",
+    traversalAffordance: "support",
     physicsColliders: resolveSurfaceColliders(
       sharedMetaversePlaygroundRangeBarrierEnvironmentAssetId
     ),
@@ -144,6 +146,7 @@ export const environmentPropManifest = defineEnvironmentAssetManifest([
   },
   {
     id: metaverseBuilderFloorTileEnvironmentAssetId,
+    editorCatalogVisibility: "visible",
     label: "Metaverse build floor tile",
     placement: "instanced",
     traversalAffordance: "support",
@@ -174,9 +177,10 @@ export const environmentPropManifest = defineEnvironmentAssetManifest([
   },
   {
     id: metaverseBuilderWallTileEnvironmentAssetId,
+    editorCatalogVisibility: "visible",
     label: "Metaverse build wall tile",
     placement: "instanced",
-    traversalAffordance: "blocker",
+    traversalAffordance: "support",
     physicsColliders: resolveSurfaceColliders(
       sharedMetaverseBuilderWallTileEnvironmentAssetId
     ),
@@ -204,6 +208,7 @@ export const environmentPropManifest = defineEnvironmentAssetManifest([
   },
   {
     id: metaverseBuilderStepTileEnvironmentAssetId,
+    editorCatalogVisibility: "visible",
     label: "Metaverse build step tile",
     placement: "instanced",
     traversalAffordance: "support",
@@ -234,6 +239,7 @@ export const environmentPropManifest = defineEnvironmentAssetManifest([
   },
   {
     id: metaverseBuilderBlockTileEnvironmentAssetId,
+    editorCatalogVisibility: "visible",
     label: "Metaverse build block tile",
     placement: "instanced",
     traversalAffordance: "support",
@@ -264,6 +270,7 @@ export const environmentPropManifest = defineEnvironmentAssetManifest([
   },
   {
     id: metaverseHubDockEnvironmentAssetId,
+    editorCatalogVisibility: "visible",
     label: "Metaverse hub dock",
     placement: "static",
     traversalAffordance: "support",
@@ -293,6 +300,7 @@ export const environmentPropManifest = defineEnvironmentAssetManifest([
   },
   {
     id: metaverseHubPushableCrateEnvironmentAssetId,
+    editorCatalogVisibility: "visible",
     label: "Metaverse hub pushable crate",
     placement: "dynamic",
     traversalAffordance: "blocker",
@@ -335,6 +343,7 @@ export const environmentPropManifest = defineEnvironmentAssetManifest([
   },
   {
     id: metaverseHubSkiffEnvironmentAssetId,
+    editorCatalogVisibility: "visible",
     label: "Metaverse hub skiff",
     placement: "dynamic",
     traversalAffordance: "mount",
@@ -470,6 +479,7 @@ export const environmentPropManifest = defineEnvironmentAssetManifest([
   },
   {
     id: metaverseHubDiveBoatEnvironmentAssetId,
+    editorCatalogVisibility: "visible",
     label: "Metaverse hub dive boat",
     placement: "dynamic",
     traversalAffordance: "mount",

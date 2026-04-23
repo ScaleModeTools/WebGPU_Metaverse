@@ -25,6 +25,10 @@ export function groupMapEditorLibraryAssets(
       continue;
     }
 
+    if (asset.editorCatalogVisibility === "hidden") {
+      continue;
+    }
+
     if (isVehicleAssetDescriptor(asset)) {
       vehicles.push(asset);
       continue;

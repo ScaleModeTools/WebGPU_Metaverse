@@ -254,7 +254,7 @@ test("authoritative world and presence snapshots preserve the explicitly assigne
   );
 });
 
-test("authoritative default joins rebalance deterministic default lanes so the second same-lane player fills the opposite team", () => {
+test("authoritative default joins preserve explicit team selection even when player ids hash to the same lane", () => {
   const bundle = createTeamSpawnPreviewBundle("server-team-spawn-balance-test");
 
   registerAuthoritativeMetaverseMapBundlePreview(bundle, "staging-ground");
@@ -288,10 +288,10 @@ test("authoritative default joins rebalance deterministic default lanes so the s
   const secondSnapshot = readPlayerSnapshot(worldSnapshot, secondBluePlayerId);
 
   assert.equal(firstSnapshot.teamId, "blue");
-  assert.equal(secondSnapshot.teamId, "red");
+  assert.equal(secondSnapshot.teamId, "blue");
   assert.equal(
     readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(secondSnapshot).position.x,
-    24
+    -24
   );
 });
 
@@ -318,6 +318,7 @@ test("pre-authority presence sync keeps spawn-like startup poses on the authored
       characterId: "mesh2motion-humanoid-v1",
       playerId: redPlayerId,
       pose: startupSpawnPose,
+      teamId: "red",
       username: redUsername
     }),
     0
@@ -327,6 +328,7 @@ test("pre-authority presence sync keeps spawn-like startup poses on the authored
       characterId: "mesh2motion-humanoid-v1",
       playerId: bluePlayerId,
       pose: startupSpawnPose,
+      teamId: "blue",
       username: blueUsername
     }),
     0

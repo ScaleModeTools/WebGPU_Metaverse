@@ -40,8 +40,7 @@ export function advanceLocalCharacterAnimation<
   >,
   dependencies: {
     readonly captureHeldWeaponPoseRuntime: (
-      heldWeaponPoseRuntime: NonNullable<TCharacterRuntime["heldWeaponPoseRuntime"]>,
-      attachmentRuntime: TAttachmentRuntime | null
+      heldWeaponPoseRuntime: NonNullable<TCharacterRuntime["heldWeaponPoseRuntime"]>
     ) => void;
   }
 ): void {
@@ -83,8 +82,7 @@ export function advanceLocalCharacterAnimation<
 
   if (characterRuntime.heldWeaponPoseRuntime !== null) {
     dependencies.captureHeldWeaponPoseRuntime(
-      characterRuntime.heldWeaponPoseRuntime,
-      attachmentRuntime
+      characterRuntime.heldWeaponPoseRuntime
     );
   }
 }

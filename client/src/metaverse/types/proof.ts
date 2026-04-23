@@ -68,7 +68,9 @@ export const metaverseSyntheticSocketNames = [
   "grip_l_socket",
   "grip_r_socket",
   "palm_l_socket",
-  "palm_r_socket"
+  "palm_r_socket",
+  "support_l_socket",
+  "support_r_socket"
 ] as const;
 
 export type MetaverseSyntheticSocketName =
@@ -84,6 +86,7 @@ export interface MetaverseAttachmentMountProofConfig {
   readonly forwardReferenceNodeName?: string | null;
   readonly offHandSupportPointId?: string | null;
   readonly socketName: MetaverseAttachmentSocketName;
+  readonly supportMarkerNodeName?: string | null;
   readonly triggerMarkerNodeName?: string | null;
   readonly upReferenceNodeName?: string | null;
 }

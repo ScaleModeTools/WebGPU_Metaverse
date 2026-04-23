@@ -37,6 +37,14 @@ export const environmentPhysicsColliderTraversalAffordanceIds = [
 export type EnvironmentPhysicsColliderTraversalAffordanceId =
   (typeof environmentPhysicsColliderTraversalAffordanceIds)[number];
 
+export const environmentEditorCatalogVisibilityIds = [
+  "visible",
+  "hidden"
+] as const;
+
+export type EnvironmentEditorCatalogVisibilityId =
+  (typeof environmentEditorCatalogVisibilityIds)[number];
+
 export interface EnvironmentVector3Descriptor {
   readonly x: number;
   readonly y: number;
@@ -119,6 +127,7 @@ export interface EnvironmentAssetDescriptor<
   TId extends EnvironmentAssetId = EnvironmentAssetId
 > {
   readonly id: TId;
+  readonly editorCatalogVisibility: EnvironmentEditorCatalogVisibilityId;
   readonly label: string;
   readonly placement: EnvironmentAssetPlacement;
   readonly dynamicBody?: EnvironmentDynamicBodyDescriptor | null;

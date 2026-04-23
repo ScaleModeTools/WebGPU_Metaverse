@@ -56,7 +56,7 @@ test("MetaverseTraversalRuntime keeps swim character presentation partially subm
   }
 });
 
-test("MetaverseTraversalRuntime routes jump presentation through up, mid, and down animation phases", async () => {
+test("MetaverseTraversalRuntime routes jump presentation through up and mid phases before grounded recovery", async () => {
   const { groundedBodyRuntime, traversalRuntime } =
     await fixtureContext.createTraversalHarness({
       surfaceColliderSnapshots: [createFlatGroundSurfaceColliderSnapshot()]
@@ -92,7 +92,7 @@ test("MetaverseTraversalRuntime routes jump presentation through up, mid, and do
 
     assert.ok(observedVocabularies.has("jump-up"));
     assert.ok(observedVocabularies.has("jump-mid"));
-    assert.ok(observedVocabularies.has("jump-down"));
+    assert.ok(!observedVocabularies.has("jump-down"));
     assert.equal(groundedBodyRuntime.snapshot.grounded, true);
     assert.equal(
       traversalRuntime.characterPresentationSnapshot?.animationVocabulary,

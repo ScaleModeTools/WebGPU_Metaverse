@@ -78,6 +78,7 @@ export {
 export {
   defineEnvironmentAssetManifest,
   environmentAssetPlacements,
+  environmentEditorCatalogVisibilityIds,
   environmentProceduralMaterialPresetIds
 } from "./types/environment-asset-manifest";
 export {
@@ -137,6 +138,7 @@ export type {
   EnvironmentAssetManifest,
   EnvironmentBoxColliderDescriptor,
   EnvironmentColliderVector3,
+  EnvironmentEditorCatalogVisibilityId,
   EnvironmentProceduralBoxLodDescriptor,
   EnvironmentProceduralMaterialPresetId,
   EnvironmentRenderLodDescriptor,

@@ -116,7 +116,9 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
   addBone("ring_01_l", handLBone, new Vector3(-0.1, 0, -0.03));
   addBone("pinky_01_l", handLBone, new Vector3(-0.08, 0, -0.05));
   addBone("thumb_01_r", handRBone, new Vector3(0.04, -0.02, 0.06));
-  addBone("index_01_r", handRBone, new Vector3(0.1, 0, 0.03));
+  const index01RBone = addBone("index_01_r", handRBone, new Vector3(0.1, 0, 0.03));
+  addBone("index_02_r", index01RBone, new Vector3(0.055, -0.004, -0.004));
+  addBone("index_03_r", bonesByName.get("index_02_r"), new Vector3(0.04, -0.004, -0.003));
   addBone("middle_01_r", handRBone, new Vector3(0.11, 0, 0));
   addBone("ring_01_r", handRBone, new Vector3(0.1, 0, -0.03));
   addBone("pinky_01_r", handRBone, new Vector3(0.08, 0, -0.05));
@@ -165,6 +167,8 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
     bonesByName.get("pinky_01_l"),
     bonesByName.get("thumb_01_r"),
     bonesByName.get("index_01_r"),
+    bonesByName.get("index_02_r"),
+    bonesByName.get("index_03_r"),
     bonesByName.get("middle_01_r"),
     bonesByName.get("ring_01_r"),
     bonesByName.get("pinky_01_r"),
@@ -204,7 +208,7 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
       attachmentId: "metaverse-service-pistol-v1",
       heldMount: {
         attachmentSocketNodeName: "metaverse_service_pistol_grip_hand_r_socket",
-        socketName: "grip_r_socket",
+        socketName: "palm_r_socket",
         triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker"
       },
       label: "Metaverse service pistol",
@@ -269,6 +273,7 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
   const handLSocket = sceneRuntime.scene.getObjectByName("hand_l_socket");
   const handSocket = sceneRuntime.scene.getObjectByName("hand_r_socket");
   const leftGripSocket = sceneRuntime.scene.getObjectByName("grip_l_socket");
+  const leftSupportSocket = sceneRuntime.scene.getObjectByName("support_l_socket");
   const gripSocket = sceneRuntime.scene.getObjectByName("grip_r_socket");
   const leftPalmSocket = sceneRuntime.scene.getObjectByName("palm_l_socket");
   const palmSocket = sceneRuntime.scene.getObjectByName("palm_r_socket");
@@ -307,6 +312,13 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
       palmLocalPosition: sourceSocketLocalPosition
         .clone()
         .lerp(knuckleCentroid, 0.45),
+      sideAxis: forwardAxis.clone().cross(upAxis).normalize(),
+      supportLocalPosition: sourceSocketLocalPosition
+        .clone()
+        .lerp(knuckleCentroid, 0.45)
+        .addScaledVector(forwardAxis, -0.07)
+        .addScaledVector(upAxis, 0.03)
+        .addScaledVector(forwardAxis.clone().cross(upAxis).normalize(), 0.11),
       upAxis
     };
   };
@@ -334,16 +346,18 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
   assert.ok(handLSocket);
   assert.ok(handSocket);
   assert.ok(leftGripSocket);
+  assert.ok(leftSupportSocket);
   assert.ok(gripSocket);
   assert.ok(leftPalmSocket);
   assert.ok(palmSocket);
   assert.ok(attachmentRoot);
   assert.ok(heldGripSocketNode);
   assert.equal(leftGripSocket.parent?.name, "hand_l");
+  assert.equal(leftSupportSocket.parent?.name, "hand_l");
   assert.equal(gripSocket.parent?.name, "hand_r");
   assert.equal(leftPalmSocket.parent?.name, "hand_l");
   assert.equal(palmSocket.parent?.name, "hand_r");
-  assert.equal(attachmentRoot.parent?.name, "grip_r_socket");
+  assert.equal(attachmentRoot.parent?.name, "palm_r_socket");
   assert.ok(
     leftGripSocket.position.distanceTo(leftExpectedPalmBasis.gripLocalPosition) <
       0.000001,
@@ -359,6 +373,24 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
       leftExpectedPalmBasis.forwardAxis
     ) < 0.000001,
     "Synthesized humanoid_v2 left palm socket should point forward along the knuckle line"
+  );
+  assert.ok(
+    leftSupportSocket.position.distanceTo(
+      leftExpectedPalmBasis.supportLocalPosition
+    ) <
+      0.000001,
+    "Synthesized humanoid_v2 left support socket should stay centered on the palm support contact"
+  );
+  assert.ok(
+    resolveSocketForwardAxis(leftSupportSocket).angleTo(
+      leftExpectedPalmBasis.forwardAxis
+    ) < 0.000001,
+    "Synthesized humanoid_v2 left support socket should keep the palm forward axis"
+  );
+  assert.ok(
+    resolveSocketUpAxis(leftSupportSocket).angleTo(leftExpectedPalmBasis.upAxis) <
+      0.000001,
+    "Synthesized humanoid_v2 left support socket should keep the grip-facing palm orientation for offhand support"
   );
   assert.ok(
     resolveSocketUpAxis(leftPalmSocket).angleTo(leftExpectedPalmBasis.upAxis) <
@@ -382,6 +414,12 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
     "Synthesized humanoid_v2 left grip socket should inherit the mirrored palm basis"
   );
   assertQuaternionArraysEquivalent(
+    leftSupportSocket.quaternion.toArray(),
+    leftPalmSocket.quaternion.toArray(),
+    0.000001,
+    "Synthesized humanoid_v2 left support socket should inherit the mirrored palm basis"
+  );
+  assertQuaternionArraysEquivalent(
     gripSocket.quaternion.toArray(),
     palmSocket.quaternion.toArray(),
     0.000001,
@@ -398,14 +436,14 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
   assert.ok(
     heldGripSocketNode
       .getWorldPosition(new Vector3())
-      .distanceTo(gripSocket.getWorldPosition(new Vector3())) < 0.000001,
-    "Humanoid_v2 held attachment should land its authored grip socket on grip_r_socket."
+      .distanceTo(palmSocket.getWorldPosition(new Vector3())) < 0.000001,
+    "Humanoid_v2 held attachment should land its authored grip socket on palm_r_socket."
   );
   assertQuaternionArraysEquivalent(
     heldGripSocketNode.getWorldQuaternion(new Quaternion()).toArray(),
-    gripSocket.getWorldQuaternion(new Quaternion()).toArray(),
+    palmSocket.getWorldQuaternion(new Quaternion()).toArray(),
     0.000001,
-    "Humanoid_v2 held attachment should align its authored grip socket to grip_r_socket."
+    "Humanoid_v2 held attachment should align its authored grip socket to palm_r_socket."
   );
 });
 

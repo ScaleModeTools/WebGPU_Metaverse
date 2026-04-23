@@ -90,15 +90,7 @@ export const weaponArchetypeManifest = defineWeaponArchetypeManifest([
       attachmentSocketNodeName: "metaverse_service_pistol_back_socket",
       socketName: "back_socket"
     },
-    supportPoint: {
-      supportPointId: "pistol-support-left",
-      authoringNodeName: "metaverse_service_pistol_support_grip_marker",
-      localPosition: {
-        x: 0.04,
-        y: -0.01,
-        z: 0.025
-      }
-    },
+    supportPoint: null,
     nodes: {
       adsCameraAnchorNodeName: "metaverse_service_pistol_ads_camera_anchor",
       forwardReferenceNodeName: "metaverse_service_pistol_forward_marker",
@@ -107,6 +99,7 @@ export const weaponArchetypeManifest = defineWeaponArchetypeManifest([
       opticMountNodeName: "metaverse_service_pistol_optic_mount_socket",
       rearSightNodeName: "metaverse_service_pistol_rear_sight_socket",
       rightHandGripSocketNodeName: "metaverse_service_pistol_grip_hand_r_socket",
+      supportMarkerNodeName: "metaverse_service_pistol_support_marker",
       triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker",
       upReferenceNodeName: "metaverse_service_pistol_up_marker"
     },

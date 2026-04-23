@@ -192,6 +192,7 @@ export interface WeaponNodeDescriptor {
   readonly opticMountNodeName: string;
   readonly rearSightNodeName: string;
   readonly rightHandGripSocketNodeName: string;
+  readonly supportMarkerNodeName?: string | null;
   readonly triggerMarkerNodeName: string;
   readonly upReferenceNodeName: string;
 }
@@ -300,6 +301,7 @@ export function buildAttachmentAssetFromWeaponArchetype<
       adsCameraAnchorNodeName: weapon.nodes.adsCameraAnchorNodeName,
       attachmentSocketNodeName: weapon.nodes.rightHandGripSocketNodeName,
       forwardReferenceNodeName: weapon.nodes.forwardReferenceNodeName,
+      supportMarkerNodeName: weapon.nodes.supportMarkerNodeName ?? null,
       triggerMarkerNodeName: weapon.nodes.triggerMarkerNodeName,
       upReferenceNodeName: weapon.nodes.upReferenceNodeName
     },

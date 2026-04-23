@@ -18,7 +18,6 @@ export interface MetaverseMovementAnimationPolicyModeConfig {
 export interface MetaverseMovementAnimationPolicyConfig {
   readonly grounded: MetaverseMovementAnimationPolicyModeConfig;
   readonly jump: {
-    readonly landingHoldMs: number;
     readonly startupHoldMs: number;
   };
   readonly swim: MetaverseMovementAnimationPolicyModeConfig;
@@ -59,7 +58,6 @@ export const metaverseMovementAnimationPolicyConfig = Object.freeze({
     minimumAppliedSpeedUnitsPerSecond: 0.05
   }),
   jump: Object.freeze({
-    landingHoldMs: 180,
     startupHoldMs: 40
   }),
   swim: Object.freeze({
@@ -203,7 +201,6 @@ export class MetaverseMovementAnimationPolicyRuntime {
   #animationCycleId = 0;
   #holdRemainingMs = 0;
   #jumpAirborneActive = false;
-  #jumpLandingHoldRemainingMs = 0;
   #jumpStartupHoldRemainingMs = 0;
   #movementDirectionKey: string | null = null;
   #vocabulary: MetaverseCharacterAnimationVocabularyId = "idle";
@@ -226,7 +223,6 @@ export class MetaverseMovementAnimationPolicyRuntime {
     this.#animationCycleId = 0;
     this.#holdRemainingMs = 0;
     this.#jumpAirborneActive = false;
-    this.#jumpLandingHoldRemainingMs = 0;
     this.#jumpStartupHoldRemainingMs = 0;
     this.#movementDirectionKey = null;
     this.#vocabulary = vocabulary;
@@ -303,24 +299,15 @@ export class MetaverseMovementAnimationPolicyRuntime {
       this.#config.jump.startupHoldMs,
       40
     );
-    const jumpLandingHoldMs = resolveJumpPresentationHoldMs(
-      this.#config.jump.landingHoldMs,
-      180
-    );
 
     this.#holdRemainingMs = Math.max(0, this.#holdRemainingMs - normalizedDeltaMs);
     this.#jumpStartupHoldRemainingMs = Math.max(
       0,
       this.#jumpStartupHoldRemainingMs - normalizedDeltaMs
     );
-    this.#jumpLandingHoldRemainingMs = Math.max(
-      0,
-      this.#jumpLandingHoldRemainingMs - normalizedDeltaMs
-    );
 
     if (input.locomotionMode === "swim") {
       this.#jumpAirborneActive = false;
-      this.#jumpLandingHoldRemainingMs = 0;
       this.#jumpStartupHoldRemainingMs = 0;
       const nextState = resolveMovingAnimationVocabulary(
         this.#vocabulary,
@@ -347,7 +334,6 @@ export class MetaverseMovementAnimationPolicyRuntime {
     const enteringAirborneJump = !input.grounded && !this.#jumpAirborneActive;
 
     if (jumpStartupActive) {
-      this.#jumpLandingHoldRemainingMs = 0;
       this.#jumpStartupHoldRemainingMs = Math.max(
         this.#jumpStartupHoldRemainingMs,
         jumpStartupHoldMs
@@ -356,7 +342,6 @@ export class MetaverseMovementAnimationPolicyRuntime {
 
     if (enteringAirborneJump) {
       this.#jumpAirborneActive = true;
-      this.#jumpLandingHoldRemainingMs = 0;
 
       if (
         this.#jumpStartupHoldRemainingMs <= 0 &&
@@ -371,23 +356,12 @@ export class MetaverseMovementAnimationPolicyRuntime {
     if (landedThisFrame) {
       this.#jumpAirborneActive = false;
       this.#jumpStartupHoldRemainingMs = 0;
-      this.#jumpLandingHoldRemainingMs = Math.max(
-        this.#jumpLandingHoldRemainingMs,
-        jumpLandingHoldMs
-      );
     }
 
     if (jumpStartupActive || (!input.grounded && this.#jumpStartupHoldRemainingMs > 0)) {
       this.#holdRemainingMs = 0;
       this.#movementDirectionKey = null;
       this.#vocabulary = "jump-up";
-      return this.#vocabulary;
-    }
-
-    if (landedThisFrame || this.#jumpLandingHoldRemainingMs > 0) {
-      this.#holdRemainingMs = 0;
-      this.#movementDirectionKey = null;
-      this.#vocabulary = "jump-down";
       return this.#vocabulary;
     }
 

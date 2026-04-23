@@ -1182,7 +1182,7 @@ test("MetaverseRemoteWorldPresentationState keeps remote jump loop airborne and 
   assert.equal(
     presentationState.remoteCharacterPresentations[0]?.presentation
       .animationVocabulary,
-    "jump-down"
+    "idle"
   );
   assert.ok(
     (presentationState.remoteCharacterPresentations[0]?.presentation.position.y ??

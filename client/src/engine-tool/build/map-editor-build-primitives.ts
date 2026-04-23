@@ -45,7 +45,7 @@ const mapEditorBuildPrimitiveCatalogEntries = Object.freeze([
   }),
   Object.freeze({
     asset: requireBuildPrimitiveAsset(metaverseBuilderWallTileEnvironmentAssetId),
-    description: "Vertical blocker tile for corridors, cover, and shell walls.",
+    description: "Vertical support tile for corridors, cover, and shell walls.",
     footprint: Object.freeze({
       x: 4,
       y: 4,

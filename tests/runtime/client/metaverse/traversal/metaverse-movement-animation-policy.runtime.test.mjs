@@ -13,7 +13,7 @@ after(async () => {
   await clientLoader?.close();
 });
 
-test("MetaverseMovementAnimationPolicyRuntime keeps jump loop airborne and only lands on contact", async () => {
+test("MetaverseMovementAnimationPolicyRuntime keeps jump loop airborne and returns to grounded animation on contact", async () => {
   const { MetaverseMovementAnimationPolicyRuntime } = await clientLoader.load(
     "/src/metaverse/traversal/presentation/metaverse-movement-animation-policy.ts"
   );
@@ -26,7 +26,6 @@ test("MetaverseMovementAnimationPolicyRuntime keeps jump loop airborne and only 
       minimumAppliedSpeedUnitsPerSecond: 0.05
     },
     jump: {
-      landingHoldMs: 120,
       startupHoldMs: 40
     },
     swim: {
@@ -70,7 +69,6 @@ test("MetaverseMovementAnimationPolicyRuntime keeps jump loop airborne and only 
   assert.equal(runtime.advance(risingInput, 0.02), "jump-up");
   assert.equal(runtime.advance(risingInput, 0.03), "jump-mid");
   assert.equal(runtime.advance(fallingInput, 0.05), "jump-mid");
-  assert.equal(runtime.advance(groundedInput, 1 / 60), "jump-down");
-  assert.equal(runtime.advance(groundedInput, 0.05), "jump-down");
-  assert.equal(runtime.advance(groundedInput, 0.08), "idle");
+  assert.equal(runtime.advance(groundedInput, 1 / 60), "idle");
+  assert.equal(runtime.advance(groundedInput, 0.05), "idle");
 });
