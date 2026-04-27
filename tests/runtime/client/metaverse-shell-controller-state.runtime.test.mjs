@@ -349,12 +349,34 @@ test("reduceMetaverseShellControllerState keeps hub and experience mutations beh
   assert.equal(state.shellStage, "main-menu");
 
   state = reduceMetaverseShellControllerState(state, {
+    type: "gamePlaylistsRequested"
+  });
+
+  assert.equal(state.shellStage, "playlists");
+
+  state = reduceMetaverseShellControllerState(state, {
+    type: "toolEditorExited"
+  });
+
+  assert.equal(state.shellStage, "main-menu");
+
+  state = reduceMetaverseShellControllerState(state, {
     matchMode: "team-deathmatch",
     type: "metaverseEntryRequested"
   });
 
   assert.equal(state.matchMode, "team-deathmatch");
   assert.equal(state.activeMetaverseBundleId, "private-build");
+  assert.equal(state.activeMetaverseLaunchVariationId, "shell-team-deathmatch");
+
+  state = reduceMetaverseShellControllerState(state, {
+    bundleId: "deathmatch",
+    launchVariationId: "shell-team-deathmatch",
+    matchMode: "team-deathmatch",
+    type: "metaverseEntryRequested"
+  });
+
+  assert.equal(state.activeMetaverseBundleId, "deathmatch");
   assert.equal(state.activeMetaverseLaunchVariationId, "shell-team-deathmatch");
 
   state = reduceMetaverseShellControllerState(state, {

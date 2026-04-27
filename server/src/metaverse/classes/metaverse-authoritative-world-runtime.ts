@@ -1,6 +1,7 @@
 import {
   resolveMetaverseGroundedJumpBodyTraversalActionSnapshot,
   type MetaverseTraversalActiveActionSnapshot,
+  type MetaverseTraversalPlayerBodyBlockerSnapshot,
   type MetaverseSurfaceTraversalConfig,
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 import {
@@ -712,6 +713,11 @@ export class MetaverseAuthoritativeWorldRuntime
         playerStateSync: this.#playerStateSync,
         playerTraversalIntentsByPlayerId: this.#playerTraversalIntentsByPlayerId,
         playersById: this.#playersById,
+        resolveGroundedTraversalPlayerBlockers: (playerRuntime) =>
+          this.#resolveGroundedTraversalPlayerBlockers(
+            playerRuntime,
+            groundedBodyConfig
+          ),
         resolveAuthoritativeSurfaceColliders: () =>
           this.#surfaceState.resolveAuthoritativeSurfaceColliders(),
         swimTraversalConfig,
@@ -1001,17 +1007,39 @@ export class MetaverseAuthoritativeWorldRuntime
         return true;
       }
 
-      const ownerPlayerRuntime = this.#playersById.get(ownerPlayerId);
+      return false;
+    };
+  }
 
-      return (
-        ownerPlayerRuntime !== undefined &&
-        ownerPlayerRuntime.playerId !== playerRuntime.playerId &&
-        shouldTreatMetaversePlayerPoseAsTraversalBlocker(
+  #resolveGroundedTraversalPlayerBlockers(
+    playerRuntime: MetaversePlayerWorldRuntimeState,
+    groundedBodyConfig: MetaverseWorldSurfacePolicyConfig
+  ): readonly MetaverseTraversalPlayerBodyBlockerSnapshot[] {
+    const blockers: MetaverseTraversalPlayerBodyBlockerSnapshot[] = [];
+
+    for (const ownerPlayerRuntime of this.#playersById.values()) {
+      if (
+        ownerPlayerRuntime.playerId === playerRuntime.playerId ||
+        !this.#combatAuthority.isPlayerAlive(ownerPlayerRuntime.playerId) ||
+        !shouldTreatMetaversePlayerPoseAsTraversalBlocker(
           ownerPlayerRuntime.locomotionMode,
           ownerPlayerRuntime.mountedOccupancy
         )
+      ) {
+        continue;
+      }
+
+      blockers.push(
+        Object.freeze({
+          capsuleHalfHeightMeters: groundedBodyConfig.capsuleHalfHeightMeters,
+          capsuleRadiusMeters: groundedBodyConfig.capsuleRadiusMeters,
+          playerId: ownerPlayerRuntime.playerId,
+          position: ownerPlayerRuntime.groundedBodyRuntime.snapshot.position
+        })
       );
-    };
+    }
+
+    return Object.freeze(blockers);
   }
 
   #createPlayerWaterborneTraversalColliderPredicate(
@@ -1045,12 +1073,23 @@ export class MetaverseAuthoritativeWorldRuntime
       return (
         ownerPlayerRuntime !== undefined &&
         ownerPlayerRuntime.playerId !== playerRuntime.playerId &&
+        this.#isPlayerActiveTraversalCollider(ownerPlayerRuntime, collider) &&
+        this.#combatAuthority.isPlayerAlive(ownerPlayerRuntime.playerId) &&
         shouldTreatMetaversePlayerPoseAsTraversalBlocker(
           ownerPlayerRuntime.locomotionMode,
           ownerPlayerRuntime.mountedOccupancy
         )
       );
     };
+  }
+
+  #isPlayerActiveTraversalCollider(
+    playerRuntime: MetaversePlayerWorldRuntimeState,
+    collider: RapierColliderHandle
+  ): boolean {
+    return playerRuntime.locomotionMode === "swim"
+      ? collider === playerRuntime.swimBodyRuntime.colliderHandle
+      : collider === playerRuntime.groundedBodyRuntime.colliderHandle;
   }
 
   #pruneInactivePlayers(nowMs: number): void {

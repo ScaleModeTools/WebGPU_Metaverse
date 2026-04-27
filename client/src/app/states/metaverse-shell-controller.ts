@@ -110,6 +110,7 @@ export function useMetaverseShellController(): MetaverseShellController {
   });
   const flowPolicy = useMetaverseShellFlowPolicy({
     audioSession,
+    browserStorage,
     dispatch,
     metaverseLaunchPending,
     metaverseRoomIdDraft,
@@ -203,6 +204,7 @@ export function useMetaverseShellController(): MetaverseShellController {
     onGlobalControllerBindingPresetChange:
       flowPolicy.onGlobalControllerBindingPresetChange,
     onInputModeChange: flowPolicy.onInputModeChange,
+    onOpenGamePlaylistsRequest: flowPolicy.onOpenGamePlaylistsRequest,
     onOpenToolRequest: flowPolicy.onOpenToolRequest,
     onCloseToolRequest: flowPolicy.onCloseToolRequest,
     onRunToolPreviewRequest: flowPolicy.onRunToolPreviewRequest,

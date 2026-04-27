@@ -2,6 +2,7 @@ import type {
   MetaversePlayerTraversalIntentSnapshotInput,
   MetaverseRealtimeEnvironmentBodySnapshot,
   MetaverseRealtimePlayerSnapshot,
+  MetaverseTraversalPlayerBodyBlockerSnapshot,
   MetaverseRealtimeVehicleSnapshot,
   MetaverseRealtimeWorldSnapshot
 } from "@webgpu-metaverse/shared";
@@ -195,6 +196,10 @@ export class MetaverseRemoteWorldRuntime {
 
   get remoteCharacterPresentations(): readonly MetaverseRemoteCharacterPresentationSnapshot[] {
     return this.#remoteWorldPresentationState.remoteCharacterPresentations;
+  }
+
+  get remotePlayerBodyBlockers(): readonly MetaverseTraversalPlayerBodyBlockerSnapshot[] {
+    return this.#remoteWorldPresentationState.remotePlayerBodyBlockers;
   }
 
   get remoteVehiclePresentations(): readonly MetaverseRemoteVehiclePresentationSnapshot[] {

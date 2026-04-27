@@ -8,6 +8,7 @@ import {
 } from "@/physics";
 import {
   advanceMetaverseUnmountedTraversalBodyStep,
+  constrainMetaverseTraversalPlayerBodyBlockers,
   type MetaverseUnmountedTraversalTransitionSnapshot,
   type MetaverseTraversalStateResolutionSnapshot,
   type MetaverseUnmountedTraversalStateSnapshot
@@ -81,6 +82,7 @@ interface MetaverseSwimTraversalStepInput {
 type FixedStepTraversalDependencies = Pick<
   MetaverseTraversalRuntimeDependencies,
   | "physicsRuntime"
+  | "readGroundedTraversalPlayerBlockers"
   | "resolveGroundedTraversalFilterPredicate"
   | "resolveWaterborneTraversalFilterPredicate"
   | "surfaceColliderSnapshots"
@@ -275,7 +277,20 @@ export class MetaverseFixedStepTraversalSimulation {
           this.#dependencies.resolveGroundedTraversalFilterPredicate(
             readGroundedTraversalExcludedColliders()
           ),
-          resolvedLookYawRadians
+          resolvedLookYawRadians,
+          (rootPosition) =>
+            constrainMetaverseTraversalPlayerBodyBlockers({
+              blockers:
+                this.#dependencies.readGroundedTraversalPlayerBlockers?.() ??
+                Object.freeze([]),
+              capsuleHalfHeightMeters:
+                this.#config.groundedBody.capsuleHalfHeightMeters,
+              capsuleRadiusMeters: this.#config.groundedBody.capsuleRadiusMeters,
+              controllerOffsetMeters:
+                this.#config.groundedBody.controllerOffsetMeters,
+              currentPosition: currentBodySnapshot.position,
+              nextPosition: rootPosition
+            })
         );
       },
       advanceSwimBodySnapshot: () => {
@@ -319,15 +334,25 @@ export class MetaverseFixedStepTraversalSimulation {
       );
     }
 
+    const resolvedBodySnapshot =
+      locomotionOutcome.locomotionMode === "grounded" &&
+      bodySnapshot.grounded !== locomotionOutcome.grounded
+        ? this.#syncGroundedBodySupportState(
+            groundedBodyRuntime,
+            bodySnapshot,
+            locomotionOutcome.grounded
+          )
+        : bodySnapshot;
+
     return Object.freeze({
       automaticSurfaceSnapshot: locomotionOutcome.automaticSurfaceSnapshot,
       autostepHeightMeters: groundedTraversalStep.autostepHeightMeters,
       cameraSnapshot: createTraversalGroundedCameraPresentationSnapshot(
-        bodySnapshot,
+        resolvedBodySnapshot,
         traversalCameraPitchRadians,
         this.#config,
         preferredLookYawRadians,
-        resolveGroundedPresentationPosition(bodySnapshot)
+        resolveGroundedPresentationPosition(resolvedBodySnapshot)
       ),
       locomotionMode: locomotionOutcome.locomotionMode,
       nextTraversalState: locomotionOutcome.traversalState,
@@ -428,5 +453,22 @@ export class MetaverseFixedStepTraversalSimulation {
       nextTraversalState: locomotionOutcome.traversalState,
       transitionSnapshot: traversalBodyStep.transitionSnapshot
     });
+  }
+
+  #syncGroundedBodySupportState(
+    groundedBodyRuntime: MetaverseGroundedBodyRuntime,
+    bodySnapshot: MetaverseGroundedBodySnapshot,
+    grounded: boolean
+  ): MetaverseGroundedBodySnapshot {
+    groundedBodyRuntime.syncAuthoritativeState({
+      driveTarget: bodySnapshot.driveTarget,
+      grounded,
+      interaction: bodySnapshot.interaction,
+      linearVelocity: bodySnapshot.linearVelocity,
+      position: bodySnapshot.position,
+      yawRadians: bodySnapshot.yawRadians
+    });
+
+    return groundedBodyRuntime.snapshot;
   }
 }

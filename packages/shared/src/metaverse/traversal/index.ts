@@ -6,6 +6,7 @@ export * from "../metaverse-grounded-traversal-kernel.js";
 export * from "../metaverse-mounted-vehicle-policies.js";
 export * from "../metaverse-grounded-traversal-simulation.js";
 export * from "../metaverse-mounted-vehicle-surface-drive-kernel.js";
+export * from "../metaverse-player-body-blocker-kernel.js";
 export * from "../metaverse-player-look-constraints.js";
 export * from "../metaverse-surface-drive-body-contract.js";
 export * from "../metaverse-surface-drive-body-kernel.js";

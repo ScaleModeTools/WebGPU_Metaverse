@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  createMetaverseIssuePlayerActionCommand,
   createMetaverseJoinPresenceCommand,
   createMetaversePlayerId,
+  metaverseGroundedBodyTraversalCoreConfig,
   createUsername
 } from "@webgpu-metaverse/shared";
 
@@ -17,6 +19,44 @@ import {
   requireValue,
   shippedGroundedSpawnSupportHeightMeters
 } from "./authoritative-world-test-fixtures.mjs";
+
+function createForwardDirection(origin, target) {
+  const deltaX = target.x - origin.x;
+  const deltaY = target.y - origin.y;
+  const deltaZ = target.z - origin.z;
+  const length = Math.hypot(deltaX, deltaY, deltaZ);
+
+  return Object.freeze({
+    x: deltaX / length,
+    y: deltaY / length,
+    z: deltaZ / length
+  });
+}
+
+function createFireWeaponPlayerActionCommand({
+  actionSequence,
+  issuedAtAuthoritativeTimeMs,
+  origin,
+  playerId,
+  target
+}) {
+  const forwardDirection = createForwardDirection(origin, target);
+  const planarMagnitude = Math.hypot(forwardDirection.x, forwardDirection.z);
+
+  return createMetaverseIssuePlayerActionCommand({
+    action: {
+      actionSequence,
+      aimSnapshot: {
+        pitchRadians: Math.atan2(forwardDirection.y, planarMagnitude),
+        yawRadians: Math.atan2(forwardDirection.x, -forwardDirection.z)
+      },
+      issuedAtAuthoritativeTimeMs,
+      kind: "fire-weapon",
+      weaponId: "metaverse-service-pistol-v2"
+    },
+    playerId
+  });
+}
 
 test("MetaverseAuthoritativeWorldRuntime simulates unmounted grounded and swim traversal from authoritative traversal intent commands", () => {
   const groundedRuntime = createAuthoritativeRuntime();
@@ -248,11 +288,173 @@ test("MetaverseAuthoritativeWorldRuntime keeps other grounded players as solid t
     .players.find((player) => player.playerId === soloMoverPlayerId);
   const soloMoverActiveBodySnapshot = readPlayerActiveBodySnapshot(soloMover);
   const blockedMoverActiveBodySnapshot = readPlayerActiveBodySnapshot(blockedMover);
+  const blockedStaticActiveBodySnapshot =
+    readPlayerActiveBodySnapshot(blockedStaticPlayer);
+  const playerBodyClearanceMeters =
+    metaverseGroundedBodyTraversalCoreConfig.capsuleRadiusMeters * 2 +
+    metaverseGroundedBodyTraversalCoreConfig.controllerOffsetMeters;
 
   assert.notEqual(soloMover, undefined);
+  assert.ok(
+    Math.hypot(
+      blockedMoverActiveBodySnapshot.position.x -
+        blockedStaticActiveBodySnapshot.position.x,
+      blockedMoverActiveBodySnapshot.position.z -
+        blockedStaticActiveBodySnapshot.position.z
+    ) >= playerBodyClearanceMeters - 0.05
+  );
   assert.ok(soloMoverActiveBodySnapshot.position.z < blockerSpawnPosition.z);
   assert.ok(
     blockedMoverActiveBodySnapshot.position.z >
       soloMoverActiveBodySnapshot.position.z + 1.5
   );
+});
+
+test("MetaverseAuthoritativeWorldRuntime stops using dead players as traversal blockers", () => {
+  const runtime = createAuthoritativeRuntime();
+  const moverPlayerId = requireValue(
+    createMetaversePlayerId("dead-blocker-mover"),
+    "moverPlayerId"
+  );
+  const blockerPlayerId = requireValue(
+    createMetaversePlayerId("dead-blocker-target"),
+    "blockerPlayerId"
+  );
+  const moverUsername = requireValue(
+    createUsername("Dead Blocker Mover"),
+    "moverUsername"
+  );
+  const blockerUsername = requireValue(
+    createUsername("Dead Blocker Target"),
+    "blockerUsername"
+  );
+  const moverSpawnPosition = {
+    x: -8.2,
+    y: shippedGroundedSpawnSupportHeightMeters,
+    z: -14.8
+  };
+  const blockerSpawnPosition = {
+    x: moverSpawnPosition.x,
+    y: moverSpawnPosition.y,
+    z: -16.2
+  };
+
+  runtime.acceptPresenceCommand(
+    createMetaverseJoinPresenceCommand({
+      characterId: "mesh2motion-humanoid-v1",
+      playerId: moverPlayerId,
+      pose: {
+        position: moverSpawnPosition,
+        stateSequence: 1,
+        yawRadians: 0
+      },
+      teamId: "red",
+      username: moverUsername
+    }),
+    0
+  );
+  runtime.acceptPresenceCommand(
+    createMetaverseJoinPresenceCommand({
+      characterId: "mesh2motion-humanoid-v1",
+      playerId: blockerPlayerId,
+      pose: {
+        position: blockerSpawnPosition,
+        stateSequence: 1,
+        yawRadians: 0
+      },
+      teamId: "blue",
+      username: blockerUsername
+    }),
+    0
+  );
+  runtime.advanceToTime(1_200);
+
+  const muzzleOrigin = Object.freeze({
+    x: moverSpawnPosition.x,
+    y: moverSpawnPosition.y + 1.62,
+    z: moverSpawnPosition.z
+  });
+  const blockerBodyTarget = Object.freeze({
+    x: blockerSpawnPosition.x,
+    y: blockerSpawnPosition.y + 0.95,
+    z: blockerSpawnPosition.z
+  });
+  const blockerHeadTarget = Object.freeze({
+    x: blockerSpawnPosition.x,
+    y: blockerSpawnPosition.y + 1.58,
+    z: blockerSpawnPosition.z
+  });
+
+  runtime.acceptWorldCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 1,
+      issuedAtAuthoritativeTimeMs: 1_200,
+      origin: muzzleOrigin,
+      playerId: moverPlayerId,
+      target: blockerBodyTarget
+    }),
+    1_200
+  );
+  runtime.acceptWorldCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 2,
+      issuedAtAuthoritativeTimeMs: 1_400,
+      origin: muzzleOrigin,
+      playerId: moverPlayerId,
+      target: blockerHeadTarget
+    }),
+    1_400
+  );
+  runtime.acceptWorldCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 3,
+      issuedAtAuthoritativeTimeMs: 1_600,
+      origin: muzzleOrigin,
+      playerId: moverPlayerId,
+      target: blockerHeadTarget
+    }),
+    1_600
+  );
+  runtime.acceptWorldCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 4,
+      issuedAtAuthoritativeTimeMs: 1_800,
+      origin: muzzleOrigin,
+      playerId: moverPlayerId,
+      target: blockerHeadTarget
+    }),
+    1_800
+  );
+
+  const postKillSnapshot = runtime.readWorldSnapshot(1_800, moverPlayerId);
+  const deadBlocker = postKillSnapshot.players.find(
+    (player) => player.playerId === blockerPlayerId
+  );
+
+  assert.equal(deadBlocker?.combat?.alive, false);
+
+  runtime.acceptWorldCommand(
+    createMetaverseSyncPlayerTraversalIntentCommand({
+      intent: {
+        boost: true,
+        sequence: 2,
+        jump: false,
+        locomotionMode: "grounded",
+        moveAxis: 1,
+        strafeAxis: 0,
+        yawAxis: 0
+      },
+      playerId: moverPlayerId
+    }),
+    1_800
+  );
+  runtime.advanceToTime(2_300);
+
+  const movedSnapshot = runtime.readWorldSnapshot(2_300, moverPlayerId);
+  const mover = movedSnapshot.players.find(
+    (player) => player.playerId === moverPlayerId
+  );
+  const moverActiveBodySnapshot = readPlayerActiveBodySnapshot(mover);
+
+  assert.ok(moverActiveBodySnapshot.position.z < blockerSpawnPosition.z);
 });

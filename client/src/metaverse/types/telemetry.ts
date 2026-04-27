@@ -53,6 +53,7 @@ export const metaverseLocalHeldWeaponGripDebugPhases = [
   "no-held-weapon-pose-runtime",
   "no-character-presentation",
   "mounted",
+  "no-weapon-state",
   "attachment-not-held",
   "grip-target-solve-failed",
   "no-offhand-grip-mount",

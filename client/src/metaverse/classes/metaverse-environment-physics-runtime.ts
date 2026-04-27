@@ -3,17 +3,9 @@ import {
   resolveMetaverseDynamicCuboidBodyConfigSnapshotFromSurfaceAsset,
   createMetaverseTraversalColliderMetadataSnapshot,
   resolveMetaverseGroundedBodyColliderTranslationSnapshot,
-  shouldConsiderMetaverseWaterborneTraversalCollider
+  shouldConsiderMetaverseWaterborneTraversalCollider,
+  type MetaverseTraversalPlayerBodyBlockerSnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
-import {
-  shouldTreatMetaversePlayerPoseAsTraversalBlocker
-} from "@webgpu-metaverse/shared/metaverse/presence";
-import {
-  readMetaverseRealtimePlayerActiveBodyKinematicSnapshot
-} from "@webgpu-metaverse/shared/metaverse/realtime";
-import type {
-  MetaverseRealtimePlayerSnapshot
-} from "@webgpu-metaverse/shared/metaverse/realtime";
 import type {
   MetaverseWorldPlacedSurfaceColliderSnapshot
 } from "@webgpu-metaverse/shared/metaverse/world";
@@ -412,6 +404,10 @@ export class MetaverseEnvironmentPhysicsRuntime {
     string,
     RapierColliderHandle
   >();
+  #remoteCharacterBlockerSnapshotsByPlayerId = new Map<
+    string,
+    MetaverseTraversalPlayerBodyBlockerSnapshot
+  >();
 
   constructor(
     config: MetaverseRuntimeConfig,
@@ -466,8 +462,20 @@ export class MetaverseEnvironmentPhysicsRuntime {
     excludedColliders: readonly RapierColliderHandle[] = emptyColliderHandleList
   ): RapierQueryFilterPredicate {
     const excludedColliderSet = new Set(excludedColliders);
+    const remoteCharacterBlockerColliderSet = new Set(
+      this.#remoteCharacterBlockerCollidersByPlayerId.values()
+    );
 
-    return (collider) => !excludedColliderSet.has(collider);
+    return (collider) =>
+      !excludedColliderSet.has(collider) &&
+      !remoteCharacterBlockerColliderSet.has(collider);
+  }
+
+  readGroundedTraversalPlayerBlockers():
+    readonly MetaverseTraversalPlayerBodyBlockerSnapshot[] {
+    return Object.freeze([
+      ...this.#remoteCharacterBlockerSnapshotsByPlayerId.values()
+    ]);
   }
 
   resolveWaterborneTraversalFilterPredicate(
@@ -680,6 +688,7 @@ export class MetaverseEnvironmentPhysicsRuntime {
     }
 
     this.#remoteCharacterBlockerCollidersByPlayerId.clear();
+    this.#remoteCharacterBlockerSnapshotsByPlayerId.clear();
     this.#surfaceColliderSnapshots.length = 0;
     this.#surfaceColliderMetadataByHandle.clear();
     this.#authoritativeEnvironmentBodyCollisionSyncEnvironmentAssetIds.clear();
@@ -731,8 +740,8 @@ export class MetaverseEnvironmentPhysicsRuntime {
     }
   }
 
-  syncAuthoritativeRemotePlayerBlockers(
-    remotePlayerSnapshots: readonly MetaverseRealtimePlayerSnapshot[]
+  syncSampledRemotePlayerBlockers(
+    remotePlayerBlockers: readonly MetaverseTraversalPlayerBodyBlockerSnapshot[]
   ): void {
     if (!this.#physicsRuntime.isInitialized) {
       return;
@@ -740,35 +749,43 @@ export class MetaverseEnvironmentPhysicsRuntime {
 
     const activePlayerIds = new Set<string>();
 
-    for (const remotePlayerSnapshot of remotePlayerSnapshots) {
-      const blockerSnapshot =
-        this.#createAuthoritativeRemotePlayerBlockerState(
-          remotePlayerSnapshot
-        );
-
-      if (blockerSnapshot === null) {
-        continue;
-      }
-
-      activePlayerIds.add(remotePlayerSnapshot.playerId);
+    for (const blockerSnapshot of remotePlayerBlockers) {
+      activePlayerIds.add(blockerSnapshot.playerId);
+      this.#remoteCharacterBlockerSnapshotsByPlayerId.set(
+        blockerSnapshot.playerId,
+        Object.freeze({
+          capsuleHalfHeightMeters: blockerSnapshot.capsuleHalfHeightMeters,
+          capsuleRadiusMeters: blockerSnapshot.capsuleRadiusMeters,
+          playerId: blockerSnapshot.playerId,
+          position: blockerSnapshot.position
+        })
+      );
       const existingCollider =
         this.#remoteCharacterBlockerCollidersByPlayerId.get(
-          remotePlayerSnapshot.playerId
+          blockerSnapshot.playerId
+        );
+      const blockerTranslation =
+        resolveMetaverseGroundedBodyColliderTranslationSnapshot(
+          {
+            capsuleHalfHeightMeters: blockerSnapshot.capsuleHalfHeightMeters,
+            capsuleRadiusMeters: blockerSnapshot.capsuleRadiusMeters
+          },
+          blockerSnapshot.position
         );
 
       if (existingCollider === undefined) {
         const blockerCollider = this.#physicsRuntime.createCapsuleCollider(
           blockerSnapshot.capsuleHalfHeightMeters,
           blockerSnapshot.capsuleRadiusMeters,
-          blockerSnapshot.translation
+          blockerTranslation
         );
 
         this.#remoteCharacterBlockerCollidersByPlayerId.set(
-          remotePlayerSnapshot.playerId,
+          blockerSnapshot.playerId,
           blockerCollider
         );
       } else {
-        existingCollider.setTranslation(blockerSnapshot.translation);
+        existingCollider.setTranslation(blockerTranslation);
       }
     }
 
@@ -779,6 +796,7 @@ export class MetaverseEnvironmentPhysicsRuntime {
 
       this.#physicsRuntime.removeCollider(collider);
       this.#remoteCharacterBlockerCollidersByPlayerId.delete(playerId);
+      this.#remoteCharacterBlockerSnapshotsByPlayerId.delete(playerId);
     }
   }
 
@@ -1144,42 +1162,4 @@ export class MetaverseEnvironmentPhysicsRuntime {
     }
   }
 
-  #createAuthoritativeRemotePlayerBlockerState(
-    remotePlayerSnapshot: MetaverseRealtimePlayerSnapshot
-  ): {
-    readonly capsuleHalfHeightMeters: number;
-    readonly capsuleRadiusMeters: number;
-    readonly translation: PhysicsVector3Snapshot;
-  } | null {
-    if (
-      !shouldTreatMetaversePlayerPoseAsTraversalBlocker(
-        remotePlayerSnapshot.locomotionMode,
-        remotePlayerSnapshot.mountedOccupancy
-      ) ||
-      remotePlayerSnapshot.combat?.alive === false
-    ) {
-      return null;
-    }
-
-    const capsuleHalfHeightMeters =
-      this.#config.groundedBody.capsuleHalfHeightMeters;
-    const capsuleRadiusMeters =
-      this.#config.groundedBody.capsuleRadiusMeters;
-    const playerPosition =
-      readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(
-        remotePlayerSnapshot
-      ).position;
-
-    return Object.freeze({
-      capsuleHalfHeightMeters,
-      capsuleRadiusMeters,
-      translation: resolveMetaverseGroundedBodyColliderTranslationSnapshot(
-        {
-          capsuleHalfHeightMeters,
-          capsuleRadiusMeters
-        },
-        playerPosition
-      )
-    });
-  }
 }

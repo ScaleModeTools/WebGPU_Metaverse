@@ -9,6 +9,9 @@ import type { AnimationVocabularyId } from "../types/animation-clip-manifest";
 export const mesh2motionHumanoidCanonicalAnimationPackSourcePath =
   "/models/metaverse/characters/mesh2motion-humanoid-canonical-animations.glb";
 
+export const mesh2motionHumanoidUnarmedIdleAnimationPackSourcePath =
+  "/models/metaverse/characters/mesh2motion-humanoid-unarmed-idle.glb";
+
 export const mesh2motionHumanoidIdleAnimationClipId = createAnimationClipId(
   "mesh2motion-humanoid-idle-v1"
 );
@@ -74,11 +77,24 @@ const mesh2motionHumanoidLoopModeByVocabulary = Object.freeze({
   seated: "repeat"
 } as const satisfies Readonly<Record<AnimationVocabularyId, "once" | "repeat">>);
 
+const mesh2motionHumanoidAnimationClipSourcePathByVocabulary = Object.freeze({
+  idle: mesh2motionHumanoidUnarmedIdleAnimationPackSourcePath,
+  walk: mesh2motionHumanoidCanonicalAnimationPackSourcePath,
+  "swim-idle": mesh2motionHumanoidCanonicalAnimationPackSourcePath,
+  swim: mesh2motionHumanoidCanonicalAnimationPackSourcePath,
+  "jump-up": mesh2motionHumanoidCanonicalAnimationPackSourcePath,
+  "jump-mid": mesh2motionHumanoidCanonicalAnimationPackSourcePath,
+  "jump-down": mesh2motionHumanoidCanonicalAnimationPackSourcePath,
+  aim: mesh2motionHumanoidCanonicalAnimationPackSourcePath,
+  interact: mesh2motionHumanoidCanonicalAnimationPackSourcePath,
+  seated: mesh2motionHumanoidCanonicalAnimationPackSourcePath
+} as const satisfies Readonly<Record<AnimationVocabularyId, string>>);
+
 export const animationClipManifest = defineAnimationClipManifest([
   ...animationVocabularyIds.map((vocabulary) => ({
     id: mesh2motionHumanoidAnimationClipIdByVocabulary[vocabulary],
     label: `Mesh2Motion humanoid ${vocabulary}`,
-    sourcePath: mesh2motionHumanoidCanonicalAnimationPackSourcePath,
+    sourcePath: mesh2motionHumanoidAnimationClipSourcePathByVocabulary[vocabulary],
     clipName: canonicalAnimationClipNamesByVocabulary[vocabulary],
     targetSkeleton: "humanoid_v2" as const,
     vocabulary,

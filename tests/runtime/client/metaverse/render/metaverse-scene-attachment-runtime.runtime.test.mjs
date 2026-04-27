@@ -58,6 +58,124 @@ after(async () => {
   await clientLoader?.close();
 });
 
+test("syncAttachmentProofRuntimeMount hides weapon attachments until weapon state matches", async () => {
+  const [
+    { Group, Quaternion, Vector3 },
+    { syncAttachmentProofRuntimeMount }
+  ] = await Promise.all([
+    import("three/webgpu"),
+    clientLoader.load(
+      "/src/metaverse/render/attachments/metaverse-scene-attachment-runtime.ts"
+    )
+  ]);
+  const characterScene = new Group();
+  const heldSocket = new Group();
+  const holsterSocket = new Group();
+  const attachmentRoot = new Group();
+  const presentationGroup = new Group();
+  const attachmentRuntime = {
+    activeMountKind: null,
+    attachmentId: "metaverse-service-pistol-v1",
+    attachmentRoot,
+    heldMount: {
+      localPosition: new Vector3(0.01, -0.02, 0.03),
+      localQuaternion: new Quaternion(),
+      socketName: "palm_r_socket"
+    },
+    mountedHolsterMount: {
+      localPosition: new Vector3(0.12, 0.03, -0.04),
+      localQuaternion: new Quaternion(),
+      socketName: "back_socket"
+    },
+    presentationGroup
+  };
+  const nodeResolvers = {
+    findSocketNode(scene, socketName) {
+      const socketNode = scene.getObjectByName(socketName);
+
+      assert.ok(socketNode, `Expected fixture socket ${socketName}.`);
+
+      return socketNode;
+    }
+  };
+
+  heldSocket.name = "palm_r_socket";
+  holsterSocket.name = "back_socket";
+  attachmentRoot.name = "metaverse_attachment/metaverse-service-pistol-v1";
+  characterScene.add(heldSocket, holsterSocket);
+  attachmentRoot.add(presentationGroup);
+
+  syncAttachmentProofRuntimeMount(
+    attachmentRuntime,
+    { scene: characterScene },
+    null,
+    nodeResolvers,
+    null
+  );
+
+  assert.equal(attachmentRuntime.activeMountKind, null);
+  assert.equal(attachmentRoot.parent, heldSocket);
+  assert.equal(attachmentRoot.visible, false);
+
+  syncAttachmentProofRuntimeMount(
+    attachmentRuntime,
+    { scene: characterScene },
+    null,
+    nodeResolvers,
+    Object.freeze({
+      aimMode: "hip-fire",
+      weaponId: "metaverse-battle-rifle-v1"
+    })
+  );
+
+  assert.equal(attachmentRuntime.activeMountKind, null);
+  assert.equal(attachmentRoot.visible, false);
+
+  syncAttachmentProofRuntimeMount(
+    attachmentRuntime,
+    { scene: characterScene },
+    null,
+    nodeResolvers,
+    Object.freeze({
+      aimMode: "hip-fire",
+      weaponId: "metaverse-service-pistol-v1"
+    })
+  );
+
+  assert.equal(attachmentRuntime.activeMountKind, "held");
+  assert.equal(attachmentRoot.parent, heldSocket);
+  assert.equal(attachmentRoot.visible, true);
+
+  syncAttachmentProofRuntimeMount(
+    attachmentRuntime,
+    { scene: characterScene },
+    Object.freeze({
+      holsterHeldAttachment: true
+    }),
+    nodeResolvers,
+    Object.freeze({
+      aimMode: "hip-fire",
+      weaponId: "metaverse-service-pistol-v1"
+    })
+  );
+
+  assert.equal(attachmentRuntime.activeMountKind, "mounted-holster");
+  assert.equal(attachmentRoot.parent, holsterSocket);
+  assert.equal(attachmentRoot.visible, true);
+
+  syncAttachmentProofRuntimeMount(
+    attachmentRuntime,
+    { scene: characterScene },
+    null,
+    nodeResolvers,
+    null
+  );
+
+  assert.equal(attachmentRuntime.activeMountKind, null);
+  assert.equal(attachmentRoot.parent, holsterSocket);
+  assert.equal(attachmentRoot.visible, false);
+});
+
 test("createMetaverseScene boots one manifest-driven character and hand socket attachment proof slice", async () => {
   const [
     {
@@ -228,6 +346,11 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
 
   await sceneRuntime.boot();
 
+  const activeWeaponState = Object.freeze({
+    aimMode: "hip-fire",
+    weaponId: "metaverse-service-pistol-v1"
+  });
+
   const characterRoot = sceneRuntime.scene.getObjectByName(
     "metaverse_character/mesh2motion-humanoid-v1"
   );
@@ -260,6 +383,8 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
       position: { x: 3.2, y: 0, z: -5.4 },
       yawRadians: 0.7
     },
+    activeWeaponState,
+    null,
     [
       {
         characterId: "mesh2motion-humanoid-v1",
@@ -293,6 +418,7 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
   );
 
   assert.ok(attachmentRoot);
+  assert.equal(attachmentRoot.visible, true);
   assert.equal(attachmentRoot.parent?.name, "palm_r_socket");
   assert.ok(
     attachmentRoot.position.distanceTo(new Vector3(0.01, -0.02, 0.03)) < 0.000001
@@ -336,6 +462,8 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
       position: { x: 3.2, y: 0, z: -5.4 },
       yawRadians: 0.7
     },
+    activeWeaponState,
+    null,
     [
       {
         characterId: "mesh2motion-humanoid-v1",
@@ -388,6 +516,8 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
       position: { x: 3.2, y: 0, z: -5.4 },
       yawRadians: 0.7
     },
+    activeWeaponState,
+    null,
     [
       {
         characterId: "mesh2motion-humanoid-v1",
@@ -440,6 +570,8 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
       position: { x: 3.2, y: 0, z: -5.4 },
       yawRadians: 0.7
     },
+    activeWeaponState,
+    null,
     [
       {
         characterId: "mesh2motion-humanoid-v1",
@@ -491,6 +623,8 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
       position: { x: 3.2, y: 0, z: -5.4 },
       yawRadians: 0.7
     },
+    activeWeaponState,
+    null,
     [
       {
         characterId: "mesh2motion-humanoid-v1",
@@ -542,6 +676,8 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
         position: { x: 3.2, y: 0, z: -5.4 },
         yawRadians: 0.7
       },
+      activeWeaponState,
+      null,
       [
         {
           characterId: "mesh2motion-humanoid-v1",
@@ -593,6 +729,8 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
     null,
     100,
     0,
+    null,
+    activeWeaponState,
     null,
     []
   );

@@ -146,6 +146,7 @@ export type MetaversePreparedUnmountedTraversalStepSnapshot =
   | MetaversePreparedUnmountedSwimTraversalStepSnapshot;
 
 export interface ResolveMetaverseUnmountedTraversalStepInput {
+  readonly groundedBodyConfig: MetaverseUnmountedGroundedTraversalConfigSnapshot;
   readonly groundedBodySnapshot: MetaverseUnmountedGroundedBodySnapshot | null;
   readonly preparedTraversalStep: MetaversePreparedUnmountedTraversalStepSnapshot;
   readonly surfaceColliderSnapshots: readonly MetaverseWorldPlacedSurfaceColliderSnapshot[];
@@ -248,6 +249,7 @@ interface PrepareMetaverseUnmountedGroundedTraversalStepResult {
 }
 
 interface ResolveMetaverseUnmountedGroundedTraversalOutcomeInput {
+  readonly groundedBodyConfig: MetaverseUnmountedGroundedTraversalConfigSnapshot;
   readonly groundedBodySnapshot: MetaverseUnmountedGroundedBodySnapshot;
   readonly preferredSupport?: MetaverseWorldSurfaceSupportSnapshot | null;
   readonly surfaceColliderSnapshots: readonly MetaverseWorldPlacedSurfaceColliderSnapshot[];
@@ -395,6 +397,49 @@ function canConsumeMetaverseUnmountedGroundedJumpFromDirectSupport(input: {
   );
 }
 
+function shouldKeepMetaverseUnmountedGroundedBodySupported(input: {
+  readonly directSupportKeepsGrounded: boolean;
+  readonly groundedBodyConfig: MetaverseUnmountedGroundedTraversalConfigSnapshot;
+  readonly groundedBodySnapshot: MetaverseUnmountedGroundedBodySnapshot;
+  readonly supportHeightMeters: number | null;
+}): boolean {
+  if (input.groundedBodySnapshot.grounded === true) {
+    return true;
+  }
+
+  if (
+    input.directSupportKeepsGrounded !== true ||
+    input.supportHeightMeters === null
+  ) {
+    return false;
+  }
+
+  if (input.groundedBodySnapshot.jumpBody.jumpSnapSuppressionActive === true) {
+    return false;
+  }
+
+  if (
+    toFiniteNumber(
+      input.groundedBodySnapshot.jumpBody.verticalSpeedUnitsPerSecond,
+      0
+    ) > 0
+  ) {
+    return false;
+  }
+
+  const supportGapMeters =
+    toFiniteNumber(input.groundedBodySnapshot.position.y, 0) -
+    input.supportHeightMeters;
+
+  return (
+    supportGapMeters <=
+    Math.max(
+      0,
+      toFiniteNumber(input.groundedBodyConfig.snapToGroundDistanceMeters, 0)
+    )
+  );
+}
+
 function prepareMetaverseUnmountedGroundedTraversalStep({
   actionState,
   bodyControl,
@@ -477,6 +522,7 @@ function prepareMetaverseUnmountedGroundedTraversalStep({
 }
 
 function resolveMetaverseUnmountedGroundedTraversalOutcome({
+  groundedBodyConfig,
   groundedBodySnapshot,
   preferredSupport = null,
   surfaceColliderSnapshots,
@@ -525,6 +571,14 @@ function resolveMetaverseUnmountedGroundedTraversalOutcome({
     waterlineThresholdMeters !== null &&
     directSupportKeepsGrounded === false &&
     groundedBodySnapshot.position.y <= waterlineThresholdMeters;
+  const grounded =
+    shouldEnterSwim === false &&
+    shouldKeepMetaverseUnmountedGroundedBodySupported({
+      directSupportKeepsGrounded,
+      groundedBodyConfig,
+      groundedBodySnapshot,
+      supportHeightMeters: resolvedSupportHeightMeters
+    });
   const adjustedResolvedSupportHeightMeters =
     resolvedSupportHeightMeters === null
       ? automaticSurfaceSnapshot.debug.resolvedSupportHeightMeters
@@ -547,7 +601,7 @@ function resolveMetaverseUnmountedGroundedTraversalOutcome({
 
   return Object.freeze({
     automaticSurfaceSnapshot: nextAutomaticSurfaceSnapshot,
-    grounded: shouldEnterSwim ? false : groundedBodySnapshot.grounded,
+    grounded,
     locomotionMode: shouldEnterSwim ? "swim" : "grounded",
     support:
       shouldEnterSwim === true
@@ -683,6 +737,7 @@ export function prepareMetaverseUnmountedTraversalStep({
 }
 
 export function resolveMetaverseUnmountedTraversalStep({
+  groundedBodyConfig,
   groundedBodySnapshot,
   preparedTraversalStep,
   surfaceColliderSnapshots,
@@ -699,6 +754,7 @@ export function resolveMetaverseUnmountedTraversalStep({
     }
 
     const locomotionOutcome = resolveMetaverseUnmountedGroundedTraversalOutcome({
+      groundedBodyConfig,
       groundedBodySnapshot,
       preferredSupport: preparedTraversalStep.support,
       surfaceColliderSnapshots,
@@ -814,6 +870,7 @@ export function advanceMetaverseUnmountedTraversalBodyStep<
       preferredLookYawRadians: prepareInput.preferredLookYawRadians ?? null
     });
     const locomotionOutcome = resolveMetaverseUnmountedTraversalStep({
+      groundedBodyConfig: prepareInput.groundedBodyConfig,
       groundedBodySnapshot,
       preparedTraversalStep,
       surfaceColliderSnapshots: prepareInput.surfaceColliderSnapshots,
@@ -843,6 +900,7 @@ export function advanceMetaverseUnmountedTraversalBodyStep<
     waterlineHeightMeters: preparedTraversalStep.waterlineHeightMeters
   });
   const locomotionOutcome = resolveMetaverseUnmountedTraversalStep({
+    groundedBodyConfig: prepareInput.groundedBodyConfig,
     groundedBodySnapshot: null,
     preparedTraversalStep,
     surfaceColliderSnapshots: prepareInput.surfaceColliderSnapshots,

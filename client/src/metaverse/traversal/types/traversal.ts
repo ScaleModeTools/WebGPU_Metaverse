@@ -6,6 +6,7 @@ import {
   type RapierQueryFilterPredicate
 } from "@/physics";
 import type {
+  MetaverseTraversalPlayerBodyBlockerSnapshot,
   MetaverseSurfaceDriveBodyRuntimeSnapshot as SharedMetaverseSurfaceDriveBodyRuntimeSnapshot,
   MetaverseSurfaceTraversalConfig as SharedMetaverseSurfaceTraversalConfig,
   MetaverseSurfaceTraversalSpeedSnapshot as SharedMetaverseSurfaceTraversalSpeedSnapshot
@@ -103,6 +104,8 @@ export interface MetaverseTraversalRuntimeDependencies {
   readonly resolveGroundedTraversalFilterPredicate: (
     excludedColliders?: readonly RapierColliderHandle[]
   ) => RapierQueryFilterPredicate;
+  readonly readGroundedTraversalPlayerBlockers?: (() =>
+    readonly MetaverseTraversalPlayerBodyBlockerSnapshot[]) | undefined;
   readonly resolveWaterborneTraversalFilterPredicate: (
     excludedOwnerEnvironmentAssetId?: string | null,
     excludedColliders?: readonly RapierColliderHandle[]

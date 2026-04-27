@@ -1,6 +1,7 @@
 export const navigationStepIds = [
   "main-menu",
   "tool",
+  "playlists",
   "permissions",
   "calibration",
   "metaverse",

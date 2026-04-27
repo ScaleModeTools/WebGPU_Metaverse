@@ -5,6 +5,7 @@ import {
   Quaternion,
   Vector3
 } from "three/webgpu";
+import type { MetaverseRealtimePlayerWeaponStateSnapshot } from "@webgpu-metaverse/shared";
 
 import type { MetaverseAttachmentProofConfig } from "../../types/metaverse-runtime";
 import type {
@@ -40,6 +41,7 @@ export interface MetaverseAttachmentAimBasisOffsetRuntime {
 
 export interface MetaverseAttachmentProofRuntime {
   activeMountKind: "held" | "mounted-holster" | null;
+  readonly attachmentId: string;
   readonly attachmentRoot: Group;
   readonly heldAdsCameraTargetOffset: MetaverseAttachmentAimBasisOffsetRuntime | null;
   readonly heldGripLocalAimQuaternion: Quaternion;
@@ -311,13 +313,30 @@ export function syncAttachmentProofRuntimeMount<
   mountedOccupancyPresentationState:
     | MetaverseMountedOccupancyPresentationStateSnapshot
     | null,
-  nodeResolvers: Pick<MetaverseAttachmentRuntimeNodeResolvers, "findSocketNode">
+  nodeResolvers: Pick<MetaverseAttachmentRuntimeNodeResolvers, "findSocketNode">,
+  weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null = null
 ): void {
+  if (weaponState?.weaponId !== attachmentRuntime.attachmentId) {
+    if (attachmentRuntime.attachmentRoot.parent === null) {
+      applyAttachmentMountRuntime(
+        attachmentRuntime,
+        characterProofRuntime,
+        attachmentRuntime.heldMount,
+        nodeResolvers
+      );
+    }
+
+    attachmentRuntime.activeMountKind = null;
+    attachmentRuntime.attachmentRoot.visible = false;
+    return;
+  }
+
   const nextMountKind =
     mountedOccupancyPresentationState?.holsterHeldAttachment === true &&
     attachmentRuntime.mountedHolsterMount !== null
       ? "mounted-holster"
       : "held";
+  attachmentRuntime.attachmentRoot.visible = true;
 
   if (attachmentRuntime.activeMountKind === nextMountKind) {
     return;
@@ -367,6 +386,7 @@ export function cloneMetaverseAttachmentProofRuntime<
 
   return {
     activeMountKind: null,
+    attachmentId: sourceRuntime.attachmentId,
     attachmentRoot: nodeResolvers.findGroupNode(
       characterProofRuntime.scene,
       sourceRuntime.attachmentRoot.name,
@@ -613,6 +633,7 @@ export async function loadMetaverseAttachmentProofRuntime<
         );
   const attachmentRuntime: MetaverseAttachmentProofRuntime = {
     activeMountKind: null,
+    attachmentId: attachmentProofConfig.attachmentId,
     attachmentRoot,
     heldAdsCameraTargetOffset:
       attachmentProofConfig.heldMount.adsCameraTargetOffset === null ||
@@ -641,7 +662,8 @@ export async function loadMetaverseAttachmentProofRuntime<
     attachmentRuntime,
     characterProofRuntime,
     null,
-    dependencies
+    dependencies,
+    null
   );
 
   return attachmentRuntime;

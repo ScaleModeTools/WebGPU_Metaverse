@@ -597,6 +597,153 @@ test("syncHumanoidV2PistolPoseWeights uses neutral as the center pose between do
   assertWeight("up", 0);
 });
 
+test("held weapon presentation stays inactive without an active weapon state", async () => {
+  const [
+    { Group },
+    {
+      resolveHeldCharacterAnimationVocabulary,
+      shouldUseHeldWeaponCharacterPresentation
+    },
+    { advanceLocalCharacterAnimation, syncLocalCharacterPresentation }
+  ] = await Promise.all([
+    import("three/webgpu"),
+    clientLoader.load(
+      "/src/metaverse/render/characters/metaverse-scene-character-animation.ts"
+    ),
+    clientLoader.load(
+      "/src/metaverse/render/characters/metaverse-scene-local-character-presentation.ts"
+    )
+  ]);
+  const characterRuntime = {
+    actionsByVocabulary: new Map([
+      ["idle", { setEffectiveTimeScale() {} }],
+      ["aim", {}]
+    ]),
+    activeAnimationActionSetId: "full-body",
+    activeAnimationCycleId: null,
+    activeAnimationVocabulary: "idle",
+    anchorGroup: new Group(),
+    firstPersonHeadAnchorNodes: [],
+    heldWeaponPoseRuntime: {},
+    humanoidV2PistolLowerBodyActionsByVocabulary: null,
+    humanoidV2PistolPoseRuntime: null,
+    mixer: {
+      update() {}
+    },
+    skeletonId: "humanoid_v2"
+  };
+  const attachmentRuntime = {
+    activeMountKind: "held",
+    attachmentId: "metaverse-service-pistol-v1"
+  };
+  const cameraSnapshot = {
+    lookDirection: { x: 0, y: 0, z: -1 },
+    pitchRadians: 0,
+    position: { x: 0, y: 1.6, z: 0 },
+    yawRadians: 0
+  };
+  const characterPresentation = {
+    animationPlaybackRateMultiplier: 1,
+    animationVocabulary: "idle",
+    position: { x: 0, y: 0, z: 0 },
+    yawRadians: 0
+  };
+  const bodyPresentation = {
+    groundedFirstPersonHeadClearanceMeters: 0.1,
+    groundedFirstPersonHeadOcclusionRadiusMeters: 0.2
+  };
+  const calls = {
+    restoreHeldWeaponPoseRuntime: 0,
+    syncHeldWeaponPose: 0
+  };
+
+  assert.equal(
+    shouldUseHeldWeaponCharacterPresentation(attachmentRuntime, null, null),
+    false
+  );
+  assert.equal(
+    shouldUseHeldWeaponCharacterPresentation(
+      attachmentRuntime,
+      Object.freeze({
+        aimMode: "hip-fire",
+        weaponId: "metaverse-service-rifle-v1"
+      }),
+      null
+    ),
+    false
+  );
+  assert.equal(
+    shouldUseHeldWeaponCharacterPresentation(
+      attachmentRuntime,
+      Object.freeze({
+        aimMode: "hip-fire",
+        weaponId: "metaverse-service-pistol-v1"
+      }),
+      null
+    ),
+    true
+  );
+  assert.equal(
+    resolveHeldCharacterAnimationVocabulary(
+      characterRuntime,
+      attachmentRuntime,
+      "idle",
+      null,
+      null
+    ),
+    "idle"
+  );
+
+  advanceLocalCharacterAnimation(
+    characterRuntime,
+    attachmentRuntime,
+    characterPresentation,
+    null,
+    null,
+    cameraSnapshot,
+    1 / 60,
+    {
+      maxPitchRadians: Math.PI * 0.5,
+      minPitchRadians: -Math.PI * 0.5
+    },
+    {
+      captureHeldWeaponPoseRuntime() {
+        calls.captureHeldWeaponPoseRuntime =
+          (calls.captureHeldWeaponPoseRuntime ?? 0) + 1;
+      },
+      restoreHeldWeaponPoseRuntime() {
+        calls.restoreHeldWeaponPoseRuntime += 1;
+      }
+    }
+  );
+
+  syncLocalCharacterPresentation(
+    characterRuntime,
+    attachmentRuntime,
+    null,
+    cameraSnapshot,
+    characterPresentation,
+    bodyPresentation,
+    null,
+    null,
+    {
+      applyMountedAnchorTransform() {},
+      restoreHeldWeaponPoseRuntime() {
+        calls.restoreHeldWeaponPoseRuntime += 1;
+      },
+      syncHeldWeaponPose() {
+        calls.syncHeldWeaponPose += 1;
+      }
+    }
+  );
+
+  assert.deepEqual(calls, {
+    captureHeldWeaponPoseRuntime: 1,
+    restoreHeldWeaponPoseRuntime: 1,
+    syncHeldWeaponPose: 0
+  });
+});
+
 test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and remotely", async () => {
   const [
     {
@@ -987,6 +1134,10 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
     position: { x: 0, y: 0, z: 0 },
     yawRadians: 0
   };
+  const activeWeaponState = Object.freeze({
+    aimMode: "hip-fire",
+    weaponId: "metaverse-service-pistol-v1"
+  });
   const traversalCameraPosition = new Vector3(
     cameraSnapshot.position.x,
     cameraSnapshot.position.y,
@@ -999,6 +1150,8 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
     16,
     1 / 60,
     characterPresentation,
+    activeWeaponState,
+    null,
     []
   );
 
@@ -1232,6 +1385,8 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
       32 + frameIndex * 16,
       1 / 60,
       characterPresentation,
+      activeWeaponState,
+      null,
       []
     );
   }
@@ -1270,6 +1425,8 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
     176,
     1 / 60,
     characterPresentation,
+    activeWeaponState,
+    null,
     []
   );
   sceneRuntime.scene.updateMatrixWorld(true);
@@ -1345,7 +1502,8 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
         z: -1
       }),
       yawRadians: 0
-    })
+    }),
+    weaponState: activeWeaponState
   });
 
   sceneRuntime.syncPresentation(
@@ -1354,6 +1512,8 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
     160,
     1 / 60,
     characterPresentation,
+    activeWeaponState,
+    null,
     [remotePitchUpPresentation]
   );
   sceneRuntime.scene.updateMatrixWorld(true);
@@ -1391,6 +1551,8 @@ test("createMetaverseScene layers humanoid_v2 pistol pitch over walk locally and
     176,
     1 / 60,
     characterPresentation,
+    activeWeaponState,
+    null,
     [
       Object.freeze({
         ...remotePitchUpPresentation,

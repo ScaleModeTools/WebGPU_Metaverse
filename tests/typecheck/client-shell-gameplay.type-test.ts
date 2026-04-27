@@ -68,6 +68,7 @@ type ExpectedShellActionType =
   | "gameplayMenuSetOpen"
   | "inputModeChanged"
   | "loginRejected"
+  | "gamePlaylistsRequested"
   | "toolEditorExited"
   | "toolEditorRequested"
   | "toolPreviewRequested"

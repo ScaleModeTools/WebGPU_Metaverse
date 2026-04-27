@@ -93,6 +93,25 @@ test("resolveShellNavigation enters gameplay only when the metaverse prerequisit
   assert.equal(snapshot.nextMetaverseStep, "metaverse");
 });
 
+test("resolveShellNavigation keeps dev playlist tools outside unsupported routing", async () => {
+  const { resolveShellNavigation } = await clientLoader.load(
+    "/src/navigation/guards/resolve-shell-navigation.ts"
+  );
+
+  const snapshot = resolveShellNavigation({
+    hasConfirmedProfile: true,
+    inputMode: "mouse",
+    webcamPermission: "prompt",
+    gameplayCapability: "supported",
+    calibrationShell: "pending",
+    shellStage: "playlists"
+  });
+
+  assert.equal(snapshot.activeStep, "playlists");
+  assert.equal(snapshot.canEnterMetaverse, true);
+  assert.equal(snapshot.nextMetaverseStep, "metaverse");
+});
+
 test("resolveShellNavigation routes unsupported capability into the unsupported screen", async () => {
   const { resolveShellNavigation } = await clientLoader.load(
     "/src/navigation/guards/resolve-shell-navigation.ts"

@@ -23,7 +23,7 @@ test("metaverse asset proof resolves a socket-compatible attachment config from 
     metaverseAttachmentProofConfig.attachmentId,
     "metaverse-service-pistol-v2"
   );
-  assert.equal(metaverseAttachmentProofConfig.heldMount.socketName, "palm_r_socket");
+  assert.equal(metaverseAttachmentProofConfig.heldMount.socketName, "grip_r_socket");
   assert.equal(metaverseAttachmentProofConfig.heldMount.offHandSupportPointId, null);
   assert.equal(
     metaverseAttachmentProofConfig.heldMount.attachmentSocketNodeName,
@@ -74,7 +74,8 @@ test("metaverse asset proof resolves the active full-body humanoid character fro
     },
     {
       animationClipManifest,
-      mesh2motionHumanoidCanonicalAnimationPackSourcePath
+      mesh2motionHumanoidCanonicalAnimationPackSourcePath,
+      mesh2motionHumanoidUnarmedIdleAnimationPackSourcePath
     },
     { animationVocabularyIds },
     { metaverseCharacterProofConfig }
@@ -106,7 +107,10 @@ test("metaverse asset proof resolves the active full-body humanoid character fro
   );
   assert.deepEqual(
     new Set(metaverseCharacterProofConfig.animationClips.map((clip) => clip.sourcePath)),
-    new Set([mesh2motionHumanoidCanonicalAnimationPackSourcePath])
+    new Set([
+      mesh2motionHumanoidCanonicalAnimationPackSourcePath,
+      mesh2motionHumanoidUnarmedIdleAnimationPackSourcePath
+    ])
   );
 
   for (const clipId of activeCharacter.animationClipIds) {
@@ -124,8 +128,8 @@ test("metaverse asset proof resolves the shipped static and dynamic environment 
 
   assert.equal(metaverseEnvironmentProofConfig.assets.length, 5);
 
-  const floorAsset = metaverseEnvironmentProofConfig.assets.find(
-    (asset) => asset.environmentAssetId === "metaverse-playground-range-floor-v1"
+  const builderFloorAsset = metaverseEnvironmentProofConfig.assets.find(
+    (asset) => asset.environmentAssetId === "metaverse-builder-floor-tile-v1"
   );
   const barrierAsset = metaverseEnvironmentProofConfig.assets.find(
     (asset) => asset.environmentAssetId === "metaverse-playground-range-barrier-v1"
@@ -143,21 +147,21 @@ test("metaverse asset proof resolves the shipped static and dynamic environment 
     (asset) => asset.environmentAssetId === "metaverse-hub-dive-boat-v1"
   );
 
-  assert.ok(floorAsset);
-  assert.equal(floorAsset.collisionPath, null);
-  assert.equal(floorAsset.placement, "static");
-  assert.equal(floorAsset.traversalAffordance, "support");
-  assert.equal(floorAsset.lods.length, 1);
-  assert.equal(floorAsset.placements.length, 1);
-  assert.equal(floorAsset.physicsColliders?.length, 1);
-  assert.deepEqual(floorAsset.lods[0], {
+  assert.ok(builderFloorAsset);
+  assert.equal(builderFloorAsset.collisionPath, null);
+  assert.equal(builderFloorAsset.placement, "instanced");
+  assert.equal(builderFloorAsset.traversalAffordance, "support");
+  assert.equal(builderFloorAsset.lods.length, 1);
+  assert.equal(builderFloorAsset.placements.length, 1);
+  assert.equal(builderFloorAsset.physicsColliders?.length, 1);
+  assert.deepEqual(builderFloorAsset.lods[0], {
     kind: "procedural-box",
     materialPreset: "training-range-surface",
     maxDistanceMeters: null,
     size: {
-      x: 72,
-      y: 0.6,
-      z: 82
+      x: 4,
+      y: 0.5,
+      z: 4
     },
     tier: "high"
   });

@@ -144,3 +144,165 @@ test("MetaverseSceneRemoteCharacterPresentationState owns remote runtime sync an
     undefined
   );
 });
+
+test("MetaverseSceneRemoteCharacterPresentationState restores held pose runtime when remote weapon state is absent", async () => {
+  const [{ Group, Scene }, { MetaverseSceneRemoteCharacterPresentationState }] =
+    await Promise.all([
+      import("three/webgpu"),
+      clientLoader.load(
+        "/src/metaverse/render/characters/metaverse-scene-remote-character-presentation-state.ts"
+      )
+    ]);
+  const scene = new Scene();
+  const calls = {
+    captureHeldWeaponPoseRuntime: 0,
+    restoreHeldWeaponPoseRuntime: 0,
+    syncHeldWeaponPose: 0
+  };
+  const sourceCharacterRuntime = {
+    anchorGroup: new Group(),
+    heldWeaponPoseRuntime: {},
+    humanoidV2PistolPoseRuntime: null,
+    mixer: {
+      update() {}
+    }
+  };
+  const sourceAttachmentRuntime = {
+    activeMountKind: "held",
+    attachmentId: "metaverse-service-pistol-v1"
+  };
+  const remoteCharacterPresentationState =
+    new MetaverseSceneRemoteCharacterPresentationState({
+      config: {
+        bodyPresentation: {
+          groundedFirstPersonHeadClearanceMeters: 0.1,
+          groundedFirstPersonHeadOcclusionRadiusMeters: 0.2
+        },
+        orientation: {
+          maxPitchRadians: Math.PI * 0.5,
+          minPitchRadians: -Math.PI * 0.5
+        }
+      },
+      interactivePresentationState: {
+        attachmentProofRuntime: sourceAttachmentRuntime,
+        characterProofRuntime: sourceCharacterRuntime
+      },
+      remoteCharacterPresentationDependencies: {
+        applyMountedAnchorTransform() {},
+        clearPistolPoseWeights() {},
+        captureHeldWeaponPoseRuntime() {
+          calls.captureHeldWeaponPoseRuntime += 1;
+        },
+        cloneAttachmentRuntime(sourceRuntime) {
+          return {
+            activeMountKind: null,
+            attachmentId: sourceRuntime.attachmentId
+          };
+        },
+        cloneCharacterRuntime(_sourceCharacterRuntime, playerId) {
+          const anchorGroup = new Group();
+
+          anchorGroup.name = `metaverse_character/test/${playerId}`;
+
+          return {
+            anchorGroup,
+            heldWeaponPoseRuntime: {},
+            humanoidV2PistolPoseRuntime: null,
+            mixer: {
+              update() {}
+            }
+          };
+        },
+        resolveHeldAnimationVocabulary(
+          _characterRuntime,
+          _attachmentRuntime,
+          targetVocabulary
+        ) {
+          return targetVocabulary;
+        },
+        resolveMountedEnvironmentRuntime() {
+          return null;
+        },
+        restoreHeldWeaponPoseRuntime() {
+          calls.restoreHeldWeaponPoseRuntime += 1;
+        },
+        syncAttachmentMount(attachmentRuntime, _characterRuntime, _mountedOccupancy, weaponState) {
+          attachmentRuntime.activeMountKind =
+            weaponState?.weaponId === attachmentRuntime.attachmentId
+              ? "held"
+              : null;
+        },
+        syncCharacterAnimation() {},
+        syncCharacterPresentation(characterRuntime, characterPresentation) {
+          characterRuntime.anchorGroup.position.set(
+            characterPresentation.position.x,
+            characterPresentation.position.y,
+            characterPresentation.position.z
+          );
+          characterRuntime.anchorGroup.updateMatrixWorld(true);
+        },
+        syncHeldWeaponPose() {
+          calls.syncHeldWeaponPose += 1;
+        },
+        syncMountedCharacterRuntime() {
+          return null;
+        },
+        syncPistolPoseWeights() {}
+      },
+      scene
+    });
+  const remotePresentation = Object.freeze({
+    aimCamera: null,
+    characterId: "mesh2motion-humanoid-v1",
+    look: Object.freeze({
+      pitchRadians: 0,
+      yawRadians: 0
+    }),
+    mountedOccupancy: null,
+    playerId: "remote-sailor-2",
+    poseSyncMode: "runtime-server-sampled",
+    presentation: Object.freeze({
+      animationVocabulary: "idle",
+      position: Object.freeze({
+        x: 3,
+        y: 1.2,
+        z: -4
+      }),
+      yawRadians: 0.4
+    }),
+    weaponState: null
+  });
+
+  remoteCharacterPresentationState.syncPresentation([remotePresentation], 1 / 60);
+
+  assert.deepEqual(calls, {
+    captureHeldWeaponPoseRuntime: 1,
+    restoreHeldWeaponPoseRuntime: 1,
+    syncHeldWeaponPose: 0
+  });
+
+  remoteCharacterPresentationState.syncPresentation(
+    [
+      Object.freeze({
+        ...remotePresentation,
+        aimCamera: Object.freeze({
+          lookDirection: Object.freeze({ x: 0, y: 0, z: -1 }),
+          pitchRadians: 0,
+          position: Object.freeze({ x: 3, y: 2.8, z: -4 }),
+          yawRadians: 0
+        }),
+        weaponState: Object.freeze({
+          aimMode: "hip-fire",
+          weaponId: "metaverse-service-pistol-v1"
+        })
+      })
+    ],
+    1 / 60
+  );
+
+  assert.deepEqual(calls, {
+    captureHeldWeaponPoseRuntime: 2,
+    restoreHeldWeaponPoseRuntime: 2,
+    syncHeldWeaponPose: 1
+  });
+});

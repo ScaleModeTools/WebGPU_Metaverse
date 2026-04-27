@@ -1,4 +1,5 @@
 import type { AnimationClip, Group, Scene } from "three/webgpu";
+import type { MetaverseRealtimePlayerWeaponStateSnapshot } from "@webgpu-metaverse/shared";
 
 import {
   loadMetaverseAttachmentProofRuntime,
@@ -36,7 +37,7 @@ export interface MetaverseSceneAssetLoader {
 }
 
 export type MetaverseSceneCharacterProofRuntime =
-  LoadedMetaverseCharacterProofRuntime<HumanoidV2HeldWeaponPoseRuntime>;
+  LoadedMetaverseCharacterProofRuntime<HumanoidV2HeldWeaponPoseRuntime | null>;
 
 interface MetaverseSceneInteractivePresentationStateDependencies {
   readonly attachmentProofConfig: MetaverseAttachmentProofConfig | null;
@@ -48,6 +49,22 @@ interface MetaverseSceneInteractivePresentationStateDependencies {
   readonly scene: Scene;
   readonly showSocketDebug: boolean;
   readonly warn: (message: string) => void;
+}
+
+function resolveUnarmedCharacterProofConfig(
+  characterProofConfig: MetaverseCharacterProofConfig
+): MetaverseCharacterProofConfig {
+  if (
+    characterProofConfig.humanoidV2PistolPoseProofConfig === null ||
+    characterProofConfig.humanoidV2PistolPoseProofConfig === undefined
+  ) {
+    return characterProofConfig;
+  }
+
+  return Object.freeze({
+    ...characterProofConfig,
+    humanoidV2PistolPoseProofConfig: null
+  });
 }
 
 export class MetaverseSceneInteractivePresentationState {
@@ -115,13 +132,9 @@ export class MetaverseSceneInteractivePresentationState {
         );
       } else if (characterProofConfig !== null) {
         const loadedCharacterProofRuntime = await loadMetaverseCharacterProofRuntime(
-          characterProofConfig,
+          resolveUnarmedCharacterProofConfig(characterProofConfig),
           {
-            createHeldWeaponPoseRuntime: (characterScene) =>
-              createHeldWeaponPoseRuntime(
-                characterScene,
-                heldWeaponPoseRuntimeNodeResolvers
-              ),
+            createHeldWeaponPoseRuntime: () => null,
             createSceneAssetLoader,
             heldWeaponSolveDirectionEpsilon,
             showSocketDebug,
@@ -153,7 +166,8 @@ export class MetaverseSceneInteractivePresentationState {
   syncAttachmentMount(
     mountedOccupancyPresentationState:
       | MetaverseMountedOccupancyPresentationStateSnapshot
-      | null
+      | null,
+    weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null = null
   ): void {
     if (
       this.attachmentProofRuntime === null ||
@@ -166,7 +180,8 @@ export class MetaverseSceneInteractivePresentationState {
       this.attachmentProofRuntime,
       this.characterProofRuntime,
       mountedOccupancyPresentationState,
-      this.#dependencies.attachmentRuntimeNodeResolvers
+      this.#dependencies.attachmentRuntimeNodeResolvers,
+      weaponState
     );
   }
 }

@@ -138,6 +138,51 @@ test("MetaverseTraversalRuntime advances grounded prediction in authoritative fi
   }
 });
 
+test("MetaverseTraversalRuntime sweeps sampled remote player blockers during fast grounded prediction", async () => {
+  const blockerRootPosition = freezeVector3(0, 0, 22);
+  let blockerSnapshot = null;
+  const traversalHarness = await fixtureContext.createTraversalHarness({
+    config: Object.freeze({
+      groundedBody: Object.freeze({
+        accelerationUnitsPerSecondSquared: 10000,
+        baseSpeedUnitsPerSecond: 90,
+        boostMultiplier: 1
+      })
+    }),
+    readGroundedTraversalPlayerBlockers: () =>
+      blockerSnapshot === null ? Object.freeze([]) : Object.freeze([blockerSnapshot])
+  });
+
+  try {
+    blockerSnapshot = Object.freeze({
+      capsuleHalfHeightMeters:
+        traversalHarness.config.groundedBody.capsuleHalfHeightMeters,
+      capsuleRadiusMeters:
+        traversalHarness.config.groundedBody.capsuleRadiusMeters,
+      playerId: "remote-player",
+      position: blockerRootPosition
+    });
+    traversalHarness.traversalRuntime.boot();
+
+    traversalHarness.traversalRuntime.advance(
+      forwardTravelInput,
+      groundedFixedStepSeconds
+    );
+
+    const requiredClearanceMeters =
+      traversalHarness.config.groundedBody.capsuleRadiusMeters * 2 +
+      traversalHarness.config.groundedBody.controllerOffsetMeters;
+
+    assert.ok(
+      traversalHarness.groundedBodyRuntime.snapshot.position.z >=
+        blockerRootPosition.z + requiredClearanceMeters - 0.02,
+      `expected fast local prediction to stop at sampled remote player capsule, received ${JSON.stringify(traversalHarness.groundedBodyRuntime.snapshot.position)}`
+    );
+  } finally {
+    traversalHarness.groundedBodyRuntime.dispose();
+  }
+});
+
 test("MetaverseTraversalRuntime advances swim prediction in authoritative fixed steps across split render frames", async () => {
   const splitHarness = await fixtureContext.createOpenWaterTraversalHarness();
   const wholeHarness = await fixtureContext.createOpenWaterTraversalHarness();

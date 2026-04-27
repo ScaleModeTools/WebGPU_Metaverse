@@ -381,7 +381,10 @@ export class MetaverseGroundedBodyRuntime {
     intentSnapshot: MetaverseGroundedBodyIntentSnapshot,
     deltaSeconds: number,
     filterPredicate?: RapierQueryFilterPredicate,
-    preferredLookYawRadians: number | null = null
+    preferredLookYawRadians: number | null = null,
+    resolveBlockedPlanarPosition?: (
+      rootPosition: PhysicsVector3Snapshot
+    ) => Pick<PhysicsVector3Snapshot, "x" | "y" | "z">
   ): MetaverseGroundedBodySnapshot {
     const collider = this.#requireCollider();
     const controller = this.#requireCharacterController();
@@ -417,6 +420,23 @@ export class MetaverseGroundedBodyRuntime {
 
     const currentTranslation = collider.translation();
     const computedMovement = controller.computedMovement();
+    const computedRootPosition = this.#colliderCenterToRoot(
+      freezeVector3(
+        currentTranslation.x + computedMovement.x,
+        currentTranslation.y + computedMovement.y,
+        currentTranslation.z + computedMovement.z
+      )
+    );
+    const blockedRootPosition =
+      resolveBlockedPlanarPosition?.(computedRootPosition) ??
+      computedRootPosition;
+    const blockedColliderCenter = this.#rootToColliderCenter(
+      freezeVector3(
+        blockedRootPosition.x,
+        blockedRootPosition.y,
+        blockedRootPosition.z
+      )
+    );
     const resolvedStep = resolveMetaverseGroundedBodyControllerStep(
       this.#stepState,
       preparedStep,
@@ -428,9 +448,9 @@ export class MetaverseGroundedBodyRuntime {
         ),
         computedGrounded: controller.computedGrounded(),
         computedMovementDelta: freezeVector3(
-          computedMovement.x,
-          computedMovement.y,
-          computedMovement.z
+          blockedColliderCenter.x - currentTranslation.x,
+          blockedColliderCenter.y - currentTranslation.y,
+          blockedColliderCenter.z - currentTranslation.z
         ),
         standingOffsetMeters: this.#standingOffsetMeters,
         supportNormal: resolveRapierControllerSupportNormal(controller)
@@ -534,6 +554,16 @@ export class MetaverseGroundedBodyRuntime {
     return resolveMetaverseGroundedBodyColliderTranslationSnapshot(
       this.#config,
       rootPosition
+    );
+  }
+
+  #colliderCenterToRoot(
+    colliderCenter: PhysicsVector3Snapshot
+  ): PhysicsVector3Snapshot {
+    return freezeVector3(
+      colliderCenter.x,
+      colliderCenter.y - this.#standingOffsetMeters,
+      colliderCenter.z
     );
   }
 }

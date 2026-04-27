@@ -69,6 +69,7 @@ export class MetaverseWorldPlayerWeaponStateSync {
 
   #lastPlayerWeaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null = null;
   #lastPlayerWeaponStateCommand: PendingPlayerWeaponStateCommand | null = null;
+  #hasLastPlayerWeaponState = false;
   #nextPlayerWeaponSequence = 0;
   #pendingPlayerWeaponStateCommand: PendingPlayerWeaponStateCommand | null = null;
   #playerWeaponStateSyncHandle: TimeoutHandle | null = null;
@@ -102,12 +103,14 @@ export class MetaverseWorldPlayerWeaponStateSync {
     if (commandInput === null) {
       this.#lastPlayerWeaponState = null;
       this.#lastPlayerWeaponStateCommand = null;
+      this.#hasLastPlayerWeaponState = false;
       this.#pendingPlayerWeaponStateCommand = null;
       this.#cancelScheduledPlayerWeaponStateSync();
       return;
     }
 
     if (
+      this.#hasLastPlayerWeaponState &&
       playerWeaponStateMatches(
         this.#lastPlayerWeaponState,
         commandInput.weaponState
@@ -126,6 +129,7 @@ export class MetaverseWorldPlayerWeaponStateSync {
     this.#lastPlayerWeaponStateCommand = this.#pendingPlayerWeaponStateCommand;
     this.#lastPlayerWeaponState =
       this.#pendingPlayerWeaponStateCommand.weaponState;
+    this.#hasLastPlayerWeaponState = true;
 
     if (this.#readStatusSnapshot().connected) {
       this.#cancelScheduledPlayerWeaponStateSync();
@@ -266,6 +270,7 @@ export class MetaverseWorldPlayerWeaponStateSync {
 
     this.#lastPlayerWeaponState = null;
     this.#lastPlayerWeaponStateCommand = null;
+    this.#hasLastPlayerWeaponState = false;
   }
 
   #shouldResendLatestPlayerWeaponStateCommand(): boolean {

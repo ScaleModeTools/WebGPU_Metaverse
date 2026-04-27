@@ -799,7 +799,7 @@ test("MetaverseEnvironmentPhysicsRuntime boots static barrier colliders from com
   environmentPhysicsRuntime.dispose();
 });
 
-test("MetaverseEnvironmentPhysicsRuntime keeps authoritative remote player blocker colliders physics-only while preserving traversal collision", async () => {
+test("MetaverseEnvironmentPhysicsRuntime keeps sampled remote player blockers physics-only while exposing shared grounded blockers", async () => {
   const [
     { Group },
     { metaverseRuntimeConfig },
@@ -842,68 +842,13 @@ test("MetaverseEnvironmentPhysicsRuntime keeps authoritative remote player block
   await environmentPhysicsRuntime.boot(0);
   assert.equal(world.colliders.length, 0);
 
-  environmentPhysicsRuntime.syncAuthoritativeRemotePlayerBlockers([
+  environmentPhysicsRuntime.syncSampledRemotePlayerBlockers([
     Object.freeze({
-      groundedBody: Object.freeze({
-        linearVelocity: Object.freeze({ x: 0, y: 0, z: 0 }),
-        position: Object.freeze({ x: 2.4, y: 0.68, z: -5.2 }),
-        yawRadians: 0
-      }),
-      locomotionMode: "grounded",
-      mountedOccupancy: null,
-      playerId: "remote-deckhand-1",
-      swimBody: null
-    }),
-    Object.freeze({
-      groundedBody: Object.freeze({
-        linearVelocity: Object.freeze({ x: 0, y: 0, z: 0 }),
-        position: Object.freeze({ x: 4.4, y: 0, z: -8 }),
-        yawRadians: 0
-      }),
-      locomotionMode: "swim",
-      mountedOccupancy: null,
-      playerId: "remote-swimmer-2",
-      swimBody: Object.freeze({
-        angularVelocityRadiansPerSecond: 0,
-        contact: Object.freeze({
-          appliedMovementDelta: Object.freeze({ x: 0, y: 0, z: 0 }),
-          blockedPlanarMovement: false,
-          desiredMovementDelta: Object.freeze({ x: 0, y: 0, z: 0 })
-        }),
-        driveTarget: Object.freeze({
-          boost: false,
-          moveAxis: 0,
-          movementMagnitude: 0,
-          strafeAxis: 0,
-          targetForwardSpeedUnitsPerSecond: 0,
-          targetPlanarSpeedUnitsPerSecond: 0,
-          targetStrafeSpeedUnitsPerSecond: 0
-        }),
-        linearVelocity: Object.freeze({ x: 0, y: 0, z: 0 }),
-        planarDirectionalSpeeds: Object.freeze({
-          forwardSpeedUnitsPerSecond: 0,
-          strafeSpeedUnitsPerSecond: 0
-        }),
-        position: Object.freeze({ x: 4.4, y: 0, z: -8 }),
-        yawRadians: 0
-      })
-    }),
-    Object.freeze({
-      groundedBody: Object.freeze({
-        linearVelocity: Object.freeze({ x: 0, y: 0, z: 0 }),
-        position: Object.freeze({ x: 1.8, y: 0.8, z: -5.6 }),
-        yawRadians: 0
-      }),
-      locomotionMode: "grounded",
-      mountedOccupancy: Object.freeze({
-        environmentAssetId: "metaverse-hub-skiff-v1",
-        entryId: null,
-        occupancyKind: "seat",
-        occupantRole: "passenger",
-        seatId: "port-bench-seat"
-      }),
+      capsuleHalfHeightMeters:
+        metaverseRuntimeConfig.groundedBody.capsuleHalfHeightMeters,
+      capsuleRadiusMeters: metaverseRuntimeConfig.groundedBody.capsuleRadiusMeters,
       playerId: "remote-passenger-3",
-      swimBody: null
+      position: Object.freeze({ x: 2.4, y: 0.68, z: -5.2 })
     })
   ]);
 
@@ -916,7 +861,7 @@ test("MetaverseEnvironmentPhysicsRuntime keeps authoritative remote player block
     environmentPhysicsRuntime.resolveGroundedTraversalFilterPredicate()(
       remoteBlockerCollider
     ),
-    true
+    false
   );
   assert.equal(
     environmentPhysicsRuntime.resolveWaterborneTraversalFilterPredicate()(
@@ -924,6 +869,15 @@ test("MetaverseEnvironmentPhysicsRuntime keeps authoritative remote player block
     ),
     true
   );
+  assert.deepEqual(environmentPhysicsRuntime.readGroundedTraversalPlayerBlockers(), [
+    Object.freeze({
+      capsuleHalfHeightMeters:
+        metaverseRuntimeConfig.groundedBody.capsuleHalfHeightMeters,
+      capsuleRadiusMeters: metaverseRuntimeConfig.groundedBody.capsuleRadiusMeters,
+      playerId: "remote-passenger-3",
+      position: Object.freeze({ x: 2.4, y: 0.68, z: -5.2 })
+    })
+  ]);
   assert.equal(
     environmentPhysicsRuntime.surfaceColliderSnapshots.filter(
       (collider) => collider.traversalAffordance === "blocker"
@@ -934,7 +888,7 @@ test("MetaverseEnvironmentPhysicsRuntime keeps authoritative remote player block
   environmentPhysicsRuntime.dispose();
 });
 
-test("MetaverseEnvironmentPhysicsRuntime removes dead remote player blocker colliders immediately", async () => {
+test("MetaverseEnvironmentPhysicsRuntime removes absent sampled remote player blocker colliders immediately", async () => {
   const [
     { Group },
     { metaverseRuntimeConfig },
@@ -976,46 +930,22 @@ test("MetaverseEnvironmentPhysicsRuntime removes dead remote player blocker coll
 
   await environmentPhysicsRuntime.boot(0);
 
-  environmentPhysicsRuntime.syncAuthoritativeRemotePlayerBlockers([
+  environmentPhysicsRuntime.syncSampledRemotePlayerBlockers([
     Object.freeze({
-      combat: Object.freeze({
-        alive: true,
-        health: 100
-      }),
-      groundedBody: Object.freeze({
-        linearVelocity: Object.freeze({ x: 0, y: 0, z: 0 }),
-        position: Object.freeze({ x: 2.4, y: 0.68, z: -5.2 }),
-        yawRadians: 0
-      }),
-      locomotionMode: "grounded",
-      mountedOccupancy: null,
+      capsuleHalfHeightMeters:
+        metaverseRuntimeConfig.groundedBody.capsuleHalfHeightMeters,
+      capsuleRadiusMeters: metaverseRuntimeConfig.groundedBody.capsuleRadiusMeters,
       playerId: "remote-deckhand-1",
-      swimBody: null
+      position: Object.freeze({ x: 2.4, y: 0.68, z: -5.2 })
     })
   ]);
 
   assert.equal(world.colliders.length, 1);
 
-  environmentPhysicsRuntime.syncAuthoritativeRemotePlayerBlockers([
-    Object.freeze({
-      combat: Object.freeze({
-        alive: false,
-        health: 0,
-        respawnRemainingMs: 3_000
-      }),
-      groundedBody: Object.freeze({
-        linearVelocity: Object.freeze({ x: 0, y: 0, z: 0 }),
-        position: Object.freeze({ x: 2.4, y: 0.68, z: -5.2 }),
-        yawRadians: 0
-      }),
-      locomotionMode: "grounded",
-      mountedOccupancy: null,
-      playerId: "remote-deckhand-1",
-      swimBody: null
-    })
-  ]);
+  environmentPhysicsRuntime.syncSampledRemotePlayerBlockers([]);
 
   assert.equal(world.colliders.length, 0);
+  assert.deepEqual(environmentPhysicsRuntime.readGroundedTraversalPlayerBlockers(), []);
 
   environmentPhysicsRuntime.dispose();
 });

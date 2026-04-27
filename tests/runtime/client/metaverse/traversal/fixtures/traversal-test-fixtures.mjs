@@ -656,6 +656,8 @@ export async function createTraversalFixtureContext() {
 
         return (collider) => !excludedColliderSet.has(collider);
       },
+      readGroundedTraversalPlayerBlockers:
+        options.readGroundedTraversalPlayerBlockers,
       resolveWaterborneTraversalFilterPredicate(
         excludedOwnerEnvironmentAssetId = null,
         excludedColliders = []

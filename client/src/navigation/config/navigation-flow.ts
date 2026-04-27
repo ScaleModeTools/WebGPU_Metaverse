@@ -12,6 +12,10 @@ export const navigationFlow = {
       label: "Open the full-screen map editor suite from the dev shell"
     },
     {
+      id: "playlists",
+      label: "Configure dev map launch playlists from exported map bundles"
+    },
+    {
       id: "permissions",
       label: "Optional webcam permission for thumb-trigger mode",
       requiresPrevious: ["main-menu"]

@@ -69,6 +69,43 @@ test("MetaverseWeaponPresentationRuntime stays hidden without an attachment proo
   assert.equal(updateCount, 0);
 });
 
+test("MetaverseWeaponPresentationRuntime keeps loaded weapon proof unequipped when weapon id is null", async () => {
+  const [{ MetaverseWeaponPresentationRuntime }, { metaverseAttachmentProofConfig }] =
+    await Promise.all([
+      clientLoader.load("/src/metaverse/classes/metaverse-weapon-presentation-runtime.ts"),
+      clientLoader.load("/src/metaverse/world/proof/index.ts")
+    ]);
+  const runtime = new MetaverseWeaponPresentationRuntime(runtimeConfig, {
+    attachmentProofConfig: metaverseAttachmentProofConfig,
+    equippedWeaponId: null
+  });
+  let updateCount = 0;
+
+  runtime.subscribeUiUpdates(() => {
+    updateCount += 1;
+  });
+
+  assert.equal(runtime.hudSnapshot.visible, false);
+  assert.equal(runtime.hudSnapshot.weaponId, null);
+  assert.equal(runtime.weaponState, null);
+
+  runtime.advance({
+    deltaSeconds: 0.016,
+    flightInput: Object.freeze({
+      primaryAction: true,
+      secondaryAction: true
+    }),
+    mountedEnvironment: null
+  });
+
+  assert.equal(runtime.cameraFieldOfViewDegrees, 70);
+  assert.equal(runtime.fireTriggerHeld, false);
+  assert.equal(runtime.hudSnapshot.visible, false);
+  assert.equal(runtime.hudSnapshot.weaponId, null);
+  assert.equal(runtime.weaponState, null);
+  assert.equal(updateCount, 0);
+});
+
 test("MetaverseWeaponPresentationRuntime publishes hip-fire, ADS, and mounted suppression from the shipped weapon proof", async () => {
   const [{ MetaverseWeaponPresentationRuntime }, { metaverseAttachmentProofConfig }] =
     await Promise.all([

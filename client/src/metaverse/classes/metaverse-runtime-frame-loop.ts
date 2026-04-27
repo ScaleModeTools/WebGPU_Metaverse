@@ -1,11 +1,11 @@
 import type { Camera, Scene } from "three/webgpu";
 import type {
   MetaversePlayerTraversalIntentSnapshotInput,
-  MetaverseRealtimePlayerSnapshot
+  MetaverseRealtimePlayerSnapshot,
+  MetaverseTraversalPlayerBodyBlockerSnapshot
 } from "@webgpu-metaverse/shared";
 
 import {
-  metaverseLocalAuthorityReconciliationConfig,
   metaverseWorldCadenceConfig
 } from "../config/metaverse-world-network";
 import { resolveFocusedPortalSnapshot } from "../states/metaverse-flight";
@@ -83,8 +83,8 @@ interface MetaverseRuntimeFrameAuthoritativeWorldSync {
 interface MetaverseRuntimeFrameEnvironmentPhysicsRuntime {
   syncDebugPresentation(): void;
   syncDynamicEnvironmentBodyPresentations(): void;
-  syncAuthoritativeRemotePlayerBlockers(
-    remotePlayerSnapshots: readonly MetaverseRealtimePlayerSnapshot[]
+  syncSampledRemotePlayerBlockers(
+    remotePlayerBlockers: readonly MetaverseTraversalPlayerBodyBlockerSnapshot[]
   ): void;
 }
 
@@ -115,11 +115,10 @@ interface MetaverseRuntimeFramePresenceRuntime {
 interface MetaverseRuntimeFrameRemoteWorldRuntime {
   readonly connectionRequired: boolean;
   readonly isConnected: boolean;
+  readonly remotePlayerBodyBlockers:
+    readonly MetaverseTraversalPlayerBodyBlockerSnapshot[];
   readonly remoteCharacterPresentations:
     readonly MetaverseRemoteCharacterPresentationSnapshot[];
-  readFreshAuthoritativeRemotePlayerSnapshots(
-    maxAuthoritativeSnapshotAgeMs: number
-  ): readonly MetaverseRealtimePlayerSnapshot[];
   previewLocalTraversalIntent(
     traversalIntentInput: MetaversePlayerTraversalIntentSnapshotInput | null
   ): unknown;
@@ -372,10 +371,8 @@ export class MetaverseRuntimeFrameLoop {
       }
 
       this.#authoritativeWorldSync.syncAuthoritativeWorldSnapshots();
-      this.#environmentPhysicsRuntime.syncAuthoritativeRemotePlayerBlockers(
-        this.#remoteWorldRuntime.readFreshAuthoritativeRemotePlayerSnapshots(
-          metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
-        )
+      this.#environmentPhysicsRuntime.syncSampledRemotePlayerBlockers(
+        this.#remoteWorldRuntime.remotePlayerBodyBlockers
       );
       authoritativeWorldPrepared = true;
     };

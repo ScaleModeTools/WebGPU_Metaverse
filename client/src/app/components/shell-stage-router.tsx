@@ -53,6 +53,11 @@ const MapEditorStageScreen = lazy(async () =>
     default: module.MapEditorStageScreen
   }))
 );
+const GamePlaylistsStageScreen = lazy(async () =>
+  import("../../engine-tool/routes/game-playlists-stage-screen").then((module) => ({
+    default: module.GamePlaylistsStageScreen
+  }))
+);
 const DuckHuntGameplayStageScreen = lazy(async () =>
   import(
     "../../experiences/duck-hunt/components/duck-hunt-gameplay-stage-screen"
@@ -99,13 +104,15 @@ interface ShellStageRouterProps {
   readonly onCoopRoomIdDraftChange: (coopRoomIdDraft: string) => void;
   readonly onEditProfile: () => void;
   readonly onEnterMetaverseRequest: (
-    matchMode?: MetaverseMatchModeId
+    matchMode?: MetaverseMatchModeId,
+    metaverseRoomIdOverride?: string
   ) => void;
   readonly onExperienceLaunchRequest: (experienceId: ExperienceId) => void;
   readonly onGameplaySignal: (signal: GameplaySignal) => void;
   readonly onInputModeChange: (inputMode: GameplayInputModeId) => void;
   readonly onLoginSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onOpenGameplayMenu: () => void;
+  readonly onOpenGamePlaylistsRequest: () => void;
   readonly onOpenToolRequest: () => void;
   readonly onRunToolPreviewRequest: (
     launchSelection: MetaverseWorldPreviewLaunchSelectionSnapshot
@@ -174,6 +181,7 @@ export function ShellStageRouter({
   onInputModeChange,
   onLoginSubmit,
   onOpenGameplayMenu,
+  onOpenGamePlaylistsRequest,
   onOpenToolRequest,
   onRunToolPreviewRequest,
   onRequestPermission,
@@ -197,6 +205,16 @@ export function ShellStageRouter({
       ),
     [activeMetaverseBundleId]
   );
+  const activeMetaverseMatchMode =
+    activeMetaverseRoomAssignment?.matchMode ?? matchMode;
+  const activeMetaverseAttachmentProofConfig =
+    activeMetaverseMatchMode === "team-deathmatch"
+      ? metaverseAttachmentProofConfig
+      : null;
+  const activeMetaverseEquippedWeaponId =
+    activeMetaverseMatchMode === "team-deathmatch"
+      ? metaverseAttachmentProofConfig.attachmentId
+      : null;
 
   return (
     <section>
@@ -216,6 +234,7 @@ export function ShellStageRouter({
           onEnterMetaverse={onEnterMetaverseRequest}
           onMatchModeChange={onMatchModeChange}
           onMetaverseRoomIdDraftChange={onMetaverseRoomIdDraftChange}
+          onOpenGamePlaylistsRequest={onOpenGamePlaylistsRequest}
           onOpenToolRequest={onOpenToolRequest}
           onRequestPermission={onRequestPermission}
           onRecalibrationRequest={onRecalibrationRequest}
@@ -249,13 +268,14 @@ export function ShellStageRouter({
       activeMetaverseRoomAssignment !== null ? (
         <Suspense fallback={<GameplayStageFallback />}>
           <MetaverseStageScreen
-            attachmentProofConfig={metaverseAttachmentProofConfig}
+            attachmentProofConfig={activeMetaverseAttachmentProofConfig}
             audioStatusLabel={audioStatusLabel}
             bundleId={activeMetaverseBundleId}
             calibrationQualityLabel={calibrationQualityLabel}
             characterProofConfig={metaverseCharacterProofConfig}
             coopRoomIdDraft={coopRoomIdDraft}
             environmentProofConfig={metaverseEnvironmentProofConfig}
+            equippedWeaponId={activeMetaverseEquippedWeaponId}
             gameplayInputMode={inputMode}
             metaverseControlMode={metaverseControlMode}
             onCoopRoomIdDraftChange={onCoopRoomIdDraftChange}
@@ -263,7 +283,7 @@ export function ShellStageRouter({
             onRecalibrationRequest={onRecalibrationRequest}
             roomAssignment={activeMetaverseRoomAssignment}
             onSetupRequest={onSetupRequest}
-            matchMode={matchMode}
+            matchMode={activeMetaverseMatchMode}
             username={profile.snapshot.username}
           />
         </Suspense>
@@ -278,6 +298,12 @@ export function ShellStageRouter({
             onCloseRequest={onCloseToolRequest}
             onRunPreviewRequest={onRunToolPreviewRequest}
           />
+        </Suspense>
+      ) : null}
+
+      {activeStep === "playlists" ? (
+        <Suspense fallback={<GameplayStageFallback />}>
+          <GamePlaylistsStageScreen onCloseRequest={onCloseToolRequest} />
         </Suspense>
       ) : null}
 

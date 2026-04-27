@@ -62,17 +62,16 @@ test("MetaverseRuntimeFrameLoop owns the live frame sequencing and frame state o
       playerId: "remote-player"
     })
   ]);
-  const authoritativeRemotePlayerSnapshots = Object.freeze([
+  const sampledRemotePlayerBodyBlockers = Object.freeze([
     Object.freeze({
-      locomotionMode: "grounded",
-      mountedOccupancy: null,
+      capsuleHalfHeightMeters: 0.62,
+      capsuleRadiusMeters: 0.32,
       playerId: "remote-player",
       position: Object.freeze({
         x: 5,
         y: 0.68,
         z: -3
-      }),
-      yawRadians: 0.25
+      })
     })
   ]);
   const focusedMountable = Object.freeze({
@@ -122,12 +121,9 @@ test("MetaverseRuntimeFrameLoop owns the live frame sequencing and frame state o
       syncDynamicEnvironmentBodyPresentations() {
         callLog.push("syncDynamicEnvironmentBodyPresentations");
       },
-      syncAuthoritativeRemotePlayerBlockers(nextRemotePlayerSnapshots) {
-        callLog.push("syncAuthoritativeRemotePlayerBlockers");
-        assert.equal(
-          nextRemotePlayerSnapshots,
-          authoritativeRemotePlayerSnapshots
-        );
+      syncSampledRemotePlayerBlockers(nextRemotePlayerBodyBlockers) {
+        callLog.push("syncSampledRemotePlayerBlockers");
+        assert.equal(nextRemotePlayerBodyBlockers, sampledRemotePlayerBodyBlockers);
       }
     },
     flightInputRuntime: {
@@ -178,11 +174,8 @@ test("MetaverseRuntimeFrameLoop owns the live frame sequencing and frame state o
     remoteWorldRuntime: {
       connectionRequired: false,
       isConnected: true,
+      remotePlayerBodyBlockers: sampledRemotePlayerBodyBlockers,
       remoteCharacterPresentations,
-      readFreshAuthoritativeRemotePlayerSnapshots() {
-        callLog.push("readFreshAuthoritativeRemotePlayerSnapshots");
-        return authoritativeRemotePlayerSnapshots;
-      },
       previewLocalTraversalIntent(traversalIntentInput) {
         callLog.push("previewLocalTraversalIntent");
         previewInputs.push(traversalIntentInput);
@@ -222,15 +215,21 @@ test("MetaverseRuntimeFrameLoop owns the live frame sequencing and frame state o
         nowMs,
         deltaSeconds,
         characterPresentationSnapshot,
+        localWeaponState,
+        localWeaponAdsBlend,
         nextRemoteCharacterPresentations,
-        mountedEnvironment
+        mountedEnvironment,
+        cameraFieldOfViewDegrees
       ) {
         callLog.push("syncPresentation");
         scenePresentationCalls.push({
           cameraSnapshot,
           characterPresentationSnapshot,
+          cameraFieldOfViewDegrees,
           deltaSeconds,
           focusedPortal,
+          localWeaponAdsBlend,
+          localWeaponState,
           mountedEnvironment,
           nextRemoteCharacterPresentations,
           nowMs
@@ -378,7 +377,7 @@ test("MetaverseRuntimeFrameLoop keeps blocked camera-phase frames neutral and su
     environmentPhysicsRuntime: {
       syncDebugPresentation() {},
       syncDynamicEnvironmentBodyPresentations() {},
-      syncAuthoritativeRemotePlayerBlockers() {}
+      syncSampledRemotePlayerBlockers() {}
     },
     flightInputRuntime: {
       readSnapshot() {
@@ -408,10 +407,8 @@ test("MetaverseRuntimeFrameLoop keeps blocked camera-phase frames neutral and su
     remoteWorldRuntime: {
       connectionRequired: true,
       isConnected: false,
+      remotePlayerBodyBlockers: Object.freeze([]),
       remoteCharacterPresentations: Object.freeze([]),
-      readFreshAuthoritativeRemotePlayerSnapshots() {
-        return Object.freeze([]);
-      },
       previewLocalTraversalIntent(traversalIntentInput) {
         previewInputs.push(traversalIntentInput);
         return "preview-intent";

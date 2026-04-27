@@ -50,6 +50,7 @@ function createIdleGroundedBodyIntentSnapshot() {
 
 type SurfaceLocomotionDependencies = Pick<
   MetaverseTraversalRuntimeDependencies,
+  | "readGroundedTraversalPlayerBlockers"
   | "resolveGroundedTraversalFilterPredicate"
   | "resolveWaterborneTraversalFilterPredicate"
   | "surfaceColliderSnapshots"
@@ -176,6 +177,8 @@ export class MetaverseUnmountedSurfaceLocomotionState {
       input.config,
       {
         physicsRuntime: input.physicsRuntime,
+        readGroundedTraversalPlayerBlockers:
+          input.dependencies.readGroundedTraversalPlayerBlockers,
         resolveGroundedTraversalFilterPredicate:
           input.dependencies.resolveGroundedTraversalFilterPredicate,
         resolveWaterborneTraversalFilterPredicate:

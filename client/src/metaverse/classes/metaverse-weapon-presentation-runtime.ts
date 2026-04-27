@@ -31,6 +31,7 @@ interface ResolvedMetaverseWeaponPresentation {
 
 interface MetaverseWeaponPresentationRuntimeDependencies {
   readonly attachmentProofConfig?: MetaverseAttachmentProofConfig | null;
+  readonly equippedWeaponId?: string | null | undefined;
 }
 
 interface AdvanceWeaponPresentationInput {
@@ -198,7 +199,7 @@ function resolveMetaverseWeaponPresentation(
 
 export class MetaverseWeaponPresentationRuntime {
   readonly #baseFieldOfViewDegrees: number;
-  readonly #resolvedWeapon: ResolvedMetaverseWeaponPresentation | null;
+  readonly #equippedWeapon: ResolvedMetaverseWeaponPresentation | null;
   readonly #uiUpdateListeners = new Set<() => void>();
 
   #adsLatched = false;
@@ -217,9 +218,18 @@ export class MetaverseWeaponPresentationRuntime {
   ) {
     this.#baseFieldOfViewDegrees = Number(config.camera.fieldOfViewDegrees);
     this.#cameraFieldOfViewDegrees = this.#baseFieldOfViewDegrees;
-    this.#resolvedWeapon = resolveMetaverseWeaponPresentation(
+    const resolvedWeapon = resolveMetaverseWeaponPresentation(
       dependencies.attachmentProofConfig
     );
+    const equippedWeaponId =
+      dependencies.equippedWeaponId === undefined
+        ? resolvedWeapon?.weaponId ?? null
+        : dependencies.equippedWeaponId;
+
+    this.#equippedWeapon =
+      resolvedWeapon !== null && equippedWeaponId === resolvedWeapon.weaponId
+        ? resolvedWeapon
+        : null;
     this.#hudSnapshot = this.#createHudSnapshot(false, "hip-fire");
   }
 
@@ -271,8 +281,8 @@ export class MetaverseWeaponPresentationRuntime {
     flightInput,
     mountedEnvironment
   }: AdvanceWeaponPresentationInput): void {
-    const resolvedWeapon = this.#resolvedWeapon;
-    const visible = resolvedWeapon !== null && mountedEnvironment === null;
+    const equippedWeapon = this.#equippedWeapon;
+    const visible = equippedWeapon !== null && mountedEnvironment === null;
     const primaryActionPressedThisFrame =
       visible &&
       (flightInput.primaryActionPressedCount > 0 ||
@@ -291,7 +301,7 @@ export class MetaverseWeaponPresentationRuntime {
     const targetAimMode: MetaverseRealtimePlayerWeaponAimModeId =
       visible && this.#adsLatched ? "ads" : "hip-fire";
     const adsTransitionSeconds =
-      resolvedWeapon?.loadout.stats.handling.adsTransitionSeconds ?? 0;
+      equippedWeapon?.loadout.stats.handling.adsTransitionSeconds ?? 0;
     const transitionStep =
       adsTransitionSeconds <= 0
         ? 1
@@ -306,13 +316,13 @@ export class MetaverseWeaponPresentationRuntime {
       transitionStep
     );
     this.#cameraFieldOfViewDegrees =
-      resolvedWeapon === null
+      equippedWeapon === null
         ? this.#baseFieldOfViewDegrees
         : lerp(
             this.#baseFieldOfViewDegrees,
             resolveAdsFieldOfViewDegrees(
               this.#baseFieldOfViewDegrees,
-              resolvedWeapon.loadout.aimProfile.adsFovDegrees
+              equippedWeapon.loadout.aimProfile.adsFovDegrees
             ),
             this.#adsBlend
           );
@@ -323,7 +333,7 @@ export class MetaverseWeaponPresentationRuntime {
     visible: boolean,
     aimMode: MetaverseRealtimePlayerWeaponAimModeId
   ): MetaverseWeaponHudSnapshot {
-    const resolvedWeapon = this.#resolvedWeapon;
+    const resolvedWeapon = this.#equippedWeapon;
 
     if (resolvedWeapon === null) {
       return hiddenWeaponHudSnapshot;
@@ -347,7 +357,7 @@ export class MetaverseWeaponPresentationRuntime {
     visible: boolean,
     aimMode: MetaverseRealtimePlayerWeaponAimModeId
   ): void {
-    const resolvedWeapon = this.#resolvedWeapon;
+    const resolvedWeapon = this.#equippedWeapon;
     const nextHudSnapshot = this.#createHudSnapshot(visible, aimMode);
     const nextWeaponState =
       visible && resolvedWeapon !== null

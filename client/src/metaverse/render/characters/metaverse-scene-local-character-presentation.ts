@@ -5,6 +5,7 @@ import { resolveFirstPersonHeadClearanceCameraSnapshot } from "../first-person-c
 import {
   clearHumanoidV2PistolPoseWeights,
   resolveHeldCharacterAnimationVocabulary,
+  shouldUseHeldWeaponCharacterPresentation,
   syncCharacterAnimation,
   syncCharacterPresentation,
   syncHumanoidV2PistolPoseWeights,
@@ -32,6 +33,7 @@ export function advanceLocalCharacterAnimation<
   characterRuntime: TCharacterRuntime,
   attachmentRuntime: TAttachmentRuntime | null,
   characterPresentation: MetaverseCharacterPresentationSnapshot | null,
+  weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null,
   mountedCharacterRuntime: object | null,
   cameraSnapshot: Pick<MetaverseCameraSnapshot, "pitchRadians">,
   deltaSeconds: number,
@@ -43,13 +45,20 @@ export function advanceLocalCharacterAnimation<
     readonly captureHeldWeaponPoseRuntime: (
       heldWeaponPoseRuntime: NonNullable<TCharacterRuntime["heldWeaponPoseRuntime"]>
     ) => void;
+    readonly restoreHeldWeaponPoseRuntime: (
+      heldWeaponPoseRuntime: NonNullable<TCharacterRuntime["heldWeaponPoseRuntime"]>
+    ) => void;
   }
 ): void {
+  const heldWeaponPresentationActive =
+    shouldUseHeldWeaponCharacterPresentation(
+      attachmentRuntime,
+      weaponState,
+      mountedCharacterRuntime
+    );
   const useHumanoidV2PistolLayering =
-    attachmentRuntime !== null &&
-    attachmentRuntime.activeMountKind === "held" &&
+    heldWeaponPresentationActive &&
     characterPresentation !== null &&
-    mountedCharacterRuntime === null &&
     characterRuntime.humanoidV2PistolPoseRuntime !== null;
 
   syncCharacterAnimation(
@@ -58,6 +67,7 @@ export function advanceLocalCharacterAnimation<
       characterRuntime,
       attachmentRuntime,
       characterPresentation?.animationVocabulary ?? "idle",
+      weaponState,
       mountedCharacterRuntime
     ),
     useHumanoidV2PistolLayering,
@@ -85,6 +95,12 @@ export function advanceLocalCharacterAnimation<
     dependencies.captureHeldWeaponPoseRuntime(
       characterRuntime.heldWeaponPoseRuntime
     );
+
+    if (!heldWeaponPresentationActive) {
+      dependencies.restoreHeldWeaponPoseRuntime(
+        characterRuntime.heldWeaponPoseRuntime
+      );
+    }
   }
 }
 
@@ -148,11 +164,14 @@ export function syncLocalCharacterPresentation<
         );
 
   if (
-    attachmentRuntime !== null &&
+    shouldUseHeldWeaponCharacterPresentation(
+      attachmentRuntime,
+      weaponState,
+      mountedCharacterRuntime
+    ) &&
     characterRuntime.heldWeaponPoseRuntime !== null &&
-    attachmentRuntime.activeMountKind === "held" &&
     characterPresentation !== null &&
-    mountedCharacterRuntime === null
+    attachmentRuntime !== null
   ) {
     dependencies.restoreHeldWeaponPoseRuntime(
       characterRuntime.heldWeaponPoseRuntime

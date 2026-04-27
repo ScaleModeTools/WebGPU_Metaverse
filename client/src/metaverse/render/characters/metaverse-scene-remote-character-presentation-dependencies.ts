@@ -75,11 +75,14 @@ export function createMetaverseSceneRemoteCharacterPresentationDependencies({
       ),
     cloneCharacterRuntime: (sourceCharacterRuntime, playerId) =>
       cloneMetaverseCharacterProofRuntime(sourceCharacterRuntime, playerId, {
-        createHeldWeaponPoseRuntime: (characterScene) =>
-          createHeldWeaponPoseRuntime(
-            characterScene,
-            heldWeaponPoseRuntimeNodeResolvers
-          ),
+        createHeldWeaponPoseRuntime:
+          sourceCharacterRuntime.heldWeaponPoseRuntime === null
+            ? () => null
+            : (characterScene) =>
+                createHeldWeaponPoseRuntime(
+                  characterScene,
+                  heldWeaponPoseRuntimeNodeResolvers
+                ),
         ...characterProofRuntimeNodeResolvers
       }),
     resolveHeldAnimationVocabulary: resolveHeldCharacterAnimationVocabulary,
@@ -88,7 +91,8 @@ export function createMetaverseSceneRemoteCharacterPresentationDependencies({
     syncAttachmentMount: (
       attachmentRuntime,
       characterRuntime,
-      mountedOccupancy
+      mountedOccupancy,
+      weaponState
     ) =>
       syncAttachmentProofRuntimeMount(
         attachmentRuntime,
@@ -96,7 +100,8 @@ export function createMetaverseSceneRemoteCharacterPresentationDependencies({
         resolveMetaverseMountedOccupancyPresentationStateSnapshot(
           mountedOccupancy
         ),
-        attachmentRuntimeNodeResolvers
+        attachmentRuntimeNodeResolvers,
+        weaponState
       ),
     syncCharacterAnimation,
     syncCharacterPresentation,

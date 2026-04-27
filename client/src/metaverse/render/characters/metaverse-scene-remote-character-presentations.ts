@@ -6,6 +6,7 @@ import type {
   MetaverseRemoteCharacterPresentationSnapshot,
   MetaverseRuntimeConfig
 } from "../../types/metaverse-runtime";
+import { shouldUseHeldWeaponCharacterPresentation } from "./metaverse-scene-character-animation";
 
 const remoteCharacterInterpolationRatePerSecond = 12;
 const remoteCharacterTeleportSnapDistanceMeters = 3.5;
@@ -19,6 +20,7 @@ interface CharacterRuntimeLike {
 
 interface AttachmentRuntimeLike {
   readonly activeMountKind: "held" | "mounted-holster" | null;
+  readonly attachmentId: string;
 }
 
 export interface MetaverseRemoteCharacterPresentationRuntimeState<
@@ -62,6 +64,7 @@ export interface MetaverseRemoteCharacterPresentationDependencies<
     characterRuntime: TCharacterRuntime,
     attachmentRuntime: TAttachmentRuntime | null,
     targetVocabulary: MetaverseCharacterAnimationVocabularyId,
+    weaponState: MetaverseRemoteCharacterPresentationSnapshot["weaponState"],
     mountedCharacterRuntime: TMountedCharacterRuntime | null
   ) => MetaverseCharacterAnimationVocabularyId;
   readonly resolveMountedEnvironmentRuntime: (
@@ -74,7 +77,8 @@ export interface MetaverseRemoteCharacterPresentationDependencies<
     attachmentRuntime: TAttachmentRuntime,
     characterRuntime: TCharacterRuntime,
     mountedOccupancy:
-      MetaverseRemoteCharacterPresentationSnapshot["mountedOccupancy"]
+      MetaverseRemoteCharacterPresentationSnapshot["mountedOccupancy"],
+    weaponState: MetaverseRemoteCharacterPresentationSnapshot["weaponState"]
   ) => void;
   readonly syncCharacterAnimation: (
     characterRuntime: TCharacterRuntime,
@@ -331,14 +335,19 @@ export function syncRemoteCharacterPresentations<
       dependencies.syncAttachmentMount(
         remoteCharacterRuntime.attachmentRuntime,
         remoteCharacterRuntime.characterRuntime,
-        remoteCharacterRuntime.targetMountedOccupancy
+        remoteCharacterRuntime.targetMountedOccupancy,
+        remoteCharacterPresentation.weaponState
       );
     }
 
+    const heldWeaponPresentationActive =
+      shouldUseHeldWeaponCharacterPresentation(
+        remoteCharacterRuntime.attachmentRuntime,
+        remoteCharacterPresentation.weaponState,
+        remoteCharacterRuntime.mountedCharacterRuntime
+      );
     const useHumanoidV2PistolLayering =
-      remoteCharacterRuntime.attachmentRuntime !== null &&
-      remoteCharacterRuntime.attachmentRuntime.activeMountKind === "held" &&
-      remoteCharacterRuntime.mountedCharacterRuntime === null &&
+      heldWeaponPresentationActive &&
       remoteCharacterRuntime.characterRuntime.humanoidV2PistolPoseRuntime !== null;
 
     dependencies.syncCharacterAnimation(
@@ -347,6 +356,7 @@ export function syncRemoteCharacterPresentations<
         remoteCharacterRuntime.characterRuntime,
         remoteCharacterRuntime.attachmentRuntime,
         remoteCharacterPresentation.presentation.animationVocabulary,
+        remoteCharacterPresentation.weaponState,
         remoteCharacterRuntime.mountedCharacterRuntime
       ),
       useHumanoidV2PistolLayering,
@@ -374,6 +384,12 @@ export function syncRemoteCharacterPresentations<
       dependencies.captureHeldWeaponPoseRuntime(
         remoteCharacterRuntime.characterRuntime.heldWeaponPoseRuntime
       );
+
+      if (!heldWeaponPresentationActive) {
+        dependencies.restoreHeldWeaponPoseRuntime(
+          remoteCharacterRuntime.characterRuntime.heldWeaponPoseRuntime
+        );
+      }
     }
 
     if (remoteCharacterRuntime.mountedCharacterRuntime !== null) {
@@ -411,10 +427,10 @@ export function syncRemoteCharacterPresentations<
     }
 
     if (
-      remoteCharacterRuntime.attachmentRuntime !== null &&
+      heldWeaponPresentationActive &&
       remoteCharacterRuntime.characterRuntime.heldWeaponPoseRuntime !== null &&
-      remoteCharacterRuntime.attachmentRuntime.activeMountKind === "held" &&
-      remoteCharacterPresentation.aimCamera !== null
+      remoteCharacterPresentation.aimCamera !== null &&
+      remoteCharacterRuntime.attachmentRuntime !== null
     ) {
       dependencies.restoreHeldWeaponPoseRuntime(
         remoteCharacterRuntime.characterRuntime.heldWeaponPoseRuntime

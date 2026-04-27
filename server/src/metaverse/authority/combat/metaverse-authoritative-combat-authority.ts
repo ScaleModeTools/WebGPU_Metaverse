@@ -866,6 +866,10 @@ export class MetaverseAuthoritativeCombatAuthority<
     });
   }
 
+  isPlayerAlive(playerId: MetaversePlayerId): boolean {
+    return this.#playerCombatStateByPlayerId.get(playerId)?.alive ?? true;
+  }
+
   readPlayerCombatActionObserverSnapshot(playerId: MetaversePlayerId): {
     readonly highestProcessedPlayerActionSequence: number;
     readonly recentPlayerActionReceipts:

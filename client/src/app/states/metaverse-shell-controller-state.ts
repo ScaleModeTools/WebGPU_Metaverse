@@ -45,8 +45,8 @@ function resolveActiveMetaverseBundleId(bundleId: string): string {
 function resolveNextShellStageAfterModeChange(
   state: MetaverseShellControllerState
 ): MetaverseShellControllerState["shellStage"] {
-  if (state.shellStage === "tool") {
-    return "tool";
+  if (state.shellStage === "tool" || state.shellStage === "playlists") {
+    return state.shellStage;
   }
 
   return state.shellStage === "main-menu" ? "main-menu" : "metaverse";
@@ -242,8 +242,21 @@ export function reduceMetaverseShellControllerState(
             isMenuOpen: false,
             shellStage: "tool"
           };
+    case "gamePlaylistsRequested":
+      return state.shellStage === "playlists" && !state.isMenuOpen
+        ? state
+        : {
+            ...state,
+            activeExperienceId: null,
+            debugPanelMode: "hidden",
+            isMenuOpen: false,
+            shellStage: "playlists"
+          };
     case "toolEditorExited":
-      return state.shellStage === "tool" && !state.isMenuOpen
+      return (
+        state.shellStage === "tool" ||
+        state.shellStage === "playlists"
+      ) && !state.isMenuOpen
         ? {
             ...state,
             shellStage: "main-menu"
@@ -254,18 +267,28 @@ export function reduceMetaverseShellControllerState(
         const nextMatchMode = action.matchMode ?? state.matchMode;
         const standardLaunchSelection =
           resolveStandardMetaverseLaunchSelection(nextMatchMode);
+        const actionLaunchSelection =
+          action.bundleId === undefined
+            ? null
+            : Object.freeze({
+                bundleId: action.bundleId,
+                variationId: action.launchVariationId ?? null
+              });
         const shouldUseStandardLaunchSelection =
+          actionLaunchSelection !== null ||
           action.matchMode !== undefined ||
           state.shellStage === "main-menu" ||
           state.activeMetaverseLaunchVariationId === null;
         const requestedBundleId = shouldUseStandardLaunchSelection
-          ? standardLaunchSelection.bundleId
+          ? actionLaunchSelection?.bundleId ?? standardLaunchSelection.bundleId
           : state.activeMetaverseBundleId;
         const activeMetaverseBundleId =
           resolveActiveMetaverseBundleId(requestedBundleId);
         const activeMetaverseLaunchVariationId = shouldUseStandardLaunchSelection
-          ? activeMetaverseBundleId === standardLaunchSelection.bundleId
-            ? standardLaunchSelection.variationId
+          ? activeMetaverseBundleId ===
+            (actionLaunchSelection?.bundleId ?? standardLaunchSelection.bundleId)
+            ? actionLaunchSelection?.variationId ??
+              standardLaunchSelection.variationId
             : null
           : activeMetaverseBundleId === state.activeMetaverseBundleId
             ? state.activeMetaverseLaunchVariationId

@@ -11,6 +11,7 @@ export function MetaverseShell() {
   const isImmersiveStage =
     activeStep === "calibration" ||
     activeStep === "tool" ||
+    activeStep === "playlists" ||
     activeStep === "metaverse" ||
     activeStep === "gameplay";
   const isMinimalEntryStage = activeStep === "main-menu";
@@ -56,6 +57,7 @@ export function MetaverseShell() {
       metaverseControlMode={controller.metaverseControlMode}
       onCloseToolRequest={controller.onCloseToolRequest}
       onOpenGameplayMenu={() => controller.onGameplayMenuOpen(true)}
+      onOpenGamePlaylistsRequest={controller.onOpenGamePlaylistsRequest}
       onOpenToolRequest={controller.onOpenToolRequest}
       onRunToolPreviewRequest={controller.onRunToolPreviewRequest}
       onRequestPermission={controller.onRequestPermission}

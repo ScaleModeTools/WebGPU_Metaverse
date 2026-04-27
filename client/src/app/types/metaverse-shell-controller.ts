@@ -88,6 +88,7 @@ export interface MetaverseShellController {
   readonly onGameplayMenuOpen: (open: boolean) => void;
   readonly onInputModeChange: (inputMode: GameplayInputModeId) => void;
   readonly onOpenToolRequest: () => void;
+  readonly onOpenGamePlaylistsRequest: () => void;
   readonly onCloseToolRequest: () => void;
   readonly onRunToolPreviewRequest: (
     launchSelection: MetaverseWorldPreviewLaunchSelectionSnapshot
@@ -177,6 +178,9 @@ export type MetaverseShellControllerAction =
       readonly type: "toolEditorRequested";
     }
   | {
+      readonly type: "gamePlaylistsRequested";
+    }
+  | {
       readonly type: "toolEditorExited";
     }
   | {
@@ -185,6 +189,8 @@ export type MetaverseShellControllerAction =
     }
   | {
       readonly type: "metaverseEntryRequested";
+      readonly bundleId?: string;
+      readonly launchVariationId?: string | null;
       readonly matchMode?: MetaverseMatchModeId;
     }
   | {

@@ -1,10 +1,12 @@
 import {
   advanceMetaverseUnmountedTraversalBodyStep,
   clamp,
+  constrainMetaverseTraversalPlayerBodyBlockers,
   createMetaverseSurfaceDriveBodyRuntimeSnapshot,
   createMetaverseUnmountedTraversalStateSnapshot,
   metaverseTraversalActionBufferSeconds,
   queueMetaverseUnmountedTraversalAction,
+  type MetaverseTraversalPlayerBodyBlockerSnapshot,
   type MetaverseSurfaceTraversalConfig
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 import {
@@ -78,6 +80,9 @@ interface MetaverseAuthoritativeUnmountedPlayerSimulationDependencies<
     MetaverseAuthoritativePlayerTraversalIntentRuntimeState
   >;
   readonly playersById: ReadonlyMap<MetaversePlayerId, PlayerRuntime>;
+  readonly resolveGroundedTraversalPlayerBlockers: (
+    playerRuntime: PlayerRuntime
+  ) => readonly MetaverseTraversalPlayerBodyBlockerSnapshot[];
   readonly resolveAuthoritativeSurfaceColliders: () => readonly MetaverseAuthoritativeSurfaceColliderSnapshot[];
   readonly swimTraversalConfig: MetaverseSurfaceTraversalConfig;
   readonly waterRegionSnapshots: readonly MetaverseWorldPlacedWaterRegionSnapshot[];
@@ -237,7 +242,23 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
           resolvedLookYawRadians,
           this.#dependencies.createGroundedTraversalColliderPredicate(
             playerRuntime
-          )
+          ),
+          (rootPosition) =>
+            constrainMetaverseTraversalPlayerBodyBlockers({
+              blockers:
+                this.#dependencies.resolveGroundedTraversalPlayerBlockers(
+                  playerRuntime
+                ),
+              capsuleHalfHeightMeters:
+                this.#dependencies.groundedBodyConfig.capsuleHalfHeightMeters,
+              capsuleRadiusMeters:
+                this.#dependencies.groundedBodyConfig.capsuleRadiusMeters,
+              controllerOffsetMeters:
+                this.#dependencies.groundedBodyRuntimeConfig
+                  .controllerOffsetMeters,
+              currentPosition: playerRuntime.groundedBodyRuntime.snapshot.position,
+              nextPosition: rootPosition
+            })
         );
       },
       advanceSwimBodySnapshot: ({

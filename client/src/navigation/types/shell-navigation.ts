@@ -17,6 +17,7 @@ export const calibrationShellStates = ["pending", "reviewed"] as const;
 export const shellStageStates = [
   "main-menu",
   "tool",
+  "playlists",
   "metaverse",
   "gameplay"
 ] as const;

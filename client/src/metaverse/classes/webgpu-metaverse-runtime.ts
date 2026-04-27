@@ -96,6 +96,7 @@ interface MetaverseRuntimeDependencies {
   readonly createSceneAssetLoader?: () => SceneAssetLoader;
   readonly devicePixelRatio?: number;
   readonly environmentProofConfig?: MetaverseEnvironmentProofConfig | null;
+  readonly equippedWeaponId?: string | null;
   readonly localPlayerIdentity?: MetaverseLocalPlayerIdentity | null;
   readonly physicsRuntime?: RapierPhysicsRuntime;
   readonly readNowMs?: () => number;
@@ -231,6 +232,8 @@ export class WebGpuMetaverseRuntime {
         environmentPhysicsRuntime.resolveGroundedTraversalFilterPredicate(
           excludedColliders
         ),
+      readGroundedTraversalPlayerBlockers: () =>
+        environmentPhysicsRuntime.readGroundedTraversalPlayerBlockers(),
       resolveWaterborneTraversalFilterPredicate: (
         excludedOwnerEnvironmentAssetId = null,
         excludedColliders = []
@@ -262,7 +265,8 @@ export class WebGpuMetaverseRuntime {
     this.#weaponPresentationRuntime = new MetaverseWeaponPresentationRuntime(
       config,
       {
-        attachmentProofConfig: dependencies.attachmentProofConfig ?? null
+        attachmentProofConfig: dependencies.attachmentProofConfig ?? null,
+        equippedWeaponId: dependencies.equippedWeaponId
       }
     );
     const presenceRuntime = new MetaversePresenceRuntime({

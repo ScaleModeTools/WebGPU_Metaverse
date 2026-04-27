@@ -5,6 +5,7 @@ export {
   mesh2motionHumanoidIdleAnimationClipId,
   mesh2motionHumanoidInteractAnimationClipId,
   mesh2motionHumanoidSeatedAnimationClipId,
+  mesh2motionHumanoidUnarmedIdleAnimationPackSourcePath,
   mesh2motionHumanoidWalkAnimationClipId
 } from "./config/animation-clip-manifest";
 export {

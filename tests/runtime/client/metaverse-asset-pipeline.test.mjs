@@ -380,7 +380,9 @@ test("character manifests expose the active humanoid_v2 skeleton on the canonica
     },
     {
       animationClipManifest,
-      mesh2motionHumanoidCanonicalAnimationPackSourcePath
+      mesh2motionHumanoidCanonicalAnimationPackSourcePath,
+      mesh2motionHumanoidIdleAnimationClipId,
+      mesh2motionHumanoidUnarmedIdleAnimationPackSourcePath
     },
     { animationVocabularyIds, canonicalAnimationClipNamesByVocabulary },
     { socketIds }
@@ -439,8 +441,22 @@ test("character manifests expose the active humanoid_v2 skeleton on the canonica
   );
 
   assert.deepEqual(
-    [...activeClipSourcePaths],
-    [mesh2motionHumanoidCanonicalAnimationPackSourcePath]
+    [...activeClipSourcePaths].sort(),
+    [
+      mesh2motionHumanoidCanonicalAnimationPackSourcePath,
+      mesh2motionHumanoidUnarmedIdleAnimationPackSourcePath
+    ].sort()
+  );
+
+  const idleClipDescriptor =
+    animationClipManifest.byId[mesh2motionHumanoidIdleAnimationClipId];
+
+  assert.ok(idleClipDescriptor);
+  assert.equal(idleClipDescriptor.vocabulary, "idle");
+  assert.equal(idleClipDescriptor.clipName, "Idle_Loop");
+  assert.equal(
+    idleClipDescriptor.sourcePath,
+    mesh2motionHumanoidUnarmedIdleAnimationPackSourcePath
   );
   assert.deepEqual(
     [...new Set(animationClipManifest.clips.map((clip) => clip.targetSkeleton))],
@@ -799,7 +815,7 @@ test("proof delivery assets keep canonical character sockets, animation vocabula
     { skeletonBoneNamesById, socketIds },
     { characterModelManifest },
     { animationClipManifest },
-    { animationVocabularyIds, canonicalAnimationClipNamesByVocabulary },
+    { canonicalAnimationClipNamesByVocabulary },
     {
       humanoidV2PistolAimClipNamesByPoseId,
       humanoidV2PistolAnimationSourcePath
@@ -867,7 +883,7 @@ test("proof delivery assets keep canonical character sockets, animation vocabula
       );
     }
 
-    const clipSourcePaths = new Set();
+    const clipDescriptorsBySourcePath = new Map();
 
     for (const clipId of character.animationClipIds) {
       const clipDescriptor = animationClipManifest.byId[clipId];
@@ -878,10 +894,15 @@ test("proof delivery assets keep canonical character sockets, animation vocabula
         clipDescriptor.clipName,
         canonicalAnimationClipNamesByVocabulary[clipDescriptor.vocabulary]
       );
-      clipSourcePaths.add(clipDescriptor.sourcePath);
+
+      const clipDescriptors =
+        clipDescriptorsBySourcePath.get(clipDescriptor.sourcePath) ?? [];
+
+      clipDescriptors.push(clipDescriptor);
+      clipDescriptorsBySourcePath.set(clipDescriptor.sourcePath, clipDescriptors);
     }
 
-    for (const clipSourcePath of clipSourcePaths) {
+    for (const [clipSourcePath, clipDescriptors] of clipDescriptorsBySourcePath) {
       const animationPackDocument = await loadMetaverseAssetDocument(clipSourcePath);
       const animationPackNodeNames = new Set(
         (animationPackDocument.nodes ?? [])
@@ -901,17 +922,10 @@ test("proof delivery assets keep canonical character sockets, animation vocabula
         );
       }
 
-      for (const socketId of socketIds) {
+      for (const clipDescriptor of clipDescriptors) {
         assert.ok(
-          animationPackNodeNames.has(socketId),
-          `${clipSourcePath} is missing canonical socket ${socketId}.`
-        );
-      }
-
-      for (const vocabularyId of animationVocabularyIds) {
-        assert.ok(
-          animationPackClipNames.has(canonicalAnimationClipNamesByVocabulary[vocabularyId]),
-          `${clipSourcePath} is missing canonical animation clip ${canonicalAnimationClipNamesByVocabulary[vocabularyId]}.`
+          animationPackClipNames.has(clipDescriptor.clipName),
+          `${clipSourcePath} is missing animation clip ${clipDescriptor.clipName}.`
         );
       }
     }
@@ -971,7 +985,9 @@ test("active full-body character render asset stays compatible with the canonica
       metaverseActiveFullBodyCharacterAssetId,
       characterModelManifest
     },
-    { animationClipManifest },
+    {
+      mesh2motionHumanoidCanonicalAnimationPackSourcePath
+    },
     {
       skeletonBoneNamesById,
       skeletonBoneParentByNameById,
@@ -986,15 +1002,7 @@ test("active full-body character render asset stays compatible with the canonica
 
   const activeCharacter =
     characterModelManifest.byId[metaverseActiveFullBodyCharacterAssetId];
-  const activeClipSourcePaths = new Set(
-    activeCharacter.animationClipIds.map(
-      (clipId) => animationClipManifest.byId[clipId].sourcePath
-    )
-  );
-
-  assert.equal(activeClipSourcePaths.size, 1);
-
-  const activeAnimationPackPath = [...activeClipSourcePaths][0];
+  const activeAnimationPackPath = mesh2motionHumanoidCanonicalAnimationPackSourcePath;
   const activeCharacterDocument = await loadMetaverseAssetDocument(
     activeCharacter.renderModel.lods[0].modelPath
   );

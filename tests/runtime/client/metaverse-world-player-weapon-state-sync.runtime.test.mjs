@@ -22,6 +22,66 @@ after(async () => {
   await clientLoader?.close();
 });
 
+test("MetaverseWorldPlayerWeaponStateSync sends an initial null weapon state", async () => {
+  const { MetaverseWorldPlayerWeaponStateSync } = await clientLoader.load(
+    "/src/network/classes/metaverse-world-player-weapon-state-sync.ts"
+  );
+  const playerId = createMetaversePlayerId("weapon-sync-no-weapon-1");
+
+  assert.notEqual(playerId, null);
+
+  const scheduler = createManualTimerScheduler();
+  const sentWeaponCommands = [];
+  const localPlayerSnapshot = readLocalPlayerSnapshot(
+    createWorldEvent({
+      currentTick: 10,
+      lastProcessedWeaponSequence: 0,
+      playerId,
+      serverTimeMs: 10_000,
+      snapshotSequence: 1
+    })
+  );
+  const weaponStateSync = new MetaverseWorldPlayerWeaponStateSync({
+    acceptWorldEvent() {},
+    applyWorldAccessError(error) {
+      throw error;
+    },
+    clearTimeout: scheduler.clearTimeout,
+    readLatestLocalPlayerSnapshot: () => localPlayerSnapshot,
+    readPlayerId: () => playerId,
+    readStatusSnapshot: () => createConnectedStatusSnapshot(playerId),
+    resolveCommandDelayMs: () => 50,
+    async sendPlayerWeaponStateCommand(command) {
+      sentWeaponCommands.push(command);
+      return null;
+    },
+    setTimeout: scheduler.setTimeout
+  });
+
+  weaponStateSync.syncPlayerWeaponState({
+    playerId,
+    weaponState: null
+  });
+
+  assert.equal(weaponStateSync.latestPlayerWeaponSequence, 1);
+  assert.equal(scheduler.pendingTasks.length, 1);
+  assert.equal(scheduler.pendingTasks[0]?.delay, 0);
+
+  scheduler.runNext(0);
+  await flushAsyncWork();
+
+  assert.equal(sentWeaponCommands.length, 1);
+  assert.equal(sentWeaponCommands[0]?.weaponSequence, 1);
+  assert.equal(sentWeaponCommands[0]?.weaponState, null);
+
+  weaponStateSync.syncPlayerWeaponState({
+    playerId,
+    weaponState: null
+  });
+
+  assert.equal(weaponStateSync.latestPlayerWeaponSequence, 1);
+});
+
 test("MetaverseWorldPlayerWeaponStateSync resends weapon state until authoritative weapon ack catches up", async () => {
   const { MetaverseWorldPlayerWeaponStateSync } = await clientLoader.load(
     "/src/network/classes/metaverse-world-player-weapon-state-sync.ts"

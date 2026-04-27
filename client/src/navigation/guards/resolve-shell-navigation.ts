@@ -34,14 +34,14 @@ function resolveNextMetaverseStep(
 export function resolveShellNavigation(
   progress: ShellNavigationProgress
 ): ShellNavigationSnapshot {
-  if (progress.shellStage === "tool") {
+  if (progress.shellStage === "tool" || progress.shellStage === "playlists") {
     const nextMetaverseStep =
       progress.gameplayCapability !== "unsupported"
         ? resolveNextMetaverseStep(progress)
         : null;
 
     return {
-      activeStep: "tool",
+      activeStep: progress.shellStage,
       canAdvanceFromPermissions: nextMetaverseStep !== null,
       canEnterMetaverse: nextMetaverseStep === "metaverse",
       isUnsupportedRoute: false,

@@ -9,6 +9,7 @@ import type { AssertTrue, IsAssignable, IsEqual } from "./type-assertions";
 type ExpectedNavigationStepId =
   | "main-menu"
   | "tool"
+  | "playlists"
   | "permissions"
   | "calibration"
   | "metaverse"

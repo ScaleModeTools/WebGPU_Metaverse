@@ -311,6 +311,11 @@ test("MetaverseSceneInteractivePresentationState boots manifest-driven character
 
   await interactivePresentationState.boot();
 
+  const activeWeaponState = Object.freeze({
+    aimMode: "hip-fire",
+    weaponId: "metaverse-service-pistol-v1"
+  });
+
   const characterRoot = scene.getObjectByName("metaverse_character/mesh2motion-humanoid-v1");
   const attachmentRoot = scene.getObjectByName(
     "metaverse_attachment/metaverse-service-pistol-v1"
@@ -329,6 +334,7 @@ test("MetaverseSceneInteractivePresentationState boots manifest-driven character
     "mesh2motion-humanoid-v1"
   );
   assert.equal(attachmentRoot.parent?.name, "palm_r_socket");
+  assert.equal(attachmentRoot.visible, false);
 
   interactivePresentationState.syncAttachmentMount(
     mountedOccupancyStateModule
@@ -338,14 +344,22 @@ test("MetaverseSceneInteractivePresentationState boots manifest-driven character
         occupancyAnimationId: "seated",
         occupancyKind: "seat",
         occupantRole: "driver"
-      })
+      }),
+    activeWeaponState
   );
 
   assert.equal(attachmentRoot.parent?.name, "back_socket");
+  assert.equal(attachmentRoot.visible, true);
 
-  interactivePresentationState.syncAttachmentMount(null);
+  interactivePresentationState.syncAttachmentMount(null, activeWeaponState);
 
   assert.equal(attachmentRoot.parent?.name, "palm_r_socket");
+  assert.equal(attachmentRoot.visible, true);
+
+  interactivePresentationState.syncAttachmentMount(null, null);
+
+  assert.equal(attachmentRoot.parent?.name, "palm_r_socket");
+  assert.equal(attachmentRoot.visible, false);
 });
 
 test("MetaverseSceneInteractivePresentationState rejects attachment proof slices without a character proof slice", async () => {

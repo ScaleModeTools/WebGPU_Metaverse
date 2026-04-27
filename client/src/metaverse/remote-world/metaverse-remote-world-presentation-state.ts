@@ -2,9 +2,13 @@ import type {
   MetaverseRealtimeEnvironmentBodySnapshot,
   MetaversePlayerId,
   MetaverseRealtimePlayerSnapshot,
+  MetaverseTraversalPlayerBodyBlockerSnapshot,
   MetaverseRealtimeVehicleSnapshot,
   MetaverseVehicleId
 } from "@webgpu-metaverse/shared";
+import {
+  shouldTreatMetaversePlayerPoseAsTraversalBlocker
+} from "@webgpu-metaverse/shared/metaverse/presence";
 
 import type {
   MetaverseRemoteEnvironmentBodyPresentationSnapshot,
@@ -71,6 +75,8 @@ export class MetaverseRemoteWorldPresentationState {
   >();
   readonly #remoteCharacterPresentations: MetaverseRemoteCharacterPresentationSnapshot[] =
     [];
+  readonly #remotePlayerBodyBlockers: MetaverseTraversalPlayerBodyBlockerSnapshot[] =
+    [];
   readonly #remoteVehiclePresentations: MetaverseRemoteVehiclePresentationSnapshot[] =
     [];
   readonly #remoteEnvironmentBodyPresentations:
@@ -90,6 +96,11 @@ export class MetaverseRemoteWorldPresentationState {
   get remoteCharacterPresentations():
     | readonly MetaverseRemoteCharacterPresentationSnapshot[] {
     return this.#remoteCharacterPresentations;
+  }
+
+  get remotePlayerBodyBlockers():
+    | readonly MetaverseTraversalPlayerBodyBlockerSnapshot[] {
+    return this.#remotePlayerBodyBlockers;
   }
 
   get remoteVehiclePresentations():
@@ -112,6 +123,7 @@ export class MetaverseRemoteWorldPresentationState {
     this.#remoteVehiclePresentationsByEnvironmentAssetId.clear();
     this.#remoteEnvironmentBodyPresentationsByEnvironmentAssetId.clear();
     this.#remoteCharacterPresentations.length = 0;
+    this.#remotePlayerBodyBlockers.length = 0;
     this.#remoteVehiclePresentations.length = 0;
     this.#remoteEnvironmentBodyPresentations.length = 0;
   }
@@ -140,6 +152,7 @@ export class MetaverseRemoteWorldPresentationState {
       this.#nextPlayerSnapshotsByPlayerId
     );
     this.#remoteCharacterPresentations.length = 0;
+    this.#remotePlayerBodyBlockers.length = 0;
     indexMetaverseWorldPlayersByPlayerId(
       remoteCharacterRootNextSnapshot?.players ?? emptyRealtimePlayerSnapshots,
       this.#remoteCharacterRootNextPlayerSnapshotsByPlayerId
@@ -193,9 +206,31 @@ export class MetaverseRemoteWorldPresentationState {
         remoteCharacterRootNextPlayer,
         sampleEpoch
       });
-      this.#remoteCharacterPresentations.push(
-        remoteCharacterPresentation.presentationSnapshot
-      );
+      const remoteCharacterPresentationSnapshot =
+        remoteCharacterPresentation.presentationSnapshot;
+
+      this.#remoteCharacterPresentations.push(remoteCharacterPresentationSnapshot);
+      if (
+        shouldTreatMetaversePlayerPoseAsTraversalBlocker(
+          sampledDiscretePlayer.locomotionMode,
+          sampledDiscretePlayer.mountedOccupancy
+        )
+      ) {
+        this.#remotePlayerBodyBlockers.push(
+          Object.freeze({
+            capsuleHalfHeightMeters:
+              this.#presentationConfig.groundedBody.capsuleHalfHeightMeters,
+            capsuleRadiusMeters:
+              this.#presentationConfig.groundedBody.capsuleRadiusMeters,
+            playerId: sampledDiscretePlayer.playerId,
+            position: Object.freeze({
+              x: remoteCharacterPresentationSnapshot.presentation.position.x,
+              y: remoteCharacterPresentationSnapshot.presentation.position.y,
+              z: remoteCharacterPresentationSnapshot.presentation.position.z
+            })
+          })
+        );
+      }
     }
 
     for (const [playerId, remoteCharacterPresentation] of this

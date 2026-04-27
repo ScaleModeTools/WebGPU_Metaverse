@@ -4,6 +4,7 @@ import {
   AnimationMixer,
   Group
 } from "three/webgpu";
+import type { MetaverseRealtimePlayerWeaponStateSnapshot } from "@webgpu-metaverse/shared";
 
 import {
   isHumanoidV2PistolAimOverlayTrack,
@@ -58,6 +59,21 @@ export interface MetaverseCharacterAnimationRuntimeLike {
 
 export interface MetaverseAttachmentAnimationRuntimeLike {
   readonly activeMountKind: "held" | "mounted-holster" | null;
+  readonly attachmentId: string;
+}
+
+export function shouldUseHeldWeaponCharacterPresentation(
+  attachmentRuntime: MetaverseAttachmentAnimationRuntimeLike | null,
+  weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null,
+  mountedCharacterRuntime: unknown | null
+): boolean {
+  return (
+    weaponState !== null &&
+    mountedCharacterRuntime === null &&
+    attachmentRuntime !== null &&
+    weaponState.weaponId === attachmentRuntime.attachmentId &&
+    attachmentRuntime.activeMountKind === "held"
+  );
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -266,12 +282,15 @@ export function resolveHeldCharacterAnimationVocabulary(
   >,
   attachmentRuntime: MetaverseAttachmentAnimationRuntimeLike | null,
   targetVocabulary: MetaverseCharacterAnimationVocabularyId,
+  weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null,
   mountedCharacterRuntime: object | null
 ): MetaverseCharacterAnimationVocabularyId {
   if (
-    mountedCharacterRuntime !== null ||
-    attachmentRuntime === null ||
-    attachmentRuntime.activeMountKind !== "held" ||
+    !shouldUseHeldWeaponCharacterPresentation(
+      attachmentRuntime,
+      weaponState,
+      mountedCharacterRuntime
+    ) ||
     targetVocabulary !== "idle" ||
     !characterRuntime.actionsByVocabulary.has("aim")
   ) {
