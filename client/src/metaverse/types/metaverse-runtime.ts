@@ -1,5 +1,6 @@
 export * from "./hud";
 export * from "./mounted";
+export * from "./metaverse-combat-presentation";
 export * from "./presentation";
 export * from "./proof";
 export * from "./metaverse-runtime-camera-phase";

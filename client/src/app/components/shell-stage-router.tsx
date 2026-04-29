@@ -14,6 +14,8 @@ import {
   type GameplaySignal
 } from "../../experiences/duck-hunt";
 import type { MetaverseControlModeId } from "../../metaverse";
+import type { AudioCuePlaybackOptions } from "../../audio";
+import type { MetaverseCombatAudioCueId } from "../../metaverse/audio";
 import type { MetaverseWorldPreviewLaunchSelectionSnapshot } from "../../metaverse/world/map-bundles";
 import type { WebGpuMetaverseCapabilitySnapshot } from "../../metaverse";
 import type {
@@ -38,10 +40,15 @@ import { TrackedHandCalibrationStageScreen } from "./tracked-hand-calibration-st
 import { UnsupportedStageScreen } from "./unsupported-stage-screen";
 import {
   metaverseAttachmentProofConfig,
+  metaverseAttachmentProofConfigs,
   metaverseCharacterProofConfig,
   loadMetaverseEnvironmentProofConfig
 } from "../../metaverse/world/proof";
-import { resolveMetaverseWorldBundleSourceBundleId } from "../../metaverse/world/bundle-registry";
+import { readMetaverseMapBundleLaunchVariation } from "../../metaverse/world/map-bundles";
+import {
+  readMetaverseWorldBundleRegistryEntry,
+  resolveMetaverseWorldBundleSourceBundleId
+} from "../../metaverse/world/bundle-registry";
 
 const MetaverseStageScreen = lazy(async () =>
   import("../../metaverse").then((module) => ({
@@ -66,9 +73,12 @@ const DuckHuntGameplayStageScreen = lazy(async () =>
   }))
 );
 
+const emptyMetaverseAttachmentProofConfigs = Object.freeze([]);
+
 interface ShellStageRouterProps {
   readonly activeExperienceId: ExperienceId | null;
   readonly activeMetaverseBundleId: string;
+  readonly activeMetaverseLaunchVariationId: string | null;
   readonly activeMetaverseRoomAssignment: MetaverseRoomAssignmentSnapshot | null;
   readonly activeStep: NavigationStepId;
   readonly audioStatusLabel: string;
@@ -109,6 +119,10 @@ interface ShellStageRouterProps {
   ) => void;
   readonly onExperienceLaunchRequest: (experienceId: ExperienceId) => void;
   readonly onGameplaySignal: (signal: GameplaySignal) => void;
+  readonly onMetaverseCombatAudioCue: (
+    cueId: MetaverseCombatAudioCueId,
+    options?: AudioCuePlaybackOptions
+  ) => void;
   readonly onInputModeChange: (inputMode: GameplayInputModeId) => void;
   readonly onLoginSubmit: (event: FormEvent<HTMLFormElement>) => void;
   readonly onOpenGameplayMenu: () => void;
@@ -141,9 +155,35 @@ function GameplayStageFallback() {
   );
 }
 
+function resolveMetaverseWeaponIdFromQueryParam(
+  attachmentProofConfigs: readonly { readonly attachmentId: string }[]
+): string | null {
+  if (attachmentProofConfigs.length <= 0) {
+    return null;
+  }
+
+  const requestedWeaponId =
+    new URLSearchParams(globalThis.location?.search ?? "").get(
+      "metaverseWeaponId"
+    ) ?? null;
+
+  if (
+    requestedWeaponId !== null &&
+    attachmentProofConfigs.some(
+      (attachmentProofConfig) =>
+        attachmentProofConfig.attachmentId === requestedWeaponId
+    )
+  ) {
+    return requestedWeaponId;
+  }
+
+  return attachmentProofConfigs[0]?.attachmentId ?? null;
+}
+
 export function ShellStageRouter({
   activeExperienceId,
   activeMetaverseBundleId,
+  activeMetaverseLaunchVariationId,
   activeMetaverseRoomAssignment,
   activeStep,
   audioStatusLabel,
@@ -178,6 +218,7 @@ export function ShellStageRouter({
   onEnterMetaverseRequest,
   onExperienceLaunchRequest,
   onGameplaySignal,
+  onMetaverseCombatAudioCue,
   onInputModeChange,
   onLoginSubmit,
   onOpenGameplayMenu,
@@ -205,15 +246,45 @@ export function ShellStageRouter({
       ),
     [activeMetaverseBundleId]
   );
+  const activeMetaverseRoomAssignmentMatchesState =
+    activeMetaverseRoomAssignment !== null &&
+    activeMetaverseRoomAssignment.bundleId === activeMetaverseBundleId &&
+    activeMetaverseRoomAssignment.launchVariationId ===
+      activeMetaverseLaunchVariationId &&
+    activeMetaverseRoomAssignment.matchMode === matchMode;
+  const resolvedMetaverseRoomAssignment =
+    activeMetaverseRoomAssignmentMatchesState
+      ? activeMetaverseRoomAssignment
+      : null;
   const activeMetaverseMatchMode =
-    activeMetaverseRoomAssignment?.matchMode ?? matchMode;
+    resolvedMetaverseRoomAssignment?.matchMode ?? matchMode;
   const activeMetaverseAttachmentProofConfig =
     activeMetaverseMatchMode === "team-deathmatch"
       ? metaverseAttachmentProofConfig
       : null;
+  const activeMetaverseAttachmentProofConfigs =
+    activeMetaverseMatchMode === "team-deathmatch"
+      ? metaverseAttachmentProofConfigs
+      : emptyMetaverseAttachmentProofConfigs;
   const activeMetaverseEquippedWeaponId =
     activeMetaverseMatchMode === "team-deathmatch"
-      ? metaverseAttachmentProofConfig.attachmentId
+      ? resolveMetaverseWeaponIdFromQueryParam(
+          activeMetaverseAttachmentProofConfigs
+        )
+      : null;
+  const activeMetaverseWeaponLayoutId =
+    activeMetaverseMatchMode === "team-deathmatch"
+      ? (() => {
+          const registryEntry =
+            readMetaverseWorldBundleRegistryEntry(activeMetaverseBundleId);
+
+          return registryEntry === null
+            ? null
+            : readMetaverseMapBundleLaunchVariation(
+                registryEntry.bundle,
+                activeMetaverseLaunchVariationId
+              )?.weaponLayoutId ?? null;
+        })()
       : null;
 
   return (
@@ -265,10 +336,11 @@ export function ShellStageRouter({
 
       {activeStep === "metaverse" &&
       profile !== null &&
-      activeMetaverseRoomAssignment !== null ? (
+      resolvedMetaverseRoomAssignment !== null ? (
         <Suspense fallback={<GameplayStageFallback />}>
           <MetaverseStageScreen
             attachmentProofConfig={activeMetaverseAttachmentProofConfig}
+            attachmentProofConfigs={activeMetaverseAttachmentProofConfigs}
             audioStatusLabel={audioStatusLabel}
             bundleId={activeMetaverseBundleId}
             calibrationQualityLabel={calibrationQualityLabel}
@@ -278,13 +350,15 @@ export function ShellStageRouter({
             equippedWeaponId={activeMetaverseEquippedWeaponId}
             gameplayInputMode={inputMode}
             metaverseControlMode={metaverseControlMode}
+            onCombatAudioCue={onMetaverseCombatAudioCue}
             onCoopRoomIdDraftChange={onCoopRoomIdDraftChange}
             onExperienceLaunchRequest={onExperienceLaunchRequest}
             onRecalibrationRequest={onRecalibrationRequest}
-            roomAssignment={activeMetaverseRoomAssignment}
+            roomAssignment={resolvedMetaverseRoomAssignment}
             onSetupRequest={onSetupRequest}
             matchMode={activeMetaverseMatchMode}
             username={profile.snapshot.username}
+            weaponLayoutId={activeMetaverseWeaponLayoutId}
           />
         </Suspense>
       ) : null}

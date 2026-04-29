@@ -1,0 +1,621 @@
+{
+  "schemaVersion": "weapon-asset-manifest.v0.1",
+  "assetId": "metaverse_rocket_launcher",
+  "sourceFile": "metaverse-rocket-launcher.gltf",
+  "sourceHashSha1": "c86820914f58cc422c907620f6d4183f78eea3eb",
+  "family": "shoulder_heavy",
+  "poseProfileId": "shoulder_heavy.two_hand_shouldered",
+  "recommendedRuntimePack": "weapons.heavy",
+  "coordinateSystem": {
+    "units": "meters",
+    "weaponForward": "+X",
+    "weaponUp": "+Y",
+    "weaponRight": "+Z",
+    "basisMarkers": {
+      "forward": "metaverse_rocket_launcher_forward_marker",
+      "up": "metaverse_rocket_launcher_up_marker"
+    }
+  },
+  "summary": {
+    "verdict": "Good scalable prototype: already shows long-gun/heavy-weapon concepts, but needs clearer support/ADS/backblast contracts.",
+    "grade": "prototype_good_contract_needed",
+    "nodeCount": 19,
+    "meshCount": 6,
+    "materialCount": 0,
+    "animationCount": 0,
+    "skinCount": 0,
+    "socketOrMarkerCount": 12,
+    "bounds": {
+      "min": [
+        -0.175,
+        -0.132595,
+        -0.07
+      ],
+      "max": [
+        1.01,
+        0.22,
+        0.07
+      ],
+      "dimensions": [
+        1.185,
+        0.352595,
+        0.14
+      ]
+    },
+    "meshTriangles": 156,
+    "meshVertices": 90
+  },
+  "holdProfile": {
+    "primaryHandDefault": "right",
+    "allowedHands": [
+      "right"
+    ],
+    "dominantGripRole": "grip.primary",
+    "offhandPolicy": "required_support_grip",
+    "poseProfileId": "shoulder_heavy.two_hand_shouldered",
+    "recommendedNeutralPose": "shoulder_heavy_ready_neutral",
+    "bodyContacts": [
+      "shoulder_or_chest_contact"
+    ],
+    "fingerPoseHints": {
+      "primary": "heavy_trigger_grip",
+      "secondary": "support_handle_grip"
+    },
+    "aimModel": "procedural_shouldered_ads_pitch_yaw_from_socket",
+    "adsReference": "camera.ads_anchor",
+    "projectileOrigin": "projectile.muzzle",
+    "hazards": [
+      "backblast_cone_recommended"
+    ]
+  },
+  "sockets": [
+    {
+      "role": "basis.forward",
+      "nodeName": "metaverse_rocket_launcher_forward_marker",
+      "position": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "basis.up",
+      "nodeName": "metaverse_rocket_launcher_up_marker",
+      "position": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "grip.primary.right_hint",
+      "nodeName": "metaverse_rocket_launcher_grip_hand_r_socket",
+      "position": [
+        0.18,
+        -0.01,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "trigger.index",
+      "nodeName": "metaverse_rocket_launcher_trigger_marker",
+      "position": [
+        0.24,
+        0.02,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "grip.secondary.required",
+      "nodeName": "metaverse_rocket_launcher_support_grip_marker",
+      "position": [
+        0.41,
+        -0.04,
+        0.035
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "module.underbarrel_grip",
+      "nodeName": "metaverse_rocket_launcher_grip_module_socket",
+      "position": [
+        0.41,
+        -0.065,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "sight.front",
+      "nodeName": "metaverse_rocket_launcher_front_sight_socket",
+      "position": [
+        0.88,
+        0.17,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "sight.rear",
+      "nodeName": "metaverse_rocket_launcher_rear_sight_socket",
+      "position": [
+        0.18,
+        0.17,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "module.optic",
+      "nodeName": "metaverse_rocket_launcher_optic_mount_socket",
+      "position": [
+        0.26,
+        0.2,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "projectile.muzzle",
+      "nodeName": "metaverse_rocket_launcher_muzzle_socket",
+      "position": [
+        1.01,
+        0.08,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "camera.ads_anchor",
+      "nodeName": "metaverse_rocket_launcher_ads_camera_anchor",
+      "position": [
+        0.02,
+        0.19,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "carry.back",
+      "nodeName": "metaverse_rocket_launcher_back_socket",
+      "position": [
+        0.18,
+        0.08,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    }
+  ],
+  "meshes": [
+    {
+      "nodeName": "metaverse_rocket_launcher_tube",
+      "meshName": "metaverse_rocket_launcher_tube_geom",
+      "vertices": 50,
+      "triangles": 96,
+      "bounds": {
+        "min": [
+          -0.05,
+          0.025,
+          -0.055
+        ],
+        "max": [
+          0.95,
+          0.135,
+          0.055
+        ],
+        "dimensions": [
+          1.0,
+          0.11,
+          0.11
+        ]
+      }
+    },
+    {
+      "nodeName": "metaverse_rocket_launcher_rear_housing",
+      "meshName": "metaverse_rocket_launcher_rear_housing_geom",
+      "vertices": 8,
+      "triangles": 12,
+      "bounds": {
+        "min": [
+          -0.175,
+          0.0,
+          -0.06
+        ],
+        "max": [
+          0.075,
+          0.16,
+          0.06
+        ],
+        "dimensions": [
+          0.25,
+          0.16,
+          0.12
+        ]
+      }
+    },
+    {
+      "nodeName": "metaverse_rocket_launcher_front_shroud",
+      "meshName": "metaverse_rocket_launcher_front_shroud_geom",
+      "vertices": 8,
+      "triangles": 12,
+      "bounds": {
+        "min": [
+          0.83,
+          0.01,
+          -0.07
+        ],
+        "max": [
+          1.01,
+          0.15,
+          0.07
+        ],
+        "dimensions": [
+          0.18,
+          0.14,
+          0.14
+        ]
+      }
+    },
+    {
+      "nodeName": "metaverse_rocket_launcher_primary_grip",
+      "meshName": "metaverse_rocket_launcher_primary_grip_geom",
+      "vertices": 8,
+      "triangles": 12,
+      "bounds": {
+        "min": [
+          0.142163,
+          -0.132595,
+          -0.02
+        ],
+        "max": [
+          0.217837,
+          0.032595,
+          0.02
+        ],
+        "dimensions": [
+          0.075674,
+          0.165191,
+          0.04
+        ]
+      }
+    },
+    {
+      "nodeName": "metaverse_rocket_launcher_support_handle",
+      "meshName": "metaverse_rocket_launcher_support_handle_geom",
+      "vertices": 8,
+      "triangles": 12,
+      "bounds": {
+        "min": [
+          0.32,
+          -0.08,
+          -0.025
+        ],
+        "max": [
+          0.4,
+          0.04,
+          0.025
+        ],
+        "dimensions": [
+          0.08,
+          0.12,
+          0.05
+        ]
+      }
+    },
+    {
+      "nodeName": "metaverse_rocket_launcher_optic_body",
+      "meshName": "metaverse_rocket_launcher_optic_body_geom",
+      "vertices": 8,
+      "triangles": 12,
+      "bounds": {
+        "min": [
+          0.15,
+          0.14,
+          -0.03
+        ],
+        "max": [
+          0.35,
+          0.22,
+          0.03
+        ],
+        "dimensions": [
+          0.2,
+          0.08,
+          0.06
+        ]
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "index": 0,
+      "name": "metaverse_rocket_launcher_root",
+      "kind": "root",
+      "parentIndex": null,
+      "translation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hasMesh": false
+    },
+    {
+      "index": 1,
+      "name": "metaverse_rocket_launcher_forward_marker",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "basis.forward"
+    },
+    {
+      "index": 2,
+      "name": "metaverse_rocket_launcher_up_marker",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "basis.up"
+    },
+    {
+      "index": 3,
+      "name": "metaverse_rocket_launcher_grip_hand_r_socket",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.18,
+        -0.01,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "grip.primary.right_hint"
+    },
+    {
+      "index": 4,
+      "name": "metaverse_rocket_launcher_trigger_marker",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.24,
+        0.02,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "trigger.index"
+    },
+    {
+      "index": 5,
+      "name": "metaverse_rocket_launcher_support_grip_marker",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.41,
+        -0.04,
+        0.035
+      ],
+      "hasMesh": false,
+      "socketRole": "grip.secondary.required"
+    },
+    {
+      "index": 6,
+      "name": "metaverse_rocket_launcher_grip_module_socket",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.41,
+        -0.065,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "module.underbarrel_grip"
+    },
+    {
+      "index": 7,
+      "name": "metaverse_rocket_launcher_front_sight_socket",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.88,
+        0.17,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "sight.front"
+    },
+    {
+      "index": 8,
+      "name": "metaverse_rocket_launcher_rear_sight_socket",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.18,
+        0.17,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "sight.rear"
+    },
+    {
+      "index": 9,
+      "name": "metaverse_rocket_launcher_optic_mount_socket",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.26,
+        0.2,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "module.optic"
+    },
+    {
+      "index": 10,
+      "name": "metaverse_rocket_launcher_muzzle_socket",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        1.01,
+        0.08,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "projectile.muzzle"
+    },
+    {
+      "index": 11,
+      "name": "metaverse_rocket_launcher_ads_camera_anchor",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.02,
+        0.19,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "camera.ads_anchor"
+    },
+    {
+      "index": 12,
+      "name": "metaverse_rocket_launcher_back_socket",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.18,
+        0.08,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "carry.back"
+    },
+    {
+      "index": 13,
+      "name": "metaverse_rocket_launcher_tube",
+      "kind": "mesh",
+      "parentIndex": 0,
+      "translation": [
+        0.45,
+        0.08,
+        0.0
+      ],
+      "hasMesh": true
+    },
+    {
+      "index": 14,
+      "name": "metaverse_rocket_launcher_rear_housing",
+      "kind": "mesh",
+      "parentIndex": 0,
+      "translation": [
+        -0.05,
+        0.08,
+        0.0
+      ],
+      "hasMesh": true
+    },
+    {
+      "index": 15,
+      "name": "metaverse_rocket_launcher_front_shroud",
+      "kind": "mesh",
+      "parentIndex": 0,
+      "translation": [
+        0.92,
+        0.08,
+        0.0
+      ],
+      "hasMesh": true
+    },
+    {
+      "index": 16,
+      "name": "metaverse_rocket_launcher_primary_grip",
+      "kind": "mesh",
+      "parentIndex": 0,
+      "translation": [
+        0.18,
+        -0.05,
+        0.0
+      ],
+      "hasMesh": true
+    },
+    {
+      "index": 17,
+      "name": "metaverse_rocket_launcher_support_handle",
+      "kind": "mesh",
+      "parentIndex": 0,
+      "translation": [
+        0.36,
+        -0.02,
+        0.0
+      ],
+      "hasMesh": true
+    },
+    {
+      "index": 18,
+      "name": "metaverse_rocket_launcher_optic_body",
+      "kind": "mesh",
+      "parentIndex": 0,
+      "translation": [
+        0.25,
+        0.18,
+        0.0
+      ],
+      "hasMesh": true
+    }
+  ],
+  "validation": {
+    "passes": [
+      "No accidental animation clips in the weapon asset.",
+      "No accidental skinning/skeleton data in the weapon asset.",
+      "Vertex colors are present, useful for prototype color blocks and cheap unlit rendering.",
+      "Node names are unique.",
+      "Shoulder-heavy asset includes an explicit secondary support marker.",
+      "Rocket launcher includes a module socket for support grip/underbarrel placement.",
+      "Projectile muzzle socket is present.",
+      "ADS camera anchor is present."
+    ],
+    "warnings": [
+      "No material table; current build relies on vertex colors only.",
+      "No NORMAL attributes found; shading will rely on importer/engine fallback or flat/unlit rendering.",
+      "No UVs found; fine for vertex-color prototypes, limiting for production skins/camos/decals.",
+      "All sockets/parts are direct children of the root; this is simple, but sockets on animated modules should be parented to the moving part.",
+      "Socket nodes currently provide positions but no distinct orientation frames.",
+      "Rocket launcher lacks exhaust/backblast sockets or volumes.",
+      "Geometry is embedded as many tiny base64 buffers in a JSON .gltf; usable, but not ideal for production/runtime packs."
+    ],
+    "recommendedChanges": [
+      "Add stable named PBR/unlit materials even if the art stays simple, so runtime and editor tooling can address parts by material.",
+      "Export normals for production weapons; add tangents if normal maps are added.",
+      "Parent moving-part sockets to the moving part they belong to, such as slide/ejection/magazine/charging-handle sockets.",
+      "Author sockets as full transforms, not only points; grip, support, optic, holster, and melee sockets need meaningful rotation axes.",
+      "Add `projectile.exhaust` and `hazard.backblast_cone` metadata for VFX, safety volumes, and gameplay logic.",
+      "Publish runtime weapons as .glb or as .gltf + a single .bin; keep source scenes separate."
+    ],
+    "artistNotes": [
+      "Add exhaust/backblast sockets or volume metadata before using this as gameplay weapon.",
+      "The support grip marker and underbarrel module socket are the right idea; separate hand target from module mounting.",
+      "Shouldered/heavy poses need body-contact metadata in addition to hand grips."
+    ]
+  }
+}

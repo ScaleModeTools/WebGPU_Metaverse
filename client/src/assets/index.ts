@@ -1,12 +1,10 @@
 export {
   animationClipManifest,
-  mesh2motionHumanoidAimAnimationClipId,
-  mesh2motionHumanoidCanonicalAnimationPackSourcePath,
+  metaverseHumanoidBaseAnimationPackSourcePath,
   mesh2motionHumanoidIdleAnimationClipId,
   mesh2motionHumanoidInteractAnimationClipId,
   mesh2motionHumanoidSeatedAnimationClipId,
-  mesh2motionHumanoidUnarmedIdleAnimationPackSourcePath,
-  mesh2motionHumanoidWalkAnimationClipId
+  mesh2motionHumanoidWalkAnimationClipId,
 } from "./config/animation-clip-manifest";
 export {
   attachmentModelManifest,
@@ -15,11 +13,12 @@ export {
   metaverseCompactSmgAttachmentAssetId,
   metaverseLongshotSniperAttachmentAssetId,
   metaverseRocketLauncherAttachmentAssetId,
-  metaverseServicePistolAttachmentAssetId
+  metaverseServicePistolAttachmentAssetId,
 } from "./config/attachment-model-manifest";
 export {
   characterModelManifest,
-  mesh2motionHumanoidCharacterAssetId
+  metaverseHumanoidCharacterAssetId,
+  mesh2motionHumanoidCharacterAssetId,
 } from "./config/character-model-manifest";
 export {
   environmentPropManifest,
@@ -27,7 +26,7 @@ export {
   metaverseHubDiveBoatEnvironmentAssetId,
   metaverseHubSkiffEnvironmentAssetId,
   metaversePlaygroundRangeBarrierEnvironmentAssetId,
-  metaversePlaygroundRangeFloorEnvironmentAssetId
+  metaversePlaygroundRangeFloorEnvironmentAssetId,
 } from "./config/environment-prop-manifest";
 export { reticleManifest } from "./config/reticle-manifest";
 export {
@@ -37,86 +36,110 @@ export {
   metaverseLongshotSniperWeaponAssetId,
   metaverseRocketLauncherWeaponAssetId,
   metaverseServicePistolV2WeaponAssetId,
-  weaponArchetypeManifest
+  weaponArchetypeManifest,
 } from "./config/weapon-archetype-manifest";
 export { weaponModuleManifest } from "./config/weapon-module-manifest";
 export { weaponProgressionManifest } from "./config/weapon-progression-manifest";
 export {
   readDefaultWeaponModuleIds,
-  resolveWeaponLoadout
+  resolveWeaponLoadout,
 } from "./runtime/resolve-weapon-loadout";
 export {
   createAnimationClipId,
   createAttachmentAssetId,
   createCharacterAssetId,
-  createEnvironmentAssetId
+  createEnvironmentAssetId,
 } from "./types/asset-id";
 export { lodTierIds } from "./types/asset-lod";
 export {
+  humanoidV2BoneAliasByName,
+  humanoidV2BoneGroups,
   humanoidV2BoneNames,
   humanoidV2BoneParentByName,
+  humanoidV2FingerChainsBySide,
+  humanoidV2NonWeightedDriverNames,
+  humanoidV2SocketLocalTransformsById,
   humanoidV2SocketParentById,
+  humanoidV2WeightedJointNames,
   skeletonBoneNamesById,
   skeletonBoneParentByNameById,
   skeletonIds,
+  skeletonSocketLocalTransformsById,
   skeletonSocketParentById,
-  socketIds
+  socketIds,
 } from "./types/asset-socket";
 export {
   animationClipLoopModes,
   animationVocabularyIds,
   canonicalAnimationClipNamesByVocabulary,
-  defineAnimationClipManifest
+  defineAnimationClipManifest,
 } from "./types/animation-clip-manifest";
 export {
   attachmentCategoryIds,
-  defineAttachmentAssetManifest
+  defineAttachmentAssetManifest,
 } from "./types/attachment-asset-manifest";
 export {
+  heldObjectAdsPolicyIds,
+  heldObjectCoreSocketRolesByFamily,
+  heldObjectFamilyIds,
+  heldObjectHandIds,
+  heldObjectOffhandPolicyIds,
+  heldObjectPoseProfileIds,
+  heldObjectPrimaryHandIds,
+  heldObjectSocketOrientationPolicyIds,
+  heldObjectSocketRoleIds,
+} from "./types/held-object-authoring-manifest";
+export {
   characterPresentationModeIds,
-  defineCharacterAssetManifest
+  defineCharacterAssetManifest,
 } from "./types/character-asset-manifest";
 export {
   defineEnvironmentAssetManifest,
   environmentAssetPlacements,
   environmentEditorCatalogVisibilityIds,
-  environmentProceduralMaterialPresetIds
+  environmentProceduralMaterialPresetIds,
 } from "./types/environment-asset-manifest";
-export {
-  defineReticleManifest
-} from "./types/asset-manifest";
+export { defineReticleManifest } from "./types/asset-manifest";
 export {
   buildAttachmentAssetFromWeaponArchetype,
   defineWeaponArchetypeManifest,
   defineWeaponModuleManifest,
   weaponFamilyIds,
   weaponModuleSlotIds,
-  weaponPoseProfileIds
+  weaponPoseProfileIds,
 } from "./types/weapon-builder-manifest";
 export type {
   AnimationClipId,
   AttachmentAssetId,
   CharacterAssetId,
-  EnvironmentAssetId
+  EnvironmentAssetId,
 } from "./types/asset-id";
 export type {
   AssetLodDescriptor,
   AssetLodGroup,
-  LodTierId
+  LodTierId,
 } from "./types/asset-lod";
 export type {
+  HumanoidV2BoneGroupName,
   HumanoidV2BoneName,
   SkeletonBoneName,
   SkeletonBoneParentByName,
   SkeletonId,
+  SkeletonSocketLocalTransform,
+  SkeletonSocketLocalTransformsById,
   SkeletonSocketParentById,
-  SocketId
+  SocketId,
 } from "./types/asset-socket";
+export type {
+  HumanoidV2BoneCategory,
+  HumanoidV2BoneDescriptor,
+  HumanoidV2BoneSide,
+} from "./types/humanoid-v2-rig-descriptors";
 export type {
   AnimationClipDescriptor,
   AnimationClipLoopMode,
   AnimationClipManifest,
-  AnimationVocabularyId
+  AnimationVocabularyId,
 } from "./types/animation-clip-manifest";
 export type {
   AttachmentAssetDescriptor,
@@ -125,15 +148,33 @@ export type {
   AttachmentMountSocketDescriptor,
   AttachmentMountTargetSocketName,
   AttachmentMountedHolsterDescriptor,
-  AttachmentOffHandSupportPointIdBySocketId,
-  AttachmentSupportPointDescriptor,
-  AttachmentVector3Descriptor
+  AttachmentVector3Descriptor,
 } from "./types/attachment-asset-manifest";
+export type {
+  HeldObjectAdsPolicyId,
+  HeldObjectFamilyId,
+  HeldObjectFingerPoseHintDescriptor,
+  HeldObjectHandId,
+  HeldObjectHoldProfileDescriptor,
+  HeldObjectOffhandPolicyId,
+  HeldObjectPoseProfileId,
+  HeldObjectPrimaryHandId,
+  HeldObjectSocketDescriptor,
+  HeldObjectSocketOrientationPolicyId,
+  HeldObjectSocketRoleId,
+} from "./types/held-object-authoring-manifest";
 export type {
   CharacterAssetDescriptor,
   CharacterAssetManifest,
-  CharacterPresentationModeId
+  CharacterPresentationModeId,
 } from "./types/character-asset-manifest";
+export type {
+  Avatar124Animation,
+  Avatar124AnimationId,
+  AvatarAnimationCategory,
+  AvatarAnimationPack,
+  AvatarAnimationPlaybackKind,
+} from "./config/metaverse-humanoid-base-animation-catalog";
 export type {
   EnvironmentAssetDescriptor,
   EnvironmentAssetManifest,
@@ -146,7 +187,7 @@ export type {
   EnvironmentRenderLodGroup,
   EnvironmentSeatDescriptor,
   EnvironmentVector3Descriptor,
-  EnvironmentAssetPlacement
+  EnvironmentAssetPlacement,
 } from "./types/environment-asset-manifest";
 export {
   defaultMountedVehicleCameraPolicyId,
@@ -159,18 +200,18 @@ export {
   mountedVehicleControlRoutingPolicyIds,
   mountedVehicleLookLimitPolicyIds,
   mountedVehicleOccupancyAnimationIds,
-  mountedVehicleSeatRoleIds
+  mountedVehicleSeatRoleIds,
 } from "./types/environment-seat";
 export type {
   MountedVehicleCameraPolicyId,
   MountedVehicleControlRoutingPolicyId,
   MountedVehicleLookLimitPolicyId,
   MountedVehicleOccupancyAnimationId,
-  MountedVehicleSeatRoleId
+  MountedVehicleSeatRoleId,
 } from "./types/environment-seat";
 export type {
   ReticleDescriptor,
-  ReticleManifest
+  ReticleManifest,
 } from "./types/asset-manifest";
 export type {
   NumericStatModifierDescriptor,
@@ -192,13 +233,11 @@ export type {
   WeaponModuleManifest,
   WeaponModuleSlotId,
   WeaponModuleSocketDescriptor,
-  WeaponNodeDescriptor,
   WeaponPoseProfileId,
   WeaponRangeStatsDescriptor,
   WeaponReloadStyle,
   WeaponStatBlockDescriptor,
   WeaponStatModifierDescriptor,
-  WeaponSupportPointDescriptor,
   WeaponUnlockDescriptor,
-  WeaponZoomLevelDescriptor
+  WeaponZoomLevelDescriptor,
 } from "./types/weapon-builder-manifest";

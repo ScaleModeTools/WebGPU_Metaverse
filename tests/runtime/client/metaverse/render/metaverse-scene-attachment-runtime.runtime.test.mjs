@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
 import { createClientModuleLoader } from "../../load-client-module.mjs";
-import { createHumanoidV2CharacterScene } from "../../metaverse-runtime-proof-slice-fixtures.mjs";
+import {
+  createHumanoidV2CharacterScene,
+  createTestServicePistolHoldProfile
+} from "../../metaverse-runtime-proof-slice-fixtures.mjs";
 
 let clientLoader;
 
@@ -203,7 +206,7 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
   ]);
 
   const authoredAnimationPackPath =
-    "/models/metaverse/characters/mesh2motion-humanoid-canonical-animations.glb";
+    "/models/metaverse/characters/metaverse-humanoid-base-pack.glb";
   const loadPaths = [];
   const warnings = [];
   const { characterScene, socketNames } = createHumanoidV2CharacterScene({
@@ -230,7 +233,6 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
     ])
   ]);
   const walkClip = new AnimationClip("walk", -1, []);
-  const aimClip = new AnimationClip("aim", -1, []);
   const interactClip = new AnimationClip("interact", -1, []);
   const seatedClip = new AnimationClip("seated", -1, []);
   const animationPackScene = new Group();
@@ -240,26 +242,38 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
     new MeshStandardMaterial({ color: 0x4b5563 })
   );
   const gripHandSocket = new Group();
+  const forwardMarker = new Group();
+  const upMarker = new Group();
   const supportMarker = new Group();
   const triggerMarker = new Group();
+  const adsCameraAnchor = new Group();
   const backSocket = new Group();
 
   attachmentScene.name = "metaverse_service_pistol_root";
   attachmentMesh.position.x = 0.14;
   gripHandSocket.name = "metaverse_service_pistol_grip_hand_r_socket";
   gripHandSocket.position.set(-0.01, 0.02, -0.03);
+  forwardMarker.name = "metaverse_service_pistol_forward_marker";
+  forwardMarker.position.set(0.28, 0.02, -0.03);
+  upMarker.name = "metaverse_service_pistol_up_marker";
+  upMarker.position.set(-0.01, 0.12, -0.03);
   supportMarker.name = "metaverse_service_pistol_support_marker";
   supportMarker.position.set(0.018, -0.137, 0);
   triggerMarker.name = "metaverse_service_pistol_trigger_marker";
   triggerMarker.position.set(0.026, 0.012, 0.004);
+  adsCameraAnchor.name = "metaverse_service_pistol_ads_camera_anchor";
+  adsCameraAnchor.position.set(0.07, 0.04, -0.03);
   backSocket.name = "metaverse_service_pistol_back_socket";
   backSocket.position.set(0.12, -0.04, 0.03);
   backSocket.quaternion.set(0, 0.7071067811865475, -0.7071067811865476, 0);
   attachmentScene.add(
     attachmentMesh,
     gripHandSocket,
+    forwardMarker,
+    upMarker,
     supportMarker,
     triggerMarker,
+    adsCameraAnchor,
     backSocket
   );
 
@@ -267,19 +281,48 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
     attachmentProofConfig: {
       attachmentId: "metaverse-service-pistol-v1",
       heldMount: {
-        attachmentSocketNodeName: "metaverse_service_pistol_grip_hand_r_socket",
-        socketName: "palm_r_socket",
-        supportMarkerNodeName: "metaverse_service_pistol_support_marker",
-        triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker"
+        attachmentSocketRole: "grip.primary",
+        socketName: "palm_r_socket"
       },
+      holdProfile: createTestServicePistolHoldProfile({
+        sockets: [
+          {
+            nodeName: "metaverse_service_pistol_grip_hand_r_socket",
+            role: "grip.primary"
+          },
+          {
+            nodeName: "metaverse_service_pistol_forward_marker",
+            role: "basis.forward"
+          },
+          {
+            nodeName: "metaverse_service_pistol_up_marker",
+            role: "basis.up"
+          },
+          {
+            nodeName: "metaverse_service_pistol_trigger_marker",
+            role: "trigger.index"
+          },
+          {
+            nodeName: "metaverse_service_pistol_support_marker",
+            role: "grip.secondary"
+          },
+          {
+            nodeName: "metaverse_service_pistol_ads_camera_anchor",
+            role: "camera.ads_anchor"
+          },
+          {
+            nodeName: "metaverse_service_pistol_back_socket",
+            role: "carry.back"
+          }
+        ]
+      }),
       label: "Metaverse service pistol",
       modelPath: "/models/metaverse/attachments/metaverse-service-pistol.gltf",
       modules: [],
       mountedHolsterMount: {
-        attachmentSocketNodeName: "metaverse_service_pistol_back_socket",
+        attachmentSocketRole: "carry.back",
         socketName: "back_socket"
-      },
-      supportPoints: null
+      }
     },
     characterProofConfig: {
       animationClips: [
@@ -294,11 +337,6 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
           vocabulary: "walk"
         },
         {
-          clipName: "aim",
-          sourcePath: authoredAnimationPackPath,
-          vocabulary: "aim"
-        },
-        {
           clipName: "interact",
           sourcePath: authoredAnimationPackPath,
           vocabulary: "interact"
@@ -311,7 +349,7 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
       ],
       characterId: "mesh2motion-humanoid-v1",
       label: "Mesh2Motion humanoid",
-      modelPath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
+      modelPath: "/models/metaverse/characters/metaverse-humanoid-base-pack.glb",
       skeletonId: "humanoid_v2",
       socketNames
     },
@@ -328,8 +366,8 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
 
         if (path === authoredAnimationPackPath) {
           return {
-            animations: [idleClip, walkClip, aimClip, interactClip, seatedClip],
-            scene: animationPackScene
+            animations: [idleClip, walkClip, interactClip, seatedClip],
+            scene: characterScene
           };
         }
 
@@ -356,8 +394,7 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
   );
 
   assert.deepEqual(loadPaths, [
-    "/models/metaverse/characters/mesh2motion-humanoid.glb",
-    authoredAnimationPackPath,
+    "/models/metaverse/characters/metaverse-humanoid-base-pack.glb",
     "/models/metaverse/attachments/metaverse-service-pistol.gltf"
   ]);
   assert.equal(

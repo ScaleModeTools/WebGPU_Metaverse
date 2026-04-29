@@ -18,5 +18,6 @@ export interface MetaverseFlightInputSnapshot {
   readonly pitchAxis: number;
   readonly secondaryAction: boolean;
   readonly strafeAxis: number;
+  readonly weaponSwitchPressedCount: number;
   readonly yawAxis: number;
 }

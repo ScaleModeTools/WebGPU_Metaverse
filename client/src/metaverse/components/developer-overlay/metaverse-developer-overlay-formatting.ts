@@ -139,6 +139,34 @@ function formatHeldWeaponGripStatus(hudSnapshot: MetaverseHudSnapshot): string {
   return `${gripSnapshot.stability} · ${gripSnapshot.phase.replaceAll("-", " ")}`;
 }
 
+function formatProjectilePresentationDebug(
+  hudSnapshot: MetaverseHudSnapshot
+): string {
+  const debugSnapshot = hudSnapshot.telemetry.projectilePresentation[0] ?? null;
+
+  if (debugSnapshot === null) {
+    return "n/a";
+  }
+
+  return [
+    debugSnapshot.deliveryModel,
+    debugSnapshot.weaponId,
+    `action ${debugSnapshot.actionSequence ?? "n/a"}`,
+    `projectile ${debugSnapshot.projectileId ?? "n/a"}`,
+    `hit ${debugSnapshot.hitscanHitKind ?? "n/a"}`,
+    `start ${debugSnapshot.tracerStartSource ?? "n/a"}`,
+    `endpoint ${debugSnapshot.visualEndpointSource ?? "n/a"}`,
+    `policy ${debugSnapshot.finiteEndpointPolicy ?? "n/a"}`,
+    `suppressed ${debugSnapshot.tracerSuppressedReason ?? "none"}`,
+    `fire-drain ${formatOptionalCentimeters(debugSnapshot.postSyncFireActionToDrainTimeMuzzleDeltaMeters)}`,
+    `ray-error ${formatOptionalCentimeters(debugSnapshot.endpointRayPerpendicularErrorMeters)}`,
+    `ray-visual ${formatOptionalDegrees(debugSnapshot.cameraRayToVisualSegmentAngleRadians)}`,
+    `muzzle-visual ${formatOptionalDegrees(debugSnapshot.muzzleForwardToVisualSegmentAngleRadians)}`,
+    `muzzle-tip ${formatOptionalCentimeters(debugSnapshot.muzzleToSemanticTipDeltaMeters)}`,
+    `tip-snapshot ${formatOptionalCentimeters(debugSnapshot.semanticTipToFirstSnapshotDeltaMeters)}`
+  ].join(" · ");
+}
+
 function formatHeldWeaponMainHandDiagnosis(
   gripSnapshot: MetaverseHudSnapshot["telemetry"]["localHeldWeaponGrip"]
 ): string {
@@ -463,7 +491,8 @@ function createDeveloperReport(hudSnapshot: MetaverseHudSnapshot): string {
       lines: [
         `Local locomotion routing: ${hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.locomotionMode} · ${formatDecisionReason(hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.decisionReason)}`,
         `Authority / ack: ${authoritativeLocalPlayer.locomotionMode === null ? "n/a" : `${authoritativeLocalPlayer.locomotionMode} · ack ${formatCount(authoritativeLocalPlayer.lastProcessedTraversalSequence ?? 0)}`}`,
-        `Combat / ack: ${combatAction.highestProcessedPlayerActionSequence === null ? "n/a" : `ack ${formatCount(combatAction.highestProcessedPlayerActionSequence)} · ${combatAction.status ?? "none"} · action ${formatCount(combatAction.actionSequence ?? combatAction.highestProcessedPlayerActionSequence)} · projectile ${combatAction.sourceProjectileId ?? "n/a"} · reject ${combatAction.rejectionReason ?? "none"}`}`
+        `Combat / ack: ${combatAction.highestProcessedPlayerActionSequence === null ? "n/a" : `ack ${formatCount(combatAction.highestProcessedPlayerActionSequence)} · ${combatAction.status ?? "none"} · action ${formatCount(combatAction.actionSequence ?? combatAction.highestProcessedPlayerActionSequence)} · projectile ${combatAction.sourceProjectileId ?? "n/a"} · reject ${combatAction.rejectionReason ?? "none"} · shot ${combatAction.shotResolution?.finalReason ?? "n/a"}`}`,
+        `Projectile FX: ${formatProjectilePresentationDebug(hudSnapshot)}`
       ]
     },
     {
@@ -471,11 +500,11 @@ function createDeveloperReport(hudSnapshot: MetaverseHudSnapshot): string {
       lines: [
         `Status: ${formatHeldWeaponGripStatus(hudSnapshot)} · ${heldWeaponGrip.attachmentMountKind}`,
         `Weapon / aim: ${heldWeaponGrip.weaponId ?? "n/a"} · ${heldWeaponGrip.aimMode ?? "n/a"} · ads ${heldWeaponGrip.adsBlend?.toFixed(2) ?? "n/a"}`,
-        `Sockets: mount ${heldWeaponGrip.heldMountSocketName ?? "n/a"} · main ${heldWeaponGrip.mainHandSocket} · off ${heldWeaponGrip.offHandSocket} · support marker ${formatBooleanFlag(heldWeaponGrip.heldSupportMarkerAvailable)} · off-hand mount ${formatBooleanFlag(heldWeaponGrip.offHandGripMounted)}`,
+        `Sockets: mount ${heldWeaponGrip.heldMountSocketName ?? "n/a"} · main ${heldWeaponGrip.mainHandSocket} · off ${heldWeaponGrip.offHandSocket} · secondary contact ${formatBooleanFlag(heldWeaponGrip.secondaryGripContactAvailable)} · off-hand mount ${formatBooleanFlag(heldWeaponGrip.offHandGripMounted)}`,
         `Main: active ${formatOptionalCentimeters(heldWeaponGrip.mainHandGripErrorMeters)} · grip cmp ${formatOptionalCentimeters(heldWeaponGrip.mainHandGripSocketComparisonErrorMeters)} · palm cmp ${formatOptionalCentimeters(heldWeaponGrip.mainHandPalmSocketComparisonErrorMeters)}`,
         `Main stages: solve ${formatOptionalCentimeters(heldWeaponGrip.mainHandSolveErrorMeters)} · post pole ${formatOptionalCentimeters(heldWeaponGrip.mainHandPostPoleBiasErrorMeters)} · final ${formatOptionalCentimeters(heldWeaponGrip.mainHandGripErrorMeters)} · pole ${formatOptionalDegrees(heldWeaponGrip.mainHandPoleAngleRadians)}`,
         `Reach: target ${formatOptionalCentimeters(heldWeaponGrip.mainHandTargetDistanceMeters)} · max ${formatOptionalCentimeters(heldWeaponGrip.mainHandMaxReachMeters)} · clamp ${formatOptionalCentimeters(heldWeaponGrip.mainHandReachClampDeltaMeters)} · slack ${formatOptionalCentimeters(heldWeaponGrip.mainHandReachSlackMeters)}`,
-        `Pose branches: ads pose ${formatBooleanFlag(heldWeaponGrip.servicePistolAdsPoseActive)} · support palm ${formatBooleanFlag(heldWeaponGrip.servicePistolSupportPalmPoseActive)} · weapon state ${formatBooleanFlag(heldWeaponGrip.weaponStatePresent)}`,
+        `Pose branches: ads anchor ${formatBooleanFlag(heldWeaponGrip.adsAnchorPoseActive)} · support palm ${formatBooleanFlag(heldWeaponGrip.supportPalmHintActive)} · off-hand ${heldWeaponGrip.offHandTargetKind} · profile ${heldWeaponGrip.poseProfileId ?? "n/a"} · weapon state ${formatBooleanFlag(heldWeaponGrip.weaponStatePresent)}`,
         `Off hand: pre ${formatOptionalCentimeters(heldWeaponGrip.offHandPreSolveErrorMeters)} · solve ${formatOptionalCentimeters(heldWeaponGrip.offHandInitialSolveErrorMeters)} · final ${formatOptionalCentimeters(heldWeaponGrip.offHandFinalErrorMeters)} · pole ${formatOptionalDegrees(heldWeaponGrip.offHandPoleAngleRadians)} · refine ${formatCount(heldWeaponGrip.offHandRefinementPassCount)}`,
         `Diagnosis: ${formatHeldWeaponMainHandDiagnosis(heldWeaponGrip)}`,
         `Degraded: ${heldWeaponGrip.lastDegradedReason ?? "none"} · ${formatOptionalMilliseconds(heldWeaponGrip.lastDegradedAgeMs)} ago · ${formatCount(heldWeaponGrip.degradedFrameCount)} total`

@@ -1,5 +1,4 @@
 import type {
-  MetaverseCombatAimSnapshotInput,
   MetaverseIssuePlayerActionCommandInput,
   MetaversePlayerId,
   MetaverseRealtimeWorldSnapshot,
@@ -18,14 +17,6 @@ import type {
   RealtimeReliableTransportStatusSnapshot
 } from "@/network";
 import type { MetaversePlayerIssuedTraversalIntentSnapshot } from "./metaverse-player-issued-traversal-intent";
-
-export interface MetaverseWorldFireWeaponCommandInput {
-  readonly aimMode?: "ads" | "hip-fire";
-  readonly aimSnapshot: MetaverseCombatAimSnapshotInput;
-  readonly issuedAtAuthoritativeTimeMs: number;
-  readonly playerId: MetaversePlayerId;
-  readonly weaponId: string;
-}
 
 export interface MetaverseWorldIssuePlayerActionInput
   extends MetaverseIssuePlayerActionCommandInput {}
@@ -49,8 +40,7 @@ export interface MetaverseWorldClientRuntime {
   ): Promise<MetaverseRealtimeWorldSnapshot>;
   issuePlayerAction?(
     commandInput: MetaverseWorldIssuePlayerActionInput
-  ): void;
-  fireWeapon?(commandInput: MetaverseWorldFireWeaponCommandInput): void;
+  ): number | null;
   syncDriverVehicleControl(
     commandInput: MetaverseSyncDriverVehicleControlCommandInput | null
   ): void;

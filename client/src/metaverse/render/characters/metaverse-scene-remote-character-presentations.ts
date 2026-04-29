@@ -6,21 +6,38 @@ import type {
   MetaverseRemoteCharacterPresentationSnapshot,
   MetaverseRuntimeConfig
 } from "../../types/metaverse-runtime";
-import { shouldUseHeldWeaponCharacterPresentation } from "./metaverse-scene-character-animation";
+import {
+  clearCharacterCombatDeathAnimation,
+  shouldUseHeldWeaponCharacterPresentation,
+  type MetaverseCharacterAnimationRuntimeLike
+} from "./metaverse-scene-character-animation";
+import type { HeldObjectAimState } from "./metaverse-scene-held-weapon-pose";
+import {
+  createMetaverseSemanticAimFrameFromCameraSnapshot,
+  type MetaverseSemanticAimFrame
+} from "../../aim/metaverse-semantic-aim";
+import type { HeldObjectPoseProfileId } from "@/assets/types/held-object-authoring-manifest";
 
 const remoteCharacterInterpolationRatePerSecond = 12;
 const remoteCharacterTeleportSnapDistanceMeters = 3.5;
+const remoteCharacterDeathCollapsePitchRadians = -Math.PI * 0.5;
+const remoteCharacterDeathCollapseGroundLiftMeters = 0.08;
+const remoteHeldWeaponLastKnownAimTtlSeconds = 0.25;
 
 interface CharacterRuntimeLike {
   readonly anchorGroup: Group;
+  readonly combatAnimationRuntime:
+    MetaverseCharacterAnimationRuntimeLike["combatAnimationRuntime"];
   readonly heldWeaponPoseRuntime: object | null;
-  readonly humanoidV2PistolPoseRuntime: object | null;
   readonly mixer: AnimationMixer;
 }
 
 interface AttachmentRuntimeLike {
   readonly activeMountKind: "held" | "mounted-holster" | null;
   readonly attachmentId: string;
+  readonly holdProfile: {
+    readonly poseProfileId: HeldObjectPoseProfileId;
+  };
 }
 
 export interface MetaverseRemoteCharacterPresentationRuntimeState<
@@ -29,7 +46,10 @@ export interface MetaverseRemoteCharacterPresentationRuntimeState<
   TMountedCharacterRuntime
 > {
   attachmentRuntime: TAttachmentRuntime | null;
+  readonly attachmentRuntimesByAttachmentId: Map<string, TAttachmentRuntime>;
   readonly characterRuntime: TCharacterRuntime;
+  lastKnownAimFrame: MetaverseSemanticAimFrame | null;
+  lastKnownAimFrameAgeSeconds: number;
   mountedCharacterRuntime: TMountedCharacterRuntime | null;
   targetMountedOccupancy:
     MetaverseRemoteCharacterPresentationSnapshot["mountedOccupancy"];
@@ -46,10 +66,10 @@ export interface MetaverseRemoteCharacterPresentationDependencies<
     characterRuntime: TCharacterRuntime,
     mountedCharacterRuntime: TMountedCharacterRuntime
   ) => void;
-  readonly clearPistolPoseWeights: (
-    pistolPoseRuntime: NonNullable<TCharacterRuntime["humanoidV2PistolPoseRuntime"]>
-  ) => void;
   readonly captureHeldWeaponPoseRuntime: (
+    heldWeaponPoseRuntime: NonNullable<TCharacterRuntime["heldWeaponPoseRuntime"]>
+  ) => void;
+  readonly prepareHeldWeaponPoseRuntime: (
     heldWeaponPoseRuntime: NonNullable<TCharacterRuntime["heldWeaponPoseRuntime"]>
   ) => void;
   readonly cloneAttachmentRuntime: (
@@ -83,7 +103,6 @@ export interface MetaverseRemoteCharacterPresentationDependencies<
   readonly syncCharacterAnimation: (
     characterRuntime: TCharacterRuntime,
     targetVocabulary: MetaverseCharacterAnimationVocabularyId,
-    useHumanoidV2PistolLayering?: boolean,
     animationCycleId?: number | null,
     animationPlaybackRateMultiplier?: number
   ) => void;
@@ -96,9 +115,8 @@ export interface MetaverseRemoteCharacterPresentationDependencies<
     characterRuntime: TCharacterRuntime,
     heldWeaponPoseRuntime: NonNullable<TCharacterRuntime["heldWeaponPoseRuntime"]>,
     attachmentRuntime: TAttachmentRuntime,
-    aimCamera: NonNullable<MetaverseRemoteCharacterPresentationSnapshot["aimCamera"]>,
+    aimState: HeldObjectAimState,
     weaponState: MetaverseRemoteCharacterPresentationSnapshot["weaponState"],
-    weaponAdsBlend?: number | null,
     bodyPresentation?: Pick<
       MetaverseRuntimeConfig["bodyPresentation"],
       | "groundedFirstPersonHeadClearanceMeters"
@@ -114,14 +132,6 @@ export interface MetaverseRemoteCharacterPresentationDependencies<
       environmentAssetId: string
     ) => TMountedEnvironmentRuntime | null
   ) => TMountedCharacterRuntime | null;
-  readonly syncPistolPoseWeights: (
-    pistolPoseRuntime: NonNullable<TCharacterRuntime["humanoidV2PistolPoseRuntime"]>,
-    pitchRadians: number,
-    orientation: Pick<
-      MetaverseRuntimeConfig["orientation"],
-      "maxPitchRadians" | "minPitchRadians"
-    >
-  ) => void;
 }
 
 function wrapRadians(rawValue: number): number {
@@ -221,6 +231,37 @@ function syncInterpolatedRemoteCharacterPresentation<
   anchorGroup.updateMatrixWorld(true);
 }
 
+function syncRemoteCharacterCombatDeathPresentation<
+  TCharacterRuntime extends CharacterRuntimeLike
+>(
+  characterRuntime: TCharacterRuntime,
+  remoteCharacterPresentation: MetaverseRemoteCharacterPresentationSnapshot
+): void {
+  if (remoteCharacterPresentation.combatAlive !== false) {
+    clearCharacterCombatDeathAnimation(characterRuntime);
+    return;
+  }
+
+  const deathAction =
+    characterRuntime.combatAnimationRuntime?.actionsByActionId.get("death");
+
+  if (
+    deathAction !== undefined &&
+    deathAction.enabled &&
+    deathAction.getEffectiveWeight() > 0
+  ) {
+    return;
+  }
+
+  const anchorGroup = characterRuntime.anchorGroup;
+
+  anchorGroup.position.y =
+    remoteCharacterPresentation.presentation.position.y +
+    remoteCharacterDeathCollapseGroundLiftMeters;
+  anchorGroup.rotation.x = remoteCharacterDeathCollapsePitchRadians;
+  anchorGroup.updateMatrixWorld(true);
+}
+
 export function syncRemoteCharacterPresentations<
   TCharacterRuntime extends CharacterRuntimeLike,
   TAttachmentRuntime extends AttachmentRuntimeLike,
@@ -229,7 +270,10 @@ export function syncRemoteCharacterPresentations<
 >(
   scene: Scene,
   sourceCharacterRuntime: TCharacterRuntime | null,
-  sourceAttachmentRuntime: TAttachmentRuntime | null,
+  sourceAttachmentRuntimesByAttachmentId: ReadonlyMap<
+    string,
+    TAttachmentRuntime
+  >,
   config: Pick<
     MetaverseRuntimeConfig,
     "bodyPresentation" | "orientation"
@@ -279,14 +323,11 @@ export function syncRemoteCharacterPresentations<
       );
 
       remoteCharacterRuntime = {
-        attachmentRuntime:
-          sourceAttachmentRuntime === null
-            ? null
-            : dependencies.cloneAttachmentRuntime(
-                sourceAttachmentRuntime,
-                characterRuntime
-              ),
+        attachmentRuntime: null,
+        attachmentRuntimesByAttachmentId: new Map<string, TAttachmentRuntime>(),
         characterRuntime,
+        lastKnownAimFrame: null,
+        lastKnownAimFrameAgeSeconds: remoteHeldWeaponLastKnownAimTtlSeconds,
         mountedCharacterRuntime: null,
         targetMountedOccupancy: remoteCharacterPresentation.mountedOccupancy ?? null,
         targetPresentation: remoteCharacterPresentation.presentation
@@ -307,23 +348,16 @@ export function syncRemoteCharacterPresentations<
         remoteCharacterPresentation.mountedOccupancy ?? null;
       existingRemoteCharacterRuntime.targetPresentation =
         remoteCharacterPresentation.presentation;
-
-      if (
-        existingRemoteCharacterRuntime.attachmentRuntime === null &&
-        sourceAttachmentRuntime !== null
-      ) {
-        existingRemoteCharacterRuntime.attachmentRuntime =
-          dependencies.cloneAttachmentRuntime(
-            sourceAttachmentRuntime,
-            existingRemoteCharacterRuntime.characterRuntime
-          );
-      }
     }
 
     if (remoteCharacterRuntime === undefined) {
       continue;
     }
 
+    remoteCharacterRuntime.lastKnownAimFrameAgeSeconds += Math.max(
+      0,
+      deltaSeconds
+    );
     remoteCharacterRuntime.mountedCharacterRuntime =
       dependencies.syncMountedCharacterRuntime(
         remoteCharacterRuntime.characterRuntime,
@@ -331,9 +365,56 @@ export function syncRemoteCharacterPresentations<
         remoteCharacterRuntime.targetMountedOccupancy,
         dependencies.resolveMountedEnvironmentRuntime
       );
-    if (remoteCharacterRuntime.attachmentRuntime !== null) {
+    const targetAttachmentIds =
+      remoteCharacterPresentation.weaponState?.slots?.map(
+        (slot) => slot.attachmentId
+      ) ??
+      (remoteCharacterPresentation.weaponState?.weaponId === undefined ||
+      remoteCharacterPresentation.weaponState.weaponId === null
+        ? []
+        : [remoteCharacterPresentation.weaponState.weaponId]);
+    const activeAttachmentId =
+      remoteCharacterPresentation.weaponState?.slots?.find(
+        (slot) =>
+          slot.slotId === remoteCharacterPresentation.weaponState?.activeSlotId
+      )?.attachmentId ??
+      remoteCharacterPresentation.weaponState?.weaponId ??
+      null;
+
+    remoteCharacterRuntime.attachmentRuntime = null;
+
+    for (const targetAttachmentId of targetAttachmentIds) {
+      const sourceAttachmentRuntime =
+        sourceAttachmentRuntimesByAttachmentId.get(targetAttachmentId);
+
+      if (sourceAttachmentRuntime === undefined) {
+        continue;
+      }
+
+      let remoteAttachmentRuntime =
+        remoteCharacterRuntime.attachmentRuntimesByAttachmentId.get(
+          sourceAttachmentRuntime.attachmentId
+        );
+
+      if (remoteAttachmentRuntime === undefined) {
+        remoteAttachmentRuntime = dependencies.cloneAttachmentRuntime(
+          sourceAttachmentRuntime,
+          remoteCharacterRuntime.characterRuntime
+        );
+        remoteCharacterRuntime.attachmentRuntimesByAttachmentId.set(
+          remoteAttachmentRuntime.attachmentId,
+          remoteAttachmentRuntime
+        );
+      }
+
+      if (sourceAttachmentRuntime.attachmentId === activeAttachmentId) {
+        remoteCharacterRuntime.attachmentRuntime = remoteAttachmentRuntime;
+      }
+    }
+
+    for (const attachmentRuntime of remoteCharacterRuntime.attachmentRuntimesByAttachmentId.values()) {
       dependencies.syncAttachmentMount(
-        remoteCharacterRuntime.attachmentRuntime,
+        attachmentRuntime,
         remoteCharacterRuntime.characterRuntime,
         remoteCharacterRuntime.targetMountedOccupancy,
         remoteCharacterPresentation.weaponState
@@ -346,9 +427,17 @@ export function syncRemoteCharacterPresentations<
         remoteCharacterPresentation.weaponState,
         remoteCharacterRuntime.mountedCharacterRuntime
       );
-    const useHumanoidV2PistolLayering =
-      heldWeaponPresentationActive &&
-      remoteCharacterRuntime.characterRuntime.humanoidV2PistolPoseRuntime !== null;
+    if (!heldWeaponPresentationActive) {
+      remoteCharacterRuntime.lastKnownAimFrame = null;
+      remoteCharacterRuntime.lastKnownAimFrameAgeSeconds =
+        remoteHeldWeaponLastKnownAimTtlSeconds;
+    }
+
+    if (remoteCharacterRuntime.characterRuntime.heldWeaponPoseRuntime !== null) {
+      dependencies.prepareHeldWeaponPoseRuntime(
+        remoteCharacterRuntime.characterRuntime.heldWeaponPoseRuntime
+      );
+    }
 
     dependencies.syncCharacterAnimation(
       remoteCharacterRuntime.characterRuntime,
@@ -359,24 +448,9 @@ export function syncRemoteCharacterPresentations<
         remoteCharacterPresentation.weaponState,
         remoteCharacterRuntime.mountedCharacterRuntime
       ),
-      useHumanoidV2PistolLayering,
       remoteCharacterPresentation.presentation.animationCycleId,
       remoteCharacterPresentation.presentation.animationPlaybackRateMultiplier
     );
-
-    if (remoteCharacterRuntime.characterRuntime.humanoidV2PistolPoseRuntime !== null) {
-      if (useHumanoidV2PistolLayering) {
-        dependencies.syncPistolPoseWeights(
-          remoteCharacterRuntime.characterRuntime.humanoidV2PistolPoseRuntime,
-          remoteCharacterPresentation.look.pitchRadians,
-          config.orientation
-        );
-      } else {
-        dependencies.clearPistolPoseWeights(
-          remoteCharacterRuntime.characterRuntime.humanoidV2PistolPoseRuntime
-        );
-      }
-    }
 
     remoteCharacterRuntime.characterRuntime.mixer.update(deltaSeconds);
 
@@ -429,23 +503,67 @@ export function syncRemoteCharacterPresentations<
     if (
       heldWeaponPresentationActive &&
       remoteCharacterRuntime.characterRuntime.heldWeaponPoseRuntime !== null &&
-      remoteCharacterPresentation.aimCamera !== null &&
       remoteCharacterRuntime.attachmentRuntime !== null
     ) {
       dependencies.restoreHeldWeaponPoseRuntime(
         remoteCharacterRuntime.characterRuntime.heldWeaponPoseRuntime
       );
       remoteCharacterRuntime.characterRuntime.anchorGroup.updateMatrixWorld(true);
+      const heldObjectAimState =
+        remoteCharacterPresentation.aimCamera === null
+          ? remoteCharacterRuntime.lastKnownAimFrame !== null &&
+            remoteCharacterRuntime.lastKnownAimFrameAgeSeconds <=
+              remoteHeldWeaponLastKnownAimTtlSeconds
+            ? {
+                ...remoteCharacterRuntime.lastKnownAimFrame,
+                aimMode: remoteCharacterPresentation.weaponState?.aimMode ?? null,
+                quality: "last_known_replicated" as const,
+                weaponId:
+                  remoteCharacterPresentation.weaponState?.weaponId ??
+                  remoteCharacterRuntime.attachmentRuntime.attachmentId
+              }
+            : null
+          : createMetaverseSemanticAimFrameFromCameraSnapshot({
+              actorFacingYawRadians:
+                remoteCharacterPresentation.presentation.yawRadians,
+              adsBlend: null,
+              attachmentRuntime: remoteCharacterRuntime.attachmentRuntime,
+              cameraSnapshot: remoteCharacterPresentation.aimCamera,
+              quality: "replicated_pitch_yaw",
+              source: "remote_replicated",
+              weaponState: remoteCharacterPresentation.weaponState
+            });
+
+      if (
+        remoteCharacterPresentation.aimCamera !== null &&
+        heldObjectAimState !== null
+      ) {
+        remoteCharacterRuntime.lastKnownAimFrame = heldObjectAimState;
+        remoteCharacterRuntime.lastKnownAimFrameAgeSeconds = 0;
+      }
+
+      if (heldObjectAimState === null) {
+        syncRemoteCharacterCombatDeathPresentation(
+          remoteCharacterRuntime.characterRuntime,
+          remoteCharacterPresentation
+        );
+        continue;
+      }
+
       dependencies.syncHeldWeaponPose(
         remoteCharacterRuntime.characterRuntime,
         remoteCharacterRuntime.characterRuntime.heldWeaponPoseRuntime,
         remoteCharacterRuntime.attachmentRuntime,
-        remoteCharacterPresentation.aimCamera,
+        heldObjectAimState,
         remoteCharacterPresentation.weaponState,
-        null,
         config.bodyPresentation
       );
     }
+
+    syncRemoteCharacterCombatDeathPresentation(
+      remoteCharacterRuntime.characterRuntime,
+      remoteCharacterPresentation
+    );
   }
 
   for (const [playerId, remoteCharacterRuntime] of remoteCharacterRuntimesByPlayerId) {

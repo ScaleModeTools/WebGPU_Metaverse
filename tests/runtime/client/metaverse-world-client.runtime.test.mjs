@@ -55,6 +55,50 @@ function createFireWeaponPlayerActionCommand({
       actionSequence,
       aimSnapshot: {
         pitchRadians: 0,
+        rayForwardWorld: {
+          x: 0,
+          y: 0,
+          z: -1
+        },
+        rayOriginWorld: {
+          x: 0,
+          y: 1.62,
+          z: 0
+        },
+        yawRadians: 0
+      },
+      issuedAtAuthoritativeTimeMs,
+      kind: "fire-weapon",
+      weaponId
+    },
+    playerId
+  });
+}
+
+function issueFireWeaponPlayerAction(
+  client,
+  {
+    aimMode,
+    issuedAtAuthoritativeTimeMs,
+    playerId,
+    weaponId
+  }
+) {
+  return client.issuePlayerAction({
+    action: {
+      ...(aimMode === undefined ? {} : { aimMode }),
+      aimSnapshot: {
+        pitchRadians: 0,
+        rayForwardWorld: {
+          x: 0,
+          y: 0,
+          z: -1
+        },
+        rayOriginWorld: {
+          x: 0,
+          y: 1.62,
+          z: 0
+        },
         yawRadians: 0
       },
       issuedAtAuthoritativeTimeMs,
@@ -175,12 +219,8 @@ test("MetaverseWorldClient sends fire-weapon commands over the reliable command 
   );
 
   await client.ensureConnected(playerId);
-  client.fireWeapon({
+  issueFireWeaponPlayerAction(client, {
     aimMode: "hip-fire",
-    aimSnapshot: {
-      pitchRadians: 0,
-      yawRadians: 0
-    },
     issuedAtAuthoritativeTimeMs: 1_234,
     playerId,
     weaponId: "metaverse-service-pistol-v2"
@@ -271,12 +311,8 @@ test("MetaverseWorldClient resends the oldest pending fire action until the obse
   );
 
   await client.ensureConnected(playerId);
-  client.fireWeapon({
+  issueFireWeaponPlayerAction(client, {
     aimMode: "hip-fire",
-    aimSnapshot: {
-      pitchRadians: 0,
-      yawRadians: 0
-    },
     issuedAtAuthoritativeTimeMs: 10_000,
     playerId,
     weaponId: "metaverse-service-pistol-v2"
@@ -352,23 +388,15 @@ test("MetaverseWorldClient fills the action window with later fire actions befor
   );
 
   await client.ensureConnected(playerId);
-  client.fireWeapon({
+  issueFireWeaponPlayerAction(client, {
     aimMode: "hip-fire",
-    aimSnapshot: {
-      pitchRadians: 0,
-      yawRadians: 0
-    },
     issuedAtAuthoritativeTimeMs: 10_050,
     playerId,
     weaponId: "metaverse-service-pistol-v2"
   });
 
-  client.fireWeapon({
+  issueFireWeaponPlayerAction(client, {
     aimMode: "hip-fire",
-    aimSnapshot: {
-      pitchRadians: 0,
-      yawRadians: 0
-    },
     issuedAtAuthoritativeTimeMs: 10_160,
     playerId,
     weaponId: "metaverse-service-pistol-v2"

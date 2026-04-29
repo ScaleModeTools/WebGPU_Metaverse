@@ -13,6 +13,7 @@ import {
   createUsername
 } from "@webgpu-metaverse/shared";
 import {
+  createMetaverseSyncPlayerWeaponStateCommand,
   readMetaverseRealtimePlayerActiveBodyKinematicSnapshot
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
@@ -156,6 +157,62 @@ function createMetaverseSyncPlayerTraversalIntentCommand(input) {
     }
   });
 }
+
+test("MetaverseAuthoritativeWorldRuntime keeps active weapon slot changes on the sequenced action lane", () => {
+  const runtime = new MetaverseAuthoritativeWorldRuntime(
+    {
+      playerInactivityTimeoutMs: createMilliseconds(5_000),
+      tickIntervalMs: createMilliseconds(100)
+    },
+    undefined,
+    "shell-team-deathmatch"
+  );
+  const playerId = requireValue(
+    createMetaversePlayerId("weapon-state-sync-slot-guard"),
+    "playerId"
+  );
+  const username = requireValue(
+    createUsername("Weapon State Sync Slot Guard"),
+    "username"
+  );
+
+  joinSurfacePlayer(runtime, playerId, username);
+
+  const initialSnapshot = runtime.readWorldSnapshot(0, playerId);
+  const initialWeaponState = requireValue(
+    initialSnapshot.players[0]?.weaponState,
+    "initialWeaponState"
+  );
+  const secondarySlot = requireValue(
+    initialWeaponState.slots.find((slot) => slot.slotId === "secondary") ?? null,
+    "secondarySlot"
+  );
+
+  runtime.acceptWorldCommand(
+    createMetaverseSyncPlayerWeaponStateCommand({
+      playerId,
+      requestedActiveSlotId: "secondary",
+      weaponSequence: 1,
+      weaponState: {
+        activeSlotId: "secondary",
+        aimMode: "ads",
+        slots: initialWeaponState.slots,
+        weaponId: secondarySlot.weaponId
+      }
+    }),
+    10
+  );
+
+  const syncedSnapshot = runtime.readWorldSnapshot(10, playerId);
+  const syncedWeaponState = requireValue(
+    syncedSnapshot.players[0]?.weaponState,
+    "syncedWeaponState"
+  );
+
+  assert.equal(syncedWeaponState.activeSlotId, initialWeaponState.activeSlotId);
+  assert.equal(syncedWeaponState.weaponId, initialWeaponState.weaponId);
+  assert.equal(syncedWeaponState.aimMode, "ads");
+});
 
 test("MetaverseAuthoritativeWorldRuntime routes an authored dock entry into the shared water bay", () => {
   const runtime = createAuthoritativeRuntime();

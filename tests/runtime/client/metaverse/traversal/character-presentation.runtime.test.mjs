@@ -122,12 +122,10 @@ test("walk animation restart preserves negative playback for backward movement",
       ["walk", walkAction]
     ]),
     anchorGroup: {},
-    humanoidV2PistolLowerBodyActionsByVocabulary: null,
-    humanoidV2PistolPoseRuntime: null,
     skeletonId: "humanoid_v2"
   };
 
-  syncCharacterAnimation(characterRuntime, "walk", false, 1, -1.5);
+  syncCharacterAnimation(characterRuntime, "walk", 1, -1.5);
 
   assert.equal(walkAction.lastEffectiveTimeScale, -1.6500000000000001);
   assert.equal(walkAction.time, 2.4);

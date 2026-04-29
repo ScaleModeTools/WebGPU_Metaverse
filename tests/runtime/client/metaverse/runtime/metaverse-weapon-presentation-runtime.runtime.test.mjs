@@ -135,6 +135,7 @@ test("MetaverseWeaponPresentationRuntime publishes hip-fire, ADS, and mounted su
   });
 
   assert.equal(runtime.fireTriggerHeld, true);
+  assert.equal(runtime.firePressedThisFrame, true);
   assert.equal(runtime.hudSnapshot.visible, true);
   assert.equal(runtime.hudSnapshot.aimMode, "hip-fire");
   assert.equal(runtime.weaponState?.aimMode, "hip-fire");
@@ -150,6 +151,7 @@ test("MetaverseWeaponPresentationRuntime publishes hip-fire, ADS, and mounted su
     mountedEnvironment: null
   });
 
+  assert.equal(runtime.firePressedThisFrame, false);
   assert.equal(updateCount, 1);
 
   runtime.advance({
@@ -168,6 +170,45 @@ test("MetaverseWeaponPresentationRuntime publishes hip-fire, ADS, and mounted su
   assert.ok(runtime.cameraFieldOfViewDegrees < 70);
   assert.equal(updateCount, 2);
 
+  runtime.setCombatPresentationSuppressed(true);
+
+  assert.equal(runtime.fireTriggerHeld, false);
+  assert.equal(runtime.hudSnapshot.visible, false);
+  assert.equal(runtime.hudSnapshot.aimMode, "hip-fire");
+  assert.equal(runtime.weaponState, null);
+  assert.equal(runtime.cameraFieldOfViewDegrees, 70);
+  assert.equal(updateCount, 3);
+
+  runtime.advance({
+    deltaSeconds: 10,
+    flightInput: Object.freeze({
+      primaryAction: true,
+      secondaryAction: false
+    }),
+    mountedEnvironment: null
+  });
+
+  assert.equal(runtime.fireTriggerHeld, false);
+  assert.equal(runtime.hudSnapshot.visible, false);
+  assert.equal(runtime.weaponState, null);
+  assert.equal(updateCount, 3);
+
+  runtime.setCombatPresentationSuppressed(false);
+  runtime.advance({
+    deltaSeconds: 0.016,
+    flightInput: Object.freeze({
+      primaryAction: true,
+      secondaryAction: false
+    }),
+    mountedEnvironment: null
+  });
+
+  assert.equal(runtime.fireTriggerHeld, true);
+  assert.equal(runtime.hudSnapshot.visible, true);
+  assert.equal(runtime.hudSnapshot.aimMode, "hip-fire");
+  assert.equal(runtime.weaponState?.aimMode, "hip-fire");
+  assert.equal(updateCount, 4);
+
   runtime.advance({
     deltaSeconds: 10,
     flightInput: Object.freeze({
@@ -182,12 +223,103 @@ test("MetaverseWeaponPresentationRuntime publishes hip-fire, ADS, and mounted su
   assert.equal(runtime.hudSnapshot.aimMode, "hip-fire");
   assert.equal(runtime.weaponState, null);
   assert.equal(runtime.cameraFieldOfViewDegrees, 70);
-  assert.equal(updateCount, 3);
+  assert.equal(updateCount, 5);
 
   runtime.reset();
 
   assert.equal(runtime.hudSnapshot.visible, false);
   assert.equal(runtime.weaponState, null);
   assert.equal(runtime.cameraFieldOfViewDegrees, 70);
-  assert.equal(updateCount, 3);
+  assert.equal(updateCount, 5);
+});
+
+test("MetaverseWeaponPresentationRuntime equips rocket launcher from plural attachment proofs", async () => {
+  const [
+    { MetaverseWeaponPresentationRuntime },
+    { metaverseAttachmentProofConfigs }
+  ] = await Promise.all([
+    clientLoader.load("/src/metaverse/classes/metaverse-weapon-presentation-runtime.ts"),
+    clientLoader.load("/src/metaverse/world/proof/index.ts")
+  ]);
+  const runtime = new MetaverseWeaponPresentationRuntime(runtimeConfig, {
+    attachmentProofConfigs: metaverseAttachmentProofConfigs,
+    equippedWeaponId: "metaverse-rocket-launcher-v1",
+    weaponLayoutId: "metaverse-tdm-pistol-rocket-layout"
+  });
+
+  runtime.advance({
+    deltaSeconds: 0.016,
+    flightInput: Object.freeze({
+      primaryAction: true,
+      secondaryAction: false,
+      weaponSwitchPressedCount: 0
+    }),
+    mountedEnvironment: null
+  });
+
+  assert.equal(runtime.fireTriggerHeld, true);
+  assert.equal(runtime.firePressedThisFrame, true);
+  assert.equal(runtime.hudSnapshot.visible, true);
+  assert.equal(runtime.hudSnapshot.weaponId, "metaverse-rocket-launcher-v1");
+  assert.equal(runtime.weaponState?.weaponId, "metaverse-rocket-launcher-v1");
+  assert.equal(runtime.weaponState?.activeSlotId, "secondary");
+  assert.equal(runtime.weaponState?.slots.length, 2);
+});
+
+test("MetaverseWeaponPresentationRuntime toggles pistol and rocket slots and resets ADS", async () => {
+  const [
+    { MetaverseWeaponPresentationRuntime },
+    { metaverseAttachmentProofConfigs }
+  ] = await Promise.all([
+    clientLoader.load("/src/metaverse/classes/metaverse-weapon-presentation-runtime.ts"),
+    clientLoader.load("/src/metaverse/world/proof/index.ts")
+  ]);
+  const runtime = new MetaverseWeaponPresentationRuntime(runtimeConfig, {
+    attachmentProofConfigs: metaverseAttachmentProofConfigs,
+    weaponLayoutId: "metaverse-tdm-pistol-rocket-layout"
+  });
+
+  runtime.advance({
+    deltaSeconds: 10,
+    flightInput: Object.freeze({
+      primaryAction: false,
+      secondaryAction: true,
+      weaponSwitchPressedCount: 0
+    }),
+    mountedEnvironment: null
+  });
+
+  assert.equal(runtime.hudSnapshot.weaponId, "metaverse-service-pistol-v2");
+  assert.equal(runtime.hudSnapshot.aimMode, "ads");
+  assert.equal(runtime.weaponState?.activeSlotId, "primary");
+  assert.equal(runtime.weaponState?.slots.length, 2);
+
+  runtime.advance({
+    deltaSeconds: 0.016,
+    flightInput: Object.freeze({
+      primaryAction: true,
+      secondaryAction: false,
+      weaponSwitchPressedCount: 1
+    }),
+    mountedEnvironment: null
+  });
+
+  assert.equal(runtime.hudSnapshot.weaponId, "metaverse-rocket-launcher-v1");
+  assert.equal(runtime.hudSnapshot.aimMode, "hip-fire");
+  assert.equal(runtime.cameraFieldOfViewDegrees, 70);
+  assert.equal(runtime.firePressedThisFrame, true);
+  assert.equal(runtime.weaponState?.activeSlotId, "secondary");
+
+  runtime.advance({
+    deltaSeconds: 0.016,
+    flightInput: Object.freeze({
+      primaryAction: false,
+      secondaryAction: false,
+      weaponSwitchPressedCount: 1
+    }),
+    mountedEnvironment: null
+  });
+
+  assert.equal(runtime.hudSnapshot.weaponId, "metaverse-service-pistol-v2");
+  assert.equal(runtime.weaponState?.activeSlotId, "primary");
 });

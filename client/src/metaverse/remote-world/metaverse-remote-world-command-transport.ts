@@ -1,4 +1,8 @@
 import type {
+  MetaverseCombatAimSnapshotInput,
+  MetaverseWeaponSlotId
+} from "@webgpu-metaverse/shared";
+import type {
   MetaversePlayerTraversalIntentSnapshotInput,
   MetaverseRealtimePlayerWeaponStateSnapshot
 } from "@webgpu-metaverse/shared/metaverse/realtime";
@@ -25,6 +29,8 @@ interface MetaverseRemoteWorldCommandTransportDependencies {
 export class MetaverseRemoteWorldCommandTransport {
   readonly #fireWeaponActionPolicy: MetaverseFireWeaponActionPolicy;
   readonly #localPlayerIdentity: MetaverseLocalPlayerIdentity | null;
+  readonly #readEstimatedServerTimeMs: (localWallClockMs: number) => number;
+  readonly #readWallClockMs: () => number;
   readonly #readWorldClient: () => MetaverseWorldClientRuntime | null;
 
   constructor({
@@ -40,6 +46,8 @@ export class MetaverseRemoteWorldCommandTransport {
       readWorldClient
     });
     this.#localPlayerIdentity = localPlayerIdentity;
+    this.#readEstimatedServerTimeMs = readEstimatedServerTimeMs;
+    this.#readWallClockMs = readWallClockMs;
     this.#readWorldClient = readWorldClient;
   }
 
@@ -171,32 +179,38 @@ export class MetaverseRemoteWorldCommandTransport {
 
     worldClient.syncPlayerWeaponState?.({
       playerId: this.#localPlayerIdentity.playerId,
+      requestedActiveSlotId: weaponState?.activeSlotId ?? null,
       weaponState
     });
   }
 
   fireWeapon(input: {
     readonly aimMode?: "ads" | "hip-fire";
-    readonly aimSnapshot: {
-      readonly pitchRadians: number;
-      readonly yawRadians: number;
-    };
+    readonly aimSnapshot: MetaverseCombatAimSnapshotInput;
     readonly weaponId: string;
-  }): void {
+  }): {
+    readonly actionSequence: number;
+    readonly issuedAtAuthoritativeTimeMs: number;
+    readonly weaponId: string;
+  } | null {
     const worldClient = this.#readWorldClient();
 
     if (worldClient === null || this.#localPlayerIdentity === null) {
-      return;
+      return null;
     }
 
     const fireWeaponAction =
       this.#fireWeaponActionPolicy.createFireWeaponAction(input);
 
     if (fireWeaponAction === null) {
-      return;
+      return null;
     }
 
-    worldClient.issuePlayerAction?.({
+    if (worldClient.issuePlayerAction === undefined) {
+      return null;
+    }
+
+    const actionSequence = worldClient.issuePlayerAction({
       action: {
         ...(fireWeaponAction.aimMode === undefined
           ? {}
@@ -210,6 +224,76 @@ export class MetaverseRemoteWorldCommandTransport {
         weaponId: fireWeaponAction.weaponId
       },
       playerId: this.#localPlayerIdentity.playerId
+    });
+
+    if (actionSequence === null || actionSequence === undefined) {
+      return null;
+    }
+
+    this.#fireWeaponActionPolicy.registerPendingFireAction({
+      actionSequence,
+      issuedAtAuthoritativeTimeMs:
+        fireWeaponAction.issuedAtAuthoritativeTimeMs,
+      weaponId: fireWeaponAction.weaponId
+    });
+
+    return Object.freeze({
+      actionSequence,
+      issuedAtAuthoritativeTimeMs:
+        fireWeaponAction.issuedAtAuthoritativeTimeMs,
+      weaponId: fireWeaponAction.weaponId
+    });
+  }
+
+  switchActiveWeaponSlot(input: {
+    readonly intendedWeaponId?: string | null;
+    readonly intendedWeaponInstanceId?: string | null;
+    readonly requestedActiveSlotId: MetaverseWeaponSlotId;
+  }): {
+    readonly actionSequence: number;
+    readonly requestedActiveSlotId: MetaverseWeaponSlotId;
+  } | null {
+    const worldClient = this.#readWorldClient();
+
+    if (
+      worldClient === null ||
+      this.#localPlayerIdentity === null ||
+      worldClient.issuePlayerAction === undefined
+    ) {
+      return null;
+    }
+
+    const actionSequence = worldClient.issuePlayerAction({
+      action: {
+        ...(input.intendedWeaponInstanceId === undefined ||
+        input.intendedWeaponInstanceId === null
+          ? {}
+          : {
+              intendedWeaponInstanceId: input.intendedWeaponInstanceId
+            }),
+        issuedAtAuthoritativeTimeMs: this.#readEstimatedServerTimeMs(
+          this.#readWallClockMs()
+        ),
+        kind: "switch-active-weapon-slot",
+        requestedActiveSlotId: input.requestedActiveSlotId
+      },
+      playerId: this.#localPlayerIdentity.playerId
+    });
+
+    if (actionSequence === null || actionSequence === undefined) {
+      return null;
+    }
+
+    if (input.intendedWeaponId !== undefined && input.intendedWeaponId !== null) {
+      this.#fireWeaponActionPolicy.registerPendingWeaponSwitchAction({
+        actionSequence,
+        weaponId: input.intendedWeaponId
+      });
+    }
+
+    return Object.freeze({
+      actionSequence,
+      requestedActiveSlotId: input.requestedActiveSlotId
     });
   }
 }

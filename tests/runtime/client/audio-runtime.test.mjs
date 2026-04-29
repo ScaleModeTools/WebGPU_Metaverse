@@ -114,8 +114,11 @@ test("BrowserAudioSession unlocks, primes music, switches typed tracks, and sync
           }
         };
       },
-      playCue({ cueId }) {
-        playedCues.push(cueId);
+      playCue({ cueId, options }) {
+        playedCues.push({
+          cueId,
+          spatial: options?.spatial?.position ?? null
+        });
       }
     }
   );
@@ -127,7 +130,16 @@ test("BrowserAudioSession unlocks, primes music, switches typed tracks, and sync
     musicVolume: 0.2,
     sfxVolume: 0.9
   });
-  const cueSnapshot = session.playCue("ui-confirm");
+  const cueSnapshot = session.playCue("ui-confirm", {
+    spatial: {
+      listener: {
+        forward: { x: 0, y: 0, z: -1 },
+        position: { x: 0, y: 1.6, z: 0 },
+        up: { x: 0, y: 1, z: 0 }
+      },
+      position: { x: 3, y: 1.6, z: -4 }
+    }
+  });
   const stoppedTrackSnapshot = session.syncBackgroundTrack(null);
 
   assert.equal(unlockSnapshot.unlockState, "unlocked");
@@ -139,7 +151,12 @@ test("BrowserAudioSession unlocks, primes music, switches typed tracks, and sync
   assert.equal(createdBuses[2]?.gain.value, 0.9);
   assert.deepEqual(playedTracks, ["birds-arena-loop", "shell-attract-loop"]);
   assert.equal(stopCalls, 1);
-  assert.deepEqual(playedCues, ["ui-confirm"]);
+  assert.deepEqual(playedCues, [
+    {
+      cueId: "ui-confirm",
+      spatial: { x: 3, y: 1.6, z: -4 }
+    }
+  ]);
   assert.equal(mixSnapshot.mix.musicVolume, 0.2);
   assert.equal(cueSnapshot.lastCueId, "ui-confirm");
 });

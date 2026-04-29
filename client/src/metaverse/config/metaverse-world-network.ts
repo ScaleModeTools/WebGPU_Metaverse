@@ -238,6 +238,7 @@ export function createMetaverseWorldClient(
     && metaverseRealtimeMigrationConfig.metaverseWorldDatagramInputEnabled
     ? createMetaverseRealtimeWorldLatestWinsWebTransportDatagramTransport(
         {
+          roomId,
           webTransportUrl
         },
         webTransportFactory === null

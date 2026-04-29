@@ -109,7 +109,7 @@ test("metaverse entry and tool preview auto-confirm a guest profile when none is
   assert.equal(state.hasConfirmedProfile, true);
   assert.equal(state.profile?.snapshot.username, "Unknown");
   assert.equal(state.shellStage, "metaverse");
-  assert.equal(state.activeMetaverseBundleId, "private-build");
+  assert.equal(state.activeMetaverseBundleId, "deathmatch");
   assert.equal(state.activeMetaverseLaunchVariationId, "shell-team-deathmatch");
 
   state = reduceMetaverseShellControllerState(state, {
@@ -366,7 +366,7 @@ test("reduceMetaverseShellControllerState keeps hub and experience mutations beh
   });
 
   assert.equal(state.matchMode, "team-deathmatch");
-  assert.equal(state.activeMetaverseBundleId, "private-build");
+  assert.equal(state.activeMetaverseBundleId, "deathmatch");
   assert.equal(state.activeMetaverseLaunchVariationId, "shell-team-deathmatch");
 
   state = reduceMetaverseShellControllerState(state, {

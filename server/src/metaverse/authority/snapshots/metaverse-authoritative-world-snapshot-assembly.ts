@@ -33,9 +33,11 @@ import {
   type MetaverseVehicleId
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 import type {
+  MetaverseCombatEventSnapshot,
   MetaverseCombatFeedEventSnapshot,
   MetaverseCombatMatchSnapshot,
   MetaverseCombatProjectileSnapshot,
+  MetaverseCombatShotResolutionTelemetrySnapshot,
   MetaversePlayerActionReceiptSnapshot,
   MetaversePlayerCombatSnapshot
 } from "@webgpu-metaverse/shared/metaverse";
@@ -129,6 +131,7 @@ export interface MetaverseAuthoritativeSnapshotEnvironmentBodyRuntimeState {
 }
 
 export interface MetaverseAuthoritativeWorldSnapshotAssemblyConfig {
+  readonly combatEvents: readonly MetaverseCombatEventSnapshot[];
   readonly combatFeed: readonly MetaverseCombatFeedEventSnapshot[];
   readonly combatMatch: MetaverseCombatMatchSnapshot | null;
   readonly currentTick: number;
@@ -139,6 +142,11 @@ export interface MetaverseAuthoritativeWorldSnapshotAssemblyConfig {
     MetaversePlayerId,
     {
       readonly highestProcessedPlayerActionSequence: number;
+      readonly latestShotResolutionTelemetry:
+        | MetaverseCombatShotResolutionTelemetrySnapshot
+        | null;
+      readonly recentShotResolutionTelemetry:
+        readonly MetaverseCombatShotResolutionTelemetrySnapshot[];
       readonly recentPlayerActionReceipts:
         readonly MetaversePlayerActionReceiptSnapshot[];
     }
@@ -160,7 +168,10 @@ function createPlayerPresentationIntentSnapshot(
   readonly moveAxis: number;
   readonly strafeAxis: number;
 } {
-  const presentationIntent = traversalIntent?.currentIntent;
+  const presentationIntent =
+    traversalIntent?.pendingIntentTimeline[
+      traversalIntent.pendingIntentTimeline.length - 1
+    ]?.intent ?? traversalIntent?.currentIntent;
 
   return Object.freeze({
     moveAxis: presentationIntent?.bodyControl.moveAxis ?? 0,
@@ -173,6 +184,11 @@ function createObserverPlayerSnapshot(
   combatActionObserverSnapshot:
     | {
         readonly highestProcessedPlayerActionSequence: number;
+        readonly latestShotResolutionTelemetry:
+          | MetaverseCombatShotResolutionTelemetrySnapshot
+          | null;
+        readonly recentShotResolutionTelemetry:
+          readonly MetaverseCombatShotResolutionTelemetrySnapshot[];
         readonly recentPlayerActionReceipts:
           readonly MetaversePlayerActionReceiptSnapshot[];
       }
@@ -214,7 +230,11 @@ function createObserverPlayerSnapshot(
     lastProcessedTraversalSequence:
       playerRuntime.lastProcessedTraversalSequence,
     lastProcessedWeaponSequence: playerRuntime.lastProcessedWeaponSequence,
+    latestShotResolutionTelemetry:
+      combatActionObserverSnapshot?.latestShotResolutionTelemetry ?? null,
     playerId: playerRuntime.playerId,
+    recentShotResolutionTelemetry:
+      combatActionObserverSnapshot?.recentShotResolutionTelemetry ?? [],
     recentPlayerActionReceipts:
       combatActionObserverSnapshot?.recentPlayerActionReceipts ?? []
   };
@@ -392,6 +412,7 @@ export function createMetaverseAuthoritativeWorldSnapshot<
     }));
 
   return createMetaverseRealtimeWorldSnapshot({
+    combatEvents: config.combatEvents,
     combatFeed: config.combatFeed,
     combatMatch: config.combatMatch,
     environmentBodies,

@@ -37,6 +37,7 @@ function createCombatSnapshot(overrides = {}) {
     maxHealth: 100,
     respawnRemainingMs: 0,
     spawnProtectionRemainingMs: 0,
+    weaponInventory: Object.freeze([]),
     weaponStats: Object.freeze([]),
     ...overrides
   });
@@ -79,6 +80,22 @@ test("MetaverseFireWeaponActionPolicy gates local fire commands against authorit
   assert.notEqual(acceptedAction, null);
   assert.equal(acceptedAction.issuedAtAuthoritativeTimeMs, 5_250);
   assert.equal(acceptedAction.weaponId, "metaverse-service-pistol-v2");
+  policy.registerPendingFireAction({
+    actionSequence: 1,
+    issuedAtAuthoritativeTimeMs: acceptedAction.issuedAtAuthoritativeTimeMs,
+    weaponId: acceptedAction.weaponId
+  });
+  assert.equal(
+    policy.createFireWeaponAction({
+      aimMode: "hip-fire",
+      aimSnapshot: Object.freeze({
+        pitchRadians: -0.05,
+        yawRadians: 0.4
+      }),
+      weaponId: "metaverse-service-pistol-v2"
+    }),
+    null
+  );
 
   worldSnapshot = createWorldEvent({
     combatMatch: createMetaverseCombatMatchSnapshot({
@@ -127,4 +144,64 @@ test("MetaverseFireWeaponActionPolicy gates local fire commands against authorit
     }),
     null
   );
+
+  worldSnapshot = createWorldEvent({
+    currentTick: 15,
+    playerCombat: createCombatSnapshot(),
+    playerId,
+    serverTimeMs: 12_150,
+    snapshotSequence: 4
+  }).world;
+
+  assert.equal(
+    policy.createFireWeaponAction({
+      aimSnapshot: Object.freeze({
+        pitchRadians: 0,
+        yawRadians: 0
+      }),
+      weaponId: "metaverse-rocket-launcher-v1"
+    }),
+    null
+  );
+
+  policy.registerPendingWeaponSwitchAction({
+    actionSequence: 2,
+    weaponId: "metaverse-rocket-launcher-v1"
+  });
+  const queuedRocketAction = policy.createFireWeaponAction({
+    aimSnapshot: Object.freeze({
+      pitchRadians: 0,
+      yawRadians: 0
+    }),
+    weaponId: "metaverse-rocket-launcher-v1"
+  });
+
+  assert.notEqual(queuedRocketAction, null);
+  assert.equal(queuedRocketAction?.weaponId, "metaverse-rocket-launcher-v1");
+
+  worldSnapshot = createWorldEvent({
+    currentTick: 16,
+    playerCombat: createCombatSnapshot({
+      activeWeapon: Object.freeze({
+        ammoInMagazine: 2,
+        ammoInReserve: 6,
+        reloadRemainingMs: 0,
+        weaponId: "metaverse-rocket-launcher-v1"
+      })
+    }),
+    playerId,
+    serverTimeMs: 12_200,
+    snapshotSequence: 5
+  }).world;
+
+  const acceptedRocketAction = policy.createFireWeaponAction({
+    aimSnapshot: Object.freeze({
+      pitchRadians: 0,
+      yawRadians: 0
+    }),
+    weaponId: "metaverse-rocket-launcher-v1"
+  });
+
+  assert.notEqual(acceptedRocketAction, null);
+  assert.equal(acceptedRocketAction.weaponId, "metaverse-rocket-launcher-v1");
 });

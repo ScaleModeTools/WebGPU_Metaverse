@@ -70,7 +70,7 @@ test("MetaverseWorldPlayerSync delegates player actions and look intent through 
     setTimeout: scheduler.setTimeout
   });
 
-  playerSync.issuePlayerAction({
+  const actionSequence = playerSync.issuePlayerAction({
     action: {
       aimSnapshot: Object.freeze({
         pitchRadians: 0,
@@ -82,6 +82,7 @@ test("MetaverseWorldPlayerSync delegates player actions and look intent through 
     },
     playerId
   });
+  assert.equal(actionSequence, 1);
   playerSync.syncPlayerLookIntent({
     lookIntent: Object.freeze({
       pitchRadians: -0.15,

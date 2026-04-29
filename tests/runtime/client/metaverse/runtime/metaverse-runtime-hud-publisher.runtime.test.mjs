@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
 import {
+  createMetaverseRealtimeWorldSnapshot,
   createMetaversePlayerId,
   createMetaverseRealtimePlayerSnapshot,
   createUsername
@@ -464,4 +465,124 @@ test("MetaverseRuntimeHudPublisher keeps in-range radar contacts live from smoot
   publisher.publishSnapshot(createPublishInput(), true, nowMs);
 
   assert.equal(publisher.hudSnapshot.radar.enemyContacts.length, 0);
+});
+
+test("MetaverseRuntimeHudPublisher displays optimistic selected weapon inventory", async () => {
+  const { MetaverseRuntimeHudPublisher } = await clientLoader.load(
+    "/src/metaverse/hud/metaverse-runtime-hud-publisher.ts"
+  );
+  const localPlayerId = createMetaversePlayerId("hud-weapon-switch-local");
+  const localUsername = createUsername("Hud Weapon Local");
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(localUsername, null);
+
+  const dependencies = createFakeHudPublisherDependencies(() => 0);
+  dependencies.presenceRuntime.isJoined = true;
+  dependencies.remoteWorldRuntime.isConnected = true;
+  dependencies.weaponPresentationRuntime = Object.freeze({
+    hudSnapshot: Object.freeze({
+      adsTransitionMs: 140,
+      aimMode: "hip-fire",
+      reticleColor: "white",
+      reticleId: "default-ring",
+      reticleStyleId: "rocket-crosshair",
+      visible: true,
+      weaponId: "metaverse-rocket-launcher-v1",
+      weaponLabel: "Rocket Launcher"
+    })
+  });
+
+  const localPlayerSnapshot = Object.freeze({
+    ...createMetaverseRealtimePlayerSnapshot({
+      characterId: "mesh2motion-humanoid-v1",
+      combat: {
+        activeWeapon: {
+          ammoInMagazine: 11,
+          ammoInReserve: 44,
+          reloadRemainingMs: 0,
+          weaponId: "metaverse-service-pistol-v2"
+        },
+        alive: true,
+        health: 100,
+        weaponInventory: [
+          {
+            ammoInMagazine: 11,
+            ammoInReserve: 44,
+            reloadRemainingMs: 0,
+            weaponId: "metaverse-service-pistol-v2"
+          },
+          {
+            ammoInMagazine: 1,
+            ammoInReserve: 3,
+            reloadRemainingMs: 0,
+            weaponId: "metaverse-rocket-launcher-v1"
+          }
+        ],
+        weaponStats: [
+          {
+            shotsFired: 0,
+            shotsHit: 0,
+            weaponId: "metaverse-rocket-launcher-v1"
+          }
+        ]
+      },
+      groundedBody: {
+        linearVelocity: {
+          x: 0,
+          y: 0,
+          z: 0
+        },
+        position: {
+          x: 0,
+          y: 0,
+          z: 0
+        },
+        yawRadians: 0
+      },
+      playerId: localPlayerId,
+      teamId: "blue",
+      username: localUsername
+    }),
+    jumpDebug: Object.freeze({
+      pendingActionBufferAgeMs: null,
+      pendingActionSequence: 0,
+      resolvedActionSequence: 0,
+      resolvedActionState: "none"
+    }),
+    lastProcessedLookSequence: 0,
+    lastProcessedTraversalSequence: 0,
+    lastProcessedWeaponSequence: 0
+  });
+  const worldSnapshot = createMetaverseRealtimeWorldSnapshot({
+    observerPlayer: {
+      highestProcessedPlayerActionSequence: 1,
+      playerId: localPlayerId,
+      recentPlayerActionReceipts: []
+    },
+    players: [localPlayerSnapshot],
+    snapshotSequence: 1,
+    tick: {
+      currentTick: 1,
+      emittedAtServerTimeMs: 1_000,
+      tickIntervalMs: 50
+    },
+    vehicles: []
+  });
+
+  dependencies.remoteWorldRuntime.readFreshAuthoritativeLocalPlayerSnapshot =
+    () => localPlayerSnapshot;
+  dependencies.remoteWorldRuntime.readFreshAuthoritativeWorldSnapshot =
+    () => worldSnapshot;
+
+  const publisher = new MetaverseRuntimeHudPublisher(dependencies);
+
+  publisher.publishSnapshot(createPublishInput(), true, 0);
+
+  assert.equal(
+    publisher.hudSnapshot.combat.weaponId,
+    "metaverse-rocket-launcher-v1"
+  );
+  assert.equal(publisher.hudSnapshot.combat.ammoInMagazine, 1);
+  assert.equal(publisher.hudSnapshot.combat.ammoInReserve, 3);
 });

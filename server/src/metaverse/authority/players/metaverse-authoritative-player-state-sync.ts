@@ -143,6 +143,9 @@ interface MetaverseAuthoritativePlayerStateSyncDependencies<
     handle: RapierColliderHandle
   ) => void;
   readonly createGroundedBodyRuntime: () => GroundedBodyRuntime;
+  readonly createInitialPlayerWeaponState: (
+    playerId: MetaversePlayerId
+  ) => MetaverseRealtimePlayerWeaponStateSnapshot | null;
   readonly createSwimBodyRuntime: () => SwimBodyRuntime;
   readonly initialYawRadians: number;
   readonly readCurrentTick: () => number;
@@ -282,7 +285,7 @@ export class MetaverseAuthoritativePlayerStateSync<
       }),
       swimBodyRuntime,
       username,
-      weaponState: null,
+      weaponState: this.#dependencies.createInitialPlayerWeaponState(playerId),
       yawRadians: this.#dependencies.initialYawRadians
     } as PlayerRuntime;
   }

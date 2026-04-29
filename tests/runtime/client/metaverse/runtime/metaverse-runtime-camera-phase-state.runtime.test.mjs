@@ -124,16 +124,16 @@ test("MetaverseRuntimeCameraPhaseState resolves entry preview, spawn wait, respa
 
   state.setGameplayControlLocked(false);
   state.setRespawnControlLocked(true);
-  assert.equal(
-    state.resolveRuntimeCameraPhaseState({
+  const respawnWaitState = state.resolveRuntimeCameraPhaseState({
       liveCameraSnapshot,
       liveFocusedPortal: null,
       nowMs: 330,
       presenceReady: true,
       worldReady: true
-    }).phaseId,
-    "respawn-wait"
-  );
+    });
+
+  assert.equal(respawnWaitState.phaseId, "respawn-wait");
+  assert.equal(respawnWaitState.hidesLocalCharacter, true);
 
   state.setDeathCameraSnapshot(
     createCameraSnapshot({
@@ -144,16 +144,16 @@ test("MetaverseRuntimeCameraPhaseState resolves entry preview, spawn wait, respa
       yawRadians: 1.1
     })
   );
-  assert.equal(
-    state.resolveRuntimeCameraPhaseState({
+  const deathHoldState = state.resolveRuntimeCameraPhaseState({
       liveCameraSnapshot,
       liveFocusedPortal: null,
       nowMs: 340,
       presenceReady: true,
       worldReady: true
-    }).phaseId,
-    "death-hold"
-  );
+    });
+
+  assert.equal(deathHoldState.phaseId, "death-hold");
+  assert.equal(deathHoldState.hidesLocalCharacter, false);
 
   state.setDeathCameraSnapshot(null);
   state.setRespawnControlLocked(false);

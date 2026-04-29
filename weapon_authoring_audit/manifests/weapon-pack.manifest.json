@@ -1,0 +1,197 @@
+{
+  "schemaVersion": "weapon-pack-manifest.v0.1",
+  "packId": "metaverse.weapon-prototypes.v0",
+  "generatedFrom": [
+    "metaverse-service-pistol.gltf",
+    "metaverse-rocket-launcher.gltf"
+  ],
+  "weaponCount": 2,
+  "coordinateSystem": {
+    "units": "meters",
+    "weaponForward": "+X",
+    "weaponUp": "+Y",
+    "weaponRight": "+Z"
+  },
+  "runtimePrinciple": "GLTF stores visuals and socket transforms; external manifests store semantic meaning, categories, hold profiles, support policy, modules, hazards, and runtime loading metadata.",
+  "weapons": [
+    {
+      "assetId": "metaverse_service_pistol",
+      "sourceFile": "metaverse-service-pistol.gltf",
+      "family": "sidearm",
+      "poseProfileId": "sidearm.one_hand_optional_support",
+      "runtimePack": "weapons.sidearms",
+      "boundsDimensions": [
+        0.316,
+        0.203587,
+        0.035
+      ],
+      "socketRoles": [
+        "basis.forward",
+        "basis.up",
+        "grip.primary.right_hint",
+        "trigger.index",
+        "grip.secondary.optional",
+        "sight.front",
+        "sight.rear",
+        "module.optic",
+        "projectile.muzzle",
+        "camera.ads_anchor",
+        "carry.back"
+      ],
+      "warnings": 8
+    },
+    {
+      "assetId": "metaverse_rocket_launcher",
+      "sourceFile": "metaverse-rocket-launcher.gltf",
+      "family": "shoulder_heavy",
+      "poseProfileId": "shoulder_heavy.two_hand_shouldered",
+      "runtimePack": "weapons.heavy",
+      "boundsDimensions": [
+        1.185,
+        0.352595,
+        0.14
+      ],
+      "socketRoles": [
+        "basis.forward",
+        "basis.up",
+        "grip.primary.right_hint",
+        "trigger.index",
+        "grip.secondary.required",
+        "module.underbarrel_grip",
+        "sight.front",
+        "sight.rear",
+        "module.optic",
+        "projectile.muzzle",
+        "camera.ads_anchor",
+        "carry.back"
+      ],
+      "warnings": 7
+    }
+  ],
+  "recommendedFamilies": {
+    "sidearm": {
+      "examples": [
+        "pistol",
+        "revolver"
+      ],
+      "offhandPolicy": "none | optional_support_palm",
+      "requiredSockets": [
+        "grip.primary",
+        "trigger.index",
+        "projectile.muzzle",
+        "camera.ads_anchor"
+      ],
+      "optionalSockets": [
+        "sight.front",
+        "sight.rear",
+        "module.optic",
+        "module.barrel",
+        "carry.hip",
+        "carry.back"
+      ]
+    },
+    "long_gun": {
+      "examples": [
+        "rifle",
+        "shotgun",
+        "smg"
+      ],
+      "offhandPolicy": "required_support_grip",
+      "requiredSockets": [
+        "grip.primary",
+        "grip.secondary",
+        "trigger.index",
+        "projectile.muzzle",
+        "camera.ads_anchor",
+        "body.stock"
+      ],
+      "optionalSockets": [
+        "module.optic",
+        "module.underbarrel",
+        "module.barrel",
+        "ejection.port",
+        "magazine.socket",
+        "carry.back"
+      ]
+    },
+    "shoulder_heavy": {
+      "examples": [
+        "rocket_launcher",
+        "railgun"
+      ],
+      "offhandPolicy": "required_support_grip",
+      "requiredSockets": [
+        "grip.primary",
+        "grip.secondary",
+        "trigger.index",
+        "projectile.muzzle",
+        "camera.ads_anchor",
+        "hazard.backblast"
+      ],
+      "optionalSockets": [
+        "module.optic",
+        "projectile.exhaust",
+        "carry.back",
+        "body.shoulder_contact"
+      ]
+    },
+    "melee_one_hand": {
+      "examples": [
+        "sword",
+        "knife",
+        "bat"
+      ],
+      "offhandPolicy": "none | optional",
+      "requiredSockets": [
+        "grip.primary",
+        "melee.tip",
+        "melee.edge_primary"
+      ],
+      "optionalSockets": [
+        "melee.edge_secondary",
+        "trail.start",
+        "trail.end",
+        "carry.hip",
+        "carry.back"
+      ]
+    },
+    "melee_two_hand": {
+      "examples": [
+        "greatsword",
+        "spear",
+        "staff"
+      ],
+      "offhandPolicy": "required_or_optional_secondary_grip",
+      "requiredSockets": [
+        "grip.primary",
+        "grip.secondary",
+        "melee.tip"
+      ],
+      "optionalSockets": [
+        "melee.edge_primary",
+        "trail.start",
+        "trail.end",
+        "carry.back"
+      ]
+    },
+    "tool_or_prop": {
+      "examples": [
+        "torch",
+        "pickaxe",
+        "keycard",
+        "cup"
+      ],
+      "offhandPolicy": "profile_specific",
+      "requiredSockets": [
+        "grip.primary",
+        "use.origin"
+      ],
+      "optionalSockets": [
+        "grip.secondary",
+        "carry.hip",
+        "carry.back",
+        "interaction.hotspot"
+      ]
+    }
+  }
+}

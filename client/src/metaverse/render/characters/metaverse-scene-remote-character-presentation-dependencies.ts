@@ -11,6 +11,7 @@ import {
 import {
   captureHumanoidV2HeldWeaponPoseRuntime,
   createHeldWeaponPoseRuntime,
+  prepareHumanoidV2HeldWeaponPoseRuntime,
   restoreHumanoidV2HeldWeaponPoseRuntime,
   syncHumanoidV2HeldWeaponPose,
   type MetaverseHeldWeaponPoseRuntimeNodeResolvers
@@ -19,11 +20,9 @@ import {
   type MetaverseRemoteCharacterPresentationDependencies
 } from "./metaverse-scene-remote-character-presentations";
 import {
-  clearHumanoidV2PistolPoseWeights,
   resolveHeldCharacterAnimationVocabulary,
   syncCharacterAnimation,
-  syncCharacterPresentation,
-  syncHumanoidV2PistolPoseWeights
+  syncCharacterPresentation
 } from "./metaverse-scene-character-animation";
 import {
   resolveMetaverseMountedOccupancyPresentationStateSnapshot
@@ -65,8 +64,8 @@ export function createMetaverseSceneRemoteCharacterPresentationDependencies({
 > {
   return {
     applyMountedAnchorTransform: applyCharacterMountedAnchorTransform,
-    clearPistolPoseWeights: clearHumanoidV2PistolPoseWeights,
     captureHeldWeaponPoseRuntime: captureHumanoidV2HeldWeaponPoseRuntime,
+    prepareHeldWeaponPoseRuntime: prepareHumanoidV2HeldWeaponPoseRuntime,
     cloneAttachmentRuntime: (sourceAttachmentRuntime, characterRuntime) =>
       cloneMetaverseAttachmentProofRuntime(
         sourceAttachmentRuntime,
@@ -120,7 +119,6 @@ export function createMetaverseSceneRemoteCharacterPresentationDependencies({
           mountedOccupancy
         ),
         resolveMountedEnvironmentRuntime
-      ),
-    syncPistolPoseWeights: syncHumanoidV2PistolPoseWeights
+      )
   };
 }

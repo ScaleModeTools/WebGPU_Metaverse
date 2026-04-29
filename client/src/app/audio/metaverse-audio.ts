@@ -9,6 +9,10 @@ import {
   duckHuntAudioCueIds,
   duckHuntBackgroundTrackId
 } from "../../experiences/duck-hunt/audio";
+import {
+  metaverseCombatAudioContentCatalog,
+  metaverseCombatAudioCueIds
+} from "../../metaverse/audio";
 
 import {
   metaverseShellAudioContentCatalog,
@@ -23,6 +27,7 @@ export const metaverseAudioTrackIds = [
 
 export const metaverseAudioCueIds = [
   ...metaverseShellAudioCueIds,
+  ...metaverseCombatAudioCueIds,
   ...duckHuntAudioCueIds
 ] as const;
 
@@ -37,10 +42,12 @@ export type MetaverseAudioSession = BrowserAudioSession<
 export const metaverseAudioContentCatalog = {
   backgroundTracks: {
     ...metaverseShellAudioContentCatalog.backgroundTracks,
+    ...metaverseCombatAudioContentCatalog.backgroundTracks,
     ...duckHuntAudioContentCatalog.backgroundTracks
   },
   cues: {
     ...metaverseShellAudioContentCatalog.cues,
+    ...metaverseCombatAudioContentCatalog.cues,
     ...duckHuntAudioContentCatalog.cues
   }
 } as const satisfies AudioContentCatalog<

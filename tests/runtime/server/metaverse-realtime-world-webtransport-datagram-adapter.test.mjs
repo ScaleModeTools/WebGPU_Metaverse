@@ -8,6 +8,7 @@ import {
   createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram,
   createMetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram,
   createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram,
+  createMetaverseRoomId,
   createMetaverseSyncPlayerLookIntentCommand,
   createMetaverseSyncPlayerTraversalIntentCommand,
   createMilliseconds,
@@ -115,7 +116,8 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards driver-control 
         },
         controlSequence: 1,
         playerId
-      }
+      },
+      roomId: roomAssignment.roomId
     }),
     100
   );
@@ -145,6 +147,7 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter rejects datagrams after 
     createMetaversePlayerId("disposed-harbor-pilot"),
     "playerId"
   );
+  const roomId = requireValue(createMetaverseRoomId("disposed-room"), "roomId");
 
   session.dispose();
 
@@ -162,7 +165,8 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter rejects datagrams after 
             },
             controlSequence: 1,
             playerId
-          }
+          },
+          roomId
         }),
         0
       ),
@@ -229,7 +233,8 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards traversal-inten
           locomotionMode: "grounded",
         },
         playerId
-      })
+      }),
+      roomId: roomAssignment.roomId
     }),
     0
   );
@@ -247,6 +252,113 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards traversal-inten
   assert.equal(worldSnapshot.players[0]?.stateSequence, 2);
   assert.ok(activeBodySnapshot.position.y > 0);
   assert.ok(activeBodySnapshot.position.z < 24);
+});
+
+test("MetaverseRealtimeWorldWebTransportDatagramAdapter rejects datagrams for a stale room binding", () => {
+  const roomDirectory = new MetaverseRoomDirectory({
+    runtimeConfig: {
+      playerInactivityTimeoutMs: createMilliseconds(5_000),
+      tickIntervalMs: createMilliseconds(100)
+    }
+  });
+  const playerId = requireValue(
+    createMetaversePlayerId("stale-room-datagram-player"),
+    "playerId"
+  );
+  const username = requireValue(createUsername("Stale Room"), "username");
+  const firstRoomId = requireValue(createMetaverseRoomId("tdm-first"), "firstRoomId");
+  const secondRoomId = requireValue(createMetaverseRoomId("tdm-second"), "secondRoomId");
+  const adapter = new MetaverseRealtimeWorldWebTransportDatagramAdapter(
+    roomDirectory
+  );
+  const session = adapter.openSession();
+
+  roomDirectory.joinRoom(
+    firstRoomId,
+    {
+      bundleId: "deathmatch",
+      launchVariationId: "shell-team-deathmatch",
+      playerId
+    },
+    0
+  );
+  roomDirectory.acceptPresenceCommand(
+    firstRoomId,
+    createMetaverseJoinPresenceCommand({
+      characterId: "mesh2motion-humanoid-v1",
+      playerId,
+      pose: {
+        position: {
+          x: 0,
+          y: 1.62,
+          z: 24
+        },
+        stateSequence: 1,
+        yawRadians: 0
+      },
+      username
+    }),
+    0
+  );
+  roomDirectory.joinRoom(
+    secondRoomId,
+    {
+      bundleId: "deathmatch",
+      launchVariationId: "shell-team-deathmatch",
+      playerId
+    },
+    10
+  );
+  roomDirectory.acceptPresenceCommand(
+    secondRoomId,
+    createMetaverseJoinPresenceCommand({
+      characterId: "mesh2motion-humanoid-v1",
+      playerId,
+      pose: {
+        position: {
+          x: 0,
+          y: 1.62,
+          z: 24
+        },
+        stateSequence: 2,
+        yawRadians: 0
+      },
+      username
+    }),
+    10
+  );
+
+  assert.throws(
+    () =>
+      session.receiveClientDatagram(
+        createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram({
+          command: createMetaverseSyncPlayerTraversalIntentCommand({
+            intent: {
+              actionIntent: {
+                kind: "none",
+                pressed: false
+              },
+              bodyControl: {
+                boost: false,
+                moveAxis: 1,
+                strafeAxis: 0,
+                turnAxis: 0
+              },
+              facing: {
+                pitchRadians: 0,
+                yawRadians: 0
+              },
+              sequence: 3,
+              locomotionMode: "grounded"
+            },
+            playerId
+          }),
+          roomId: firstRoomId
+        }),
+        20
+      ),
+    /not bound to room/
+  );
 });
 
 test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards player-look datagrams into authoritative world state", () => {
@@ -303,7 +415,8 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter forwards player-look dat
         },
         lookSequence: 2,
         playerId
-      })
+      }),
+      roomId: roomAssignment.roomId
     }),
     50
   );
@@ -373,7 +486,8 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter binds the session to the
             },
             controlSequence: 1,
             playerId: firstPlayerId
-          }
+          },
+          roomId: roomAssignment.roomId
         }),
         0
       );
@@ -390,7 +504,8 @@ test("MetaverseRealtimeWorldWebTransportDatagramAdapter binds the session to the
               yawAxis: 0
             },
             playerId: secondPlayerId
-          }
+          },
+          roomId: roomAssignment.roomId
         }),
         0
       );

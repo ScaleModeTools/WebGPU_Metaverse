@@ -4,7 +4,10 @@ import {
   initializeCatalogBackedBackgroundMusic,
   playCatalogCue
 } from "../services/procedural-browser-audio";
-import type { AudioContentCatalog } from "../types/audio-catalog";
+import type {
+  AudioContentCatalog,
+  AudioCuePlaybackOptions
+} from "../types/audio-catalog";
 import type { AudioFoundationConfig } from "../types/audio-foundation";
 import type {
   AudioBusNodeLike,
@@ -96,11 +99,12 @@ function createDefaultBrowserAudioSessionDependencies<
         musicBus
       });
     },
-    playCue({ context, cueId, sfxBus }) {
+    playCue({ context, cueId, options, sfxBus }) {
       playCatalogCue({
         context,
         cueCatalog: contentCatalog.cues,
         cueId,
+        ...(options === undefined ? {} : { options }),
         sfxBus
       });
     }
@@ -176,7 +180,10 @@ export class BrowserAudioSession<
     return this.#unlockPromise;
   }
 
-  playCue(cueId: CueId): AudioSessionSnapshot<TrackId, CueId> {
+  playCue(
+    cueId: CueId,
+    options?: AudioCuePlaybackOptions
+  ): AudioSessionSnapshot<TrackId, CueId> {
     if (
       this.#audioContext === null ||
       this.#sfxGain === null ||
@@ -188,6 +195,7 @@ export class BrowserAudioSession<
     this.#dependencies.playCue({
       context: this.#audioContext,
       cueId,
+      ...(options === undefined ? {} : { options }),
       sfxBus: this.#sfxGain
     });
 

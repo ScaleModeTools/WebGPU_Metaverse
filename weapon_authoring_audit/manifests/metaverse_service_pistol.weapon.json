@@ -1,0 +1,592 @@
+{
+  "schemaVersion": "weapon-asset-manifest.v0.1",
+  "assetId": "metaverse_service_pistol",
+  "sourceFile": "metaverse-service-pistol.gltf",
+  "sourceHashSha1": "7b504286c4806f0d24f02b6f6742f62022f21188",
+  "family": "sidearm",
+  "poseProfileId": "sidearm.one_hand_optional_support",
+  "recommendedRuntimePack": "weapons.sidearms",
+  "coordinateSystem": {
+    "units": "meters",
+    "weaponForward": "+X",
+    "weaponUp": "+Y",
+    "weaponRight": "+Z",
+    "basisMarkers": {
+      "forward": "metaverse_service_pistol_forward_marker",
+      "up": "metaverse_service_pistol_up_marker"
+    }
+  },
+  "summary": {
+    "verdict": "Good proof asset: clean shape split and the right marker ideas, but too much behavior is encoded by ad-hoc names.",
+    "grade": "prototype_good_contract_needed",
+    "nodeCount": 18,
+    "meshCount": 6,
+    "materialCount": 0,
+    "animationCount": 0,
+    "skinCount": 0,
+    "socketOrMarkerCount": 11,
+    "bounds": {
+      "min": [
+        -0.001,
+        -0.143587,
+        -0.0175
+      ],
+      "max": [
+        0.315,
+        0.06,
+        0.0175
+      ],
+      "dimensions": [
+        0.316,
+        0.203587,
+        0.035
+      ]
+    },
+    "meshTriangles": 156,
+    "meshVertices": 90
+  },
+  "holdProfile": {
+    "primaryHandDefault": "right",
+    "allowedHands": [
+      "right",
+      "left"
+    ],
+    "dominantGripRole": "grip.primary",
+    "offhandPolicy": "optional_support_palm",
+    "poseProfileId": "sidearm.one_hand_optional_support",
+    "recommendedNeutralPose": "sidearm_hold_neutral",
+    "fingerPoseHints": {
+      "primary": "pistol_grip_trigger_index",
+      "secondary": "support_palm_optional"
+    },
+    "aimModel": "procedural_ads_pitch_yaw_from_socket",
+    "adsReference": "camera.ads_anchor",
+    "projectileOrigin": "projectile.muzzle"
+  },
+  "sockets": [
+    {
+      "role": "basis.forward",
+      "nodeName": "metaverse_service_pistol_forward_marker",
+      "position": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "basis.up",
+      "nodeName": "metaverse_service_pistol_up_marker",
+      "position": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "grip.primary.right_hint",
+      "nodeName": "metaverse_service_pistol_grip_hand_r_socket",
+      "position": [
+        0.079,
+        -0.048,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "trigger.index",
+      "nodeName": "metaverse_service_pistol_trigger_marker",
+      "position": [
+        0.082,
+        -0.061,
+        -0.008
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "grip.secondary.optional",
+      "nodeName": "metaverse_service_pistol_support_marker",
+      "position": [
+        0.018,
+        -0.137,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "sight.front",
+      "nodeName": "metaverse_service_pistol_front_sight_socket",
+      "position": [
+        0.286,
+        0.064,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "sight.rear",
+      "nodeName": "metaverse_service_pistol_rear_sight_socket",
+      "position": [
+        0.082,
+        0.061,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "module.optic",
+      "nodeName": "metaverse_service_pistol_optic_mount_socket",
+      "position": [
+        0.145,
+        0.061,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "projectile.muzzle",
+      "nodeName": "metaverse_service_pistol_muzzle_socket",
+      "position": [
+        0.312,
+        0.03,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "camera.ads_anchor",
+      "nodeName": "metaverse_service_pistol_ads_camera_anchor",
+      "position": [
+        0.016,
+        0.059,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    },
+    {
+      "role": "carry.back",
+      "nodeName": "metaverse_service_pistol_back_socket",
+      "position": [
+        0.072,
+        0.012,
+        0.0
+      ],
+      "rotationPolicy": "identity_in_current_build",
+      "orientationContract": "+X forward, +Y up, +Z right; production sockets should encode full local orientation"
+    }
+  ],
+  "meshes": [
+    {
+      "nodeName": "metaverse_service_pistol_slide",
+      "meshName": "metaverse_service_pistol_slide_geom",
+      "vertices": 8,
+      "triangles": 12,
+      "bounds": {
+        "min": [
+          0.07,
+          0.03,
+          -0.0175
+        ],
+        "max": [
+          0.27,
+          0.06,
+          0.0175
+        ],
+        "dimensions": [
+          0.2,
+          0.03,
+          0.035
+        ]
+      }
+    },
+    {
+      "nodeName": "metaverse_service_pistol_barrel",
+      "meshName": "metaverse_service_pistol_barrel_geom",
+      "vertices": 50,
+      "triangles": 96,
+      "bounds": {
+        "min": [
+          0.235,
+          0.0205,
+          -0.0095
+        ],
+        "max": [
+          0.315,
+          0.0395,
+          0.0095
+        ],
+        "dimensions": [
+          0.08,
+          0.019,
+          0.019
+        ]
+      }
+    },
+    {
+      "nodeName": "metaverse_service_pistol_frame",
+      "meshName": "metaverse_service_pistol_frame_geom",
+      "vertices": 8,
+      "triangles": 12,
+      "bounds": {
+        "min": [
+          0.02,
+          -0.023,
+          -0.015
+        ],
+        "max": [
+          0.2,
+          0.017,
+          0.015
+        ],
+        "dimensions": [
+          0.18,
+          0.04,
+          0.03
+        ]
+      }
+    },
+    {
+      "nodeName": "metaverse_service_pistol_grip",
+      "meshName": "metaverse_service_pistol_grip_geom",
+      "vertices": 8,
+      "triangles": 12,
+      "bounds": {
+        "min": [
+          0.005557,
+          -0.143587,
+          -0.014
+        ],
+        "max": [
+          0.074443,
+          -0.026413,
+          0.014
+        ],
+        "dimensions": [
+          0.068885,
+          0.117174,
+          0.028
+        ]
+      }
+    },
+    {
+      "nodeName": "metaverse_service_pistol_trigger_guard",
+      "meshName": "metaverse_service_pistol_trigger_guard_geom",
+      "vertices": 8,
+      "triangles": 12,
+      "bounds": {
+        "min": [
+          0.052,
+          -0.069,
+          -0.004
+        ],
+        "max": [
+          0.112,
+          -0.041,
+          0.004
+        ],
+        "dimensions": [
+          0.06,
+          0.028,
+          0.008
+        ]
+      }
+    },
+    {
+      "nodeName": "metaverse_service_pistol_mag_floorplate",
+      "meshName": "metaverse_service_pistol_mag_floorplate_geom",
+      "vertices": 8,
+      "triangles": 12,
+      "bounds": {
+        "min": [
+          -0.001,
+          -0.141,
+          -0.013
+        ],
+        "max": [
+          0.037,
+          -0.133,
+          0.013
+        ],
+        "dimensions": [
+          0.038,
+          0.008,
+          0.026
+        ]
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "index": 0,
+      "name": "metaverse_service_pistol_root",
+      "kind": "root",
+      "parentIndex": null,
+      "translation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "hasMesh": false
+    },
+    {
+      "index": 1,
+      "name": "metaverse_service_pistol_forward_marker",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "basis.forward"
+    },
+    {
+      "index": 2,
+      "name": "metaverse_service_pistol_up_marker",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "basis.up"
+    },
+    {
+      "index": 3,
+      "name": "metaverse_service_pistol_grip_hand_r_socket",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.079,
+        -0.048,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "grip.primary.right_hint"
+    },
+    {
+      "index": 4,
+      "name": "metaverse_service_pistol_trigger_marker",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.082,
+        -0.061,
+        -0.008
+      ],
+      "hasMesh": false,
+      "socketRole": "trigger.index"
+    },
+    {
+      "index": 5,
+      "name": "metaverse_service_pistol_support_marker",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.018,
+        -0.137,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "grip.secondary.optional"
+    },
+    {
+      "index": 6,
+      "name": "metaverse_service_pistol_front_sight_socket",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.286,
+        0.064,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "sight.front"
+    },
+    {
+      "index": 7,
+      "name": "metaverse_service_pistol_rear_sight_socket",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.082,
+        0.061,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "sight.rear"
+    },
+    {
+      "index": 8,
+      "name": "metaverse_service_pistol_optic_mount_socket",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.145,
+        0.061,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "module.optic"
+    },
+    {
+      "index": 9,
+      "name": "metaverse_service_pistol_muzzle_socket",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.312,
+        0.03,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "projectile.muzzle"
+    },
+    {
+      "index": 10,
+      "name": "metaverse_service_pistol_ads_camera_anchor",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.016,
+        0.059,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "camera.ads_anchor"
+    },
+    {
+      "index": 11,
+      "name": "metaverse_service_pistol_back_socket",
+      "kind": "socket_or_marker",
+      "parentIndex": 0,
+      "translation": [
+        0.072,
+        0.012,
+        0.0
+      ],
+      "hasMesh": false,
+      "socketRole": "carry.back"
+    },
+    {
+      "index": 12,
+      "name": "metaverse_service_pistol_slide",
+      "kind": "mesh",
+      "parentIndex": 0,
+      "translation": [
+        0.17,
+        0.045,
+        0.0
+      ],
+      "hasMesh": true
+    },
+    {
+      "index": 13,
+      "name": "metaverse_service_pistol_barrel",
+      "kind": "mesh",
+      "parentIndex": 0,
+      "translation": [
+        0.275,
+        0.03,
+        0.0
+      ],
+      "hasMesh": true
+    },
+    {
+      "index": 14,
+      "name": "metaverse_service_pistol_frame",
+      "kind": "mesh",
+      "parentIndex": 0,
+      "translation": [
+        0.11,
+        -0.003,
+        0.0
+      ],
+      "hasMesh": true
+    },
+    {
+      "index": 15,
+      "name": "metaverse_service_pistol_grip",
+      "kind": "mesh",
+      "parentIndex": 0,
+      "translation": [
+        0.04,
+        -0.085,
+        0.0
+      ],
+      "hasMesh": true
+    },
+    {
+      "index": 16,
+      "name": "metaverse_service_pistol_trigger_guard",
+      "kind": "mesh",
+      "parentIndex": 0,
+      "translation": [
+        0.082,
+        -0.055,
+        0.0
+      ],
+      "hasMesh": true
+    },
+    {
+      "index": 17,
+      "name": "metaverse_service_pistol_mag_floorplate",
+      "kind": "mesh",
+      "parentIndex": 0,
+      "translation": [
+        0.018,
+        -0.137,
+        0.0
+      ],
+      "hasMesh": true
+    }
+  ],
+  "validation": {
+    "passes": [
+      "No accidental animation clips in the weapon asset.",
+      "No accidental skinning/skeleton data in the weapon asset.",
+      "Vertex colors are present, useful for prototype color blocks and cheap unlit rendering.",
+      "Node names are unique.",
+      "Projectile muzzle socket is present.",
+      "ADS camera anchor is present."
+    ],
+    "warnings": [
+      "No material table; current build relies on vertex colors only.",
+      "No NORMAL attributes found; shading will rely on importer/engine fallback or flat/unlit rendering.",
+      "No UVs found; fine for vertex-color prototypes, limiting for production skins/camos/decals.",
+      "All sockets/parts are direct children of the root; this is simple, but sockets on animated modules should be parented to the moving part.",
+      "Socket nodes currently provide positions but no distinct orientation frames.",
+      "Primary grip socket name is right-hand-specific; this makes left-hand/dual-wield support harder.",
+      "Pistol support point is a generic support marker near the magazine floor; off-hand semantics should be explicit.",
+      "Geometry is embedded as many tiny base64 buffers in a JSON .gltf; usable, but not ideal for production/runtime packs."
+    ],
+    "recommendedChanges": [
+      "Add stable named PBR/unlit materials even if the art stays simple, so runtime and editor tooling can address parts by material.",
+      "Export normals for production weapons; add tangents if normal maps are added.",
+      "Parent moving-part sockets to the moving part they belong to, such as slide/ejection/magazine/charging-handle sockets.",
+      "Author sockets as full transforms, not only points; grip, support, optic, holster, and melee sockets need meaningful rotation axes.",
+      "Rename/export canonical `grip.primary` and use manifest fields for preferred/allowed hands.",
+      "Represent pistol off-hand as `supportPolicy: optional_palm_overlay`, not as a hard support grip.",
+      "Publish runtime weapons as .glb or as .gltf + a single .bin; keep source scenes separate."
+    ],
+    "artistNotes": [
+      "Keep slide/barrel/frame/grip separation; add magazine/ejection sockets if reload/fire cycles matter.",
+      "Treat support as optional palm overlay rather than a true foregrip.",
+      "Remove hand side from the canonical grip socket name; express handedness in manifest."
+    ]
+  }
+}

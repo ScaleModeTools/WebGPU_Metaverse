@@ -77,6 +77,8 @@ test("createMetaverseScene mounts remote metaverse presence avatars from shared 
     0,
     0,
     null,
+    null,
+    null,
     [remoteCharacterPresentation],
     null
   );
@@ -109,6 +111,8 @@ test("createMetaverseScene mounts remote metaverse presence avatars from shared 
     null,
     0,
     0.016,
+    null,
+    null,
     null,
     [remoteCharacterPresentation],
     null

@@ -167,10 +167,8 @@ export class MetaverseRemoteWorldPresentationState {
         this.#nextPlayerSnapshotsByPlayerId.get(basePlayer.playerId) ?? null;
       const sampledDiscretePlayer =
         nextPlayer !== null && alpha >= 0.5 ? nextPlayer : basePlayer;
+      const sampledPlayerAlive = sampledDiscretePlayer.combat?.alive ?? true;
 
-      if (sampledDiscretePlayer.combat?.alive === false) {
-        continue;
-      }
       const remoteCharacterRootBasePlayer =
         remoteCharacterRootBaseSnapshot.players.find(
           (playerSnapshot) => playerSnapshot.playerId === basePlayer.playerId
@@ -211,6 +209,7 @@ export class MetaverseRemoteWorldPresentationState {
 
       this.#remoteCharacterPresentations.push(remoteCharacterPresentationSnapshot);
       if (
+        sampledPlayerAlive &&
         shouldTreatMetaversePlayerPoseAsTraversalBlocker(
           sampledDiscretePlayer.locomotionMode,
           sampledDiscretePlayer.mountedOccupancy

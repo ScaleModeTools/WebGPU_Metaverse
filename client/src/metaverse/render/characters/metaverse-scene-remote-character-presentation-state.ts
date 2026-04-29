@@ -1,4 +1,4 @@
-import { type Scene } from "three/webgpu";
+import { Quaternion, Vector3, type Scene } from "three/webgpu";
 
 import type {
   MetaverseRemoteCharacterPresentationDependencies,
@@ -7,6 +7,9 @@ import type {
 import {
   syncRemoteCharacterPresentations
 } from "./metaverse-scene-remote-character-presentations";
+import {
+  triggerCharacterCombatPresentationEvent
+} from "./metaverse-scene-character-animation";
 import type {
   MetaverseSceneCharacterProofRuntime,
   MetaverseSceneInteractivePresentationState
@@ -21,6 +24,9 @@ import type { MetaverseAttachmentProofRuntime } from "../attachments/metaverse-s
 
 import type {
   MetaverseRemoteCharacterPresentationSnapshot,
+  MetaverseCombatPresentationEvent,
+  MetaverseRenderedWeaponMuzzleFrame,
+  MetaverseRenderedWeaponMuzzleQuery,
   MetaverseRuntimeConfig
 } from "../../types/metaverse-runtime";
 
@@ -31,7 +37,7 @@ interface MetaverseSceneRemoteCharacterPresentationStateDependencies {
   >;
   readonly interactivePresentationState: Pick<
     MetaverseSceneInteractivePresentationState,
-    "attachmentProofRuntime" | "characterProofRuntime"
+    "attachmentProofRuntimesByAttachmentId" | "characterProofRuntime"
   >;
   readonly remoteCharacterPresentationDependencies: MetaverseRemoteCharacterPresentationDependencies<
     MetaverseSceneCharacterProofRuntime,
@@ -44,6 +50,9 @@ interface MetaverseSceneRemoteCharacterPresentationStateDependencies {
 
 export class MetaverseSceneRemoteCharacterPresentationState {
   readonly #dependencies: MetaverseSceneRemoteCharacterPresentationStateDependencies;
+  readonly #muzzleForwardWorldScratch = new Vector3();
+  readonly #muzzleWorldPositionScratch = new Vector3();
+  readonly #muzzleWorldQuaternionScratch = new Quaternion();
   readonly #remoteCharacterRuntimesByPlayerId = new Map<
     string,
     MetaverseRemoteCharacterPresentationRuntimeState<
@@ -69,6 +78,74 @@ export class MetaverseSceneRemoteCharacterPresentationState {
     this.#remoteCharacterRuntimesByPlayerId.clear();
   }
 
+  triggerCombatPresentationEvent(
+    event: MetaverseCombatPresentationEvent
+  ): void {
+    const remoteCharacterRuntime = this.#remoteCharacterRuntimesByPlayerId.get(
+      event.playerId
+    );
+
+    if (remoteCharacterRuntime === undefined) {
+      return;
+    }
+
+    triggerCharacterCombatPresentationEvent(
+      remoteCharacterRuntime.characterRuntime,
+      event
+    );
+  }
+
+  readRenderedWeaponMuzzleFrame(
+    query: MetaverseRenderedWeaponMuzzleQuery,
+    sampledAtRenderFrame: number
+  ): MetaverseRenderedWeaponMuzzleFrame | null {
+    const remoteCharacterRuntime = this.#remoteCharacterRuntimesByPlayerId.get(
+      query.playerId
+    );
+    const attachmentRuntime =
+      remoteCharacterRuntime?.attachmentRuntime ?? null;
+
+    if (
+      attachmentRuntime === null ||
+      attachmentRuntime.attachmentId !== query.weaponId
+    ) {
+      return null;
+    }
+
+    const muzzleSocketNode =
+      attachmentRuntime.socketNodesByRole.get(query.role) ?? null;
+
+    if (muzzleSocketNode === null) {
+      return null;
+    }
+
+    muzzleSocketNode.updateWorldMatrix(true, false);
+    muzzleSocketNode.getWorldPosition(this.#muzzleWorldPositionScratch);
+    muzzleSocketNode.getWorldQuaternion(this.#muzzleWorldQuaternionScratch);
+    this.#muzzleForwardWorldScratch
+      .set(1, 0, 0)
+      .applyQuaternion(this.#muzzleWorldQuaternionScratch)
+      .normalize();
+
+    return Object.freeze({
+      forwardWorld: Object.freeze({
+        x: this.#muzzleForwardWorldScratch.x,
+        y: this.#muzzleForwardWorldScratch.y,
+        z: this.#muzzleForwardWorldScratch.z
+      }),
+      originWorld: Object.freeze({
+        x: this.#muzzleWorldPositionScratch.x,
+        y: this.#muzzleWorldPositionScratch.y,
+        z: this.#muzzleWorldPositionScratch.z
+      }),
+      playerId: query.playerId,
+      sampledAtRenderFrame,
+      source: "rendered-projectile-muzzle" as const,
+      weaponId: query.weaponId,
+      weaponInstanceId: query.weaponInstanceId ?? null
+    });
+  }
+
   syncPresentation(
     remoteCharacterPresentations: readonly MetaverseRemoteCharacterPresentationSnapshot[],
     deltaSeconds: number
@@ -76,7 +153,8 @@ export class MetaverseSceneRemoteCharacterPresentationState {
     syncRemoteCharacterPresentations(
       this.#dependencies.scene,
       this.#dependencies.interactivePresentationState.characterProofRuntime,
-      this.#dependencies.interactivePresentationState.attachmentProofRuntime,
+      this.#dependencies.interactivePresentationState
+        .attachmentProofRuntimesByAttachmentId,
       this.#dependencies.config,
       this.#remoteCharacterRuntimesByPlayerId,
       remoteCharacterPresentations,

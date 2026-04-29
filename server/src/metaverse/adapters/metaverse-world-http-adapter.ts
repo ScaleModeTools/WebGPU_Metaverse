@@ -11,7 +11,11 @@ import {
   type MetaversePresenceMountedOccupancySnapshotInput,
   type MetaversePresenceMountedOccupantRoleId
 } from "@webgpu-metaverse/shared/metaverse/presence";
-import { createMetaverseRoomId } from "@webgpu-metaverse/shared";
+import {
+  createMetaverseRoomId,
+  metaverseWeaponSlotIds,
+  type MetaverseWeaponSlotId
+} from "@webgpu-metaverse/shared";
 import {
   createMetaverseSyncDriverVehicleControlCommand,
   createMetaverseSyncPlayerLookIntentCommand,
@@ -87,6 +91,23 @@ function readBooleanField(value: unknown, fieldName: string): boolean {
   }
 
   return value;
+}
+
+function readOptionalVector3Field(
+  value: unknown,
+  fieldName: string
+): { readonly x: number; readonly y: number; readonly z: number } | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  const vector = readRecordField(value, fieldName);
+
+  return {
+    x: readNumberField(vector.x, `${fieldName}.x`),
+    y: readNumberField(vector.y, `${fieldName}.y`),
+    z: readNumberField(vector.z, `${fieldName}.z`)
+  };
 }
 
 function readRecordField(
@@ -473,10 +494,84 @@ function parseWorldPlayerWeaponState(weaponStateBody: unknown) {
     throw new Error(`Unsupported weaponState.aimMode: ${aimMode}`);
   }
 
+  const activeSlotId =
+    weaponState.activeSlotId === undefined || weaponState.activeSlotId === null
+      ? undefined
+      : readStringField(weaponState.activeSlotId, "weaponState.activeSlotId");
+
+  if (
+    activeSlotId !== undefined &&
+    !metaverseWeaponSlotIds.includes(activeSlotId as MetaverseWeaponSlotId)
+  ) {
+    throw new Error(`Unsupported weaponState.activeSlotId: ${activeSlotId}`);
+  }
+
+  const slots =
+    weaponState.slots === undefined
+      ? undefined
+      : (() => {
+          if (!Array.isArray(weaponState.slots)) {
+            throw new Error("Expected array field: weaponState.slots");
+          }
+
+          return weaponState.slots.map((slotBody, slotIndex) => {
+            const slot = readRecordField(
+              slotBody,
+              `weaponState.slots[${slotIndex}]`
+            );
+            const slotId = readStringField(
+              slot.slotId,
+              `weaponState.slots[${slotIndex}].slotId`
+            );
+
+            if (!metaverseWeaponSlotIds.includes(slotId as MetaverseWeaponSlotId)) {
+              throw new Error(
+                `Unsupported weaponState.slots[${slotIndex}].slotId: ${slotId}`
+              );
+            }
+
+            return {
+              ...(slot.attachmentId === undefined
+                ? {}
+                : {
+                    attachmentId: readStringField(
+                      slot.attachmentId,
+                      `weaponState.slots[${slotIndex}].attachmentId`
+                    )
+                  }),
+              ...(slot.equipped === undefined
+                ? {}
+                : {
+                    equipped: readBooleanField(
+                      slot.equipped,
+                      `weaponState.slots[${slotIndex}].equipped`
+                    )
+                  }),
+              slotId: slotId as MetaverseWeaponSlotId,
+              weaponId: readStringField(
+                slot.weaponId,
+                `weaponState.slots[${slotIndex}].weaponId`
+              ),
+              ...(slot.weaponInstanceId === undefined
+                ? {}
+                : {
+                    weaponInstanceId: readStringField(
+                      slot.weaponInstanceId,
+                      `weaponState.slots[${slotIndex}].weaponInstanceId`
+                    )
+                  })
+            };
+          });
+        })();
+
   return {
+    ...(activeSlotId === undefined
+      ? {}
+      : { activeSlotId: activeSlotId as MetaverseWeaponSlotId }),
     ...(aimMode === undefined
       ? {}
       : { aimMode: aimMode as MetaverseRealtimePlayerWeaponAimModeId }),
+    ...(slots === undefined ? {} : { slots }),
     weaponId: readStringField(weaponState.weaponId, "weaponState.weaponId")
   };
 }
@@ -516,6 +611,16 @@ function parseWorldCommand(
                     .pitchRadians,
                   "action.aimSnapshot.pitchRadians"
                 ),
+                rayForwardWorld: readOptionalVector3Field(
+                  readRecordField(action.aimSnapshot, "action.aimSnapshot")
+                    .rayForwardWorld,
+                  "action.aimSnapshot.rayForwardWorld"
+                ),
+                rayOriginWorld: readOptionalVector3Field(
+                  readRecordField(action.aimSnapshot, "action.aimSnapshot")
+                    .rayOriginWorld,
+                  "action.aimSnapshot.rayOriginWorld"
+                ),
                 yawRadians: readNumberField(
                   readRecordField(action.aimSnapshot, "action.aimSnapshot")
                     .yawRadians,
@@ -546,6 +651,48 @@ function parseWorldCommand(
             },
             playerId: resolvePlayerId(readStringField(body.playerId, "playerId"))
           });
+        case "switch-active-weapon-slot": {
+          const requestedActiveSlotId = readStringField(
+            action.requestedActiveSlotId,
+            "action.requestedActiveSlotId"
+          );
+
+          if (
+            !metaverseWeaponSlotIds.includes(
+              requestedActiveSlotId as MetaverseWeaponSlotId
+            )
+          ) {
+            throw new Error(
+              `Unsupported action.requestedActiveSlotId: ${requestedActiveSlotId}`
+            );
+          }
+
+          return createMetaverseIssuePlayerActionCommand({
+            action: {
+              actionSequence: readNumberField(
+                action.actionSequence,
+                "action.actionSequence"
+              ),
+              ...(action.intendedWeaponInstanceId === undefined ||
+              action.intendedWeaponInstanceId === null
+                ? {}
+                : {
+                    intendedWeaponInstanceId: readStringField(
+                      action.intendedWeaponInstanceId,
+                      "action.intendedWeaponInstanceId"
+                    )
+                  }),
+              issuedAtAuthoritativeTimeMs: readNumberField(
+                action.issuedAtAuthoritativeTimeMs,
+                "action.issuedAtAuthoritativeTimeMs"
+              ),
+              kind: "switch-active-weapon-slot",
+              requestedActiveSlotId:
+                requestedActiveSlotId as MetaverseWeaponSlotId
+            },
+            playerId: resolvePlayerId(readStringField(body.playerId, "playerId"))
+          });
+        }
         default:
           throw new Error(`Unsupported action.kind: ${actionKind}`);
       }
@@ -584,8 +731,30 @@ function parseWorldCommand(
         playerId: resolvePlayerId(readStringField(body.playerId, "playerId"))
       });
     case "sync-player-weapon-state":
+      if (
+        body.requestedActiveSlotId !== undefined &&
+        body.requestedActiveSlotId !== null &&
+        !metaverseWeaponSlotIds.includes(
+          readStringField(body.requestedActiveSlotId, "requestedActiveSlotId") as
+            MetaverseWeaponSlotId
+        )
+      ) {
+        throw new Error(
+          `Unsupported requestedActiveSlotId: ${body.requestedActiveSlotId}`
+        );
+      }
+
       return createMetaverseSyncPlayerWeaponStateCommand({
         playerId: resolvePlayerId(readStringField(body.playerId, "playerId")),
+        ...(body.requestedActiveSlotId === undefined ||
+        body.requestedActiveSlotId === null
+          ? {}
+          : {
+              requestedActiveSlotId: readStringField(
+                body.requestedActiveSlotId,
+                "requestedActiveSlotId"
+              ) as MetaverseWeaponSlotId
+            }),
         weaponSequence: readNumberField(body.weaponSequence, "weaponSequence"),
         weaponState: parseWorldPlayerWeaponState(body.weaponState)
       });

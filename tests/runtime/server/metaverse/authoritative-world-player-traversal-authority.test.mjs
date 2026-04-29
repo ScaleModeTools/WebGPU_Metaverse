@@ -6,6 +6,7 @@ import {
   createMetaversePlayerId,
   createMetaverseSyncDriverVehicleControlCommand,
   createMetaverseSyncPlayerLookIntentCommand,
+  createMetaverseSyncPlayerWeaponStateCommand,
   createUsername
 } from "@webgpu-metaverse/shared";
 
@@ -60,6 +61,64 @@ test("MetaverseAuthoritativeWorldRuntime stores explicit unmounted traversal fac
   assert.equal(worldSnapshot.players[0]?.look.pitchRadians, -0.35);
   assert.equal(worldSnapshot.players[0]?.look.yawRadians, Math.PI * 0.75);
   assert.equal(activeBodySnapshot.yawRadians, Math.PI * 0.25);
+});
+
+test("MetaverseAuthoritativeWorldRuntime accepts armed unmounted look intent for weapon aim", () => {
+  const runtime = createAuthoritativeRuntime();
+  const playerId = requireValue(
+    createMetaversePlayerId("armed-look-harbor-pilot"),
+    "playerId"
+  );
+  const username = requireValue(createUsername("Armed Look Pilot"), "username");
+
+  joinSurfacePlayer(runtime, playerId, username, {
+    yawRadians: Math.PI * 0.2
+  });
+
+  runtime.acceptWorldCommand(
+    createMetaverseSyncPlayerLookIntentCommand({
+      lookIntent: {
+        pitchRadians: -0.45,
+        yawRadians: Math.PI * 0.55
+      },
+      lookSequence: 1,
+      playerId
+    }),
+    100
+  );
+
+  let worldSnapshot = runtime.readWorldSnapshot(100, playerId);
+
+  assert.equal(worldSnapshot.players[0]?.look.pitchRadians, 0);
+  assert.equal(worldSnapshot.players[0]?.look.yawRadians, Math.PI * 0.2);
+
+  runtime.acceptWorldCommand(
+    createMetaverseSyncPlayerWeaponStateCommand({
+      playerId,
+      weaponState: {
+        aimMode: "hip-fire",
+        weaponId: "metaverse-service-pistol-v2"
+      },
+      weaponSequence: 1
+    }),
+    110
+  );
+  runtime.acceptWorldCommand(
+    createMetaverseSyncPlayerLookIntentCommand({
+      lookIntent: {
+        pitchRadians: -0.45,
+        yawRadians: Math.PI * 0.55
+      },
+      lookSequence: 2,
+      playerId
+    }),
+    120
+  );
+
+  worldSnapshot = runtime.readWorldSnapshot(120, playerId);
+
+  assert.equal(worldSnapshot.players[0]?.look.pitchRadians, -0.45);
+  assert.equal(worldSnapshot.players[0]?.look.yawRadians, Math.PI * 0.55);
 });
 
 test("MetaverseAuthoritativeWorldRuntime aligns unmounted authoritative body yaw to explicit traversal facing", () => {
@@ -263,10 +322,10 @@ test("MetaverseAuthoritativeWorldRuntime schedules bundled traversal samples acr
   const firstTickActiveBodySnapshot =
     readPrimaryPlayerActiveBodySnapshot(firstTickSnapshot);
 
-  assert.equal(firstTickSnapshot.observerPlayer?.lastProcessedTraversalSequence, 0);
+  assert.equal(firstTickSnapshot.observerPlayer?.lastProcessedTraversalSequence, 1);
   assert.equal(
     firstTickSnapshot.observerPlayer?.lastProcessedTraversalSequence,
-    0
+    1
   );
   assert.ok(
     Math.abs(firstTickActiveBodySnapshot.position.x - preTickActiveBodySnapshot.position.x) <
@@ -298,7 +357,7 @@ test("MetaverseAuthoritativeWorldRuntime schedules bundled traversal samples acr
   assert.equal(finalTickSnapshot.observerPlayer?.lastProcessedTraversalSequence, 3);
   assert.equal(
     finalTickSnapshot.observerPlayer?.lastProcessedTraversalSequence,
-    1
+    3
   );
   assert.ok(
     finalTickActiveBodySnapshot.position.x >
@@ -744,7 +803,7 @@ test("MetaverseAuthoritativeWorldRuntime activates traversal intent received exa
 
   assert.equal(
     boundarySnapshot.observerPlayer?.lastProcessedTraversalSequence,
-    0
+    1
   );
 
   runtime.advanceToTime(200);

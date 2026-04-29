@@ -3,12 +3,16 @@ import type {
   MountedVehicleControlRoutingPolicyId,
   MountedVehicleLookLimitPolicyId,
   MountedVehicleOccupancyAnimationId,
-  MountedVehicleSeatRoleId
+  MountedVehicleSeatRoleId,
 } from "../vehicles";
 import type {
   MetaverseCharacterAnimationVocabularyId,
-  MetaverseVector3Snapshot
+  MetaverseVector3Snapshot,
 } from "./presentation";
+import type {
+  HeldObjectHoldProfileDescriptor,
+  HeldObjectSocketRoleId,
+} from "@/assets/types/held-object-authoring-manifest";
 
 export interface MetaverseCharacterAnimationClipProofConfig {
   readonly clipName: string;
@@ -19,20 +23,21 @@ export interface MetaverseCharacterAnimationClipProofConfig {
 
 export type MetaverseCharacterAnimationClipLoopMode = "once" | "repeat";
 
-export const metaverseHumanoidV2PistolPoseIds = [
-  "down",
-  "neutral",
-  "up"
+export const metaverseCharacterCombatAnimationActionIds = [
+  "hit",
+  "death",
 ] as const;
 
-export type MetaverseHumanoidV2PistolPoseId =
-  (typeof metaverseHumanoidV2PistolPoseIds)[number];
+export type MetaverseCharacterCombatAnimationActionId =
+  (typeof metaverseCharacterCombatAnimationActionIds)[number];
 
-export interface MetaverseHumanoidV2PistolPoseProofConfig {
-  readonly clipNamesByPoseId: Readonly<
-    Record<MetaverseHumanoidV2PistolPoseId, string>
+export interface MetaverseCharacterCombatAnimationProofConfig {
+  readonly clipNamesByActionId: Readonly<
+    Record<MetaverseCharacterCombatAnimationActionId, string>
   >;
-  readonly sourcePath: string;
+  readonly sourcePathByActionId: Readonly<
+    Record<MetaverseCharacterCombatAnimationActionId, string>
+  >;
 }
 
 export const metaverseCharacterSkeletonIds = ["humanoid_v2"] as const;
@@ -45,7 +50,7 @@ export const metaverseCanonicalSocketNames = [
   "hand_l_socket",
   "head_socket",
   "hip_socket",
-  "seat_socket"
+  "seat_socket",
 ] as const;
 
 export type MetaverseCanonicalSocketName =
@@ -54,9 +59,7 @@ export type MetaverseCanonicalSocketName =
 export interface MetaverseCharacterProofConfig {
   readonly animationClips: readonly MetaverseCharacterAnimationClipProofConfig[];
   readonly characterId: string;
-  readonly humanoidV2PistolPoseProofConfig?:
-    | MetaverseHumanoidV2PistolPoseProofConfig
-    | null;
+  readonly combatAnimationProofConfig?: MetaverseCharacterCombatAnimationProofConfig | null;
   readonly label: string;
   readonly modelPath: string;
   readonly skeletonId: MetaverseCharacterSkeletonId;
@@ -70,7 +73,7 @@ export const metaverseSyntheticSocketNames = [
   "palm_l_socket",
   "palm_r_socket",
   "support_l_socket",
-  "support_r_socket"
+  "support_r_socket",
 ] as const;
 
 export type MetaverseSyntheticSocketName =
@@ -81,15 +84,9 @@ export type MetaverseAttachmentSocketName =
   | MetaverseSyntheticSocketName;
 
 export interface MetaverseAttachmentMountProofConfig {
-  readonly adsCameraAnchorNodeName?: string | null;
   readonly adsCameraTargetOffset?: MetaverseAttachmentAimBasisOffsetSnapshot | null;
-  readonly attachmentSocketNodeName: string;
-  readonly forwardReferenceNodeName?: string | null;
-  readonly offHandSupportPointId?: string | null;
+  readonly attachmentSocketRole: HeldObjectSocketRoleId;
   readonly socketName: MetaverseAttachmentSocketName;
-  readonly supportMarkerNodeName?: string | null;
-  readonly triggerMarkerNodeName?: string | null;
-  readonly upReferenceNodeName?: string | null;
 }
 
 export interface MetaverseAttachmentAimBasisOffsetSnapshot {
@@ -101,22 +98,18 @@ export interface MetaverseAttachmentAimBasisOffsetSnapshot {
 export interface MetaverseAttachmentProofConfig {
   readonly attachmentId: string;
   readonly heldMount: MetaverseAttachmentMountProofConfig;
+  readonly holdProfile: HeldObjectHoldProfileDescriptor;
   readonly label: string;
   readonly modelPath: string;
   readonly modules: readonly MetaverseAttachmentModuleProofConfig[];
   readonly mountedHolsterMount: MetaverseAttachmentMountProofConfig | null;
-  readonly supportPoints: readonly {
-    readonly authoringNodeName: string | null;
-    readonly localPosition: MetaverseVector3Snapshot;
-    readonly supportPointId: string;
-  }[] | null;
 }
 
 export interface MetaverseAttachmentModuleProofConfig {
   readonly label: string;
   readonly modelPath: string;
   readonly moduleId: string;
-  readonly socketNodeName: string;
+  readonly socketRole: HeldObjectSocketRoleId;
 }
 
 export interface MetaverseEnvironmentColliderProofConfig {
@@ -134,8 +127,7 @@ export interface MetaverseEnvironmentDynamicBodyProofConfig {
   readonly lockRotations: boolean;
 }
 
-export interface MetaverseEnvironmentPhysicsColliderProofConfig
-  extends MetaverseEnvironmentColliderProofConfig {
+export interface MetaverseEnvironmentPhysicsColliderProofConfig extends MetaverseEnvironmentColliderProofConfig {
   readonly traversalAffordance: "blocker" | "support";
 }
 
@@ -175,7 +167,7 @@ import type {
   MetaverseMapBundleSemanticMaterialId,
   MetaverseMapBundleSemanticStructureKind,
   MetaverseWorldPlacedSurfaceColliderSnapshot,
-  MetaverseWorldSurfaceScaleSnapshot
+  MetaverseWorldSurfaceScaleSnapshot,
 } from "@webgpu-metaverse/shared/metaverse/world";
 
 export interface MetaverseEnvironmentPlacementProofConfig {
@@ -204,8 +196,7 @@ export interface MetaverseEnvironmentTerrainMaterialLayerProofConfig {
 
 export interface MetaverseEnvironmentTerrainPatchProofConfig {
   readonly heightSamples: readonly number[];
-  readonly materialLayers:
-    readonly MetaverseEnvironmentTerrainMaterialLayerProofConfig[];
+  readonly materialLayers: readonly MetaverseEnvironmentTerrainMaterialLayerProofConfig[];
   readonly origin: MetaverseVector3Snapshot;
   readonly rotationYRadians: number;
   readonly sampleCountX: number;
@@ -290,12 +281,9 @@ export interface MetaverseEnvironmentProofConfig {
   readonly assets: readonly MetaverseEnvironmentAssetProofConfig[];
   readonly gameplayVolumes: readonly MetaverseEnvironmentGameplayVolumeProofConfig[];
   readonly lights: readonly MetaverseEnvironmentLightProofConfig[];
-  readonly materialDefinitions:
-    readonly MetaverseMapBundleSemanticMaterialDefinitionSnapshot[];
-  readonly proceduralStructures:
-    readonly MetaverseEnvironmentProceduralStructureProofConfig[];
-  readonly surfaceColliders:
-    readonly MetaverseWorldPlacedSurfaceColliderSnapshot[];
+  readonly materialDefinitions: readonly MetaverseMapBundleSemanticMaterialDefinitionSnapshot[];
+  readonly proceduralStructures: readonly MetaverseEnvironmentProceduralStructureProofConfig[];
+  readonly surfaceColliders: readonly MetaverseWorldPlacedSurfaceColliderSnapshot[];
   readonly surfaceMeshes: readonly MetaverseEnvironmentSurfaceMeshProofConfig[];
   readonly terrainPatches: readonly MetaverseEnvironmentTerrainPatchProofConfig[];
 }

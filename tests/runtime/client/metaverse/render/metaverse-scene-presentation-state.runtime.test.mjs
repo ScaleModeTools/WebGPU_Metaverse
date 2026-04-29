@@ -66,17 +66,23 @@ test("MetaverseScenePresentationState resets presentation state and syncs a null
     },
     localCharacterPresentationState: {
       syncPresentation(
+        nowMs,
         snapshot,
         deltaSeconds,
         nextCharacterPresentation,
-        nextMountedEnvironment
+        nextMountedEnvironment,
+        nextWeaponState,
+        nextWeaponAdsBlend
       ) {
         calls.push([
           "sync-local-character-presentation",
+          nowMs,
           snapshot,
           deltaSeconds,
           nextCharacterPresentation,
-          nextMountedEnvironment
+          nextMountedEnvironment,
+          nextWeaponState,
+          nextWeaponAdsBlend
         ]);
         return snapshot;
       }
@@ -104,6 +110,8 @@ test("MetaverseScenePresentationState resets presentation state and syncs a null
     123,
     1 / 60,
     null,
+    null,
+    null,
     [],
     mountedEnvironment
   );
@@ -112,10 +120,13 @@ test("MetaverseScenePresentationState resets presentation state and syncs a null
   assert.deepEqual(calls, [
     [
       "sync-local-character-presentation",
+      123,
       cameraSnapshot,
       1 / 60,
       null,
-      mountedPresentationSnapshot
+      mountedPresentationSnapshot,
+      null,
+      null
     ],
     ["sync-camera-presentation", cameraSnapshot, 123],
     ["sync-remote-character-presentation", [], 1 / 60],

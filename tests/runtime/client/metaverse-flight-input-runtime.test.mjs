@@ -131,6 +131,7 @@ test("MetaverseFlightInputRuntime owns browser flight input listeners and transi
       primaryActionPressedCount: 1,
       secondaryAction: false,
       strafeAxis: 1,
+      weaponSwitchPressedCount: 0,
       yawAxis: 1
     });
     nowMs += 1000 / 60;
@@ -143,6 +144,7 @@ test("MetaverseFlightInputRuntime owns browser flight input listeners and transi
       primaryActionPressedCount: 0,
       secondaryAction: false,
       strafeAxis: 1,
+      weaponSwitchPressedCount: 0,
       yawAxis: 0
     });
 
@@ -162,6 +164,7 @@ test("MetaverseFlightInputRuntime owns browser flight input listeners and transi
       primaryActionPressedCount: 0,
       secondaryAction: false,
       strafeAxis: 1,
+      weaponSwitchPressedCount: 0,
       yawAxis: 0
     });
 
@@ -189,6 +192,7 @@ test("MetaverseFlightInputRuntime owns browser flight input listeners and transi
       primaryActionPressedCount: 0,
       secondaryAction: false,
       strafeAxis: 0,
+      weaponSwitchPressedCount: 0,
       yawAxis: 0
     });
 
@@ -213,6 +217,7 @@ test("MetaverseFlightInputRuntime owns browser flight input listeners and transi
       primaryActionPressedCount: 0,
       secondaryAction: false,
       strafeAxis: 0,
+      weaponSwitchPressedCount: 0,
       yawAxis: 0
     });
   } finally {
@@ -343,6 +348,7 @@ test("MetaverseFlightInputRuntime maps gamepad triggers onto primary and seconda
       primaryActionPressedCount: 1,
       secondaryAction: true,
       strafeAxis: 0,
+      weaponSwitchPressedCount: 0,
       yawAxis: 0
     });
   } finally {

@@ -1,4 +1,5 @@
 import type {
+  MetaverseCombatAimSnapshotInput,
   MetaverseCombatMatchPhaseId,
   MetaversePlayerActionReceiptSnapshot,
   MetaversePlayerCombatSnapshot,
@@ -38,6 +39,7 @@ function readLatestLocalPlayerWorldSnapshot(
 ): {
   readonly combat: MetaversePlayerCombatSnapshot | null;
   readonly combatMatchPhase: MetaverseCombatMatchPhaseId | null;
+  readonly highestProcessedPlayerActionSequence: number;
   readonly mountedOccupancy:
     | MetaverseRealtimeWorldSnapshot["players"][number]["mountedOccupancy"]
     | null;
@@ -61,9 +63,20 @@ function readLatestLocalPlayerWorldSnapshot(
   return Object.freeze({
     combat: playerSnapshot.combat,
     combatMatchPhase: worldSnapshot.combatMatch?.phase ?? null,
+    highestProcessedPlayerActionSequence:
+      observerPlayerSnapshot.highestProcessedPlayerActionSequence,
     mountedOccupancy: playerSnapshot.mountedOccupancy ?? null,
     recentPlayerActionReceipts: observerPlayerSnapshot.recentPlayerActionReceipts
   });
+}
+
+interface PendingLocalFireAttempt {
+  readonly actionSequence: number;
+  readonly issuedAtAuthoritativeTimeMs: number;
+}
+
+interface PendingLocalWeaponSwitch {
+  readonly actionSequence: number;
 }
 
 export class MetaverseFireWeaponActionPolicy {
@@ -76,6 +89,15 @@ export class MetaverseFireWeaponActionPolicy {
   readonly #readWorldClient:
     MetaverseFireWeaponActionPolicyDependencies["readWorldClient"];
 
+  readonly #pendingLocalFireAttemptsByWeaponId = new Map<
+    string,
+    PendingLocalFireAttempt[]
+  >();
+  readonly #pendingLocalWeaponSwitchesByWeaponId = new Map<
+    string,
+    PendingLocalWeaponSwitch[]
+  >();
+
   constructor(dependencies: MetaverseFireWeaponActionPolicyDependencies) {
     this.#readEstimatedServerTimeMs = dependencies.readEstimatedServerTimeMs;
     this.#readLocalPlayerId = dependencies.readLocalPlayerId;
@@ -83,19 +105,47 @@ export class MetaverseFireWeaponActionPolicy {
     this.#readWorldClient = dependencies.readWorldClient;
   }
 
+  registerPendingFireAction(input: {
+    readonly actionSequence: number;
+    readonly issuedAtAuthoritativeTimeMs: number;
+    readonly weaponId: string;
+  }): void {
+    const pendingFireAttempts =
+      this.#pendingLocalFireAttemptsByWeaponId.get(input.weaponId) ?? [];
+
+    pendingFireAttempts.push({
+      actionSequence: Math.max(0, Math.trunc(input.actionSequence)),
+      issuedAtAuthoritativeTimeMs: Number(input.issuedAtAuthoritativeTimeMs)
+    });
+    this.#pendingLocalFireAttemptsByWeaponId.set(
+      input.weaponId,
+      pendingFireAttempts
+    );
+  }
+
+  registerPendingWeaponSwitchAction(input: {
+    readonly actionSequence: number;
+    readonly weaponId: string;
+  }): void {
+    const pendingWeaponSwitches =
+      this.#pendingLocalWeaponSwitchesByWeaponId.get(input.weaponId) ?? [];
+
+    pendingWeaponSwitches.push({
+      actionSequence: Math.max(0, Math.trunc(input.actionSequence))
+    });
+    this.#pendingLocalWeaponSwitchesByWeaponId.set(
+      input.weaponId,
+      pendingWeaponSwitches
+    );
+  }
+
   createFireWeaponAction(input: {
     readonly aimMode?: "ads" | "hip-fire";
-    readonly aimSnapshot: {
-      readonly pitchRadians: number;
-      readonly yawRadians: number;
-    };
+    readonly aimSnapshot: MetaverseCombatAimSnapshotInput;
     readonly weaponId: string;
   }): {
     readonly aimMode?: "ads" | "hip-fire";
-    readonly aimSnapshot: {
-      readonly pitchRadians: number;
-      readonly yawRadians: number;
-    };
+    readonly aimSnapshot: MetaverseCombatAimSnapshotInput;
     readonly issuedAtAuthoritativeTimeMs: number;
     readonly weaponId: string;
   } | null {
@@ -110,6 +160,12 @@ export class MetaverseFireWeaponActionPolicy {
       return null;
     }
 
+    const millisecondsPerShot = resolveMillisecondsPerShot(input.weaponId);
+
+    if (millisecondsPerShot === null) {
+      return null;
+    }
+
     const latestWorldSnapshot =
       worldClient.worldSnapshotBuffer[worldClient.worldSnapshotBuffer.length - 1] ??
       null;
@@ -121,6 +177,8 @@ export class MetaverseFireWeaponActionPolicy {
       );
 
       if (localPlayerSnapshot !== null) {
+        this.#retirePendingLocalActions(localPlayerSnapshot);
+
         if (
           localPlayerSnapshot.combatMatchPhase !== null &&
           localPlayerSnapshot.combatMatchPhase !== "active"
@@ -134,18 +192,32 @@ export class MetaverseFireWeaponActionPolicy {
 
         const combatSnapshot = localPlayerSnapshot.combat;
 
-        if (
-          combatSnapshot !== null &&
-          (!combatSnapshot.alive ||
+        if (combatSnapshot !== null) {
+          const pendingWeaponSwitch =
+            this.#hasPendingWeaponSwitch(input.weaponId);
+          const weaponInventory = combatSnapshot.weaponInventory ?? [];
+          const selectedWeapon =
+            combatSnapshot.activeWeapon?.weaponId === input.weaponId
+              ? combatSnapshot.activeWeapon
+              : weaponInventory.find(
+                  (weaponSnapshot) => weaponSnapshot.weaponId === input.weaponId
+                ) ?? null;
+
+          if (
+            !combatSnapshot.alive ||
             Number(combatSnapshot.spawnProtectionRemainingMs) > 0 ||
-            combatSnapshot.activeWeapon === null ||
-            Number(combatSnapshot.activeWeapon.reloadRemainingMs) > 0 ||
-            combatSnapshot.activeWeapon.ammoInMagazine <= 0)
-        ) {
-          return null;
+            (selectedWeapon === null && !pendingWeaponSwitch) ||
+            (selectedWeapon !== null &&
+              combatSnapshot.activeWeapon?.weaponId !== input.weaponId &&
+              !pendingWeaponSwitch) ||
+            (selectedWeapon !== null &&
+              (Number(selectedWeapon.reloadRemainingMs) > 0 ||
+                selectedWeapon.ammoInMagazine <= 0))
+          ) {
+            return null;
+          }
         }
 
-        const millisecondsPerShot = resolveMillisecondsPerShot(input.weaponId);
         const latestAcceptedFireReceipt =
           localPlayerSnapshot.recentPlayerActionReceipts
             .toReversed()
@@ -166,6 +238,19 @@ export class MetaverseFireWeaponActionPolicy {
         ) {
           return null;
         }
+
+        const latestPendingFireAttempt =
+          this.#readLatestPendingFireAttempt(input.weaponId);
+
+        if (
+          latestPendingFireAttempt !== null &&
+          issuedAtAuthoritativeTimeMs -
+            latestPendingFireAttempt.issuedAtAuthoritativeTimeMs +
+            0.0001 <
+            millisecondsPerShot
+        ) {
+          return null;
+        }
       }
     }
 
@@ -179,5 +264,76 @@ export class MetaverseFireWeaponActionPolicy {
       issuedAtAuthoritativeTimeMs,
       weaponId: input.weaponId
     });
+  }
+
+  #readLatestPendingFireAttempt(
+    weaponId: string
+  ): PendingLocalFireAttempt | null {
+    const pendingFireAttempts =
+      this.#pendingLocalFireAttemptsByWeaponId.get(weaponId) ?? [];
+
+    return pendingFireAttempts[pendingFireAttempts.length - 1] ?? null;
+  }
+
+  #hasPendingWeaponSwitch(weaponId: string): boolean {
+    return (
+      (this.#pendingLocalWeaponSwitchesByWeaponId.get(weaponId)?.length ?? 0) > 0
+    );
+  }
+
+  #retirePendingLocalActions(localPlayerSnapshot: {
+    readonly highestProcessedPlayerActionSequence: number;
+    readonly recentPlayerActionReceipts:
+      readonly MetaversePlayerActionReceiptSnapshot[];
+  }): void {
+    const acknowledgedActionSequences = new Set(
+      localPlayerSnapshot.recentPlayerActionReceipts.map(
+        (receiptSnapshot) => receiptSnapshot.actionSequence
+      )
+    );
+
+    for (const [
+      weaponId,
+      pendingFireAttempts
+    ] of this.#pendingLocalFireAttemptsByWeaponId) {
+      const retainedFireAttempts = pendingFireAttempts.filter(
+        (pendingFireAttempt) =>
+          pendingFireAttempt.actionSequence >
+            localPlayerSnapshot.highestProcessedPlayerActionSequence &&
+          !acknowledgedActionSequences.has(pendingFireAttempt.actionSequence)
+      );
+
+      if (retainedFireAttempts.length === 0) {
+        this.#pendingLocalFireAttemptsByWeaponId.delete(weaponId);
+        continue;
+      }
+
+      this.#pendingLocalFireAttemptsByWeaponId.set(
+        weaponId,
+        retainedFireAttempts
+      );
+    }
+
+    for (const [
+      weaponId,
+      pendingWeaponSwitches
+    ] of this.#pendingLocalWeaponSwitchesByWeaponId) {
+      const retainedWeaponSwitches = pendingWeaponSwitches.filter(
+        (pendingWeaponSwitch) =>
+          pendingWeaponSwitch.actionSequence >
+            localPlayerSnapshot.highestProcessedPlayerActionSequence &&
+          !acknowledgedActionSequences.has(pendingWeaponSwitch.actionSequence)
+      );
+
+      if (retainedWeaponSwitches.length === 0) {
+        this.#pendingLocalWeaponSwitchesByWeaponId.delete(weaponId);
+        continue;
+      }
+
+      this.#pendingLocalWeaponSwitchesByWeaponId.set(
+        weaponId,
+        retainedWeaponSwitches
+      );
+    }
   }
 }

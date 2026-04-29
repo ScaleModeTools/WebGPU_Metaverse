@@ -4,9 +4,11 @@ import type {
   MetaversePresenceRosterSnapshot
 } from "@webgpu-metaverse/shared/metaverse/presence";
 import type {
+  MetaverseCombatEventSnapshot,
   MetaverseCombatFeedEventSnapshot,
   MetaverseCombatMatchSnapshot,
   MetaverseCombatProjectileSnapshot,
+  MetaverseCombatShotResolutionTelemetrySnapshot,
   MetaversePlayerActionReceiptSnapshot,
   MetaversePlayerCombatSnapshot
 } from "@webgpu-metaverse/shared/metaverse";
@@ -49,6 +51,8 @@ interface MetaverseAuthoritativeWorldReadStateDependencies<
     EnvironmentBodyRuntime
   >;
   readonly playersById: Map<MetaversePlayerId, PlayerRuntime>;
+  readonly readCombatEventSnapshots:
+    () => readonly MetaverseCombatEventSnapshot[];
   readonly readCombatFeedSnapshots:
     () => readonly MetaverseCombatFeedEventSnapshot[];
   readonly readCombatMatchSnapshot: () => MetaverseCombatMatchSnapshot | null;
@@ -56,6 +60,11 @@ interface MetaverseAuthoritativeWorldReadStateDependencies<
     playerId: MetaversePlayerId
   ) => {
     readonly highestProcessedPlayerActionSequence: number;
+    readonly latestShotResolutionTelemetry:
+      | MetaverseCombatShotResolutionTelemetrySnapshot
+      | null;
+    readonly recentShotResolutionTelemetry:
+      readonly MetaverseCombatShotResolutionTelemetrySnapshot[];
     readonly recentPlayerActionReceipts:
       readonly MetaversePlayerActionReceiptSnapshot[];
   } | null;
@@ -131,6 +140,11 @@ export class MetaverseAuthoritativeWorldReadState<
       MetaversePlayerId,
       {
         readonly highestProcessedPlayerActionSequence: number;
+        readonly latestShotResolutionTelemetry:
+          | MetaverseCombatShotResolutionTelemetrySnapshot
+          | null;
+        readonly recentShotResolutionTelemetry:
+          readonly MetaverseCombatShotResolutionTelemetrySnapshot[];
         readonly recentPlayerActionReceipts:
           readonly MetaversePlayerActionReceiptSnapshot[];
       }
@@ -175,6 +189,7 @@ export class MetaverseAuthoritativeWorldReadState<
     }
 
     return createMetaverseAuthoritativeWorldSnapshot({
+      combatEvents: this.#dependencies.readCombatEventSnapshots(),
       combatFeed: this.#dependencies.readCombatFeedSnapshots(),
       combatMatch: this.#dependencies.readCombatMatchSnapshot(),
       currentTick: this.#dependencies.readCurrentTick(),

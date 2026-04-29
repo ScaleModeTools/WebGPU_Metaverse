@@ -125,7 +125,7 @@ test("MetaverseRoomHttpAdapter creates and rejoins explicit team deathmatch room
   assert.equal(firstJoinResult.handled, true);
   assert.equal(firstJoinResult.response.statusCode, 200);
   assert.equal(firstJoinResult.response.json.roomId, roomId);
-  assert.equal(firstJoinResult.response.json.bundleId, "private-build");
+  assert.equal(firstJoinResult.response.json.bundleId, "deathmatch");
   assert.equal(firstJoinResult.response.json.matchMode, "team-deathmatch");
   assert.equal(firstJoinResult.response.json.leaderPlayerId, "tdm-leader");
   assert.equal(secondJoinResult.handled, true);

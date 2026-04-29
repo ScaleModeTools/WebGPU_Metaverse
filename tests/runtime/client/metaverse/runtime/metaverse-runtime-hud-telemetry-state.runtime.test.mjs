@@ -713,6 +713,26 @@ test("MetaverseRuntimeHudTelemetryState publishes authoritative combat action re
             weaponId: "metaverse-service-pistol-v2"
           })
         ]),
+        latestShotResolutionTelemetry: Object.freeze({
+          actionSequence: 8,
+          candidatePlayerHit: null,
+          finalReason: "hit-player",
+          firingReferenceOriginWorld: Object.freeze({ x: 0, y: 1.62, z: 0 }),
+          lineOfSightBlocked: false,
+          lineOfSightBlockerDistanceMeters: null,
+          lineOfSightBlockerKind: null,
+          lineOfSightBlockerPoint: null,
+          lineOfSightChecked: true,
+          processedAtTimeMs: 1_250,
+          rayForwardWorld: Object.freeze({ x: 0, y: 0, z: -1 }),
+          rayOriginWorld: Object.freeze({ x: 0, y: 1.62, z: 0 }),
+          rewindSource: "current",
+          selectedPlayerHit: null,
+          weaponId: "metaverse-service-pistol-v2",
+          worldHitColliderKind: null,
+          worldHitDistanceMeters: null,
+          worldHitPoint: null
+        }),
         yawRadians: 0
       });
 
@@ -741,5 +761,10 @@ test("MetaverseRuntimeHudTelemetryState publishes authoritative combat action re
     telemetrySnapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
       .combatAction.sourceProjectileId,
     "combat-projectile-8"
+  );
+  assert.equal(
+    telemetrySnapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
+      .combatAction.shotResolution?.finalReason,
+    "hit-player"
   );
 });

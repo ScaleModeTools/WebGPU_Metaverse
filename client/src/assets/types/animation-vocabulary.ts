@@ -6,7 +6,6 @@ export const animationVocabularyIds = [
   "jump-up",
   "jump-mid",
   "jump-down",
-  "aim",
   "interact",
   "seated"
 ] as const;
@@ -15,13 +14,12 @@ export type AnimationVocabularyId = (typeof animationVocabularyIds)[number];
 
 export const canonicalAnimationClipNamesByVocabulary = Object.freeze({
   idle: "Idle_Loop",
-  walk: "walk",
-  "swim-idle": "swim-idle",
-  swim: "swim",
+  walk: "Walk_Loop",
+  "swim-idle": "Swim_Idle_Loop",
+  swim: "Swim_Fwd_Loop",
   "jump-up": "Jump_Start",
   "jump-mid": "Jump_Loop",
   "jump-down": "Jump_Land",
-  aim: "aim",
-  interact: "interact",
-  seated: "seated"
+  interact: "Interact",
+  seated: "Sitting_Idle_Loop"
 } as const satisfies Readonly<Record<AnimationVocabularyId, string>>);

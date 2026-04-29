@@ -13,6 +13,7 @@ import {
   createDuckHuntCoopRoomWebTransportServerEventMessage,
   createDuckHuntCoopRoomWebTransportSnapshotRequest,
   createMetaverseCombatActionReceiptSnapshot,
+  createMetaverseCombatAimSnapshot,
   createMetaverseDriverVehicleControlIntentSnapshot,
   createMetaverseGameplayTraversalIntentSnapshotInput,
   createMetaverseIssuePlayerActionCommand,
@@ -25,6 +26,7 @@ import {
   createMetaversePresenceWebTransportCommandRequest,
   createMetaversePresenceWebTransportRosterRequest,
   createMetaversePresenceWebTransportServerEventMessage,
+  createMetaverseRealtimePlayerWeaponStateSnapshot,
   createMetaverseSyncPlayerLookIntentCommand,
   createMetaverseSyncDriverVehicleControlCommand,
   createMetaverseSyncMountedOccupancyCommand,
@@ -51,8 +53,11 @@ import {
   metaversePresencePrimaryLocomotionModeIds,
   metaverseUnmountedPlayerLookConstraintBounds,
   parseMetaverseMapBundleSnapshot,
+  readMetaverseWeaponLayout,
+  readMetaverseCombatWeaponProfile,
   readExperienceCatalogEntry,
   readExperienceTickOwner,
+  resolveMetaverseCombatSemanticWeaponTipOrigin,
   resolveMetaverseMountedLookConstraintBounds,
   resolveMetaverseMountedOccupantRoleLookConstraintBounds,
   shouldKeepMetaverseMountedOccupancyFreeRoam,
@@ -105,6 +110,111 @@ function createMetaverseSyncPlayerTraversalIntentCommand(input) {
     }
   });
 }
+
+test("metaverse weapon loadout contracts resolve pistol-only and pistol-rocket slot states", () => {
+  const pistolLayout = readMetaverseWeaponLayout("duck-hunt-default-pistol-layout");
+  const tdmLayout = readMetaverseWeaponLayout("metaverse-tdm-pistol-rocket-layout");
+
+  assert.equal(pistolLayout?.slots.length, 1);
+  assert.equal(pistolLayout?.slots[0]?.weaponId, "metaverse-service-pistol-v2");
+  assert.equal(tdmLayout?.activeSlotId, "primary");
+  assert.deepEqual(
+    tdmLayout?.slots.map((slot) => [slot.slotId, slot.weaponId]),
+    [
+      ["primary", "metaverse-service-pistol-v2"],
+      ["secondary", "metaverse-rocket-launcher-v1"]
+    ]
+  );
+
+  const legacyState = createMetaverseRealtimePlayerWeaponStateSnapshot({
+    aimMode: "ads",
+    weaponId: "metaverse-service-pistol-v2"
+  });
+
+  assert.equal(legacyState.activeSlotId, "primary");
+  assert.equal(legacyState.weaponId, "metaverse-service-pistol-v2");
+  assert.equal(legacyState.slots.length, 1);
+  assert.equal(legacyState.slots[0]?.slotId, "primary");
+
+  const fullState = createMetaverseRealtimePlayerWeaponStateSnapshot({
+    activeSlotId: "secondary",
+    aimMode: "hip-fire",
+    slots: [
+      {
+        attachmentId: "metaverse-service-pistol-v2",
+        equipped: true,
+        slotId: "primary",
+        weaponId: "metaverse-service-pistol-v2",
+        weaponInstanceId: "player:primary:metaverse-service-pistol-v2"
+      },
+      {
+        attachmentId: "metaverse-rocket-launcher-v1",
+        equipped: true,
+        slotId: "secondary",
+        weaponId: "metaverse-rocket-launcher-v1",
+        weaponInstanceId: "player:secondary:metaverse-rocket-launcher-v1"
+      }
+    ],
+    weaponId: "metaverse-service-pistol-v2"
+  });
+
+  assert.equal(fullState.activeSlotId, "secondary");
+  assert.equal(fullState.weaponId, "metaverse-rocket-launcher-v1");
+  assert.equal(
+    fullState.slots[1]?.weaponInstanceId,
+    "player:secondary:metaverse-rocket-launcher-v1"
+  );
+});
+
+test("metaverse rocket combat profile resolves projectile and splash values", () => {
+  const rocketProfile = readMetaverseCombatWeaponProfile(
+    "metaverse-rocket-launcher-v1"
+  );
+
+  assert.equal(rocketProfile.deliveryModel, "projectile");
+  assert.equal(rocketProfile.fireMode, "semi");
+  assert.equal(rocketProfile.roundsPerMinute, 42);
+  assert.equal(rocketProfile.accuracy.projectileVelocityMetersPerSecond, 70);
+  assert.equal(rocketProfile.accuracy.projectileLifetimeMs, 6_000);
+  assert.equal(rocketProfile.accuracy.gravityUnitsPerSecondSquared, 0);
+  assert.equal(rocketProfile.magazine.magazineCapacity, 2);
+  assert.equal(rocketProfile.magazine.reserveCapacity, 6);
+  assert.equal(rocketProfile.magazine.reloadDurationMs, 3_600);
+  assert.equal(rocketProfile.damage.body, 180);
+  assert.equal(rocketProfile.damage.head, 180);
+  assert.deepEqual(rocketProfile.firingOriginOffset, {
+    forwardMeters: 0.95,
+    rightMeters: 0.1,
+    upMeters: 1.34
+  });
+  assert.notEqual(rocketProfile.areaDamage, null);
+  assert.equal(rocketProfile.areaDamage?.innerRadiusMeters, 2);
+  assert.equal(rocketProfile.areaDamage?.outerRadiusMeters, 6);
+  assert.equal(rocketProfile.areaDamage?.maxDamage, 100);
+  assert.equal(rocketProfile.areaDamage?.minDamage, 20);
+  assert.equal(rocketProfile.areaDamage?.lineOfSightRequired, true);
+  assert.equal(rocketProfile.areaDamage?.affectsOwner, false);
+  assert.equal(rocketProfile.areaDamage?.affectsTeammates, false);
+});
+
+test("metaverse semantic weapon-tip origin follows aim yaw for side and forward offsets", () => {
+  const rocketProfile = readMetaverseCombatWeaponProfile(
+    "metaverse-rocket-launcher-v1"
+  );
+  const origin = resolveMetaverseCombatSemanticWeaponTipOrigin({
+    actorBodyPosition: { x: 0, y: 0, z: 0 },
+    actorBodyYawRadians: 0,
+    aimYawInfluence: 1,
+    firingOriginOffset: rocketProfile.firingOriginOffset,
+    semanticAimForward: { x: 1, y: 0, z: 0 }
+  });
+
+  assert.deepEqual(origin, {
+    x: 0.95,
+    y: 1.34,
+    z: 0.1
+  });
+});
 
 function createFireWeaponPlayerActionCommand({
   actionSequence,
@@ -789,6 +899,43 @@ test("metaverse realtime world contracts keep combat action receipts observer-lo
   assert.notEqual(username, null);
 
   const worldSnapshot = createMetaverseRealtimeWorldSnapshot({
+    combatEvents: [
+      {
+        actionSequence: 3.4,
+        cameraRayForwardWorld: {
+          x: 0,
+          y: 0,
+          z: -1
+        },
+        cameraRayOriginWorld: {
+          x: 0,
+          y: 1.62,
+          z: 0
+        },
+        eventKind: "hitscan-resolved",
+        eventSequence: 7.2,
+        hitscan: {
+          finalReason: "hit-player",
+          hitKind: "player",
+          hitPointWorld: {
+            x: 0,
+            y: 1.62,
+            z: -6
+          },
+          regionId: "head",
+          targetPlayerId: playerId
+        },
+        playerId,
+        presentationDeliveryModel: "hitscan-tracer",
+        semanticMuzzleWorld: {
+          x: 0.18,
+          y: 1.42,
+          z: -0.55
+        },
+        serverTick: 24.8,
+        weaponId: " metaverse-service-pistol-v2 "
+      }
+    ],
     combatFeed: [
       {
         attackerPlayerId: playerId,
@@ -891,6 +1038,13 @@ test("metaverse realtime world contracts keep combat action receipts observer-lo
     "projectile-3"
   );
   assert.equal(worldSnapshot.projectiles[0]?.sourceActionSequence, 3);
+  assert.equal(worldSnapshot.combatEvents[0]?.eventSequence, 7);
+  assert.equal(worldSnapshot.combatEvents[0]?.shotId, `${playerId}:3`);
+  assert.equal(
+    worldSnapshot.combatEvents[0]?.presentationDeliveryModel,
+    "hitscan-tracer"
+  );
+  assert.equal(worldSnapshot.combatEvents[0]?.hitscan?.hitKind, "player");
   assert.equal(worldSnapshot.combatFeed[0]?.type, "damage");
   assert.equal(worldSnapshot.combatFeed[0]?.sourceActionSequence, 3);
   assert.equal(worldSnapshot.combatFeed[0]?.sourceProjectileId, "projectile-3");
@@ -915,6 +1069,38 @@ test("metaverse issue-player-action fire commands normalize actionSequence inste
   assert.equal(fireWeaponCommand.action.weaponId, "metaverse-service-pistol-v2");
   assert.equal(fireWeaponCommand.action.aimSnapshot.yawRadians, 0);
   assert.equal(fireWeaponCommand.type, "issue-player-action");
+});
+
+test("metaverse fire aim snapshots preserve semantic reticle ray fields", () => {
+  const aimSnapshot = createMetaverseCombatAimSnapshot({
+    pitchRadians: Math.PI * 0.125,
+    rayForwardWorld: {
+      x: 0.25,
+      y: 0.5,
+      z: -0.82915619758885
+    },
+    rayOriginWorld: {
+      x: 1.25,
+      y: 1.72,
+      z: -3.5
+    },
+    yawRadians: Math.PI * 0.25
+  });
+  assert.deepEqual(aimSnapshot.rayOriginWorld, {
+    x: 1.25,
+    y: 1.72,
+    z: -3.5
+  });
+  assert.deepEqual(aimSnapshot.rayForwardWorld, {
+    x: 0.25,
+    y: 0.5,
+    z: -0.82915619758885
+  });
+
+  const legacyAimSnapshot = createMetaverseCombatAimSnapshot();
+
+  assert.equal(legacyAimSnapshot.rayOriginWorld, null);
+  assert.equal(legacyAimSnapshot.rayForwardWorld, null);
 });
 
 test("metaverse realtime world contracts preserve explicit traversal authority from accepted jump resolution", () => {
@@ -1851,10 +2037,12 @@ test("webtransport shared contracts wrap presence, world, and Duck Hunt room mes
 
 test("webtransport datagram shared contracts wrap latest-wins channels with explicit domain names", () => {
   const metaversePlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const metaverseRoomId = createMetaverseRoomId("tdm-harbor");
   const coopPlayerId = createCoopPlayerId("coop-pilot-1");
   const coopRoomId = createCoopRoomId("co-op-harbor");
 
   assert.notEqual(metaversePlayerId, null);
+  assert.notEqual(metaverseRoomId, null);
   assert.notEqual(coopPlayerId, null);
   assert.notEqual(coopRoomId, null);
 
@@ -1870,7 +2058,8 @@ test("webtransport datagram shared contracts wrap latest-wins channels with expl
         },
         controlSequence: 8.2,
         playerId: metaversePlayerId
-      })
+      }),
+      roomId: metaverseRoomId
     });
   const playerTraversalIntentDatagram =
     createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram({
@@ -1885,7 +2074,8 @@ test("webtransport datagram shared contracts wrap latest-wins channels with expl
           yawAxis: 0.8
         },
         playerId: metaversePlayerId
-      })
+      }),
+      roomId: metaverseRoomId
     });
   const playerLookIntentDatagram =
     createMetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram({
@@ -1896,7 +2086,8 @@ test("webtransport datagram shared contracts wrap latest-wins channels with expl
         },
         lookSequence: 9.4,
         playerId: metaversePlayerId
-      })
+      }),
+      roomId: metaverseRoomId
     });
   const playerPresenceDatagram =
     createDuckHuntCoopRoomWebTransportPlayerPresenceDatagram({
@@ -1928,6 +2119,7 @@ test("webtransport datagram shared contracts wrap latest-wins channels with expl
     driverVehicleControlDatagram.command.type,
     "sync-driver-vehicle-control"
   );
+  assert.equal(driverVehicleControlDatagram.roomId, metaverseRoomId);
   assert.equal(
     driverVehicleControlDatagram.command.controlSequence,
     8

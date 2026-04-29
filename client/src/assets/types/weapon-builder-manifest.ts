@@ -6,8 +6,13 @@ import type { SkeletonId, SocketId } from "./asset-socket";
 import type {
   AttachmentAimBasisOffsetDescriptor,
   AttachmentAssetDescriptor,
-  AttachmentMountedHolsterDescriptor
+  AttachmentMountedHolsterDescriptor,
 } from "./attachment-asset-manifest";
+import type {
+  HeldObjectHoldProfileDescriptor,
+  HeldObjectPoseProfileId,
+  HeldObjectSocketRoleId,
+} from "./held-object-authoring-manifest";
 
 export const weaponFamilyIds = [
   "pistol",
@@ -15,7 +20,7 @@ export const weaponFamilyIds = [
   "battle-rifle",
   "shotgun",
   "sniper",
-  "launcher"
+  "launcher",
 ] as const;
 
 export type WeaponFamilyId = (typeof weaponFamilyIds)[number];
@@ -25,14 +30,23 @@ export const weaponModuleSlotIds = [
   "front-sight",
   "rear-sight",
   "optic",
-  "muzzle"
+  "muzzle",
 ] as const;
 
 export type WeaponModuleSlotId = (typeof weaponModuleSlotIds)[number];
 
-export const weaponPoseProfileIds = ["sidearm", "long-gun"] as const;
+export const weaponPoseProfileIds = [
+  "sidearm.one_hand_optional_support",
+  "long_gun.two_hand_shoulder",
+  "shoulder_heavy.two_hand_shouldered",
+  "melee.one_hand",
+  "melee.two_hand",
+  "tool.one_hand",
+] as const;
 
-export type WeaponPoseProfileId = (typeof weaponPoseProfileIds)[number];
+export type WeaponPoseProfileId =
+  | (typeof weaponPoseProfileIds)[number]
+  | HeldObjectPoseProfileId;
 
 export type WeaponFireMode =
   | "semi"
@@ -44,10 +58,7 @@ export type WeaponFireMode =
 
 export type WeaponReloadStyle = "magazine" | "tube";
 
-export type WeaponBallisticsKind =
-  | "hitscan"
-  | "pellet"
-  | "tracking-projectile";
+export type WeaponBallisticsKind = "hitscan" | "pellet" | "tracking-projectile";
 
 export interface WeaponUnlockDescriptor {
   readonly challengeId?: string;
@@ -173,47 +184,23 @@ export interface WeaponModuleSocketDescriptor {
   readonly defaultModuleId: string | null;
   readonly required: boolean;
   readonly slotId: WeaponModuleSlotId;
-  readonly socketNodeName: string;
-}
-
-export interface WeaponSupportPointDescriptor {
-  readonly authoringNodeName: string;
-  readonly localPosition: {
-    readonly x: number;
-    readonly y: number;
-    readonly z: number;
-  };
-  readonly supportPointId: string;
-}
-
-export interface WeaponNodeDescriptor {
-  readonly adsCameraAnchorNodeName: string;
-  readonly forwardReferenceNodeName: string;
-  readonly frontSightNodeName: string;
-  readonly muzzleSocketNodeName: string;
-  readonly opticMountNodeName: string;
-  readonly rearSightNodeName: string;
-  readonly rightHandGripSocketNodeName: string;
-  readonly supportMarkerNodeName?: string | null;
-  readonly triggerMarkerNodeName: string;
-  readonly upReferenceNodeName: string;
+  readonly socketRole: HeldObjectSocketRoleId;
 }
 
 export interface WeaponArchetypeDescriptor<
-  TId extends AttachmentAssetId = AttachmentAssetId
+  TId extends AttachmentAssetId = AttachmentAssetId,
 > {
   readonly allowedSocketIds: readonly SocketId[];
   readonly compatibleSkeletons: readonly SkeletonId[];
   readonly defaultSocketId: SocketId;
   readonly family: WeaponFamilyId;
+  readonly holdProfile: HeldObjectHoldProfileDescriptor;
   readonly id: TId;
   readonly label: string;
   readonly model: AssetLodGroup;
   readonly mountedHolster: AttachmentMountedHolsterDescriptor | null;
   readonly moduleSockets: readonly WeaponModuleSocketDescriptor[];
-  readonly nodes: WeaponNodeDescriptor;
   readonly stats: WeaponStatBlockDescriptor;
-  readonly supportPoint: WeaponSupportPointDescriptor | null;
   readonly tags: readonly string[];
   readonly unlock: WeaponUnlockDescriptor | null;
   readonly weaponAimProfile: WeaponAimProfileDescriptor;
@@ -242,7 +229,7 @@ export interface WeaponModuleAssetDescriptor {
 
 export interface WeaponArchetypeManifest<
   TEntries extends readonly WeaponArchetypeDescriptor[] =
-    readonly WeaponArchetypeDescriptor[]
+    readonly WeaponArchetypeDescriptor[],
 > {
   readonly archetypes: TEntries;
   readonly byId: RegistryById<TEntries>;
@@ -250,7 +237,7 @@ export interface WeaponArchetypeManifest<
 
 export interface WeaponModuleManifest<
   TEntries extends readonly WeaponModuleAssetDescriptor[] =
-    readonly WeaponModuleAssetDescriptor[]
+    readonly WeaponModuleAssetDescriptor[],
 > {
   readonly byId: RegistryById<TEntries>;
   readonly modules: TEntries;
@@ -267,33 +254,33 @@ export interface ResolvedWeaponLoadoutDescriptor {
 }
 
 export function defineWeaponArchetypeManifest<
-  const TEntries extends readonly WeaponArchetypeDescriptor[]
+  const TEntries extends readonly WeaponArchetypeDescriptor[],
 >(archetypes: TEntries): WeaponArchetypeManifest<TEntries> {
   const byId = Object.fromEntries(
-    archetypes.map((archetype) => [archetype.id, archetype] as const)
+    archetypes.map((archetype) => [archetype.id, archetype] as const),
   ) as RegistryById<TEntries>;
 
   return {
     archetypes,
-    byId
+    byId,
   };
 }
 
 export function defineWeaponModuleManifest<
-  const TEntries extends readonly WeaponModuleAssetDescriptor[]
+  const TEntries extends readonly WeaponModuleAssetDescriptor[],
 >(modules: TEntries): WeaponModuleManifest<TEntries> {
   const byId = Object.fromEntries(
-    modules.map((module) => [module.id, module] as const)
+    modules.map((module) => [module.id, module] as const),
   ) as RegistryById<TEntries>;
 
   return {
     byId,
-    modules
+    modules,
   };
 }
 
 export function buildAttachmentAssetFromWeaponArchetype<
-  const TWeapon extends WeaponArchetypeDescriptor
+  const TWeapon extends WeaponArchetypeDescriptor,
 >(weapon: TWeapon): AttachmentAssetDescriptor<TWeapon["id"]> {
   return {
     allowedSocketIds: weapon.allowedSocketIds,
@@ -301,33 +288,14 @@ export function buildAttachmentAssetFromWeaponArchetype<
     compatibleSkeletons: weapon.compatibleSkeletons,
     defaultSocketId: weapon.defaultSocketId,
     heldMount: {
-      adsCameraAnchorNodeName: weapon.nodes.adsCameraAnchorNodeName,
-      adsCameraTargetOffset: weapon.weaponAimProfile.adsCameraTargetOffset ?? null,
-      attachmentSocketNodeName: weapon.nodes.rightHandGripSocketNodeName,
-      forwardReferenceNodeName: weapon.nodes.forwardReferenceNodeName,
-      supportMarkerNodeName: weapon.nodes.supportMarkerNodeName ?? null,
-      triggerMarkerNodeName: weapon.nodes.triggerMarkerNodeName,
-      upReferenceNodeName: weapon.nodes.upReferenceNodeName
+      adsCameraTargetOffset:
+        weapon.weaponAimProfile.adsCameraTargetOffset ?? null,
+      attachmentSocketRole: "grip.primary",
     },
+    holdProfile: weapon.holdProfile,
     id: weapon.id,
     label: weapon.label,
     mountedHolster: weapon.mountedHolster,
-    offHandSupportPointIdBySocketId:
-      weapon.supportPoint === null
-        ? null
-        : {
-            hand_r_socket: weapon.supportPoint.supportPointId
-          },
     renderModel: weapon.model,
-    supportPoints:
-      weapon.supportPoint === null
-        ? null
-        : [
-            {
-              authoringNodeName: weapon.supportPoint.authoringNodeName,
-              localPosition: weapon.supportPoint.localPosition,
-              supportPointId: weapon.supportPoint.supportPointId
-            }
-          ]
   };
 }

@@ -216,7 +216,7 @@ test("MetaverseRemoteWorldPresentationState keeps remote character root on fresh
   );
 });
 
-test("MetaverseRemoteWorldPresentationState removes dead remote players and recreates them fresh on respawn", async () => {
+test("MetaverseRemoteWorldPresentationState keeps dead remote players presented for death animation and restores them on respawn", async () => {
   const presentationState = await createPresentationState();
   const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
   const remotePlayerId = createMetaversePlayerId("remote-respawn-2");
@@ -255,6 +255,7 @@ test("MetaverseRemoteWorldPresentationState removes dead remote players and recr
   });
 
   assert.equal(presentationState.remoteCharacterPresentations.length, 1);
+  assert.equal(presentationState.remotePlayerBodyBlockers.length, 1);
   assert.equal(
     presentationState.remoteCharacterPresentations[0]?.presentation.position.x,
     8
@@ -287,7 +288,12 @@ test("MetaverseRemoteWorldPresentationState removes dead remote players and recr
     })
   });
 
-  assert.equal(presentationState.remoteCharacterPresentations.length, 0);
+  assert.equal(presentationState.remoteCharacterPresentations.length, 1);
+  assert.equal(presentationState.remotePlayerBodyBlockers.length, 0);
+  assert.equal(
+    presentationState.remoteCharacterPresentations[0]?.combatAlive,
+    false
+  );
 
   const respawnedSnapshot = createRealtimeWorldSnapshot({
     currentTick: 12,
@@ -318,6 +324,11 @@ test("MetaverseRemoteWorldPresentationState removes dead remote players and recr
   });
 
   assert.equal(presentationState.remoteCharacterPresentations.length, 1);
+  assert.equal(presentationState.remotePlayerBodyBlockers.length, 1);
+  assert.equal(
+    presentationState.remoteCharacterPresentations[0]?.combatAlive,
+    true
+  );
   assert.ok(
     Math.abs(
       (presentationState.remoteCharacterPresentations[0]?.presentation.position.x ??

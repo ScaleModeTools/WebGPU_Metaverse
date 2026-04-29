@@ -1,6 +1,7 @@
 import {
   createMetaversePlayerId,
   createMilliseconds,
+  resolveMetaversePlayerTeamId,
   createUsername,
   type MetaversePlayerId,
   type MetaversePlayerTeamId,
@@ -359,6 +360,18 @@ export function createMetaverseLocalPlayerIdentity(
     characterId: normalizedCharacterId,
     playerId,
     username: resolvedUsername
+  });
+}
+
+export function createMetaverseTeamDeathmatchLocalPlayerIdentity(
+  username: string,
+  characterId: string
+): MetaverseLocalPlayerIdentity {
+  const identity = createMetaverseLocalPlayerIdentity(username, characterId);
+
+  return Object.freeze({
+    ...identity,
+    teamId: resolveMetaversePlayerTeamId(identity.playerId)
   });
 }
 

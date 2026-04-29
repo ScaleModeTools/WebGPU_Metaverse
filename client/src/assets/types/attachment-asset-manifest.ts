@@ -3,11 +3,15 @@ import type { RegistryById } from "@webgpu-metaverse/shared";
 import type { AttachmentAssetId } from "./asset-id";
 import type { AssetLodGroup } from "./asset-lod";
 import type { SkeletonId, SocketId } from "./asset-socket";
+import type {
+  HeldObjectHoldProfileDescriptor,
+  HeldObjectSocketRoleId,
+} from "./held-object-authoring-manifest";
 
 export const attachmentCategoryIds = [
   "handheld",
   "wearable",
-  "hip-mounted"
+  "hip-mounted",
 ] as const;
 
 export type AttachmentCategoryId = (typeof attachmentCategoryIds)[number];
@@ -19,22 +23,8 @@ export interface AttachmentVector3Descriptor {
 }
 
 export interface AttachmentMountSocketDescriptor {
-  readonly adsCameraAnchorNodeName?: string | null;
   readonly adsCameraTargetOffset?: AttachmentAimBasisOffsetDescriptor | null;
-  readonly attachmentSocketNodeName?: string | null;
-  readonly attachmentSocketNodeNameBySocketId?: Partial<
-    Record<SocketId, string | null>
-  >;
-  readonly forwardReferenceNodeName?: string | null;
-  readonly supportMarkerNodeName?: string | null;
-  readonly triggerMarkerNodeName?: string | null;
-  readonly upReferenceNodeName?: string | null;
-}
-
-export interface AttachmentSupportPointDescriptor {
-  readonly authoringNodeName?: string | null;
-  readonly localPosition: AttachmentVector3Descriptor;
-  readonly supportPointId: string;
+  readonly attachmentSocketRole: HeldObjectSocketRoleId;
 }
 
 export interface AttachmentAimBasisOffsetDescriptor {
@@ -42,10 +32,6 @@ export interface AttachmentAimBasisOffsetDescriptor {
   readonly forward: number;
   readonly up: number;
 }
-
-export type AttachmentOffHandSupportPointIdBySocketId = Partial<
-  Record<SocketId, string | null>
->;
 
 export type AttachmentMountTargetSocketName =
   | SocketId
@@ -56,12 +42,12 @@ export type AttachmentMountTargetSocketName =
   | "palm_r_socket";
 
 export interface AttachmentMountedHolsterDescriptor {
-  readonly attachmentSocketNodeName: string;
+  readonly attachmentSocketRole: HeldObjectSocketRoleId;
   readonly socketName: AttachmentMountTargetSocketName;
 }
 
 export interface AttachmentAssetDescriptor<
-  TId extends AttachmentAssetId = AttachmentAssetId
+  TId extends AttachmentAssetId = AttachmentAssetId,
 > {
   readonly id: TId;
   readonly label: string;
@@ -71,30 +57,27 @@ export interface AttachmentAssetDescriptor<
   readonly allowedSocketIds: readonly SocketId[];
   readonly compatibleSkeletons: readonly SkeletonId[];
   readonly heldMount: AttachmentMountSocketDescriptor;
+  readonly holdProfile: HeldObjectHoldProfileDescriptor;
   readonly mountedHolster: AttachmentMountedHolsterDescriptor | null;
-  readonly offHandSupportPointIdBySocketId?:
-    | AttachmentOffHandSupportPointIdBySocketId
-    | null;
-  readonly supportPoints: readonly AttachmentSupportPointDescriptor[] | null;
 }
 
 export interface AttachmentAssetManifest<
   TEntries extends readonly AttachmentAssetDescriptor[] =
-    readonly AttachmentAssetDescriptor[]
+    readonly AttachmentAssetDescriptor[],
 > {
   readonly attachments: TEntries;
   readonly byId: RegistryById<TEntries>;
 }
 
 export function defineAttachmentAssetManifest<
-  const TEntries extends readonly AttachmentAssetDescriptor[]
+  const TEntries extends readonly AttachmentAssetDescriptor[],
 >(attachments: TEntries): AttachmentAssetManifest<TEntries> {
   const byId = Object.fromEntries(
-    attachments.map((attachment) => [attachment.id, attachment] as const)
+    attachments.map((attachment) => [attachment.id, attachment] as const),
   ) as RegistryById<TEntries>;
 
   return {
     attachments,
-    byId
+    byId,
   };
 }

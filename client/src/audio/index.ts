@@ -1,8 +1,10 @@
 export { audioFoundationConfig } from "./config/audio-foundation";
 export { BrowserAudioSession } from "./classes/browser-audio-session";
 export {
+  createAudioCueDestination,
   initializeCatalogBackedBackgroundMusic,
   playCatalogCue,
+  scheduleNoiseBurst,
   schedulePulse
 } from "./services/procedural-browser-audio";
 export {
@@ -13,6 +15,9 @@ export type {
   AudioContentCatalog,
   AudioCueCatalog,
   AudioCueDefinition,
+  AudioCuePlaybackOptions,
+  AudioCueSpatialSnapshot,
+  AudioCueVector3Snapshot,
   BackgroundMusicTrackCatalog,
   BackgroundMusicTrackDefinition
 } from "./types/audio-catalog";

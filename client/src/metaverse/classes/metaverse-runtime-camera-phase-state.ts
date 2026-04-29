@@ -47,11 +47,12 @@ function freezePresentationSnapshot(
 function freezeStateSnapshot(
   phaseId: MetaverseRuntimeCameraPhaseStateSnapshot["phaseId"],
   presentationSnapshot: MetaverseRuntimeCameraPhasePresentationSnapshot | null,
-  blocked: boolean
+  blocked: boolean,
+  hidesLocalCharacter: boolean = blocked
 ): MetaverseRuntimeCameraPhaseStateSnapshot {
   return Object.freeze({
     blocksMovementInput: blocked,
-    hidesLocalCharacter: blocked,
+    hidesLocalCharacter,
     phaseId,
     presentationSnapshot,
     suppressesInteractionFocus: blocked
@@ -291,7 +292,8 @@ export class MetaverseRuntimeCameraPhaseState {
       return freezeStateSnapshot(
         "death-hold",
         freezePresentationSnapshot(this.#deathCameraSnapshot, null),
-        true
+        true,
+        false
       );
     }
 

@@ -260,6 +260,7 @@ function createRemoteCharacterPresentations(
       Object.freeze({
         aimCamera: null,
         characterId: playerSnapshot.characterId,
+        combatAlive: true,
         look: Object.freeze({
           pitchRadians: playerSnapshot.pose.look.pitchRadians,
           yawRadians: playerSnapshot.pose.look.yawRadians

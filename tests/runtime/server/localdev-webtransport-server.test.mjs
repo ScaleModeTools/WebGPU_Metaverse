@@ -505,6 +505,7 @@ test("LocaldevWebTransportServer routes reliable frames and datagrams through th
       controlSequence: 3,
       playerId: "driver-player"
     },
+    roomId: "metaverse-room-test",
     type: "world-driver-vehicle-control-datagram"
   });
   await worldSession.sendClientDatagram({
@@ -517,6 +518,7 @@ test("LocaldevWebTransportServer routes reliable frames and datagrams through th
       playerId: "driver-player",
       type: "sync-player-look-intent"
     },
+    roomId: "metaverse-room-test",
     type: "world-player-look-intent-datagram"
   });
   await worldSession.sendClientDatagram({
@@ -529,6 +531,7 @@ test("LocaldevWebTransportServer routes reliable frames and datagrams through th
         weaponId: "metaverse-service-pistol-v1"
       }
     },
+    roomId: "metaverse-room-test",
     type: "world-player-weapon-state-datagram"
   });
   await flushAsyncWork();

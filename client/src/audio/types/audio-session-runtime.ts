@@ -1,3 +1,5 @@
+import type { AudioCuePlaybackOptions } from "./audio-catalog";
+
 export interface AudioBusGainLike {
   value: number;
 }
@@ -37,6 +39,7 @@ export interface BrowserAudioSessionDependencies<
   playCue: (input: {
     readonly context: AudioContextLike;
     readonly cueId: CueId;
+    readonly options?: AudioCuePlaybackOptions;
     readonly sfxBus: AudioBusNodeLike;
   }) => void;
 }

@@ -92,7 +92,7 @@ export class MetaverseWorldPlayerActionSync {
 
   issuePlayerAction(
     commandInput: MetaverseIssuePlayerActionCommandInput
-  ): void {
+  ): number | null {
     this.#retireAcknowledgedPlayerActions();
     this.#rebasePlayerActionSequenceCounter();
 
@@ -100,15 +100,16 @@ export class MetaverseWorldPlayerActionSync {
       this.#pendingPlayerActions.length >=
       metaversePlayerActionPendingQueueMaxEntries
     ) {
-      return;
+      return null;
     }
 
     this.#nextPlayerActionSequence += 1;
+    const actionSequence = this.#nextPlayerActionSequence;
     this.#pendingPlayerActions.push({
       command: createMetaverseIssuePlayerActionCommand({
         action: {
           ...commandInput.action,
-          actionSequence: this.#nextPlayerActionSequence
+          actionSequence
         },
         playerId: commandInput.playerId
       }),
@@ -121,6 +122,8 @@ export class MetaverseWorldPlayerActionSync {
       this.#cancelScheduledPlayerActionSync();
       this.#syncPlayerActionSchedule();
     }
+
+    return actionSequence;
   }
 
   dispose(): void {
@@ -273,9 +276,28 @@ export class MetaverseWorldPlayerActionSync {
   }
 
   #readOutstandingWindow(): readonly PendingPlayerAction[] {
+    const firstSwitchActionIndex = this.#pendingPlayerActions.findIndex(
+      (pendingAction) =>
+        pendingAction.command.action.kind === "switch-active-weapon-slot"
+    );
+
+    if (firstSwitchActionIndex < 0) {
+      return this.#pendingPlayerActions.slice(
+        0,
+        metaversePlayerActionOutstandingWindowMaxEntries
+      );
+    }
+
+    if (firstSwitchActionIndex === 0) {
+      return this.#pendingPlayerActions.slice(0, 1);
+    }
+
     return this.#pendingPlayerActions.slice(
       0,
-      metaversePlayerActionOutstandingWindowMaxEntries
+      Math.min(
+        firstSwitchActionIndex,
+        metaversePlayerActionOutstandingWindowMaxEntries
+      )
     );
   }
 

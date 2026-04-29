@@ -410,25 +410,37 @@ function parseMetaverseWorldClientDatagram(
       return createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram({
         command: payload.command as unknown as Parameters<
           typeof createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram
-        >[0]["command"]
+        >[0]["command"],
+        roomId: readNonEmptyStringField(payload.roomId, "roomId") as Parameters<
+          typeof createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram
+        >[0]["roomId"]
       });
     case "world-player-look-intent-datagram":
       return createMetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram({
         command: payload.command as unknown as Parameters<
           typeof createMetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram
-        >[0]["command"]
+        >[0]["command"],
+        roomId: readNonEmptyStringField(payload.roomId, "roomId") as Parameters<
+          typeof createMetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram
+        >[0]["roomId"]
       });
     case "world-player-traversal-intent-datagram":
       return createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram({
         command: payload.command as unknown as Parameters<
           typeof createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram
-        >[0]["command"]
+        >[0]["command"],
+        roomId: readNonEmptyStringField(payload.roomId, "roomId") as Parameters<
+          typeof createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram
+        >[0]["roomId"]
       });
     case "world-player-weapon-state-datagram":
       return createMetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagram({
         command: payload.command as unknown as Parameters<
           typeof createMetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagram
-        >[0]["command"]
+        >[0]["command"],
+        roomId: readNonEmptyStringField(payload.roomId, "roomId") as Parameters<
+          typeof createMetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagram
+        >[0]["roomId"]
       });
     default:
       throw new Error(

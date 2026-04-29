@@ -53,6 +53,14 @@ export type MetaverseRealtimeAuthoritativeLocalPlayerSnapshot =
     readonly lastProcessedLookSequence: number;
     readonly lastProcessedTraversalSequence: number;
     readonly lastProcessedWeaponSequence: number;
+    readonly latestShotResolutionTelemetry:
+      NonNullable<
+        MetaverseRealtimeWorldSnapshot["observerPlayer"]
+      >["latestShotResolutionTelemetry"];
+    readonly recentShotResolutionTelemetry:
+      NonNullable<
+        MetaverseRealtimeWorldSnapshot["observerPlayer"]
+      >["recentShotResolutionTelemetry"];
     readonly recentPlayerActionReceipts:
       readonly MetaversePlayerActionReceiptSnapshot[];
   };
@@ -460,6 +468,10 @@ export class MetaverseRemoteWorldAuthoritativeSnapshotState {
         observerPlayerSnapshot.lastProcessedTraversalSequence,
       lastProcessedWeaponSequence:
         observerPlayerSnapshot.lastProcessedWeaponSequence,
+      latestShotResolutionTelemetry:
+        observerPlayerSnapshot.latestShotResolutionTelemetry,
+      recentShotResolutionTelemetry:
+        observerPlayerSnapshot.recentShotResolutionTelemetry,
       recentPlayerActionReceipts:
         observerPlayerSnapshot.recentPlayerActionReceipts
     });

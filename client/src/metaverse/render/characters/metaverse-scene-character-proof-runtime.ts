@@ -13,23 +13,26 @@ import {
   Vector3
 } from "three/webgpu";
 import { clone as cloneSkinnedGroup } from "three/addons/utils/SkeletonUtils.js";
+import {
+  humanoidV2SocketLocalTransformsById,
+  humanoidV2SocketParentById,
+  socketIds
+} from "@/assets/types/asset-socket";
+import type { SocketId } from "@/assets/types/asset-socket";
 
 import {
-  createHumanoidV2PitchSelectivePistolPoseClip,
-  createHumanoidV2PistolLowerBodyActionsByVocabulary,
-  createHumanoidV2PistolPoseRuntime,
-  createHumanoidV2UpperBodyPistolPoseClip,
-  type HumanoidV2PistolPoseRuntime,
+  createMetaverseCharacterCombatAnimationRuntime,
+  type MetaverseCharacterCombatAnimationRuntime,
   type MetaverseCharacterAnimationRuntimeLike
 } from "./metaverse-scene-character-animation";
 
 import type {
   MetaverseCharacterAnimationClipLoopMode,
   MetaverseCharacterAnimationVocabularyId,
+  MetaverseCharacterCombatAnimationActionId,
   MetaverseCharacterProofConfig,
-  MetaverseHumanoidV2PistolPoseId
 } from "../../types/metaverse-runtime";
-import { metaverseHumanoidV2PistolPoseIds } from "../../types/metaverse-runtime";
+import { metaverseCharacterCombatAnimationActionIds } from "../../types/metaverse-runtime";
 
 const humanoidV2GripSocketBlendAlpha = 0.72;
 const humanoidV2PalmSocketBlendAlpha = 0.45;
@@ -96,6 +99,7 @@ export interface LoadedMetaverseCharacterProofRuntime<
     MetaverseCharacterAnimationVocabularyId,
     MetaverseCharacterAnimationClipLoopMode
   >;
+  readonly combatAnimationRuntime: MetaverseCharacterCombatAnimationRuntime | null;
   readonly firstPersonHeadAnchorNodes: readonly Object3D[];
   readonly heldWeaponPoseRuntime: THeldWeaponPoseRuntime | null;
   readonly mixer: AnimationMixer;
@@ -362,6 +366,61 @@ function cloneCharacterScene(scene: Group): Group {
   return cloneSkinnedGroup(scene) as Group;
 }
 
+function isHumanoidV2SocketId(socketName: string): socketName is SocketId {
+  return (socketIds as readonly string[]).includes(socketName);
+}
+
+function ensureHumanoidV2CanonicalSocketNodes(
+  characterScene: Group,
+  socketNames: readonly string[],
+  showSocketDebug: boolean,
+  nodeResolvers: Pick<
+    MetaverseCharacterProofRuntimeNodeResolvers,
+    | "findBoneNode"
+    | "findOptionalNode"
+    | "upsertSyntheticSocketNode"
+  >
+): void {
+  for (const socketName of socketNames) {
+    if (nodeResolvers.findOptionalNode(characterScene, socketName) !== null) {
+      continue;
+    }
+
+    if (!isHumanoidV2SocketId(socketName)) {
+      throw new Error(
+        `Metaverse humanoid_v2 character cannot synthesize unknown socket ${socketName}.`
+      );
+    }
+
+    const parentBone = nodeResolvers.findBoneNode(
+      characterScene,
+      humanoidV2SocketParentById[socketName],
+      "Metaverse humanoid_v2 canonical socket synthesis"
+    );
+    const transform = humanoidV2SocketLocalTransformsById[socketName];
+
+    nodeResolvers.upsertSyntheticSocketNode(
+      characterScene,
+      parentBone,
+      socketName,
+      new Vector3(
+        transform.position.x,
+        transform.position.y,
+        transform.position.z
+      ),
+      showSocketDebug,
+      new Quaternion(
+        transform.quaternion.x,
+        transform.quaternion.y,
+        transform.quaternion.z,
+        transform.quaternion.w
+      )
+    );
+  }
+
+  characterScene.updateMatrixWorld(true);
+}
+
 function validateCharacterScale(
   characterScene: Group,
   label: string,
@@ -410,8 +469,8 @@ function createCharacterProofRuntime<THeldWeaponPoseRuntime>(
     MetaverseCharacterAnimationVocabularyId,
     MetaverseCharacterAnimationClipLoopMode
   >,
-  humanoidV2PistolPoseClipsByPoseId:
-    | ReadonlyMap<MetaverseHumanoidV2PistolPoseId, AnimationClip>
+  combatAnimationClipsByActionId:
+    | ReadonlyMap<MetaverseCharacterCombatAnimationActionId, AnimationClip>
     | null,
   dependencies: {
     readonly createHeldWeaponPoseRuntime: (
@@ -459,14 +518,6 @@ function createCharacterProofRuntime<THeldWeaponPoseRuntime>(
   }
 
   const idleAction = actionsByVocabulary.get("idle");
-  const humanoidV2PistolLowerBodyActionsByVocabulary =
-    humanoidV2PistolPoseClipsByPoseId !== null
-      ? createHumanoidV2PistolLowerBodyActionsByVocabulary(
-          mixer,
-          clipsByVocabulary
-        )
-      : null;
-
   if (idleAction === undefined) {
     throw new Error(
       `Metaverse character ${characterId} requires an idle animation vocabulary.`
@@ -484,16 +535,15 @@ function createCharacterProofRuntime<THeldWeaponPoseRuntime>(
     characterId,
     clipsByVocabulary,
     clipLoopModesByVocabulary,
+    combatAnimationRuntime:
+      combatAnimationClipsByActionId === null
+        ? null
+        : createMetaverseCharacterCombatAnimationRuntime(
+            mixer,
+            combatAnimationClipsByActionId
+          ),
     firstPersonHeadAnchorNodes,
     heldWeaponPoseRuntime: dependencies.createHeldWeaponPoseRuntime(characterScene),
-    humanoidV2PistolLowerBodyActionsByVocabulary,
-    humanoidV2PistolPoseRuntime:
-      humanoidV2PistolPoseClipsByPoseId !== null
-        ? createHumanoidV2PistolPoseRuntime(
-            mixer,
-            humanoidV2PistolPoseClipsByPoseId
-          )
-        : null,
     mixer,
     scene: characterScene,
     seatSocketNode,
@@ -519,7 +569,7 @@ export function cloneMetaverseCharacterProofRuntime<THeldWeaponPoseRuntime>(
     cloneCharacterScene(sourceRuntime.scene),
     sourceRuntime.clipsByVocabulary,
     sourceRuntime.clipLoopModesByVocabulary,
-    sourceRuntime.humanoidV2PistolPoseRuntime?.clipsByPoseId ?? null,
+    sourceRuntime.combatAnimationRuntime?.clipsByActionId ?? null,
     dependencies
   );
 
@@ -549,6 +599,12 @@ export async function loadMetaverseCharacterProofRuntime<
   ]);
 
   ensureSkinnedMesh(characterAsset.scene);
+  ensureHumanoidV2CanonicalSocketNodes(
+    characterAsset.scene,
+    characterProofConfig.socketNames,
+    dependencies.showSocketDebug,
+    dependencies
+  );
 
   for (const socketName of characterProofConfig.socketNames) {
     const socketNode = dependencies.findSocketNode(characterAsset.scene, socketName);
@@ -611,40 +667,36 @@ export async function loadMetaverseCharacterProofRuntime<
     );
   }
 
-  let humanoidV2PistolPoseClipsByPoseId:
-    | ReadonlyMap<MetaverseHumanoidV2PistolPoseId, AnimationClip>
+  let combatAnimationClipsByActionId:
+    | ReadonlyMap<MetaverseCharacterCombatAnimationActionId, AnimationClip>
     | null = null;
 
   if (
-    characterProofConfig.humanoidV2PistolPoseProofConfig !== null &&
-    characterProofConfig.humanoidV2PistolPoseProofConfig !== undefined
+    characterProofConfig.combatAnimationProofConfig !== null &&
+    characterProofConfig.combatAnimationProofConfig !== undefined
   ) {
-    const pistolPoseProofConfig = characterProofConfig.humanoidV2PistolPoseProofConfig;
+    const combatAnimationProofConfig =
+      characterProofConfig.combatAnimationProofConfig;
 
     try {
-      let pistolAnimationAsset = animationAssetsByPath.get(
-        pistolPoseProofConfig.sourcePath
-      );
-
-      if (pistolAnimationAsset === undefined) {
-        pistolAnimationAsset = await sceneAssetLoader.loadAsync(
-          pistolPoseProofConfig.sourcePath
-        );
-        animationAssetsByPath.set(
-          pistolPoseProofConfig.sourcePath,
-          pistolAnimationAsset
-        );
-      }
-
-      const clipsByPoseId = new Map<
-        MetaverseHumanoidV2PistolPoseId,
+      const clipsByActionId = new Map<
+        MetaverseCharacterCombatAnimationActionId,
         AnimationClip
       >();
       let missingClipName: string | null = null;
 
-      for (const poseId of metaverseHumanoidV2PistolPoseIds) {
-        const clipName = pistolPoseProofConfig.clipNamesByPoseId[poseId];
-        const clip = pistolAnimationAsset.animations.find(
+      for (const actionId of metaverseCharacterCombatAnimationActionIds) {
+        const sourcePath =
+          combatAnimationProofConfig.sourcePathByActionId[actionId];
+        let animationAsset = animationAssetsByPath.get(sourcePath);
+
+        if (animationAsset === undefined) {
+          animationAsset = await sceneAssetLoader.loadAsync(sourcePath);
+          animationAssetsByPath.set(sourcePath, animationAsset);
+        }
+
+        const clipName = combatAnimationProofConfig.clipNamesByActionId[actionId];
+        const clip = animationAsset.animations.find(
           (animation) => animation.name === clipName
         );
 
@@ -653,43 +705,19 @@ export async function loadMetaverseCharacterProofRuntime<
           break;
         }
 
-        clipsByPoseId.set(
-          poseId,
-          createHumanoidV2UpperBodyPistolPoseClip(clip)
-        );
+        clipsByActionId.set(actionId, clip);
       }
 
       if (missingClipName === null) {
-        const downClip = clipsByPoseId.get("down");
-        const neutralClip = clipsByPoseId.get("neutral");
-        const upClip = clipsByPoseId.get("up");
-
-        if (
-          downClip !== undefined &&
-          neutralClip !== undefined &&
-          upClip !== undefined
-        ) {
-          clipsByPoseId.set(
-            "down",
-            createHumanoidV2PitchSelectivePistolPoseClip(downClip, neutralClip)
-          );
-          clipsByPoseId.set(
-            "up",
-            createHumanoidV2PitchSelectivePistolPoseClip(upClip, neutralClip)
-          );
-        }
-
-        humanoidV2PistolPoseClipsByPoseId = clipsByPoseId;
-      }
-
-      if (missingClipName !== null) {
+        combatAnimationClipsByActionId = clipsByActionId;
+      } else {
         dependencies.warn(
-          `Metaverse humanoid_v2 pistol pose overlay disabled because ${pistolPoseProofConfig.sourcePath} is missing ${missingClipName}.`
+          `Metaverse combat animation overlay disabled because it is missing ${missingClipName}.`
         );
       }
     } catch {
       dependencies.warn(
-        `Metaverse humanoid_v2 pistol pose overlay disabled because ${pistolPoseProofConfig.sourcePath} could not load.`
+        "Metaverse combat animation overlay disabled because an animation source could not load."
       );
     }
   }
@@ -700,7 +728,7 @@ export async function loadMetaverseCharacterProofRuntime<
     characterAsset.scene,
     clipsByVocabulary,
     clipLoopModesByVocabulary,
-    humanoidV2PistolPoseClipsByPoseId,
+    combatAnimationClipsByActionId,
     dependencies
   );
 }

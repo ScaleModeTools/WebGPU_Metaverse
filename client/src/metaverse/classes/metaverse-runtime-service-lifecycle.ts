@@ -90,6 +90,9 @@ interface MetaverseRuntimeServiceLifecycleTraversalRuntime {
 interface MetaverseRuntimeServiceLifecycleDependencies {
   readonly authoritativeWorldSync: MetaverseRuntimeServiceLifecycleAuthoritativeWorldSync;
   readonly bootLifecycle: MetaverseRuntimeServiceLifecycleBootLifecycle;
+  readonly combatFeedbackRuntime?: {
+    reset(): void;
+  } | null;
   readonly combatLifecycle?: {
     reset(): void;
   } | null;
@@ -132,6 +135,9 @@ interface MetaverseRuntimeServiceBootCleanupRequest {
 export class MetaverseRuntimeServiceLifecycle {
   readonly #authoritativeWorldSync: MetaverseRuntimeServiceLifecycleAuthoritativeWorldSync;
   readonly #bootLifecycle: MetaverseRuntimeServiceLifecycleBootLifecycle;
+  readonly #combatFeedbackRuntime: {
+    reset(): void;
+  } | null;
   readonly #combatLifecycle: {
     reset(): void;
   } | null;
@@ -153,6 +159,7 @@ export class MetaverseRuntimeServiceLifecycle {
   constructor({
     authoritativeWorldSync,
     bootLifecycle,
+    combatFeedbackRuntime,
     combatLifecycle,
     environmentPhysicsRuntime,
     ensureAuthoritativeWorldBundleSynchronized,
@@ -168,6 +175,7 @@ export class MetaverseRuntimeServiceLifecycle {
   }: MetaverseRuntimeServiceLifecycleDependencies) {
     this.#authoritativeWorldSync = authoritativeWorldSync;
     this.#bootLifecycle = bootLifecycle;
+    this.#combatFeedbackRuntime = combatFeedbackRuntime ?? null;
     this.#combatLifecycle = combatLifecycle ?? null;
     this.#environmentPhysicsRuntime = environmentPhysicsRuntime;
     this.#ensureAuthoritativeWorldBundleSynchronized =
@@ -184,6 +192,7 @@ export class MetaverseRuntimeServiceLifecycle {
   }
 
   resetForStart(): void {
+    this.#combatFeedbackRuntime?.reset();
     this.#combatLifecycle?.reset();
     this.#weaponPresentationRuntime?.reset();
     this.#traversalRuntime.reset();
@@ -259,6 +268,7 @@ export class MetaverseRuntimeServiceLifecycle {
   disposeRuntimeServices(): void {
     this.#flightInputRuntime.dispose();
     this.#authoritativeWorldSync.reset();
+    this.#combatFeedbackRuntime?.reset();
     this.#combatLifecycle?.reset();
     this.#frameLoop.reset();
     this.#environmentPhysicsRuntime.dispose();

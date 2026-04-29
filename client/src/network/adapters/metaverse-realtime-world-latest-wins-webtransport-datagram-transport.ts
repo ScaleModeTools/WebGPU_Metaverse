@@ -5,6 +5,7 @@ import type {
   MetaverseSyncPlayerWeaponStateCommand,
   MetaverseSyncPlayerTraversalIntentCommand
 } from "@webgpu-metaverse/shared/metaverse/realtime";
+import type { MetaverseRoomId } from "@webgpu-metaverse/shared";
 import {
   createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram,
   createMetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram,
@@ -16,6 +17,7 @@ import { LatestWinsWebTransportJsonDatagramChannel } from "./latest-wins-webtran
 import type { MetaverseRealtimeWorldLatestWinsDatagramTransport } from "../types/metaverse-realtime-world-latest-wins-datagram-transport";
 
 interface MetaverseRealtimeWorldLatestWinsWebTransportDatagramTransportConfig {
+  readonly roomId: MetaverseRoomId;
   readonly webTransportUrl: string;
 }
 
@@ -71,7 +73,8 @@ export function createMetaverseRealtimeWorldLatestWinsWebTransportDatagramTransp
     ): Promise<void> {
       await channel.sendDatagram(
         createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram({
-          command
+          command,
+          roomId: config.roomId
         })
       );
     },
@@ -80,7 +83,8 @@ export function createMetaverseRealtimeWorldLatestWinsWebTransportDatagramTransp
     ): Promise<void> {
       await channel.sendDatagram(
         createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram({
-          command
+          command,
+          roomId: config.roomId
         })
       );
     },
@@ -89,7 +93,8 @@ export function createMetaverseRealtimeWorldLatestWinsWebTransportDatagramTransp
     ): Promise<void> {
       await channel.sendDatagram(
         createMetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram({
-          command
+          command,
+          roomId: config.roomId
         })
       );
     },
@@ -98,7 +103,8 @@ export function createMetaverseRealtimeWorldLatestWinsWebTransportDatagramTransp
     ): Promise<void> {
       await channel.sendDatagram(
         createMetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagram({
-          command
+          command,
+          roomId: config.roomId
         })
       );
     }

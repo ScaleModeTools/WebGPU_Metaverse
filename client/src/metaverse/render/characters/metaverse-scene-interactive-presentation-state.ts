@@ -40,7 +40,10 @@ export type MetaverseSceneCharacterProofRuntime =
   LoadedMetaverseCharacterProofRuntime<HumanoidV2HeldWeaponPoseRuntime | null>;
 
 interface MetaverseSceneInteractivePresentationStateDependencies {
-  readonly attachmentProofConfig: MetaverseAttachmentProofConfig | null;
+  readonly attachmentProofConfig?: MetaverseAttachmentProofConfig | null;
+  readonly attachmentProofConfigs?:
+    | readonly MetaverseAttachmentProofConfig[]
+    | null;
   readonly attachmentRuntimeNodeResolvers: MetaverseAttachmentRuntimeNodeResolvers;
   readonly characterProofConfig: MetaverseCharacterProofConfig | null;
   readonly characterProofRuntimeNodeResolvers: MetaverseCharacterProofRuntimeNodeResolvers;
@@ -51,24 +54,28 @@ interface MetaverseSceneInteractivePresentationStateDependencies {
   readonly warn: (message: string) => void;
 }
 
-function resolveUnarmedCharacterProofConfig(
-  characterProofConfig: MetaverseCharacterProofConfig
-): MetaverseCharacterProofConfig {
-  if (
-    characterProofConfig.humanoidV2PistolPoseProofConfig === null ||
-    characterProofConfig.humanoidV2PistolPoseProofConfig === undefined
-  ) {
-    return characterProofConfig;
+function resolveAttachmentProofConfigs(
+  dependencies: Pick<
+    MetaverseSceneInteractivePresentationStateDependencies,
+    "attachmentProofConfig" | "attachmentProofConfigs"
+  >
+): readonly MetaverseAttachmentProofConfig[] {
+  if (dependencies.attachmentProofConfigs !== undefined) {
+    return dependencies.attachmentProofConfigs ?? [];
   }
 
-  return Object.freeze({
-    ...characterProofConfig,
-    humanoidV2PistolPoseProofConfig: null
-  });
+  return dependencies.attachmentProofConfig === null ||
+    dependencies.attachmentProofConfig === undefined
+    ? []
+    : [dependencies.attachmentProofConfig];
 }
 
 export class MetaverseSceneInteractivePresentationState {
   attachmentProofRuntime: MetaverseAttachmentProofRuntime | null = null;
+  readonly attachmentProofRuntimesByAttachmentId = new Map<
+    string,
+    MetaverseAttachmentProofRuntime
+  >();
   characterProofRuntime: MetaverseSceneCharacterProofRuntime | null = null;
 
   readonly #dependencies: MetaverseSceneInteractivePresentationStateDependencies;
@@ -91,7 +98,6 @@ export class MetaverseSceneInteractivePresentationState {
 
     this.#interactivePresentationBootPromise = (async () => {
       const {
-        attachmentProofConfig,
         attachmentRuntimeNodeResolvers,
         characterProofConfig,
         characterProofRuntimeNodeResolvers,
@@ -101,8 +107,11 @@ export class MetaverseSceneInteractivePresentationState {
         showSocketDebug,
         warn
       } = this.#dependencies;
+      const attachmentProofConfigs = resolveAttachmentProofConfigs(
+        this.#dependencies
+      );
 
-      if (attachmentProofConfig !== null && characterProofConfig !== null) {
+      if (attachmentProofConfigs.length > 0 && characterProofConfig !== null) {
         const loadedCharacterProofRuntime = await loadMetaverseCharacterProofRuntime(
           characterProofConfig,
           {
@@ -121,18 +130,25 @@ export class MetaverseSceneInteractivePresentationState {
 
         this.characterProofRuntime = loadedCharacterProofRuntime;
         scene.add(loadedCharacterProofRuntime.anchorGroup);
-        this.attachmentProofRuntime = await loadMetaverseAttachmentProofRuntime(
-          attachmentProofConfig,
-          loadedCharacterProofRuntime,
-          {
-            createSceneAssetLoader,
-            heldWeaponSolveDirectionEpsilon,
-            ...attachmentRuntimeNodeResolvers
-          }
-        );
+        for (const attachmentProofConfig of attachmentProofConfigs) {
+          const attachmentProofRuntime = await loadMetaverseAttachmentProofRuntime(
+            attachmentProofConfig,
+            loadedCharacterProofRuntime,
+            {
+              createSceneAssetLoader,
+              heldWeaponSolveDirectionEpsilon,
+              ...attachmentRuntimeNodeResolvers
+            }
+          );
+
+          this.attachmentProofRuntimesByAttachmentId.set(
+            attachmentProofRuntime.attachmentId,
+            attachmentProofRuntime
+          );
+        }
       } else if (characterProofConfig !== null) {
         const loadedCharacterProofRuntime = await loadMetaverseCharacterProofRuntime(
-          resolveUnarmedCharacterProofConfig(characterProofConfig),
+          characterProofConfig,
           {
             createHeldWeaponPoseRuntime: () => null,
             createSceneAssetLoader,
@@ -145,7 +161,7 @@ export class MetaverseSceneInteractivePresentationState {
 
         this.characterProofRuntime = loadedCharacterProofRuntime;
         scene.add(loadedCharacterProofRuntime.anchorGroup);
-      } else if (attachmentProofConfig !== null) {
+      } else if (attachmentProofConfigs.length > 0) {
         throw new Error(
           "Metaverse scene cannot boot an attachment proof slice without a character proof slice."
         );
@@ -169,19 +185,27 @@ export class MetaverseSceneInteractivePresentationState {
       | null,
     weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null = null
   ): void {
-    if (
-      this.attachmentProofRuntime === null ||
-      this.characterProofRuntime === null
-    ) {
+    this.attachmentProofRuntime = null;
+
+    if (this.characterProofRuntime === null) {
       return;
     }
 
-    syncAttachmentProofRuntimeMount(
-      this.attachmentProofRuntime,
-      this.characterProofRuntime,
-      mountedOccupancyPresentationState,
-      this.#dependencies.attachmentRuntimeNodeResolvers,
-      weaponState
-    );
+    for (const attachmentProofRuntime of this.attachmentProofRuntimesByAttachmentId.values()) {
+      syncAttachmentProofRuntimeMount(
+        attachmentProofRuntime,
+        this.characterProofRuntime,
+        mountedOccupancyPresentationState,
+        this.#dependencies.attachmentRuntimeNodeResolvers,
+        weaponState
+      );
+
+      if (
+        weaponState !== null &&
+        weaponState.weaponId === attachmentProofRuntime.attachmentId
+      ) {
+        this.attachmentProofRuntime = attachmentProofRuntime;
+      }
+    }
   }
 }

@@ -67,6 +67,20 @@ function toFiniteNumber(value: number, fallback = 0): number {
   return Number.isFinite(value) ? value : fallback;
 }
 
+function readRayHitDistanceMeters(input: {
+  readonly timeOfImpact?: number;
+  readonly toi?: number;
+}): number | null {
+  const distanceMeters =
+    input.timeOfImpact === undefined ? input.toi : input.timeOfImpact;
+
+  return distanceMeters !== undefined &&
+    Number.isFinite(distanceMeters) &&
+    distanceMeters >= 0
+    ? distanceMeters
+    : null;
+}
+
 function sanitizeQuaternion(
   rotation: PhysicsQuaternionSnapshot
 ): PhysicsQuaternionSnapshot {
@@ -317,14 +331,30 @@ export class MetaverseAuthoritativeRapierPhysicsRuntime {
       return null;
     }
 
+    const distanceMeters = readRayHitDistanceMeters(rayHit);
+
+    if (distanceMeters === null) {
+      return null;
+    }
+
+    const point = Object.freeze({
+      x: origin.x + direction.x * distanceMeters,
+      y: origin.y + direction.y * distanceMeters,
+      z: origin.z + direction.z * distanceMeters
+    });
+
+    if (
+      !Number.isFinite(point.x) ||
+      !Number.isFinite(point.y) ||
+      !Number.isFinite(point.z)
+    ) {
+      return null;
+    }
+
     return Object.freeze({
       collider: rayHit.collider,
-      distanceMeters: rayHit.toi,
-      point: Object.freeze({
-        x: origin.x + direction.x * rayHit.toi,
-        y: origin.y + direction.y * rayHit.toi,
-        z: origin.z + direction.z * rayHit.toi
-      })
+      distanceMeters,
+      point
     });
   }
 

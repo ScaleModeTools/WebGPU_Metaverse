@@ -4,6 +4,7 @@ import test, { after, before } from "node:test";
 import {
   createMetaversePlayerId,
   createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram,
+  createMetaverseRoomId,
   createMetaverseSyncDriverVehicleControlCommand
 } from "@webgpu-metaverse/shared";
 
@@ -24,13 +25,16 @@ test("createMetaverseRealtimeWorldDriverVehicleControlWebTransportDatagramTransp
     createMetaverseRealtimeWorldDriverVehicleControlWebTransportDatagramTransport
   } = await clientLoader.load("/src/network/index.ts");
   const playerId = createMetaversePlayerId("harbor-pilot-1");
+  const roomId = createMetaverseRoomId("tdm-harbor");
 
   assert.notEqual(playerId, null);
+  assert.notEqual(roomId, null);
 
   const sentDatagrams = [];
   const transport =
     createMetaverseRealtimeWorldDriverVehicleControlWebTransportDatagramTransport(
       {
+        roomId,
         webTransportUrl: "https://example.test/metaverse/world"
       },
       {
@@ -70,7 +74,8 @@ test("createMetaverseRealtimeWorldDriverVehicleControlWebTransportDatagramTransp
         },
         controlSequence: 2,
         playerId
-      })
+      }),
+      roomId
     })
   );
 });
@@ -79,11 +84,15 @@ test("createMetaverseRealtimeWorldDriverVehicleControlWebTransportDatagramTransp
   const {
     createMetaverseRealtimeWorldDriverVehicleControlWebTransportDatagramTransport
   } = await clientLoader.load("/src/network/index.ts");
+  const roomId = createMetaverseRoomId("tdm-harbor");
+
+  assert.notEqual(roomId, null);
 
   let disposed = false;
   const transport =
     createMetaverseRealtimeWorldDriverVehicleControlWebTransportDatagramTransport(
       {
+        roomId,
         webTransportUrl: "https://example.test/metaverse/world"
       },
       {

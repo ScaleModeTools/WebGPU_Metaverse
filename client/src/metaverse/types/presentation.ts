@@ -12,7 +12,6 @@ export const metaverseCharacterAnimationVocabularyIds = [
   "jump-up",
   "jump-mid",
   "jump-down",
-  "aim",
   "interact",
   "seated"
 ] as const;
@@ -53,6 +52,7 @@ export type MetaverseRemoteCharacterPoseSyncMode =
 export interface MetaverseRemoteCharacterPresentationSnapshot {
   readonly aimCamera: MetaverseCameraSnapshot | null;
   readonly characterId: string;
+  readonly combatAlive: boolean;
   readonly look: MetaverseCharacterLookSnapshot;
   readonly mountedOccupancy: MetaversePresenceMountedOccupancySnapshot | null;
   readonly playerId: string;

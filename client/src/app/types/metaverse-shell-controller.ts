@@ -7,7 +7,10 @@ import type {
   PlayerProfile
 } from "@webgpu-metaverse/shared";
 
-import type { AudioSessionSnapshot } from "../../audio";
+import type {
+  AudioCuePlaybackOptions,
+  AudioSessionSnapshot
+} from "../../audio";
 import type {
   GameplayDebugPanelMode,
   GameplaySignal
@@ -20,6 +23,7 @@ import type {
   MetaverseControllerSchemeId
 } from "../../input";
 import type { MetaverseControlModeId } from "../../metaverse";
+import type { MetaverseCombatAudioCueId } from "../../metaverse/audio";
 import type { MetaverseWorldPreviewLaunchSelectionSnapshot } from "../../metaverse/world/map-bundles";
 import type { WebGpuMetaverseCapabilitySnapshot } from "../../metaverse";
 import type {
@@ -77,6 +81,10 @@ export interface MetaverseShellController {
   readonly onGameplaySignal: (signal: GameplaySignal) => void;
   readonly onGameplayDebugPanelModeChange: (
     mode: GameplayDebugPanelMode
+  ) => void;
+  readonly onMetaverseCombatAudioCue: (
+    cueId: MetaverseCombatAudioCueId,
+    options?: AudioCuePlaybackOptions
   ) => void;
   readonly onGlobalControllerBindingPresetChange: (
     globalBindingPresetId: GlobalControllerBindingPresetId

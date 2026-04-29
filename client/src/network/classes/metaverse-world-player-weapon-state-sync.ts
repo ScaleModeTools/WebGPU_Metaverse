@@ -51,8 +51,22 @@ function playerWeaponStateMatches(
     createMetaverseRealtimePlayerWeaponStateSnapshot(rightState);
 
   return (
+    leftState.activeSlotId === normalizedRightState.activeSlotId &&
     leftState.aimMode === normalizedRightState.aimMode &&
-    leftState.weaponId === normalizedRightState.weaponId
+    leftState.weaponId === normalizedRightState.weaponId &&
+    leftState.slots.length === normalizedRightState.slots.length &&
+    leftState.slots.every((leftSlot, slotIndex) => {
+      const rightSlot = normalizedRightState.slots[slotIndex] ?? null;
+
+      return (
+        rightSlot !== null &&
+        leftSlot.attachmentId === rightSlot.attachmentId &&
+        leftSlot.equipped === rightSlot.equipped &&
+        leftSlot.slotId === rightSlot.slotId &&
+        leftSlot.weaponId === rightSlot.weaponId &&
+        leftSlot.weaponInstanceId === rightSlot.weaponInstanceId
+      );
+    })
   );
 }
 
@@ -123,6 +137,7 @@ export class MetaverseWorldPlayerWeaponStateSync {
     this.#pendingPlayerWeaponStateCommand =
       createMetaverseSyncPlayerWeaponStateCommand({
         playerId: commandInput.playerId,
+        requestedActiveSlotId: commandInput.requestedActiveSlotId ?? null,
         weaponSequence: this.#nextPlayerWeaponSequence,
         weaponState: commandInput.weaponState
       });

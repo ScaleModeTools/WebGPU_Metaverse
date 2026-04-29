@@ -1,11 +1,21 @@
 import type { Camera, Scene } from "three/webgpu";
 import type {
+  MetaverseCombatAimSnapshotInput,
   MetaversePlayerTraversalIntentSnapshotInput,
   MetaverseRealtimePlayerSnapshot,
-  MetaverseTraversalPlayerBodyBlockerSnapshot
+  MetaverseRealtimeWorldSnapshot,
+  MetaverseTraversalPlayerBodyBlockerSnapshot,
+  MetaverseWeaponSlotId
 } from "@webgpu-metaverse/shared";
 
 import {
+  createMetaverseFireAimSnapshotFromSemanticAimFrame,
+  createMetaverseLookSyncIntentFromSemanticAimFrame,
+  createMetaverseSemanticAimFrameFromCameraSnapshot,
+  type MetaverseSemanticAimFrame
+} from "../aim/metaverse-semantic-aim";
+import {
+  metaverseLocalAuthorityReconciliationConfig,
   metaverseWorldCadenceConfig
 } from "../config/metaverse-world-network";
 import { resolveFocusedPortalSnapshot } from "../states/metaverse-flight";
@@ -21,6 +31,9 @@ import type {
   MetaverseHudSnapshot,
   MetaverseMountedInteractionSnapshot,
   MetaverseRemoteCharacterPresentationSnapshot,
+  MetaverseCombatPresentationEvent,
+  MetaverseRenderedWeaponMuzzleFrame,
+  MetaverseRenderedWeaponMuzzleQuery,
   MountedEnvironmentSnapshot,
   MetaversePortalConfig
 } from "../types/metaverse-runtime";
@@ -35,6 +48,7 @@ const neutralMetaverseFlightInputSnapshot = Object.freeze({
   primaryActionPressedCount: 0,
   secondaryAction: false,
   strafeAxis: 0,
+  weaponSwitchPressedCount: 0,
   yawAxis: 0
 });
 const metaverseRuntimeTraversalFixedStepSeconds =
@@ -74,6 +88,50 @@ interface MetaverseRuntimeFrameBootLifecycle {
 
 interface MetaverseRuntimeFrameCombatLifecycle {
   syncLocalCombatState(liveCameraSnapshot: MetaverseCameraSnapshot): void;
+}
+
+interface MetaverseRuntimeFrameCombatFeedbackRuntime {
+  capturePendingLocalShotOrigin(input: {
+    readonly actionSequence?: number | null;
+    readonly directionWorld?: {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+    } | null;
+    readonly originWorld?: {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+    } | null;
+    readonly originSource?:
+      | "rendered-muzzle-post-sync"
+      | null;
+    readonly originForwardWorld?: {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+    } | null;
+    readonly weaponId: string;
+  }): void;
+  drainQueuedVisualIntents?(input: {
+    readonly cameraSnapshot: MetaverseCameraSnapshot;
+    readonly resolveRenderedMuzzle?: ((
+      query: MetaverseRenderedWeaponMuzzleQuery
+    ) => MetaverseRenderedWeaponMuzzleFrame | null) | null;
+  }): void;
+  registerPendingLocalShot(input: {
+    readonly actionSequence?: number | null;
+    readonly directionWorld?: {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+    } | null;
+    readonly weaponId: string;
+  }): void;
+  syncAuthoritativeWorld(
+    worldSnapshot: MetaverseRealtimeWorldSnapshot | null,
+    cameraSnapshot: MetaverseCameraSnapshot
+  ): void;
 }
 
 interface MetaverseRuntimeFrameAuthoritativeWorldSync {
@@ -125,12 +183,24 @@ interface MetaverseRuntimeFrameRemoteWorldRuntime {
   sampleRemoteWorld(): void;
   fireWeapon(input: {
     readonly aimMode?: "ads" | "hip-fire";
-    readonly aimSnapshot: {
-      readonly pitchRadians: number;
-      readonly yawRadians: number;
-    };
+    readonly aimSnapshot: MetaverseCombatAimSnapshotInput;
     readonly weaponId: string;
-  }): void;
+  }): {
+    readonly actionSequence: number;
+    readonly issuedAtAuthoritativeTimeMs: number;
+    readonly weaponId: string;
+  } | null;
+  switchActiveWeaponSlot(input: {
+    readonly intendedWeaponId?: string | null;
+    readonly intendedWeaponInstanceId?: string | null;
+    readonly requestedActiveSlotId: MetaverseWeaponSlotId;
+  }): {
+    readonly actionSequence: number;
+    readonly requestedActiveSlotId: MetaverseWeaponSlotId;
+  } | null;
+  readFreshAuthoritativeWorldSnapshot?(
+    maxAuthoritativeSnapshotAgeMs: number
+  ): MetaverseRealtimeWorldSnapshot | null;
   syncConnection(presenceJoined: boolean): void;
   syncLocalDriverVehicleControl(
     controlIntentSnapshot: RoutedDriverVehicleControlIntentSnapshot | null
@@ -151,6 +221,28 @@ interface MetaverseRuntimeFrameRemoteWorldRuntime {
 interface MetaverseRuntimeFrameSceneRuntime {
   readonly camera: Camera;
   readonly scene: Scene;
+  readLocalWeaponProjectileMuzzleWorldPosition?(
+    weaponId: string
+  ): { readonly x: number; readonly y: number; readonly z: number } | null;
+  readLocalWeaponProjectileMuzzleFrame?(weaponId: string): {
+    readonly forwardWorld?: {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+    } | null;
+    readonly originWorld: {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+    };
+  } | null;
+  readRenderedWeaponMuzzleFrame?(
+    query: MetaverseRenderedWeaponMuzzleQuery
+  ): MetaverseRenderedWeaponMuzzleFrame | null;
+  syncCombatProjectiles?(
+    projectiles: MetaverseRealtimeWorldSnapshot["projectiles"],
+    nowMs: number
+  ): void;
   syncPresentation(
     cameraSnapshot: MetaverseCameraSnapshot,
     focusedPortal: FocusedExperiencePortalSnapshot | null,
@@ -161,10 +253,15 @@ interface MetaverseRuntimeFrameSceneRuntime {
     localWeaponAdsBlend: number | null,
     remoteCharacterPresentations: readonly MetaverseRemoteCharacterPresentationSnapshot[],
     mountedEnvironment: MountedEnvironmentSnapshot | null,
-    cameraFieldOfViewDegrees?: number | null
+    cameraFieldOfViewDegrees?: number | null,
+    localSemanticAimFrame?: MetaverseSemanticAimFrame | null,
+    combatProjectiles?: MetaverseRealtimeWorldSnapshot["projectiles"]
   ): {
     readonly focusedMountable: FocusedMountableSnapshot | null;
   };
+  triggerCombatPresentationEvent(
+    event: MetaverseCombatPresentationEvent
+  ): void;
   syncViewport(
     renderer: MetaverseRuntimeFrameRendererHost,
     canvas: MetaverseRuntimeFrameCanvasHost,
@@ -200,11 +297,16 @@ interface MetaverseRuntimeFrameWeaponPresentationRuntime {
   readonly cameraFieldOfViewDegrees: number;
   readonly firePressedThisFrame: boolean;
   readonly weaponState: MetaverseRealtimePlayerSnapshot["weaponState"] | null;
+  consumeSlotSwitchIntent?(): {
+    readonly intendedWeaponId: string;
+    readonly intendedWeaponInstanceId: string;
+    readonly requestedActiveSlotId: MetaverseWeaponSlotId;
+  } | null;
   advance(input: {
     readonly deltaSeconds: number;
     readonly flightInput: Pick<
       MetaverseFlightInputSnapshot,
-      "primaryAction" | "secondaryAction"
+      "primaryAction" | "secondaryAction" | "weaponSwitchPressedCount"
     >;
     readonly mountedEnvironment: MountedEnvironmentSnapshot | null;
   }): void;
@@ -213,6 +315,7 @@ interface MetaverseRuntimeFrameWeaponPresentationRuntime {
 interface MetaverseRuntimeFrameLoopDependencies {
   readonly authoritativeWorldSync: MetaverseRuntimeFrameAuthoritativeWorldSync;
   readonly bootLifecycle: MetaverseRuntimeFrameBootLifecycle;
+  readonly combatFeedbackRuntime?: MetaverseRuntimeFrameCombatFeedbackRuntime;
   readonly combatLifecycle?: MetaverseRuntimeFrameCombatLifecycle;
   readonly devicePixelRatio: number;
   readonly environmentPhysicsRuntime: MetaverseRuntimeFrameEnvironmentPhysicsRuntime;
@@ -235,6 +338,7 @@ interface MetaverseRuntimeFrameSyncRequest {
 export class MetaverseRuntimeFrameLoop {
   readonly #authoritativeWorldSync: MetaverseRuntimeFrameAuthoritativeWorldSync;
   readonly #bootLifecycle: MetaverseRuntimeFrameBootLifecycle;
+  readonly #combatFeedbackRuntime: MetaverseRuntimeFrameCombatFeedbackRuntime | null;
   readonly #combatLifecycle: MetaverseRuntimeFrameCombatLifecycle | null;
   readonly #devicePixelRatio: number;
   readonly #environmentPhysicsRuntime: MetaverseRuntimeFrameEnvironmentPhysicsRuntime;
@@ -260,6 +364,7 @@ export class MetaverseRuntimeFrameLoop {
   constructor({
     authoritativeWorldSync,
     bootLifecycle,
+    combatFeedbackRuntime,
     combatLifecycle,
     devicePixelRatio,
     environmentPhysicsRuntime,
@@ -274,6 +379,7 @@ export class MetaverseRuntimeFrameLoop {
   }: MetaverseRuntimeFrameLoopDependencies) {
     this.#authoritativeWorldSync = authoritativeWorldSync;
     this.#bootLifecycle = bootLifecycle;
+    this.#combatFeedbackRuntime = combatFeedbackRuntime ?? null;
     this.#combatLifecycle = combatLifecycle ?? null;
     this.#devicePixelRatio = devicePixelRatio;
     this.#environmentPhysicsRuntime = environmentPhysicsRuntime;
@@ -437,6 +543,23 @@ export class MetaverseRuntimeFrameLoop {
       flightInput: movementInput,
       mountedEnvironment
     });
+    const localWeaponSlotSwitchIntent =
+      weaponPresentationRuntime?.consumeSlotSwitchIntent?.() ?? null;
+    const localWeaponState = weaponPresentationRuntime?.weaponState ?? null;
+    const localWeaponAdsBlend = weaponPresentationRuntime?.adsBlend ?? 0;
+    const localSemanticAimFrame =
+      localWeaponState === null
+        ? null
+        : createMetaverseSemanticAimFrameFromCameraSnapshot({
+            actorFacingYawRadians:
+              this.#traversalRuntime.characterPresentationSnapshot?.yawRadians ??
+              cameraSnapshot.yawRadians,
+            adsBlend: localWeaponAdsBlend,
+            cameraSnapshot,
+            quality: "full_camera_ray",
+            source: "local_camera",
+            weaponState: localWeaponState
+          });
 
     this.#presenceRuntime.syncPresencePose(
       this.#traversalRuntime.characterPresentationSnapshot,
@@ -448,24 +571,61 @@ export class MetaverseRuntimeFrameLoop {
     this.#remoteWorldRuntime.syncLocalPlayerLook(
       this.#traversalRuntime.locomotionMode === "mounted"
         ? cameraSnapshot
-        : null
+        : localSemanticAimFrame === null || mountedEnvironment !== null
+          ? null
+          : createMetaverseLookSyncIntentFromSemanticAimFrame(
+              localSemanticAimFrame
+            )
     );
     this.#remoteWorldRuntime.syncLocalPlayerWeaponState?.(
-      weaponPresentationRuntime?.weaponState ?? null
+      localWeaponState
     );
+    if (localWeaponSlotSwitchIntent !== null) {
+      this.#remoteWorldRuntime.switchActiveWeaponSlot({
+        intendedWeaponId: localWeaponSlotSwitchIntent.intendedWeaponId,
+        intendedWeaponInstanceId:
+          localWeaponSlotSwitchIntent.intendedWeaponInstanceId,
+        requestedActiveSlotId:
+          localWeaponSlotSwitchIntent.requestedActiveSlotId
+      });
+    }
+    let pendingLocalShotFeedback:
+      | {
+          readonly actionSequence: number;
+          readonly directionWorld: MetaverseSemanticAimFrame["cameraForwardWorld"];
+          readonly weaponId: string;
+        }
+      | null = null;
+
     if (
       weaponPresentationRuntime?.firePressedThisFrame === true &&
       mountedEnvironment === null &&
-      weaponPresentationRuntime.weaponState !== null
+      localWeaponState !== null &&
+      localSemanticAimFrame !== null
     ) {
-      this.#remoteWorldRuntime.fireWeapon({
-        aimMode: weaponPresentationRuntime.weaponState.aimMode,
-        aimSnapshot: {
-          pitchRadians: cameraSnapshot.pitchRadians,
-          yawRadians: cameraSnapshot.yawRadians
-        },
-        weaponId: weaponPresentationRuntime.weaponState.weaponId
-      });
+      const fireAimSnapshot =
+        createMetaverseFireAimSnapshotFromSemanticAimFrame(localSemanticAimFrame);
+      const fireWeaponIssue =
+        fireAimSnapshot === null
+          ? null
+          : this.#remoteWorldRuntime.fireWeapon({
+              aimMode: localWeaponState.aimMode,
+              aimSnapshot: fireAimSnapshot,
+              weaponId: localWeaponState.weaponId
+            });
+
+      if (fireWeaponIssue !== null) {
+        pendingLocalShotFeedback = {
+          actionSequence: fireWeaponIssue.actionSequence,
+          directionWorld: localSemanticAimFrame.cameraForwardWorld,
+          weaponId: localWeaponState.weaponId
+        };
+        this.#combatFeedbackRuntime?.registerPendingLocalShot({
+          actionSequence: fireWeaponIssue.actionSequence,
+          directionWorld: localSemanticAimFrame.cameraForwardWorld,
+          weaponId: localWeaponState.weaponId
+        });
+      }
     }
     this.#remoteWorldRuntime.syncLocalDriverVehicleControl(
       this.#traversalRuntime.routedDriverVehicleControlIntentSnapshot
@@ -489,6 +649,16 @@ export class MetaverseRuntimeFrameLoop {
     const presentationFocusedPortal =
       presentationSnapshot?.focusedPortal ?? liveFocusedPortal;
 
+    const authoritativeWorldSnapshot =
+      this.#remoteWorldRuntime.readFreshAuthoritativeWorldSnapshot?.(
+        metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
+      ) ?? null;
+
+    this.#combatFeedbackRuntime?.syncAuthoritativeWorld(
+      authoritativeWorldSnapshot,
+      presentationCameraSnapshot
+    );
+
     this.#sceneRuntime.syncViewport(renderer, canvas, this.#devicePixelRatio);
     const sceneInteractionSnapshot = this.#sceneRuntime.syncPresentation(
       presentationCameraSnapshot,
@@ -498,11 +668,50 @@ export class MetaverseRuntimeFrameLoop {
       cameraPhaseState.hidesLocalCharacter
         ? null
         : this.#traversalRuntime.characterPresentationSnapshot,
-      weaponPresentationRuntime?.weaponState ?? null,
+      localWeaponState,
       weaponPresentationRuntime?.adsBlend ?? null,
       remoteCharacterPresentations,
       mountedEnvironment,
-      weaponPresentationRuntime?.cameraFieldOfViewDegrees ?? null
+      weaponPresentationRuntime?.cameraFieldOfViewDegrees ?? null,
+      localSemanticAimFrame
+    );
+
+    if (pendingLocalShotFeedback !== null) {
+      const renderedMuzzleFrame =
+        this.#sceneRuntime.readLocalWeaponProjectileMuzzleFrame?.(
+          pendingLocalShotFeedback.weaponId
+        ) ?? null;
+      const renderedMuzzleOrigin =
+        renderedMuzzleFrame?.originWorld ??
+        this.#sceneRuntime.readLocalWeaponProjectileMuzzleWorldPosition?.(
+          pendingLocalShotFeedback.weaponId
+        ) ??
+        null;
+      const localShotOriginSource =
+        renderedMuzzleOrigin !== null
+          ? "rendered-muzzle-post-sync"
+          : null;
+
+      this.#combatFeedbackRuntime?.capturePendingLocalShotOrigin({
+        actionSequence: pendingLocalShotFeedback.actionSequence,
+        directionWorld: pendingLocalShotFeedback.directionWorld,
+        originForwardWorld: renderedMuzzleFrame?.forwardWorld ?? null,
+        originSource: localShotOriginSource,
+        originWorld: renderedMuzzleOrigin,
+        weaponId: pendingLocalShotFeedback.weaponId
+      });
+    }
+
+    this.#combatFeedbackRuntime?.drainQueuedVisualIntents?.({
+      cameraSnapshot: presentationCameraSnapshot,
+      resolveRenderedMuzzle:
+        this.#sceneRuntime.readRenderedWeaponMuzzleFrame?.bind(
+          this.#sceneRuntime
+        ) ?? null
+    });
+    this.#sceneRuntime.syncCombatProjectiles?.(
+      authoritativeWorldSnapshot?.projectiles ?? [],
+      nowMs
     );
 
     this.#hudPublisher.trackFrameTelemetry(

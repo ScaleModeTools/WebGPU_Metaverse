@@ -2,46 +2,35 @@ import {
   AnimationAction,
   AnimationClip,
   AnimationMixer,
-  Group
+  Group,
+  LoopOnce
 } from "three/webgpu";
 import type { MetaverseRealtimePlayerWeaponStateSnapshot } from "@webgpu-metaverse/shared";
 
-import {
-  isHumanoidV2PistolAimOverlayTrack,
-  isHumanoidV2PistolPitchDrivenTrack,
-  isHumanoidV2PistolLowerBodyTrack
-} from "../humanoid-v2-rig";
-
 import type {
   MetaverseCharacterAnimationVocabularyId,
+  MetaverseCharacterCombatAnimationActionId,
+  MetaverseCombatPresentationEvent,
   MetaverseCharacterPresentationSnapshot,
-  MetaverseCharacterProofConfig,
-  MetaverseHumanoidV2PistolPoseId,
-  MetaverseRuntimeConfig
+  MetaverseCharacterProofConfig
 } from "../../types/metaverse-runtime";
-import { metaverseHumanoidV2PistolPoseIds } from "../../types/metaverse-runtime";
 
-const humanoidV2PistolLowerBodyVocabularyIds = Object.freeze([
-  "idle",
-  "walk"
-] as const satisfies readonly MetaverseCharacterAnimationVocabularyId[]);
-const humanoidV2PistolPoseWeightEpsilon = 0.000001;
 const metaverseCharacterRenderYawOffsetRadians = Math.PI;
 const minimumAnimationPlaybackRateMagnitude = 0.01;
 
-export interface HumanoidV2PistolPoseRuntime {
-  readonly actionsByPoseId: ReadonlyMap<
-    MetaverseHumanoidV2PistolPoseId,
+export interface MetaverseCharacterCombatAnimationRuntime {
+  readonly actionsByActionId: ReadonlyMap<
+    MetaverseCharacterCombatAnimationActionId,
     AnimationAction
   >;
-  readonly clipsByPoseId: ReadonlyMap<
-    MetaverseHumanoidV2PistolPoseId,
+  readonly clipsByActionId: ReadonlyMap<
+    MetaverseCharacterCombatAnimationActionId,
     AnimationClip
   >;
 }
 
 export interface MetaverseCharacterAnimationRuntimeLike {
-  activeAnimationActionSetId: "full-body" | "humanoid_v2_pistol_lower_body";
+  activeAnimationActionSetId: "full-body";
   activeAnimationCycleId: number | null;
   activeAnimationVocabulary: MetaverseCharacterAnimationVocabularyId;
   readonly actionsByVocabulary: ReadonlyMap<
@@ -49,11 +38,7 @@ export interface MetaverseCharacterAnimationRuntimeLike {
     AnimationAction
   >;
   readonly anchorGroup: Group;
-  readonly humanoidV2PistolLowerBodyActionsByVocabulary: ReadonlyMap<
-    MetaverseCharacterAnimationVocabularyId,
-    AnimationAction
-  > | null;
-  readonly humanoidV2PistolPoseRuntime: HumanoidV2PistolPoseRuntime | null;
+  readonly combatAnimationRuntime: MetaverseCharacterCombatAnimationRuntime | null;
   readonly skeletonId: MetaverseCharacterProofConfig["skeletonId"];
 }
 
@@ -104,11 +89,10 @@ function resolveCharacterRenderYawRadians(yawRadians: number): number {
 
 function resolveAnimationPlaybackRate(
   vocabulary: MetaverseCharacterAnimationVocabularyId,
-  useHumanoidV2PistolLayering: boolean,
   playbackRateMultiplier: number
 ): number {
   if (vocabulary === "walk") {
-    return (useHumanoidV2PistolLayering ? 1 : 1.1) * playbackRateMultiplier;
+    return 1.1 * playbackRateMultiplier;
   }
 
   if (vocabulary === "swim") {
@@ -118,134 +102,86 @@ function resolveAnimationPlaybackRate(
   return 1;
 }
 
-function createHumanoidV2LowerBodyLocomotionClip(
-  clip: AnimationClip
-): AnimationClip {
-  const lowerBodyTracks = clip.tracks.filter((track) =>
-    isHumanoidV2PistolLowerBodyTrack(track.name)
-  );
-
-  if (lowerBodyTracks.length === 0) {
-    throw new Error(
-      `Metaverse humanoid_v2 lower-body locomotion clip ${clip.name} did not retain any lower-body tracks.`
-    );
-  }
-
-  return new AnimationClip(
-    `${clip.name}__metaverse_lower_body`,
-    clip.duration,
-    lowerBodyTracks,
-    clip.blendMode
-  );
-}
-
-export function createHumanoidV2UpperBodyPistolPoseClip(
-  clip: AnimationClip
-): AnimationClip {
-  const upperBodyTracks = clip.tracks.filter((track) =>
-    isHumanoidV2PistolAimOverlayTrack(track.name)
-  );
-
-  if (upperBodyTracks.length === 0) {
-    throw new Error(
-      `Metaverse humanoid_v2 pistol pose clip ${clip.name} did not retain any upper-body tracks.`
-    );
-  }
-
-  return new AnimationClip(
-    `${clip.name}__metaverse_upper_body`,
-    clip.duration,
-    upperBodyTracks,
-    clip.blendMode
-  );
-}
-
-export function createHumanoidV2PitchSelectivePistolPoseClip(
-  pitchClip: AnimationClip,
-  neutralClip: AnimationClip
-): AnimationClip {
-  const pitchTracksByName = new Map(
-    pitchClip.tracks.map((track) => [track.name, track])
-  );
-  const hybridTracks = neutralClip.tracks.map((track) => {
-    const pitchTrack = pitchTracksByName.get(track.name);
-
-    if (
-      pitchTrack !== undefined &&
-      isHumanoidV2PistolPitchDrivenTrack(track.name)
-    ) {
-      return pitchTrack.clone();
-    }
-
-    return track.clone();
-  });
-
-  return new AnimationClip(
-    `${pitchClip.name}__metaverse_pitch_selective`,
-    neutralClip.duration,
-    hybridTracks,
-    neutralClip.blendMode
-  );
-}
-
-export function createHumanoidV2PistolLowerBodyActionsByVocabulary(
+export function createMetaverseCharacterCombatAnimationRuntime(
   mixer: AnimationMixer,
-  clipsByVocabulary: ReadonlyMap<
-    MetaverseCharacterAnimationVocabularyId,
+  clipsByActionId: ReadonlyMap<
+    MetaverseCharacterCombatAnimationActionId,
     AnimationClip
   >
-): ReadonlyMap<MetaverseCharacterAnimationVocabularyId, AnimationAction> {
-  const actionsByVocabulary = new Map<
-    MetaverseCharacterAnimationVocabularyId,
+): MetaverseCharacterCombatAnimationRuntime {
+  const actionsByActionId = new Map<
+    MetaverseCharacterCombatAnimationActionId,
     AnimationAction
   >();
 
-  for (const vocabulary of humanoidV2PistolLowerBodyVocabularyIds) {
-    const clip = clipsByVocabulary.get(vocabulary);
-
-    if (clip === undefined) {
-      continue;
-    }
-
-    actionsByVocabulary.set(
-      vocabulary,
-      mixer.clipAction(createHumanoidV2LowerBodyLocomotionClip(clip))
-    );
-  }
-
-  return actionsByVocabulary;
-}
-
-export function createHumanoidV2PistolPoseRuntime(
-  mixer: AnimationMixer,
-  clipsByPoseId: ReadonlyMap<MetaverseHumanoidV2PistolPoseId, AnimationClip>
-): HumanoidV2PistolPoseRuntime {
-  const actionsByPoseId = new Map<
-    MetaverseHumanoidV2PistolPoseId,
-    AnimationAction
-  >();
-
-  for (const poseId of metaverseHumanoidV2PistolPoseIds) {
-    const clip = clipsByPoseId.get(poseId);
-
-    if (clip === undefined) {
-      throw new Error(
-        `Metaverse humanoid_v2 pistol pose runtime is missing ${poseId}.`
-      );
-    }
-
+  for (const [actionId, clip] of clipsByActionId) {
     const action = mixer.clipAction(clip);
-    action.enabled = true;
+
+    action.enabled = false;
+    action.clampWhenFinished = false;
+    action.setLoop(LoopOnce, 1);
     action.setEffectiveTimeScale(1);
     action.setEffectiveWeight(0);
-    action.play();
-    actionsByPoseId.set(poseId, action);
+    actionsByActionId.set(actionId, action);
   }
 
   return {
-    actionsByPoseId,
-    clipsByPoseId
+    actionsByActionId,
+    clipsByActionId
   };
+}
+
+export function clearCharacterCombatDeathAnimation(
+  characterRuntime: Pick<
+    MetaverseCharacterAnimationRuntimeLike,
+    "combatAnimationRuntime"
+  >
+): void {
+  const deathAction =
+    characterRuntime.combatAnimationRuntime?.actionsByActionId.get("death");
+
+  if (deathAction === undefined) {
+    return;
+  }
+
+  deathAction.stop();
+  deathAction.enabled = false;
+  deathAction.setEffectiveWeight(0);
+}
+
+export function triggerCharacterCombatPresentationEvent(
+  characterRuntime: Pick<
+    MetaverseCharacterAnimationRuntimeLike,
+    "combatAnimationRuntime"
+  >,
+  event: MetaverseCombatPresentationEvent
+): void {
+  if (event.kind === "shot" || event.kind === "projectile-impact") {
+    // Weapon fire and projectile impacts are FX-owned presentation events.
+    return;
+  }
+
+  const combatAnimationRuntime = characterRuntime.combatAnimationRuntime;
+
+  if (combatAnimationRuntime === null) {
+    return;
+  }
+
+  const actionId: MetaverseCharacterCombatAnimationActionId = event.kind;
+  const action = combatAnimationRuntime.actionsByActionId.get(actionId);
+
+  if (action === undefined) {
+    return;
+  }
+
+  action.stop();
+  action.enabled = true;
+  action.clampWhenFinished = event.kind === "death";
+  action.reset();
+  action.setLoop(LoopOnce, 1);
+  action.setEffectiveTimeScale(1);
+  action.setEffectiveWeight(0.86);
+  action.play();
 }
 
 export function syncCharacterPresentation(
@@ -278,34 +214,19 @@ export function syncCharacterPresentation(
 export function resolveHeldCharacterAnimationVocabulary(
   characterRuntime: Pick<
     MetaverseCharacterAnimationRuntimeLike,
-    "actionsByVocabulary" | "humanoidV2PistolPoseRuntime" | "skeletonId"
+    "actionsByVocabulary" | "skeletonId"
   >,
   attachmentRuntime: MetaverseAttachmentAnimationRuntimeLike | null,
   targetVocabulary: MetaverseCharacterAnimationVocabularyId,
   weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null,
   mountedCharacterRuntime: object | null
 ): MetaverseCharacterAnimationVocabularyId {
-  if (
-    !shouldUseHeldWeaponCharacterPresentation(
-      attachmentRuntime,
-      weaponState,
-      mountedCharacterRuntime
-    ) ||
-    targetVocabulary !== "idle" ||
-    !characterRuntime.actionsByVocabulary.has("aim")
-  ) {
-    return targetVocabulary;
-  }
-
-  return characterRuntime.humanoidV2PistolPoseRuntime === null
-    ? "aim"
-    : targetVocabulary;
+  return targetVocabulary;
 }
 
 export function syncCharacterAnimation(
   characterRuntime: MetaverseCharacterAnimationRuntimeLike,
   targetVocabulary: MetaverseCharacterAnimationVocabularyId,
-  useHumanoidV2PistolLayering: boolean = false,
   animationCycleId?: number | null,
   animationPlaybackRateMultiplier: number = 1
 ): void {
@@ -331,26 +252,11 @@ export function syncCharacterAnimation(
   };
   const nextVocabulary = resolveNextVocabulary();
   const resolveActionByVocabulary = (
-    vocabulary: MetaverseCharacterAnimationVocabularyId,
-    preferHumanoidV2PistolLayering: boolean
+    vocabulary: MetaverseCharacterAnimationVocabularyId
   ): {
     readonly action: AnimationAction;
     readonly actionSetId: MetaverseCharacterAnimationRuntimeLike["activeAnimationActionSetId"];
   } | null => {
-    if (preferHumanoidV2PistolLayering) {
-      const lowerBodyAction =
-        characterRuntime.humanoidV2PistolLowerBodyActionsByVocabulary?.get(
-          vocabulary
-        );
-
-      if (lowerBodyAction !== undefined) {
-        return {
-          action: lowerBodyAction,
-          actionSetId: "humanoid_v2_pistol_lower_body"
-        };
-      }
-    }
-
     const fullBodyAction = characterRuntime.actionsByVocabulary.get(vocabulary);
 
     return fullBodyAction === undefined
@@ -360,10 +266,7 @@ export function syncCharacterAnimation(
           actionSetId: "full-body"
         };
   };
-  const nextActionSelection = resolveActionByVocabulary(
-    nextVocabulary,
-    useHumanoidV2PistolLayering
-  );
+  const nextActionSelection = resolveActionByVocabulary(nextVocabulary);
   const resolvedAnimationCycleId =
     animationCycleId === null || animationCycleId === undefined
       ? characterRuntime.activeAnimationCycleId
@@ -380,7 +283,6 @@ export function syncCharacterAnimation(
           );
   const nextPlaybackRate = resolveAnimationPlaybackRate(
     nextVocabulary,
-    useHumanoidV2PistolLayering,
     resolvedAnimationPlaybackRateMultiplier
   );
   const shouldRestartCurrentAction =
@@ -402,9 +304,7 @@ export function syncCharacterAnimation(
   }
 
   const previousActionSelection = resolveActionByVocabulary(
-    characterRuntime.activeAnimationVocabulary,
-    characterRuntime.activeAnimationActionSetId ===
-      "humanoid_v2_pistol_lower_body"
+    characterRuntime.activeAnimationVocabulary
   );
   const nextAction = nextActionSelection.action;
   const previousAction = previousActionSelection?.action;
@@ -441,69 +341,4 @@ export function syncCharacterAnimation(
   characterRuntime.activeAnimationActionSetId = nextActionSelection.actionSetId;
   characterRuntime.activeAnimationCycleId = resolvedAnimationCycleId;
   characterRuntime.activeAnimationVocabulary = nextVocabulary;
-}
-
-function setHumanoidV2PistolPoseWeights(
-  pistolPoseRuntime: HumanoidV2PistolPoseRuntime,
-  weights: Readonly<Record<MetaverseHumanoidV2PistolPoseId, number>>
-): void {
-  for (const poseId of metaverseHumanoidV2PistolPoseIds) {
-    const action = pistolPoseRuntime.actionsByPoseId.get(poseId);
-
-    if (action === undefined) {
-      continue;
-    }
-
-    const weight = clamp(weights[poseId], 0, 1);
-    action.enabled = weight > humanoidV2PistolPoseWeightEpsilon;
-    action.setEffectiveWeight(weight);
-  }
-}
-
-export function clearHumanoidV2PistolPoseWeights(
-  pistolPoseRuntime: HumanoidV2PistolPoseRuntime
-): void {
-  setHumanoidV2PistolPoseWeights(pistolPoseRuntime, {
-    down: 0,
-    neutral: 0,
-    up: 0
-  });
-}
-
-export function syncHumanoidV2PistolPoseWeights(
-  pistolPoseRuntime: HumanoidV2PistolPoseRuntime,
-  pitchRadians: number,
-  orientation: Pick<
-    MetaverseRuntimeConfig["orientation"],
-    "maxPitchRadians" | "minPitchRadians"
-  >
-): void {
-  const downRangeRadians = Math.max(
-    Math.abs(orientation.minPitchRadians),
-    humanoidV2PistolPoseWeightEpsilon
-  );
-  const upRangeRadians = Math.max(
-    orientation.maxPitchRadians,
-    humanoidV2PistolPoseWeightEpsilon
-  );
-  const clampedPitchRadians = clamp(
-    pitchRadians,
-    orientation.minPitchRadians,
-    orientation.maxPitchRadians
-  );
-  const downWeight =
-    clampedPitchRadians < 0
-      ? clamp(Math.abs(clampedPitchRadians) / downRangeRadians, 0, 1)
-      : 0;
-  const upWeight =
-    clampedPitchRadians > 0
-      ? clamp(clampedPitchRadians / upRangeRadians, 0, 1)
-      : 0;
-  const neutralWeight = clamp(1 - Math.max(downWeight, upWeight), 0, 1);
-
-  setHumanoidV2PistolPoseWeights(pistolPoseRuntime, {
-    down: downWeight,
-    neutral: neutralWeight,
-    up: upWeight
-  });
 }

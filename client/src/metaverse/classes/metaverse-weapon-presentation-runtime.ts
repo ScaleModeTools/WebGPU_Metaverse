@@ -3,6 +3,12 @@ import type {
   ReticleId
 } from "@webgpu-metaverse/shared";
 import {
+  createMetaverseWeaponInstanceId,
+  readMetaverseWeaponLayout,
+  tryReadMetaverseCombatWeaponProfile,
+  type MetaverseWeaponSlotId
+} from "@webgpu-metaverse/shared";
+import {
   createMetaverseRealtimePlayerWeaponStateSnapshot,
   type MetaverseRealtimePlayerWeaponAimModeId,
   type MetaverseRealtimePlayerWeaponStateSnapshot
@@ -29,16 +35,36 @@ interface ResolvedMetaverseWeaponPresentation {
   readonly weaponLabel: string;
 }
 
+interface ResolvedMetaverseWeaponPresentationSlot {
+  readonly weapon: ResolvedMetaverseWeaponPresentation;
+  readonly slotId: MetaverseWeaponSlotId;
+  readonly weaponInstanceId: string;
+}
+
+export interface MetaverseWeaponSlotSwitchIntentSnapshot {
+  readonly intendedWeaponId: string;
+  readonly intendedWeaponInstanceId: string;
+  readonly requestedActiveSlotId: MetaverseWeaponSlotId;
+}
+
 interface MetaverseWeaponPresentationRuntimeDependencies {
   readonly attachmentProofConfig?: MetaverseAttachmentProofConfig | null;
+  readonly attachmentProofConfigs?:
+    | readonly MetaverseAttachmentProofConfig[]
+    | null
+    | undefined;
   readonly equippedWeaponId?: string | null | undefined;
+  readonly weaponLayoutId?: string | null | undefined;
 }
 
 interface AdvanceWeaponPresentationInput {
   readonly deltaSeconds: number;
   readonly flightInput: Pick<
     MetaverseFlightInputSnapshot,
-    "primaryAction" | "primaryActionPressedCount" | "secondaryAction"
+    | "primaryAction"
+    | "primaryActionPressedCount"
+    | "secondaryAction"
+    | "weaponSwitchPressedCount"
   >;
   readonly mountedEnvironment: MountedEnvironmentSnapshot | null;
 }
@@ -146,8 +172,22 @@ function doWeaponStateSnapshotsMatch(
     left === right ||
     (left !== null &&
       right !== null &&
+      left.activeSlotId === right.activeSlotId &&
       left.aimMode === right.aimMode &&
-      left.weaponId === right.weaponId)
+      left.weaponId === right.weaponId &&
+      left.slots.length === right.slots.length &&
+      left.slots.every((leftSlot, slotIndex) => {
+        const rightSlot = right.slots[slotIndex] ?? null;
+
+        return (
+          rightSlot !== null &&
+          leftSlot.attachmentId === rightSlot.attachmentId &&
+          leftSlot.equipped === rightSlot.equipped &&
+          leftSlot.slotId === rightSlot.slotId &&
+          leftSlot.weaponId === rightSlot.weaponId &&
+          leftSlot.weaponInstanceId === rightSlot.weaponInstanceId
+        );
+      }))
   );
 }
 
@@ -197,18 +237,121 @@ function resolveMetaverseWeaponPresentation(
   });
 }
 
+function resolveMetaverseWeaponPresentationAttachmentProofConfigs(
+  dependencies: Pick<
+    MetaverseWeaponPresentationRuntimeDependencies,
+    "attachmentProofConfig" | "attachmentProofConfigs"
+  >
+): readonly MetaverseAttachmentProofConfig[] {
+  if (dependencies.attachmentProofConfigs !== undefined) {
+    return dependencies.attachmentProofConfigs ?? [];
+  }
+
+  return dependencies.attachmentProofConfig === null ||
+    dependencies.attachmentProofConfig === undefined
+    ? []
+    : [dependencies.attachmentProofConfig];
+}
+
+function resolveWeaponPresentationSlots(input: {
+  readonly equippedWeaponId?: string | null | undefined;
+  readonly resolvedWeapons: readonly ResolvedMetaverseWeaponPresentation[];
+  readonly weaponLayoutId?: string | null | undefined;
+}): {
+  readonly activeSlotId: MetaverseWeaponSlotId | null;
+  readonly slots: readonly ResolvedMetaverseWeaponPresentationSlot[];
+} {
+  const weaponLayout = readMetaverseWeaponLayout(input.weaponLayoutId ?? null);
+
+  if (weaponLayout !== null) {
+    const slots = Object.freeze(
+      weaponLayout.slots.flatMap((layoutSlot) => {
+        if (!layoutSlot.equipped) {
+          return [];
+        }
+
+        const weapon =
+          input.resolvedWeapons.find(
+            (resolvedWeapon) =>
+              resolvedWeapon.weaponId === layoutSlot.weaponId
+          ) ?? null;
+
+        return weapon === null
+          ? []
+          : [
+              Object.freeze({
+                slotId: layoutSlot.slotId,
+                weapon,
+                weaponInstanceId: createMetaverseWeaponInstanceId(
+                  "local",
+                  layoutSlot.slotId,
+                  layoutSlot.weaponId
+                )
+              })
+            ];
+      })
+    );
+    const overrideSlot =
+      input.equippedWeaponId === null || input.equippedWeaponId === undefined
+        ? null
+        : slots.find((slot) => slot.weapon.weaponId === input.equippedWeaponId) ??
+          null;
+    const activeSlotId =
+      overrideSlot?.slotId ??
+      slots.find((slot) => slot.slotId === weaponLayout.activeSlotId)?.slotId ??
+      slots[0]?.slotId ??
+      null;
+
+    return {
+      activeSlotId,
+      slots
+    };
+  }
+
+  const equippedWeaponId =
+    input.equippedWeaponId === undefined
+      ? input.resolvedWeapons[0]?.weaponId ?? null
+      : input.equippedWeaponId;
+  const weapon =
+    equippedWeaponId === null
+      ? null
+      : input.resolvedWeapons.find((candidate) => candidate.weaponId === equippedWeaponId) ??
+        null;
+
+  return {
+    activeSlotId: weapon === null ? null : "primary",
+    slots:
+      weapon === null
+        ? Object.freeze([])
+        : Object.freeze([
+            Object.freeze({
+              slotId: "primary",
+              weapon,
+              weaponInstanceId: createMetaverseWeaponInstanceId(
+                "local",
+                "primary",
+                weapon.weaponId
+              )
+            })
+          ])
+  };
+}
+
 export class MetaverseWeaponPresentationRuntime {
   readonly #baseFieldOfViewDegrees: number;
-  readonly #equippedWeapon: ResolvedMetaverseWeaponPresentation | null;
+  readonly #weaponSlots: readonly ResolvedMetaverseWeaponPresentationSlot[];
   readonly #uiUpdateListeners = new Set<() => void>();
 
+  #activeSlotId: MetaverseWeaponSlotId | null = null;
   #adsLatched = false;
   #adsBlend = 0;
   #aimMode: MetaverseRealtimePlayerWeaponAimModeId = "hip-fire";
   #cameraFieldOfViewDegrees: number;
+  #combatPresentationSuppressed = false;
   #firePressedThisFrame = false;
   #fireTriggerHeld = false;
   #hudSnapshot: MetaverseWeaponHudSnapshot = hiddenWeaponHudSnapshot;
+  #pendingSlotSwitchIntent: MetaverseWeaponSlotSwitchIntentSnapshot | null = null;
   #secondaryActionHeld = false;
   #weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null = null;
 
@@ -218,19 +361,38 @@ export class MetaverseWeaponPresentationRuntime {
   ) {
     this.#baseFieldOfViewDegrees = Number(config.camera.fieldOfViewDegrees);
     this.#cameraFieldOfViewDegrees = this.#baseFieldOfViewDegrees;
-    const resolvedWeapon = resolveMetaverseWeaponPresentation(
-      dependencies.attachmentProofConfig
-    );
-    const equippedWeaponId =
-      dependencies.equippedWeaponId === undefined
-        ? resolvedWeapon?.weaponId ?? null
-        : dependencies.equippedWeaponId;
+    const resolvedWeapons = resolveMetaverseWeaponPresentationAttachmentProofConfigs(
+      dependencies
+    )
+      .map((attachmentProofConfig) =>
+        resolveMetaverseWeaponPresentation(attachmentProofConfig)
+      )
+      .filter(
+        (
+          weaponPresentation
+        ): weaponPresentation is ResolvedMetaverseWeaponPresentation =>
+          weaponPresentation !== null
+      );
+    const resolvedLoadout = resolveWeaponPresentationSlots({
+      equippedWeaponId: dependencies.equippedWeaponId,
+      resolvedWeapons,
+      weaponLayoutId: dependencies.weaponLayoutId
+    });
 
-    this.#equippedWeapon =
-      resolvedWeapon !== null && equippedWeaponId === resolvedWeapon.weaponId
-        ? resolvedWeapon
-        : null;
+    this.#weaponSlots = resolvedLoadout.slots;
+    this.#activeSlotId = resolvedLoadout.activeSlotId;
     this.#hudSnapshot = this.#createHudSnapshot(false, "hip-fire");
+  }
+
+  get #activeSlot(): ResolvedMetaverseWeaponPresentationSlot | null {
+    return this.#activeSlotId === null
+      ? null
+      : this.#weaponSlots.find((slot) => slot.slotId === this.#activeSlotId) ??
+          null;
+  }
+
+  get #activeWeapon(): ResolvedMetaverseWeaponPresentation | null {
+    return this.#activeSlot?.weapon ?? null;
   }
 
   get cameraFieldOfViewDegrees(): number {
@@ -257,6 +419,14 @@ export class MetaverseWeaponPresentationRuntime {
     return this.#weaponState;
   }
 
+  consumeSlotSwitchIntent(): MetaverseWeaponSlotSwitchIntentSnapshot | null {
+    const switchIntent = this.#pendingSlotSwitchIntent;
+
+    this.#pendingSlotSwitchIntent = null;
+
+    return switchIntent;
+  }
+
   subscribeUiUpdates(listener: () => void): () => void {
     this.#uiUpdateListeners.add(listener);
 
@@ -272,8 +442,21 @@ export class MetaverseWeaponPresentationRuntime {
     this.#cameraFieldOfViewDegrees = this.#baseFieldOfViewDegrees;
     this.#firePressedThisFrame = false;
     this.#fireTriggerHeld = false;
+    this.#pendingSlotSwitchIntent = null;
     this.#secondaryActionHeld = false;
     this.#syncPublishedState(false, "hip-fire");
+  }
+
+  setCombatPresentationSuppressed(suppressed: boolean): void {
+    if (this.#combatPresentationSuppressed === suppressed) {
+      return;
+    }
+
+    this.#combatPresentationSuppressed = suppressed;
+
+    if (suppressed) {
+      this.reset();
+    }
   }
 
   advance({
@@ -281,10 +464,21 @@ export class MetaverseWeaponPresentationRuntime {
     flightInput,
     mountedEnvironment
   }: AdvanceWeaponPresentationInput): void {
-    const equippedWeapon = this.#equippedWeapon;
-    const visible = equippedWeapon !== null && mountedEnvironment === null;
+    if (flightInput.weaponSwitchPressedCount > 0) {
+      this.#toggleActiveWeaponSlot();
+    }
+
+    const equippedWeapon = this.#activeWeapon;
+    const visible =
+      equippedWeapon !== null &&
+      mountedEnvironment === null &&
+      !this.#combatPresentationSuppressed;
+    const canActiveWeaponFire =
+      equippedWeapon !== null &&
+      tryReadMetaverseCombatWeaponProfile(equippedWeapon.weaponId) !== null;
     const primaryActionPressedThisFrame =
       visible &&
+      canActiveWeaponFire &&
       (flightInput.primaryActionPressedCount > 0 ||
         (flightInput.primaryAction && !this.#fireTriggerHeld));
     const secondaryActionPressedThisFrame =
@@ -309,7 +503,7 @@ export class MetaverseWeaponPresentationRuntime {
 
     this.#aimMode = targetAimMode;
     this.#firePressedThisFrame = primaryActionPressedThisFrame;
-    this.#fireTriggerHeld = visible && flightInput.primaryAction;
+    this.#fireTriggerHeld = visible && canActiveWeaponFire && flightInput.primaryAction;
     this.#adsBlend = moveToward(
       this.#adsBlend,
       targetAimMode === "ads" ? 1 : 0,
@@ -329,11 +523,39 @@ export class MetaverseWeaponPresentationRuntime {
     this.#syncPublishedState(visible, targetAimMode);
   }
 
+  #toggleActiveWeaponSlot(): void {
+    if (this.#weaponSlots.length <= 1) {
+      return;
+    }
+
+    const currentSlotIndex = Math.max(
+      0,
+      this.#weaponSlots.findIndex((slot) => slot.slotId === this.#activeSlotId)
+    );
+    const nextSlot =
+      this.#weaponSlots[(currentSlotIndex + 1) % this.#weaponSlots.length] ?? null;
+
+    if (nextSlot === null || nextSlot.slotId === this.#activeSlotId) {
+      return;
+    }
+
+    this.#activeSlotId = nextSlot.slotId;
+    this.#pendingSlotSwitchIntent = Object.freeze({
+      intendedWeaponId: nextSlot.weapon.weaponId,
+      intendedWeaponInstanceId: nextSlot.weaponInstanceId,
+      requestedActiveSlotId: nextSlot.slotId
+    });
+    this.#adsLatched = false;
+    this.#adsBlend = 0;
+    this.#aimMode = "hip-fire";
+    this.#cameraFieldOfViewDegrees = this.#baseFieldOfViewDegrees;
+  }
+
   #createHudSnapshot(
     visible: boolean,
     aimMode: MetaverseRealtimePlayerWeaponAimModeId
   ): MetaverseWeaponHudSnapshot {
-    const resolvedWeapon = this.#equippedWeapon;
+    const resolvedWeapon = this.#activeWeapon;
 
     if (resolvedWeapon === null) {
       return hiddenWeaponHudSnapshot;
@@ -357,12 +579,21 @@ export class MetaverseWeaponPresentationRuntime {
     visible: boolean,
     aimMode: MetaverseRealtimePlayerWeaponAimModeId
   ): void {
-    const resolvedWeapon = this.#equippedWeapon;
+    const activeSlot = this.#activeSlot;
+    const resolvedWeapon = activeSlot?.weapon ?? null;
     const nextHudSnapshot = this.#createHudSnapshot(visible, aimMode);
     const nextWeaponState =
-      visible && resolvedWeapon !== null
+      visible && resolvedWeapon !== null && activeSlot !== null
         ? createMetaverseRealtimePlayerWeaponStateSnapshot({
+            activeSlotId: activeSlot.slotId,
             aimMode,
+            slots: this.#weaponSlots.map((slot) => ({
+              attachmentId: slot.weapon.weaponId,
+              equipped: true,
+              slotId: slot.slotId,
+              weaponId: slot.weapon.weaponId,
+              weaponInstanceId: slot.weaponInstanceId
+            })),
             weaponId: resolvedWeapon.weaponId
           })
         : null;

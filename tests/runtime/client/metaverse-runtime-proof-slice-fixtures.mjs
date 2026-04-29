@@ -65,19 +65,41 @@ export function createHumanoidV2CharacterScene({
   const calfRBone = addBone("calf_r", thighRBone, new Vector3(0, -0.42, 0));
   const footRBone = addBone("foot_r", calfRBone, new Vector3(0, -0.4, 0.06));
   const ballRBone = addBone("ball_r", footRBone, new Vector3(0, 0, 0.12));
+  const addFingerChain = (
+    fingerName,
+    handSuffix,
+    handBone,
+    basePosition,
+    segmentPosition
+  ) => {
+    const baseBone = addBone(
+      `${fingerName}_01_${handSuffix}`,
+      handBone,
+      basePosition
+    );
+    const middleBone = addBone(
+      `${fingerName}_02_${handSuffix}`,
+      baseBone,
+      segmentPosition
+    );
 
-  addBone("thumb_01_l", handLBone, new Vector3(-0.04, -0.02, 0.06));
-  addBone("index_01_l", handLBone, new Vector3(-0.1, 0, 0.03));
-  addBone("middle_01_l", handLBone, new Vector3(-0.11, 0, 0));
-  addBone("ring_01_l", handLBone, new Vector3(-0.1, 0, -0.03));
-  addBone("pinky_01_l", handLBone, new Vector3(-0.08, 0, -0.05));
-  addBone("thumb_01_r", handRBone, new Vector3(0.04, -0.02, 0.06));
-  const index01RBone = addBone("index_01_r", handRBone, new Vector3(0.1, 0, 0.03));
-  const index02RBone = addBone("index_02_r", index01RBone, new Vector3(0.055, -0.004, -0.004));
-  addBone("index_03_r", index02RBone, new Vector3(0.04, -0.004, -0.003));
-  addBone("middle_01_r", handRBone, new Vector3(0.11, 0, 0));
-  addBone("ring_01_r", handRBone, new Vector3(0.1, 0, -0.03));
-  addBone("pinky_01_r", handRBone, new Vector3(0.08, 0, -0.05));
+    addBone(
+      `${fingerName}_03_${handSuffix}`,
+      middleBone,
+      segmentPosition.clone().multiplyScalar(0.72)
+    );
+  };
+
+  addFingerChain("thumb", "l", handLBone, new Vector3(-0.04, -0.02, 0.06), new Vector3(-0.032, -0.01, 0.014));
+  addFingerChain("index", "l", handLBone, new Vector3(-0.1, 0, 0.03), new Vector3(-0.055, -0.004, -0.004));
+  addFingerChain("middle", "l", handLBone, new Vector3(-0.11, 0, 0), new Vector3(-0.055, -0.004, 0));
+  addFingerChain("ring", "l", handLBone, new Vector3(-0.1, 0, -0.03), new Vector3(-0.048, -0.004, 0.002));
+  addFingerChain("pinky", "l", handLBone, new Vector3(-0.08, 0, -0.05), new Vector3(-0.04, -0.004, 0.002));
+  addFingerChain("thumb", "r", handRBone, new Vector3(0.04, -0.02, 0.06), new Vector3(0.032, -0.01, 0.014));
+  addFingerChain("index", "r", handRBone, new Vector3(0.1, 0, 0.03), new Vector3(0.055, -0.004, -0.004));
+  addFingerChain("middle", "r", handRBone, new Vector3(0.11, 0, 0), new Vector3(0.055, -0.004, 0));
+  addFingerChain("ring", "r", handRBone, new Vector3(0.1, 0, -0.03), new Vector3(0.048, -0.004, 0.002));
+  addFingerChain("pinky", "r", handRBone, new Vector3(0.08, 0, -0.05), new Vector3(0.04, -0.004, 0.002));
 
   const headSocketBone = addBone("head_socket", headBone, new Vector3(0, 0.12, 0));
   const handLSocketBone = addBone("hand_l_socket", handLBone, new Vector3(-0.05, 0, 0));
@@ -114,17 +136,35 @@ export function createHumanoidV2CharacterScene({
     footRBone,
     ballRBone,
     bonesByName.get("thumb_01_l"),
+    bonesByName.get("thumb_02_l"),
+    bonesByName.get("thumb_03_l"),
     bonesByName.get("index_01_l"),
+    bonesByName.get("index_02_l"),
+    bonesByName.get("index_03_l"),
     bonesByName.get("middle_01_l"),
+    bonesByName.get("middle_02_l"),
+    bonesByName.get("middle_03_l"),
     bonesByName.get("ring_01_l"),
+    bonesByName.get("ring_02_l"),
+    bonesByName.get("ring_03_l"),
     bonesByName.get("pinky_01_l"),
+    bonesByName.get("pinky_02_l"),
+    bonesByName.get("pinky_03_l"),
     bonesByName.get("thumb_01_r"),
+    bonesByName.get("thumb_02_r"),
+    bonesByName.get("thumb_03_r"),
     bonesByName.get("index_01_r"),
     bonesByName.get("index_02_r"),
     bonesByName.get("index_03_r"),
     bonesByName.get("middle_01_r"),
+    bonesByName.get("middle_02_r"),
+    bonesByName.get("middle_03_r"),
     bonesByName.get("ring_01_r"),
+    bonesByName.get("ring_02_r"),
+    bonesByName.get("ring_03_r"),
     bonesByName.get("pinky_01_r"),
+    bonesByName.get("pinky_02_r"),
+    bonesByName.get("pinky_03_r"),
     headSocketBone,
     handLSocketBone,
     handRSocketBone,
@@ -146,6 +186,84 @@ export function createHumanoidV2CharacterScene({
       "seat_socket"
     ]
   };
+}
+
+export function createTestServicePistolHoldProfile(overrides = {}) {
+  return Object.freeze({
+    adsPolicy: "iron_sights",
+    allowedHands: ["right", "left"],
+    family: "sidearm",
+    offhandPolicy: "optional_support_palm",
+    poseProfileId: "sidearm.one_hand_optional_support",
+    primaryHandDefault: "right",
+    recommendedNeutralPose: "sidearm_hold_neutral",
+    sockets: [
+      {
+        nodeName: "metaverse_service_pistol_grip_hand_r_socket",
+        role: "grip.primary"
+      },
+      {
+        nodeName: "metaverse_service_pistol_forward_marker",
+        role: "basis.forward"
+      },
+      {
+        nodeName: "metaverse_service_pistol_up_marker",
+        role: "basis.up"
+      },
+      {
+        nodeName: "metaverse_service_pistol_trigger_marker",
+        role: "trigger.index"
+      },
+      {
+        nodeName: "metaverse_service_pistol_support_marker",
+        role: "grip.secondary"
+      },
+      {
+        nodeName: "metaverse_service_pistol_ads_camera_anchor",
+        role: "camera.ads_anchor"
+      }
+    ],
+    ...overrides
+  });
+}
+
+export function createTestRocketLauncherHoldProfile(overrides = {}) {
+  return Object.freeze({
+    adsPolicy: "shouldered_heavy",
+    allowedHands: ["right"],
+    family: "shoulder_heavy",
+    offhandPolicy: "required_support_grip",
+    poseProfileId: "shoulder_heavy.two_hand_shouldered",
+    primaryHandDefault: "right",
+    recommendedNeutralPose: "shoulder_heavy_ready_neutral",
+    sockets: [
+      {
+        nodeName: "metaverse_rocket_launcher_grip_hand_r_socket",
+        role: "grip.primary"
+      },
+      {
+        nodeName: "metaverse_rocket_launcher_forward_marker",
+        role: "basis.forward"
+      },
+      {
+        nodeName: "metaverse_rocket_launcher_up_marker",
+        role: "basis.up"
+      },
+      {
+        nodeName: "metaverse_rocket_launcher_support_grip_marker",
+        role: "grip.secondary"
+      },
+      {
+        nodeName: "metaverse_rocket_launcher_trigger_marker",
+        role: "trigger.index"
+      },
+      {
+        nodeName: "metaverse_rocket_launcher_ads_camera_anchor",
+        role: "camera.ads_anchor"
+      }
+    ],
+    ...overrides
+  });
 }
 
 export async function createSkiffMountProofSlice() {
@@ -220,18 +338,18 @@ export async function createSkiffMountProofSlice() {
       animationClips: [
         {
           clipName: "idle",
-          sourcePath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
+          sourcePath: "/models/metaverse/characters/metaverse-humanoid-base-pack.glb",
           vocabulary: "idle"
         },
         {
           clipName: "walk",
-          sourcePath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
+          sourcePath: "/models/metaverse/characters/metaverse-humanoid-base-pack.glb",
           vocabulary: "walk"
         }
       ],
       characterId: "mesh2motion-humanoid-v1",
       label: "Mesh2Motion humanoid",
-      modelPath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
+      modelPath: "/models/metaverse/characters/metaverse-humanoid-base-pack.glb",
       skeletonId: "humanoid_v2",
       socketNames
     },
@@ -479,19 +597,41 @@ export async function createHeldWeaponProofSlice() {
   const calfRBone = addBone("calf_r", thighRBone, new Vector3(0, -0.42, 0));
   const footRBone = addBone("foot_r", calfRBone, new Vector3(0, -0.4, 0.06));
   const ballRBone = addBone("ball_r", footRBone, new Vector3(0, 0, 0.12));
+  const addFingerChain = (
+    fingerName,
+    handSuffix,
+    handBone,
+    basePosition,
+    segmentPosition
+  ) => {
+    const baseBone = addBone(
+      `${fingerName}_01_${handSuffix}`,
+      handBone,
+      basePosition
+    );
+    const middleBone = addBone(
+      `${fingerName}_02_${handSuffix}`,
+      baseBone,
+      segmentPosition
+    );
 
-  addBone("thumb_01_l", handLBone, new Vector3(-0.04, -0.02, 0.06));
-  addBone("index_01_l", handLBone, new Vector3(-0.1, 0, 0.03));
-  addBone("middle_01_l", handLBone, new Vector3(-0.11, 0, 0));
-  addBone("ring_01_l", handLBone, new Vector3(-0.1, 0, -0.03));
-  addBone("pinky_01_l", handLBone, new Vector3(-0.08, 0, -0.05));
-  addBone("thumb_01_r", handRBone, new Vector3(0.04, -0.02, 0.06));
-  const index01RBone = addBone("index_01_r", handRBone, new Vector3(0.1, 0, 0.03));
-  const index02RBone = addBone("index_02_r", index01RBone, new Vector3(0.055, -0.004, -0.004));
-  addBone("index_03_r", index02RBone, new Vector3(0.04, -0.004, -0.003));
-  addBone("middle_01_r", handRBone, new Vector3(0.11, 0, 0));
-  addBone("ring_01_r", handRBone, new Vector3(0.1, 0, -0.03));
-  addBone("pinky_01_r", handRBone, new Vector3(0.08, 0, -0.05));
+    addBone(
+      `${fingerName}_03_${handSuffix}`,
+      middleBone,
+      segmentPosition.clone().multiplyScalar(0.72)
+    );
+  };
+
+  addFingerChain("thumb", "l", handLBone, new Vector3(-0.04, -0.02, 0.06), new Vector3(-0.032, -0.01, 0.014));
+  addFingerChain("index", "l", handLBone, new Vector3(-0.1, 0, 0.03), new Vector3(-0.055, -0.004, -0.004));
+  addFingerChain("middle", "l", handLBone, new Vector3(-0.11, 0, 0), new Vector3(-0.055, -0.004, 0));
+  addFingerChain("ring", "l", handLBone, new Vector3(-0.1, 0, -0.03), new Vector3(-0.048, -0.004, 0.002));
+  addFingerChain("pinky", "l", handLBone, new Vector3(-0.08, 0, -0.05), new Vector3(-0.04, -0.004, 0.002));
+  addFingerChain("thumb", "r", handRBone, new Vector3(0.04, -0.02, 0.06), new Vector3(0.032, -0.01, 0.014));
+  addFingerChain("index", "r", handRBone, new Vector3(0.1, 0, 0.03), new Vector3(0.055, -0.004, -0.004));
+  addFingerChain("middle", "r", handRBone, new Vector3(0.11, 0, 0), new Vector3(0.055, -0.004, 0));
+  addFingerChain("ring", "r", handRBone, new Vector3(0.1, 0, -0.03), new Vector3(0.048, -0.004, 0.002));
+  addFingerChain("pinky", "r", handRBone, new Vector3(0.08, 0, -0.05), new Vector3(0.04, -0.004, 0.002));
 
   const headSocketBone = addBone("head_socket", headBone, new Vector3(0, 0.12, 0));
   const handLSocketBone = addBone("hand_l_socket", handLBone, new Vector3(-0.05, 0, 0));
@@ -531,17 +671,35 @@ export async function createHeldWeaponProofSlice() {
     footRBone,
     ballRBone,
     bonesByName.get("thumb_01_l"),
+    bonesByName.get("thumb_02_l"),
+    bonesByName.get("thumb_03_l"),
     bonesByName.get("index_01_l"),
+    bonesByName.get("index_02_l"),
+    bonesByName.get("index_03_l"),
     bonesByName.get("middle_01_l"),
+    bonesByName.get("middle_02_l"),
+    bonesByName.get("middle_03_l"),
     bonesByName.get("ring_01_l"),
+    bonesByName.get("ring_02_l"),
+    bonesByName.get("ring_03_l"),
     bonesByName.get("pinky_01_l"),
+    bonesByName.get("pinky_02_l"),
+    bonesByName.get("pinky_03_l"),
     bonesByName.get("thumb_01_r"),
+    bonesByName.get("thumb_02_r"),
+    bonesByName.get("thumb_03_r"),
     bonesByName.get("index_01_r"),
     bonesByName.get("index_02_r"),
     bonesByName.get("index_03_r"),
     bonesByName.get("middle_01_r"),
+    bonesByName.get("middle_02_r"),
+    bonesByName.get("middle_03_r"),
     bonesByName.get("ring_01_r"),
+    bonesByName.get("ring_02_r"),
+    bonesByName.get("ring_03_r"),
     bonesByName.get("pinky_01_r"),
+    bonesByName.get("pinky_02_r"),
+    bonesByName.get("pinky_03_r"),
     headSocketBone,
     handLSocketBone,
     handRSocketBone,
@@ -554,7 +712,7 @@ export async function createHeldWeaponProofSlice() {
   characterScene.add(skinnedMesh);
 
   const authoredAnimationPackPath =
-    "/models/metaverse/characters/mesh2motion-humanoid-canonical-animations.glb";
+    "/models/metaverse/characters/metaverse-humanoid-base-pack.glb";
   const idleClip = new AnimationClip("idle", -1, []);
   const walkClip = new AnimationClip("walk", -1, []);
   const attachmentScene = new Group();
@@ -563,29 +721,67 @@ export async function createHeldWeaponProofSlice() {
     new MeshStandardMaterial({ color: 0x4b5563 })
   );
   const gripHandSocket = new Group();
+  const forwardMarker = new Group();
+  const upMarker = new Group();
   const triggerMarker = new Group();
+  const adsCameraAnchor = new Group();
 
   attachmentMesh.position.x = 0.14;
   attachmentScene.name = "metaverse_service_pistol_root";
   gripHandSocket.name = "metaverse_service_pistol_grip_hand_r_socket";
   gripHandSocket.position.set(-0.01, 0.02, -0.03);
+  forwardMarker.name = "metaverse_service_pistol_forward_marker";
+  forwardMarker.position.set(0.28, 0.02, -0.03);
+  upMarker.name = "metaverse_service_pistol_up_marker";
+  upMarker.position.set(-0.01, 0.12, -0.03);
   triggerMarker.name = "metaverse_service_pistol_trigger_marker";
   triggerMarker.position.set(0.026, 0.012, 0.004);
-  attachmentScene.add(attachmentMesh, gripHandSocket, triggerMarker);
+  adsCameraAnchor.name = "metaverse_service_pistol_ads_camera_anchor";
+  adsCameraAnchor.position.set(0.07, 0.04, -0.03);
+  attachmentScene.add(
+    attachmentMesh,
+    gripHandSocket,
+    forwardMarker,
+    upMarker,
+    triggerMarker,
+    adsCameraAnchor
+  );
 
   return {
     attachmentProofConfig: {
       attachmentId: "metaverse-service-pistol-v1",
       heldMount: {
-        attachmentSocketNodeName: "metaverse_service_pistol_grip_hand_r_socket",
-        socketName: "palm_r_socket",
-        triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker"
+        attachmentSocketRole: "grip.primary",
+        socketName: "palm_r_socket"
       },
+      holdProfile: createTestServicePistolHoldProfile({
+        sockets: [
+          {
+            nodeName: "metaverse_service_pistol_grip_hand_r_socket",
+            role: "grip.primary"
+          },
+          {
+            nodeName: "metaverse_service_pistol_forward_marker",
+            role: "basis.forward"
+          },
+          {
+            nodeName: "metaverse_service_pistol_up_marker",
+            role: "basis.up"
+          },
+          {
+            nodeName: "metaverse_service_pistol_trigger_marker",
+            role: "trigger.index"
+          },
+          {
+            nodeName: "metaverse_service_pistol_ads_camera_anchor",
+            role: "camera.ads_anchor"
+          }
+        ]
+      }),
       label: "Metaverse service pistol",
       modelPath: "/models/metaverse/attachments/metaverse-service-pistol.gltf",
       modules: [],
-      mountedHolsterMount: null,
-      supportPoints: null
+      mountedHolsterMount: null
     },
     characterProofConfig: {
       animationClips: [
@@ -602,7 +798,7 @@ export async function createHeldWeaponProofSlice() {
       ],
       characterId: "mesh2motion-humanoid-v1",
       label: "Mesh2Motion humanoid",
-      modelPath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
+      modelPath: "/models/metaverse/characters/metaverse-humanoid-base-pack.glb",
       skeletonId: "humanoid_v2",
       socketNames: [
         "hand_r_socket",
@@ -624,7 +820,7 @@ export async function createHeldWeaponProofSlice() {
         if (path === authoredAnimationPackPath) {
           return {
             animations: [idleClip, walkClip],
-            scene: new Group()
+            scene: characterScene
           };
         }
 

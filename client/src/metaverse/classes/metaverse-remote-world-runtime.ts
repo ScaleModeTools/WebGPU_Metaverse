@@ -1,10 +1,12 @@
 import type {
+  MetaverseCombatAimSnapshotInput,
   MetaversePlayerTraversalIntentSnapshotInput,
   MetaverseRealtimeEnvironmentBodySnapshot,
   MetaverseRealtimePlayerSnapshot,
   MetaverseTraversalPlayerBodyBlockerSnapshot,
   MetaverseRealtimeVehicleSnapshot,
-  MetaverseRealtimeWorldSnapshot
+  MetaverseRealtimeWorldSnapshot,
+  MetaverseWeaponSlotId
 } from "@webgpu-metaverse/shared";
 
 import type {
@@ -345,13 +347,25 @@ export class MetaverseRemoteWorldRuntime {
 
   fireWeapon(input: {
     readonly aimMode?: "ads" | "hip-fire";
-    readonly aimSnapshot: {
-      readonly pitchRadians: number;
-      readonly yawRadians: number;
-    };
+    readonly aimSnapshot: MetaverseCombatAimSnapshotInput;
     readonly weaponId: string;
-  }): void {
-    this.#commandTransport.fireWeapon(input);
+  }): {
+    readonly actionSequence: number;
+    readonly issuedAtAuthoritativeTimeMs: number;
+    readonly weaponId: string;
+  } | null {
+    return this.#commandTransport.fireWeapon(input);
+  }
+
+  switchActiveWeaponSlot(input: {
+    readonly intendedWeaponId?: string | null;
+    readonly intendedWeaponInstanceId?: string | null;
+    readonly requestedActiveSlotId: MetaverseWeaponSlotId;
+  }): {
+    readonly actionSequence: number;
+    readonly requestedActiveSlotId: MetaverseWeaponSlotId;
+  } | null {
+    return this.#commandTransport.switchActiveWeaponSlot(input);
   }
 
   readFreshAuthoritativeWorldSnapshot(

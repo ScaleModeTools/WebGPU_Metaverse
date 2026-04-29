@@ -1,9 +1,14 @@
 import type { MetaverseRealtimePlayerWeaponStateSnapshot } from "@webgpu-metaverse/shared";
 
+import type { MetaverseSemanticAimFrame } from "../../aim/metaverse-semantic-aim";
 import {
   advanceLocalCharacterAnimation,
   syncLocalCharacterPresentation
 } from "./metaverse-scene-local-character-presentation";
+import {
+  clearCharacterCombatDeathAnimation,
+  triggerCharacterCombatPresentationEvent
+} from "./metaverse-scene-character-animation";
 import { MetaverseSceneHeldWeaponGripDebugState } from "./metaverse-scene-held-weapon-grip-debug-state";
 import type {
   MetaverseRemoteCharacterPresentationDependencies
@@ -31,6 +36,7 @@ import type {
 import type {
   MetaverseCameraSnapshot,
   MetaverseCharacterPresentationSnapshot,
+  MetaverseCombatPresentationEvent,
   MetaverseRuntimeConfig
 } from "../../types/metaverse-runtime";
 
@@ -53,6 +59,7 @@ interface MetaverseSceneLocalCharacterPresentationStateDependencies {
     >,
     | "captureHeldWeaponPoseRuntime"
     | "applyMountedAnchorTransform"
+    | "prepareHeldWeaponPoseRuntime"
     | "restoreHeldWeaponPoseRuntime"
     | "syncHeldWeaponPose"
   >;
@@ -79,6 +86,30 @@ export class MetaverseSceneLocalCharacterPresentationState {
     this.#dependencies.interactivePresentationState.syncAttachmentMount(null);
   }
 
+  triggerCombatPresentationEvent(
+    event: MetaverseCombatPresentationEvent
+  ): void {
+    const characterRuntime =
+      this.#dependencies.interactivePresentationState.characterProofRuntime;
+
+    if (characterRuntime === null) {
+      return;
+    }
+
+    triggerCharacterCombatPresentationEvent(characterRuntime, event);
+  }
+
+  clearCombatDeathAnimation(): void {
+    const characterRuntime =
+      this.#dependencies.interactivePresentationState.characterProofRuntime;
+
+    if (characterRuntime === null) {
+      return;
+    }
+
+    clearCharacterCombatDeathAnimation(characterRuntime);
+  }
+
   syncPresentation(
     nowMs: number,
     cameraSnapshot: MetaverseCameraSnapshot,
@@ -87,7 +118,8 @@ export class MetaverseSceneLocalCharacterPresentationState {
     mountedPresentationSnapshot: MetaverseSceneMountedPresentationSnapshot | null =
       null,
     weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null = null,
-    weaponAdsBlend: number | null = null
+    weaponAdsBlend: number | null = null,
+    semanticAimFrame: MetaverseSemanticAimFrame | null = null
   ): MetaverseCameraSnapshot {
     const {
       config,
@@ -129,9 +161,9 @@ export class MetaverseSceneLocalCharacterPresentationState {
       heldWeaponGripDebugState.recordSkippedFrame({
         adsBlend: weaponAdsBlend,
         attachmentMountKind: null,
-        heldSupportMarkerAvailable: false,
+        secondaryGripContactAvailable: false,
         heldMountSocketName: null,
-        offHandSupportMarkerAvailable: false,
+        offHandGripAnchorAvailable: false,
         phase: "no-character-runtime",
         weaponState
       }, nowMs);
@@ -143,9 +175,9 @@ export class MetaverseSceneLocalCharacterPresentationState {
       heldWeaponGripDebugState.recordSkippedFrame({
         adsBlend: weaponAdsBlend,
         attachmentMountKind: null,
-        heldSupportMarkerAvailable: false,
+        secondaryGripContactAvailable: false,
         heldMountSocketName: null,
-        offHandSupportMarkerAvailable: false,
+        offHandGripAnchorAvailable: false,
         phase: "no-attachment-runtime",
         weaponState
       }, nowMs);
@@ -159,6 +191,7 @@ export class MetaverseSceneLocalCharacterPresentationState {
         config.bodyPresentation,
         weaponState,
         weaponAdsBlend,
+        semanticAimFrame,
         localCharacterPresentationDependencies
       );
     }
@@ -170,11 +203,10 @@ export class MetaverseSceneLocalCharacterPresentationState {
       heldWeaponGripDebugState.recordSkippedFrame({
         adsBlend: weaponAdsBlend,
         attachmentMountKind: attachmentProofRuntime.activeMountKind,
-        heldSupportMarkerAvailable:
-          attachmentProofRuntime.heldSupportMarkerNode !== null,
+        secondaryGripContactAvailable: false,
         heldMountSocketName: attachmentProofRuntime.heldMount.socketName,
-        offHandSupportMarkerAvailable:
-          attachmentProofRuntime.offHandSupportMarkerNode !== null,
+        offHandGripAnchorAvailable:
+          attachmentProofRuntime.offHandGripAnchorNode !== null,
         phase: "no-held-weapon-pose-runtime",
         weaponState
       }, nowMs);
@@ -182,11 +214,10 @@ export class MetaverseSceneLocalCharacterPresentationState {
       heldWeaponGripDebugState.recordSkippedFrame({
         adsBlend: weaponAdsBlend,
         attachmentMountKind: attachmentProofRuntime.activeMountKind,
-        heldSupportMarkerAvailable:
-          attachmentProofRuntime.heldSupportMarkerNode !== null,
+        secondaryGripContactAvailable: false,
         heldMountSocketName: attachmentProofRuntime.heldMount.socketName,
-        offHandSupportMarkerAvailable:
-          attachmentProofRuntime.offHandSupportMarkerNode !== null,
+        offHandGripAnchorAvailable:
+          attachmentProofRuntime.offHandGripAnchorNode !== null,
         phase: "no-character-presentation",
         weaponState
       }, nowMs);
@@ -194,11 +225,10 @@ export class MetaverseSceneLocalCharacterPresentationState {
       heldWeaponGripDebugState.recordSkippedFrame({
         adsBlend: weaponAdsBlend,
         attachmentMountKind: attachmentProofRuntime.activeMountKind,
-        heldSupportMarkerAvailable:
-          attachmentProofRuntime.heldSupportMarkerNode !== null,
+        secondaryGripContactAvailable: false,
         heldMountSocketName: attachmentProofRuntime.heldMount.socketName,
-        offHandSupportMarkerAvailable:
-          attachmentProofRuntime.offHandSupportMarkerNode !== null,
+        offHandGripAnchorAvailable:
+          attachmentProofRuntime.offHandGripAnchorNode !== null,
         phase: "mounted",
         weaponState
       }, nowMs);
@@ -206,11 +236,10 @@ export class MetaverseSceneLocalCharacterPresentationState {
       heldWeaponGripDebugState.recordSkippedFrame({
         adsBlend: weaponAdsBlend,
         attachmentMountKind: attachmentProofRuntime.activeMountKind,
-        heldSupportMarkerAvailable:
-          attachmentProofRuntime.heldSupportMarkerNode !== null,
+        secondaryGripContactAvailable: false,
         heldMountSocketName: attachmentProofRuntime.heldMount.socketName,
-        offHandSupportMarkerAvailable:
-          attachmentProofRuntime.offHandSupportMarkerNode !== null,
+        offHandGripAnchorAvailable:
+          attachmentProofRuntime.offHandGripAnchorNode !== null,
         phase: "no-weapon-state",
         weaponState
       }, nowMs);
@@ -218,11 +247,10 @@ export class MetaverseSceneLocalCharacterPresentationState {
       heldWeaponGripDebugState.recordSkippedFrame({
         adsBlend: weaponAdsBlend,
         attachmentMountKind: attachmentProofRuntime.activeMountKind,
-        heldSupportMarkerAvailable:
-          attachmentProofRuntime.heldSupportMarkerNode !== null,
+        secondaryGripContactAvailable: false,
         heldMountSocketName: attachmentProofRuntime.heldMount.socketName,
-        offHandSupportMarkerAvailable:
-          attachmentProofRuntime.offHandSupportMarkerNode !== null,
+        offHandGripAnchorAvailable:
+          attachmentProofRuntime.offHandGripAnchorNode !== null,
         phase: "attachment-not-held",
         weaponState
       }, nowMs);
@@ -237,6 +265,7 @@ export class MetaverseSceneLocalCharacterPresentationState {
       config.bodyPresentation,
       weaponState,
       weaponAdsBlend,
+      semanticAimFrame,
       localCharacterPresentationDependencies
     );
   }

@@ -180,6 +180,6 @@ test("MetaverseRoomDirectory transfers TDM leadership and rotates the room sessi
   );
 
   assert.notEqual(recreatedAssignment.roomSessionId, leaderAssignment.roomSessionId);
-  assert.equal(leaderAssignment.bundleId, "private-build");
+  assert.equal(leaderAssignment.bundleId, "deathmatch");
   assert.equal(recreatedAssignment.leaderPlayerId, replacementPlayerId);
 });

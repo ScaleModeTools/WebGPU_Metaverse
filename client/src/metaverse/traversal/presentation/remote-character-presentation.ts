@@ -32,6 +32,7 @@ interface MutableVector3Snapshot {
 interface MutableRemoteCharacterPresentationSnapshot {
   aimCamera: MetaverseCameraSnapshot | null;
   characterId: string;
+  combatAlive: boolean;
   look: {
     pitchRadians: number;
     yawRadians: number;
@@ -259,11 +260,12 @@ function resolveRemoteCharacterAimCameraSnapshot(
   look: MutableRemoteCharacterPresentationSnapshot["look"],
   playerSnapshot: Pick<
     MetaverseRealtimePlayerSnapshot,
-    "locomotionMode" | "mountedOccupancy" | "weaponState"
+    "combat" | "locomotionMode" | "mountedOccupancy" | "weaponState"
   >,
   config: RemoteCharacterAimPresentationConfig
 ): MetaverseCameraSnapshot | null {
   if (
+    playerSnapshot.combat?.alive === false ||
     playerSnapshot.mountedOccupancy !== null ||
     playerSnapshot.locomotionMode !== "grounded" ||
     playerSnapshot.weaponState === null
@@ -401,11 +403,13 @@ export class MetaverseRemoteCharacterPresentationOwner {
   ) {
     const activeBodySnapshot =
       readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(playerSnapshot);
+    const combatAlive = playerSnapshot.combat?.alive ?? true;
 
     this.#config = config;
     this.#snapshot = {
       aimCamera: null,
       characterId: playerSnapshot.characterId,
+      combatAlive,
       look: {
         pitchRadians: playerSnapshot.look.pitchRadians,
         yawRadians: playerSnapshot.look.yawRadians
@@ -432,7 +436,7 @@ export class MetaverseRemoteCharacterPresentationOwner {
       },
       teamId: playerSnapshot.teamId,
       username: playerSnapshot.username,
-      weaponState: playerSnapshot.weaponState
+      weaponState: combatAlive ? playerSnapshot.weaponState : null
     };
   }
 
@@ -461,8 +465,11 @@ export class MetaverseRemoteCharacterPresentationOwner {
       nextPlayer,
       alpha
     );
+    const sampledCombatAlive =
+      sampledDiscretePlayerSnapshot.combat?.alive ?? true;
 
     this.#snapshot.characterId = sampledDiscretePlayerSnapshot.characterId;
+    this.#snapshot.combatAlive = sampledCombatAlive;
     this.#snapshot.look.pitchRadians = sampleRemotePlayerLookPitchRadians(
       basePlayer,
       nextPlayer,
@@ -477,7 +484,9 @@ export class MetaverseRemoteCharacterPresentationOwner {
       sampledDiscretePlayerSnapshot.mountedOccupancy;
     this.#snapshot.teamId = sampledDiscretePlayerSnapshot.teamId;
     this.#snapshot.username = sampledDiscretePlayerSnapshot.username;
-    this.#snapshot.weaponState = sampledDiscretePlayerSnapshot.weaponState;
+    this.#snapshot.weaponState = sampledCombatAlive
+      ? sampledDiscretePlayerSnapshot.weaponState
+      : null;
     this.#snapshot.presentation.animationVocabulary =
       resolveRemoteCharacterAnimationVocabulary(
         this.#animationRuntime,

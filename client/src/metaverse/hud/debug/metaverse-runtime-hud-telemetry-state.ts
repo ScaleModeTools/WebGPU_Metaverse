@@ -25,7 +25,8 @@ import { resolveAutomaticSurfaceLocomotionSnapshot } from "../../traversal/polic
 import type {
   MetaverseHudSnapshot,
   MetaverseRuntimeConfig,
-  MetaverseTelemetrySnapshot
+  MetaverseTelemetrySnapshot,
+  MetaverseVector3Snapshot
 } from "../../types/metaverse-runtime";
 
 export interface MetaverseRendererTelemetrySource {
@@ -52,6 +53,8 @@ interface MetaverseRuntimeHudTelemetryStateDependencies {
   readonly readLocalHeldWeaponGripTelemetrySnapshot: (
     nowMs: number
   ) => MetaverseTelemetrySnapshot["localHeldWeaponGrip"];
+  readonly readProjectilePresentationTelemetrySnapshots?: (() =>
+    MetaverseTelemetrySnapshot["projectilePresentation"]) | null | undefined;
   readonly remoteWorldRuntime: MetaverseRemoteWorldRuntime;
   readonly traversalRuntime: MetaverseTraversalRuntime;
 }
@@ -240,22 +243,52 @@ function freezeRendererTelemetrySnapshot(
   });
 }
 
+function freezeNullableVector3Snapshot(
+  snapshot: MetaverseVector3Snapshot | null
+): MetaverseVector3Snapshot | null {
+  if (snapshot === null) {
+    return null;
+  }
+
+  return Object.freeze({
+    x: snapshot.x,
+    y: snapshot.y,
+    z: snapshot.z
+  });
+}
+
 function freezeLocalHeldWeaponGripTelemetrySnapshot(
   snapshot: MetaverseTelemetrySnapshot["localHeldWeaponGrip"]
 ): MetaverseTelemetrySnapshot["localHeldWeaponGrip"] {
   return Object.freeze({
     adsBlend: snapshot.adsBlend,
+    adsAnchorPoseActive: snapshot.adsAnchorPoseActive,
+    adsAnchorPositionErrorMeters: snapshot.adsAnchorPositionErrorMeters,
+    adsAppliedGripDeltaMeters: snapshot.adsAppliedGripDeltaMeters,
+    adsGripDeltaClamped: snapshot.adsGripDeltaClamped,
+    adsPositionalWeight: snapshot.adsPositionalWeight,
     aimMode: snapshot.aimMode,
+    aimSource: snapshot.aimSource,
+    aimSourceQuality: snapshot.aimSourceQuality,
     attachmentMountKind: snapshot.attachmentMountKind,
+    actualWeaponForwardWorld: freezeNullableVector3Snapshot(
+      snapshot.actualWeaponForwardWorld
+    ),
     degradedFrameCount: snapshot.degradedFrameCount,
+    deprecatedAimPoseActive: snapshot.deprecatedAimPoseActive,
+    desiredWeaponForwardWorld: freezeNullableVector3Snapshot(
+      snapshot.desiredWeaponForwardWorld
+    ),
     gripTargetSolveFailureReason: snapshot.gripTargetSolveFailureReason,
-    heldSupportMarkerAvailable: snapshot.heldSupportMarkerAvailable,
+    secondaryGripContactAvailable: snapshot.secondaryGripContactAvailable,
     heldMountSocketName: snapshot.heldMountSocketName,
     lastDegradedAgeMs: snapshot.lastDegradedAgeMs,
     lastDegradedReason: snapshot.lastDegradedReason,
     mainHandGripErrorMeters: snapshot.mainHandGripErrorMeters,
     mainHandGripSocketComparisonErrorMeters:
       snapshot.mainHandGripSocketComparisonErrorMeters,
+    mainHandAngularErrorRadians: snapshot.mainHandAngularErrorRadians,
+    mainHandContactFrameId: snapshot.mainHandContactFrameId,
     mainHandMaxReachMeters: snapshot.mainHandMaxReachMeters,
     mainHandPalmSocketComparisonErrorMeters:
       snapshot.mainHandPalmSocketComparisonErrorMeters,
@@ -267,6 +300,14 @@ function freezeLocalHeldWeaponGripTelemetrySnapshot(
     mainHandSolveErrorMeters: snapshot.mainHandSolveErrorMeters,
     mainHandSocket: snapshot.mainHandSocket,
     mainHandTargetDistanceMeters: snapshot.mainHandTargetDistanceMeters,
+    mainHandWeaponSocketRole: snapshot.mainHandWeaponSocketRole,
+    mainHandWristCorrectionRadians: snapshot.mainHandWristCorrectionRadians,
+    legacyFullBodyAimFallbackActive: snapshot.legacyFullBodyAimFallbackActive,
+    legacyPistolShootOverlayActive: snapshot.legacyPistolShootOverlayActive,
+    legacyUpperBodyAimOverlayActive: snapshot.legacyUpperBodyAimOverlayActive,
+    muzzleAimAngularErrorRadians: snapshot.muzzleAimAngularErrorRadians,
+    offHandAngularErrorRadians: snapshot.offHandAngularErrorRadians,
+    offHandContactFrameId: snapshot.offHandContactFrameId,
     offHandFinalErrorMeters: snapshot.offHandFinalErrorMeters,
     offHandGripMounted: snapshot.offHandGripMounted,
     offHandInitialSolveErrorMeters: snapshot.offHandInitialSolveErrorMeters,
@@ -274,17 +315,103 @@ function freezeLocalHeldWeaponGripTelemetrySnapshot(
     offHandPreSolveErrorMeters: snapshot.offHandPreSolveErrorMeters,
     offHandRefinementPassCount: snapshot.offHandRefinementPassCount,
     offHandSocket: snapshot.offHandSocket,
-    offHandSupportMarkerAvailable: snapshot.offHandSupportMarkerAvailable,
+    offHandGripAnchorAvailable: snapshot.offHandGripAnchorAvailable,
+    offHandTargetKind: snapshot.offHandTargetKind,
+    offHandWeaponSocketRole: snapshot.offHandWeaponSocketRole,
+    offHandWristCorrectionRadians: snapshot.offHandWristCorrectionRadians,
     phase: snapshot.phase,
-    servicePistolAdsPoseActive: snapshot.servicePistolAdsPoseActive,
-    servicePistolSupportPalmPoseActive:
-      snapshot.servicePistolSupportPalmPoseActive,
+    poseProfileId: snapshot.poseProfileId,
+    supportPalmFade: snapshot.supportPalmFade,
+    supportPalmHintActive: snapshot.supportPalmHintActive,
     stability: snapshot.stability,
     weaponId: snapshot.weaponId,
     weaponStatePresent: snapshot.weaponStatePresent,
     worstMainHandGripErrorMeters: snapshot.worstMainHandGripErrorMeters,
     worstOffHandFinalErrorMeters: snapshot.worstOffHandFinalErrorMeters
   });
+}
+
+function freezeProjectilePresentationDebugSnapshots(
+  snapshots: MetaverseTelemetrySnapshot["projectilePresentation"]
+): MetaverseTelemetrySnapshot["projectilePresentation"] {
+  return Object.freeze(
+    snapshots.map((snapshot) =>
+      Object.freeze({
+        actionSequence: snapshot.actionSequence,
+        actorId: snapshot.actorId,
+        cameraRayToVisualSegmentAngleRadians:
+          snapshot.cameraRayToVisualSegmentAngleRadians,
+        deliveryModel: snapshot.deliveryModel,
+        drainTimeRenderedMuzzleWorld: freezeNullableVector3Snapshot(
+          snapshot.drainTimeRenderedMuzzleWorld
+        ),
+        endpointRayDistanceMeters: snapshot.endpointRayDistanceMeters,
+        endpointRayPerpendicularErrorMeters:
+          snapshot.endpointRayPerpendicularErrorMeters,
+        eventCameraRayForwardWorld: freezeNullableVector3Snapshot(
+          snapshot.eventCameraRayForwardWorld
+        ),
+        finiteEndpointPolicy: snapshot.finiteEndpointPolicy,
+        firstProjectileSnapshotWorld: freezeNullableVector3Snapshot(
+          snapshot.firstProjectileSnapshotWorld
+        ),
+        hitscanHitKind: snapshot.hitscanHitKind,
+        muzzleToSemanticTipDeltaMeters:
+          snapshot.muzzleToSemanticTipDeltaMeters,
+        muzzleToEndpointDistanceMeters:
+          snapshot.muzzleToEndpointDistanceMeters,
+        muzzleForwardToVisualSegmentAngleRadians:
+          snapshot.muzzleForwardToVisualSegmentAngleRadians,
+        postSyncFireActionMuzzleWorld: freezeNullableVector3Snapshot(
+          snapshot.postSyncFireActionMuzzleWorld
+        ),
+        postSyncFireActionToDrainTimeMuzzleDeltaMeters:
+          snapshot.postSyncFireActionToDrainTimeMuzzleDeltaMeters,
+        projectileId: snapshot.projectileId,
+        renderedMuzzleCapturedAt: snapshot.renderedMuzzleCapturedAt,
+        renderedMuzzleForwardWorld: freezeNullableVector3Snapshot(
+          snapshot.renderedMuzzleForwardWorld
+        ),
+        renderedMuzzleWorld: freezeNullableVector3Snapshot(
+          snapshot.renderedMuzzleWorld
+        ),
+        renderedToServerDeltaMeters: snapshot.renderedToServerDeltaMeters,
+        semanticTipToFirstSnapshotDeltaMeters:
+          snapshot.semanticTipToFirstSnapshotDeltaMeters,
+        semanticTipWorld: freezeNullableVector3Snapshot(snapshot.semanticTipWorld),
+        serverProjectileOriginWorld: freezeNullableVector3Snapshot(
+          snapshot.serverProjectileOriginWorld
+        ),
+        sharedObjectLocalMuzzleFrame:
+          snapshot.sharedObjectLocalMuzzleFrame === null
+            ? null
+            : Object.freeze({
+                forwardMeters:
+                  snapshot.sharedObjectLocalMuzzleFrame.forwardMeters,
+                rightMeters: snapshot.sharedObjectLocalMuzzleFrame.rightMeters,
+                role: snapshot.sharedObjectLocalMuzzleFrame.role,
+                rotation: Object.freeze({
+                  w: snapshot.sharedObjectLocalMuzzleFrame.rotation.w,
+                  x: snapshot.sharedObjectLocalMuzzleFrame.rotation.x,
+                  y: snapshot.sharedObjectLocalMuzzleFrame.rotation.y,
+                  z: snapshot.sharedObjectLocalMuzzleFrame.rotation.z
+                }),
+                source: snapshot.sharedObjectLocalMuzzleFrame.source,
+                upMeters: snapshot.sharedObjectLocalMuzzleFrame.upMeters
+              }),
+        tracerSuppressedReason: snapshot.tracerSuppressedReason,
+        tracerStartSource: snapshot.tracerStartSource,
+        visualEndWorld: freezeNullableVector3Snapshot(snapshot.visualEndWorld),
+        visualEndpointSource: snapshot.visualEndpointSource,
+        visualSegmentDirectionWorld: freezeNullableVector3Snapshot(
+          snapshot.visualSegmentDirectionWorld
+        ),
+        visualStartWorld: freezeNullableVector3Snapshot(snapshot.visualStartWorld),
+        weaponId: snapshot.weaponId,
+        weaponInstanceId: snapshot.weaponInstanceId
+      })
+    )
+  );
 }
 
 function freezeOptionalVector3Snapshot(
@@ -538,6 +665,9 @@ function freezeTelemetrySnapshot(
     localHeldWeaponGrip: freezeLocalHeldWeaponGripTelemetrySnapshot(
       snapshot.localHeldWeaponGrip
     ),
+    projectilePresentation: freezeProjectilePresentationDebugSnapshots(
+      snapshot.projectilePresentation
+    ),
     renderedFrameCount: snapshot.renderedFrameCount,
     renderer: freezeRendererTelemetrySnapshot(snapshot.renderer),
     worldCadence: Object.freeze({
@@ -745,6 +875,9 @@ function freezeTelemetrySnapshot(
             rejectionReason:
               snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
                 .combatAction.rejectionReason,
+            shotResolution:
+              snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
+                .combatAction.shotResolution,
             status:
               snapshot.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
                 .combatAction.status,
@@ -909,6 +1042,8 @@ export class MetaverseRuntimeHudTelemetryState {
   readonly #readLocalHeldWeaponGripTelemetrySnapshot: (
     nowMs: number
   ) => MetaverseTelemetrySnapshot["localHeldWeaponGrip"];
+  readonly #readProjectilePresentationTelemetrySnapshots: () =>
+    MetaverseTelemetrySnapshot["projectilePresentation"];
   readonly #remoteWorldRuntime: MetaverseRemoteWorldRuntime;
   readonly #traversalRuntime: MetaverseTraversalRuntime;
 
@@ -927,6 +1062,7 @@ export class MetaverseRuntimeHudTelemetryState {
     devicePixelRatio,
     environmentPhysicsRuntime,
     readLocalHeldWeaponGripTelemetrySnapshot,
+    readProjectilePresentationTelemetrySnapshots,
     remoteWorldRuntime,
     traversalRuntime
   }: MetaverseRuntimeHudTelemetryStateDependencies) {
@@ -935,6 +1071,8 @@ export class MetaverseRuntimeHudTelemetryState {
     this.#environmentPhysicsRuntime = environmentPhysicsRuntime;
     this.#readLocalHeldWeaponGripTelemetrySnapshot =
       readLocalHeldWeaponGripTelemetrySnapshot;
+    this.#readProjectilePresentationTelemetrySnapshots =
+      readProjectilePresentationTelemetrySnapshots ?? (() => Object.freeze([]));
     this.#remoteWorldRuntime = remoteWorldRuntime;
     this.#traversalRuntime = traversalRuntime;
   }
@@ -974,6 +1112,8 @@ export class MetaverseRuntimeHudTelemetryState {
       frameDeltaMs: input.frameDeltaMs,
       frameRate: input.frameRate,
       localHeldWeaponGrip: this.#readLocalHeldWeaponGripTelemetrySnapshot(nowMs),
+      projectilePresentation:
+        this.#readProjectilePresentationTelemetrySnapshots(),
       renderedFrameCount: input.renderedFrameCount,
       renderer: {
         active: input.renderer !== null,
@@ -1088,6 +1228,8 @@ export class MetaverseRuntimeHudTelemetryState {
             latestFireWeaponActionReceipt?.sourceProjectileId ?? null,
           rejectionReason:
             latestFireWeaponActionReceipt?.rejectionReason ?? null,
+          shotResolution:
+            authoritativeLocalPlayerSnapshot?.latestShotResolutionTelemetry ?? null,
           status: latestFireWeaponActionReceipt?.status ?? null,
           weaponId: latestFireWeaponActionReceipt?.weaponId ?? null
         }),

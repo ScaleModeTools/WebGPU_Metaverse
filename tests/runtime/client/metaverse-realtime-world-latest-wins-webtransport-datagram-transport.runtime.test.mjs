@@ -8,7 +8,8 @@ import {
   createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram,
   createMetaverseSyncDriverVehicleControlCommand,
   createMetaverseSyncPlayerLookIntentCommand,
-  createMetaverseSyncPlayerTraversalIntentCommand
+  createMetaverseSyncPlayerTraversalIntentCommand,
+  createMetaverseRoomId
 } from "@webgpu-metaverse/shared";
 
 import { createClientModuleLoader } from "./load-client-module.mjs";
@@ -28,13 +29,16 @@ test("createMetaverseRealtimeWorldLatestWinsWebTransportDatagramTransport sends 
     createMetaverseRealtimeWorldLatestWinsWebTransportDatagramTransport
   } = await clientLoader.load("/src/network/index.ts");
   const playerId = createMetaversePlayerId("harbor-pilot-1");
+  const roomId = createMetaverseRoomId("tdm-harbor");
 
   assert.notEqual(playerId, null);
+  assert.notEqual(roomId, null);
 
   const sentDatagrams = [];
   const transport =
     createMetaverseRealtimeWorldLatestWinsWebTransportDatagramTransport(
       {
+        roomId,
         webTransportUrl: "https://example.test/metaverse/world"
       },
       {
@@ -88,19 +92,22 @@ test("createMetaverseRealtimeWorldLatestWinsWebTransportDatagramTransport sends 
   assert.deepEqual(
     sentDatagrams[0],
     createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram({
-      command: driverControlCommand
+      command: driverControlCommand,
+      roomId
     })
   );
   assert.deepEqual(
     sentDatagrams[1],
     createMetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram({
-      command: playerLookIntentCommand
+      command: playerLookIntentCommand,
+      roomId
     })
   );
   assert.deepEqual(
     sentDatagrams[2],
     createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram({
-      command: playerTraversalIntentCommand
+      command: playerTraversalIntentCommand,
+      roomId
     })
   );
 });
@@ -109,11 +116,15 @@ test("createMetaverseRealtimeWorldLatestWinsWebTransportDatagramTransport dispos
   const {
     createMetaverseRealtimeWorldLatestWinsWebTransportDatagramTransport
   } = await clientLoader.load("/src/network/index.ts");
+  const roomId = createMetaverseRoomId("tdm-harbor");
+
+  assert.notEqual(roomId, null);
 
   let disposed = false;
   const transport =
     createMetaverseRealtimeWorldLatestWinsWebTransportDatagramTransport(
       {
+        roomId,
         webTransportUrl: "https://example.test/metaverse/world"
       },
       {

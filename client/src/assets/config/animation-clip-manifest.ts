@@ -6,11 +6,8 @@ import {
 } from "../types/animation-clip-manifest";
 import type { AnimationVocabularyId } from "../types/animation-clip-manifest";
 
-export const mesh2motionHumanoidCanonicalAnimationPackSourcePath =
-  "/models/metaverse/characters/mesh2motion-humanoid-canonical-animations.glb";
-
-export const mesh2motionHumanoidUnarmedIdleAnimationPackSourcePath =
-  "/models/metaverse/characters/mesh2motion-humanoid-unarmed-idle.glb";
+export const metaverseHumanoidBaseAnimationPackSourcePath =
+  "/models/metaverse/characters/metaverse-humanoid-base-pack.glb";
 
 export const mesh2motionHumanoidIdleAnimationClipId = createAnimationClipId(
   "mesh2motion-humanoid-idle-v1"
@@ -39,10 +36,6 @@ export const mesh2motionHumanoidSwimAnimationClipId = createAnimationClipId(
   "mesh2motion-humanoid-swim-v1"
 );
 
-export const mesh2motionHumanoidAimAnimationClipId = createAnimationClipId(
-  "mesh2motion-humanoid-aim-v1"
-);
-
 export const mesh2motionHumanoidInteractAnimationClipId = createAnimationClipId(
   "mesh2motion-humanoid-interact-v1"
 );
@@ -59,7 +52,6 @@ const mesh2motionHumanoidAnimationClipIdByVocabulary = Object.freeze({
   "jump-up": mesh2motionHumanoidJumpUpAnimationClipId,
   "jump-mid": mesh2motionHumanoidJumpMidAnimationClipId,
   "jump-down": mesh2motionHumanoidJumpDownAnimationClipId,
-  aim: mesh2motionHumanoidAimAnimationClipId,
   interact: mesh2motionHumanoidInteractAnimationClipId,
   seated: mesh2motionHumanoidSeatedAnimationClipId
 } as const);
@@ -72,22 +64,20 @@ const mesh2motionHumanoidLoopModeByVocabulary = Object.freeze({
   "jump-up": "once",
   "jump-mid": "repeat",
   "jump-down": "once",
-  aim: "repeat",
   interact: "once",
   seated: "repeat"
 } as const satisfies Readonly<Record<AnimationVocabularyId, "once" | "repeat">>);
 
 const mesh2motionHumanoidAnimationClipSourcePathByVocabulary = Object.freeze({
-  idle: mesh2motionHumanoidUnarmedIdleAnimationPackSourcePath,
-  walk: mesh2motionHumanoidCanonicalAnimationPackSourcePath,
-  "swim-idle": mesh2motionHumanoidCanonicalAnimationPackSourcePath,
-  swim: mesh2motionHumanoidCanonicalAnimationPackSourcePath,
-  "jump-up": mesh2motionHumanoidCanonicalAnimationPackSourcePath,
-  "jump-mid": mesh2motionHumanoidCanonicalAnimationPackSourcePath,
-  "jump-down": mesh2motionHumanoidCanonicalAnimationPackSourcePath,
-  aim: mesh2motionHumanoidCanonicalAnimationPackSourcePath,
-  interact: mesh2motionHumanoidCanonicalAnimationPackSourcePath,
-  seated: mesh2motionHumanoidCanonicalAnimationPackSourcePath
+  idle: metaverseHumanoidBaseAnimationPackSourcePath,
+  walk: metaverseHumanoidBaseAnimationPackSourcePath,
+  "swim-idle": metaverseHumanoidBaseAnimationPackSourcePath,
+  swim: metaverseHumanoidBaseAnimationPackSourcePath,
+  "jump-up": metaverseHumanoidBaseAnimationPackSourcePath,
+  "jump-mid": metaverseHumanoidBaseAnimationPackSourcePath,
+  "jump-down": metaverseHumanoidBaseAnimationPackSourcePath,
+  interact: metaverseHumanoidBaseAnimationPackSourcePath,
+  seated: metaverseHumanoidBaseAnimationPackSourcePath
 } as const satisfies Readonly<Record<AnimationVocabularyId, string>>);
 
 export const animationClipManifest = defineAnimationClipManifest([

@@ -44,6 +44,7 @@ export interface MetaverseAuthoritativePlayerTraversalRuntimeState {
     | null;
   realtimeWorldAuthorityActive: boolean;
   unmountedTraversalState: MetaverseUnmountedTraversalStateSnapshot;
+  weaponState?: { readonly weaponId: string } | null;
 }
 
 interface MetaverseAuthoritativePlayerTraversalAuthorityDependencies<
@@ -337,6 +338,8 @@ export class MetaverseAuthoritativePlayerTraversalAuthority<
       }
     );
 
+    playerRuntime.lookPitchRadians = latestComparableIntent.facing.pitchRadians;
+    playerRuntime.lookYawRadians = latestComparableIntent.facing.yawRadians;
     playerRuntime.lastSeenAtMs = nowMs;
     this.#dependencies.syncPlayerTraversalAuthorityState(playerRuntime);
   }
@@ -359,11 +362,13 @@ export class MetaverseAuthoritativePlayerTraversalAuthority<
     playerRuntime.realtimeWorldAuthorityActive = true;
     playerRuntime.lastSeenAtMs = nowMs;
 
-    if (
-      !shouldTreatMetaverseMountedOccupancyAsTraversalMounted(
-        playerRuntime.mountedOccupancy
-      )
-    ) {
+    const mountedLookAllowed = shouldTreatMetaverseMountedOccupancyAsTraversalMounted(
+      playerRuntime.mountedOccupancy
+    );
+    const armedUnmountedLookAllowed =
+      !mountedLookAllowed && playerRuntime.weaponState != null;
+
+    if (!mountedLookAllowed && !armedUnmountedLookAllowed) {
       return;
     }
 

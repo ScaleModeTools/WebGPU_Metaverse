@@ -38,6 +38,8 @@ interface MetaverseRuntimeHudPublisherDependencies {
     nowMs: number
   ) => MetaverseHudSnapshot["telemetry"]["localHeldWeaponGrip"];
   readonly readNowMs: () => number;
+  readonly readProjectilePresentationTelemetrySnapshots?: (() =>
+    MetaverseHudSnapshot["telemetry"]["projectilePresentation"]) | null;
   readonly remoteWorldRuntime: MetaverseRemoteWorldRuntime;
   readonly traversalRuntime: MetaverseTraversalRuntime;
   readonly weaponPresentationRuntime?: MetaverseWeaponPresentationRuntime;
@@ -216,6 +218,7 @@ export class MetaverseRuntimeHudPublisher {
     presenceRuntime,
     readLocalHeldWeaponGripTelemetrySnapshot,
     readNowMs,
+    readProjectilePresentationTelemetrySnapshots,
     remoteWorldRuntime,
     traversalRuntime,
     weaponPresentationRuntime
@@ -230,6 +233,7 @@ export class MetaverseRuntimeHudPublisher {
       devicePixelRatio,
       environmentPhysicsRuntime,
       readLocalHeldWeaponGripTelemetrySnapshot,
+      readProjectilePresentationTelemetrySnapshots,
       remoteWorldRuntime,
       traversalRuntime
     });
@@ -410,11 +414,27 @@ export class MetaverseRuntimeHudPublisher {
     }
 
     const activeWeaponSnapshot = combatSnapshot.activeWeapon;
-    const activeWeaponStats =
-      activeWeaponSnapshot === null
+    const presentationWeaponId =
+      this.#weaponPresentationRuntime?.hudSnapshot.visible === true
+        ? this.#weaponPresentationRuntime.hudSnapshot.weaponId
+        : null;
+    const weaponInventory = combatSnapshot.weaponInventory ?? [];
+    const displayedWeaponSnapshot =
+      presentationWeaponId === null
+        ? activeWeaponSnapshot
+        : weaponInventory.find(
+            (weaponSnapshot) => weaponSnapshot.weaponId === presentationWeaponId
+          ) ??
+          (activeWeaponSnapshot?.weaponId === presentationWeaponId
+            ? activeWeaponSnapshot
+            : null) ??
+          activeWeaponSnapshot;
+    const displayedWeaponStats =
+      displayedWeaponSnapshot === null
         ? null
         : combatSnapshot.weaponStats.find(
-            (weaponStats) => weaponStats.weaponId === activeWeaponSnapshot.weaponId
+            (weaponStats) =>
+              weaponStats.weaponId === displayedWeaponSnapshot.weaponId
           ) ?? null;
     const localTeamId = localPlayerSnapshot.teamId ?? presenceSnapshot.localTeamId;
     const matchSnapshot = worldSnapshot.combatMatch;
@@ -465,15 +485,15 @@ export class MetaverseRuntimeHudPublisher {
         }
       })
     );
-    const shotsFired = activeWeaponStats?.shotsFired ?? 0;
-    const shotsHit = activeWeaponStats?.shotsHit ?? 0;
+    const shotsFired = displayedWeaponStats?.shotsFired ?? 0;
+    const shotsHit = displayedWeaponStats?.shotsHit ?? 0;
 
     return Object.freeze({
       accuracyRatio:
         shotsFired > 0 ? Math.max(0, Math.min(1, shotsHit / shotsFired)) : null,
       alive: combatSnapshot.alive,
-      ammoInMagazine: activeWeaponSnapshot?.ammoInMagazine ?? 0,
-      ammoInReserve: activeWeaponSnapshot?.ammoInReserve ?? 0,
+      ammoInMagazine: displayedWeaponSnapshot?.ammoInMagazine ?? 0,
+      ammoInReserve: displayedWeaponSnapshot?.ammoInReserve ?? 0,
       assists: combatSnapshot.assists,
       available: true,
       deaths: combatSnapshot.deaths,
@@ -485,7 +505,7 @@ export class MetaverseRuntimeHudPublisher {
       kills: combatSnapshot.kills,
       matchPhase: matchSnapshot?.phase ?? null,
       maxHealth: combatSnapshot.maxHealth,
-      reloadRemainingMs: Number(activeWeaponSnapshot?.reloadRemainingMs ?? 0),
+      reloadRemainingMs: Number(displayedWeaponSnapshot?.reloadRemainingMs ?? 0),
       respawnRemainingMs: Number(combatSnapshot.respawnRemainingMs),
       scoreLimit: matchSnapshot?.scoreLimit ?? null,
       shotsFired,
@@ -494,7 +514,7 @@ export class MetaverseRuntimeHudPublisher {
       teamScore: localTeamSnapshot?.score ?? null,
       timeRemainingMs:
         matchSnapshot === null ? null : Number(matchSnapshot.timeRemainingMs),
-      weaponId: activeWeaponSnapshot?.weaponId ?? null
+      weaponId: displayedWeaponSnapshot?.weaponId ?? null
     });
   }
 

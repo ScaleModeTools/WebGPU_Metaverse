@@ -29,6 +29,7 @@ import {
 import { createMetaverseRuntimeConfig } from "../config/metaverse-runtime";
 import {
   createMetaverseLocalPlayerIdentity,
+  createMetaverseTeamDeathmatchLocalPlayerIdentity,
   createMetaversePresenceClient
 } from "../config/metaverse-presence-network";
 import { createMetaverseWorldClient } from "../config/metaverse-world-network";
@@ -37,6 +38,8 @@ import { registerMetaverseWorldBundleOnServer } from "../world/map-bundles";
 import { MetaverseDeveloperOverlay } from "./metaverse-developer-overlay";
 import { MetaversePlayerRadarHud } from "./metaverse-player-radar-hud";
 import { MetaverseWeaponReticleOverlay } from "./metaverse-weapon-reticle-overlay";
+import type { AudioCuePlaybackOptions } from "../../audio";
+import type { MetaverseCombatAudioCueId } from "../audio";
 import type { MetaverseControlModeId } from "../types/metaverse-control-mode";
 import type {
   MetaverseAttachmentProofConfig,
@@ -45,7 +48,10 @@ import type {
 } from "../types/metaverse-runtime";
 
 interface MetaverseStageScreenProps {
-  readonly attachmentProofConfig: MetaverseAttachmentProofConfig | null;
+  readonly attachmentProofConfig?: MetaverseAttachmentProofConfig | null;
+  readonly attachmentProofConfigs?:
+    | readonly MetaverseAttachmentProofConfig[]
+    | null;
   readonly audioStatusLabel: string;
   readonly bundleId: string;
   readonly calibrationQualityLabel: string;
@@ -56,12 +62,17 @@ interface MetaverseStageScreenProps {
   readonly gameplayInputMode: GameplayInputModeId;
   readonly matchMode: MetaverseMatchModeId;
   readonly metaverseControlMode: MetaverseControlModeId;
+  readonly onCombatAudioCue: (
+    cueId: MetaverseCombatAudioCueId,
+    options?: AudioCuePlaybackOptions
+  ) => void;
   readonly onCoopRoomIdDraftChange: (coopRoomIdDraft: string) => void;
   readonly onExperienceLaunchRequest: (experienceId: ExperienceId) => void;
   readonly onRecalibrationRequest: () => void;
   readonly roomAssignment: MetaverseRoomAssignmentSnapshot;
   readonly onSetupRequest: () => void;
   readonly username: string;
+  readonly weaponLayoutId?: string | null;
 }
 
 interface MetaverseHudSurfaceProps {
@@ -171,6 +182,7 @@ function formatMatchTimeLabel(timeRemainingMs: number | null): string {
 
 export function MetaverseStageScreen({
   attachmentProofConfig,
+  attachmentProofConfigs,
   audioStatusLabel,
   bundleId,
   calibrationQualityLabel,
@@ -181,12 +193,14 @@ export function MetaverseStageScreen({
   gameplayInputMode,
   matchMode,
   metaverseControlMode,
+  onCombatAudioCue,
   onCoopRoomIdDraftChange,
   onExperienceLaunchRequest,
   onRecalibrationRequest,
   roomAssignment,
   onSetupRequest,
-  username
+  username,
+  weaponLayoutId = null
 }: MetaverseStageScreenProps) {
   void audioStatusLabel;
   void calibrationQualityLabel;
@@ -201,15 +215,45 @@ export function MetaverseStageScreen({
   const localCharacterId =
     characterProofConfig?.characterId ?? metaverseActiveFullBodyCharacterAssetId;
   const localPlayerIdentity = useMemo(
-    () => createMetaverseLocalPlayerIdentity(username, localCharacterId),
-    [localCharacterId, username]
+    () =>
+      matchMode === "team-deathmatch"
+        ? createMetaverseTeamDeathmatchLocalPlayerIdentity(
+            username,
+            localCharacterId
+          )
+        : createMetaverseLocalPlayerIdentity(username, localCharacterId),
+    [localCharacterId, matchMode, username]
+  );
+  const resolvedAttachmentProofConfigs = useMemo(
+    () =>
+      attachmentProofConfigs !== undefined
+        ? attachmentProofConfigs ?? []
+        : attachmentProofConfig === null || attachmentProofConfig === undefined
+          ? []
+          : [attachmentProofConfig],
+    [attachmentProofConfig, attachmentProofConfigs]
+  );
+  const combatAudioCueRef = useRef(onCombatAudioCue);
+  useEffect(() => {
+    combatAudioCueRef.current = onCombatAudioCue;
+  }, [onCombatAudioCue]);
+  const playCombatAudioCue = useCallback(
+    (cueId: MetaverseCombatAudioCueId, options?: AudioCuePlaybackOptions) => {
+      combatAudioCueRef.current(cueId, options);
+    },
+    []
   );
   const metaverseRuntime = useMemo(
     () => {
       return new WebGpuMetaverseRuntime(
-        createMetaverseRuntimeConfig(bundleId, localPlayerIdentity.playerId, null),
+        createMetaverseRuntimeConfig(
+          bundleId,
+          localPlayerIdentity.playerId,
+          localPlayerIdentity.teamId ?? null
+        ),
         {
-          attachmentProofConfig,
+          attachmentProofConfig: attachmentProofConfig ?? null,
+          attachmentProofConfigs: resolvedAttachmentProofConfigs,
           characterProofConfig,
           createMetaversePresenceClient: () =>
             createMetaversePresenceClient(roomAssignment.roomId),
@@ -219,19 +263,24 @@ export function MetaverseStageScreen({
             registerMetaverseWorldBundleOnServer(bundleId),
           environmentProofConfig,
           equippedWeaponId,
-          localPlayerIdentity
+          localPlayerIdentity,
+          playCombatAudioCue,
+          weaponLayoutId
         }
       );
     },
     [
       attachmentProofConfig,
+      resolvedAttachmentProofConfigs,
       bundleId,
       characterProofConfig,
       environmentProofConfig,
       equippedWeaponId,
       localPlayerIdentity,
+      playCombatAudioCue,
       roomAssignment.roomId,
-      roomAssignment.roomSessionId
+      roomAssignment.roomSessionId,
+      weaponLayoutId
     ]
   );
   const [hudViewport, setHudViewport] = useState({
@@ -493,6 +542,10 @@ export function MetaverseStageScreen({
   const healthLabel = combatSnapshot.available
     ? `${Math.round(combatSnapshot.health)}/${Math.round(combatSnapshot.maxHealth)}`
     : "--/--";
+  const weaponLabel =
+    weaponHudSnapshot.visible && weaponHudSnapshot.weaponLabel !== null
+      ? weaponHudSnapshot.weaponLabel
+      : combatSnapshot.weaponId ?? "Weapon";
 
   return (
     <ImmersiveStageFrame className="bg-game-stage">
@@ -587,7 +640,12 @@ export function MetaverseStageScreen({
                   className="max-w-[min(17rem,100%)] shrink-0"
                   strong
                 >
-                  <span className="type-shell-banner">Ammo</span>
+                  <div className="flex min-w-0 items-center justify-between gap-3">
+                    <span className="type-shell-banner">Ammo</span>
+                    <span className="type-shell-caption truncate text-right">
+                      {weaponLabel}
+                    </span>
+                  </div>
                   <div className="mt-3 grid grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] items-end gap-4">
                     <div className="min-w-0">
                       <span className="type-shell-caption block truncate">

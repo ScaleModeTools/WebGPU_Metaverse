@@ -29,6 +29,7 @@ import {
 } from "../../metaverse/world/map-bundles";
 import type { MetaverseWorldPreviewLaunchSelectionSnapshot } from "../../metaverse/world/map-bundles";
 import {
+  defaultMetaverseMapLaunchPlaylistSnapshot,
   readMetaverseMapLaunchPlaylistSnapshot,
   resolveMetaverseMapLaunchSelection
 } from "../../metaverse/world/playlists";
@@ -93,16 +94,14 @@ function resolveStandardMetaverseLaunchSelection(
   readonly bundleId: string;
   readonly launchVariationId: string;
 } {
-  if (matchMode === "team-deathmatch") {
-    return Object.freeze({
-      bundleId: "private-build",
-      launchVariationId: "shell-team-deathmatch"
-    });
-  }
+  const launchSelection = resolveMetaverseMapLaunchSelection(
+    defaultMetaverseMapLaunchPlaylistSnapshot,
+    matchMode
+  );
 
   return Object.freeze({
-    bundleId: "private-build",
-    launchVariationId: "shell-free-roam"
+    bundleId: launchSelection.bundleId,
+    launchVariationId: launchSelection.launchVariationId
   });
 }
 
@@ -183,9 +182,15 @@ export function useMetaverseShellFlowPolicy({
       setMetaverseLaunchPending(true);
       setMetaverseLaunchError(null);
       setActiveMetaverseRoomAssignment(null);
-      dispatch({
-        type: "audioSnapshotChanged",
-        audioSnapshot: audioSession.playCue("ui-confirm")
+      void audioSession.unlock().then((unlockSnapshot) => {
+        dispatch({
+          type: "audioSnapshotChanged",
+          audioSnapshot: unlockSnapshot
+        });
+        dispatch({
+          type: "audioSnapshotChanged",
+          audioSnapshot: audioSession.playCue("ui-confirm")
+        });
       });
 
       try {

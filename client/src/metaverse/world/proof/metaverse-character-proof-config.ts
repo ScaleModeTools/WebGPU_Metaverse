@@ -1,103 +1,111 @@
 import { animationClipManifest } from "@/assets/config/animation-clip-manifest";
 import {
-  humanoidV2PistolAimClipNamesByPoseId,
-  humanoidV2PistolAnimationSourcePath
-} from "@/assets/config/humanoid-v2-pistol-animation-source";
+  metaverseCombatAnimationClipNamesByActionId,
+  metaverseCombatAnimationSourcePathByActionId,
+} from "@/assets/config/metaverse-combat-animation-source";
 import {
   attachmentModelManifest,
-  metaverseServicePistolAttachmentAssetId
+  metaverseRocketLauncherAttachmentAssetId,
+  metaverseServicePistolAttachmentAssetId,
 } from "@/assets/config/attachment-model-manifest";
 import {
   characterModelManifest,
-  metaverseActiveFullBodyCharacterAssetId
+  metaverseActiveFullBodyCharacterAssetId,
 } from "@/assets/config/character-model-manifest";
 import { weaponArchetypeManifest } from "@/assets/config/weapon-archetype-manifest";
 import { weaponModuleManifest } from "@/assets/config/weapon-module-manifest";
 import {
   animationVocabularyIds,
-  canonicalAnimationClipNamesByVocabulary
+  canonicalAnimationClipNamesByVocabulary,
 } from "@/assets/types/animation-clip-manifest";
 import type { SocketId } from "@/assets/types/asset-socket";
-import type {
-  AttachmentMountSocketDescriptor,
-  AttachmentOffHandSupportPointIdBySocketId,
-  AttachmentSupportPointDescriptor
-} from "@/assets/types/attachment-asset-manifest";
+import {
+  heldObjectCoreSocketRolesByFamily,
+  type HeldObjectHoldProfileDescriptor,
+  type HeldObjectSocketRoleId,
+} from "@/assets/types/held-object-authoring-manifest";
 import type {
   WeaponArchetypeDescriptor,
   WeaponModuleAssetDescriptor,
-  WeaponModuleSlotId
+  WeaponModuleSlotId,
 } from "@/assets/types/weapon-builder-manifest";
 import type {
   MetaverseAttachmentProofConfig,
-  MetaverseCharacterProofConfig
+  MetaverseCharacterProofConfig,
 } from "@/metaverse/types/metaverse-runtime";
 
 import { resolveMetaverseProofLodModelPath } from "./resolve-metaverse-proof-lod-model-path";
 
 function resolveHeldAttachmentSocketName(
-  socketId: SocketId
+  socketId: SocketId,
 ): MetaverseAttachmentProofConfig["heldMount"]["socketName"] {
   // Handheld weapons are authored around an explicit grip socket, so mount them
   // to the synthesized grip seam instead of the broader palm center.
   return socketId === "hand_r_socket" ? "grip_r_socket" : socketId;
 }
 
-function resolveAttachmentSupportPoints(
+function validateAttachmentHoldProfile(
   attachmentLabel: string,
-  supportPoints: readonly AttachmentSupportPointDescriptor[] | null
-) {
-  if (supportPoints === null) {
-    return null;
+  holdProfile: HeldObjectHoldProfileDescriptor,
+): void {
+  const roles = new Set<HeldObjectSocketRoleId>();
+
+  for (const socket of holdProfile.sockets) {
+    if (roles.has(socket.role)) {
+      throw new Error(
+        `Metaverse attachment ${attachmentLabel} has duplicate semantic socket role ${socket.role}.`,
+      );
+    }
+
+    if (socket.nodeName.trim().length === 0) {
+      throw new Error(
+        `Metaverse attachment ${attachmentLabel} requires semantic socket ${socket.role} to have a node name.`,
+      );
+    }
+
+    roles.add(socket.role);
   }
 
-  const supportPointIds = new Set<string>();
+  const requiredRoles = new Set<HeldObjectSocketRoleId>([
+    "basis.forward",
+    "basis.up",
+    "grip.primary",
+    ...heldObjectCoreSocketRolesByFamily[holdProfile.family],
+  ]);
 
-  return Object.freeze(
-    supportPoints.map((supportPoint) => {
-      if (supportPointIds.has(supportPoint.supportPointId)) {
-        throw new Error(
-          `Metaverse attachment ${attachmentLabel} has duplicate support point ${supportPoint.supportPointId}.`
-        );
-      }
+  if (
+    holdProfile.adsPolicy !== "none" &&
+    holdProfile.adsPolicy !== "third_person_hint_only"
+  ) {
+    requiredRoles.add(holdProfile.adsReferenceRole ?? "camera.ads_anchor");
+  }
 
-      supportPointIds.add(supportPoint.supportPointId);
+  for (const role of requiredRoles) {
+    if (!roles.has(role)) {
+      throw new Error(
+        `Metaverse attachment ${attachmentLabel} requires semantic socket role ${role}.`,
+      );
+    }
+  }
+}
 
-      if (
-        !Number.isFinite(supportPoint.localPosition.x) ||
-        !Number.isFinite(supportPoint.localPosition.y) ||
-        !Number.isFinite(supportPoint.localPosition.z)
-      ) {
-        throw new Error(
-          `Metaverse attachment ${attachmentLabel} requires finite support point ${supportPoint.supportPointId} local position metadata.`
-        );
-      }
+function resolveAttachmentSocketRole(
+  attachmentLabel: string,
+  holdProfile: HeldObjectHoldProfileDescriptor,
+  socketRole: HeldObjectSocketRoleId,
+  label: string,
+): HeldObjectSocketRoleId {
+  if (!holdProfile.sockets.some((socket) => socket.role === socketRole)) {
+    throw new Error(
+      `Metaverse attachment ${attachmentLabel} requires ${label} to reference semantic socket role ${socketRole}.`,
+    );
+  }
 
-      const authoringNodeName =
-        supportPoint.authoringNodeName === null ||
-        supportPoint.authoringNodeName === undefined
-          ? null
-          : resolveAttachmentNodeName(
-              attachmentLabel,
-              supportPoint.authoringNodeName,
-              `support point ${supportPoint.supportPointId} authoring node name`
-            );
-
-      return Object.freeze({
-        authoringNodeName,
-        localPosition: Object.freeze({
-          x: supportPoint.localPosition.x,
-          y: supportPoint.localPosition.y,
-          z: supportPoint.localPosition.z
-        }),
-        supportPointId: supportPoint.supportPointId
-      });
-    })
-  );
+  return socketRole;
 }
 
 function resolveWeaponDefaultModuleProofConfigs(
-  weaponDescriptor: WeaponArchetypeDescriptor
+  weaponDescriptor: WeaponArchetypeDescriptor,
 ): MetaverseAttachmentProofConfig["modules"] {
   const moduleSocketsBySlotId = new Map<
     WeaponModuleSlotId,
@@ -107,13 +115,13 @@ function resolveWeaponDefaultModuleProofConfigs(
   for (const moduleSocket of weaponDescriptor.moduleSockets) {
     if (moduleSocketsBySlotId.has(moduleSocket.slotId)) {
       throw new Error(
-        `Metaverse weapon ${weaponDescriptor.label} has duplicate module socket ${moduleSocket.slotId}.`
+        `Metaverse weapon ${weaponDescriptor.label} has duplicate module socket ${moduleSocket.slotId}.`,
       );
     }
 
     if (moduleSocket.required && moduleSocket.defaultModuleId === null) {
       throw new Error(
-        `Metaverse weapon ${weaponDescriptor.label} requires a default module for ${moduleSocket.slotId}.`
+        `Metaverse weapon ${weaponDescriptor.label} requires a default module for ${moduleSocket.slotId}.`,
       );
     }
 
@@ -131,24 +139,26 @@ function resolveWeaponDefaultModuleProofConfigs(
     }
 
     const moduleDescriptor = weaponModuleManifest.modules.find(
-      (module) => module.id === defaultModuleId
+      (module) => module.id === defaultModuleId,
     ) as WeaponModuleAssetDescriptor | undefined;
 
     if (moduleDescriptor === undefined) {
       throw new Error(
-        `Metaverse weapon ${weaponDescriptor.label} references unknown default module ${defaultModuleId}.`
+        `Metaverse weapon ${weaponDescriptor.label} references unknown default module ${defaultModuleId}.`,
       );
     }
 
-    if (!moduleDescriptor.compatibleFamilies.includes(weaponDescriptor.family)) {
+    if (
+      !moduleDescriptor.compatibleFamilies.includes(weaponDescriptor.family)
+    ) {
       throw new Error(
-        `Metaverse weapon ${weaponDescriptor.label} default module ${moduleDescriptor.label} is incompatible with ${weaponDescriptor.family}.`
+        `Metaverse weapon ${weaponDescriptor.label} default module ${moduleDescriptor.label} is incompatible with ${weaponDescriptor.family}.`,
       );
     }
 
     if (moduleDescriptor.slotId !== moduleSocket.slotId) {
       throw new Error(
-        `Metaverse weapon ${weaponDescriptor.label} default module ${moduleDescriptor.label} targets ${moduleDescriptor.slotId}, not ${moduleSocket.slotId}.`
+        `Metaverse weapon ${weaponDescriptor.label} default module ${moduleDescriptor.label} targets ${moduleDescriptor.slotId}, not ${moduleSocket.slotId}.`,
       );
     }
 
@@ -157,117 +167,35 @@ function resolveWeaponDefaultModuleProofConfigs(
         label: moduleDescriptor.label,
         modelPath: resolveMetaverseProofLodModelPath(moduleDescriptor.model),
         moduleId: moduleDescriptor.id,
-        socketNodeName: resolveAttachmentNodeName(
+        socketRole: resolveAttachmentSocketRole(
           weaponDescriptor.label,
-          moduleSocket.socketNodeName,
-          `module socket ${moduleSocket.slotId} node name`
-        )
-      })
+          weaponDescriptor.holdProfile,
+          moduleSocket.socketRole,
+          `module socket ${moduleSocket.slotId}`,
+        ),
+      }),
     );
   }
 
   return Object.freeze(defaultModuleProofConfigs);
 }
 
-function resolveAttachmentNodeName(
-  attachmentLabel: string,
-  nodeName: string,
-  label: string
-): string {
-  const trimmedNodeName = nodeName.trim();
-
-  if (trimmedNodeName.length === 0) {
-    throw new Error(
-      `Metaverse attachment ${attachmentLabel} requires ${label}.`
-    );
-  }
-
-  return trimmedNodeName;
-}
-
-function resolveAttachmentSocketNodeName(
-  attachmentLabel: string,
-  mountDescriptor: AttachmentMountSocketDescriptor,
-  socketName: string
-): string {
-  const attachmentSocketNodeNameBySocketName =
-    mountDescriptor.attachmentSocketNodeNameBySocketId as
-      | Readonly<Record<string, string | null | undefined>>
-      | undefined;
-  const attachmentSocketNodeName =
-    attachmentSocketNodeNameBySocketName?.[socketName] ??
-    mountDescriptor.attachmentSocketNodeName ??
-    null;
-
-  if (attachmentSocketNodeName === null) {
-    throw new Error(
-      `Metaverse attachment ${attachmentLabel} requires an attachment socket node name for ${socketName}.`
-    );
-  }
-
-  return resolveAttachmentNodeName(
-    attachmentLabel,
-    attachmentSocketNodeName,
-    `attachment socket node name for ${socketName}`
-  );
-}
-
-function resolveOffHandSupportPointId(
-  attachmentLabel: string,
-  supportPoints: ReturnType<typeof resolveAttachmentSupportPoints>,
-  offHandSupportPointIdBySocketId:
-    | AttachmentOffHandSupportPointIdBySocketId
-    | null
-    | undefined,
-  socketId: string
-) {
-  const supportPointIdBySocketName =
-    offHandSupportPointIdBySocketId as
-      | Readonly<Record<string, string | null | undefined>>
-      | null
-      | undefined;
-  const rawSupportPointId = supportPointIdBySocketName?.[socketId] ?? null;
-
-  if (rawSupportPointId === null || rawSupportPointId === undefined) {
-    return null;
-  }
-
-  const supportPointId = rawSupportPointId.trim();
-
-  if (supportPointId.length === 0) {
-    throw new Error(
-      `Metaverse attachment ${attachmentLabel} requires a non-empty off-hand support point id for ${socketId}.`
-    );
-  }
-
-  if (
-    supportPoints === null ||
-    !supportPoints.some(
-      (supportPoint) => supportPoint.supportPointId === supportPointId
-    )
-  ) {
-    throw new Error(
-      `Metaverse attachment ${attachmentLabel} maps ${socketId} to unknown off-hand support point ${supportPointId}.`
-    );
-  }
-
-  return supportPointId;
-}
-
 function resolveMetaverseCharacterProofConfig(): MetaverseCharacterProofConfig {
   const characterDescriptor = characterModelManifest.characters.find(
-    (character) => character.id === metaverseActiveFullBodyCharacterAssetId
+    (character) => character.id === metaverseActiveFullBodyCharacterAssetId,
   );
 
   if (characterDescriptor === undefined) {
     throw new Error(
-      `Metaverse character manifest is missing ${metaverseActiveFullBodyCharacterAssetId}.`
+      `Metaverse character manifest is missing ${metaverseActiveFullBodyCharacterAssetId}.`,
     );
   }
 
-  if (!characterDescriptor.presentationModes.some((mode) => mode === "full-body")) {
+  if (
+    !characterDescriptor.presentationModes.some((mode) => mode === "full-body")
+  ) {
     throw new Error(
-      `Metaverse full-body proof character ${characterDescriptor.label} must expose full-body presentation mode.`
+      `Metaverse full-body proof character ${characterDescriptor.label} must expose full-body presentation mode.`,
     );
   }
 
@@ -277,15 +205,19 @@ function resolveMetaverseCharacterProofConfig(): MetaverseCharacterProofConfig {
   >();
 
   for (const clipId of characterDescriptor.animationClipIds) {
-    const clipDescriptor = animationClipManifest.clips.find((clip) => clip.id === clipId);
+    const clipDescriptor = animationClipManifest.clips.find(
+      (clip) => clip.id === clipId,
+    );
 
     if (clipDescriptor === undefined) {
-      throw new Error(`Metaverse animation manifest is missing clip ${clipId}.`);
+      throw new Error(
+        `Metaverse animation manifest is missing clip ${clipId}.`,
+      );
     }
 
     if (clipDescriptor.targetSkeleton !== characterDescriptor.skeleton) {
       throw new Error(
-        `Metaverse clip ${clipDescriptor.label} targets ${clipDescriptor.targetSkeleton}, not ${characterDescriptor.skeleton}.`
+        `Metaverse clip ${clipDescriptor.label} targets ${clipDescriptor.targetSkeleton}, not ${characterDescriptor.skeleton}.`,
       );
     }
 
@@ -294,13 +226,13 @@ function resolveMetaverseCharacterProofConfig(): MetaverseCharacterProofConfig {
       canonicalAnimationClipNamesByVocabulary[clipDescriptor.vocabulary]
     ) {
       throw new Error(
-        `Metaverse clip ${clipDescriptor.label} must preserve canonical clip name ${canonicalAnimationClipNamesByVocabulary[clipDescriptor.vocabulary]}.`
+        `Metaverse clip ${clipDescriptor.label} must preserve canonical clip name ${canonicalAnimationClipNamesByVocabulary[clipDescriptor.vocabulary]}.`,
       );
     }
 
     if (animationClipsByVocabulary.has(clipDescriptor.vocabulary)) {
       throw new Error(
-        `Metaverse character ${characterDescriptor.label} has duplicate animation vocabulary ${clipDescriptor.vocabulary}.`
+        `Metaverse character ${characterDescriptor.label} has duplicate animation vocabulary ${clipDescriptor.vocabulary}.`,
       );
     }
 
@@ -310,18 +242,18 @@ function resolveMetaverseCharacterProofConfig(): MetaverseCharacterProofConfig {
         clipName: clipDescriptor.clipName,
         loopMode: clipDescriptor.loopMode,
         sourcePath: clipDescriptor.sourcePath,
-        vocabulary: clipDescriptor.vocabulary
-      })
+        vocabulary: clipDescriptor.vocabulary,
+      }),
     );
   }
 
   const missingVocabularies = animationVocabularyIds.filter(
-    (vocabulary) => !animationClipsByVocabulary.has(vocabulary)
+    (vocabulary) => !animationClipsByVocabulary.has(vocabulary),
   );
 
   if (missingVocabularies[0] !== undefined) {
     throw new Error(
-      `Metaverse full-body proof character ${characterDescriptor.label} must resolve canonical animation vocabularies: ${missingVocabularies.join(", ")}.`
+      `Metaverse full-body proof character ${characterDescriptor.label} must resolve canonical animation vocabularies: ${missingVocabularies.join(", ")}.`,
     );
   }
 
@@ -332,173 +264,151 @@ function resolveMetaverseCharacterProofConfig(): MetaverseCharacterProofConfig {
 
         if (animationClip === undefined) {
           throw new Error(
-            `Metaverse full-body proof character ${characterDescriptor.label} is missing animation vocabulary ${vocabulary}.`
+            `Metaverse full-body proof character ${characterDescriptor.label} is missing animation vocabulary ${vocabulary}.`,
           );
         }
 
         return animationClip;
-      })
+      }),
     ),
     characterId: characterDescriptor.id,
-    humanoidV2PistolPoseProofConfig: Object.freeze({
-      clipNamesByPoseId: humanoidV2PistolAimClipNamesByPoseId,
-      sourcePath: humanoidV2PistolAnimationSourcePath
+    combatAnimationProofConfig: Object.freeze({
+      clipNamesByActionId: metaverseCombatAnimationClipNamesByActionId,
+      sourcePathByActionId: metaverseCombatAnimationSourcePathByActionId,
     }),
     label: characterDescriptor.label,
-    modelPath: resolveMetaverseProofLodModelPath(characterDescriptor.renderModel),
+    modelPath: resolveMetaverseProofLodModelPath(
+      characterDescriptor.renderModel,
+    ),
     skeletonId: characterDescriptor.skeleton,
-    socketNames: characterDescriptor.socketIds
+    socketNames: characterDescriptor.socketIds,
   });
 }
 
 function resolveMetaverseAttachmentProofConfig(
-  characterProofConfig: MetaverseCharacterProofConfig
+  characterProofConfig: MetaverseCharacterProofConfig,
+  attachmentId: string = metaverseServicePistolAttachmentAssetId,
 ): MetaverseAttachmentProofConfig {
   const characterDescriptor = characterModelManifest.characters.find(
-    (character) => character.id === characterProofConfig.characterId
+    (character) => character.id === characterProofConfig.characterId,
   );
 
   if (characterDescriptor === undefined) {
     throw new Error(
-      `Metaverse character manifest is missing ${characterProofConfig.characterId}.`
+      `Metaverse character manifest is missing ${characterProofConfig.characterId}.`,
     );
   }
 
   const attachmentDescriptor = attachmentModelManifest.attachments.find(
-    (attachment) => attachment.id === metaverseServicePistolAttachmentAssetId
+    (attachment) => attachment.id === attachmentId,
   );
 
   if (attachmentDescriptor === undefined) {
     throw new Error(
-      `Metaverse attachment manifest is missing ${metaverseServicePistolAttachmentAssetId}.`
+      `Metaverse attachment manifest is missing ${attachmentId}.`,
     );
   }
 
-  if (!attachmentDescriptor.allowedSocketIds.includes(attachmentDescriptor.defaultSocketId)) {
+  if (
+    !attachmentDescriptor.allowedSocketIds.includes(
+      attachmentDescriptor.defaultSocketId,
+    )
+  ) {
     throw new Error(
-      `Metaverse attachment ${attachmentDescriptor.label} must allow its default socket ${attachmentDescriptor.defaultSocketId}.`
+      `Metaverse attachment ${attachmentDescriptor.label} must allow its default socket ${attachmentDescriptor.defaultSocketId}.`,
     );
   }
 
-  if (!characterDescriptor.socketIds.includes(attachmentDescriptor.defaultSocketId)) {
+  if (
+    !characterDescriptor.socketIds.includes(
+      attachmentDescriptor.defaultSocketId,
+    )
+  ) {
     throw new Error(
-      `Metaverse attachment ${attachmentDescriptor.label} default socket ${attachmentDescriptor.defaultSocketId} is unavailable on ${characterDescriptor.label}.`
+      `Metaverse attachment ${attachmentDescriptor.label} default socket ${attachmentDescriptor.defaultSocketId} is unavailable on ${characterDescriptor.label}.`,
     );
   }
 
-  if (!attachmentDescriptor.compatibleSkeletons.includes(characterDescriptor.skeleton)) {
+  if (
+    !attachmentDescriptor.compatibleSkeletons.includes(
+      characterDescriptor.skeleton,
+    )
+  ) {
     throw new Error(
-      `Metaverse attachment ${attachmentDescriptor.label} is incompatible with skeleton ${characterDescriptor.skeleton}.`
+      `Metaverse attachment ${attachmentDescriptor.label} is incompatible with skeleton ${characterDescriptor.skeleton}.`,
     );
   }
 
   const weaponDescriptor = weaponArchetypeManifest.archetypes.find(
-    (weapon) => weapon.id === attachmentDescriptor.id
+    (weapon) => weapon.id === attachmentDescriptor.id,
   ) as WeaponArchetypeDescriptor | undefined;
 
   if (weaponDescriptor === undefined) {
     throw new Error(
-      `Metaverse weapon manifest is missing attachment ${attachmentDescriptor.id}.`
+      `Metaverse weapon manifest is missing attachment ${attachmentDescriptor.id}.`,
     );
   }
 
-  const resolvedSupportPoints = resolveAttachmentSupportPoints(
+  validateAttachmentHoldProfile(
     attachmentDescriptor.label,
-    attachmentDescriptor.supportPoints
+    attachmentDescriptor.holdProfile,
   );
 
   return Object.freeze({
     attachmentId: attachmentDescriptor.id,
     heldMount: Object.freeze({
-      adsCameraAnchorNodeName:
-        attachmentDescriptor.heldMount.adsCameraAnchorNodeName === null ||
-        attachmentDescriptor.heldMount.adsCameraAnchorNodeName === undefined
-          ? null
-          : resolveAttachmentNodeName(
-              attachmentDescriptor.label,
-              attachmentDescriptor.heldMount.adsCameraAnchorNodeName,
-              "held ads camera anchor node name"
-            ),
       adsCameraTargetOffset:
         attachmentDescriptor.heldMount.adsCameraTargetOffset === null ||
         attachmentDescriptor.heldMount.adsCameraTargetOffset === undefined
           ? null
           : Object.freeze({
-              across: attachmentDescriptor.heldMount.adsCameraTargetOffset.across,
-              forward: attachmentDescriptor.heldMount.adsCameraTargetOffset.forward,
-              up: attachmentDescriptor.heldMount.adsCameraTargetOffset.up
+              across:
+                attachmentDescriptor.heldMount.adsCameraTargetOffset.across,
+              forward:
+                attachmentDescriptor.heldMount.adsCameraTargetOffset.forward,
+              up: attachmentDescriptor.heldMount.adsCameraTargetOffset.up,
             }),
-      attachmentSocketNodeName: resolveAttachmentSocketNodeName(
+      attachmentSocketRole: resolveAttachmentSocketRole(
         attachmentDescriptor.label,
-        attachmentDescriptor.heldMount,
-        attachmentDescriptor.defaultSocketId
-      ),
-      forwardReferenceNodeName:
-        attachmentDescriptor.heldMount.forwardReferenceNodeName === null ||
-        attachmentDescriptor.heldMount.forwardReferenceNodeName === undefined
-          ? null
-          : resolveAttachmentNodeName(
-              attachmentDescriptor.label,
-              attachmentDescriptor.heldMount.forwardReferenceNodeName,
-              "held forward reference node name"
-            ),
-      supportMarkerNodeName:
-        attachmentDescriptor.heldMount.supportMarkerNodeName === null ||
-        attachmentDescriptor.heldMount.supportMarkerNodeName === undefined
-          ? null
-          : resolveAttachmentNodeName(
-              attachmentDescriptor.label,
-              attachmentDescriptor.heldMount.supportMarkerNodeName,
-              "held support marker node name"
-            ),
-      offHandSupportPointId: resolveOffHandSupportPointId(
-        attachmentDescriptor.label,
-        resolvedSupportPoints,
-        attachmentDescriptor.offHandSupportPointIdBySocketId,
-        attachmentDescriptor.defaultSocketId
+        attachmentDescriptor.holdProfile,
+        attachmentDescriptor.heldMount.attachmentSocketRole,
+        "held mount",
       ),
       socketName: resolveHeldAttachmentSocketName(
-        attachmentDescriptor.defaultSocketId
+        attachmentDescriptor.defaultSocketId,
       ),
-      triggerMarkerNodeName:
-        attachmentDescriptor.heldMount.triggerMarkerNodeName === null ||
-        attachmentDescriptor.heldMount.triggerMarkerNodeName === undefined
-          ? null
-          : resolveAttachmentNodeName(
-              attachmentDescriptor.label,
-              attachmentDescriptor.heldMount.triggerMarkerNodeName,
-              "held trigger marker node name"
-            ),
-      upReferenceNodeName:
-        attachmentDescriptor.heldMount.upReferenceNodeName === null ||
-        attachmentDescriptor.heldMount.upReferenceNodeName === undefined
-          ? null
-          : resolveAttachmentNodeName(
-              attachmentDescriptor.label,
-              attachmentDescriptor.heldMount.upReferenceNodeName,
-              "held up reference node name"
-            )
     }),
+    holdProfile: attachmentDescriptor.holdProfile,
     label: attachmentDescriptor.label,
-    modelPath: resolveMetaverseProofLodModelPath(attachmentDescriptor.renderModel),
+    modelPath: resolveMetaverseProofLodModelPath(
+      attachmentDescriptor.renderModel,
+    ),
     modules: resolveWeaponDefaultModuleProofConfigs(weaponDescriptor),
     mountedHolsterMount:
       attachmentDescriptor.mountedHolster === null
         ? null
         : Object.freeze({
-            attachmentSocketNodeName: resolveAttachmentSocketNodeName(
+            attachmentSocketRole: resolveAttachmentSocketRole(
               attachmentDescriptor.label,
-              attachmentDescriptor.mountedHolster,
-              attachmentDescriptor.mountedHolster.socketName
+              attachmentDescriptor.holdProfile,
+              attachmentDescriptor.mountedHolster.attachmentSocketRole,
+              "mounted holster",
             ),
-            socketName: attachmentDescriptor.mountedHolster.socketName
+            socketName: attachmentDescriptor.mountedHolster.socketName,
           }),
-    supportPoints: resolvedSupportPoints
   });
 }
 
-export const metaverseCharacterProofConfig = resolveMetaverseCharacterProofConfig();
+export const metaverseCharacterProofConfig =
+  resolveMetaverseCharacterProofConfig();
 
-export const metaverseAttachmentProofConfig = resolveMetaverseAttachmentProofConfig(
-  metaverseCharacterProofConfig
-);
+export const metaverseAttachmentProofConfig =
+  resolveMetaverseAttachmentProofConfig(metaverseCharacterProofConfig);
+
+export const metaverseAttachmentProofConfigs = Object.freeze([
+  metaverseAttachmentProofConfig,
+  resolveMetaverseAttachmentProofConfig(
+    metaverseCharacterProofConfig,
+    metaverseRocketLauncherAttachmentAssetId,
+  ),
+]);

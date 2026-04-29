@@ -1,8 +1,10 @@
 import {
+  createMetaverseJoinPresenceCommand,
   createMetaverseLeavePresenceCommand,
   createMetaverseRoomAssignmentSnapshot,
   createMetaverseRoomDirectoryEntrySnapshot,
   type MetaversePlayerId,
+  type MetaversePlayerTeamId,
   type MetaversePresenceCommand,
   type MetaversePresenceRosterEvent,
   type MetaversePresenceRosterSnapshot,
@@ -52,7 +54,8 @@ export class MetaverseRoomRuntime {
     this.#roomSessionId = config.roomSessionId;
     this.#runtime = new MetaverseAuthoritativeWorldRuntime(
       config.runtimeConfig ?? {},
-      config.bundleId
+      config.bundleId,
+      config.launchVariationId
     );
   }
 
@@ -128,7 +131,10 @@ export class MetaverseRoomRuntime {
     command: MetaversePresenceCommand,
     nowMs: number
   ): MetaversePresenceRosterEvent {
-    return this.#runtime.acceptPresenceCommand(command, nowMs);
+    return this.#runtime.acceptPresenceCommand(
+      this.#adaptPresenceCommandForRoomPolicy(command, nowMs),
+      nowMs
+    );
   }
 
   acceptWorldCommand(
@@ -204,5 +210,77 @@ export class MetaverseRoomRuntime {
       timeRemainingMs:
         combatMatch === null ? null : Number(combatMatch.timeRemainingMs)
     });
+  }
+
+  #adaptPresenceCommandForRoomPolicy(
+    command: MetaversePresenceCommand,
+    nowMs: number
+  ): MetaversePresenceCommand {
+    if (
+      this.#matchMode !== "team-deathmatch" ||
+      command.type !== "join-presence"
+    ) {
+      return command;
+    }
+
+    const teamId = this.#resolveTeamDeathmatchJoinTeamId(
+      command.playerId,
+      command.teamId,
+      nowMs
+    );
+
+    if (teamId === command.teamId) {
+      return command;
+    }
+
+    return createMetaverseJoinPresenceCommand({
+      characterId: command.characterId,
+      playerId: command.playerId,
+      pose: command.pose,
+      teamId,
+      username: command.username
+    });
+  }
+
+  #resolveTeamDeathmatchJoinTeamId(
+    playerId: MetaversePlayerId,
+    requestedTeamId: MetaversePlayerTeamId,
+    nowMs: number
+  ): MetaversePlayerTeamId {
+    const worldSnapshot = this.#runtime.readWorldSnapshot(nowMs);
+    const currentPlayerSnapshot =
+      worldSnapshot.players.find(
+        (playerSnapshot) => playerSnapshot.playerId === playerId
+      ) ?? null;
+
+    if (currentPlayerSnapshot !== null) {
+      return currentPlayerSnapshot.teamId;
+    }
+
+    let redPlayerCount = 0;
+    let bluePlayerCount = 0;
+
+    for (const playerSnapshot of worldSnapshot.players) {
+      if (playerSnapshot.teamId === "red") {
+        redPlayerCount += 1;
+      } else {
+        bluePlayerCount += 1;
+      }
+    }
+
+    if (redPlayerCount === bluePlayerCount) {
+      return requestedTeamId;
+    }
+
+    const requestedTeamPlayerCount =
+      requestedTeamId === "red" ? redPlayerCount : bluePlayerCount;
+    const oppositeTeamPlayerCount =
+      requestedTeamId === "red" ? bluePlayerCount : redPlayerCount;
+
+    return requestedTeamPlayerCount <= oppositeTeamPlayerCount
+      ? requestedTeamId
+      : requestedTeamId === "red"
+        ? "blue"
+        : "red";
   }
 }

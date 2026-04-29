@@ -24,7 +24,7 @@ export const deathmatchMapBundle = Object.freeze({
       matchMode: "team-deathmatch",
       variationId: "shell-team-deathmatch",
       vehicleLayoutId: null,
-      weaponLayoutId: "duck-hunt-default-pistol-layout"
+      weaponLayoutId: "metaverse-tdm-pistol-rocket-layout"
     })
   ]),
   mapId: "deathmatch",

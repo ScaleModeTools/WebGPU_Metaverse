@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState } from "react";
+import { useCallback, useEffect, useReducer, useState } from "react";
 
 import type { MetaverseRoomAssignmentSnapshot } from "@webgpu-metaverse/shared";
 
@@ -129,6 +129,31 @@ export function useMetaverseShellController(): MetaverseShellController {
   });
   const gameplayInputSource =
     state.inputMode === "mouse" ? mouseGameplayInput : handTrackingRuntime;
+  const onMetaverseCombatAudioCue = useCallback(
+    (...cueInput: Parameters<MetaverseShellController["onMetaverseCombatAudioCue"]>) => {
+      const [cueId, options] = cueInput;
+      const playCombatCue = () => {
+        dispatch({
+          audioSnapshot: audioSession.playCue(cueId, options),
+          type: "audioSnapshotChanged"
+        });
+      };
+
+      if (audioSession.snapshot.unlockState === "unlocked") {
+        playCombatCue();
+        return;
+      }
+
+      void audioSession.unlock().then((unlockSnapshot) => {
+        dispatch({
+          audioSnapshot: unlockSnapshot,
+          type: "audioSnapshotChanged"
+        });
+        playCombatCue();
+      });
+    },
+    [audioSession]
+  );
 
   useEffect(() => {
     if (
@@ -198,6 +223,7 @@ export function useMetaverseShellController(): MetaverseShellController {
     onGameplaySignal: (signal: GameplaySignal) => {
       audioPolicy.onGameplaySignal(signal);
     },
+    onMetaverseCombatAudioCue,
     onEnterMetaverseRequest: flowPolicy.onEnterMetaverseRequest,
     onExperienceLaunchRequest: flowPolicy.onExperienceLaunchRequest,
     onGameplayMenuOpen: gameplayMenuPolicy.onGameplayMenuOpen,

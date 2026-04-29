@@ -39,6 +39,7 @@ import type {
 import {
   createMetaverseRealtimePlayerWeaponStateSnapshot
 } from "./metaverse-realtime-player-weapon-state.js";
+import type { MetaverseWeaponSlotId } from "../metaverse-weapon-loadout.js";
 import type {
   MetaverseIssuePlayerActionCommand as MetaverseCombatIssuePlayerActionCommand,
   MetaverseIssuePlayerActionCommandInput as MetaverseCombatIssuePlayerActionCommandInput
@@ -210,6 +211,7 @@ export interface MetaverseSyncPlayerLookIntentCommandInput {
 
 export interface MetaverseSyncPlayerWeaponStateCommand {
   readonly playerId: MetaversePlayerId;
+  readonly requestedActiveSlotId: MetaverseWeaponSlotId | null;
   readonly type: "sync-player-weapon-state";
   readonly weaponSequence: number;
   readonly weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null;
@@ -217,6 +219,7 @@ export interface MetaverseSyncPlayerWeaponStateCommand {
 
 export interface MetaverseSyncPlayerWeaponStateCommandInput {
   readonly playerId: MetaversePlayerId;
+  readonly requestedActiveSlotId?: MetaverseWeaponSlotId | null;
   readonly weaponSequence?: number;
   readonly weaponState: MetaverseRealtimePlayerWeaponStateSnapshotInput | null;
 }
@@ -430,6 +433,7 @@ export function createMetaverseSyncPlayerWeaponStateCommand(
 ): MetaverseSyncPlayerWeaponStateCommand {
   return Object.freeze({
     playerId: input.playerId,
+    requestedActiveSlotId: input.requestedActiveSlotId ?? null,
     type: "sync-player-weapon-state",
     weaponSequence: normalizeFiniteNonNegativeInteger(input.weaponSequence ?? 0),
     weaponState:

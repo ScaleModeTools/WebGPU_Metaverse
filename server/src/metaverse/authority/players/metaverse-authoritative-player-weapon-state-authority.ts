@@ -18,6 +18,10 @@ interface MetaverseAuthoritativePlayerWeaponStateAuthorityDependencies<
 > {
   readonly incrementSnapshotSequence: () => void;
   readonly playersById: ReadonlyMap<MetaversePlayerId, PlayerRuntime>;
+  readonly resolveCanonicalWeaponState?: (
+    playerRuntime: PlayerRuntime,
+    command: MetaverseSyncPlayerWeaponStateCommand
+  ) => MetaverseRealtimePlayerWeaponStateSnapshot | null;
 }
 
 function doWeaponStatesMatch(
@@ -28,8 +32,22 @@ function doWeaponStatesMatch(
     left === right ||
     (left !== null &&
       right !== null &&
+      left.activeSlotId === right.activeSlotId &&
       left.aimMode === right.aimMode &&
-      left.weaponId === right.weaponId)
+      left.weaponId === right.weaponId &&
+      left.slots.length === right.slots.length &&
+      left.slots.every((leftSlot, slotIndex) => {
+        const rightSlot = right.slots[slotIndex] ?? null;
+
+        return (
+          rightSlot !== null &&
+          leftSlot.attachmentId === rightSlot.attachmentId &&
+          leftSlot.equipped === rightSlot.equipped &&
+          leftSlot.slotId === rightSlot.slotId &&
+          leftSlot.weaponId === rightSlot.weaponId &&
+          leftSlot.weaponInstanceId === rightSlot.weaponInstanceId
+        );
+      }))
   );
 }
 
@@ -69,14 +87,19 @@ export class MetaverseAuthoritativePlayerWeaponStateAuthority<
       return;
     }
 
+    const nextWeaponState =
+      this.#dependencies.resolveCanonicalWeaponState?.(
+        playerRuntime,
+        normalizedCommand
+      ) ?? normalizedCommand.weaponState;
     const weaponStateChanged = !doWeaponStatesMatch(
       playerRuntime.weaponState,
-      normalizedCommand.weaponState
+      nextWeaponState
     );
 
     playerRuntime.lastProcessedWeaponSequence =
       normalizedCommand.weaponSequence;
-    playerRuntime.weaponState = normalizedCommand.weaponState;
+    playerRuntime.weaponState = nextWeaponState;
 
     if (weaponStateChanged) {
       this.#dependencies.incrementSnapshotSequence();

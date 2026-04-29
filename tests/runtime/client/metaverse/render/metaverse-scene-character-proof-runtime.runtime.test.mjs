@@ -4,6 +4,7 @@ import test, { after, before } from "node:test";
 import { createClientModuleLoader } from "../../load-client-module.mjs";
 import {
   createHumanoidV2CharacterScene,
+  createTestServicePistolHoldProfile,
   createSkiffMountProofSlice
 } from "../../metaverse-runtime-proof-slice-fixtures.mjs";
 
@@ -111,8 +112,12 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
   const ballRBone = addBone("ball_r", footRBone, new Vector3(0, 0, 0.12));
 
   addBone("thumb_01_l", handLBone, new Vector3(-0.04, -0.02, 0.06));
-  addBone("index_01_l", handLBone, new Vector3(-0.1, 0, 0.03));
-  addBone("middle_01_l", handLBone, new Vector3(-0.11, 0, 0));
+  const index01LBone = addBone("index_01_l", handLBone, new Vector3(-0.1, 0, 0.03));
+  const index02LBone = addBone("index_02_l", index01LBone, new Vector3(-0.055, -0.004, -0.004));
+  addBone("index_03_l", index02LBone, new Vector3(-0.04, -0.004, -0.003));
+  const middle01LBone = addBone("middle_01_l", handLBone, new Vector3(-0.11, 0, 0));
+  const middle02LBone = addBone("middle_02_l", middle01LBone, new Vector3(-0.055, -0.004, 0));
+  addBone("middle_03_l", middle02LBone, new Vector3(-0.04, -0.004, 0));
   addBone("ring_01_l", handLBone, new Vector3(-0.1, 0, -0.03));
   addBone("pinky_01_l", handLBone, new Vector3(-0.08, 0, -0.05));
   addBone("thumb_01_r", handRBone, new Vector3(0.04, -0.02, 0.06));
@@ -162,7 +167,11 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
     ballRBone,
     bonesByName.get("thumb_01_l"),
     bonesByName.get("index_01_l"),
+    bonesByName.get("index_02_l"),
+    bonesByName.get("index_03_l"),
     bonesByName.get("middle_01_l"),
+    bonesByName.get("middle_02_l"),
+    bonesByName.get("middle_03_l"),
     bonesByName.get("ring_01_l"),
     bonesByName.get("pinky_01_l"),
     bonesByName.get("thumb_01_r"),
@@ -184,7 +193,7 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
   characterScene.add(skinnedMesh);
 
   const authoredAnimationPackPath =
-    "/models/metaverse/characters/mesh2motion-humanoid-canonical-animations.glb";
+    "/models/metaverse/characters/metaverse-humanoid-base-pack.glb";
   const idleClip = new AnimationClip("idle", -1, []);
   const walkClip = new AnimationClip("walk", -1, []);
   const attachmentScene = new Group();
@@ -193,29 +202,67 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
     new MeshStandardMaterial({ color: 0x4b5563 })
   );
   const gripHandSocket = new Group();
+  const forwardMarker = new Group();
+  const upMarker = new Group();
   const triggerMarker = new Group();
+  const adsCameraAnchor = new Group();
 
   attachmentMesh.position.x = 0.14;
   attachmentScene.name = "metaverse_service_pistol_root";
   gripHandSocket.name = "metaverse_service_pistol_grip_hand_r_socket";
   gripHandSocket.position.set(0.04, -0.045, 0.025);
+  forwardMarker.name = "metaverse_service_pistol_forward_marker";
+  forwardMarker.position.set(0.28, -0.045, 0.025);
+  upMarker.name = "metaverse_service_pistol_up_marker";
+  upMarker.position.set(0.04, 0.055, 0.025);
   triggerMarker.name = "metaverse_service_pistol_trigger_marker";
   triggerMarker.position.set(0.076, -0.022, 0.025);
-  attachmentScene.add(attachmentMesh, gripHandSocket, triggerMarker);
+  adsCameraAnchor.name = "metaverse_service_pistol_ads_camera_anchor";
+  adsCameraAnchor.position.set(0.1, 0.02, 0.025);
+  attachmentScene.add(
+    attachmentMesh,
+    gripHandSocket,
+    forwardMarker,
+    upMarker,
+    triggerMarker,
+    adsCameraAnchor
+  );
 
   const sceneRuntime = createMetaverseScene(metaverseRuntimeConfig, {
     attachmentProofConfig: {
       attachmentId: "metaverse-service-pistol-v1",
       heldMount: {
-        attachmentSocketNodeName: "metaverse_service_pistol_grip_hand_r_socket",
-        socketName: "palm_r_socket",
-        triggerMarkerNodeName: "metaverse_service_pistol_trigger_marker"
+        attachmentSocketRole: "grip.primary",
+        socketName: "palm_r_socket"
       },
+      holdProfile: createTestServicePistolHoldProfile({
+        sockets: [
+          {
+            nodeName: "metaverse_service_pistol_grip_hand_r_socket",
+            role: "grip.primary"
+          },
+          {
+            nodeName: "metaverse_service_pistol_forward_marker",
+            role: "basis.forward"
+          },
+          {
+            nodeName: "metaverse_service_pistol_up_marker",
+            role: "basis.up"
+          },
+          {
+            nodeName: "metaverse_service_pistol_trigger_marker",
+            role: "trigger.index"
+          },
+          {
+            nodeName: "metaverse_service_pistol_ads_camera_anchor",
+            role: "camera.ads_anchor"
+          }
+        ]
+      }),
       label: "Metaverse service pistol",
       modelPath: "/models/metaverse/attachments/metaverse-service-pistol.gltf",
       modules: [],
-      mountedHolsterMount: null,
-      supportPoints: null
+      mountedHolsterMount: null
     },
     characterProofConfig: {
       animationClips: [
@@ -232,7 +279,7 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
       ],
       characterId: "mesh2motion-humanoid-v1",
       label: "Mesh2Motion humanoid",
-      modelPath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
+      modelPath: "/models/metaverse/characters/metaverse-humanoid-base-pack.glb",
       skeletonId: "humanoid_v2",
       socketNames: [
         "hand_r_socket",
@@ -254,7 +301,7 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
         if (path === authoredAnimationPackPath) {
           return {
             animations: [idleClip, walkClip],
-            scene: new Group()
+            scene: characterScene
           };
         }
 
@@ -447,6 +494,115 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
   );
 });
 
+test("createMetaverseScene synthesizes canonical humanoid_v2 sockets when the base rig omits them", async () => {
+  const [
+    {
+      AnimationClip,
+      Bone,
+      BoxGeometry,
+      Float32BufferAttribute,
+      Group,
+      MeshStandardMaterial,
+      Skeleton,
+      SkinnedMesh,
+      Uint16BufferAttribute,
+      Vector3
+    },
+    { createMetaverseScene },
+    { metaverseRuntimeConfig },
+    {
+      humanoidV2SocketLocalTransformsById,
+      humanoidV2SocketParentById
+    }
+  ] = await Promise.all([
+    import("three/webgpu"),
+    clientLoader.load("/src/metaverse/render/webgpu-metaverse-scene.ts"),
+    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts"),
+    clientLoader.load("/src/assets/types/asset-socket.ts")
+  ]);
+  const { characterScene, socketNames } = createHumanoidV2CharacterScene({
+    Bone,
+    BoxGeometry,
+    Float32BufferAttribute,
+    Group,
+    MeshStandardMaterial,
+    Skeleton,
+    SkinnedMesh,
+    Uint16BufferAttribute,
+    Vector3
+  });
+
+  for (const socketName of socketNames) {
+    const socketNode = characterScene.getObjectByName(socketName);
+
+    socketNode?.parent?.remove(socketNode);
+  }
+
+  const modelPath = "/models/metaverse/characters/metaverse-humanoid-base-pack.glb";
+  const sceneRuntime = createMetaverseScene(metaverseRuntimeConfig, {
+    characterProofConfig: {
+      animationClips: [
+        {
+          clipName: "Idle_Loop",
+          sourcePath: modelPath,
+          vocabulary: "idle"
+        }
+      ],
+      characterId: "mesh2motion-humanoid-v1",
+      label: "Metaverse humanoid",
+      modelPath,
+      skeletonId: "humanoid_v2",
+      socketNames
+    },
+    createSceneAssetLoader: () => ({
+      async loadAsync(path) {
+        if (path === modelPath) {
+          return {
+            animations: [new AnimationClip("Idle_Loop", -1, [])],
+            scene: characterScene
+          };
+        }
+
+        return {
+          animations: [],
+          scene: new Group()
+        };
+      }
+    }),
+    warn() {}
+  });
+
+  await sceneRuntime.boot();
+
+  for (const socketName of socketNames) {
+    const socketNode = sceneRuntime.scene.getObjectByName(socketName);
+    const transform = humanoidV2SocketLocalTransformsById[socketName];
+
+    assert.ok(socketNode, `Expected ${socketName} to be synthesized.`);
+    assert.equal(socketNode.parent?.name, humanoidV2SocketParentById[socketName]);
+    assert.deepEqual(socketNode.position.toArray(), [
+      transform.position.x,
+      transform.position.y,
+      transform.position.z
+    ]);
+    assertQuaternionArraysEquivalent(
+      socketNode.quaternion.toArray(),
+      [
+        transform.quaternion.x,
+        transform.quaternion.y,
+        transform.quaternion.z,
+        transform.quaternion.w
+      ],
+      0.000001,
+      `Synthesized ${socketName} should use the canonical local orientation`
+    );
+  }
+
+  assert.ok(sceneRuntime.scene.getObjectByName("palm_r_socket"));
+  assert.ok(sceneRuntime.scene.getObjectByName("grip_r_socket"));
+  assert.ok(sceneRuntime.scene.getObjectByName("back_socket"));
+});
+
 test("createMetaverseScene keeps socket debug markers opt-in", async () => {
   const [{ createMetaverseScene }, { metaverseRuntimeConfig }] = await Promise.all([
     clientLoader.load("/src/metaverse/render/webgpu-metaverse-scene.ts"),
@@ -512,26 +668,26 @@ test("createMetaverseScene requires an authored walk clip when walk vocabulary i
       animationClips: [
         {
           clipName: "idle",
-          sourcePath: "/models/metaverse/characters/mesh2motion-humanoid-canonical-animations.glb",
+          sourcePath: "/models/metaverse/characters/metaverse-humanoid-base-pack.glb",
           vocabulary: "idle"
         },
         {
           clipName: "walk",
-          sourcePath: "/models/metaverse/characters/mesh2motion-humanoid-canonical-animations.glb",
+          sourcePath: "/models/metaverse/characters/metaverse-humanoid-base-pack.glb",
           vocabulary: "walk"
         }
       ],
       characterId: "mesh2motion-humanoid-v1",
       label: "Mesh2Motion humanoid",
-      modelPath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
+      modelPath: "/models/metaverse/characters/metaverse-humanoid-base-pack.glb",
       skeletonId: "humanoid_v2",
       socketNames
     },
     createSceneAssetLoader: () => ({
       async loadAsync(path) {
-        if (path === "/models/metaverse/characters/mesh2motion-humanoid.glb") {
+        if (path === "/models/metaverse/characters/metaverse-humanoid-base-pack.glb") {
           return {
-            animations: [],
+            animations: [new AnimationClip("idle", -1, [])],
             scene: characterScene
           };
         }

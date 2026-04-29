@@ -113,8 +113,10 @@ export class MetaverseWorldPlayerSync {
     this.#playerIntentSync.syncFromAuthoritativeWorld();
   }
 
-  issuePlayerAction(commandInput: MetaverseIssuePlayerActionCommandInput): void {
-    this.#playerActionSync.issuePlayerAction(commandInput);
+  issuePlayerAction(
+    commandInput: MetaverseIssuePlayerActionCommandInput
+  ): number | null {
+    return this.#playerActionSync.issuePlayerAction(commandInput);
   }
 
   syncPlayerLookIntent(

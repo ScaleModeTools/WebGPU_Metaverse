@@ -1,8 +1,13 @@
 import {
   PerspectiveCamera,
-  Scene
+  Quaternion,
+  Scene,
+  Vector3
 } from "three/webgpu";
-import type { MetaverseRealtimePlayerWeaponStateSnapshot } from "@webgpu-metaverse/shared";
+import type {
+  MetaverseCombatProjectileSnapshot,
+  MetaverseRealtimePlayerWeaponStateSnapshot
+} from "@webgpu-metaverse/shared";
 import {
   createMetaverseSceneCamera,
   createMetaverseSceneCameraSnapshot,
@@ -10,6 +15,7 @@ import {
   type MetaverseSceneRendererHost
 } from "./camera/metaverse-scene-camera";
 import { MetaverseSceneCameraPresentationState } from "./camera/metaverse-scene-camera-presentation-state";
+import { MetaverseSceneCombatFxState } from "./combat/metaverse-scene-combat-fx-state";
 import {
   MetaverseSceneInteractivePresentationState,
   type MetaverseSceneAssetLoader,
@@ -43,6 +49,7 @@ import { MetaverseScenePresentationLifecycleState } from "./metaverse-scene-pres
 import { MetaverseScenePresentationState } from "./metaverse-scene-presentation-state";
 import { MetaverseSceneScenicState } from "./metaverse-scene-scenic-state";
 import { MetaverseScenePortalPresentationState } from "./portals/metaverse-scene-portal-presentation-state";
+import type { MetaverseSemanticAimFrame } from "../aim/metaverse-semantic-aim";
 
 import type {
   MetaverseAttachmentProofConfig,
@@ -51,12 +58,14 @@ import type {
   MetaverseEnvironmentProofConfig,
   FocusedExperiencePortalSnapshot,
   MetaverseCameraSnapshot,
+  MetaverseCombatPresentationEvent,
   MetaverseRemoteCharacterPresentationSnapshot,
   MetaverseLocalHeldWeaponGripTelemetrySnapshot,
+  MetaverseRenderedWeaponMuzzleFrame,
+  MetaverseRenderedWeaponMuzzleQuery,
   MountedEnvironmentSnapshot,
   MetaverseRuntimeConfig
 } from "../types/metaverse-runtime";
-import { metaverseHumanoidV2PistolPoseIds } from "../types/metaverse-runtime";
 import type { MountedEnvironmentAnchorSnapshot } from "../traversal/types/traversal";
 export type {
   MetaverseSceneCanvasHost,
@@ -66,11 +75,32 @@ export type { MetaverseSceneAssetLoader as SceneAssetLoader } from "./characters
 
 interface MetaverseSceneDependencies {
   attachmentProofConfig?: MetaverseAttachmentProofConfig | null;
+  attachmentProofConfigs?:
+    | readonly MetaverseAttachmentProofConfig[]
+    | null
+    | undefined;
   characterProofConfig?: MetaverseCharacterProofConfig | null;
   environmentProofConfig?: MetaverseEnvironmentProofConfig | null;
   createSceneAssetLoader?: () => MetaverseSceneAssetLoader;
   showSocketDebug?: boolean;
+  localPlayerId?: string | null;
   warn?: (message: string) => void;
+}
+
+function resolveMetaverseSceneAttachmentProofConfigs(
+  dependencies: Pick<
+    MetaverseSceneDependencies,
+    "attachmentProofConfig" | "attachmentProofConfigs"
+  >
+): readonly MetaverseAttachmentProofConfig[] {
+  if (dependencies.attachmentProofConfigs !== undefined) {
+    return dependencies.attachmentProofConfigs ?? [];
+  }
+
+  return dependencies.attachmentProofConfig === null ||
+    dependencies.attachmentProofConfig === undefined
+    ? []
+    : [dependencies.attachmentProofConfig];
 }
 
 export function createMetaverseScene(
@@ -83,10 +113,36 @@ export function createMetaverseScene(
   bootInteractivePresentation(): Promise<void>;
   bootScenicEnvironment(): Promise<void>;
   resetPresentation(): void;
+  clearLocalCombatDeathAnimation(): void;
+  triggerCombatPresentationEvent(
+    event: MetaverseCombatPresentationEvent
+  ): void;
   prewarm(renderer: MetaverseSceneRendererHost): Promise<void>;
   readLocalHeldWeaponGripTelemetrySnapshot(
     nowMs: number
   ): MetaverseLocalHeldWeaponGripTelemetrySnapshot;
+  readLocalWeaponProjectileMuzzleWorldPosition(
+    weaponId: string
+  ): { readonly x: number; readonly y: number; readonly z: number } | null;
+  readLocalWeaponProjectileMuzzleFrame(weaponId: string): {
+    readonly forwardWorld: {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+    };
+    readonly originWorld: {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+    };
+  } | null;
+  readRenderedWeaponMuzzleFrame(
+    query: MetaverseRenderedWeaponMuzzleQuery
+  ): MetaverseRenderedWeaponMuzzleFrame | null;
+  syncCombatProjectiles(
+    combatProjectiles: readonly MetaverseCombatProjectileSnapshot[],
+    nowMs: number
+  ): void;
   syncPresentation(
     cameraSnapshot: MetaverseCameraSnapshot,
     focusedPortal: FocusedExperiencePortalSnapshot | null,
@@ -97,7 +153,9 @@ export function createMetaverseScene(
     localWeaponAdsBlend?: number | null,
     remoteCharacterPresentations?: readonly MetaverseRemoteCharacterPresentationSnapshot[],
     mountedEnvironment?: MountedEnvironmentSnapshot | null,
-    cameraFieldOfViewDegrees?: number | null
+    cameraFieldOfViewDegrees?: number | null,
+    localSemanticAimFrame?: MetaverseSemanticAimFrame | null,
+    combatProjectiles?: readonly MetaverseCombatProjectileSnapshot[]
   ): MetaverseSceneInteractionSnapshot;
   readDynamicEnvironmentPose(
     environmentAssetId: string
@@ -132,6 +190,13 @@ export function createMetaverseScene(
   });
   const createSceneAssetLoader =
     dependencies.createSceneAssetLoader ?? createDefaultMetaverseSceneAssetLoader;
+  const attachmentProofConfigs =
+    resolveMetaverseSceneAttachmentProofConfigs(dependencies);
+  const localPlayerId = dependencies.localPlayerId ?? null;
+  const localProjectileMuzzleForwardWorldScratch = new Vector3();
+  const localProjectileMuzzleWorldPositionScratch = new Vector3();
+  const localProjectileMuzzleWorldQuaternionScratch = new Quaternion();
+  let presentationRenderFrame = 0;
 
   function resolveMountedEnvironmentRuntime(
     environmentAssetId: string
@@ -151,7 +216,7 @@ export function createMetaverseScene(
 
   const interactivePresentationState = new MetaverseSceneInteractivePresentationState(
     {
-      attachmentProofConfig: dependencies.attachmentProofConfig ?? null,
+      attachmentProofConfigs,
       attachmentRuntimeNodeResolvers,
       characterProofConfig: dependencies.characterProofConfig ?? null,
       characterProofRuntimeNodeResolvers,
@@ -203,6 +268,9 @@ export function createMetaverseScene(
     portalMeshes: scenicState.portalMeshes
   });
   const heldWeaponGripDebugState = new MetaverseSceneHeldWeaponGripDebugState();
+  const combatFxState = new MetaverseSceneCombatFxState({
+    scene
+  });
   const localCharacterPresentationState =
     new MetaverseSceneLocalCharacterPresentationState({
       config,
@@ -213,24 +281,24 @@ export function createMetaverseScene(
           remoteCharacterPresentationDependencies.applyMountedAnchorTransform,
         captureHeldWeaponPoseRuntime:
           remoteCharacterPresentationDependencies.captureHeldWeaponPoseRuntime,
+        prepareHeldWeaponPoseRuntime:
+          remoteCharacterPresentationDependencies.prepareHeldWeaponPoseRuntime,
         restoreHeldWeaponPoseRuntime:
           remoteCharacterPresentationDependencies.restoreHeldWeaponPoseRuntime,
         syncHeldWeaponPose: (
           characterRuntime,
           heldWeaponPoseRuntime,
           attachmentRuntime,
-          cameraSnapshot,
+          aimState,
           weaponState,
-          weaponAdsBlend,
           bodyPresentation
         ) =>
           syncHumanoidV2HeldWeaponPose(
             characterRuntime,
             heldWeaponPoseRuntime,
             attachmentRuntime,
-            cameraSnapshot,
+            aimState,
             weaponState,
-            weaponAdsBlend,
             bodyPresentation,
             heldWeaponGripDebugState
           )
@@ -280,12 +348,128 @@ export function createMetaverseScene(
     bootScenicEnvironment: () => presentationState.bootScenicEnvironment(),
     resetPresentation() {
       presentationState.resetPresentation();
+      combatFxState.reset();
+    },
+    clearLocalCombatDeathAnimation() {
+      presentationState.clearLocalCombatDeathAnimation();
+    },
+    triggerCombatPresentationEvent(event) {
+      presentationState.triggerCombatPresentationEvent(event, localPlayerId);
+      combatFxState.triggerCombatPresentationEvent(event);
     },
     async prewarm(renderer) {
       await presentationState.prewarm(renderer);
     },
     readLocalHeldWeaponGripTelemetrySnapshot(nowMs) {
       return heldWeaponGripDebugState.readSnapshot(nowMs);
+    },
+    readLocalWeaponProjectileMuzzleWorldPosition(weaponId) {
+      const attachmentProofRuntime =
+        interactivePresentationState.attachmentProofRuntimesByAttachmentId.get(
+          weaponId
+        ) ?? null;
+      const muzzleSocketNode =
+        attachmentProofRuntime?.socketNodesByRole.get("projectile.muzzle") ??
+        null;
+
+      if (muzzleSocketNode === null) {
+        return null;
+      }
+
+      muzzleSocketNode.updateWorldMatrix(true, false);
+      muzzleSocketNode.getWorldPosition(localProjectileMuzzleWorldPositionScratch);
+
+      return Object.freeze({
+        x: localProjectileMuzzleWorldPositionScratch.x,
+        y: localProjectileMuzzleWorldPositionScratch.y,
+        z: localProjectileMuzzleWorldPositionScratch.z
+      });
+    },
+    readLocalWeaponProjectileMuzzleFrame(weaponId) {
+      const attachmentProofRuntime =
+        interactivePresentationState.attachmentProofRuntimesByAttachmentId.get(
+          weaponId
+        ) ?? null;
+      const muzzleSocketNode =
+        attachmentProofRuntime?.socketNodesByRole.get("projectile.muzzle") ??
+        null;
+
+      if (muzzleSocketNode === null) {
+        return null;
+      }
+
+      muzzleSocketNode.updateWorldMatrix(true, false);
+      muzzleSocketNode.getWorldPosition(localProjectileMuzzleWorldPositionScratch);
+      muzzleSocketNode.getWorldQuaternion(localProjectileMuzzleWorldQuaternionScratch);
+      localProjectileMuzzleForwardWorldScratch
+        .set(1, 0, 0)
+        .applyQuaternion(localProjectileMuzzleWorldQuaternionScratch)
+        .normalize();
+
+      return Object.freeze({
+        forwardWorld: Object.freeze({
+          x: localProjectileMuzzleForwardWorldScratch.x,
+          y: localProjectileMuzzleForwardWorldScratch.y,
+          z: localProjectileMuzzleForwardWorldScratch.z
+        }),
+        originWorld: Object.freeze({
+          x: localProjectileMuzzleWorldPositionScratch.x,
+          y: localProjectileMuzzleWorldPositionScratch.y,
+          z: localProjectileMuzzleWorldPositionScratch.z
+        })
+      });
+    },
+    readRenderedWeaponMuzzleFrame(query) {
+      if (localPlayerId !== null && query.playerId === localPlayerId) {
+        const attachmentProofRuntime =
+          interactivePresentationState.attachmentProofRuntimesByAttachmentId.get(
+            query.weaponId
+          ) ?? null;
+        const muzzleSocketNode =
+          attachmentProofRuntime?.socketNodesByRole.get(query.role) ?? null;
+
+        if (muzzleSocketNode === null) {
+          return null;
+        }
+
+        muzzleSocketNode.updateWorldMatrix(true, false);
+        muzzleSocketNode.getWorldPosition(
+          localProjectileMuzzleWorldPositionScratch
+        );
+        muzzleSocketNode.getWorldQuaternion(
+          localProjectileMuzzleWorldQuaternionScratch
+        );
+        localProjectileMuzzleForwardWorldScratch
+          .set(1, 0, 0)
+          .applyQuaternion(localProjectileMuzzleWorldQuaternionScratch)
+          .normalize();
+
+        return Object.freeze({
+          forwardWorld: Object.freeze({
+            x: localProjectileMuzzleForwardWorldScratch.x,
+            y: localProjectileMuzzleForwardWorldScratch.y,
+            z: localProjectileMuzzleForwardWorldScratch.z
+          }),
+          originWorld: Object.freeze({
+            x: localProjectileMuzzleWorldPositionScratch.x,
+            y: localProjectileMuzzleWorldPositionScratch.y,
+            z: localProjectileMuzzleWorldPositionScratch.z
+          }),
+          playerId: query.playerId,
+          sampledAtRenderFrame: presentationRenderFrame,
+          source: "rendered-projectile-muzzle" as const,
+          weaponId: query.weaponId,
+          weaponInstanceId: query.weaponInstanceId ?? null
+        });
+      }
+
+      return remoteCharacterPresentationState.readRenderedWeaponMuzzleFrame(
+        query,
+        presentationRenderFrame
+      );
+    },
+    syncCombatProjectiles(combatProjectiles, nowMs) {
+      combatFxState.syncProjectiles(combatProjectiles, nowMs);
     },
     syncPresentation(
       cameraSnapshot,
@@ -297,7 +481,9 @@ export function createMetaverseScene(
       localWeaponAdsBlend = null,
       remoteCharacterPresentations = [],
       mountedEnvironment = null,
-      cameraFieldOfViewDegrees = null
+      cameraFieldOfViewDegrees = null,
+      localSemanticAimFrame = null,
+      combatProjectiles = []
     ) {
       const interactionSnapshot = presentationState.syncPresentation(
         cameraSnapshot,
@@ -309,9 +495,14 @@ export function createMetaverseScene(
         localWeaponAdsBlend,
         remoteCharacterPresentations,
         mountedEnvironment,
-        cameraFieldOfViewDegrees
+        cameraFieldOfViewDegrees,
+        localSemanticAimFrame
       );
 
+      presentationRenderFrame += 1;
+      if (combatProjectiles.length > 0) {
+        combatFxState.syncProjectiles(combatProjectiles, nowMs);
+      }
       scenicState.syncCameraRelativeEnvironment();
 
       return interactionSnapshot;

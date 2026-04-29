@@ -1,7 +1,8 @@
 import type {
+  MetaverseRoomId,
   MetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram,
   MetaverseSyncDriverVehicleControlCommand
-} from "@webgpu-metaverse/shared/metaverse/realtime";
+} from "@webgpu-metaverse/shared";
 import {
   createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram
 } from "@webgpu-metaverse/shared/metaverse/realtime";
@@ -10,6 +11,7 @@ import { LatestWinsWebTransportJsonDatagramChannel } from "./latest-wins-webtran
 import type { MetaverseRealtimeWorldDriverVehicleControlDatagramTransport } from "../types/metaverse-realtime-world-driver-vehicle-control-datagram-transport";
 
 interface MetaverseRealtimeWorldDriverVehicleControlWebTransportDatagramTransportConfig {
+  readonly roomId: MetaverseRoomId;
   readonly webTransportUrl: string;
 }
 
@@ -65,7 +67,8 @@ export function createMetaverseRealtimeWorldDriverVehicleControlWebTransportData
     ): Promise<void> {
       await channel.sendDatagram(
         createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram({
-          command
+          command,
+          roomId: config.roomId
         })
       );
     }

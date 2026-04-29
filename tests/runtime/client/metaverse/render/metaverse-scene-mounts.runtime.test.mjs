@@ -114,18 +114,18 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
       animationClips: [
         {
           clipName: "idle",
-          sourcePath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
+          sourcePath: "/models/metaverse/characters/metaverse-humanoid-base-pack.glb",
           vocabulary: "idle"
         },
         {
           clipName: "walk",
-          sourcePath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
+          sourcePath: "/models/metaverse/characters/metaverse-humanoid-base-pack.glb",
           vocabulary: "walk"
         }
       ],
       characterId: "mesh2motion-humanoid-v1",
       label: "Mesh2Motion humanoid",
-      modelPath: "/models/metaverse/characters/mesh2motion-humanoid.glb",
+      modelPath: "/models/metaverse/characters/metaverse-humanoid-base-pack.glb",
       skeletonId: "humanoid_v2",
       socketNames
     },

@@ -26,13 +26,12 @@ test("MetaverseSceneRemoteCharacterPresentationState owns remote runtime sync an
   const sourceCharacterRuntime = {
     anchorGroup: new Group(),
     heldWeaponPoseRuntime: null,
-    humanoidV2PistolPoseRuntime: null,
     mixer: {
       update() {}
     }
   };
   const interactivePresentationState = {
-    attachmentProofRuntime: null,
+    attachmentProofRuntimesByAttachmentId: new Map(),
     characterProofRuntime: sourceCharacterRuntime
   };
   const remoteCharacterPresentationState =
@@ -46,8 +45,8 @@ test("MetaverseSceneRemoteCharacterPresentationState owns remote runtime sync an
       interactivePresentationState,
       remoteCharacterPresentationDependencies: {
         applyMountedAnchorTransform() {},
-        clearPistolPoseWeights() {},
         captureHeldWeaponPoseRuntime() {},
+        prepareHeldWeaponPoseRuntime() {},
         cloneAttachmentRuntime() {
           return null;
         },
@@ -58,7 +57,6 @@ test("MetaverseSceneRemoteCharacterPresentationState owns remote runtime sync an
           return {
             anchorGroup,
             heldWeaponPoseRuntime: null,
-            humanoidV2PistolPoseRuntime: null,
             mixer: {
               update(deltaSeconds) {
                 mixerUpdateCalls.push(deltaSeconds);
@@ -95,8 +93,7 @@ test("MetaverseSceneRemoteCharacterPresentationState owns remote runtime sync an
         syncHeldWeaponPose() {},
         syncMountedCharacterRuntime() {
           return null;
-        },
-        syncPistolPoseWeights() {}
+        }
       },
       scene
     });
@@ -157,19 +154,22 @@ test("MetaverseSceneRemoteCharacterPresentationState restores held pose runtime 
   const calls = {
     captureHeldWeaponPoseRuntime: 0,
     restoreHeldWeaponPoseRuntime: 0,
-    syncHeldWeaponPose: 0
+    syncHeldWeaponPose: 0,
+    syncHeldWeaponPoseAimStates: []
   };
   const sourceCharacterRuntime = {
     anchorGroup: new Group(),
     heldWeaponPoseRuntime: {},
-    humanoidV2PistolPoseRuntime: null,
     mixer: {
       update() {}
     }
   };
   const sourceAttachmentRuntime = {
     activeMountKind: "held",
-    attachmentId: "metaverse-service-pistol-v1"
+    attachmentId: "metaverse-service-pistol-v1",
+    holdProfile: Object.freeze({
+      poseProfileId: "sidearm.one_hand_optional_support"
+    })
   };
   const remoteCharacterPresentationState =
     new MetaverseSceneRemoteCharacterPresentationState({
@@ -184,19 +184,22 @@ test("MetaverseSceneRemoteCharacterPresentationState restores held pose runtime 
         }
       },
       interactivePresentationState: {
-        attachmentProofRuntime: sourceAttachmentRuntime,
+        attachmentProofRuntimesByAttachmentId: new Map([
+          [sourceAttachmentRuntime.attachmentId, sourceAttachmentRuntime]
+        ]),
         characterProofRuntime: sourceCharacterRuntime
       },
       remoteCharacterPresentationDependencies: {
         applyMountedAnchorTransform() {},
-        clearPistolPoseWeights() {},
         captureHeldWeaponPoseRuntime() {
           calls.captureHeldWeaponPoseRuntime += 1;
         },
+        prepareHeldWeaponPoseRuntime() {},
         cloneAttachmentRuntime(sourceRuntime) {
           return {
             activeMountKind: null,
-            attachmentId: sourceRuntime.attachmentId
+            attachmentId: sourceRuntime.attachmentId,
+            holdProfile: sourceRuntime.holdProfile
           };
         },
         cloneCharacterRuntime(_sourceCharacterRuntime, playerId) {
@@ -207,7 +210,6 @@ test("MetaverseSceneRemoteCharacterPresentationState restores held pose runtime 
           return {
             anchorGroup,
             heldWeaponPoseRuntime: {},
-            humanoidV2PistolPoseRuntime: null,
             mixer: {
               update() {}
             }
@@ -241,13 +243,18 @@ test("MetaverseSceneRemoteCharacterPresentationState restores held pose runtime 
           );
           characterRuntime.anchorGroup.updateMatrixWorld(true);
         },
-        syncHeldWeaponPose() {
+        syncHeldWeaponPose(
+          _characterRuntime,
+          _heldWeaponPoseRuntime,
+          _attachmentRuntime,
+          aimState
+        ) {
           calls.syncHeldWeaponPose += 1;
+          calls.syncHeldWeaponPoseAimStates.push(aimState);
         },
         syncMountedCharacterRuntime() {
           return null;
-        },
-        syncPistolPoseWeights() {}
+        }
       },
       scene
     });
@@ -278,7 +285,8 @@ test("MetaverseSceneRemoteCharacterPresentationState restores held pose runtime 
   assert.deepEqual(calls, {
     captureHeldWeaponPoseRuntime: 1,
     restoreHeldWeaponPoseRuntime: 1,
-    syncHeldWeaponPose: 0
+    syncHeldWeaponPose: 0,
+    syncHeldWeaponPoseAimStates: []
   });
 
   remoteCharacterPresentationState.syncPresentation(
@@ -303,6 +311,52 @@ test("MetaverseSceneRemoteCharacterPresentationState restores held pose runtime 
   assert.deepEqual(calls, {
     captureHeldWeaponPoseRuntime: 2,
     restoreHeldWeaponPoseRuntime: 2,
-    syncHeldWeaponPose: 1
+    syncHeldWeaponPose: 1,
+    syncHeldWeaponPoseAimStates: [
+      calls.syncHeldWeaponPoseAimStates[0]
+    ]
   });
+  assert.equal(
+    calls.syncHeldWeaponPoseAimStates[0]?.quality,
+    "replicated_pitch_yaw"
+  );
+  assert.equal(
+    calls.syncHeldWeaponPoseAimStates[0]?.source,
+    "remote_replicated"
+  );
+
+  remoteCharacterPresentationState.syncPresentation(
+    [
+      Object.freeze({
+        ...remotePresentation,
+        aimCamera: null,
+        weaponState: Object.freeze({
+          aimMode: "hip-fire",
+          weaponId: "metaverse-service-pistol-v1"
+        })
+      })
+    ],
+    1 / 60
+  );
+
+  assert.equal(calls.syncHeldWeaponPose, 2);
+  assert.equal(
+    calls.syncHeldWeaponPoseAimStates[1]?.quality,
+    "last_known_replicated"
+  );
+  remoteCharacterPresentationState.syncPresentation(
+    [
+      Object.freeze({
+        ...remotePresentation,
+        aimCamera: null,
+        weaponState: Object.freeze({
+          aimMode: "hip-fire",
+          weaponId: "metaverse-service-pistol-v1"
+        })
+      })
+    ],
+    0.3
+  );
+
+  assert.equal(calls.syncHeldWeaponPose, 2);
 });

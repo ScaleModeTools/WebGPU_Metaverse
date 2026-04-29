@@ -72,20 +72,26 @@ import type {
 import type {
   MetaversePlayerActionReceiptSnapshot,
   MetaversePlayerActionReceiptSnapshotInput,
+  MetaverseCombatEventSnapshot,
+  MetaverseCombatEventSnapshotInput,
   MetaverseCombatFeedEventSnapshot,
   MetaverseCombatFeedEventSnapshotInput,
   MetaverseCombatMatchSnapshot,
   MetaverseCombatMatchSnapshotInput,
   MetaverseCombatProjectileSnapshot,
   MetaverseCombatProjectileSnapshotInput,
+  MetaverseCombatShotResolutionTelemetrySnapshot,
+  MetaverseCombatShotResolutionTelemetrySnapshotInput,
   MetaversePlayerCombatSnapshot,
   MetaversePlayerCombatSnapshotInput
 } from "../metaverse-combat.js";
 import {
   createMetaversePlayerActionReceiptSnapshot,
+  createMetaverseCombatEventSnapshot,
   createMetaverseCombatFeedEventSnapshot,
   createMetaverseCombatMatchSnapshot,
   createMetaverseCombatProjectileSnapshot,
+  createMetaverseCombatShotResolutionTelemetrySnapshot,
   createMetaversePlayerCombatSnapshot
 } from "../metaverse-combat.js";
 
@@ -261,7 +267,12 @@ export interface MetaverseRealtimeObserverPlayerSnapshot {
   readonly lastProcessedLookSequence: number;
   readonly lastProcessedTraversalSequence: number;
   readonly lastProcessedWeaponSequence: number;
+  readonly latestShotResolutionTelemetry:
+    | MetaverseCombatShotResolutionTelemetrySnapshot
+    | null;
   readonly playerId: MetaversePlayerId;
+  readonly recentShotResolutionTelemetry:
+    readonly MetaverseCombatShotResolutionTelemetrySnapshot[];
   readonly recentPlayerActionReceipts:
     readonly MetaversePlayerActionReceiptSnapshot[];
 }
@@ -272,7 +283,12 @@ export interface MetaverseRealtimeObserverPlayerSnapshotInput {
   readonly lastProcessedLookSequence?: number;
   readonly lastProcessedTraversalSequence?: number;
   readonly lastProcessedWeaponSequence?: number;
+  readonly latestShotResolutionTelemetry?:
+    | MetaverseCombatShotResolutionTelemetrySnapshotInput
+    | null;
   readonly playerId: MetaversePlayerId;
+  readonly recentShotResolutionTelemetry?:
+    readonly MetaverseCombatShotResolutionTelemetrySnapshotInput[];
   readonly recentPlayerActionReceipts?:
     readonly MetaversePlayerActionReceiptSnapshotInput[];
 }
@@ -312,6 +328,7 @@ export interface MetaverseRealtimeEnvironmentBodySnapshotInput {
 }
 
 export interface MetaverseRealtimeWorldSnapshot {
+  readonly combatEvents: readonly MetaverseCombatEventSnapshot[];
   readonly combatFeed: readonly MetaverseCombatFeedEventSnapshot[];
   readonly combatMatch: MetaverseCombatMatchSnapshot | null;
   readonly environmentBodies: readonly MetaverseRealtimeEnvironmentBodySnapshot[];
@@ -324,6 +341,7 @@ export interface MetaverseRealtimeWorldSnapshot {
 }
 
 export interface MetaverseRealtimeWorldSnapshotInput {
+  readonly combatEvents?: readonly MetaverseCombatEventSnapshotInput[];
   readonly combatFeed?: readonly MetaverseCombatFeedEventSnapshotInput[];
   readonly combatMatch?: MetaverseCombatMatchSnapshotInput | null;
   readonly environmentBodies?:
@@ -529,7 +547,19 @@ function freezeObserverPlayerSnapshot(
     lastProcessedWeaponSequence: normalizeFiniteNonNegativeInteger(
       input.lastProcessedWeaponSequence ?? 0
     ),
+    latestShotResolutionTelemetry:
+      input.latestShotResolutionTelemetry === undefined ||
+      input.latestShotResolutionTelemetry === null
+        ? null
+        : createMetaverseCombatShotResolutionTelemetrySnapshot(
+            input.latestShotResolutionTelemetry
+          ),
     playerId: input.playerId,
+    recentShotResolutionTelemetry: Object.freeze(
+      (input.recentShotResolutionTelemetry ?? []).map((telemetrySnapshot) =>
+        createMetaverseCombatShotResolutionTelemetrySnapshot(telemetrySnapshot)
+      )
+    ),
     recentPlayerActionReceipts: freezePlayerActionReceiptSnapshots(
       input.recentPlayerActionReceipts
     )
@@ -1017,6 +1047,9 @@ export function createMetaverseRealtimeWorldSnapshot(
     input.combatMatch === undefined || input.combatMatch === null
       ? null
       : createMetaverseCombatMatchSnapshot(input.combatMatch);
+  const combatEvents = (input.combatEvents ?? []).map(
+    createMetaverseCombatEventSnapshot
+  );
   const combatFeed = (input.combatFeed ?? []).map(
     createMetaverseCombatFeedEventSnapshot
   );
@@ -1135,6 +1168,7 @@ export function createMetaverseRealtimeWorldSnapshot(
   }
 
   return Object.freeze({
+    combatEvents: Object.freeze(combatEvents),
     combatFeed: Object.freeze(combatFeed),
     combatMatch,
     environmentBodies: Object.freeze(environmentBodies),

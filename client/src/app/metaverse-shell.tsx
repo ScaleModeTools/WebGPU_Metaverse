@@ -20,6 +20,7 @@ export function MetaverseShell() {
     <ShellStageRouter
       activeExperienceId={controller.activeExperienceId}
       activeMetaverseBundleId={controller.activeMetaverseBundleId}
+      activeMetaverseLaunchVariationId={controller.activeMetaverseLaunchVariationId}
       activeMetaverseRoomAssignment={controller.activeMetaverseRoomAssignment}
       activeStep={activeStep}
       audioStatusLabel={controller.shellView.audioStatusLabel}
@@ -52,6 +53,7 @@ export function MetaverseShell() {
       onEditProfile={controller.onEditProfile}
       onExperienceLaunchRequest={controller.onExperienceLaunchRequest}
       onGameplaySignal={controller.onGameplaySignal}
+      onMetaverseCombatAudioCue={controller.onMetaverseCombatAudioCue}
       onInputModeChange={controller.onInputModeChange}
       onLoginSubmit={controller.onLoginSubmit}
       metaverseControlMode={controller.metaverseControlMode}

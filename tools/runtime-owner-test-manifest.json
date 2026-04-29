@@ -134,6 +134,18 @@
       ]
     },
     {
+      "ownerPath": "client/src/metaverse/classes/metaverse-combat-feedback-runtime.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/runtime/metaverse-combat-feedback-runtime.runtime.test.mjs"
+      ]
+    },
+    {
+      "ownerPath": "client/src/metaverse/classes/metaverse-combat-haptics-runtime.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/runtime/metaverse-combat-feedback-runtime.runtime.test.mjs"
+      ]
+    },
+    {
       "ownerPath": "client/src/metaverse/boot/metaverse-runtime-start-coordinator.ts",
       "testPaths": [
         "tests/runtime/client/metaverse/boot/metaverse-runtime-start-coordinator.runtime.test.mjs"

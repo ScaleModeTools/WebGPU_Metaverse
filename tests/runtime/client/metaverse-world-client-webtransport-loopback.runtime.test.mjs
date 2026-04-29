@@ -422,6 +422,36 @@ function joinGroundedPlayer(
   );
 }
 
+function issueFireWeaponPlayerAction(
+  client,
+  {
+    issuedAtAuthoritativeTimeMs,
+    playerId,
+    rayOriginWorld,
+    weaponId
+  }
+) {
+  return client.issuePlayerAction({
+    action: {
+      aimMode: "hip-fire",
+      aimSnapshot: {
+        pitchRadians: 0,
+        rayForwardWorld: {
+          x: 0,
+          y: 0,
+          z: -1
+        },
+        rayOriginWorld,
+        yawRadians: 0
+      },
+      issuedAtAuthoritativeTimeMs,
+      kind: "fire-weapon",
+      weaponId
+    },
+    playerId
+  });
+}
+
 async function publishAuthoritativeWorld(runtime, worldAdapter, nowMs) {
   runtime.advanceToTime(nowMs);
   worldAdapter.publishWorldSnapshots(nowMs);
@@ -1731,7 +1761,17 @@ test("MetaverseWorldClient uses the WebTransport weapon-state datagram lane and 
       expectedWeaponSequence
     );
     assert.deepEqual(authoritativeWeaponSnapshot.players[0]?.weaponState, {
+      activeSlotId: "primary",
       aimMode: "ads",
+      slots: [
+        {
+          attachmentId: "metaverse-service-pistol-v1",
+          equipped: true,
+          slotId: "primary",
+          weaponId: "metaverse-service-pistol-v1",
+          weaponInstanceId: "primary:metaverse-service-pistol-v1"
+        }
+      ],
       weaponId: "metaverse-service-pistol-v1"
     });
 
@@ -1749,7 +1789,17 @@ test("MetaverseWorldClient uses the WebTransport weapon-state datagram lane and 
     }, "weapon-state ack over WebTransport datagram lane");
 
     assert.deepEqual(acknowledgedSnapshot.players[0]?.weaponState, {
+      activeSlotId: "primary",
       aimMode: "ads",
+      slots: [
+        {
+          attachmentId: "metaverse-service-pistol-v1",
+          equipped: true,
+          slotId: "primary",
+          weaponId: "metaverse-service-pistol-v1",
+          weaponInstanceId: "primary:metaverse-service-pistol-v1"
+        }
+      ],
       weaponId: "metaverse-service-pistol-v1"
     });
   } finally {
@@ -1823,14 +1873,14 @@ test("MetaverseWorldClient keeps reliable fire-weapon command responses observer
     assert.ok(initialSnapshotSequence > 0);
 
     nowMs = 1_200;
-    client.fireWeapon({
-      aimMode: "hip-fire",
-      aimSnapshot: {
-        pitchRadians: 0,
-        yawRadians: 0
-      },
+    issueFireWeaponPlayerAction(client, {
       issuedAtAuthoritativeTimeMs: 1_200,
       playerId,
+      rayOriginWorld: {
+        x: 0,
+        y: 1.62,
+        z: 24
+      },
       weaponId: "metaverse-service-pistol-v2"
     });
     scheduler.runNext(0);

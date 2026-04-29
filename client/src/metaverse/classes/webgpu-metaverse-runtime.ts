@@ -33,9 +33,11 @@ import type {
   MetaverseCharacterProofConfig,
   MetaverseEnvironmentProofConfig,
   MetaverseHudSnapshot,
+  MetaverseCombatAudioCuePlayer,
   MetaverseRuntimeConfig
 } from "../types/metaverse-runtime";
 import { MetaverseAuthoritativeWorldSync } from "./metaverse-authoritative-world-sync";
+import { MetaverseCombatFeedbackRuntime } from "./metaverse-combat-feedback-runtime";
 import { MetaverseEnvironmentPhysicsRuntime } from "./metaverse-environment-physics-runtime";
 import { MetaverseFlightInputRuntime } from "./metaverse-flight-input-runtime";
 import { MetaverseMountedInteractionRuntime } from "./metaverse-mounted-interaction-runtime";
@@ -80,6 +82,7 @@ interface MetaverseRendererTuningHandle {
 
 interface MetaverseRuntimeDependencies {
   readonly attachmentProofConfig?: MetaverseAttachmentProofConfig | null;
+  readonly attachmentProofConfigs?: readonly MetaverseAttachmentProofConfig[] | null;
   readonly authoritativePlayerMovementEnabled?: boolean;
   readonly cancelAnimationFrame?: typeof globalThis.cancelAnimationFrame;
   readonly characterProofConfig?: MetaverseCharacterProofConfig | null;
@@ -99,12 +102,14 @@ interface MetaverseRuntimeDependencies {
   readonly equippedWeaponId?: string | null;
   readonly localPlayerIdentity?: MetaverseLocalPlayerIdentity | null;
   readonly physicsRuntime?: RapierPhysicsRuntime;
+  readonly playCombatAudioCue?: MetaverseCombatAudioCuePlayer | null;
   readonly readNowMs?: () => number;
   readonly readWallClockMs?: () => number;
   readonly requestAnimationFrame?: typeof globalThis.requestAnimationFrame;
   readonly runtimeCameraPhaseConfig?: MetaverseRuntimeCameraPhaseConfig;
   readonly showPhysicsDebug?: boolean;
   readonly showSocketDebug?: boolean;
+  readonly weaponLayoutId?: string | null;
 }
 
 function createDefaultRenderer(canvas: HTMLCanvasElement): MetaverseRendererHost {
@@ -195,9 +200,11 @@ export class WebGpuMetaverseRuntime {
 
     const sceneRuntime = createMetaverseScene(config, {
       attachmentProofConfig: dependencies.attachmentProofConfig ?? null,
+      attachmentProofConfigs: dependencies.attachmentProofConfigs ?? undefined,
       characterProofConfig: dependencies.characterProofConfig ?? null,
       createSceneAssetLoader,
       environmentProofConfig,
+      localPlayerId: dependencies.localPlayerIdentity?.playerId ?? null,
       showSocketDebug: dependencies.showSocketDebug ?? false
     });
     const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
@@ -266,7 +273,9 @@ export class WebGpuMetaverseRuntime {
       config,
       {
         attachmentProofConfig: dependencies.attachmentProofConfig ?? null,
-        equippedWeaponId: dependencies.equippedWeaponId
+        attachmentProofConfigs: dependencies.attachmentProofConfigs ?? undefined,
+        equippedWeaponId: dependencies.equippedWeaponId,
+        weaponLayoutId: dependencies.weaponLayoutId
       }
     );
     const presenceRuntime = new MetaversePresenceRuntime({
@@ -332,8 +341,16 @@ export class WebGpuMetaverseRuntime {
     const combatLifecycle = new MetaverseRuntimeCombatLifecycle({
       authoritativeWorldSync,
       bootLifecycle,
+      clearLocalCombatDeathAnimation: () =>
+        sceneRuntime.clearLocalCombatDeathAnimation(),
       remoteWorldRuntime,
       weaponPresentationRuntime: this.#weaponPresentationRuntime
+    });
+    const combatFeedbackRuntime = new MetaverseCombatFeedbackRuntime({
+      playAudioCue: dependencies.playCombatAudioCue ?? null,
+      readLocalPlayerId: () => dependencies.localPlayerIdentity?.playerId ?? null,
+      triggerPresentationEvent: (event) =>
+        sceneRuntime.triggerCombatPresentationEvent(event)
     });
 
     this.#hudPublisher = new MetaverseRuntimeHudPublisher({
@@ -345,6 +362,8 @@ export class WebGpuMetaverseRuntime {
       readLocalHeldWeaponGripTelemetrySnapshot: (nowMs) =>
         sceneRuntime.readLocalHeldWeaponGripTelemetrySnapshot(nowMs),
       readNowMs: readNowMsImpl,
+      readProjectilePresentationTelemetrySnapshots: () =>
+        combatFeedbackRuntime.projectilePresentationDebugSnapshots,
       remoteWorldRuntime,
       traversalRuntime,
       weaponPresentationRuntime: this.#weaponPresentationRuntime
@@ -353,6 +372,7 @@ export class WebGpuMetaverseRuntime {
     const frameLoop = new MetaverseRuntimeFrameLoop({
       authoritativeWorldSync,
       bootLifecycle,
+      combatFeedbackRuntime,
       combatLifecycle,
       devicePixelRatio,
       environmentPhysicsRuntime,
@@ -386,6 +406,7 @@ export class WebGpuMetaverseRuntime {
     const serviceLifecycle = new MetaverseRuntimeServiceLifecycle({
       authoritativeWorldSync,
       bootLifecycle,
+      combatFeedbackRuntime,
       combatLifecycle,
       environmentPhysicsRuntime,
       ensureAuthoritativeWorldBundleSynchronized:

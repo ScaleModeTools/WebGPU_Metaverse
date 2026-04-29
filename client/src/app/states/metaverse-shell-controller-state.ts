@@ -17,6 +17,10 @@ import {
   readMetaverseWorldBundleRegistryEntry,
   resolveDefaultMetaverseWorldBundleId
 } from "../../metaverse/world/bundle-registry";
+import {
+  defaultMetaverseMapLaunchPlaylistSnapshot,
+  resolveMetaverseMapLaunchSelection
+} from "../../metaverse/world/playlists";
 import type { WebGpuMetaverseCapabilitySnapshot } from "../../metaverse/types/webgpu-capability";
 
 import type {
@@ -31,10 +35,6 @@ export const initialCapabilitySnapshot = Object.freeze({
 }) satisfies WebGpuMetaverseCapabilitySnapshot;
 const defaultMatchMode: MetaverseMatchModeId = "team-deathmatch";
 const guestShellUsername = createUsername("Unknown")!;
-const freeRoamMetaverseBundleId = "private-build";
-const freeRoamMetaverseLaunchVariationId = "shell-free-roam";
-const teamDeathmatchMetaverseBundleId = "private-build";
-const teamDeathmatchMetaverseLaunchVariationId = "shell-team-deathmatch";
 
 function resolveActiveMetaverseBundleId(bundleId: string): string {
   return readMetaverseWorldBundleRegistryEntry(bundleId) === null
@@ -70,16 +70,14 @@ function resolveStandardMetaverseLaunchSelection(
   readonly bundleId: string;
   readonly variationId: string;
 } {
-  if (matchMode === "free-roam") {
-    return Object.freeze({
-      bundleId: freeRoamMetaverseBundleId,
-      variationId: freeRoamMetaverseLaunchVariationId
-    });
-  }
+  const launchSelection = resolveMetaverseMapLaunchSelection(
+    defaultMetaverseMapLaunchPlaylistSnapshot,
+    matchMode
+  );
 
   return Object.freeze({
-    bundleId: teamDeathmatchMetaverseBundleId,
-    variationId: teamDeathmatchMetaverseLaunchVariationId
+    bundleId: launchSelection.bundleId,
+    variationId: launchSelection.launchVariationId
   });
 }
 

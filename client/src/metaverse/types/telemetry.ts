@@ -2,6 +2,9 @@ import type {
   MetaverseCombatActionKindId,
   MetaverseCombatActionReceiptStatusId,
   MetaverseCombatActionRejectionReasonId,
+  MetaverseCombatWeaponObjectLocalMuzzleFrameSnapshot,
+  MetaverseCombatWeaponPresentationDeliveryModelId,
+  MetaverseCombatShotResolutionTelemetrySnapshot,
   MetaversePlayerTraversalActionIntentSnapshot,
   MetaversePlayerTraversalBodyControlSnapshot,
   MetaverseRealtimePlayerTraversalActionResolutionStateId,
@@ -28,6 +31,23 @@ import type {
 import type {
   MetaverseRealtimePlayerWeaponAimModeId
 } from "@webgpu-metaverse/shared/metaverse/realtime";
+import type {
+  HeldObjectPoseProfileId,
+  HeldObjectSocketRoleId
+} from "@/assets/types/held-object-authoring-manifest";
+
+export const metaverseLocalHeldObjectContactFrameIds = [
+  "primary_trigger_grip",
+  "heavy_trigger_grip",
+  "support_palm",
+  "support_handle_grip",
+  "barrel_cradle",
+  "sword_grip",
+  "tool_grip"
+] as const;
+
+export type MetaverseLocalHeldObjectContactFrameId =
+  (typeof metaverseLocalHeldObjectContactFrameIds)[number];
 
 export interface MetaverseRendererTelemetrySnapshot {
   readonly active: boolean;
@@ -35,6 +55,73 @@ export interface MetaverseRendererTelemetrySnapshot {
   readonly drawCallCount: number;
   readonly label: string;
   readonly triangleCount: number;
+}
+
+export type MetaverseProjectilePresentationDebugCaptureSource =
+  | "post-sync"
+  | "unavailable";
+
+export type MetaverseProjectilePresentationDebugTracerStartSource =
+  | "rendered-muzzle-post-sync"
+  | "rendered-muzzle-drain-time"
+  | "semantic-muzzle-fallback";
+
+export type MetaverseProjectilePresentationDebugFiniteEndpointPolicy =
+  | "normal-tracer"
+  | "forward-converged-tracer"
+  | "near-field-tracer"
+  | "suppressed-invalid-endpoint";
+
+export type MetaverseProjectilePresentationDebugHitscanHitKind =
+  | "miss"
+  | "player"
+  | "world";
+
+export type MetaverseProjectilePresentationDebugTracerSuppressedReason =
+  | "missing-rendered-muzzle"
+  | "muzzle-unavailable-after-wait"
+  | "missing-camera-ray"
+  | "missing-endpoint";
+
+export type MetaverseProjectilePresentationDebugVisualEndpointSource =
+  | "authoritative-hit-point"
+  | "camera-ray-max-distance"
+  | "first-projectile-snapshot";
+
+export interface MetaverseProjectilePresentationDebugSnapshot {
+  readonly actionSequence: number | null;
+  readonly actorId: string;
+  readonly cameraRayToVisualSegmentAngleRadians: number | null;
+  readonly deliveryModel: MetaverseCombatWeaponPresentationDeliveryModelId;
+  readonly drainTimeRenderedMuzzleWorld: MetaverseVector3Snapshot | null;
+  readonly endpointRayDistanceMeters: number | null;
+  readonly endpointRayPerpendicularErrorMeters: number | null;
+  readonly eventCameraRayForwardWorld: MetaverseVector3Snapshot | null;
+  readonly finiteEndpointPolicy: MetaverseProjectilePresentationDebugFiniteEndpointPolicy | null;
+  readonly firstProjectileSnapshotWorld: MetaverseVector3Snapshot | null;
+  readonly hitscanHitKind: MetaverseProjectilePresentationDebugHitscanHitKind | null;
+  readonly muzzleToSemanticTipDeltaMeters: number | null;
+  readonly muzzleToEndpointDistanceMeters: number | null;
+  readonly muzzleForwardToVisualSegmentAngleRadians: number | null;
+  readonly postSyncFireActionMuzzleWorld: MetaverseVector3Snapshot | null;
+  readonly postSyncFireActionToDrainTimeMuzzleDeltaMeters: number | null;
+  readonly projectileId: string | null;
+  readonly renderedMuzzleCapturedAt: MetaverseProjectilePresentationDebugCaptureSource;
+  readonly renderedMuzzleForwardWorld: MetaverseVector3Snapshot | null;
+  readonly renderedMuzzleWorld: MetaverseVector3Snapshot | null;
+  readonly renderedToServerDeltaMeters: number | null;
+  readonly semanticTipToFirstSnapshotDeltaMeters: number | null;
+  readonly semanticTipWorld: MetaverseVector3Snapshot | null;
+  readonly serverProjectileOriginWorld: MetaverseVector3Snapshot | null;
+  readonly sharedObjectLocalMuzzleFrame: MetaverseCombatWeaponObjectLocalMuzzleFrameSnapshot | null;
+  readonly tracerSuppressedReason: MetaverseProjectilePresentationDebugTracerSuppressedReason | null;
+  readonly tracerStartSource: MetaverseProjectilePresentationDebugTracerStartSource | null;
+  readonly visualEndWorld: MetaverseVector3Snapshot | null;
+  readonly visualEndpointSource: MetaverseProjectilePresentationDebugVisualEndpointSource | null;
+  readonly visualSegmentDirectionWorld: MetaverseVector3Snapshot | null;
+  readonly visualStartWorld: MetaverseVector3Snapshot | null;
+  readonly weaponId: string;
+  readonly weaponInstanceId: string | null;
 }
 
 export interface MetaverseTelemetryGroundedBodySnapshot {
@@ -80,6 +167,25 @@ export const metaverseLocalHeldWeaponGripDebugSolveFailureReasons = [
   "grip-across-direction-degenerate"
 ] as const;
 
+export const metaverseLocalHeldObjectOffHandTargetKinds = [
+  "none",
+  "support-palm-hint",
+  "secondary-grip"
+] as const;
+
+export const metaverseLocalHeldWeaponAimSourceIds = [
+  "local_camera",
+  "remote_replicated",
+  "debug"
+] as const;
+
+export const metaverseLocalHeldWeaponAimSourceQualityIds = [
+  "full_camera_ray",
+  "replicated_pitch_yaw",
+  "last_known_replicated",
+  "debug"
+] as const;
+
 export type MetaverseLocalHeldWeaponGripDebugPhase =
   (typeof metaverseLocalHeldWeaponGripDebugPhases)[number];
 export type MetaverseLocalHeldWeaponGripDebugStability =
@@ -88,21 +194,41 @@ export type MetaverseLocalHeldWeaponGripDebugHandSocketId =
   (typeof metaverseLocalHeldWeaponGripDebugHandSocketIds)[number];
 export type MetaverseLocalHeldWeaponGripDebugSolveFailureReason =
   (typeof metaverseLocalHeldWeaponGripDebugSolveFailureReasons)[number];
+export type MetaverseLocalHeldObjectOffHandTargetKind =
+  (typeof metaverseLocalHeldObjectOffHandTargetKinds)[number];
+export type MetaverseLocalHeldWeaponAimSourceId =
+  (typeof metaverseLocalHeldWeaponAimSourceIds)[number];
+export type MetaverseLocalHeldWeaponAimSourceQualityId =
+  (typeof metaverseLocalHeldWeaponAimSourceQualityIds)[number];
 
 export interface MetaverseLocalHeldWeaponGripTelemetrySnapshot {
   readonly adsBlend: number | null;
+  readonly adsAnchorPoseActive: boolean;
+  readonly adsAnchorPositionErrorMeters: number | null;
+  readonly adsAppliedGripDeltaMeters: number | null;
+  readonly adsGripDeltaClamped: boolean;
+  readonly adsPositionalWeight: number | null;
   readonly aimMode: MetaverseRealtimePlayerWeaponAimModeId | null;
+  readonly aimSource: MetaverseLocalHeldWeaponAimSourceId | null;
+  readonly aimSourceQuality: MetaverseLocalHeldWeaponAimSourceQualityId | null;
   readonly attachmentMountKind: "held" | "mounted-holster" | "none";
+  readonly actualWeaponForwardWorld: MetaverseVector3Snapshot | null;
   readonly degradedFrameCount: number;
+  readonly deprecatedAimPoseActive: boolean;
+  readonly desiredWeaponForwardWorld: MetaverseVector3Snapshot | null;
   readonly gripTargetSolveFailureReason:
     | MetaverseLocalHeldWeaponGripDebugSolveFailureReason
     | null;
-  readonly heldSupportMarkerAvailable: boolean;
+  readonly secondaryGripContactAvailable: boolean;
   readonly heldMountSocketName: string | null;
   readonly lastDegradedAgeMs: number | null;
   readonly lastDegradedReason: string | null;
   readonly mainHandGripErrorMeters: number | null;
   readonly mainHandGripSocketComparisonErrorMeters: number | null;
+  readonly mainHandContactFrameId:
+    | MetaverseLocalHeldObjectContactFrameId
+    | null;
+  readonly mainHandAngularErrorRadians: number | null;
   readonly mainHandMaxReachMeters: number | null;
   readonly mainHandPalmSocketComparisonErrorMeters: number | null;
   readonly mainHandPoleAngleRadians: number | null;
@@ -112,6 +238,16 @@ export interface MetaverseLocalHeldWeaponGripTelemetrySnapshot {
   readonly mainHandSolveErrorMeters: number | null;
   readonly mainHandSocket: MetaverseLocalHeldWeaponGripDebugHandSocketId;
   readonly mainHandTargetDistanceMeters: number | null;
+  readonly mainHandWeaponSocketRole: HeldObjectSocketRoleId | null;
+  readonly mainHandWristCorrectionRadians: number | null;
+  readonly legacyFullBodyAimFallbackActive: boolean;
+  readonly legacyPistolShootOverlayActive: boolean;
+  readonly legacyUpperBodyAimOverlayActive: boolean;
+  readonly muzzleAimAngularErrorRadians: number | null;
+  readonly offHandContactFrameId:
+    | MetaverseLocalHeldObjectContactFrameId
+    | null;
+  readonly offHandAngularErrorRadians: number | null;
   readonly offHandFinalErrorMeters: number | null;
   readonly offHandGripMounted: boolean;
   readonly offHandInitialSolveErrorMeters: number | null;
@@ -119,11 +255,15 @@ export interface MetaverseLocalHeldWeaponGripTelemetrySnapshot {
   readonly offHandPreSolveErrorMeters: number | null;
   readonly offHandRefinementPassCount: number;
   readonly offHandSocket: MetaverseLocalHeldWeaponGripDebugHandSocketId;
-  readonly offHandSupportMarkerAvailable: boolean;
+  readonly offHandGripAnchorAvailable: boolean;
+  readonly offHandTargetKind: MetaverseLocalHeldObjectOffHandTargetKind;
+  readonly offHandWeaponSocketRole: HeldObjectSocketRoleId | null;
+  readonly offHandWristCorrectionRadians: number | null;
   readonly phase: MetaverseLocalHeldWeaponGripDebugPhase;
-  readonly servicePistolAdsPoseActive: boolean;
-  readonly servicePistolSupportPalmPoseActive: boolean;
+  readonly poseProfileId: HeldObjectPoseProfileId | null;
   readonly stability: MetaverseLocalHeldWeaponGripDebugStability;
+  readonly supportPalmFade: number | null;
+  readonly supportPalmHintActive: boolean;
   readonly weaponId: string | null;
   readonly weaponStatePresent: boolean;
   readonly worstMainHandGripErrorMeters: number;
@@ -134,6 +274,7 @@ export interface MetaverseTelemetrySnapshot {
   readonly frameDeltaMs: number;
   readonly frameRate: number;
   readonly localHeldWeaponGrip: MetaverseLocalHeldWeaponGripTelemetrySnapshot;
+  readonly projectilePresentation: readonly MetaverseProjectilePresentationDebugSnapshot[];
   readonly renderedFrameCount: number;
   readonly renderer: MetaverseRendererTelemetrySnapshot;
   readonly worldCadence: {
@@ -292,6 +433,9 @@ export interface MetaverseTelemetrySnapshot {
           readonly processedAtTimeMs: number | null;
           readonly sourceProjectileId: string | null;
           readonly rejectionReason: MetaverseCombatActionRejectionReasonId | null;
+          readonly shotResolution:
+            | MetaverseCombatShotResolutionTelemetrySnapshot
+            | null;
           readonly status: MetaverseCombatActionReceiptStatusId | null;
           readonly weaponId: string | null;
         };

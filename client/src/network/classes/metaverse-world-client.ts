@@ -23,8 +23,7 @@ import type {
   MetaverseWorldClientStatusSnapshot
 } from "../types/metaverse-world-client";
 import type {
-  MetaverseWorldIssuePlayerActionInput,
-  MetaverseWorldFireWeaponCommandInput
+  MetaverseWorldIssuePlayerActionInput
 } from "../types/metaverse-world-client-runtime";
 import type { MetaversePlayerIssuedTraversalIntentSnapshot } from "../types/metaverse-player-issued-traversal-intent";
 import type { MetaverseWorldTransport } from "../types/metaverse-world-transport";
@@ -491,27 +490,12 @@ export class MetaverseWorldClient {
     this.#mountedOccupancySync.syncMountedOccupancy(commandInput);
   }
 
-  issuePlayerAction(commandInput: MetaverseWorldIssuePlayerActionInput): void {
+  issuePlayerAction(
+    commandInput: MetaverseWorldIssuePlayerActionInput
+  ): number | null {
     this.#assertNotDisposed();
     this.#connectionLifecycle.bindPlayer(commandInput.playerId);
-    this.#playerSync.issuePlayerAction(commandInput);
-  }
-
-  fireWeapon(commandInput: MetaverseWorldFireWeaponCommandInput): void {
-    this.issuePlayerAction({
-      action: {
-        ...(commandInput.aimMode === undefined
-          ? {}
-          : {
-              aimMode: commandInput.aimMode
-            }),
-        aimSnapshot: commandInput.aimSnapshot,
-        issuedAtAuthoritativeTimeMs: commandInput.issuedAtAuthoritativeTimeMs,
-        kind: "fire-weapon",
-        weaponId: commandInput.weaponId
-      },
-      playerId: commandInput.playerId
-    });
+    return this.#playerSync.issuePlayerAction(commandInput);
   }
 
   async ensureConnected(

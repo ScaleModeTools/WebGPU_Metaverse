@@ -16,7 +16,6 @@ export const metaversePresenceAnimationVocabularyIds = [
   "jump-up",
   "jump-mid",
   "jump-down",
-  "aim",
   "interact",
   "seated"
 ] as const;

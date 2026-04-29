@@ -2,13 +2,16 @@ import type { AnimationMixer, Object3D } from "three/webgpu";
 import type { MetaverseRealtimePlayerWeaponStateSnapshot } from "@webgpu-metaverse/shared";
 
 import { resolveFirstPersonHeadClearanceCameraSnapshot } from "../first-person-camera-clearance";
+import type { HeldObjectAimState } from "./metaverse-scene-held-weapon-pose";
 import {
-  clearHumanoidV2PistolPoseWeights,
+  createMetaverseSemanticAimFrameFromCameraSnapshot,
+  type MetaverseSemanticAimFrame
+} from "../../aim/metaverse-semantic-aim";
+import {
   resolveHeldCharacterAnimationVocabulary,
   shouldUseHeldWeaponCharacterPresentation,
   syncCharacterAnimation,
   syncCharacterPresentation,
-  syncHumanoidV2PistolPoseWeights,
   type MetaverseAttachmentAnimationRuntimeLike,
   type MetaverseCharacterAnimationRuntimeLike
 } from "./metaverse-scene-character-animation";
@@ -18,12 +21,20 @@ import type {
   MetaverseCharacterPresentationSnapshot,
   MetaverseRuntimeConfig
 } from "../../types/metaverse-runtime";
+import type { HeldObjectPoseProfileId } from "@/assets/types/held-object-authoring-manifest";
 
 interface LocalCharacterPresentationRuntimeLike
   extends MetaverseCharacterAnimationRuntimeLike {
   readonly firstPersonHeadAnchorNodes: readonly Object3D[];
   readonly heldWeaponPoseRuntime: object | null;
   readonly mixer: AnimationMixer;
+}
+
+interface LocalHeldObjectAttachmentRuntimeLike
+  extends MetaverseAttachmentAnimationRuntimeLike {
+  readonly holdProfile: {
+    readonly poseProfileId: HeldObjectPoseProfileId;
+  };
 }
 
 export function advanceLocalCharacterAnimation<
@@ -45,6 +56,9 @@ export function advanceLocalCharacterAnimation<
     readonly captureHeldWeaponPoseRuntime: (
       heldWeaponPoseRuntime: NonNullable<TCharacterRuntime["heldWeaponPoseRuntime"]>
     ) => void;
+    readonly prepareHeldWeaponPoseRuntime: (
+      heldWeaponPoseRuntime: NonNullable<TCharacterRuntime["heldWeaponPoseRuntime"]>
+    ) => void;
     readonly restoreHeldWeaponPoseRuntime: (
       heldWeaponPoseRuntime: NonNullable<TCharacterRuntime["heldWeaponPoseRuntime"]>
     ) => void;
@@ -56,10 +70,12 @@ export function advanceLocalCharacterAnimation<
       weaponState,
       mountedCharacterRuntime
     );
-  const useHumanoidV2PistolLayering =
-    heldWeaponPresentationActive &&
-    characterPresentation !== null &&
-    characterRuntime.humanoidV2PistolPoseRuntime !== null;
+
+  if (characterRuntime.heldWeaponPoseRuntime !== null) {
+    dependencies.prepareHeldWeaponPoseRuntime(
+      characterRuntime.heldWeaponPoseRuntime
+    );
+  }
 
   syncCharacterAnimation(
     characterRuntime,
@@ -70,24 +86,12 @@ export function advanceLocalCharacterAnimation<
       weaponState,
       mountedCharacterRuntime
     ),
-    useHumanoidV2PistolLayering,
     characterPresentation?.animationCycleId,
     characterPresentation?.animationPlaybackRateMultiplier
   );
 
-  if (characterRuntime.humanoidV2PistolPoseRuntime !== null) {
-    if (useHumanoidV2PistolLayering) {
-      syncHumanoidV2PistolPoseWeights(
-        characterRuntime.humanoidV2PistolPoseRuntime,
-        cameraSnapshot.pitchRadians,
-        orientation
-      );
-    } else {
-      clearHumanoidV2PistolPoseWeights(
-        characterRuntime.humanoidV2PistolPoseRuntime
-      );
-    }
-  }
+  void cameraSnapshot;
+  void orientation;
 
   characterRuntime.mixer.update(deltaSeconds);
 
@@ -106,7 +110,7 @@ export function advanceLocalCharacterAnimation<
 
 export function syncLocalCharacterPresentation<
   TCharacterRuntime extends LocalCharacterPresentationRuntimeLike,
-  TAttachmentRuntime extends MetaverseAttachmentAnimationRuntimeLike,
+  TAttachmentRuntime extends LocalHeldObjectAttachmentRuntimeLike,
   TMountedCharacterRuntime extends object
 >(
   characterRuntime: TCharacterRuntime,
@@ -117,6 +121,7 @@ export function syncLocalCharacterPresentation<
   bodyPresentation: MetaverseRuntimeConfig["bodyPresentation"],
   weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null,
   weaponAdsBlend: number | null,
+  semanticAimFrame: MetaverseSemanticAimFrame | null,
   dependencies: {
     readonly applyMountedAnchorTransform: (
       characterRuntime: TCharacterRuntime,
@@ -129,9 +134,8 @@ export function syncLocalCharacterPresentation<
       characterRuntime: TCharacterRuntime,
       heldWeaponPoseRuntime: NonNullable<TCharacterRuntime["heldWeaponPoseRuntime"]>,
       attachmentRuntime: TAttachmentRuntime,
-      cameraSnapshot: MetaverseCameraSnapshot,
+      aimState: HeldObjectAimState,
       weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null,
-      weaponAdsBlend?: number | null,
       bodyPresentation?: Pick<
         MetaverseRuntimeConfig["bodyPresentation"],
         | "groundedFirstPersonHeadClearanceMeters"
@@ -181,9 +185,17 @@ export function syncLocalCharacterPresentation<
       characterRuntime,
       characterRuntime.heldWeaponPoseRuntime,
       attachmentRuntime,
-      presentedCameraSnapshot,
+      semanticAimFrame ??
+        createMetaverseSemanticAimFrameFromCameraSnapshot({
+          actorFacingYawRadians: characterPresentation.yawRadians,
+          adsBlend: weaponAdsBlend,
+          attachmentRuntime,
+          cameraSnapshot: presentedCameraSnapshot,
+          quality: "full_camera_ray",
+          source: "local_camera",
+          weaponState
+        }),
       weaponState,
-      weaponAdsBlend,
       bodyPresentation
     );
   }

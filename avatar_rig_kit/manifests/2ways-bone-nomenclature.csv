@@ -1,0 +1,67 @@
+skinJointIndex,nodeIndex,name,humanAlias,parent,children,depth,side,category,isEndLeaf,weightedVertexCount,weightSum
+0,1,root,root / scene-scale orientation bone,,pelvis,0,center,root,False,0,0
+1,2,pelvis,hips / pelvis driver,root,spine_01|thigh_l|thigh_r,1,center,hips,False,0,0
+2,3,spine_01,lower spine,pelvis,spine_02,2,center,spine,False,692,446.099999
+3,4,spine_02,mid spine,spine_01,spine_03,3,center,spine,False,359,222.099999
+4,5,spine_03,upper spine / chest,spine_02,neck_01|clavicle_l|clavicle_r,4,center,spine,False,169,70.7
+5,6,neck_01,neck,spine_03,head,5,center,head_neck,False,204,97.45
+6,7,head,head,neck_01,head_leaf,6,center,head_neck,False,149,78.85
+7,8,head_leaf,head end / head tip,head,,7,center,head_neck,True,193,161.5
+8,9,clavicle_l,left clavicle / shoulder,spine_03,upperarm_l,5,left,arm,False,195,127.05
+9,10,upperarm_l,left upper arm,clavicle_l,lowerarm_l,6,left,arm,False,166,144.5
+10,11,lowerarm_l,left forearm,upperarm_l,hand_l,7,left,arm,False,116,93.0
+11,12,hand_l,left wrist / hand,lowerarm_l,index_01_l|middle_01_l|pinky_01_l|ring_01_l|thumb_01_l,8,left,arm,False,88,56.0
+12,13,index_01_l,left index finger proximal / base,hand_l,index_02_l,9,left,finger,False,392,325.0
+13,14,index_02_l,left index finger intermediate / middle,index_01_l,index_03_l,10,left,finger,False,283,200.0
+14,15,index_03_l,left index finger distal,index_02_l,index_04_leaf_l,11,left,finger,False,177,123.5
+15,16,index_04_leaf_l,left index finger tip end,index_03_l,,12,left,finger,False,29,15.5
+16,17,middle_01_l,left middle finger proximal / base,hand_l,middle_02_l,9,left,finger,False,387,273.0
+17,18,middle_02_l,left middle finger intermediate / middle,middle_01_l,middle_03_l,10,left,finger,False,311,205.5
+18,19,middle_03_l,left middle finger distal,middle_02_l,middle_04_leaf_l,11,left,finger,False,185,125.5
+19,20,middle_04_leaf_l,left middle finger tip end,middle_03_l,,12,left,finger,False,22,12.0
+20,21,pinky_01_l,left pinky finger proximal / base,hand_l,pinky_02_l,9,left,finger,False,414,338.0
+21,22,pinky_02_l,left pinky finger intermediate / middle,pinky_01_l,pinky_03_l,10,left,finger,False,243,172.0
+22,23,pinky_03_l,left pinky finger distal,pinky_02_l,pinky_04_leaf_l,11,left,finger,False,162,108.5
+23,24,pinky_04_leaf_l,left pinky finger tip end,pinky_03_l,,12,left,finger,False,25,14.5
+24,25,ring_01_l,left ring finger proximal / base,hand_l,ring_02_l,9,left,finger,False,396,275.5
+25,26,ring_02_l,left ring finger intermediate / middle,ring_01_l,ring_03_l,10,left,finger,False,253,163.0
+26,27,ring_03_l,left ring finger distal,ring_02_l,ring_04_leaf_l,11,left,finger,False,166,117.0
+27,28,ring_04_leaf_l,left ring finger tip end,ring_03_l,,12,left,finger,False,28,16.5
+28,29,thumb_01_l,left thumb base / CMC-metacarpal,hand_l,thumb_02_l,9,left,finger,False,179,130.5
+29,30,thumb_02_l,left thumb proximal,thumb_01_l,thumb_03_l,10,left,finger,False,263,226.0
+30,31,thumb_03_l,left thumb distal,thumb_02_l,thumb_04_leaf_l,11,left,finger,False,139,125.0
+31,32,thumb_04_leaf_l,left thumb tip end,thumb_03_l,,12,left,finger,False,0,0
+32,33,clavicle_r,right clavicle / shoulder,spine_03,upperarm_r,5,right,arm,False,192,126.05
+33,34,upperarm_r,right upper arm,clavicle_r,lowerarm_r,6,right,arm,False,166,144.5
+34,35,lowerarm_r,right forearm,upperarm_r,hand_r,7,right,arm,False,116,93.0
+35,36,hand_r,right wrist / hand,lowerarm_r,index_01_r|middle_01_r|pinky_01_r|ring_01_r|thumb_01_r,8,right,arm,False,88,56.0
+36,37,index_01_r,right index finger proximal / base,hand_r,index_02_r,9,right,finger,False,392,325.0
+37,38,index_02_r,right index finger intermediate / middle,index_01_r,index_03_r,10,right,finger,False,283,200.0
+38,39,index_03_r,right index finger distal,index_02_r,index_04_leaf_r,11,right,finger,False,177,123.5
+39,40,index_04_leaf_r,right index finger tip end,index_03_r,,12,right,finger,False,29,15.5
+40,41,middle_01_r,right middle finger proximal / base,hand_r,middle_02_r,9,right,finger,False,387,273.0
+41,42,middle_02_r,right middle finger intermediate / middle,middle_01_r,middle_03_r,10,right,finger,False,311,205.5
+42,43,middle_03_r,right middle finger distal,middle_02_r,middle_04_leaf_r,11,right,finger,False,185,125.5
+43,44,middle_04_leaf_r,right middle finger tip end,middle_03_r,,12,right,finger,False,22,12.0
+44,45,pinky_01_r,right pinky finger proximal / base,hand_r,pinky_02_r,9,right,finger,False,414,338.0
+45,46,pinky_02_r,right pinky finger intermediate / middle,pinky_01_r,pinky_03_r,10,right,finger,False,243,172.0
+46,47,pinky_03_r,right pinky finger distal,pinky_02_r,pinky_04_leaf_r,11,right,finger,False,161,108.0
+47,48,pinky_04_leaf_r,right pinky finger tip end,pinky_03_r,,12,right,finger,False,25,14.5
+48,49,ring_01_r,right ring finger proximal / base,hand_r,ring_02_r,9,right,finger,False,396,275.5
+49,50,ring_02_r,right ring finger intermediate / middle,ring_01_r,ring_03_r,10,right,finger,False,254,163.5
+50,51,ring_03_r,right ring finger distal,ring_02_r,ring_04_leaf_r,11,right,finger,False,166,117.0
+51,52,ring_04_leaf_r,right ring finger tip end,ring_03_r,,12,right,finger,False,28,16.5
+52,53,thumb_01_r,right thumb base / CMC-metacarpal,hand_r,thumb_02_r,9,right,finger,False,179,130.5
+53,54,thumb_02_r,right thumb proximal,thumb_01_r,thumb_03_r,10,right,finger,False,263,226.0
+54,55,thumb_03_r,right thumb distal,thumb_02_r,thumb_04_leaf_r,11,right,finger,False,139,125.0
+55,56,thumb_04_leaf_r,right thumb tip end,thumb_03_r,,12,right,finger,False,0,0
+56,57,thigh_l,left thigh / upper leg,pelvis,calf_l,2,left,leg,False,260,159.15
+57,58,calf_l,left calf / lower leg,thigh_l,foot_l,3,left,leg,False,127,105.0
+58,59,foot_l,left foot,calf_l,ball_l,4,left,leg,False,157,135.5
+59,60,ball_l,left ball / toe base,foot_l,ball_leaf_l,5,left,leg,False,40,22.0
+60,61,ball_leaf_l,left toe end,ball_l,,6,left,leg,False,18,9.0
+61,62,thigh_r,right thigh / upper leg,pelvis,calf_r,2,right,leg,False,285,170.05
+62,63,calf_r,right calf / lower leg,thigh_r,foot_r,3,right,leg,False,127,105.0
+63,64,foot_r,right foot,calf_r,ball_r,4,right,leg,False,157,135.5
+64,65,ball_r,right ball / toe base,foot_r,ball_leaf_r,5,right,leg,False,40,22.0
+65,66,ball_leaf_r,right toe end,ball_r,,6,right,leg,False,18,9.0

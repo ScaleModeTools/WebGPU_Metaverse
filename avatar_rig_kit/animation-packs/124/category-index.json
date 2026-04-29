@@ -1,0 +1,2671 @@
+{
+  "generatedAt": "2026-04-27T21:46:14.556Z",
+  "byCategory": {
+    "social_emote": [
+      {
+        "id": "angry",
+        "clipName": "Angry",
+        "durationSeconds": 0.833333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "bow",
+        "clipName": "Bow",
+        "durationSeconds": 3.75,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "confused",
+        "clipName": "Confused",
+        "durationSeconds": 2.916667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "greeting",
+        "clipName": "Greeting",
+        "durationSeconds": 4.833333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "head_nod",
+        "clipName": "Head Nod",
+        "durationSeconds": 0.875,
+        "rootMotion": false,
+        "defaultMask": "neckHead"
+      },
+      {
+        "id": "reject",
+        "clipName": "Reject",
+        "durationSeconds": 3.791667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "victory",
+        "clipName": "Victory",
+        "durationSeconds": 1.666667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "victory_fist_pump",
+        "clipName": "Victory Fist Pump",
+        "durationSeconds": 2.25,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "yes",
+        "clipName": "Yes",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "neckHead"
+      }
+    ],
+    "locomotion_transition": [
+      {
+        "id": "backflip",
+        "clipName": "Backflip",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "climb_up_1m_rm",
+        "clipName": "ClimbUp_1m_RM",
+        "durationSeconds": 0.666667,
+        "rootMotion": true,
+        "defaultMask": "all"
+      },
+      {
+        "id": "jump_land",
+        "clipName": "Jump_Land",
+        "durationSeconds": 1.583333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "jump_loop",
+        "clipName": "Jump_Loop",
+        "durationSeconds": 3.125,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "jump_start",
+        "clipName": "Jump_Start",
+        "durationSeconds": 1.666667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "ninja_jump_idle_loop",
+        "clipName": "NinjaJump_Idle_Loop",
+        "durationSeconds": 2,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "ninja_jump_land",
+        "clipName": "NinjaJump_Land",
+        "durationSeconds": 1.25,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "ninja_jump_start",
+        "clipName": "NinjaJump_Start",
+        "durationSeconds": 0.958333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "roll",
+        "clipName": "Roll",
+        "durationSeconds": 1.833333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "roll_rm",
+        "clipName": "Roll_RM",
+        "durationSeconds": 1.833333,
+        "rootMotion": true,
+        "defaultMask": "all"
+      },
+      {
+        "id": "slide_exit",
+        "clipName": "Slide_Exit",
+        "durationSeconds": 0.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "slide_loop",
+        "clipName": "Slide_Loop",
+        "durationSeconds": 2,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "slide_start",
+        "clipName": "Slide_Start",
+        "durationSeconds": 0.833333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      }
+    ],
+    "interaction_world": [
+      {
+        "id": "chest_open",
+        "clipName": "Chest_Open",
+        "durationSeconds": 1.333333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "consume",
+        "clipName": "Consume",
+        "durationSeconds": 1.333333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "consume_item",
+        "clipName": "Consume Item",
+        "durationSeconds": 4.166667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "farm_harvest",
+        "clipName": "Farm_Harvest",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "farm_plant_seed",
+        "clipName": "Farm_PlantSeed",
+        "durationSeconds": 2.75,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "farm_watering",
+        "clipName": "Farm_Watering",
+        "durationSeconds": 3.791667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "fixing_kneeling",
+        "clipName": "Fixing_Kneeling",
+        "durationSeconds": 6.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "interact",
+        "clipName": "Interact",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "overhand_throw",
+        "clipName": "OverhandThrow",
+        "durationSeconds": 1.333333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pick_up_table",
+        "clipName": "PickUp_Table",
+        "durationSeconds": 1.041667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "push_loop",
+        "clipName": "Push_Loop",
+        "durationSeconds": 3.333333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "throw_object",
+        "clipName": "Throw Object",
+        "durationSeconds": 1.875,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "tree_chopping_loop",
+        "clipName": "TreeChopping_Loop",
+        "durationSeconds": 0.958333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      }
+    ],
+    "locomotion": [
+      {
+        "id": "crawl",
+        "clipName": "Crawl",
+        "durationSeconds": 1.708333,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "crawl_rm",
+        "clipName": "Crawl RM",
+        "durationSeconds": 1.708333,
+        "rootMotion": true,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "crouch_fwd_loop",
+        "clipName": "Crouch_Fwd_Loop",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "flying_forward",
+        "clipName": "Flying Forward",
+        "durationSeconds": 0.5,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "flying_forward_super",
+        "clipName": "Flying Forward Super",
+        "durationSeconds": 0.5,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "jog_fwd_loop",
+        "clipName": "Jog_Fwd_Loop",
+        "durationSeconds": 1.166667,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "run_anime",
+        "clipName": "Run Anime",
+        "durationSeconds": 0.541667,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "sprint_loop",
+        "clipName": "Sprint_Loop",
+        "durationSeconds": 0.833333,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "swim_fwd_loop",
+        "clipName": "Swim_Fwd_Loop",
+        "durationSeconds": 1.666667,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "swim_idle_loop",
+        "clipName": "Swim_Idle_Loop",
+        "durationSeconds": 4.166667,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "walk_carry_loop",
+        "clipName": "Walk_Carry_Loop",
+        "durationSeconds": 2,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "walk_formal_loop",
+        "clipName": "Walk_Formal_Loop",
+        "durationSeconds": 1.666667,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "walk_loop",
+        "clipName": "Walk_Loop",
+        "durationSeconds": 1.666667,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "zombie_walk_fwd_loop",
+        "clipName": "Zombie_Walk_Fwd_Loop",
+        "durationSeconds": 1.333333,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      }
+    ],
+    "posture_state": [
+      {
+        "id": "crouch_idle_loop",
+        "clipName": "Crouch_Idle_Loop",
+        "durationSeconds": 3.666667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "dizzy",
+        "clipName": "Dizzy",
+        "durationSeconds": 2.416667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "kneeling_tired",
+        "clipName": "Kneeling Tired",
+        "durationSeconds": 0.833333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "meditate",
+        "clipName": "Meditate",
+        "durationSeconds": 1.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "shivering",
+        "clipName": "Shivering",
+        "durationSeconds": 0.25,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sitting_enter",
+        "clipName": "Sitting_Enter",
+        "durationSeconds": 1.625,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sitting_exit",
+        "clipName": "Sitting_Exit",
+        "durationSeconds": 1.291667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sitting_idle_loop",
+        "clipName": "Sitting_Idle_Loop",
+        "durationSeconds": 2.083333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sitting_talking_loop",
+        "clipName": "Sitting_Talking_Loop",
+        "durationSeconds": 3.666667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sleeping",
+        "clipName": "Sleeping",
+        "durationSeconds": 1.666667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "tired_hunched",
+        "clipName": "Tired Hunched",
+        "durationSeconds": 1.041667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      }
+    ],
+    "dance": [
+      {
+        "id": "dance_body_roll",
+        "clipName": "Dance Body Roll",
+        "durationSeconds": 6.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "dance_charleston",
+        "clipName": "Dance Charleston",
+        "durationSeconds": 2.333333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "dance_reach_hip",
+        "clipName": "Dance Reach Hip",
+        "durationSeconds": 2.541667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "dance_loop",
+        "clipName": "Dance_Loop",
+        "durationSeconds": 1.25,
+        "rootMotion": false,
+        "defaultMask": "all"
+      }
+    ],
+    "damage_death": [
+      {
+        "id": "death01",
+        "clipName": "Death01",
+        "durationSeconds": 3,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "hit_chest",
+        "clipName": "Hit_Chest",
+        "durationSeconds": 0.416667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "hit_head",
+        "clipName": "Hit_Head",
+        "durationSeconds": 0.541667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "hit_knockback",
+        "clipName": "Hit_Knockback",
+        "durationSeconds": 0.833333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "hit_knockback_rm",
+        "clipName": "Hit_Knockback_RM",
+        "durationSeconds": 0.833333,
+        "rootMotion": true,
+        "defaultMask": "all"
+      }
+    ],
+    "combat_unarmed": [
+      {
+        "id": "defend",
+        "clipName": "Defend",
+        "durationSeconds": 0.958333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "fighting_idle",
+        "clipName": "Fighting Idle",
+        "durationSeconds": 1.708333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "fighting_left_jab",
+        "clipName": "Fighting Left Jab",
+        "durationSeconds": 0.916667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "fighting_right_jab",
+        "clipName": "Fighting Right Jab",
+        "durationSeconds": 0.916667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "melee_hook",
+        "clipName": "Melee_Hook",
+        "durationSeconds": 0.458333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "melee_hook_rec",
+        "clipName": "Melee_Hook_Rec",
+        "durationSeconds": 0.583333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "punch_cross",
+        "clipName": "Punch_Cross",
+        "durationSeconds": 1.25,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "punch_jab",
+        "clipName": "Punch_Jab",
+        "durationSeconds": 1.083333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "zombie_scratch",
+        "clipName": "Zombie_Scratch",
+        "durationSeconds": 1.791667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      }
+    ],
+    "vehicle_prop_state": [
+      {
+        "id": "driving_loop",
+        "clipName": "Driving_Loop",
+        "durationSeconds": 2.083333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      }
+    ],
+    "idle_state": [
+      {
+        "id": "idle_listening",
+        "clipName": "Idle Listening",
+        "durationSeconds": 1.708333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_fold_arms_loop",
+        "clipName": "Idle_FoldArms_Loop",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_lantern_loop",
+        "clipName": "Idle_Lantern_Loop",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_loop",
+        "clipName": "Idle_Loop",
+        "durationSeconds": 3.125,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_no_loop",
+        "clipName": "Idle_No_Loop",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_rail_call",
+        "clipName": "Idle_Rail_Call",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_rail_loop",
+        "clipName": "Idle_Rail_Loop",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_talking_phone_loop",
+        "clipName": "Idle_TalkingPhone_Loop",
+        "durationSeconds": 2.916667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "idle_talking_loop",
+        "clipName": "Idle_Talking_Loop",
+        "durationSeconds": 3.666667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "idle_torch_loop",
+        "clipName": "Idle_Torch_Loop",
+        "durationSeconds": 1.583333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "lay_to_idle",
+        "clipName": "LayToIdle",
+        "durationSeconds": 1.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "zombie_idle_loop",
+        "clipName": "Zombie_Idle_Loop",
+        "durationSeconds": 1.333333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      }
+    ],
+    "combat_weapon": [
+      {
+        "id": "idle_shield_break",
+        "clipName": "Idle_Shield_Break",
+        "durationSeconds": 1.041667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_shield_loop",
+        "clipName": "Idle_Shield_Loop",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "pistol_aim_down",
+        "clipName": "Pistol_Aim_Down",
+        "durationSeconds": 0.208333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pistol_aim_neutral",
+        "clipName": "Pistol_Aim_Neutral",
+        "durationSeconds": 0.208333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pistol_aim_up",
+        "clipName": "Pistol_Aim_Up",
+        "durationSeconds": 0.208333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pistol_idle_loop",
+        "clipName": "Pistol_Idle_Loop",
+        "durationSeconds": 2.083333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pistol_reload",
+        "clipName": "Pistol_Reload",
+        "durationSeconds": 2.083333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pistol_shoot",
+        "clipName": "Pistol_Shoot",
+        "durationSeconds": 0.791667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "shield_dash_rm",
+        "clipName": "Shield_Dash_RM",
+        "durationSeconds": 1.083333,
+        "rootMotion": true,
+        "defaultMask": "all"
+      },
+      {
+        "id": "shield_one_shot",
+        "clipName": "Shield_OneShot",
+        "durationSeconds": 0.833333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_attack",
+        "clipName": "Sword_Attack",
+        "durationSeconds": 1.916667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_attack_rm",
+        "clipName": "Sword_Attack_RM",
+        "durationSeconds": 1.916667,
+        "rootMotion": true,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_block",
+        "clipName": "Sword_Block",
+        "durationSeconds": 1.208333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_dash_rm",
+        "clipName": "Sword_Dash_RM",
+        "durationSeconds": 1.541667,
+        "rootMotion": true,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_idle",
+        "clipName": "Sword_Idle",
+        "durationSeconds": 2.083333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_regular_a",
+        "clipName": "Sword_Regular_A",
+        "durationSeconds": 0.416667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_regular_a_rec",
+        "clipName": "Sword_Regular_A_Rec",
+        "durationSeconds": 0.958333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_regular_b",
+        "clipName": "Sword_Regular_B",
+        "durationSeconds": 0.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_regular_b_rec",
+        "clipName": "Sword_Regular_B_Rec",
+        "durationSeconds": 1,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_regular_c",
+        "clipName": "Sword_Regular_C",
+        "durationSeconds": 2,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_regular_combo",
+        "clipName": "Sword_Regular_Combo",
+        "durationSeconds": 3,
+        "rootMotion": false,
+        "defaultMask": "all"
+      }
+    ],
+    "fitness": [
+      {
+        "id": "jumping_jacks",
+        "clipName": "Jumping Jacks",
+        "durationSeconds": 1.25,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "pushup",
+        "clipName": "Pushup",
+        "durationSeconds": 1.541667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      }
+    ],
+    "magic_power": [
+      {
+        "id": "levitate_entrance",
+        "clipName": "Levitate Entrance",
+        "durationSeconds": 2,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "levitate_idle",
+        "clipName": "Levitate Idle",
+        "durationSeconds": 2,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "power_up",
+        "clipName": "Power Up",
+        "durationSeconds": 0.75,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "spell_simple_enter",
+        "clipName": "Spell_Simple_Enter",
+        "durationSeconds": 0.666667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "spell_simple_exit",
+        "clipName": "Spell_Simple_Exit",
+        "durationSeconds": 0.541667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "spell_simple_idle_loop",
+        "clipName": "Spell_Simple_Idle_Loop",
+        "durationSeconds": 2.625,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "spell_simple_shoot",
+        "clipName": "Spell_Simple_Shoot",
+        "durationSeconds": 0.625,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "two_hand_blast",
+        "clipName": "Two-hand Blast",
+        "durationSeconds": 0.458333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      }
+    ],
+    "reference_pose": [
+      {
+        "id": "rest_pose",
+        "clipName": "Rest Pose",
+        "durationSeconds": 0.416667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "tpose",
+        "clipName": "TPose",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      }
+    ]
+  },
+  "byLoadPack": {
+    "social-emotes": [
+      {
+        "id": "angry",
+        "clipName": "Angry",
+        "durationSeconds": 0.833333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "bow",
+        "clipName": "Bow",
+        "durationSeconds": 3.75,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "confused",
+        "clipName": "Confused",
+        "durationSeconds": 2.916667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "greeting",
+        "clipName": "Greeting",
+        "durationSeconds": 4.833333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "head_nod",
+        "clipName": "Head Nod",
+        "durationSeconds": 0.875,
+        "rootMotion": false,
+        "defaultMask": "neckHead"
+      },
+      {
+        "id": "reject",
+        "clipName": "Reject",
+        "durationSeconds": 3.791667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "victory",
+        "clipName": "Victory",
+        "durationSeconds": 1.666667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "victory_fist_pump",
+        "clipName": "Victory Fist Pump",
+        "durationSeconds": 2.25,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "yes",
+        "clipName": "Yes",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "neckHead"
+      }
+    ],
+    "locomotion-transitions": [
+      {
+        "id": "backflip",
+        "clipName": "Backflip",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "climb_up_1m_rm",
+        "clipName": "ClimbUp_1m_RM",
+        "durationSeconds": 0.666667,
+        "rootMotion": true,
+        "defaultMask": "all"
+      },
+      {
+        "id": "jump_land",
+        "clipName": "Jump_Land",
+        "durationSeconds": 1.583333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "jump_loop",
+        "clipName": "Jump_Loop",
+        "durationSeconds": 3.125,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "jump_start",
+        "clipName": "Jump_Start",
+        "durationSeconds": 1.666667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "ninja_jump_idle_loop",
+        "clipName": "NinjaJump_Idle_Loop",
+        "durationSeconds": 2,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "ninja_jump_land",
+        "clipName": "NinjaJump_Land",
+        "durationSeconds": 1.25,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "ninja_jump_start",
+        "clipName": "NinjaJump_Start",
+        "durationSeconds": 0.958333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "roll",
+        "clipName": "Roll",
+        "durationSeconds": 1.833333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "roll_rm",
+        "clipName": "Roll_RM",
+        "durationSeconds": 1.833333,
+        "rootMotion": true,
+        "defaultMask": "all"
+      },
+      {
+        "id": "slide_exit",
+        "clipName": "Slide_Exit",
+        "durationSeconds": 0.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "slide_loop",
+        "clipName": "Slide_Loop",
+        "durationSeconds": 2,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "slide_start",
+        "clipName": "Slide_Start",
+        "durationSeconds": 0.833333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      }
+    ],
+    "world-interactions": [
+      {
+        "id": "chest_open",
+        "clipName": "Chest_Open",
+        "durationSeconds": 1.333333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "consume",
+        "clipName": "Consume",
+        "durationSeconds": 1.333333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "consume_item",
+        "clipName": "Consume Item",
+        "durationSeconds": 4.166667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "farm_harvest",
+        "clipName": "Farm_Harvest",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "farm_plant_seed",
+        "clipName": "Farm_PlantSeed",
+        "durationSeconds": 2.75,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "farm_watering",
+        "clipName": "Farm_Watering",
+        "durationSeconds": 3.791667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "fixing_kneeling",
+        "clipName": "Fixing_Kneeling",
+        "durationSeconds": 6.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "interact",
+        "clipName": "Interact",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "overhand_throw",
+        "clipName": "OverhandThrow",
+        "durationSeconds": 1.333333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pick_up_table",
+        "clipName": "PickUp_Table",
+        "durationSeconds": 1.041667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "push_loop",
+        "clipName": "Push_Loop",
+        "durationSeconds": 3.333333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "throw_object",
+        "clipName": "Throw Object",
+        "durationSeconds": 1.875,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "tree_chopping_loop",
+        "clipName": "TreeChopping_Loop",
+        "durationSeconds": 0.958333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      }
+    ],
+    "core-locomotion": [
+      {
+        "id": "crawl",
+        "clipName": "Crawl",
+        "durationSeconds": 1.708333,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "crawl_rm",
+        "clipName": "Crawl RM",
+        "durationSeconds": 1.708333,
+        "rootMotion": true,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "crouch_fwd_loop",
+        "clipName": "Crouch_Fwd_Loop",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "flying_forward",
+        "clipName": "Flying Forward",
+        "durationSeconds": 0.5,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "flying_forward_super",
+        "clipName": "Flying Forward Super",
+        "durationSeconds": 0.5,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "jog_fwd_loop",
+        "clipName": "Jog_Fwd_Loop",
+        "durationSeconds": 1.166667,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "run_anime",
+        "clipName": "Run Anime",
+        "durationSeconds": 0.541667,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "sprint_loop",
+        "clipName": "Sprint_Loop",
+        "durationSeconds": 0.833333,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "swim_fwd_loop",
+        "clipName": "Swim_Fwd_Loop",
+        "durationSeconds": 1.666667,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "swim_idle_loop",
+        "clipName": "Swim_Idle_Loop",
+        "durationSeconds": 4.166667,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "walk_carry_loop",
+        "clipName": "Walk_Carry_Loop",
+        "durationSeconds": 2,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "walk_formal_loop",
+        "clipName": "Walk_Formal_Loop",
+        "durationSeconds": 1.666667,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "walk_loop",
+        "clipName": "Walk_Loop",
+        "durationSeconds": 1.666667,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "zombie_walk_fwd_loop",
+        "clipName": "Zombie_Walk_Fwd_Loop",
+        "durationSeconds": 1.333333,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      }
+    ],
+    "posture-states": [
+      {
+        "id": "crouch_idle_loop",
+        "clipName": "Crouch_Idle_Loop",
+        "durationSeconds": 3.666667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "dizzy",
+        "clipName": "Dizzy",
+        "durationSeconds": 2.416667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "kneeling_tired",
+        "clipName": "Kneeling Tired",
+        "durationSeconds": 0.833333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "meditate",
+        "clipName": "Meditate",
+        "durationSeconds": 1.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "shivering",
+        "clipName": "Shivering",
+        "durationSeconds": 0.25,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sitting_enter",
+        "clipName": "Sitting_Enter",
+        "durationSeconds": 1.625,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sitting_exit",
+        "clipName": "Sitting_Exit",
+        "durationSeconds": 1.291667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sitting_idle_loop",
+        "clipName": "Sitting_Idle_Loop",
+        "durationSeconds": 2.083333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sitting_talking_loop",
+        "clipName": "Sitting_Talking_Loop",
+        "durationSeconds": 3.666667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sleeping",
+        "clipName": "Sleeping",
+        "durationSeconds": 1.666667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "tired_hunched",
+        "clipName": "Tired Hunched",
+        "durationSeconds": 1.041667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      }
+    ],
+    "magic-dance-fitness": [
+      {
+        "id": "dance_body_roll",
+        "clipName": "Dance Body Roll",
+        "durationSeconds": 6.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "dance_charleston",
+        "clipName": "Dance Charleston",
+        "durationSeconds": 2.333333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "dance_reach_hip",
+        "clipName": "Dance Reach Hip",
+        "durationSeconds": 2.541667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "dance_loop",
+        "clipName": "Dance_Loop",
+        "durationSeconds": 1.25,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "jumping_jacks",
+        "clipName": "Jumping Jacks",
+        "durationSeconds": 1.25,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "levitate_entrance",
+        "clipName": "Levitate Entrance",
+        "durationSeconds": 2,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "levitate_idle",
+        "clipName": "Levitate Idle",
+        "durationSeconds": 2,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "power_up",
+        "clipName": "Power Up",
+        "durationSeconds": 0.75,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pushup",
+        "clipName": "Pushup",
+        "durationSeconds": 1.541667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "spell_simple_enter",
+        "clipName": "Spell_Simple_Enter",
+        "durationSeconds": 0.666667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "spell_simple_exit",
+        "clipName": "Spell_Simple_Exit",
+        "durationSeconds": 0.541667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "spell_simple_idle_loop",
+        "clipName": "Spell_Simple_Idle_Loop",
+        "durationSeconds": 2.625,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "spell_simple_shoot",
+        "clipName": "Spell_Simple_Shoot",
+        "durationSeconds": 0.625,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "two_hand_blast",
+        "clipName": "Two-hand Blast",
+        "durationSeconds": 0.458333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      }
+    ],
+    "combat": [
+      {
+        "id": "death01",
+        "clipName": "Death01",
+        "durationSeconds": 3,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "defend",
+        "clipName": "Defend",
+        "durationSeconds": 0.958333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "fighting_idle",
+        "clipName": "Fighting Idle",
+        "durationSeconds": 1.708333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "fighting_left_jab",
+        "clipName": "Fighting Left Jab",
+        "durationSeconds": 0.916667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "fighting_right_jab",
+        "clipName": "Fighting Right Jab",
+        "durationSeconds": 0.916667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "hit_chest",
+        "clipName": "Hit_Chest",
+        "durationSeconds": 0.416667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "hit_head",
+        "clipName": "Hit_Head",
+        "durationSeconds": 0.541667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "hit_knockback",
+        "clipName": "Hit_Knockback",
+        "durationSeconds": 0.833333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "hit_knockback_rm",
+        "clipName": "Hit_Knockback_RM",
+        "durationSeconds": 0.833333,
+        "rootMotion": true,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_shield_break",
+        "clipName": "Idle_Shield_Break",
+        "durationSeconds": 1.041667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_shield_loop",
+        "clipName": "Idle_Shield_Loop",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "melee_hook",
+        "clipName": "Melee_Hook",
+        "durationSeconds": 0.458333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "melee_hook_rec",
+        "clipName": "Melee_Hook_Rec",
+        "durationSeconds": 0.583333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pistol_aim_down",
+        "clipName": "Pistol_Aim_Down",
+        "durationSeconds": 0.208333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pistol_aim_neutral",
+        "clipName": "Pistol_Aim_Neutral",
+        "durationSeconds": 0.208333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pistol_aim_up",
+        "clipName": "Pistol_Aim_Up",
+        "durationSeconds": 0.208333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pistol_idle_loop",
+        "clipName": "Pistol_Idle_Loop",
+        "durationSeconds": 2.083333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pistol_reload",
+        "clipName": "Pistol_Reload",
+        "durationSeconds": 2.083333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pistol_shoot",
+        "clipName": "Pistol_Shoot",
+        "durationSeconds": 0.791667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "punch_cross",
+        "clipName": "Punch_Cross",
+        "durationSeconds": 1.25,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "punch_jab",
+        "clipName": "Punch_Jab",
+        "durationSeconds": 1.083333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "shield_dash_rm",
+        "clipName": "Shield_Dash_RM",
+        "durationSeconds": 1.083333,
+        "rootMotion": true,
+        "defaultMask": "all"
+      },
+      {
+        "id": "shield_one_shot",
+        "clipName": "Shield_OneShot",
+        "durationSeconds": 0.833333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_attack",
+        "clipName": "Sword_Attack",
+        "durationSeconds": 1.916667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_attack_rm",
+        "clipName": "Sword_Attack_RM",
+        "durationSeconds": 1.916667,
+        "rootMotion": true,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_block",
+        "clipName": "Sword_Block",
+        "durationSeconds": 1.208333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_dash_rm",
+        "clipName": "Sword_Dash_RM",
+        "durationSeconds": 1.541667,
+        "rootMotion": true,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_idle",
+        "clipName": "Sword_Idle",
+        "durationSeconds": 2.083333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_regular_a",
+        "clipName": "Sword_Regular_A",
+        "durationSeconds": 0.416667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_regular_a_rec",
+        "clipName": "Sword_Regular_A_Rec",
+        "durationSeconds": 0.958333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_regular_b",
+        "clipName": "Sword_Regular_B",
+        "durationSeconds": 0.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_regular_b_rec",
+        "clipName": "Sword_Regular_B_Rec",
+        "durationSeconds": 1,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_regular_c",
+        "clipName": "Sword_Regular_C",
+        "durationSeconds": 2,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_regular_combo",
+        "clipName": "Sword_Regular_Combo",
+        "durationSeconds": 3,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "zombie_scratch",
+        "clipName": "Zombie_Scratch",
+        "durationSeconds": 1.791667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      }
+    ],
+    "vehicle-prop-states": [
+      {
+        "id": "driving_loop",
+        "clipName": "Driving_Loop",
+        "durationSeconds": 2.083333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      }
+    ],
+    "idles": [
+      {
+        "id": "idle_listening",
+        "clipName": "Idle Listening",
+        "durationSeconds": 1.708333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_fold_arms_loop",
+        "clipName": "Idle_FoldArms_Loop",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_lantern_loop",
+        "clipName": "Idle_Lantern_Loop",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_loop",
+        "clipName": "Idle_Loop",
+        "durationSeconds": 3.125,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_no_loop",
+        "clipName": "Idle_No_Loop",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_rail_call",
+        "clipName": "Idle_Rail_Call",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_rail_loop",
+        "clipName": "Idle_Rail_Loop",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_talking_phone_loop",
+        "clipName": "Idle_TalkingPhone_Loop",
+        "durationSeconds": 2.916667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "idle_talking_loop",
+        "clipName": "Idle_Talking_Loop",
+        "durationSeconds": 3.666667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "idle_torch_loop",
+        "clipName": "Idle_Torch_Loop",
+        "durationSeconds": 1.583333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "lay_to_idle",
+        "clipName": "LayToIdle",
+        "durationSeconds": 1.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "zombie_idle_loop",
+        "clipName": "Zombie_Idle_Loop",
+        "durationSeconds": 1.333333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      }
+    ],
+    "reference": [
+      {
+        "id": "rest_pose",
+        "clipName": "Rest Pose",
+        "durationSeconds": 0.416667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "tpose",
+        "clipName": "TPose",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      }
+    ]
+  },
+  "byPlaybackKind": {
+    "one_shot": [
+      {
+        "id": "angry",
+        "clipName": "Angry",
+        "durationSeconds": 0.833333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "backflip",
+        "clipName": "Backflip",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "bow",
+        "clipName": "Bow",
+        "durationSeconds": 3.75,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "chest_open",
+        "clipName": "Chest_Open",
+        "durationSeconds": 1.333333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "climb_up_1m_rm",
+        "clipName": "ClimbUp_1m_RM",
+        "durationSeconds": 0.666667,
+        "rootMotion": true,
+        "defaultMask": "all"
+      },
+      {
+        "id": "confused",
+        "clipName": "Confused",
+        "durationSeconds": 2.916667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "consume",
+        "clipName": "Consume",
+        "durationSeconds": 1.333333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "consume_item",
+        "clipName": "Consume Item",
+        "durationSeconds": 4.166667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "dance_body_roll",
+        "clipName": "Dance Body Roll",
+        "durationSeconds": 6.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "dance_charleston",
+        "clipName": "Dance Charleston",
+        "durationSeconds": 2.333333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "dance_reach_hip",
+        "clipName": "Dance Reach Hip",
+        "durationSeconds": 2.541667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "death01",
+        "clipName": "Death01",
+        "durationSeconds": 3,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "defend",
+        "clipName": "Defend",
+        "durationSeconds": 0.958333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "dizzy",
+        "clipName": "Dizzy",
+        "durationSeconds": 2.416667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "farm_harvest",
+        "clipName": "Farm_Harvest",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "farm_plant_seed",
+        "clipName": "Farm_PlantSeed",
+        "durationSeconds": 2.75,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "farm_watering",
+        "clipName": "Farm_Watering",
+        "durationSeconds": 3.791667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "fighting_left_jab",
+        "clipName": "Fighting Left Jab",
+        "durationSeconds": 0.916667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "fighting_right_jab",
+        "clipName": "Fighting Right Jab",
+        "durationSeconds": 0.916667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "fixing_kneeling",
+        "clipName": "Fixing_Kneeling",
+        "durationSeconds": 6.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "greeting",
+        "clipName": "Greeting",
+        "durationSeconds": 4.833333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "head_nod",
+        "clipName": "Head Nod",
+        "durationSeconds": 0.875,
+        "rootMotion": false,
+        "defaultMask": "neckHead"
+      },
+      {
+        "id": "hit_chest",
+        "clipName": "Hit_Chest",
+        "durationSeconds": 0.416667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "hit_head",
+        "clipName": "Hit_Head",
+        "durationSeconds": 0.541667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_listening",
+        "clipName": "Idle Listening",
+        "durationSeconds": 1.708333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_rail_call",
+        "clipName": "Idle_Rail_Call",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_shield_break",
+        "clipName": "Idle_Shield_Break",
+        "durationSeconds": 1.041667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "interact",
+        "clipName": "Interact",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "jumping_jacks",
+        "clipName": "Jumping Jacks",
+        "durationSeconds": 1.25,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "kneeling_tired",
+        "clipName": "Kneeling Tired",
+        "durationSeconds": 0.833333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "levitate_entrance",
+        "clipName": "Levitate Entrance",
+        "durationSeconds": 2,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "melee_hook",
+        "clipName": "Melee_Hook",
+        "durationSeconds": 0.458333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "overhand_throw",
+        "clipName": "OverhandThrow",
+        "durationSeconds": 1.333333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pick_up_table",
+        "clipName": "PickUp_Table",
+        "durationSeconds": 1.041667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pistol_aim_down",
+        "clipName": "Pistol_Aim_Down",
+        "durationSeconds": 0.208333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pistol_aim_neutral",
+        "clipName": "Pistol_Aim_Neutral",
+        "durationSeconds": 0.208333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pistol_aim_up",
+        "clipName": "Pistol_Aim_Up",
+        "durationSeconds": 0.208333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pistol_reload",
+        "clipName": "Pistol_Reload",
+        "durationSeconds": 2.083333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "pistol_shoot",
+        "clipName": "Pistol_Shoot",
+        "durationSeconds": 0.791667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "power_up",
+        "clipName": "Power Up",
+        "durationSeconds": 0.75,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "punch_cross",
+        "clipName": "Punch_Cross",
+        "durationSeconds": 1.25,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "punch_jab",
+        "clipName": "Punch_Jab",
+        "durationSeconds": 1.083333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "pushup",
+        "clipName": "Pushup",
+        "durationSeconds": 1.541667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "reject",
+        "clipName": "Reject",
+        "durationSeconds": 3.791667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "roll",
+        "clipName": "Roll",
+        "durationSeconds": 1.833333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "roll_rm",
+        "clipName": "Roll_RM",
+        "durationSeconds": 1.833333,
+        "rootMotion": true,
+        "defaultMask": "all"
+      },
+      {
+        "id": "shield_dash_rm",
+        "clipName": "Shield_Dash_RM",
+        "durationSeconds": 1.083333,
+        "rootMotion": true,
+        "defaultMask": "all"
+      },
+      {
+        "id": "shield_one_shot",
+        "clipName": "Shield_OneShot",
+        "durationSeconds": 0.833333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "shivering",
+        "clipName": "Shivering",
+        "durationSeconds": 0.25,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "spell_simple_shoot",
+        "clipName": "Spell_Simple_Shoot",
+        "durationSeconds": 0.625,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "sword_attack",
+        "clipName": "Sword_Attack",
+        "durationSeconds": 1.916667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_attack_rm",
+        "clipName": "Sword_Attack_RM",
+        "durationSeconds": 1.916667,
+        "rootMotion": true,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_block",
+        "clipName": "Sword_Block",
+        "durationSeconds": 1.208333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_dash_rm",
+        "clipName": "Sword_Dash_RM",
+        "durationSeconds": 1.541667,
+        "rootMotion": true,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_regular_a",
+        "clipName": "Sword_Regular_A",
+        "durationSeconds": 0.416667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_regular_b",
+        "clipName": "Sword_Regular_B",
+        "durationSeconds": 0.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_regular_c",
+        "clipName": "Sword_Regular_C",
+        "durationSeconds": 2,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_regular_combo",
+        "clipName": "Sword_Regular_Combo",
+        "durationSeconds": 3,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "throw_object",
+        "clipName": "Throw Object",
+        "durationSeconds": 1.875,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "tired_hunched",
+        "clipName": "Tired Hunched",
+        "durationSeconds": 1.041667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "two_hand_blast",
+        "clipName": "Two-hand Blast",
+        "durationSeconds": 0.458333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "victory",
+        "clipName": "Victory",
+        "durationSeconds": 1.666667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "victory_fist_pump",
+        "clipName": "Victory Fist Pump",
+        "durationSeconds": 2.25,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "yes",
+        "clipName": "Yes",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "neckHead"
+      },
+      {
+        "id": "zombie_scratch",
+        "clipName": "Zombie_Scratch",
+        "durationSeconds": 1.791667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      }
+    ],
+    "loop_candidate": [
+      {
+        "id": "crawl",
+        "clipName": "Crawl",
+        "durationSeconds": 1.708333,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "crawl_rm",
+        "clipName": "Crawl RM",
+        "durationSeconds": 1.708333,
+        "rootMotion": true,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "flying_forward",
+        "clipName": "Flying Forward",
+        "durationSeconds": 0.5,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "flying_forward_super",
+        "clipName": "Flying Forward Super",
+        "durationSeconds": 0.5,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "run_anime",
+        "clipName": "Run Anime",
+        "durationSeconds": 0.541667,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      }
+    ],
+    "loop": [
+      {
+        "id": "crouch_fwd_loop",
+        "clipName": "Crouch_Fwd_Loop",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "crouch_idle_loop",
+        "clipName": "Crouch_Idle_Loop",
+        "durationSeconds": 3.666667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "dance_loop",
+        "clipName": "Dance_Loop",
+        "durationSeconds": 1.25,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "driving_loop",
+        "clipName": "Driving_Loop",
+        "durationSeconds": 2.083333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "fighting_idle",
+        "clipName": "Fighting Idle",
+        "durationSeconds": 1.708333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_fold_arms_loop",
+        "clipName": "Idle_FoldArms_Loop",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_lantern_loop",
+        "clipName": "Idle_Lantern_Loop",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_loop",
+        "clipName": "Idle_Loop",
+        "durationSeconds": 3.125,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_no_loop",
+        "clipName": "Idle_No_Loop",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_rail_loop",
+        "clipName": "Idle_Rail_Loop",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_shield_loop",
+        "clipName": "Idle_Shield_Loop",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "idle_talking_phone_loop",
+        "clipName": "Idle_TalkingPhone_Loop",
+        "durationSeconds": 2.916667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "idle_talking_loop",
+        "clipName": "Idle_Talking_Loop",
+        "durationSeconds": 3.666667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "idle_torch_loop",
+        "clipName": "Idle_Torch_Loop",
+        "durationSeconds": 1.583333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "jog_fwd_loop",
+        "clipName": "Jog_Fwd_Loop",
+        "durationSeconds": 1.166667,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "jump_loop",
+        "clipName": "Jump_Loop",
+        "durationSeconds": 3.125,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "lay_to_idle",
+        "clipName": "LayToIdle",
+        "durationSeconds": 1.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "levitate_idle",
+        "clipName": "Levitate Idle",
+        "durationSeconds": 2,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "meditate",
+        "clipName": "Meditate",
+        "durationSeconds": 1.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "ninja_jump_idle_loop",
+        "clipName": "NinjaJump_Idle_Loop",
+        "durationSeconds": 2,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "pistol_idle_loop",
+        "clipName": "Pistol_Idle_Loop",
+        "durationSeconds": 2.083333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "push_loop",
+        "clipName": "Push_Loop",
+        "durationSeconds": 3.333333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sitting_idle_loop",
+        "clipName": "Sitting_Idle_Loop",
+        "durationSeconds": 2.083333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sitting_talking_loop",
+        "clipName": "Sitting_Talking_Loop",
+        "durationSeconds": 3.666667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sleeping",
+        "clipName": "Sleeping",
+        "durationSeconds": 1.666667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "slide_loop",
+        "clipName": "Slide_Loop",
+        "durationSeconds": 2,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "spell_simple_idle_loop",
+        "clipName": "Spell_Simple_Idle_Loop",
+        "durationSeconds": 2.625,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "sprint_loop",
+        "clipName": "Sprint_Loop",
+        "durationSeconds": 0.833333,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "swim_fwd_loop",
+        "clipName": "Swim_Fwd_Loop",
+        "durationSeconds": 1.666667,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "swim_idle_loop",
+        "clipName": "Swim_Idle_Loop",
+        "durationSeconds": 4.166667,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "sword_idle",
+        "clipName": "Sword_Idle",
+        "durationSeconds": 2.083333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "tree_chopping_loop",
+        "clipName": "TreeChopping_Loop",
+        "durationSeconds": 0.958333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "walk_carry_loop",
+        "clipName": "Walk_Carry_Loop",
+        "durationSeconds": 2,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "walk_formal_loop",
+        "clipName": "Walk_Formal_Loop",
+        "durationSeconds": 1.666667,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "walk_loop",
+        "clipName": "Walk_Loop",
+        "durationSeconds": 1.666667,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      },
+      {
+        "id": "zombie_idle_loop",
+        "clipName": "Zombie_Idle_Loop",
+        "durationSeconds": 1.333333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "zombie_walk_fwd_loop",
+        "clipName": "Zombie_Walk_Fwd_Loop",
+        "durationSeconds": 1.333333,
+        "rootMotion": false,
+        "defaultMask": "locomotionCore"
+      }
+    ],
+    "transition": [
+      {
+        "id": "hit_knockback",
+        "clipName": "Hit_Knockback",
+        "durationSeconds": 0.833333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "hit_knockback_rm",
+        "clipName": "Hit_Knockback_RM",
+        "durationSeconds": 0.833333,
+        "rootMotion": true,
+        "defaultMask": "all"
+      },
+      {
+        "id": "jump_land",
+        "clipName": "Jump_Land",
+        "durationSeconds": 1.583333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "jump_start",
+        "clipName": "Jump_Start",
+        "durationSeconds": 1.666667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "melee_hook_rec",
+        "clipName": "Melee_Hook_Rec",
+        "durationSeconds": 0.583333,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "ninja_jump_land",
+        "clipName": "NinjaJump_Land",
+        "durationSeconds": 1.25,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "ninja_jump_start",
+        "clipName": "NinjaJump_Start",
+        "durationSeconds": 0.958333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sitting_enter",
+        "clipName": "Sitting_Enter",
+        "durationSeconds": 1.625,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sitting_exit",
+        "clipName": "Sitting_Exit",
+        "durationSeconds": 1.291667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "slide_exit",
+        "clipName": "Slide_Exit",
+        "durationSeconds": 0.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "slide_start",
+        "clipName": "Slide_Start",
+        "durationSeconds": 0.833333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "spell_simple_enter",
+        "clipName": "Spell_Simple_Enter",
+        "durationSeconds": 0.666667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "spell_simple_exit",
+        "clipName": "Spell_Simple_Exit",
+        "durationSeconds": 0.541667,
+        "rootMotion": false,
+        "defaultMask": "upperBody"
+      },
+      {
+        "id": "sword_regular_a_rec",
+        "clipName": "Sword_Regular_A_Rec",
+        "durationSeconds": 0.958333,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "sword_regular_b_rec",
+        "clipName": "Sword_Regular_B_Rec",
+        "durationSeconds": 1,
+        "rootMotion": false,
+        "defaultMask": "all"
+      }
+    ],
+    "pose": [
+      {
+        "id": "rest_pose",
+        "clipName": "Rest Pose",
+        "durationSeconds": 0.416667,
+        "rootMotion": false,
+        "defaultMask": "all"
+      },
+      {
+        "id": "tpose",
+        "clipName": "TPose",
+        "durationSeconds": 2.5,
+        "rootMotion": false,
+        "defaultMask": "all"
+      }
+    ]
+  }
+}

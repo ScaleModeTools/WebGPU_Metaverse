@@ -122,7 +122,8 @@ export interface RapierCharacterControllerHandle {
 
 export interface RapierRayColliderHitHandle {
   readonly collider: RapierColliderHandle;
-  readonly toi: number;
+  readonly timeOfImpact?: number;
+  readonly toi?: number;
 }
 
 export interface RapierWorldHandle {

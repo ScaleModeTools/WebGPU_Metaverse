@@ -5,19 +5,33 @@ import { createClientModuleLoader } from "../../load-client-module.mjs";
 
 let clientLoader;
 
+function directionFromYawPitch(yawRadians, pitchRadians) {
+  const horizontalScale = Math.cos(pitchRadians);
+  const x = Math.sin(yawRadians) * horizontalScale;
+  const y = Math.sin(pitchRadians);
+  const z = -Math.cos(yawRadians) * horizontalScale;
+  const length = Math.hypot(x, y, z);
+
+  return Object.freeze({
+    x: x / length,
+    y: y / length,
+    z: z / length
+  });
+}
+
 function createCameraSnapshot({
+  lookDirection = null,
   x = 0,
   y = 1.62,
   z = 0,
   pitchRadians = 0,
   yawRadians = 0
 } = {}) {
+  const resolvedLookDirection =
+    lookDirection ?? directionFromYawPitch(yawRadians, pitchRadians);
+
   return Object.freeze({
-    lookDirection: Object.freeze({
-      x: 0,
-      y: 0,
-      z: -1
-    }),
+    lookDirection: Object.freeze(resolvedLookDirection),
     pitchRadians,
     position: Object.freeze({
       x,
@@ -496,4 +510,323 @@ test("MetaverseRuntimeFrameLoop keeps blocked camera-phase frames neutral and su
   assert.equal(frameLoop.mountedInteraction.focusedMountable, null);
   assert.equal(frameLoop.focusedPortal, null);
   assert.equal(frameLoop.renderedFrameCount, 1);
+});
+
+test("MetaverseRuntimeFrameLoop routes local weapon fire, look sync, and presentation through one semantic aim frame", async () => {
+  const { MetaverseRuntimeFrameLoop } = await clientLoader.load(
+    "/src/metaverse/classes/metaverse-runtime-frame-loop.ts"
+  );
+  const cameraSnapshot = createCameraSnapshot({
+    pitchRadians: -0.32,
+    yawRadians: 1.15,
+    x: 2,
+    y: 1.7,
+    z: -4
+  });
+  const expectedRayForwardWorld = directionFromYawPitch(
+    cameraSnapshot.yawRadians,
+    cameraSnapshot.pitchRadians
+  );
+  const weaponState = Object.freeze({
+    aimMode: "ads",
+    weaponId: "metaverse-service-pistol-v2"
+  });
+  let firedWeapon = null;
+  let syncedLook = null;
+  let syncedWeaponState = null;
+  let presentationAimFrame = null;
+  let localShotActionSequence = null;
+  let localShotOrigin = null;
+  let localShotWeaponId = null;
+  let presentationSynced = false;
+  const projectionOrder = [];
+
+  const frameLoop = new MetaverseRuntimeFrameLoop({
+    authoritativeWorldSync: {
+      syncAuthoritativeWorldSnapshots() {}
+    },
+    bootLifecycle: {
+      resolveRuntimeCameraPhaseState({ liveCameraSnapshot, liveFocusedPortal }) {
+        return {
+          blocksMovementInput: false,
+          hidesLocalCharacter: false,
+          phaseId: "live",
+          presentationSnapshot: {
+            cameraSnapshot: liveCameraSnapshot,
+            focusedPortal: liveFocusedPortal
+          },
+          suppressesInteractionFocus: false
+        };
+      }
+    },
+    combatFeedbackRuntime: {
+      capturePendingLocalShotOrigin({ actionSequence, originWorld, weaponId }) {
+        projectionOrder.push("capture-local-muzzle");
+        localShotActionSequence = actionSequence;
+        localShotOrigin = originWorld;
+        localShotWeaponId = weaponId;
+      },
+      drainQueuedVisualIntents({ resolveRenderedMuzzle }) {
+        projectionOrder.push("drain-visual-intents");
+        assert.equal(presentationSynced, true);
+        assert.notEqual(localShotOrigin, null);
+        assert.equal(
+          resolveRenderedMuzzle?.({
+            playerId: "local-player",
+            role: "projectile.muzzle",
+            weaponId: weaponState.weaponId
+          })?.originWorld.z,
+          -0.52
+        );
+      },
+      registerPendingLocalShot() {},
+      syncAuthoritativeWorld() {},
+    },
+    devicePixelRatio: 1,
+    environmentPhysicsRuntime: {
+      syncDebugPresentation() {},
+      syncDynamicEnvironmentBodyPresentations() {},
+      syncSampledRemotePlayerBlockers() {}
+    },
+    flightInputRuntime: {
+      readSnapshot() {
+        return Object.freeze({
+          boost: false,
+          jump: false,
+          moveAxis: 0,
+          pitchAxis: 0,
+          primaryAction: true,
+          secondaryAction: true,
+          strafeAxis: 0,
+          yawAxis: 0
+        });
+      }
+    },
+    hudPublisher: {
+      trackFrameTelemetry() {}
+    },
+    portals: Object.freeze([]),
+    presenceRuntime: {
+      connectionRequired: false,
+      isJoined: true,
+      syncPresencePose() {},
+      syncRemoteCharacterPresentations() {}
+    },
+    remoteWorldRuntime: {
+      connectionRequired: false,
+      fireWeapon(input) {
+        firedWeapon = input;
+        return {
+          actionSequence: 41,
+          issuedAtAuthoritativeTimeMs: 100,
+          weaponId: input.weaponId
+        };
+      },
+      isConnected: true,
+      readFreshAuthoritativeWorldSnapshot() {
+        return null;
+      },
+      remoteCharacterPresentations: Object.freeze([]),
+      remotePlayerBodyBlockers: Object.freeze([]),
+      previewLocalTraversalIntent() {
+        return "preview";
+      },
+      sampleRemoteWorld() {},
+      syncConnection() {},
+      syncLocalDriverVehicleControl() {},
+      syncLocalPlayerLook(lookSnapshot) {
+        syncedLook = lookSnapshot;
+      },
+      syncLocalPlayerWeaponState(nextWeaponState) {
+        syncedWeaponState = nextWeaponState;
+      },
+      syncLocalTraversalIntent() {
+        return "synced";
+      }
+    },
+    sceneRuntime: {
+      camera: {
+        kind: "render-camera"
+      },
+      scene: {
+        kind: "scene"
+      },
+      readLocalWeaponProjectileMuzzleWorldPosition() {
+        assert.equal(presentationSynced, true);
+        return Object.freeze({ x: 0.21, y: 1.44, z: -0.52 });
+      },
+      readRenderedWeaponMuzzleFrame(query) {
+        assert.equal(presentationSynced, true);
+        return Object.freeze({
+          forwardWorld: null,
+          originWorld: Object.freeze({ x: 0.21, y: 1.44, z: -0.52 }),
+          playerId: query.playerId,
+          sampledAtRenderFrame: 1,
+          source: "rendered-projectile-muzzle",
+          weaponId: query.weaponId,
+          weaponInstanceId: query.weaponInstanceId ?? null
+        });
+      },
+      syncCombatProjectiles() {
+        projectionOrder.push("sync-combat-projectiles");
+      },
+      syncPresentation(
+        _cameraSnapshot,
+        _focusedPortal,
+        _nowMs,
+        _deltaSeconds,
+        _characterPresentationSnapshot,
+        _localWeaponState,
+        _localWeaponAdsBlend,
+        _remoteCharacterPresentations,
+        _mountedEnvironment,
+        _cameraFieldOfViewDegrees,
+        localSemanticAimFrame
+      ) {
+        presentationSynced = true;
+        presentationAimFrame = localSemanticAimFrame;
+        return {
+          focusedMountable: null
+        };
+      },
+      syncViewport() {},
+      triggerCombatPresentationEvent() {}
+    },
+    traversalRuntime: {
+      cameraSnapshot,
+      characterPresentationSnapshot: Object.freeze({
+        playerId: "local-player",
+        yawRadians: 0.8
+      }),
+      locomotionMode: "grounded",
+      mountedEnvironmentSnapshot: null,
+      routedDriverVehicleControlIntentSnapshot: null,
+      resolveLocalTraversalIntentInput() {
+        return null;
+      },
+      advance() {},
+      syncIssuedTraversalIntentSnapshot() {}
+    },
+    weaponPresentationRuntime: {
+      adsBlend: 0.7,
+      cameraFieldOfViewDegrees: 54,
+      firePressedThisFrame: true,
+      weaponState,
+      advance() {}
+    }
+  });
+
+  frameLoop.syncFrame({
+    canvas: {
+      clientHeight: 720,
+      clientWidth: 1280
+    },
+    nowMs: 100,
+    renderer: createFakeRenderer([])
+  });
+
+  assert.deepEqual(syncedLook, {
+    pitchRadians: cameraSnapshot.pitchRadians,
+    yawRadians: cameraSnapshot.yawRadians
+  });
+  assert.equal(syncedWeaponState, weaponState);
+  assert.deepEqual(firedWeapon, {
+    aimMode: weaponState.aimMode,
+    aimSnapshot: {
+      pitchRadians: cameraSnapshot.pitchRadians,
+      rayForwardWorld: {
+        x: expectedRayForwardWorld.x,
+        y: expectedRayForwardWorld.y,
+        z: expectedRayForwardWorld.z
+      },
+      rayOriginWorld: {
+        x: cameraSnapshot.position.x,
+        y: cameraSnapshot.position.y,
+        z: cameraSnapshot.position.z
+      },
+      yawRadians: cameraSnapshot.yawRadians
+    },
+    weaponId: weaponState.weaponId
+  });
+  assert.equal(localShotActionSequence, 41);
+  assert.equal(localShotWeaponId, weaponState.weaponId);
+  assert.deepEqual(localShotOrigin, {
+    x: 0.21,
+    y: 1.44,
+    z: -0.52
+  });
+  assert.deepEqual(projectionOrder, [
+    "capture-local-muzzle",
+    "drain-visual-intents",
+    "sync-combat-projectiles"
+  ]);
+  assert.equal(presentationAimFrame?.source, "local_camera");
+  assert.equal(presentationAimFrame?.quality, "full_camera_ray");
+  assert.equal(presentationAimFrame?.aimMode, weaponState.aimMode);
+  assert.equal(presentationAimFrame?.adsBlend, 0.7);
+  assert.equal(presentationAimFrame?.actorFacingYawRadians, 0.8);
+  assert.equal(presentationAimFrame?.pitchRadians, cameraSnapshot.pitchRadians);
+  assert.equal(presentationAimFrame?.yawRadians, cameraSnapshot.yawRadians);
+  assert.equal(presentationAimFrame?.weaponId, weaponState.weaponId);
+  assert.deepEqual(presentationAimFrame?.cameraForwardWorld, {
+    x: expectedRayForwardWorld.x,
+    y: expectedRayForwardWorld.y,
+    z: expectedRayForwardWorld.z
+  });
+});
+
+test("semantic fire aim snapshots use the camera look ray and reject invalid rays", async () => {
+  const {
+    createMetaverseFireAimSnapshotFromSemanticAimFrame,
+    createMetaverseSemanticAimFrameFromCameraSnapshot
+  } = await clientLoader.load("/src/metaverse/aim/metaverse-semantic-aim.ts");
+  const pitchRadians = -0.24;
+  const yawRadians = 0.52;
+  const expectedRayForwardWorld = directionFromYawPitch(-0.34, 0.18);
+  const cameraSnapshot = Object.freeze({
+    lookDirection: expectedRayForwardWorld,
+    pitchRadians,
+    position: Object.freeze({
+      x: 1.2,
+      y: 1.68,
+      z: -2.5
+    }),
+    yawRadians
+  });
+  const aimFrame = createMetaverseSemanticAimFrameFromCameraSnapshot({
+    cameraSnapshot,
+    quality: "full_camera_ray",
+    source: "local_camera"
+  });
+  const fireAimSnapshot =
+    createMetaverseFireAimSnapshotFromSemanticAimFrame(aimFrame);
+  const rayForwardWorld = fireAimSnapshot.rayForwardWorld;
+  const rayOriginWorld = fireAimSnapshot.rayOriginWorld;
+
+  assert.notEqual(rayForwardWorld, null);
+  assert.notEqual(rayOriginWorld, null);
+  assert.ok(Math.abs(rayForwardWorld.x - expectedRayForwardWorld.x) < 0.000001);
+  assert.ok(Math.abs(rayForwardWorld.y - expectedRayForwardWorld.y) < 0.000001);
+  assert.ok(Math.abs(rayForwardWorld.z - expectedRayForwardWorld.z) < 0.000001);
+  assert.deepEqual(rayOriginWorld, cameraSnapshot.position);
+  assert.equal(fireAimSnapshot.pitchRadians, pitchRadians);
+  assert.equal(fireAimSnapshot.yawRadians, yawRadians);
+
+  const invalidAimFrame = createMetaverseSemanticAimFrameFromCameraSnapshot({
+    cameraSnapshot: {
+      ...cameraSnapshot,
+      lookDirection: Object.freeze({
+        x: 0,
+        y: 0,
+        z: 0
+      })
+    },
+    quality: "full_camera_ray",
+    source: "local_camera"
+  });
+
+  assert.equal(
+    createMetaverseFireAimSnapshotFromSemanticAimFrame(invalidAimFrame),
+    null
+  );
 });

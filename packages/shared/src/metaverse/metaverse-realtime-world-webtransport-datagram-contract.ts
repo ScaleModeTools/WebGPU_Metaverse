@@ -4,6 +4,7 @@ import type {
   MetaverseSyncPlayerWeaponStateCommand,
   MetaverseSyncPlayerTraversalIntentCommand
 } from "./realtime/metaverse-realtime-world-commands.js";
+import type { MetaverseRoomId } from "./metaverse-room-contract.js";
 import {
   createMetaverseSyncPlayerLookIntentCommand,
   createMetaverseSyncDriverVehicleControlCommand,
@@ -23,38 +24,46 @@ export type MetaverseRealtimeWorldWebTransportClientDatagramType =
 
 export interface MetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram {
   readonly command: MetaverseSyncDriverVehicleControlCommand;
+  readonly roomId: MetaverseRoomId;
   readonly type: "world-driver-vehicle-control-datagram";
 }
 
 export interface MetaverseRealtimeWorldWebTransportDriverVehicleControlDatagramInput {
   readonly command: MetaverseSyncDriverVehicleControlCommand;
+  readonly roomId: MetaverseRoomId;
 }
 
 export interface MetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram {
   readonly command: MetaverseSyncPlayerLookIntentCommand;
+  readonly roomId: MetaverseRoomId;
   readonly type: "world-player-look-intent-datagram";
 }
 
 export interface MetaverseRealtimeWorldWebTransportPlayerLookIntentDatagramInput {
   readonly command: MetaverseSyncPlayerLookIntentCommand;
+  readonly roomId: MetaverseRoomId;
 }
 
 export interface MetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram {
   readonly command: MetaverseSyncPlayerTraversalIntentCommand;
+  readonly roomId: MetaverseRoomId;
   readonly type: "world-player-traversal-intent-datagram";
 }
 
 export interface MetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagramInput {
   readonly command: MetaverseSyncPlayerTraversalIntentCommand;
+  readonly roomId: MetaverseRoomId;
 }
 
 export interface MetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagram {
   readonly command: MetaverseSyncPlayerWeaponStateCommand;
+  readonly roomId: MetaverseRoomId;
   readonly type: "world-player-weapon-state-datagram";
 }
 
 export interface MetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagramInput {
   readonly command: MetaverseSyncPlayerWeaponStateCommand;
+  readonly roomId: MetaverseRoomId;
 }
 
 export type MetaverseRealtimeWorldWebTransportClientDatagram =
@@ -68,6 +77,7 @@ export function createMetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram
 ): MetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram {
   return Object.freeze({
     command: createMetaverseSyncPlayerLookIntentCommand(input.command),
+    roomId: input.roomId,
     type: "world-player-look-intent-datagram"
   });
 }
@@ -77,6 +87,7 @@ export function createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDat
 ): MetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram {
   return Object.freeze({
     command: createMetaverseSyncPlayerTraversalIntentCommand(input.command),
+    roomId: input.roomId,
     type: "world-player-traversal-intent-datagram"
   });
 }
@@ -86,6 +97,7 @@ export function createMetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagra
 ): MetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagram {
   return Object.freeze({
     command: createMetaverseSyncPlayerWeaponStateCommand(input.command),
+    roomId: input.roomId,
     type: "world-player-weapon-state-datagram"
   });
 }
@@ -95,6 +107,7 @@ export function createMetaverseRealtimeWorldWebTransportDriverVehicleControlData
 ): MetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram {
   return Object.freeze({
     command: createMetaverseSyncDriverVehicleControlCommand(input.command),
+    roomId: input.roomId,
     type: "world-driver-vehicle-control-datagram"
   });
 }

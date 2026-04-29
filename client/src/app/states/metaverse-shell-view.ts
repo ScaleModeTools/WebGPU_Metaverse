@@ -6,7 +6,7 @@ import {
   type PlayerProfile
 } from "@webgpu-metaverse/shared";
 
-import { reticleManifest } from "../../assets";
+import { reticleManifest } from "../../assets/config/reticle-manifest";
 import { audioFoundationConfig } from "../../audio";
 import type { AudioSessionSnapshot } from "../../audio";
 import { duckHuntGameFoundationConfig } from "../../experiences/duck-hunt/config";

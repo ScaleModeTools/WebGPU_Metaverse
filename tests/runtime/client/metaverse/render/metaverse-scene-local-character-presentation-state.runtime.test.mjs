@@ -88,8 +88,6 @@ test("MetaverseSceneLocalCharacterPresentationState owns local animation advance
     anchorGroup: new Group(),
     firstPersonHeadAnchorNodes: [],
     heldWeaponPoseRuntime: null,
-    humanoidV2PistolLowerBodyActionsByVocabulary: null,
-    humanoidV2PistolPoseRuntime: null,
     mixer: {
       update(deltaSeconds) {
         calls.push(["mixer-update", deltaSeconds]);
@@ -116,12 +114,23 @@ test("MetaverseSceneLocalCharacterPresentationState owns local animation advance
           calls.push(["sync-attachment-mount", nextMountedEnvironment]);
         }
       },
+      heldWeaponGripDebugState: {
+        recordSkippedFrame() {
+          calls.push("record-held-weapon-skipped-frame");
+        },
+        reset() {
+          calls.push("reset-held-weapon-grip-debug-state");
+        }
+      },
       localCharacterPresentationDependencies: {
         captureHeldWeaponPoseRuntime() {
           calls.push("capture-held-weapon-pose-runtime");
         },
         applyMountedAnchorTransform() {
           calls.push("apply-mounted-anchor-transform");
+        },
+        prepareHeldWeaponPoseRuntime() {
+          calls.push("prepare-held-weapon-pose-runtime");
         },
         restoreHeldWeaponPoseRuntime() {
           calls.push("restore-held-weapon-pose-runtime");
@@ -149,6 +158,7 @@ test("MetaverseSceneLocalCharacterPresentationState owns local animation advance
     });
 
   const presentedCameraSnapshot = localCharacterPresentationState.syncPresentation(
+    10,
     cameraSnapshot,
     1 / 60,
     characterPresentation,
@@ -164,8 +174,9 @@ test("MetaverseSceneLocalCharacterPresentationState owns local animation advance
       mountedEnvironment,
       mountedOccupancyPresentationState
     ],
+    "read-mounted-character-runtime",
     ["sync-attachment-mount", mountedOccupancyPresentationState],
-    "read-mounted-character-runtime"
+    "record-held-weapon-skipped-frame"
   ]);
   assert.equal(characterRuntime.anchorGroup.position.x, 1);
   assert.equal(characterRuntime.anchorGroup.position.y, 2);
@@ -173,5 +184,8 @@ test("MetaverseSceneLocalCharacterPresentationState owns local animation advance
 
   localCharacterPresentationState.resetPresentation();
 
-  assert.deepEqual(calls.slice(5), [["sync-attachment-mount", null]]);
+  assert.deepEqual(calls.slice(6), [
+    "reset-held-weapon-grip-debug-state",
+    ["sync-attachment-mount", null]
+  ]);
 });

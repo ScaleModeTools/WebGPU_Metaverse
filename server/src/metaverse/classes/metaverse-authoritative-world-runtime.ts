@@ -21,11 +21,21 @@ import {
   type MetaversePresenceRosterSnapshot
 } from "@webgpu-metaverse/shared/metaverse/presence";
 import type {
+  MetaverseRealtimePlayerWeaponStateSnapshot,
   MetaverseRealtimeWorldClientCommand,
   MetaverseRealtimeWorldEvent,
   MetaverseRealtimeWorldSnapshot,
   MetaverseVehicleId
 } from "@webgpu-metaverse/shared/metaverse/realtime";
+import {
+  createMetaverseRealtimePlayerWeaponStateSnapshot
+} from "@webgpu-metaverse/shared/metaverse/realtime";
+import {
+  createMetaverseWeaponInstanceId,
+  readMetaverseWeaponLayout,
+  type MetaverseWeaponLayoutSnapshot,
+  type MetaverseWeaponSlotId
+} from "@webgpu-metaverse/shared/metaverse";
 
 import { metaverseAuthoritativeWorldRuntimeConfig } from "../config/metaverse-authoritative-world-runtime.js";
 import {
@@ -244,6 +254,54 @@ function createEnvironmentBodyWorldRuntimeState(
   };
 }
 
+function createPlayerWeaponStateFromLayout(
+  weaponLayout: MetaverseWeaponLayoutSnapshot | null,
+  playerId: MetaversePlayerId,
+  requestedActiveSlotId: MetaverseWeaponSlotId | null =
+    weaponLayout?.activeSlotId ?? null,
+  aimMode: "ads" | "hip-fire" = "hip-fire"
+): MetaverseRealtimePlayerWeaponStateSnapshot | null {
+  if (weaponLayout === null) {
+    return null;
+  }
+
+  const equippedSlots = weaponLayout.slots.filter((slot) => slot.equipped);
+
+  if (equippedSlots.length === 0) {
+    return null;
+  }
+
+  const fallbackSlot = equippedSlots[0];
+
+  if (fallbackSlot === undefined) {
+    return null;
+  }
+
+  const activeSlot =
+    (requestedActiveSlotId === null
+      ? null
+      : equippedSlots.find((slot) => slot.slotId === requestedActiveSlotId)) ??
+    equippedSlots.find((slot) => slot.slotId === weaponLayout.activeSlotId) ??
+    fallbackSlot;
+
+  return createMetaverseRealtimePlayerWeaponStateSnapshot({
+    activeSlotId: activeSlot.slotId,
+    aimMode,
+    slots: equippedSlots.map((slot) => ({
+      attachmentId: slot.attachmentId,
+      equipped: slot.equipped,
+      slotId: slot.slotId,
+      weaponId: slot.weaponId,
+      weaponInstanceId: createMetaverseWeaponInstanceId(
+        playerId,
+        slot.slotId,
+        slot.weaponId
+      )
+    })),
+    weaponId: activeSlot.weaponId
+  });
+}
+
 export class MetaverseAuthoritativeWorldRuntime
   implements MetaverseAuthoritativeWorldRuntimeOwner {
   readonly #config: MetaverseAuthoritativeWorldRuntimeConfig;
@@ -329,9 +387,19 @@ export class MetaverseAuthoritativeWorldRuntime
 
   constructor(
     config: Partial<MetaverseAuthoritativeWorldRuntimeConfig> = {},
-    bundleId = resolveDefaultAuthoritativeMetaverseMapBundleId()
+    bundleId = resolveDefaultAuthoritativeMetaverseMapBundleId(),
+    launchVariationId: string | null = null
   ) {
     const bundleInputs = createMetaverseAuthoritativeWorldBundleInputs(bundleId);
+    const launchVariation =
+      (launchVariationId === null
+        ? bundleInputs.bundle.launchVariations[0] ?? null
+        : bundleInputs.bundle.launchVariations.find(
+            (variation) => variation.variationId === launchVariationId
+          ) ?? null);
+    const weaponLayout = readMetaverseWeaponLayout(
+      launchVariation?.weaponLayoutId ?? null
+    );
     const groundedBodyConfig = Object.freeze({
       ...bundleInputs.gameplayProfile.groundedSurfacePolicy
     } satisfies MetaverseWorldSurfacePolicyConfig);
@@ -439,6 +507,8 @@ export class MetaverseAuthoritativeWorldRuntime
 
         return groundedBodyRuntime;
       },
+      createInitialPlayerWeaponState: (playerId) =>
+        createPlayerWeaponStateFromLayout(weaponLayout, playerId),
       createSwimBodyRuntime: () =>
         new MetaverseAuthoritativeSurfaceDriveRuntime(
           {
@@ -643,7 +713,36 @@ export class MetaverseAuthoritativeWorldRuntime
         incrementSnapshotSequence: () => {
           this.#tickState.incrementSnapshotSequence();
         },
-        playersById: this.#playersById
+        playersById: this.#playersById,
+        resolveCanonicalWeaponState: (playerRuntime, command) => {
+          if (weaponLayout === null) {
+            return command.weaponState;
+          }
+
+          if (playerRuntime.weaponState !== null) {
+            return createPlayerWeaponStateFromLayout(
+              weaponLayout,
+              playerRuntime.playerId,
+              playerRuntime.weaponState.activeSlotId,
+              command.weaponState?.aimMode ??
+                playerRuntime.weaponState.aimMode ??
+                "hip-fire"
+            );
+          }
+
+          const requestedActiveSlotId =
+            command.requestedActiveSlotId ??
+            command.weaponState?.activeSlotId ??
+            weaponLayout.activeSlotId ??
+            null;
+
+          return createPlayerWeaponStateFromLayout(
+            weaponLayout,
+            playerRuntime.playerId,
+            requestedActiveSlotId,
+            command.weaponState?.aimMode ?? "hip-fire"
+          );
+        }
       });
     this.#combatAuthority = new MetaverseAuthoritativeCombatAuthority({
       authoritativeCombatRewindEnabled:
@@ -665,6 +764,7 @@ export class MetaverseAuthoritativeWorldRuntime
       physicsRuntime: this.#physicsRuntime,
       playerTraversalColliderHandles: this.#playerTraversalColliderHandles,
       playersById: this.#playersById,
+      readCurrentTick: () => this.#tickState.currentTick,
       readTickIntervalMs: () => Number(this.#config.tickIntervalMs),
       resolveRespawnPose: (playerId, teamId) =>
         this.#resolveRespawnPose(playerId, teamId, bundleInputs),
@@ -774,6 +874,8 @@ export class MetaverseAuthoritativeWorldRuntime
       environmentBodiesByEnvironmentAssetId:
         this.#environmentBodiesByEnvironmentAssetId,
       playersById: this.#playersById,
+      readCombatEventSnapshots: () =>
+        this.#combatAuthority.readCombatEventSnapshots(),
       readCombatFeedSnapshots: () => this.#combatAuthority.readCombatFeedSnapshots(),
       readCombatMatchSnapshot: () => this.#combatAuthority.readCombatMatchSnapshot(),
       readPlayerCombatActionObserverSnapshot: (playerId) =>

@@ -181,7 +181,7 @@ export function MetaverseDeveloperOverlay({
               Weapon: {heldWeaponGrip.weaponId ?? "n/a"} · aim {heldWeaponGrip.aimMode ?? "n/a"} · ads {heldWeaponGrip.adsBlend?.toFixed(2) ?? "n/a"}
             </div>
             <div>
-              Pose: ads pose {heldWeaponGrip.servicePistolAdsPoseActive ? "yes" : "no"} · support palm {heldWeaponGrip.servicePistolSupportPalmPoseActive ? "yes" : "no"} · state {heldWeaponGrip.weaponStatePresent ? "yes" : "no"}
+              Pose: ads anchor {heldWeaponGrip.adsAnchorPoseActive ? "yes" : "no"} · support palm {heldWeaponGrip.supportPalmHintActive ? "yes" : "no"} · off-hand {heldWeaponGrip.offHandTargetKind} · profile {heldWeaponGrip.poseProfileId ?? "n/a"} · state {heldWeaponGrip.weaponStatePresent ? "yes" : "no"}
             </div>
             <div>
               Main {heldWeaponGrip.mainHandSocket} {formatOptionalCentimeters(heldWeaponGrip.mainHandGripErrorMeters)} · grip cmp {formatOptionalCentimeters(heldWeaponGrip.mainHandGripSocketComparisonErrorMeters)} · palm cmp {formatOptionalCentimeters(heldWeaponGrip.mainHandPalmSocketComparisonErrorMeters)}

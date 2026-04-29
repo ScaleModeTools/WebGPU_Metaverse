@@ -4,13 +4,25 @@ import test from "node:test";
 import {
   createMetaverseIssuePlayerActionCommand,
   createMetaversePlayerId,
+  createMetaversePlayerCombatHurtVolumes,
   createMetaverseRealtimePlayerWeaponStateSnapshot,
-  createMetaverseUnmountedTraversalStateSnapshot
+  createMetaverseUnmountedTraversalStateSnapshot,
+  readMetaverseCombatWeaponProfile,
+  resolveMetaverseCombatSemanticWeaponTipFrame
 } from "@webgpu-metaverse/shared";
 
 import { MetaverseAuthoritativeCombatAuthority } from "../../../server/dist/metaverse/authority/combat/metaverse-authoritative-combat-authority.js";
 
-function createPlayerRuntimeState(playerId, teamId, position, yawRadians = 0) {
+function createPlayerRuntimeState(
+  playerId,
+  teamId,
+  position,
+  yawRadians = 0,
+  weaponState = createMetaverseRealtimePlayerWeaponStateSnapshot({
+    aimMode: "hip-fire",
+    weaponId: "metaverse-service-pistol-v2"
+  })
+) {
   return {
     linearVelocityX: 0,
     linearVelocityY: 0,
@@ -28,10 +40,7 @@ function createPlayerRuntimeState(playerId, teamId, position, yawRadians = 0) {
     unmountedTraversalState: createMetaverseUnmountedTraversalStateSnapshot({
       locomotionMode: "grounded"
     }),
-    weaponState: createMetaverseRealtimePlayerWeaponStateSnapshot({
-      aimMode: "hip-fire",
-      weaponId: "metaverse-service-pistol-v2"
-    }),
+    weaponState,
     yawRadians
   };
 }
@@ -49,12 +58,71 @@ function createForwardDirection(origin, target) {
   });
 }
 
+function resolveWeaponTipOrigin(position, yawRadians, weaponId) {
+  const originOffset = readMetaverseCombatWeaponProfile(weaponId)
+    .firingOriginOffset;
+  const forwardX = Math.sin(yawRadians);
+  const forwardZ = -Math.cos(yawRadians);
+  const rightX = Math.cos(yawRadians);
+  const rightZ = Math.sin(yawRadians);
+
+  return Object.freeze({
+    x:
+      position.x +
+      rightX * originOffset.rightMeters +
+      forwardX * originOffset.forwardMeters,
+    y: position.y + originOffset.upMeters,
+    z:
+      position.z +
+      rightZ * originOffset.rightMeters +
+      forwardZ * originOffset.forwardMeters
+  });
+}
+
+function resolveSemanticWeaponTipOrigin(position, yawRadians, weaponId, aimForward) {
+  const weaponProfile = readMetaverseCombatWeaponProfile(weaponId);
+
+  return resolveMetaverseCombatSemanticWeaponTipFrame({
+    actorBodyPosition: position,
+    actorBodyYawRadians: yawRadians,
+    aimYawInfluence: 1,
+    authoredMuzzleFromGrip:
+      weaponProfile.projectilePresentation.authoredMuzzleFromGrip,
+    firingOriginOffset: weaponProfile.firingOriginOffset,
+    objectLocalMuzzleFrame:
+      weaponProfile.projectilePresentation.objectLocalMuzzleFrame,
+    objectLocalPrimaryGripFrame:
+      weaponProfile.projectilePresentation.objectLocalPrimaryGripFrame,
+    primaryGripAnchorOffset:
+      weaponProfile.projectilePresentation.primaryGripAnchorOffset,
+    semanticAimForward: aimForward,
+    semanticLaunchOriginOffset:
+      weaponProfile.projectilePresentation.semanticLaunchOriginOffset
+  }).originWorld;
+}
+
+function readHurtRegionCenter(region) {
+  if (region.shape === "sphere") {
+    return region.sphere.center;
+  }
+
+  return Object.freeze({
+    x: (region.capsule.start.x + region.capsule.end.x) / 2,
+    y: (region.capsule.start.y + region.capsule.end.y) / 2,
+    z: (region.capsule.start.z + region.capsule.end.z) / 2
+  });
+}
+
 function createFireWeaponPlayerActionCommand({
   actionSequence,
   aimMode,
   issuedAtAuthoritativeTimeMs,
+  omitRayForwardWorld = false,
+  omitRayOriginWorld = false,
   origin,
   playerId,
+  rayForwardWorld,
+  rayOriginWorld,
   target,
   weaponId
 }) {
@@ -67,6 +135,16 @@ function createFireWeaponPlayerActionCommand({
       actionSequence,
       aimSnapshot: {
         pitchRadians: Math.atan2(forwardDirection.y, planarMagnitude),
+        ...(omitRayForwardWorld
+          ? {}
+          : {
+              rayForwardWorld: rayForwardWorld ?? forwardDirection
+            }),
+        ...(omitRayOriginWorld
+          ? {}
+          : {
+              rayOriginWorld: rayOriginWorld ?? origin
+            }),
         yawRadians: Math.atan2(forwardDirection.x, -forwardDirection.z)
       },
       issuedAtAuthoritativeTimeMs,
@@ -74,6 +152,57 @@ function createFireWeaponPlayerActionCommand({
       weaponId
     },
     playerId
+  });
+}
+
+function createSwitchActiveWeaponSlotCommand({
+  actionSequence,
+  intendedWeaponInstanceId,
+  issuedAtAuthoritativeTimeMs,
+  playerId,
+  requestedActiveSlotId
+}) {
+  return createMetaverseIssuePlayerActionCommand({
+    action: {
+      actionSequence,
+      ...(intendedWeaponInstanceId === undefined
+        ? {}
+        : { intendedWeaponInstanceId }),
+      issuedAtAuthoritativeTimeMs,
+      kind: "switch-active-weapon-slot",
+      requestedActiveSlotId
+    },
+    playerId
+  });
+}
+
+function createDualWeaponState(playerId, activeSlotId = "primary") {
+  const primaryWeaponInstanceId = `${playerId}:primary:metaverse-service-pistol-v2`;
+  const secondaryWeaponInstanceId = `${playerId}:secondary:metaverse-rocket-launcher-v1`;
+
+  return createMetaverseRealtimePlayerWeaponStateSnapshot({
+    activeSlotId,
+    aimMode: "hip-fire",
+    slots: [
+      {
+        attachmentId: "metaverse-service-pistol-v2",
+        equipped: true,
+        slotId: "primary",
+        weaponId: "metaverse-service-pistol-v2",
+        weaponInstanceId: primaryWeaponInstanceId
+      },
+      {
+        attachmentId: "metaverse-rocket-launcher-v1",
+        equipped: true,
+        slotId: "secondary",
+        weaponId: "metaverse-rocket-launcher-v1",
+        weaponInstanceId: secondaryWeaponInstanceId
+      }
+    ],
+    weaponId:
+      activeSlotId === "secondary"
+        ? "metaverse-rocket-launcher-v1"
+        : "metaverse-service-pistol-v2"
   });
 }
 
@@ -133,14 +262,14 @@ test("MetaverseAuthoritativeCombatAuthority resolves floor-root body/head hits a
     z: 0
   });
   const blueBodyTarget = Object.freeze({
-    x: 0,
+    x: blueRespawnPosition.x,
     y: 0.95,
-    z: -9
+    z: blueRespawnPosition.z
   });
   const blueHeadTarget = Object.freeze({
-    x: 0,
+    x: blueRespawnPosition.x,
     y: 1.58,
-    z: -9
+    z: blueRespawnPosition.z
   });
   const blueRespawnHeadTarget = Object.freeze({
     x: blueRespawnPosition.x,
@@ -245,10 +374,10 @@ test("MetaverseAuthoritativeCombatAuthority resolves floor-root body/head hits a
   assert.equal(damageFeedEvents.length, 2);
   assert.equal(damageFeedEvents[0]?.hitZone, "body");
   assert.equal(damageFeedEvents[0]?.sourceActionSequence, 1);
-  assert.equal(damageFeedEvents[0]?.sourceProjectileId, `${redPlayerId}:1`);
+  assert.equal(damageFeedEvents[0]?.sourceProjectileId, null);
   assert.equal(damageFeedEvents[1]?.hitZone, "head");
   assert.equal(damageFeedEvents[1]?.sourceActionSequence, 2);
-  assert.equal(damageFeedEvents[1]?.sourceProjectileId, `${redPlayerId}:2`);
+  assert.equal(damageFeedEvents[1]?.sourceProjectileId, null);
   assert.equal(preRespawnBlueCombatSnapshot?.alive, false);
   assert.equal(preRespawnBlueCombatSnapshot?.deaths, 1);
   assert.equal(preRespawnBlueCombatSnapshot?.health, 0);
@@ -260,7 +389,7 @@ test("MetaverseAuthoritativeCombatAuthority resolves floor-root body/head hits a
   assert.equal(killFeedEvent?.attackerPlayerId, redPlayerId);
   assert.equal(killFeedEvent?.headshot, true);
   assert.equal(killFeedEvent?.sourceActionSequence, 3);
-  assert.equal(killFeedEvent?.sourceProjectileId, `${redPlayerId}:3`);
+  assert.equal(killFeedEvent?.sourceProjectileId, null);
   assert.equal(killFeedEvent?.targetPlayerId, bluePlayerId);
 
   combatAuthority.acceptIssuePlayerActionCommand(
@@ -333,6 +462,684 @@ test("MetaverseAuthoritativeCombatAuthority resolves floor-root body/head hits a
       )?.shotsHit,
     3
   );
+});
+
+test("MetaverseAuthoritativeCombatAuthority uses validated reticle rays for close hitscan truth", () => {
+  const redPlayerId = createMetaversePlayerId("combat-reticle-red-1");
+  const bluePlayerId = createMetaversePlayerId("combat-reticle-blue-1");
+
+  assert.notEqual(redPlayerId, null);
+  assert.notEqual(bluePlayerId, null);
+
+  const redRootPosition = Object.freeze({
+    x: 0,
+    y: 0,
+    z: 0
+  });
+  const blueRootPosition = Object.freeze({
+    x: 0.8,
+    y: 0,
+    z: -2
+  });
+  const firingReferenceOrigin = resolveWeaponTipOrigin(
+    redRootPosition,
+    0,
+    "metaverse-service-pistol-v2"
+  );
+  const cameraRayOrigin = Object.freeze({
+    x: 0.8,
+    y: 1.62,
+    z: 0
+  });
+  const blueBodyTarget = Object.freeze({
+    x: 0.8,
+    y: 0.95,
+    z: -2
+  });
+  const playersById = new Map([
+    [
+      redPlayerId,
+      createPlayerRuntimeState(redPlayerId, "red", redRootPosition)
+    ],
+    [
+      bluePlayerId,
+      createPlayerRuntimeState(bluePlayerId, "blue", blueRootPosition)
+    ]
+  ]);
+  const combatAuthority = new MetaverseAuthoritativeCombatAuthority({
+    authoritativeCombatRewindEnabled: true,
+    clearDriverVehicleControl() {},
+    clearPlayerTraversalIntent() {},
+    clearPlayerVehicleOccupancy() {},
+    incrementSnapshotSequence() {},
+    physicsRuntime: {
+      castRay() {
+        return null;
+      }
+    },
+    playerTraversalColliderHandles: new Set(),
+    playersById,
+    readTickIntervalMs: () => 33,
+    resolveRespawnPose(_playerId, teamId) {
+      return {
+        position: teamId === "red" ? redRootPosition : blueRootPosition,
+        yawRadians: 0
+      };
+    },
+    syncAuthoritativePlayerLookToCurrentFacing() {},
+    syncPlayerTraversalAuthorityState() {},
+    syncPlayerTraversalBodyRuntimes() {}
+  });
+
+  combatAuthority.syncCombatState(0);
+  combatAuthority.advanceCombatRuntimes(1.1, 1_100);
+
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 1,
+      issuedAtAuthoritativeTimeMs: 1_050,
+      origin: firingReferenceOrigin,
+      playerId: redPlayerId,
+      rayForwardWorld: createForwardDirection(cameraRayOrigin, blueBodyTarget),
+      rayOriginWorld: cameraRayOrigin,
+      target: {
+        x: 0,
+        y: 0.95,
+        z: -2
+      },
+      weaponId: "metaverse-service-pistol-v2"
+    }),
+    1_200
+  );
+
+  assert.equal(
+    combatAuthority
+      .readPlayerCombatSnapshot(redPlayerId)
+      ?.weaponStats.find(
+        (weaponStats) => weaponStats.weaponId === "metaverse-service-pistol-v2"
+      )?.shotsHit,
+    1
+  );
+});
+
+test("MetaverseAuthoritativeCombatAuthority registers upper-chest body hits below head volume", () => {
+  const redPlayerId = createMetaversePlayerId("combat-upper-body-red-1");
+  const bluePlayerId = createMetaversePlayerId("combat-upper-body-blue-1");
+
+  assert.notEqual(redPlayerId, null);
+  assert.notEqual(bluePlayerId, null);
+
+  const redRootPosition = Object.freeze({
+    x: 0,
+    y: 0,
+    z: 0
+  });
+  const blueRootPosition = Object.freeze({
+    x: 0,
+    y: 0,
+    z: -3
+  });
+  const firingReferenceOrigin = resolveWeaponTipOrigin(
+    redRootPosition,
+    0,
+    "metaverse-service-pistol-v2"
+  );
+  const blueUpperChestTarget = Object.freeze({
+    x: blueRootPosition.x,
+    y: 1.34,
+    z: blueRootPosition.z
+  });
+  const combatAuthority = new MetaverseAuthoritativeCombatAuthority({
+    authoritativeCombatRewindEnabled: true,
+    clearDriverVehicleControl() {},
+    clearPlayerTraversalIntent() {},
+    clearPlayerVehicleOccupancy() {},
+    incrementSnapshotSequence() {},
+    physicsRuntime: {
+      castRay() {
+        return null;
+      }
+    },
+    playerTraversalColliderHandles: new Set(),
+    playersById: new Map([
+      [
+        redPlayerId,
+        createPlayerRuntimeState(redPlayerId, "red", redRootPosition)
+      ],
+      [
+        bluePlayerId,
+        createPlayerRuntimeState(bluePlayerId, "blue", blueRootPosition)
+      ]
+    ]),
+    readTickIntervalMs: () => 33,
+    resolveRespawnPose(_playerId, teamId) {
+      return {
+        position: teamId === "red" ? redRootPosition : blueRootPosition,
+        yawRadians: 0
+      };
+    },
+    syncAuthoritativePlayerLookToCurrentFacing() {},
+    syncPlayerTraversalAuthorityState() {},
+    syncPlayerTraversalBodyRuntimes() {}
+  });
+
+  combatAuthority.syncCombatState(0);
+  combatAuthority.advanceCombatRuntimes(1.1, 1_100);
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 1,
+      issuedAtAuthoritativeTimeMs: 1_050,
+      origin: firingReferenceOrigin,
+      playerId: redPlayerId,
+      rayForwardWorld: createForwardDirection(
+        firingReferenceOrigin,
+        blueUpperChestTarget
+      ),
+      rayOriginWorld: firingReferenceOrigin,
+      target: blueUpperChestTarget,
+      weaponId: "metaverse-service-pistol-v2"
+    }),
+    1_200
+  );
+
+  assert.equal(combatAuthority.readPlayerCombatSnapshot(bluePlayerId)?.health, 76);
+  assert.equal(
+    combatAuthority.readPlayerCombatSnapshot(redPlayerId)?.headshotKills,
+    0
+  );
+  assert.equal(
+    combatAuthority
+      .readCombatFeedSnapshots()
+      .find((eventSnapshot) => eventSnapshot.type === "damage")?.hitZone,
+    "body"
+  );
+});
+
+test("MetaverseAuthoritativeCombatAuthority registers humanoid lower-body hurt regions", () => {
+  const redPlayerId = createMetaversePlayerId("combat-leg-red-1");
+  const bluePlayerId = createMetaversePlayerId("combat-leg-blue-1");
+
+  assert.notEqual(redPlayerId, null);
+  assert.notEqual(bluePlayerId, null);
+
+  const redRootPosition = Object.freeze({
+    x: 0,
+    y: 0,
+    z: 0
+  });
+  const blueRootPosition = Object.freeze({
+    x: 0.35,
+    y: 0,
+    z: -3
+  });
+  const firingReferenceOrigin = Object.freeze({
+    x: 0,
+    y: 1.62,
+    z: 0
+  });
+  const blueHurtVolumes = createMetaversePlayerCombatHurtVolumes({
+    activeBodyPosition: blueRootPosition
+  });
+  const blueFootRegion = blueHurtVolumes.regions.find(
+    (region) => region.regionId === "foot_l"
+  );
+
+  assert.notEqual(blueFootRegion, undefined);
+
+  const blueFootTarget = readHurtRegionCenter(blueFootRegion);
+  const playersById = new Map([
+    [
+      redPlayerId,
+      createPlayerRuntimeState(redPlayerId, "red", redRootPosition)
+    ],
+    [
+      bluePlayerId,
+      createPlayerRuntimeState(bluePlayerId, "blue", blueRootPosition)
+    ]
+  ]);
+  const combatAuthority = new MetaverseAuthoritativeCombatAuthority({
+    authoritativeCombatRewindEnabled: true,
+    clearDriverVehicleControl() {},
+    clearPlayerTraversalIntent() {},
+    clearPlayerVehicleOccupancy() {},
+    incrementSnapshotSequence() {},
+    physicsRuntime: {
+      castRay() {
+        return null;
+      }
+    },
+    playerTraversalColliderHandles: new Set(),
+    playersById,
+    readTickIntervalMs: () => 33,
+    resolveRespawnPose(_playerId, teamId) {
+      return {
+        position: teamId === "red" ? redRootPosition : blueRootPosition,
+        yawRadians: 0
+      };
+    },
+    syncAuthoritativePlayerLookToCurrentFacing() {},
+    syncPlayerTraversalAuthorityState() {},
+    syncPlayerTraversalBodyRuntimes() {}
+  });
+
+  combatAuthority.syncCombatState(0);
+  combatAuthority.advanceCombatRuntimes(1.1, 1_100);
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 1,
+      issuedAtAuthoritativeTimeMs: 1_050,
+      origin: firingReferenceOrigin,
+      playerId: redPlayerId,
+      rayForwardWorld: createForwardDirection(
+        firingReferenceOrigin,
+        blueFootTarget
+      ),
+      rayOriginWorld: firingReferenceOrigin,
+      target: blueFootTarget,
+      weaponId: "metaverse-service-pistol-v2"
+    }),
+    1_200
+  );
+
+  assert.equal(
+    combatAuthority
+      .readPlayerCombatSnapshot(redPlayerId)
+      ?.weaponStats.find(
+        (weaponStats) => weaponStats.weaponId === "metaverse-service-pistol-v2"
+      )?.shotsHit,
+    1
+  );
+  assert.equal(combatAuthority.readPlayerCombatSnapshot(bluePlayerId)?.health, 76);
+  assert.equal(
+    combatAuthority
+      .readCombatFeedSnapshots()
+      .find((eventSnapshot) => eventSnapshot.type === "damage")?.hitZone,
+    "body"
+  );
+});
+
+test("MetaverseAuthoritativeCombatAuthority rejects invalid reticle ray origin and direction", () => {
+  const redPlayerId = createMetaversePlayerId("combat-reticle-red-2");
+  const bluePlayerId = createMetaversePlayerId("combat-reticle-blue-2");
+
+  assert.notEqual(redPlayerId, null);
+  assert.notEqual(bluePlayerId, null);
+
+  const redRootPosition = Object.freeze({
+    x: 0,
+    y: 0,
+    z: 0
+  });
+  const blueRootPosition = Object.freeze({
+    x: 0,
+    y: 0,
+    z: -9
+  });
+  const firingReferenceOrigin = Object.freeze({
+    x: 0,
+    y: 1.62,
+    z: 0
+  });
+  const blueBodyTarget = Object.freeze({
+    x: 0,
+    y: 0.95,
+    z: -9
+  });
+  const combatAuthority = new MetaverseAuthoritativeCombatAuthority({
+    authoritativeCombatRewindEnabled: true,
+    clearDriverVehicleControl() {},
+    clearPlayerTraversalIntent() {},
+    clearPlayerVehicleOccupancy() {},
+    incrementSnapshotSequence() {},
+    physicsRuntime: {
+      castRay() {
+        return null;
+      }
+    },
+    playerTraversalColliderHandles: new Set(),
+    playersById: new Map([
+      [
+        redPlayerId,
+        createPlayerRuntimeState(redPlayerId, "red", redRootPosition)
+      ],
+      [
+        bluePlayerId,
+        createPlayerRuntimeState(bluePlayerId, "blue", blueRootPosition)
+      ]
+    ]),
+    readTickIntervalMs: () => 33,
+    resolveRespawnPose(_playerId, teamId) {
+      return {
+        position: teamId === "red" ? redRootPosition : blueRootPosition,
+        yawRadians: 0
+      };
+    },
+    syncAuthoritativePlayerLookToCurrentFacing() {},
+    syncPlayerTraversalAuthorityState() {},
+    syncPlayerTraversalBodyRuntimes() {}
+  });
+
+  combatAuthority.syncCombatState(0);
+  combatAuthority.advanceCombatRuntimes(1.1, 1_100);
+
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 1,
+      issuedAtAuthoritativeTimeMs: 1_050,
+      origin: firingReferenceOrigin,
+      playerId: redPlayerId,
+      rayForwardWorld: createForwardDirection(firingReferenceOrigin, blueBodyTarget),
+      rayOriginWorld: {
+        x: 10,
+        y: 1.62,
+        z: 0
+      },
+      target: blueBodyTarget,
+      weaponId: "metaverse-service-pistol-v2"
+    }),
+    1_200
+  );
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 2,
+      issuedAtAuthoritativeTimeMs: 1_250,
+      origin: firingReferenceOrigin,
+      playerId: redPlayerId,
+      rayForwardWorld: {
+        x: 0,
+        y: 0,
+        z: 0
+      },
+      rayOriginWorld: firingReferenceOrigin,
+      target: blueBodyTarget,
+      weaponId: "metaverse-service-pistol-v2"
+    }),
+    1_300
+  );
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 3,
+      issuedAtAuthoritativeTimeMs: 1_350,
+      omitRayOriginWorld: true,
+      origin: firingReferenceOrigin,
+      playerId: redPlayerId,
+      target: blueBodyTarget,
+      weaponId: "metaverse-service-pistol-v2"
+    }),
+    1_400
+  );
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 4,
+      issuedAtAuthoritativeTimeMs: 1_450,
+      omitRayForwardWorld: true,
+      origin: firingReferenceOrigin,
+      playerId: redPlayerId,
+      target: blueBodyTarget,
+      weaponId: "metaverse-service-pistol-v2"
+    }),
+    1_500
+  );
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 5,
+      issuedAtAuthoritativeTimeMs: 1_550,
+      omitRayForwardWorld: true,
+      omitRayOriginWorld: true,
+      origin: firingReferenceOrigin,
+      playerId: redPlayerId,
+      target: blueBodyTarget,
+      weaponId: "metaverse-service-pistol-v2"
+    }),
+    1_600
+  );
+
+  const receiptSnapshot =
+    combatAuthority.readPlayerCombatActionObserverSnapshot(redPlayerId);
+
+  assert.equal(
+    receiptSnapshot?.recentPlayerActionReceipts[0]?.rejectionReason,
+    "invalid-origin"
+  );
+  assert.equal(
+    receiptSnapshot?.recentPlayerActionReceipts[1]?.rejectionReason,
+    "invalid-direction"
+  );
+  assert.equal(
+    receiptSnapshot?.recentPlayerActionReceipts[2]?.rejectionReason,
+    "invalid-origin"
+  );
+  assert.equal(
+    receiptSnapshot?.recentPlayerActionReceipts[3]?.rejectionReason,
+    "invalid-direction"
+  );
+  assert.equal(
+    receiptSnapshot?.recentPlayerActionReceipts[4]?.rejectionReason,
+    "invalid-origin"
+  );
+  assert.equal(
+    receiptSnapshot?.latestShotResolutionTelemetry?.finalReason,
+    "rejected-missing-origin"
+  );
+});
+
+test("MetaverseAuthoritativeCombatAuthority validates camera-ray hits against authoritative firing line of sight", () => {
+  const redPlayerId = createMetaversePlayerId("combat-reticle-red-3");
+  const bluePlayerId = createMetaversePlayerId("combat-reticle-blue-3");
+
+  assert.notEqual(redPlayerId, null);
+  assert.notEqual(bluePlayerId, null);
+
+  const redRootPosition = Object.freeze({
+    x: 0,
+    y: 0,
+    z: 0
+  });
+  const blueRootPosition = Object.freeze({
+    x: 0.8,
+    y: 0,
+    z: -2
+  });
+  const firingReferenceOrigin = resolveWeaponTipOrigin(
+    redRootPosition,
+    0,
+    "metaverse-service-pistol-v2"
+  );
+  const cameraRayOrigin = Object.freeze({
+    x: 0.8,
+    y: 1.62,
+    z: 0
+  });
+  const blueBodyTarget = Object.freeze({
+    x: 0.8,
+    y: 0.95,
+    z: -2
+  });
+  const combatAuthority = new MetaverseAuthoritativeCombatAuthority({
+    authoritativeCombatRewindEnabled: true,
+    clearDriverVehicleControl() {},
+    clearPlayerTraversalIntent() {},
+    clearPlayerVehicleOccupancy() {},
+    incrementSnapshotSequence() {},
+    physicsRuntime: {
+      castRay(origin, direction, maxDistanceMeters) {
+        if (
+          Math.abs(origin.x - firingReferenceOrigin.x) < 0.000001 &&
+          Math.abs(origin.z - firingReferenceOrigin.z) < 0.000001
+        ) {
+          return Object.freeze({
+            collider: 42,
+            distanceMeters: Math.min(0.5, maxDistanceMeters),
+            point: Object.freeze({
+              x: origin.x + direction.x * 0.5,
+              y: origin.y + direction.y * 0.5,
+              z: origin.z + direction.z * 0.5
+            })
+          });
+        }
+
+        return null;
+      }
+    },
+    playerTraversalColliderHandles: new Set(),
+    playersById: new Map([
+      [
+        redPlayerId,
+        createPlayerRuntimeState(redPlayerId, "red", redRootPosition)
+      ],
+      [
+        bluePlayerId,
+        createPlayerRuntimeState(bluePlayerId, "blue", blueRootPosition)
+      ]
+    ]),
+    readTickIntervalMs: () => 33,
+    resolveRespawnPose(_playerId, teamId) {
+      return {
+        position: teamId === "red" ? redRootPosition : blueRootPosition,
+        yawRadians: 0
+      };
+    },
+    syncAuthoritativePlayerLookToCurrentFacing() {},
+    syncPlayerTraversalAuthorityState() {},
+    syncPlayerTraversalBodyRuntimes() {}
+  });
+
+  combatAuthority.syncCombatState(0);
+  combatAuthority.advanceCombatRuntimes(1.1, 1_100);
+
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 1,
+      issuedAtAuthoritativeTimeMs: 1_050,
+      origin: firingReferenceOrigin,
+      playerId: redPlayerId,
+      rayForwardWorld: createForwardDirection(cameraRayOrigin, blueBodyTarget),
+      rayOriginWorld: cameraRayOrigin,
+      target: {
+        x: 0,
+        y: 0.95,
+        z: -2
+      },
+      weaponId: "metaverse-service-pistol-v2"
+    }),
+    1_200
+  );
+
+  assert.equal(
+    combatAuthority
+      .readPlayerCombatSnapshot(redPlayerId)
+      ?.weaponStats.find(
+        (weaponStats) => weaponStats.weaponId === "metaverse-service-pistol-v2"
+      )?.shotsHit,
+    0
+  );
+  assert.equal(
+    combatAuthority.readPlayerCombatActionObserverSnapshot(redPlayerId)
+      ?.latestShotResolutionTelemetry?.finalReason,
+    "blocked-by-firing-reference-los"
+  );
+  assert.equal(
+    combatAuthority.readPlayerCombatActionObserverSnapshot(redPlayerId)
+      ?.latestShotResolutionTelemetry?.lineOfSightBlocked,
+    true
+  );
+});
+
+test("MetaverseAuthoritativeCombatAuthority orders world blockers and player hits on the same semantic ray", () => {
+  const redPlayerId = createMetaversePlayerId("combat-hit-order-red-1");
+  const bluePlayerId = createMetaversePlayerId("combat-hit-order-blue-1");
+
+  assert.notEqual(redPlayerId, null);
+  assert.notEqual(bluePlayerId, null);
+
+  const redRootPosition = Object.freeze({ x: 0, y: 0, z: 0 });
+  const blueRootPosition = Object.freeze({ x: 0, y: 0, z: -3 });
+  const firingReferenceOrigin = Object.freeze({ x: 0, y: 1.62, z: 0 });
+  const blueBodyTarget = Object.freeze({ x: 0, y: 0.95, z: -3 });
+  let worldHitDistanceMeters = 0.5;
+  const combatAuthority = new MetaverseAuthoritativeCombatAuthority({
+    authoritativeCombatRewindEnabled: true,
+    clearDriverVehicleControl() {},
+    clearPlayerTraversalIntent() {},
+    clearPlayerVehicleOccupancy() {},
+    incrementSnapshotSequence() {},
+    physicsRuntime: {
+      castRay(origin, direction) {
+        return Object.freeze({
+          collider: 42,
+          distanceMeters: worldHitDistanceMeters,
+          point: Object.freeze({
+            x: origin.x + direction.x * worldHitDistanceMeters,
+            y: origin.y + direction.y * worldHitDistanceMeters,
+            z: origin.z + direction.z * worldHitDistanceMeters
+          })
+        });
+      }
+    },
+    playerTraversalColliderHandles: new Set(),
+    playersById: new Map([
+      [redPlayerId, createPlayerRuntimeState(redPlayerId, "red", redRootPosition)],
+      [bluePlayerId, createPlayerRuntimeState(bluePlayerId, "blue", blueRootPosition)]
+    ]),
+    readTickIntervalMs: () => 33,
+    resolveRespawnPose(_playerId, teamId) {
+      return {
+        position: teamId === "red" ? redRootPosition : blueRootPosition,
+        yawRadians: 0
+      };
+    },
+    syncAuthoritativePlayerLookToCurrentFacing() {},
+    syncPlayerTraversalAuthorityState() {},
+    syncPlayerTraversalBodyRuntimes() {}
+  });
+
+  combatAuthority.syncCombatState(0);
+  combatAuthority.advanceCombatRuntimes(1.1, 1_100);
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 1,
+      issuedAtAuthoritativeTimeMs: 1_050,
+      origin: firingReferenceOrigin,
+      playerId: redPlayerId,
+      target: blueBodyTarget,
+      weaponId: "metaverse-service-pistol-v2"
+    }),
+    1_200
+  );
+
+  assert.equal(
+    combatAuthority.readPlayerCombatActionObserverSnapshot(redPlayerId)
+      ?.latestShotResolutionTelemetry?.finalReason,
+    "hit-world-before-player"
+  );
+  assert.equal(
+    combatAuthority
+      .readPlayerCombatSnapshot(redPlayerId)
+      ?.weaponStats.find(
+        (weaponStats) => weaponStats.weaponId === "metaverse-service-pistol-v2"
+      )?.shotsHit,
+    0
+  );
+
+  worldHitDistanceMeters = 9;
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 2,
+      issuedAtAuthoritativeTimeMs: 1_250,
+      origin: firingReferenceOrigin,
+      playerId: redPlayerId,
+      target: blueBodyTarget,
+      weaponId: "metaverse-service-pistol-v2"
+    }),
+    1_500
+  );
+
+  assert.equal(
+    combatAuthority.readPlayerCombatActionObserverSnapshot(redPlayerId)
+      ?.latestShotResolutionTelemetry?.finalReason,
+    "hit-player"
+  );
+  assert.equal(combatAuthority.readPlayerCombatSnapshot(bluePlayerId)?.health, 76);
 });
 
 test("MetaverseAuthoritativeCombatAuthority publishes exactly-once combat action receipts for accepted and rejected fire commands", () => {
@@ -430,6 +1237,17 @@ test("MetaverseAuthoritativeCombatAuthority publishes exactly-once combat action
   );
   assert.equal(
     acceptedReceiptSnapshot?.recentPlayerActionReceipts[0]?.sourceProjectileId,
+    null
+  );
+  assert.equal(combatAuthority.readProjectileSnapshots().length, 0);
+  assert.deepEqual(
+    combatAuthority
+      .readCombatEventSnapshots()
+      .map((eventSnapshot) => eventSnapshot.eventKind),
+    ["fire-accepted", "hitscan-resolved"]
+  );
+  assert.equal(
+    combatAuthority.readCombatEventSnapshots()[0]?.shotId,
     `${redPlayerId}:1`
   );
 
@@ -467,7 +1285,7 @@ test("MetaverseAuthoritativeCombatAuthority publishes exactly-once combat action
   const rejectedReceiptSnapshot =
     combatAuthority.readPlayerCombatActionObserverSnapshot(redPlayerId);
 
-  assert.equal(snapshotSequence, snapshotSequenceAfterAcceptedShot + 1);
+  assert.ok(snapshotSequence > snapshotSequenceAfterAcceptedShot);
   assert.equal(
     rejectedReceiptSnapshot?.highestProcessedPlayerActionSequence,
     2
@@ -484,6 +1302,1235 @@ test("MetaverseAuthoritativeCombatAuthority publishes exactly-once combat action
     rejectedReceiptSnapshot?.recentPlayerActionReceipts[1]?.sourceProjectileId,
     null
   );
+  assert.deepEqual(
+    combatAuthority
+      .readCombatEventSnapshots()
+      .map((eventSnapshot) => eventSnapshot.eventKind),
+    ["fire-accepted", "hitscan-resolved", "fire-rejected"]
+  );
+});
+
+test("MetaverseAuthoritativeCombatAuthority rejects inactive pistol and accepts active rocket fire by server slot truth", () => {
+  const redPlayerId = createMetaversePlayerId("combat-loadout-red-1");
+  const bluePlayerId = createMetaversePlayerId("combat-loadout-blue-1");
+
+  assert.notEqual(redPlayerId, null);
+  assert.notEqual(bluePlayerId, null);
+
+  const redRootPosition = Object.freeze({
+    x: 0,
+    y: 0,
+    z: 0
+  });
+  const blueRootPosition = Object.freeze({
+    x: 0,
+    y: 0,
+    z: -9
+  });
+  const redMuzzleOrigin = Object.freeze({
+    x: 0,
+    y: 1.62,
+    z: 0
+  });
+  const target = Object.freeze({
+    x: 0,
+    y: 1.4,
+    z: -10
+  });
+  const rocketActiveWeaponState = createMetaverseRealtimePlayerWeaponStateSnapshot({
+    activeSlotId: "secondary",
+    aimMode: "hip-fire",
+    slots: [
+      {
+        attachmentId: "metaverse-service-pistol-v2",
+        equipped: true,
+        slotId: "primary",
+        weaponId: "metaverse-service-pistol-v2",
+        weaponInstanceId: "red:primary:metaverse-service-pistol-v2"
+      },
+      {
+        attachmentId: "metaverse-rocket-launcher-v1",
+        equipped: true,
+        slotId: "secondary",
+        weaponId: "metaverse-rocket-launcher-v1",
+        weaponInstanceId: "red:secondary:metaverse-rocket-launcher-v1"
+      }
+    ],
+    weaponId: "metaverse-rocket-launcher-v1"
+  });
+  const combatAuthority = new MetaverseAuthoritativeCombatAuthority({
+    clearDriverVehicleControl() {},
+    clearPlayerTraversalIntent() {},
+    clearPlayerVehicleOccupancy() {},
+    incrementSnapshotSequence() {},
+    physicsRuntime: {
+      castRay() {
+        return null;
+      }
+    },
+    playerTraversalColliderHandles: new Set(),
+    playersById: new Map([
+      [
+        redPlayerId,
+        createPlayerRuntimeState(
+          redPlayerId,
+          "red",
+          redRootPosition,
+          0,
+          rocketActiveWeaponState
+        )
+      ],
+      [
+        bluePlayerId,
+        createPlayerRuntimeState(bluePlayerId, "blue", blueRootPosition)
+      ]
+    ]),
+    readTickIntervalMs: () => 33,
+    resolveRespawnPose() {
+      return {
+        position: redRootPosition,
+        yawRadians: 0
+      };
+    },
+    syncAuthoritativePlayerLookToCurrentFacing() {},
+    syncPlayerTraversalAuthorityState() {},
+    syncPlayerTraversalBodyRuntimes() {}
+  });
+
+  combatAuthority.syncCombatState(0);
+  combatAuthority.advanceCombatRuntimes(1.1, 1_100);
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 1,
+      issuedAtAuthoritativeTimeMs: 1_050,
+      origin: redMuzzleOrigin,
+      playerId: redPlayerId,
+      target,
+      weaponId: "metaverse-service-pistol-v2"
+    }),
+    1_200
+  );
+
+  assert.equal(
+    combatAuthority.readPlayerCombatActionObserverSnapshot(redPlayerId)
+      ?.recentPlayerActionReceipts[0]?.rejectionReason,
+    "inactive-weapon"
+  );
+
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 2,
+      issuedAtAuthoritativeTimeMs: 1_250,
+      origin: redMuzzleOrigin,
+      playerId: redPlayerId,
+      target,
+      weaponId: "metaverse-rocket-launcher-v1"
+    }),
+    1_250
+  );
+
+  assert.equal(
+    combatAuthority.readPlayerCombatActionObserverSnapshot(redPlayerId)
+      ?.recentPlayerActionReceipts[1]?.rejectionReason,
+    null
+  );
+  assert.equal(
+    combatAuthority.readPlayerCombatActionObserverSnapshot(redPlayerId)
+      ?.recentPlayerActionReceipts[1]?.status,
+    "accepted"
+  );
+  assert.equal(combatAuthority.readProjectileSnapshots().length, 1);
+  assert.equal(
+    combatAuthority.readProjectileSnapshots()[0]?.weaponId,
+    "metaverse-rocket-launcher-v1"
+  );
+  assert.deepEqual(
+    combatAuthority
+      .readCombatEventSnapshots()
+      .map((eventSnapshot) => eventSnapshot.eventKind),
+    ["fire-rejected", "fire-accepted", "projectile-spawned"]
+  );
+  assert.equal(
+    combatAuthority.readCombatEventSnapshots()[2]?.projectileId,
+    `${redPlayerId}:2`
+  );
+});
+
+test("MetaverseAuthoritativeCombatAuthority applies sequenced weapon slot switches before fire validation", () => {
+  const redPlayerId = createMetaversePlayerId("combat-switch-red-1");
+  const bluePlayerId = createMetaversePlayerId("combat-switch-blue-1");
+
+  assert.notEqual(redPlayerId, null);
+  assert.notEqual(bluePlayerId, null);
+
+  const redRootPosition = Object.freeze({ x: 0, y: 0, z: 0 });
+  const blueRootPosition = Object.freeze({ x: 0, y: 0, z: -9 });
+  const redMuzzleOrigin = Object.freeze({ x: 0, y: 1.62, z: 0 });
+  const target = Object.freeze({ x: 0, y: 1.4, z: -10 });
+  const redWeaponState = createDualWeaponState(redPlayerId, "primary");
+  const redPlayerRuntime = createPlayerRuntimeState(
+    redPlayerId,
+    "red",
+    redRootPosition,
+    0,
+    redWeaponState
+  );
+  const combatAuthority = new MetaverseAuthoritativeCombatAuthority({
+    clearDriverVehicleControl() {},
+    clearPlayerTraversalIntent() {},
+    clearPlayerVehicleOccupancy() {},
+    incrementSnapshotSequence() {},
+    physicsRuntime: {
+      castRay() {
+        return null;
+      }
+    },
+    playerTraversalColliderHandles: new Set(),
+    playersById: new Map([
+      [redPlayerId, redPlayerRuntime],
+      [
+        bluePlayerId,
+        createPlayerRuntimeState(bluePlayerId, "blue", blueRootPosition)
+      ]
+    ]),
+    readTickIntervalMs: () => 33,
+    resolveRespawnPose() {
+      return {
+        position: redRootPosition,
+        yawRadians: 0
+      };
+    },
+    syncAuthoritativePlayerLookToCurrentFacing() {},
+    syncPlayerTraversalAuthorityState() {},
+    syncPlayerTraversalBodyRuntimes() {}
+  });
+
+  combatAuthority.syncCombatState(0);
+  combatAuthority.advanceCombatRuntimes(1.1, 1_100);
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 1,
+      issuedAtAuthoritativeTimeMs: 1_100,
+      origin: redMuzzleOrigin,
+      playerId: redPlayerId,
+      target,
+      weaponId: "metaverse-rocket-launcher-v1"
+    }),
+    1_120
+  );
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createSwitchActiveWeaponSlotCommand({
+      actionSequence: 2,
+      intendedWeaponInstanceId:
+        redWeaponState.slots[1]?.weaponInstanceId ?? "missing-secondary",
+      issuedAtAuthoritativeTimeMs: 1_130,
+      playerId: redPlayerId,
+      requestedActiveSlotId: "secondary"
+    }),
+    1_130
+  );
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 3,
+      issuedAtAuthoritativeTimeMs: 1_250,
+      origin: redMuzzleOrigin,
+      playerId: redPlayerId,
+      target,
+      weaponId: "metaverse-rocket-launcher-v1"
+    }),
+    1_250
+  );
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createSwitchActiveWeaponSlotCommand({
+      actionSequence: 4,
+      intendedWeaponInstanceId: "stale-primary-instance",
+      issuedAtAuthoritativeTimeMs: 1_260,
+      playerId: redPlayerId,
+      requestedActiveSlotId: "primary"
+    }),
+    1_260
+  );
+
+  const receipts =
+    combatAuthority.readPlayerCombatActionObserverSnapshot(redPlayerId)
+      ?.recentPlayerActionReceipts ?? [];
+
+  assert.equal(receipts[0]?.kind, "fire-weapon");
+  assert.equal(receipts[0]?.rejectionReason, "inactive-weapon");
+  assert.equal(receipts[1]?.kind, "switch-active-weapon-slot");
+  assert.equal(receipts[1]?.status, "accepted");
+  assert.equal(receipts[1]?.activeSlotId, "secondary");
+  assert.equal(receipts[1]?.weaponId, "metaverse-rocket-launcher-v1");
+  assert.equal(receipts[2]?.kind, "fire-weapon");
+  assert.equal(receipts[2]?.status, "accepted");
+  assert.equal(receipts[3]?.kind, "switch-active-weapon-slot");
+  assert.equal(receipts[3]?.status, "rejected");
+  assert.equal(receipts[3]?.rejectionReason, "stale-weapon-state");
+  assert.equal(redPlayerRuntime.weaponState?.activeSlotId, "secondary");
+  assert.equal(redPlayerRuntime.weaponState?.aimMode, "hip-fire");
+  assert.equal(
+    combatAuthority.readPlayerCombatSnapshot(redPlayerId)?.activeWeapon?.weaponId,
+    "metaverse-rocket-launcher-v1"
+  );
+  assert.equal(
+    combatAuthority
+      .readPlayerCombatSnapshot(redPlayerId)
+      ?.weaponInventory.some(
+        (weaponSnapshot) =>
+          weaponSnapshot.weaponId === "metaverse-service-pistol-v2"
+      ),
+    true
+  );
+  assert.equal(combatAuthority.readProjectileSnapshots().length, 1);
+});
+
+test("MetaverseAuthoritativeCombatAuthority resolves rocket direct player impacts from authoritative projectiles", () => {
+  const redPlayerId = createMetaversePlayerId("combat-rocket-direct-red-1");
+  const bluePlayerId = createMetaversePlayerId("combat-rocket-direct-blue-1");
+
+  assert.notEqual(redPlayerId, null);
+  assert.notEqual(bluePlayerId, null);
+
+  const redRootPosition = Object.freeze({ x: 0, y: 0, z: 0 });
+  const blueRootPosition = Object.freeze({ x: 0, y: 0, z: -10 });
+  const redMuzzleOrigin = Object.freeze({ x: 0, y: 1.62, z: 0 });
+  const target = Object.freeze({ x: 0, y: 1.2, z: -10 });
+  const rocketActiveWeaponState = createMetaverseRealtimePlayerWeaponStateSnapshot({
+    activeSlotId: "secondary",
+    aimMode: "hip-fire",
+    slots: [
+      {
+        attachmentId: "metaverse-service-pistol-v2",
+        equipped: true,
+        slotId: "primary",
+        weaponId: "metaverse-service-pistol-v2",
+        weaponInstanceId: "red:primary:metaverse-service-pistol-v2"
+      },
+      {
+        attachmentId: "metaverse-rocket-launcher-v1",
+        equipped: true,
+        slotId: "secondary",
+        weaponId: "metaverse-rocket-launcher-v1",
+        weaponInstanceId: "red:secondary:metaverse-rocket-launcher-v1"
+      }
+    ],
+    weaponId: "metaverse-rocket-launcher-v1"
+  });
+  const combatAuthority = new MetaverseAuthoritativeCombatAuthority({
+    clearDriverVehicleControl() {},
+    clearPlayerTraversalIntent() {},
+    clearPlayerVehicleOccupancy() {},
+    incrementSnapshotSequence() {},
+    physicsRuntime: {
+      castRay() {
+        return null;
+      }
+    },
+    playerTraversalColliderHandles: new Set(),
+    playersById: new Map([
+      [
+        redPlayerId,
+        createPlayerRuntimeState(
+          redPlayerId,
+          "red",
+          redRootPosition,
+          0,
+          rocketActiveWeaponState
+        )
+      ],
+      [
+        bluePlayerId,
+        createPlayerRuntimeState(bluePlayerId, "blue", blueRootPosition)
+      ]
+    ]),
+    readTickIntervalMs: () => 33,
+    resolveRespawnPose() {
+      return {
+        position: redRootPosition,
+        yawRadians: 0
+      };
+    },
+    syncAuthoritativePlayerLookToCurrentFacing() {},
+    syncPlayerTraversalAuthorityState() {},
+    syncPlayerTraversalBodyRuntimes() {}
+  });
+
+  combatAuthority.syncCombatState(0);
+  combatAuthority.advanceCombatRuntimes(1.1, 1_100);
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 1,
+      issuedAtAuthoritativeTimeMs: 1_200,
+      origin: redMuzzleOrigin,
+      playerId: redPlayerId,
+      target,
+      weaponId: "metaverse-rocket-launcher-v1"
+    }),
+    1_200
+  );
+
+  assert.equal(
+    combatAuthority.readPlayerCombatActionObserverSnapshot(redPlayerId)
+      ?.recentPlayerActionReceipts[0]?.status,
+    "accepted"
+  );
+  assert.equal(combatAuthority.readProjectileSnapshots().length, 1);
+  const spawnedProjectile = combatAuthority.readProjectileSnapshots()[0];
+  const expectedBodyYawReferenceOrigin = resolveWeaponTipOrigin(
+    redRootPosition,
+    0,
+    "metaverse-rocket-launcher-v1"
+  );
+  const expectedWeaponTipOrigin = resolveSemanticWeaponTipOrigin(
+    redRootPosition,
+    0,
+    "metaverse-rocket-launcher-v1",
+    createForwardDirection(redMuzzleOrigin, target)
+  );
+
+  assert.deepEqual(spawnedProjectile?.position, expectedWeaponTipOrigin);
+  assert.equal(
+    spawnedProjectile?.launchTelemetry?.cameraRayTargetSource,
+    "player-hit"
+  );
+  assert.deepEqual(
+    spawnedProjectile?.launchTelemetry?.weaponTipOriginWorld,
+    expectedWeaponTipOrigin
+  );
+  assert.deepEqual(
+    spawnedProjectile?.launchTelemetry?.bodyYawReferenceOriginWorld,
+    expectedBodyYawReferenceOrigin
+  );
+
+  combatAuthority.advanceCombatRuntimes(0.25, 1_450);
+
+  const projectileSnapshot = combatAuthority.readProjectileSnapshots()[0];
+
+  assert.equal(projectileSnapshot?.resolution, "hit-player");
+  assert.equal(projectileSnapshot?.resolvedPlayerId, bluePlayerId);
+  assert.equal(projectileSnapshot?.launchTelemetry?.firstImpactKind, "player");
+  assert.notEqual(projectileSnapshot?.launchTelemetry?.firstImpactPointWorld, null);
+  assert.deepEqual(
+    combatAuthority
+      .readCombatEventSnapshots()
+      .map((eventSnapshot) => eventSnapshot.eventKind),
+    ["fire-accepted", "projectile-spawned", "projectile-resolved"]
+  );
+  assert.equal(
+    combatAuthority.readCombatEventSnapshots()[1]?.semanticMuzzleWorld?.z,
+    expectedWeaponTipOrigin.z
+  );
+  assert.equal(
+    combatAuthority.readCombatEventSnapshots()[2]?.projectile?.resolutionKind,
+    "hit-player"
+  );
+  assert.equal(
+    combatAuthority.readPlayerCombatSnapshot(bluePlayerId)?.alive,
+    false
+  );
+  assert.equal(
+    combatAuthority.readPlayerCombatSnapshot(redPlayerId)?.activeWeapon
+      ?.ammoInMagazine,
+    1
+  );
+});
+
+test("MetaverseAuthoritativeCombatAuthority launches no-hit rockets from weapon tips without owner collision", () => {
+  const redPlayerId = createMetaversePlayerId("combat-rocket-no-hit-red-1");
+  const bluePlayerId = createMetaversePlayerId("combat-rocket-no-hit-blue-1");
+
+  assert.notEqual(redPlayerId, null);
+  assert.notEqual(bluePlayerId, null);
+
+  const redRootPosition = Object.freeze({ x: 0, y: 0, z: 0 });
+  const blueRootPosition = Object.freeze({ x: 100, y: 0, z: 100 });
+  const redMuzzleOrigin = Object.freeze({ x: 0, y: 1.62, z: 0 });
+  const target = Object.freeze({ x: 0, y: 1.62, z: -10 });
+  const expectedWeaponTipOrigin = resolveSemanticWeaponTipOrigin(
+    redRootPosition,
+    0,
+    "metaverse-rocket-launcher-v1",
+    createForwardDirection(redMuzzleOrigin, target)
+  );
+  const rocketActiveWeaponState = createMetaverseRealtimePlayerWeaponStateSnapshot({
+    activeSlotId: "secondary",
+    aimMode: "hip-fire",
+    slots: [
+      {
+        attachmentId: "metaverse-service-pistol-v2",
+        equipped: true,
+        slotId: "primary",
+        weaponId: "metaverse-service-pistol-v2",
+        weaponInstanceId: "red:primary:metaverse-service-pistol-v2"
+      },
+      {
+        attachmentId: "metaverse-rocket-launcher-v1",
+        equipped: true,
+        slotId: "secondary",
+        weaponId: "metaverse-rocket-launcher-v1",
+        weaponInstanceId: "red:secondary:metaverse-rocket-launcher-v1"
+      }
+    ],
+    weaponId: "metaverse-rocket-launcher-v1"
+  });
+  const combatAuthority = new MetaverseAuthoritativeCombatAuthority({
+    clearDriverVehicleControl() {},
+    clearPlayerTraversalIntent() {},
+    clearPlayerVehicleOccupancy() {},
+    incrementSnapshotSequence() {},
+    physicsRuntime: {
+      castRay() {
+        return null;
+      }
+    },
+    playerTraversalColliderHandles: new Set(),
+    playersById: new Map([
+      [
+        redPlayerId,
+        createPlayerRuntimeState(
+          redPlayerId,
+          "red",
+          redRootPosition,
+          0,
+          rocketActiveWeaponState
+        )
+      ],
+      [
+        bluePlayerId,
+        createPlayerRuntimeState(bluePlayerId, "red", blueRootPosition)
+      ]
+    ]),
+    readTickIntervalMs: () => 33,
+    resolveRespawnPose() {
+      return {
+        position: redRootPosition,
+        yawRadians: 0
+      };
+    },
+    syncAuthoritativePlayerLookToCurrentFacing() {},
+    syncPlayerTraversalAuthorityState() {},
+    syncPlayerTraversalBodyRuntimes() {}
+  });
+
+  combatAuthority.syncCombatState(0);
+  combatAuthority.advanceCombatRuntimes(1.1, 1_100);
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 1,
+      issuedAtAuthoritativeTimeMs: 1_200,
+      origin: redMuzzleOrigin,
+      playerId: redPlayerId,
+      target,
+      weaponId: "metaverse-rocket-launcher-v1"
+    }),
+    1_200
+  );
+
+  const spawnedProjectile = combatAuthority.readProjectileSnapshots()[0];
+
+  assert.deepEqual(spawnedProjectile?.position, expectedWeaponTipOrigin);
+  assert.equal(
+    spawnedProjectile?.launchTelemetry?.cameraRayTargetSource,
+    "max-distance"
+  );
+  assert.equal(spawnedProjectile?.launchTelemetry?.firstImpactKind, null);
+
+  combatAuthority.advanceCombatRuntimes(0.05, 1_250);
+
+  assert.equal(combatAuthority.readProjectileSnapshots()[0]?.resolution, "active");
+  assert.equal(combatAuthority.readPlayerCombatSnapshot(redPlayerId)?.health, 100);
+  assert.equal(combatAuthority.readPlayerCombatSnapshot(bluePlayerId)?.health, 100);
+});
+
+test("MetaverseAuthoritativeCombatAuthority resolves zero-distance rocket world raycasts as impacts", () => {
+  const redPlayerId = createMetaversePlayerId("combat-rocket-zero-world-red-1");
+  const bluePlayerId = createMetaversePlayerId("combat-rocket-zero-world-blue-1");
+
+  assert.notEqual(redPlayerId, null);
+  assert.notEqual(bluePlayerId, null);
+
+  const redRootPosition = Object.freeze({ x: 0, y: 0, z: 0 });
+  const blueRootPosition = Object.freeze({ x: 100, y: 0, z: 100 });
+  const redMuzzleOrigin = Object.freeze({ x: 0, y: 1.62, z: 0 });
+  const target = Object.freeze({ x: 0, y: 1.62, z: -10 });
+  const expectedWeaponTipOrigin = resolveSemanticWeaponTipOrigin(
+    redRootPosition,
+    0,
+    "metaverse-rocket-launcher-v1",
+    createForwardDirection(redMuzzleOrigin, target)
+  );
+  const rocketActiveWeaponState = createMetaverseRealtimePlayerWeaponStateSnapshot({
+    activeSlotId: "secondary",
+    aimMode: "hip-fire",
+    slots: [
+      {
+        attachmentId: "metaverse-service-pistol-v2",
+        equipped: true,
+        slotId: "primary",
+        weaponId: "metaverse-service-pistol-v2",
+        weaponInstanceId: "red:primary:metaverse-service-pistol-v2"
+      },
+      {
+        attachmentId: "metaverse-rocket-launcher-v1",
+        equipped: true,
+        slotId: "secondary",
+        weaponId: "metaverse-rocket-launcher-v1",
+        weaponInstanceId: "red:secondary:metaverse-rocket-launcher-v1"
+      }
+    ],
+    weaponId: "metaverse-rocket-launcher-v1"
+  });
+  const combatAuthority = new MetaverseAuthoritativeCombatAuthority({
+    clearDriverVehicleControl() {},
+    clearPlayerTraversalIntent() {},
+    clearPlayerVehicleOccupancy() {},
+    incrementSnapshotSequence() {},
+    physicsRuntime: {
+      castRay(origin) {
+        const originAtRocketTip =
+          Math.hypot(
+            origin.x - expectedWeaponTipOrigin.x,
+            origin.y - expectedWeaponTipOrigin.y,
+            origin.z - expectedWeaponTipOrigin.z
+          ) < 0.000001;
+
+        return originAtRocketTip
+          ? {
+              collider: 101,
+              distanceMeters: 0,
+              point: origin
+            }
+          : null;
+      }
+    },
+    playerTraversalColliderHandles: new Set(),
+    playersById: new Map([
+      [
+        redPlayerId,
+        createPlayerRuntimeState(
+          redPlayerId,
+          "red",
+          redRootPosition,
+          0,
+          rocketActiveWeaponState
+        )
+      ],
+      [
+        bluePlayerId,
+        createPlayerRuntimeState(bluePlayerId, "red", blueRootPosition)
+      ]
+    ]),
+    readTickIntervalMs: () => 33,
+    resolveRespawnPose() {
+      return {
+        position: redRootPosition,
+        yawRadians: 0
+      };
+    },
+    syncAuthoritativePlayerLookToCurrentFacing() {},
+    syncPlayerTraversalAuthorityState() {},
+    syncPlayerTraversalBodyRuntimes() {}
+  });
+
+  combatAuthority.syncCombatState(0);
+  combatAuthority.advanceCombatRuntimes(1.1, 1_100);
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 1,
+      issuedAtAuthoritativeTimeMs: 1_200,
+      origin: redMuzzleOrigin,
+      playerId: redPlayerId,
+      target,
+      weaponId: "metaverse-rocket-launcher-v1"
+    }),
+    1_200
+  );
+  combatAuthority.advanceCombatRuntimes(0.05, 1_250);
+
+  assert.equal(combatAuthority.readProjectileSnapshots()[0]?.resolution, "hit-world");
+  assert.equal(
+    combatAuthority.readCombatEventSnapshots().at(-1)?.eventKind,
+    "projectile-resolved"
+  );
+  assert.equal(
+    combatAuthority.readCombatEventSnapshots().at(-1)?.projectile?.resolutionKind,
+    "hit-world"
+  );
+});
+
+test("MetaverseAuthoritativeCombatAuthority resolves short positive rocket world raycasts", () => {
+  const redPlayerId = createMetaversePlayerId("combat-rocket-short-world-red-1");
+  const bluePlayerId = createMetaversePlayerId("combat-rocket-short-world-blue-1");
+
+  assert.notEqual(redPlayerId, null);
+  assert.notEqual(bluePlayerId, null);
+
+  const redRootPosition = Object.freeze({ x: 0, y: 0, z: 0 });
+  const blueRootPosition = Object.freeze({ x: 100, y: 0, z: 100 });
+  const redMuzzleOrigin = Object.freeze({ x: 0, y: 1.62, z: 0 });
+  const target = Object.freeze({ x: 0, y: 1.62, z: -10 });
+  const rocketActiveWeaponState = createMetaverseRealtimePlayerWeaponStateSnapshot({
+    activeSlotId: "secondary",
+    aimMode: "hip-fire",
+    slots: [
+      {
+        attachmentId: "metaverse-service-pistol-v2",
+        equipped: true,
+        slotId: "primary",
+        weaponId: "metaverse-service-pistol-v2",
+        weaponInstanceId: "red:primary:metaverse-service-pistol-v2"
+      },
+      {
+        attachmentId: "metaverse-rocket-launcher-v1",
+        equipped: true,
+        slotId: "secondary",
+        weaponId: "metaverse-rocket-launcher-v1",
+        weaponInstanceId: "red:secondary:metaverse-rocket-launcher-v1"
+      }
+    ],
+    weaponId: "metaverse-rocket-launcher-v1"
+  });
+  const combatAuthority = new MetaverseAuthoritativeCombatAuthority({
+    clearDriverVehicleControl() {},
+    clearPlayerTraversalIntent() {},
+    clearPlayerVehicleOccupancy() {},
+    incrementSnapshotSequence() {},
+    physicsRuntime: {
+      castRay(origin, direction, distanceMeters) {
+        const projectileAdvanceRay = distanceMeters < 10;
+
+        return projectileAdvanceRay
+          ? {
+              collider: 101,
+              distanceMeters: 0.03,
+              point: {
+                x: origin.x + direction.x * 0.03,
+                y: origin.y + direction.y * 0.03,
+                z: origin.z + direction.z * 0.03
+              }
+            }
+          : null;
+      }
+    },
+    playerTraversalColliderHandles: new Set(),
+    playersById: new Map([
+      [
+        redPlayerId,
+        createPlayerRuntimeState(
+          redPlayerId,
+          "red",
+          redRootPosition,
+          0,
+          rocketActiveWeaponState
+        )
+      ],
+      [
+        bluePlayerId,
+        createPlayerRuntimeState(bluePlayerId, "red", blueRootPosition)
+      ]
+    ]),
+    readTickIntervalMs: () => 33,
+    resolveRespawnPose() {
+      return {
+        position: redRootPosition,
+        yawRadians: 0
+      };
+    },
+    syncAuthoritativePlayerLookToCurrentFacing() {},
+    syncPlayerTraversalAuthorityState() {},
+    syncPlayerTraversalBodyRuntimes() {}
+  });
+
+  combatAuthority.syncCombatState(0);
+  combatAuthority.advanceCombatRuntimes(1.1, 1_100);
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 1,
+      issuedAtAuthoritativeTimeMs: 1_200,
+      origin: redMuzzleOrigin,
+      playerId: redPlayerId,
+      target,
+      weaponId: "metaverse-rocket-launcher-v1"
+    }),
+    1_200
+  );
+  combatAuthority.advanceCombatRuntimes(0.05, 1_250);
+
+  assert.equal(combatAuthority.readProjectileSnapshots()[0]?.resolution, "hit-world");
+  assert.equal(
+    combatAuthority.readCombatEventSnapshots().at(-1)?.eventKind,
+    "projectile-resolved"
+  );
+  assert.equal(
+    combatAuthority.readCombatEventSnapshots().at(-1)?.projectile?.resolutionKind,
+    "hit-world"
+  );
+});
+
+test("MetaverseAuthoritativeCombatAuthority treats duplicate fire action sequences as gameplay-idempotent", () => {
+  const redPlayerId = createMetaversePlayerId("combat-idempotent-red-1");
+  const bluePlayerId = createMetaversePlayerId("combat-idempotent-blue-1");
+
+  assert.notEqual(redPlayerId, null);
+  assert.notEqual(bluePlayerId, null);
+
+  const redRootPosition = Object.freeze({ x: 0, y: 0, z: 0 });
+  const blueRootPosition = Object.freeze({ x: 0, y: 0, z: -10 });
+  const redMuzzleOrigin = Object.freeze({ x: 0, y: 1.62, z: 0 });
+  const target = Object.freeze({ x: 0, y: 1.2, z: -10 });
+  const rocketActiveWeaponState = createMetaverseRealtimePlayerWeaponStateSnapshot({
+    activeSlotId: "secondary",
+    aimMode: "hip-fire",
+    slots: [
+      {
+        attachmentId: "metaverse-service-pistol-v2",
+        equipped: true,
+        slotId: "primary",
+        weaponId: "metaverse-service-pistol-v2",
+        weaponInstanceId: "red:primary:metaverse-service-pistol-v2"
+      },
+      {
+        attachmentId: "metaverse-rocket-launcher-v1",
+        equipped: true,
+        slotId: "secondary",
+        weaponId: "metaverse-rocket-launcher-v1",
+        weaponInstanceId: "red:secondary:metaverse-rocket-launcher-v1"
+      }
+    ],
+    weaponId: "metaverse-rocket-launcher-v1"
+  });
+  const combatAuthority = new MetaverseAuthoritativeCombatAuthority({
+    clearDriverVehicleControl() {},
+    clearPlayerTraversalIntent() {},
+    clearPlayerVehicleOccupancy() {},
+    incrementSnapshotSequence() {},
+    physicsRuntime: {
+      castRay() {
+        return null;
+      }
+    },
+    playerTraversalColliderHandles: new Set(),
+    playersById: new Map([
+      [
+        redPlayerId,
+        createPlayerRuntimeState(
+          redPlayerId,
+          "red",
+          redRootPosition,
+          0,
+          rocketActiveWeaponState
+        )
+      ],
+      [
+        bluePlayerId,
+        createPlayerRuntimeState(bluePlayerId, "blue", blueRootPosition)
+      ]
+    ]),
+    readTickIntervalMs: () => 33,
+    resolveRespawnPose() {
+      return {
+        position: redRootPosition,
+        yawRadians: 0
+      };
+    },
+    syncAuthoritativePlayerLookToCurrentFacing() {},
+    syncPlayerTraversalAuthorityState() {},
+    syncPlayerTraversalBodyRuntimes() {}
+  });
+
+  combatAuthority.syncCombatState(0);
+  combatAuthority.advanceCombatRuntimes(1.1, 1_100);
+
+  const fireCommand = createFireWeaponPlayerActionCommand({
+    actionSequence: 1,
+    issuedAtAuthoritativeTimeMs: 1_200,
+    origin: redMuzzleOrigin,
+    playerId: redPlayerId,
+    target,
+    weaponId: "metaverse-rocket-launcher-v1"
+  });
+
+  combatAuthority.acceptIssuePlayerActionCommand(fireCommand, 1_200);
+  combatAuthority.acceptIssuePlayerActionCommand(fireCommand, 1_205);
+
+  assert.equal(combatAuthority.readProjectileSnapshots().length, 1);
+  assert.equal(
+    combatAuthority.readPlayerCombatSnapshot(redPlayerId)?.activeWeapon
+      ?.ammoInMagazine,
+    1
+  );
+  assert.equal(
+    combatAuthority.readPlayerCombatSnapshot(redPlayerId)?.weaponStats.find(
+      (weaponStats) =>
+        weaponStats.weaponId === "metaverse-rocket-launcher-v1"
+    )?.shotsFired,
+    1
+  );
+  assert.deepEqual(
+    combatAuthority
+      .readPlayerCombatActionObserverSnapshot(redPlayerId)
+      ?.recentPlayerActionReceipts.map((receipt) => receipt.actionSequence),
+    [1]
+  );
+  assert.deepEqual(
+    combatAuthority
+      .readCombatEventSnapshots()
+      .map((eventSnapshot) => eventSnapshot.eventKind),
+    ["fire-accepted", "projectile-spawned"]
+  );
+});
+
+test("MetaverseAuthoritativeCombatAuthority emits one expired projectile resolution event", () => {
+  const redPlayerId = createMetaversePlayerId("combat-rocket-expiry-red-1");
+  const bluePlayerId = createMetaversePlayerId("combat-rocket-expiry-blue-1");
+
+  assert.notEqual(redPlayerId, null);
+  assert.notEqual(bluePlayerId, null);
+
+  const redRootPosition = Object.freeze({ x: 0, y: 0, z: 0 });
+  const blueRootPosition = Object.freeze({ x: 100, y: 0, z: 100 });
+  const redMuzzleOrigin = Object.freeze({ x: 0, y: 1.62, z: 0 });
+  const target = Object.freeze({ x: 0, y: 1.62, z: -10 });
+  const rocketActiveWeaponState = createMetaverseRealtimePlayerWeaponStateSnapshot({
+    activeSlotId: "secondary",
+    aimMode: "hip-fire",
+    slots: [
+      {
+        attachmentId: "metaverse-service-pistol-v2",
+        equipped: true,
+        slotId: "primary",
+        weaponId: "metaverse-service-pistol-v2",
+        weaponInstanceId: "red:primary:metaverse-service-pistol-v2"
+      },
+      {
+        attachmentId: "metaverse-rocket-launcher-v1",
+        equipped: true,
+        slotId: "secondary",
+        weaponId: "metaverse-rocket-launcher-v1",
+        weaponInstanceId: "red:secondary:metaverse-rocket-launcher-v1"
+      }
+    ],
+    weaponId: "metaverse-rocket-launcher-v1"
+  });
+  const combatAuthority = new MetaverseAuthoritativeCombatAuthority({
+    clearDriverVehicleControl() {},
+    clearPlayerTraversalIntent() {},
+    clearPlayerVehicleOccupancy() {},
+    incrementSnapshotSequence() {},
+    physicsRuntime: {
+      castRay() {
+        return null;
+      }
+    },
+    playerTraversalColliderHandles: new Set(),
+    playersById: new Map([
+      [
+        redPlayerId,
+        createPlayerRuntimeState(
+          redPlayerId,
+          "red",
+          redRootPosition,
+          0,
+          rocketActiveWeaponState
+        )
+      ],
+      [
+        bluePlayerId,
+        createPlayerRuntimeState(bluePlayerId, "blue", blueRootPosition)
+      ]
+    ]),
+    readTickIntervalMs: () => 33,
+    resolveRespawnPose() {
+      return {
+        position: redRootPosition,
+        yawRadians: 0
+      };
+    },
+    syncAuthoritativePlayerLookToCurrentFacing() {},
+    syncPlayerTraversalAuthorityState() {},
+    syncPlayerTraversalBodyRuntimes() {}
+  });
+
+  combatAuthority.syncCombatState(0);
+  combatAuthority.advanceCombatRuntimes(1.1, 1_100);
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 1,
+      issuedAtAuthoritativeTimeMs: 1_200,
+      origin: redMuzzleOrigin,
+      playerId: redPlayerId,
+      target,
+      weaponId: "metaverse-rocket-launcher-v1"
+    }),
+    1_200
+  );
+  combatAuthority.advanceCombatRuntimes(7, 8_200);
+
+  assert.equal(combatAuthority.readProjectileSnapshots()[0]?.resolution, "expired");
+  assert.deepEqual(
+    combatAuthority
+      .readCombatEventSnapshots()
+      .map((eventSnapshot) => eventSnapshot.eventKind),
+    ["fire-accepted", "projectile-spawned", "projectile-resolved"]
+  );
+  assert.equal(
+    combatAuthority.readCombatEventSnapshots()[2]?.projectile?.resolutionKind,
+    "expired"
+  );
+});
+
+test("MetaverseAuthoritativeCombatAuthority applies rocket splash around direct impacts without self damage", () => {
+  const redPlayerId = createMetaversePlayerId("combat-rocket-splash-red-1");
+  const bluePlayerId = createMetaversePlayerId("combat-rocket-splash-blue-1");
+  const greenPlayerId = createMetaversePlayerId("combat-rocket-splash-green-1");
+
+  assert.notEqual(redPlayerId, null);
+  assert.notEqual(bluePlayerId, null);
+  assert.notEqual(greenPlayerId, null);
+
+  const redRootPosition = Object.freeze({ x: 0, y: 0, z: 0 });
+  const blueRootPosition = Object.freeze({ x: 0, y: 0, z: -10 });
+  const greenRootPosition = Object.freeze({ x: 6.1, y: 0, z: -10 });
+  const redMuzzleOrigin = Object.freeze({ x: 0, y: 1.62, z: 0 });
+  const target = Object.freeze({ x: 0, y: 1.2, z: -10 });
+  const rocketActiveWeaponState = createMetaverseRealtimePlayerWeaponStateSnapshot({
+    activeSlotId: "secondary",
+    aimMode: "hip-fire",
+    slots: [
+      {
+        attachmentId: "metaverse-service-pistol-v2",
+        equipped: true,
+        slotId: "primary",
+        weaponId: "metaverse-service-pistol-v2",
+        weaponInstanceId: "red:primary:metaverse-service-pistol-v2"
+      },
+      {
+        attachmentId: "metaverse-rocket-launcher-v1",
+        equipped: true,
+        slotId: "secondary",
+        weaponId: "metaverse-rocket-launcher-v1",
+        weaponInstanceId: "red:secondary:metaverse-rocket-launcher-v1"
+      }
+    ],
+    weaponId: "metaverse-rocket-launcher-v1"
+  });
+  const combatAuthority = new MetaverseAuthoritativeCombatAuthority({
+    clearDriverVehicleControl() {},
+    clearPlayerTraversalIntent() {},
+    clearPlayerVehicleOccupancy() {},
+    incrementSnapshotSequence() {},
+    physicsRuntime: {
+      castRay() {
+        return null;
+      }
+    },
+    playerTraversalColliderHandles: new Set(),
+    playersById: new Map([
+      [
+        redPlayerId,
+        createPlayerRuntimeState(
+          redPlayerId,
+          "red",
+          redRootPosition,
+          0,
+          rocketActiveWeaponState
+        )
+      ],
+      [
+        bluePlayerId,
+        createPlayerRuntimeState(bluePlayerId, "blue", blueRootPosition)
+      ],
+      [
+        greenPlayerId,
+        createPlayerRuntimeState(greenPlayerId, "blue", greenRootPosition)
+      ]
+    ]),
+    readTickIntervalMs: () => 33,
+    resolveRespawnPose(playerId) {
+      return {
+        position:
+          playerId === bluePlayerId
+            ? blueRootPosition
+            : playerId === greenPlayerId
+              ? greenRootPosition
+              : redRootPosition,
+        yawRadians: 0
+      };
+    },
+    syncAuthoritativePlayerLookToCurrentFacing() {},
+    syncPlayerTraversalAuthorityState() {},
+    syncPlayerTraversalBodyRuntimes() {}
+  });
+
+  combatAuthority.syncCombatState(0);
+  combatAuthority.advanceCombatRuntimes(1.1, 1_100);
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 1,
+      issuedAtAuthoritativeTimeMs: 1_200,
+      origin: redMuzzleOrigin,
+      playerId: redPlayerId,
+      target,
+      weaponId: "metaverse-rocket-launcher-v1"
+    }),
+    1_200
+  );
+  combatAuthority.advanceCombatRuntimes(0.25, 1_450);
+
+  const projectileSnapshot = combatAuthority.readProjectileSnapshots()[0];
+
+  assert.equal(projectileSnapshot?.resolution, "hit-player");
+  assert.equal(projectileSnapshot?.resolvedPlayerId, bluePlayerId);
+  assert.equal(combatAuthority.readPlayerCombatSnapshot(redPlayerId)?.health, 100);
+  assert.equal(
+    combatAuthority.readPlayerCombatSnapshot(bluePlayerId)?.alive,
+    false
+  );
+  const greenCombatSnapshot =
+    combatAuthority.readPlayerCombatSnapshot(greenPlayerId);
+
+  assert.ok((greenCombatSnapshot?.health ?? 100) < 100);
+});
+
+test("MetaverseAuthoritativeCombatAuthority applies rocket splash on world impact without self-blocking the impact surface", () => {
+  const redPlayerId = createMetaversePlayerId("combat-rocket-world-splash-red-1");
+  const greenPlayerId = createMetaversePlayerId("combat-rocket-world-splash-green-1");
+
+  assert.notEqual(redPlayerId, null);
+  assert.notEqual(greenPlayerId, null);
+
+  const redRootPosition = Object.freeze({ x: 0, y: 0, z: 0 });
+  const greenRootPosition = Object.freeze({ x: 5.5, y: 0, z: -10 });
+  const redMuzzleOrigin = Object.freeze({ x: 0, y: 1.62, z: 0 });
+  const impactPoint = Object.freeze({ x: 0, y: 0.05, z: -10 });
+  const rocketActiveWeaponState = createMetaverseRealtimePlayerWeaponStateSnapshot({
+    activeSlotId: "secondary",
+    aimMode: "hip-fire",
+    slots: [
+      {
+        attachmentId: "metaverse-service-pistol-v2",
+        equipped: true,
+        slotId: "primary",
+        weaponId: "metaverse-service-pistol-v2",
+        weaponInstanceId: "red:primary:metaverse-service-pistol-v2"
+      },
+      {
+        attachmentId: "metaverse-rocket-launcher-v1",
+        equipped: true,
+        slotId: "secondary",
+        weaponId: "metaverse-rocket-launcher-v1",
+        weaponInstanceId: "red:secondary:metaverse-rocket-launcher-v1"
+      }
+    ],
+    weaponId: "metaverse-rocket-launcher-v1"
+  });
+  const combatAuthority = new MetaverseAuthoritativeCombatAuthority({
+    clearDriverVehicleControl() {},
+    clearPlayerTraversalIntent() {},
+    clearPlayerVehicleOccupancy() {},
+    incrementSnapshotSequence() {},
+    physicsRuntime: {
+      castRay(origin, direction, distanceMeters) {
+        const originAtImpact =
+          Math.hypot(
+            origin.x - impactPoint.x,
+            origin.y - impactPoint.y,
+            origin.z - impactPoint.z
+          ) < 0.000001;
+
+        if (originAtImpact) {
+          return {
+            collider: 101,
+            distanceMeters: 0,
+            point: impactPoint
+          };
+        }
+
+        const toImpact = {
+          x: impactPoint.x - origin.x,
+          y: impactPoint.y - origin.y,
+          z: impactPoint.z - origin.z
+        };
+        const projection =
+          toImpact.x * direction.x +
+          toImpact.y * direction.y +
+          toImpact.z * direction.z;
+
+        if (projection <= 0 || projection > distanceMeters) {
+          return null;
+        }
+
+        const closestPoint = {
+          x: origin.x + direction.x * projection,
+          y: origin.y + direction.y * projection,
+          z: origin.z + direction.z * projection
+        };
+        const missDistance = Math.hypot(
+          closestPoint.x - impactPoint.x,
+          closestPoint.y - impactPoint.y,
+          closestPoint.z - impactPoint.z
+        );
+
+        return missDistance <= 0.05
+          ? {
+              collider: 101,
+              distanceMeters: projection,
+              point: impactPoint
+            }
+          : null;
+      }
+    },
+    playerTraversalColliderHandles: new Set(),
+    playersById: new Map([
+      [
+        redPlayerId,
+        createPlayerRuntimeState(
+          redPlayerId,
+          "red",
+          redRootPosition,
+          0,
+          rocketActiveWeaponState
+        )
+      ],
+      [
+        greenPlayerId,
+        createPlayerRuntimeState(greenPlayerId, "blue", greenRootPosition)
+      ]
+    ]),
+    readTickIntervalMs: () => 33,
+    resolveRespawnPose(playerId) {
+      return {
+        position:
+          playerId === greenPlayerId ? greenRootPosition : redRootPosition,
+        yawRadians: 0
+      };
+    },
+    syncAuthoritativePlayerLookToCurrentFacing() {},
+    syncPlayerTraversalAuthorityState() {},
+    syncPlayerTraversalBodyRuntimes() {}
+  });
+
+  combatAuthority.syncCombatState(0);
+  combatAuthority.advanceCombatRuntimes(1.1, 1_100);
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 1,
+      issuedAtAuthoritativeTimeMs: 1_200,
+      origin: redMuzzleOrigin,
+      playerId: redPlayerId,
+      target: impactPoint,
+      weaponId: "metaverse-rocket-launcher-v1"
+    }),
+    1_200
+  );
+  combatAuthority.advanceCombatRuntimes(0.25, 1_450);
+
+  const projectileSnapshot = combatAuthority.readProjectileSnapshots()[0];
+  const greenCombatSnapshot =
+    combatAuthority.readPlayerCombatSnapshot(greenPlayerId);
+
+  assert.equal(projectileSnapshot?.resolution, "hit-world");
+  assert.ok((greenCombatSnapshot?.health ?? 100) < 100);
 });
 
 test("MetaverseAuthoritativeCombatAuthority applies kill-floor suicides as deaths with minus one kill and negative team score", () => {
@@ -493,6 +2540,16 @@ test("MetaverseAuthoritativeCombatAuthority applies kill-floor suicides as death
   assert.notEqual(redPlayerId, null);
   assert.notEqual(bluePlayerId, null);
 
+  const playersById = new Map([
+    [
+      redPlayerId,
+      createPlayerRuntimeState(redPlayerId, "red", Object.freeze({ x: 16, y: 0, z: 0 }))
+    ],
+    [
+      bluePlayerId,
+      createPlayerRuntimeState(bluePlayerId, "blue", Object.freeze({ x: 0, y: -6, z: 0 }))
+    ]
+  ]);
   const combatAuthority = new MetaverseAuthoritativeCombatAuthority({
     clearDriverVehicleControl() {},
     clearPlayerTraversalIntent() {},
@@ -505,16 +2562,7 @@ test("MetaverseAuthoritativeCombatAuthority applies kill-floor suicides as death
       }
     },
     playerTraversalColliderHandles: new Set(),
-    playersById: new Map([
-      [
-        redPlayerId,
-        createPlayerRuntimeState(redPlayerId, "red", Object.freeze({ x: 16, y: 0, z: 0 }))
-      ],
-      [
-        bluePlayerId,
-        createPlayerRuntimeState(bluePlayerId, "blue", Object.freeze({ x: 0, y: -6, z: 0 }))
-      ]
-    ]),
+    playersById,
     readTickIntervalMs: () => 33,
     resolveRespawnPose(_playerId, teamId) {
       return {
@@ -530,6 +2578,7 @@ test("MetaverseAuthoritativeCombatAuthority applies kill-floor suicides as death
   });
 
   combatAuthority.syncCombatState(0);
+  playersById.get(bluePlayerId).positionY = -6;
   combatAuthority.advanceCombatRuntimes(1.1, 1_100);
 
   const blueCombatSnapshot = combatAuthority.readPlayerCombatSnapshot(bluePlayerId);
