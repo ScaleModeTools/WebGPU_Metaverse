@@ -1584,6 +1584,111 @@ test("MetaverseAuthoritativeCombatAuthority applies sequenced weapon slot switch
   assert.equal(combatAuthority.readProjectileSnapshots().length, 1);
 });
 
+test("MetaverseAuthoritativeCombatAuthority tracks fire cooldown per equipped weapon", () => {
+  const redPlayerId = createMetaversePlayerId("combat-switch-cooldown-red-1");
+  const bluePlayerId = createMetaversePlayerId("combat-switch-cooldown-blue-1");
+
+  assert.notEqual(redPlayerId, null);
+  assert.notEqual(bluePlayerId, null);
+
+  const redRootPosition = Object.freeze({ x: 0, y: 0, z: 0 });
+  const blueRootPosition = Object.freeze({ x: 0, y: 0, z: -9 });
+  const redMuzzleOrigin = Object.freeze({ x: 0, y: 1.62, z: 0 });
+  const target = Object.freeze({ x: 0, y: 1.4, z: -10 });
+  const redWeaponState = createDualWeaponState(redPlayerId, "primary");
+  const redPlayerRuntime = createPlayerRuntimeState(
+    redPlayerId,
+    "red",
+    redRootPosition,
+    0,
+    redWeaponState
+  );
+  const combatAuthority = new MetaverseAuthoritativeCombatAuthority({
+    clearDriverVehicleControl() {},
+    clearPlayerTraversalIntent() {},
+    clearPlayerVehicleOccupancy() {},
+    incrementSnapshotSequence() {},
+    physicsRuntime: {
+      castRay() {
+        return null;
+      }
+    },
+    playerTraversalColliderHandles: new Set(),
+    playersById: new Map([
+      [redPlayerId, redPlayerRuntime],
+      [
+        bluePlayerId,
+        createPlayerRuntimeState(bluePlayerId, "blue", blueRootPosition)
+      ]
+    ]),
+    readTickIntervalMs: () => 33,
+    resolveRespawnPose() {
+      return {
+        position: redRootPosition,
+        yawRadians: 0
+      };
+    },
+    syncAuthoritativePlayerLookToCurrentFacing() {},
+    syncPlayerTraversalAuthorityState() {},
+    syncPlayerTraversalBodyRuntimes() {}
+  });
+
+  combatAuthority.syncCombatState(0);
+  combatAuthority.advanceCombatRuntimes(1.1, 1_100);
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 1,
+      issuedAtAuthoritativeTimeMs: 1_200,
+      origin: redMuzzleOrigin,
+      playerId: redPlayerId,
+      target,
+      weaponId: "metaverse-service-pistol-v2"
+    }),
+    1_200
+  );
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createSwitchActiveWeaponSlotCommand({
+      actionSequence: 2,
+      intendedWeaponInstanceId:
+        redWeaponState.slots[1]?.weaponInstanceId ?? "missing-secondary",
+      issuedAtAuthoritativeTimeMs: 1_210,
+      playerId: redPlayerId,
+      requestedActiveSlotId: "secondary"
+    }),
+    1_210
+  );
+  combatAuthority.acceptIssuePlayerActionCommand(
+    createFireWeaponPlayerActionCommand({
+      actionSequence: 3,
+      issuedAtAuthoritativeTimeMs: 1_220,
+      origin: redMuzzleOrigin,
+      playerId: redPlayerId,
+      target,
+      weaponId: "metaverse-rocket-launcher-v1"
+    }),
+    1_220
+  );
+
+  const receipts =
+    combatAuthority.readPlayerCombatActionObserverSnapshot(redPlayerId)
+      ?.recentPlayerActionReceipts ?? [];
+
+  assert.equal(receipts[0]?.kind, "fire-weapon");
+  assert.equal(receipts[0]?.weaponId, "metaverse-service-pistol-v2");
+  assert.equal(receipts[0]?.status, "accepted");
+  assert.equal(receipts[1]?.kind, "switch-active-weapon-slot");
+  assert.equal(receipts[1]?.status, "accepted");
+  assert.equal(receipts[2]?.kind, "fire-weapon");
+  assert.equal(receipts[2]?.weaponId, "metaverse-rocket-launcher-v1");
+  assert.equal(receipts[2]?.status, "accepted");
+  assert.equal(receipts[2]?.rejectionReason, null);
+  assert.equal(combatAuthority.readProjectileSnapshots().length, 1);
+  assert.equal(
+    combatAuthority.readProjectileSnapshots()[0]?.weaponId,
+    "metaverse-rocket-launcher-v1"
+  );
+});
+
 test("MetaverseAuthoritativeCombatAuthority resolves rocket direct player impacts from authoritative projectiles", () => {
   const redPlayerId = createMetaversePlayerId("combat-rocket-direct-red-1");
   const bluePlayerId = createMetaversePlayerId("combat-rocket-direct-blue-1");

@@ -89,6 +89,7 @@ export interface MetaverseAuthoritativeCombatPlayerRuntimeState<
 interface MutableMetaverseCombatWeaponRuntimeState {
   ammoInMagazine: number;
   ammoInReserve: number;
+  lastFireAtMs: number;
   reloadRemainingMs: number;
   shotsFired: number;
   shotsHit: number;
@@ -105,7 +106,6 @@ interface MutableMetaverseCombatPlayerRuntimeState {
   highestProcessedPlayerActionSequence: number;
   health: number;
   kills: number;
-  lastFireAtMs: number;
   latestShotResolutionTelemetry:
     | MetaverseCombatShotResolutionTelemetrySnapshot
     | null;
@@ -655,7 +655,7 @@ export class MetaverseAuthoritativeCombatAuthority<
         ? Number.POSITIVE_INFINITY
         : 60_000 / weaponProfile.roundsPerMinute;
 
-    if (nowMs - combatState.lastFireAtMs + 0.0001 < millisecondsPerShot) {
+    if (nowMs - weaponState.lastFireAtMs + 0.0001 < millisecondsPerShot) {
       this.#publishFireWeaponActionReceipt(combatState, {
         actionSequence: action.actionSequence,
         nowMs,
@@ -703,9 +703,9 @@ export class MetaverseAuthoritativeCombatAuthority<
     }
 
     weaponState.ammoInMagazine -= 1;
+    weaponState.lastFireAtMs = nowMs;
     weaponState.shotsFired += 1;
     combatState.activeWeaponId = weaponId;
-    combatState.lastFireAtMs = nowMs;
 
     const issuedAtTimeMs = this.#resolveIssuedAtAuthoritativeTimeMs(
       Number(action.issuedAtAuthoritativeTimeMs),
@@ -2372,7 +2372,6 @@ export class MetaverseAuthoritativeCombatAuthority<
       highestProcessedPlayerActionSequence: 0,
       health: 100,
       kills: 0,
-      lastFireAtMs: Number.NEGATIVE_INFINITY,
       latestShotResolutionTelemetry: null,
       maxHealth: 100,
       playerId: playerRuntime.playerId,
@@ -2433,6 +2432,7 @@ export class MetaverseAuthoritativeCombatAuthority<
     const nextWeaponState: MutableMetaverseCombatWeaponRuntimeState = {
       ammoInMagazine: weaponProfile.magazine.magazineCapacity,
       ammoInReserve: weaponProfile.magazine.reserveCapacity,
+      lastFireAtMs: Number.NEGATIVE_INFINITY,
       reloadRemainingMs: 0,
       shotsFired: 0,
       shotsHit: 0,
@@ -2630,6 +2630,7 @@ export class MetaverseAuthoritativeCombatAuthority<
 
       weaponState.ammoInMagazine = weaponProfile.magazine.magazineCapacity;
       weaponState.ammoInReserve = weaponProfile.magazine.reserveCapacity;
+      weaponState.lastFireAtMs = Number.NEGATIVE_INFINITY;
       weaponState.reloadRemainingMs = 0;
     }
 
@@ -2668,7 +2669,6 @@ export class MetaverseAuthoritativeCombatAuthority<
       combatState.deaths = 0;
       combatState.headshotKills = 0;
       combatState.kills = 0;
-      combatState.lastFireAtMs = Number.NEGATIVE_INFINITY;
       combatState.latestShotResolutionTelemetry = null;
       combatState.highestProcessedPlayerActionSequence = 0;
       combatState.playerActionReceiptSequenceOrder.length = 0;

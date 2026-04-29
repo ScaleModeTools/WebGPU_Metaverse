@@ -157,3 +157,42 @@ test("MetaverseRemoteWorldCommandTransport clears traversal/look lanes when the 
   assert.equal(worldClient.playerWeaponStateRequests[0]?.playerId, localPlayerId);
   assert.equal(worldClient.playerWeaponStateRequests[0]?.weaponState, null);
 });
+
+test("MetaverseRemoteWorldCommandTransport derives switch weapon instance ids from the local player", async () => {
+  const { MetaverseRemoteWorldCommandTransport } = await clientLoader.load(
+    "/src/metaverse/remote-world/metaverse-remote-world-command-transport.ts"
+  );
+  const localPlayerId = createMetaversePlayerId("rocket-switch-pilot");
+  const username = createUsername("Rocket Switch Pilot");
+  const issuedActions = [];
+  const worldClient = {
+    issuePlayerAction(commandInput) {
+      issuedActions.push(commandInput);
+      return 12;
+    }
+  };
+  const commandTransport = new MetaverseRemoteWorldCommandTransport({
+    localPlayerIdentity: {
+      characterId: "mesh2motion-humanoid-v1",
+      playerId: localPlayerId,
+      username
+    },
+    readEstimatedServerTimeMs: () => 1_250,
+    readWallClockMs: () => 250,
+    readWorldClient: () => worldClient
+  });
+
+  const switchIssue = commandTransport.switchActiveWeaponSlot({
+    intendedWeaponId: "metaverse-rocket-launcher-v1",
+    intendedWeaponInstanceId: "local:secondary:metaverse-rocket-launcher-v1",
+    requestedActiveSlotId: "secondary"
+  });
+
+  assert.equal(switchIssue?.actionSequence, 12);
+  assert.equal(
+    issuedActions[0]?.action.intendedWeaponInstanceId,
+    `${localPlayerId}:secondary:metaverse-rocket-launcher-v1`
+  );
+  assert.equal(issuedActions[0]?.action.kind, "switch-active-weapon-slot");
+  assert.equal(issuedActions[0]?.action.requestedActiveSlotId, "secondary");
+});

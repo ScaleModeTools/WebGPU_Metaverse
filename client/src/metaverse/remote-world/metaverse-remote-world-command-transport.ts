@@ -2,6 +2,7 @@ import type {
   MetaverseCombatAimSnapshotInput,
   MetaverseWeaponSlotId
 } from "@webgpu-metaverse/shared";
+import { createMetaverseWeaponInstanceId } from "@webgpu-metaverse/shared";
 import type {
   MetaversePlayerTraversalIntentSnapshotInput,
   MetaverseRealtimePlayerWeaponStateSnapshot
@@ -263,13 +264,21 @@ export class MetaverseRemoteWorldCommandTransport {
       return null;
     }
 
+    const intendedWeaponInstanceId =
+      input.intendedWeaponId === undefined || input.intendedWeaponId === null
+        ? input.intendedWeaponInstanceId ?? null
+        : createMetaverseWeaponInstanceId(
+            this.#localPlayerIdentity.playerId,
+            input.requestedActiveSlotId,
+            input.intendedWeaponId
+          );
+
     const actionSequence = worldClient.issuePlayerAction({
       action: {
-        ...(input.intendedWeaponInstanceId === undefined ||
-        input.intendedWeaponInstanceId === null
+        ...(intendedWeaponInstanceId === null
           ? {}
           : {
-              intendedWeaponInstanceId: input.intendedWeaponInstanceId
+              intendedWeaponInstanceId
             }),
         issuedAtAuthoritativeTimeMs: this.#readEstimatedServerTimeMs(
           this.#readWallClockMs()
