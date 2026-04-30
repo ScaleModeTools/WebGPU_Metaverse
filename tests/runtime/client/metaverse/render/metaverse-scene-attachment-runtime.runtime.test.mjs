@@ -268,7 +268,7 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
   upMarker.name = "metaverse_service_pistol_up_marker";
   upMarker.position.set(-0.01, 0.12, -0.03);
   supportMarker.name = "metaverse_service_pistol_support_marker";
-  supportMarker.position.set(0.018, -0.137, 0);
+  supportMarker.position.set(0.037, -0.137, 0);
   triggerMarker.name = "metaverse_service_pistol_trigger_marker";
   triggerMarker.position.set(0.026, 0.012, 0.004);
   adsCameraAnchor.name = "metaverse_service_pistol_ads_camera_anchor";
@@ -485,7 +485,7 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
   assert.equal(leftAttachmentSupportPoint, undefined);
   assert.equal(rightAttachmentSupportPoint, undefined);
   assert.ok(
-    authoredSupportSocket.position.distanceTo(new Vector3(0.018, -0.137, 0)) <
+    authoredSupportSocket.position.distanceTo(new Vector3(0.037, -0.137, 0)) <
       0.000001
   );
 

@@ -1494,9 +1494,9 @@ test("createMetaverseScene keeps traversal as the held-object IK base locally an
   forwardMarker.name = "metaverse_service_pistol_forward_marker";
   forwardMarker.position.set(1, 0, 0);
   gripHandSocket.name = "metaverse_service_pistol_grip_hand_r_socket";
-  gripHandSocket.position.set(0.079, -0.048, 0);
+  gripHandSocket.position.set(0.079, -0.048, 0.006);
   supportMarker.name = "metaverse_service_pistol_support_marker";
-  supportMarker.position.set(0.018, -0.137, 0);
+  supportMarker.position.set(0.037, -0.137, 0);
   triggerMarker.name = "metaverse_service_pistol_trigger_marker";
   triggerMarker.position.set(0.082, -0.061, -0.008);
   upMarker.name = "metaverse_service_pistol_up_marker";
@@ -2251,12 +2251,12 @@ test("createMetaverseScene keeps traversal as the held-object IK base locally an
     adsDownLeftSupportContactLocalPosition.distanceTo(
       adsDownSupportMarkerLocalPosition
     ) < 0.12,
-    `Expected steep down ADS support palm ${adsDownLeftSupportContactLocalPosition.toArray()} to stay cupped near grip.secondary ${adsDownSupportMarkerLocalPosition.toArray()}.`
+    `Expected steep down ADS support palm ${adsDownLeftSupportContactLocalPosition.toArray()} to stay near the service pistol mag floorplate support marker ${adsDownSupportMarkerLocalPosition.toArray()}.`
   );
   assert.ok(
     adsDownLeftSupportContactLocalPosition.y <=
       adsDownPrimaryTriggerContactLocalPosition.y + 0.025,
-    `Expected secondary support contact local Y ${adsDownLeftSupportContactLocalPosition.y.toFixed(4)} to stay below or level with primary trigger contact local Y ${adsDownPrimaryTriggerContactLocalPosition.y.toFixed(4)}.`
+    `Expected secondary support contact local Y ${adsDownLeftSupportContactLocalPosition.y.toFixed(4)} to stay on the mag floorplate below or level with primary trigger contact local Y ${adsDownPrimaryTriggerContactLocalPosition.y.toFixed(4)}.`
   );
   assert.ok(
     supportPalmSideWorldDirection.dot(supportPalmToPistolWorldDirection) > 0.12,

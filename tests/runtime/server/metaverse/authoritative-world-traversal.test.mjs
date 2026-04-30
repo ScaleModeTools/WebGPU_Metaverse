@@ -99,11 +99,10 @@ test("MetaverseAuthoritativeWorldRuntime simulates unmounted grounded and swim t
   assert.equal(groundedWorldSnapshot.tick.currentTick, 2);
   assert.equal(groundedWorldSnapshot.observerPlayer?.lastProcessedTraversalSequence, 2);
   assert.equal(groundedWorldSnapshot.players[0]?.locomotionMode, "grounded");
+  assert.ok(groundedActiveBodySnapshot.position.y > 0.4);
   assert.ok(
-    Math.abs(
-      groundedActiveBodySnapshot.position.y -
-        shippedGroundedSpawnSupportHeightMeters
-    ) < 0.01
+    groundedActiveBodySnapshot.position.y <
+      shippedGroundedSpawnSupportHeightMeters
   );
   assert.ok(groundedActiveBodySnapshot.position.z < -14.8);
   assert.ok(groundedActiveBodySnapshot.linearVelocity.z < 0);

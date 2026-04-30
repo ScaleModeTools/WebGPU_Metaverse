@@ -189,7 +189,7 @@ const heldWeaponContactFrameDescriptors = Object.freeze({
     baseSocket: "palm",
     handOverrides: Object.freeze({
       left: Object.freeze({
-        localPositionOffset: [0.01, -0.004, -0.014] as const,
+        localPositionOffset: [0.01, -0.004, 0.014] as const,
         localRotationOffsetRadians: [-0.12, -0.08, -0.22] as const
       })
     }),
