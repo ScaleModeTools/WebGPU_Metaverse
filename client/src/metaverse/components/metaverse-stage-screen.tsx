@@ -18,11 +18,23 @@ import type {
 
 import { metaverseActiveFullBodyCharacterAssetId } from "@/assets/config/character-model-manifest";
 import { ImmersiveStageFrame } from "../../ui/components/immersive-stage-frame";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
@@ -35,7 +47,6 @@ import {
 import { createMetaverseWorldClient } from "../config/metaverse-world-network";
 import { WebGpuMetaverseRuntime } from "../classes/webgpu-metaverse-runtime";
 import { registerMetaverseWorldBundleOnServer } from "../world/map-bundles";
-import { MetaverseDeveloperOverlay } from "./metaverse-developer-overlay";
 import { MetaversePlayerRadarHud } from "./metaverse-player-radar-hud";
 import { MetaverseWeaponReticleOverlay } from "./metaverse-weapon-reticle-overlay";
 import type { AudioCuePlaybackOptions } from "../../audio";
@@ -117,6 +128,16 @@ function createMetaverseHudStyle(scale: number): CSSProperties {
     "--metaverse-hud-panel-padding": `${20 * scale}px`,
     "--metaverse-hud-panel-radius": `${8 * scale}px`
   } as CSSProperties;
+}
+
+function isEditableKeyboardTarget(eventTarget: EventTarget | null): boolean {
+  return (
+    eventTarget instanceof HTMLElement &&
+    (eventTarget.isContentEditable ||
+      eventTarget instanceof HTMLInputElement ||
+      eventTarget instanceof HTMLTextAreaElement ||
+      eventTarget instanceof HTMLSelectElement)
+  );
 }
 
 function MetaverseHudSurface({
@@ -287,7 +308,6 @@ export function MetaverseStageScreen({
     height: 720,
     width: 1280
   });
-  const [isDeveloperOverlayOpen, setDeveloperOverlayOpen] = useState(false);
   const [isPauseMenuOpen, setPauseMenuOpen] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const subscribeUiUpdates = useCallback(
@@ -309,7 +329,24 @@ export function MetaverseStageScreen({
     () => metaverseRuntime.weaponHudSnapshot,
     () => metaverseRuntime.weaponHudSnapshot
   );
-  const showDeveloperOverlay = import.meta.env.DEV;
+  const [isQuitConfirmOpen, setQuitConfirmOpen] = useState(false);
+  const togglePauseMenu = useCallback(() => {
+    setQuitConfirmOpen(false);
+    setPauseMenuOpen((currentValue) => !currentValue);
+  }, []);
+  const handlePauseMenuOpenChange = useCallback((open: boolean) => {
+    setPauseMenuOpen(open);
+
+    if (!open) {
+      setQuitConfirmOpen(false);
+    }
+  }, []);
+  const handleQuitToMenu = useCallback(() => {
+    setQuitConfirmOpen(false);
+    setPauseMenuOpen(false);
+    onSetupRequest();
+  }, [onSetupRequest]);
+
   useEffect(() => {
     const { getGamepads } = globalThis.navigator;
     const hasRaf =
@@ -331,7 +368,7 @@ export function MetaverseStageScreen({
       );
 
       if (nextIsStartPressed && !isStartPressed) {
-        setPauseMenuOpen((currentValue) => !currentValue);
+        togglePauseMenu();
       }
 
       isStartPressed = nextIsStartPressed;
@@ -347,28 +384,23 @@ export function MetaverseStageScreen({
       isMounted = false;
       globalThis.cancelAnimationFrame(frameId);
     };
-  }, []);
+  }, [togglePauseMenu]);
 
   useEffect(() => {
     const handlePauseKeyDown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() !== "p" || event.repeat) {
+      const isPauseKey =
+        event.key === "Backspace" || event.key.toLowerCase() === "p";
+
+      if (!isPauseKey || event.repeat || isQuitConfirmOpen) {
         return;
       }
 
-      const eventTarget = event.target;
-      const editableTarget =
-        eventTarget instanceof HTMLElement &&
-        (eventTarget.isContentEditable ||
-          eventTarget instanceof HTMLInputElement ||
-          eventTarget instanceof HTMLTextAreaElement ||
-          eventTarget instanceof HTMLSelectElement);
-
-      if (editableTarget) {
+      if (isEditableKeyboardTarget(event.target)) {
         return;
       }
 
       event.preventDefault();
-      setPauseMenuOpen((currentValue) => !currentValue);
+      togglePauseMenu();
     };
 
     globalThis.addEventListener("keydown", handlePauseKeyDown);
@@ -376,36 +408,7 @@ export function MetaverseStageScreen({
     return () => {
       globalThis.removeEventListener("keydown", handlePauseKeyDown);
     };
-  }, []);
-
-  useEffect(() => {
-    if (!showDeveloperOverlay) {
-      return;
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const eventTarget = event.target;
-      const editableTarget =
-        eventTarget instanceof HTMLElement &&
-        (eventTarget.isContentEditable ||
-          eventTarget instanceof HTMLInputElement ||
-          eventTarget instanceof HTMLTextAreaElement ||
-          eventTarget instanceof HTMLSelectElement);
-
-      if (editableTarget || event.key !== "Backspace") {
-        return;
-      }
-
-      event.preventDefault();
-      setDeveloperOverlayOpen((currentValue) => !currentValue);
-    };
-
-    globalThis.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      globalThis.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [showDeveloperOverlay]);
+  }, [isQuitConfirmOpen, togglePauseMenu]);
 
   useEffect(() => {
     const overlayElement = overlayRef.current;
@@ -753,64 +756,56 @@ export function MetaverseStageScreen({
           </div>
         </div>
 
-        {showDeveloperOverlay ? (
-          <Dialog
-            onOpenChange={setDeveloperOverlayOpen}
-            open={isDeveloperOverlayOpen}
-          >
-            <DialogContent className="max-w-3xl border border-white/10 bg-[rgb(2_6_23_/_0.92)] text-game-foreground shadow-[0_28px_90px_rgb(2_6_23_/_0.5)]">
-              <DialogHeader>
-                <DialogTitle>Developer Overlay</DialogTitle>
-                <DialogDescription>
-                  Runtime diagnostics and shell developer controls. Toggle with
-                  {" "}
-                  <span className="font-medium text-game-foreground">
-                    Backspace
-                  </span>
-                  .
-                </DialogDescription>
-              </DialogHeader>
-              <MetaverseDeveloperOverlay
-                hudScaleStyle={hudStyle}
-                hudSnapshot={hudSnapshot}
-                layout="modal"
-                onSetupRequest={onSetupRequest}
-              />
-            </DialogContent>
-          </Dialog>
-        ) : null}
-
-        <Dialog onOpenChange={setPauseMenuOpen} open={isPauseMenuOpen}>
+        <Dialog onOpenChange={handlePauseMenuOpenChange} open={isPauseMenuOpen}>
           <DialogContent className="max-w-sm border border-white/10 bg-[rgb(2_6_23_/_0.92)] text-game-foreground shadow-none">
             <DialogHeader>
               <DialogTitle>Game Paused</DialogTitle>
               <DialogDescription>
-                Resume with <span className="font-medium">P</span> or Start,
-                or return to the main menu.
+                Resume with <span className="font-medium">Backspace</span>,{" "}
+                <span className="font-medium">P</span>, or Start, or return to
+                the main menu.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            <DialogFooter className="bg-transparent">
               <Button
                 onClick={() => {
-                  setPauseMenuOpen(false);
+                  handlePauseMenuOpenChange(false);
                 }}
                 type="button"
                 variant="outline"
               >
                 Resume
               </Button>
-              <Button
-                onClick={() => {
-                  setPauseMenuOpen(false);
-                  onSetupRequest();
-                }}
-                type="button"
-                variant="outline"
+              <AlertDialog
+                onOpenChange={setQuitConfirmOpen}
+                open={isQuitConfirmOpen}
               >
-                Main Menu
-              </Button>
-            </div>
+                <AlertDialogTrigger asChild>
+                  <Button type="button" variant="secondary">
+                    Back to Menu
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="surface-game-overlay text-[color:var(--game-foreground)]">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Quit match?</AlertDialogTitle>
+                    <AlertDialogDescription className="text-[color:var(--game-muted)]">
+                      Leave the current team deathmatch session and return to
+                      the main menu?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter className="border-[color:var(--game-border)] bg-transparent">
+                    <AlertDialogCancel>No</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleQuitToMenu}
+                      variant="destructive"
+                    >
+                      Yes
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
