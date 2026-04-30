@@ -129,6 +129,7 @@
   --game-danger: oklch(0.6368 0.2078 25.3313 / 0.14);
   --game-danger-border: oklch(0.786 0.109 24.9 / 0.32);
   --game-danger-foreground: oklch(0.961 0.019 17.4);
+  --game-text-shadow: 0 2px 10px rgb(2 6 23 / 0.82);
   --shell-surface: oklch(0.985 0.004 247.8575 / 0.68);
   --shell-surface-strong: oklch(0.992 0.003 247.8575 / 0.82);
   --shell-surface-overlay: oklch(0.991 0.003 247.8575 / 0.9);
@@ -223,6 +224,7 @@
   --game-danger: oklch(0.3958 0.1331 25.723 / 0.24);
   --game-danger-border: oklch(0.727 0.108 25.3 / 0.38);
   --game-danger-foreground: oklch(0.948 0.026 18.6);
+  --game-text-shadow: 0 2px 10px rgb(2 6 23 / 0.86);
   --shell-surface: oklch(0.985 0.004 247.8575 / 0.68);
   --shell-surface-strong: oklch(0.992 0.003 247.8575 / 0.82);
   --shell-surface-overlay: oklch(0.991 0.003 247.8575 / 0.9);
@@ -334,6 +336,7 @@
     font-size: calc(0.875rem * var(--game-ui-scale));
     font-weight: 500;
     line-height: calc(1.25rem * var(--game-ui-scale));
+    text-shadow: var(--game-text-shadow);
   }
 
   .type-game-body {
@@ -341,6 +344,7 @@
     font-variant-numeric: tabular-nums;
     font-size: calc(0.875rem * var(--game-ui-scale));
     line-height: 1.625;
+    text-shadow: var(--game-text-shadow);
   }
 
   .type-game-detail {
@@ -348,6 +352,7 @@
     font-variant-numeric: tabular-nums;
     font-size: calc(0.75rem * var(--game-ui-scale));
     line-height: 1.5;
+    text-shadow: var(--game-text-shadow);
   }
 
   .type-body {
@@ -454,6 +459,7 @@
     font-weight: 600;
     letter-spacing: var(--tracking-tight);
     line-height: 1.35;
+    text-shadow: var(--game-text-shadow);
   }
 
   .type-game-banner {
@@ -465,6 +471,7 @@
     letter-spacing: 0.2em;
     line-height: calc(1.25rem * var(--game-ui-scale));
     text-transform: uppercase;
+    text-shadow: var(--game-text-shadow);
   }
 
   .type-game-caption {
@@ -476,6 +483,7 @@
     letter-spacing: 0.22em;
     line-height: calc(1.25rem * var(--game-ui-scale));
     text-transform: uppercase;
+    text-shadow: var(--game-text-shadow);
   }
 
   .type-game-value {
@@ -487,6 +495,7 @@
     font-weight: 600;
     letter-spacing: var(--tracking-tight);
     line-height: 1.15;
+    text-shadow: var(--game-text-shadow);
   }
 
   .type-shell-title {

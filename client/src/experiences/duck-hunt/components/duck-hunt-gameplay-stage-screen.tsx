@@ -17,24 +17,13 @@ import type {
 } from "@webgpu-metaverse/shared";
 import { createCoopPlayerId, type Username } from "@webgpu-metaverse/shared";
 
-import type {
-  GameplayDebugPanelMode,
-  GameplayTelemetrySnapshot
-} from "../types/duck-hunt-gameplay-presentation";
 import type { GameplaySignal } from "../types/duck-hunt-gameplay-signal";
 import type { GameplayArenaRuntime } from "../types/duck-hunt-gameplay-arena-runtime";
 import { type CoopRoomClientStatusSnapshot } from "../../../network";
 import type {
-  GameplayInputSource,
-  HandTrackingTelemetrySnapshot
+  GameplayInputSource
 } from "../../../tracking";
 import { ImmersiveStageFrame } from "../../../ui/components/immersive-stage-frame";
-import {
-  DuckHuntGameplayDebugOverlay
-} from "./duck-hunt-gameplay-debug-overlay";
-import {
-  DuckHuntGameplayDeveloperPanel
-} from "./duck-hunt-gameplay-developer-panel";
 import {
   DuckHuntGameplayHudOverlay
 } from "./duck-hunt-gameplay-hud-overlay";
@@ -54,7 +43,6 @@ interface GameplayStageScreenProps {
   readonly audioStatusLabel: string;
   readonly bestScore: number;
   readonly coopRoomId: CoopRoomId;
-  readonly debugPanelMode: GameplayDebugPanelMode;
   readonly inputMode: GameplayInputModeId;
   readonly onBestScoreChange: (bestScore: number) => void;
   readonly onGameplaySignal: (signal: GameplaySignal) => void;
@@ -105,7 +93,6 @@ export function DuckHuntGameplayStageScreen({
   audioStatusLabel,
   bestScore,
   coopRoomId,
-  debugPanelMode,
   inputMode,
   onBestScoreChange,
   onGameplaySignal,
@@ -117,7 +104,6 @@ export function DuckHuntGameplayStageScreen({
   username,
   weaponLabel
 }: GameplayStageScreenProps) {
-  const showDeveloperUi = import.meta.env.DEV;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const coopRoomDisposeHandleRef =
     useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
@@ -175,9 +161,6 @@ export function DuckHuntGameplayStageScreen({
     () => gameplayRuntime.hudSnapshot,
     () => gameplayRuntime.hudSnapshot
   );
-  const gameplayTelemetry: GameplayTelemetrySnapshot = gameplayRuntime.telemetrySnapshot;
-  const trackingTelemetry: HandTrackingTelemetrySnapshot =
-    trackingSource.telemetrySnapshot;
   const coopLocalPlayer =
     hudSnapshot.session.mode === "co-op"
       ? hudSnapshot.session.players.find((playerSnapshot) => playerSnapshot.isLocalPlayer) ??
@@ -388,16 +371,6 @@ export function DuckHuntGameplayStageScreen({
       <div className="relative flex-1 overflow-hidden" ref={viewportRef}>
         <canvas className="absolute inset-0 h-full w-full" ref={canvasRef} />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgb(56_189_248/0.08),transparent_28%)]" />
-        {showDeveloperUi ? (
-          <>
-            <DuckHuntGameplayDeveloperPanel gameplayTelemetry={gameplayTelemetry} />
-            <DuckHuntGameplayDebugOverlay
-              gameplayTelemetry={gameplayTelemetry}
-              mode={debugPanelMode}
-              trackingTelemetry={trackingTelemetry}
-            />
-          </>
-        ) : null}
         <DuckHuntGameplayReticleOverlay
           reticleConfig={duckHuntGameplayRuntimeConfig.reticle}
           reticleSource={gameplayRuntime}

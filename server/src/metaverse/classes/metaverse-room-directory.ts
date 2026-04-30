@@ -1,5 +1,4 @@
 import {
-  createMetaverseRoomAssignmentSnapshot,
   createMetaverseRoomDirectorySnapshot,
   createMetaverseRoomId,
   createMetaverseRoomSessionId,
@@ -170,18 +169,6 @@ function resolveDirectoryEntryPriority(
   }
 
   return roomEntry.status === "available" ? 4 : 5;
-}
-
-function isUnknownRoomError(error: unknown): error is Error {
-  return error instanceof Error && error.message.startsWith("Unknown metaverse room:");
-}
-
-function isRoomBindingError(error: unknown): error is Error {
-  return (
-    error instanceof Error &&
-    error.message.startsWith("Metaverse player ") &&
-    error.message.includes(" is not bound to room ")
-  );
 }
 
 export class MetaverseRoomDirectory implements MetaverseRoomDirectoryOwner {

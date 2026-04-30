@@ -20,13 +20,7 @@ const radarEnemyAccent = Object.freeze({
   stroke: "#fda4af"
 });
 
-const radarLocalPlayerAccent = Object.freeze({
-  fill: "#60a5fa",
-  glow: "rgba(96, 165, 250, 0.44)",
-  stroke: "#dbeafe"
-});
-
-function resolveRadarMarkerAccent(kind: "enemy" | "friendly" | "local"): {
+function resolveRadarMarkerAccent(kind: "enemy" | "friendly"): {
   readonly fill: string;
   readonly glow: string;
   readonly stroke: string;
@@ -36,16 +30,12 @@ function resolveRadarMarkerAccent(kind: "enemy" | "friendly" | "local"): {
       return radarEnemyAccent;
     case "friendly":
       return radarFriendlyAccent;
-    case "local":
-      return radarLocalPlayerAccent;
   }
 }
 
 export function MetaversePlayerRadarHud({
   radarSnapshot
 }: MetaversePlayerRadarHudProps) {
-  const localPlayerAccent = resolveRadarMarkerAccent("local");
-
   return (
     <svg
       aria-label="Player radar"
@@ -85,15 +75,6 @@ export function MetaversePlayerRadarHud({
         d={`M ${radarCenter - radarRadius} ${radarCenter} L ${radarCenter + radarRadius} ${radarCenter}`}
         stroke="rgba(148, 163, 184, 0.1)"
         strokeWidth="1"
-      />
-
-      <title>You</title>
-      <circle
-        cx={radarCenter}
-        cy={radarCenter}
-        fill={localPlayerAccent.fill}
-        r="4.25"
-        style={{ filter: `drop-shadow(0 0 10px ${localPlayerAccent.glow})` }}
       />
 
       {radarSnapshot.friendlyContacts.map((contact) => {

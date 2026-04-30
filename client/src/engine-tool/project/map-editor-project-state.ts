@@ -6,7 +6,6 @@ import {
 } from "@/metaverse/render/environment/profiles";
 import type { EnvironmentAssetDescriptor } from "@/assets/types/environment-asset-manifest";
 import {
-  environmentPropManifest,
   metaverseBuilderFloorTileEnvironmentAssetId,
   metaverseBuilderStepTileEnvironmentAssetId,
   metaverseBuilderWallTileEnvironmentAssetId
@@ -20,7 +19,6 @@ import {
   resolveMapEditorBuildSizedCenterPosition,
   resolveMapEditorBuildWallSegment,
   snapMapEditorBuildCoordinateToGrid,
-  snapMapEditorBuildCoordinateToCellCenter,
   type MapEditorBuildPlacementPositionSnapshot
 } from "@/engine-tool/build/map-editor-build-placement";
 import { readMapEditorBuildPrimitiveCatalogEntry } from "@/engine-tool/build/map-editor-build-primitives";
@@ -81,7 +79,6 @@ import {
   freezeResourceSpawnDraft,
   freezeSceneObjectDraft,
   freezeWaterRegionDraft,
-  resolveMapEditorWaterRegionCenter,
   resolveMapEditorWaterRegionTopCenter,
   type MapEditorPlayerSpawnDraftSnapshot,
   type MapEditorResourceSpawnDraftSnapshot,
@@ -1138,16 +1135,6 @@ function snapMapEditorPositionToGrid(
     x: snapMapEditorBuildCoordinateToGrid(position.x),
     y: position.y,
     z: snapMapEditorBuildCoordinateToGrid(position.z)
-  });
-}
-
-function snapMapEditorPositionToCellCenter(
-  position: MetaverseWorldSurfaceVector3Snapshot
-): MetaverseWorldSurfaceVector3Snapshot {
-  return Object.freeze({
-    x: snapMapEditorBuildCoordinateToCellCenter(position.x),
-    y: position.y,
-    z: snapMapEditorBuildCoordinateToCellCenter(position.z)
   });
 }
 
@@ -2674,20 +2661,6 @@ function ensurePathSurfaceAndRegion(
     regionId,
     surfaceId
   });
-}
-
-function hasStructuralDraftAtGridPosition(
-  project: MapEditorProjectSnapshot,
-  structureKind: MapEditorStructuralDraftSnapshot["structureKind"],
-  center: MetaverseWorldSurfaceVector3Snapshot
-): boolean {
-  return project.structuralDrafts.some(
-    (structure) =>
-      structure.structureKind === structureKind &&
-      structure.center.x === center.x &&
-      Math.abs(structure.center.y - center.y) <= 0.01 &&
-      structure.center.z === center.z
-  );
 }
 
 type MapEditorPathRampEndpointSign = -1 | 1;

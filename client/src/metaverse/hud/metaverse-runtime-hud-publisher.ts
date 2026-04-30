@@ -1,5 +1,8 @@
 import {
-  readMetaverseRealtimePlayerActiveBodyKinematicSnapshot
+  readMetaverseRealtimePlayerActiveBodyKinematicSnapshot,
+  type MetaversePlayerId,
+  type MetaverseRealtimePlayerSnapshot,
+  type MetaverseRealtimeWorldSnapshot
 } from "@webgpu-metaverse/shared";
 
 import { metaverseLocalAuthorityReconciliationConfig } from "../config/metaverse-world-network";
@@ -56,6 +59,19 @@ interface PublishRuntimeHudSnapshotInput {
 
 const metaverseUiUpdateIntervalMs = 16;
 const metaverseRadarRangeMeters = 25;
+const metaverseDamageIndicatorMaxAgeMs = 1_200;
+const metaverseDamageIndicatorMaxEntries = 6;
+const emptyCombatScoreboardSnapshot = Object.freeze({
+  available: false,
+  phase: null,
+  scoreLimit: null,
+  teams: Object.freeze([]),
+  timeRemainingMs: null,
+  winnerTeamId: null
+} satisfies MetaverseHudSnapshot["combat"]["scoreboard"]);
+const emptyInteractionSnapshot = Object.freeze({
+  weaponResource: null
+} satisfies MetaverseHudSnapshot["interaction"]);
 const hiddenWeaponHudSnapshot = Object.freeze({
   adsTransitionMs: 0,
   aimMode: "hip-fire",
@@ -74,6 +90,7 @@ const hiddenCombatHudSnapshot = Object.freeze({
   assists: 0,
   available: false,
   deaths: 0,
+  damageIndicators: Object.freeze([]),
   enemyScore: null,
   friendlyFireEnabled: false,
   headshotKills: 0,
@@ -84,6 +101,7 @@ const hiddenCombatHudSnapshot = Object.freeze({
   maxHealth: 100,
   reloadRemainingMs: 0,
   respawnRemainingMs: 0,
+  scoreboard: emptyCombatScoreboardSnapshot,
   scoreLimit: null,
   shotsFired: 0,
   shotsHit: 0,
@@ -103,6 +121,14 @@ function createEmptyRadarSnapshot(
     localTeamId,
     rangeMeters: metaverseRadarRangeMeters
   });
+}
+
+function clampUnit(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.min(1, Math.max(0, value));
 }
 
 function freezeRadarContactSnapshot(
@@ -144,6 +170,61 @@ function freezeRadarContactSnapshot(
   });
 }
 
+function freezeDamageIndicatorSnapshot(
+  localYawRadians: number,
+  localPosition: {
+    readonly x: number;
+    readonly z: number;
+  },
+  sourcePosition: {
+    readonly x: number;
+    readonly z: number;
+  } | null,
+  damage: number,
+  maxHealth: number,
+  eventAgeMs: number,
+  sequence: number
+): MetaverseHudSnapshot["combat"]["damageIndicators"][number] | null {
+  if (
+    !Number.isFinite(eventAgeMs) ||
+    eventAgeMs > metaverseDamageIndicatorMaxAgeMs
+  ) {
+    return null;
+  }
+
+  let directionX = 0;
+  let directionY = -1;
+
+  if (sourcePosition !== null) {
+    const deltaX = sourcePosition.x - localPosition.x;
+    const deltaZ = sourcePosition.z - localPosition.z;
+    const forwardX = Math.sin(localYawRadians);
+    const forwardZ = -Math.cos(localYawRadians);
+    const rightX = Math.cos(localYawRadians);
+    const rightZ = Math.sin(localYawRadians);
+    const rightOffset = deltaX * rightX + deltaZ * rightZ;
+    const forwardOffset = deltaX * forwardX + deltaZ * forwardZ;
+    const distanceMeters = Math.hypot(deltaX, deltaZ);
+
+    if (distanceMeters > 0.000001) {
+      directionX = rightOffset / distanceMeters;
+      directionY = -forwardOffset / distanceMeters;
+    }
+  }
+
+  return Object.freeze({
+    ageMs: eventAgeMs,
+    damage,
+    directionX,
+    directionY,
+    intensity: Math.max(
+      0.2,
+      clampUnit((damage / Math.max(1, maxHealth)) * 3.2)
+    ),
+    sequence
+  });
+}
+
 function compareRadarContacts(
   leftContact: MetaverseHudSnapshot["radar"]["enemyContacts"][number],
   rightContact: MetaverseHudSnapshot["radar"]["enemyContacts"][number]
@@ -155,6 +236,212 @@ function compareRadarContacts(
   return leftContact.username.localeCompare(rightContact.username);
 }
 
+function compareScoreboardPlayers(
+  leftPlayer: MetaverseHudSnapshot["combat"]["scoreboard"]["teams"][number]["players"][number],
+  rightPlayer: MetaverseHudSnapshot["combat"]["scoreboard"]["teams"][number]["players"][number]
+): number {
+  if (leftPlayer.kills !== rightPlayer.kills) {
+    return rightPlayer.kills - leftPlayer.kills;
+  }
+
+  if (leftPlayer.assists !== rightPlayer.assists) {
+    return rightPlayer.assists - leftPlayer.assists;
+  }
+
+  if (leftPlayer.deaths !== rightPlayer.deaths) {
+    return leftPlayer.deaths - rightPlayer.deaths;
+  }
+
+  return leftPlayer.username.localeCompare(rightPlayer.username);
+}
+
+function compareScoreboardTeams(
+  leftTeam: MetaverseHudSnapshot["combat"]["scoreboard"]["teams"][number],
+  rightTeam: MetaverseHudSnapshot["combat"]["scoreboard"]["teams"][number],
+  winnerTeamId: MetaverseHudSnapshot["combat"]["scoreboard"]["winnerTeamId"]
+): number {
+  if (winnerTeamId !== null) {
+    if (leftTeam.teamId === winnerTeamId && rightTeam.teamId !== winnerTeamId) {
+      return -1;
+    }
+
+    if (rightTeam.teamId === winnerTeamId && leftTeam.teamId !== winnerTeamId) {
+      return 1;
+    }
+  }
+
+  if (leftTeam.score !== rightTeam.score) {
+    return rightTeam.score - leftTeam.score;
+  }
+
+  return leftTeam.teamId.localeCompare(rightTeam.teamId);
+}
+
+function createCombatScoreboardPlayerSnapshot(
+  playerSnapshot: MetaverseRealtimePlayerSnapshot,
+  localPlayerId: MetaversePlayerId
+): MetaverseHudSnapshot["combat"]["scoreboard"]["teams"][number]["players"][number] {
+  const combatSnapshot = playerSnapshot.combat;
+  const shotsFired =
+    combatSnapshot?.weaponStats.reduce(
+      (totalShotsFired, weaponStats) => totalShotsFired + weaponStats.shotsFired,
+      0
+    ) ?? 0;
+  const shotsHit =
+    combatSnapshot?.weaponStats.reduce(
+      (totalShotsHit, weaponStats) => totalShotsHit + weaponStats.shotsHit,
+      0
+    ) ?? 0;
+
+  return Object.freeze({
+    accuracyRatio:
+      shotsFired > 0 ? Math.max(0, Math.min(1, shotsHit / shotsFired)) : null,
+    alive: combatSnapshot?.alive ?? true,
+    assists: combatSnapshot?.assists ?? 0,
+    deaths: combatSnapshot?.deaths ?? 0,
+    headshotKills: combatSnapshot?.headshotKills ?? 0,
+    isLocalPlayer: playerSnapshot.playerId === localPlayerId,
+    kills: combatSnapshot?.kills ?? 0,
+    playerId: playerSnapshot.playerId,
+    shotsFired,
+    shotsHit,
+    teamId: playerSnapshot.teamId,
+    username: playerSnapshot.username
+  });
+}
+
+function createCombatScoreboardSnapshot(
+  worldSnapshot: MetaverseRealtimeWorldSnapshot,
+  localPlayerId: MetaversePlayerId
+): MetaverseHudSnapshot["combat"]["scoreboard"] {
+  const matchSnapshot = worldSnapshot.combatMatch;
+
+  if (matchSnapshot === null) {
+    return emptyCombatScoreboardSnapshot;
+  }
+
+  const playersByTeamId = new Map<
+    MetaverseHudSnapshot["combat"]["scoreboard"]["teams"][number]["teamId"],
+    MetaverseRealtimePlayerSnapshot[]
+  >();
+
+  for (const playerSnapshot of worldSnapshot.players) {
+    const teamPlayers = playersByTeamId.get(playerSnapshot.teamId);
+
+    if (teamPlayers === undefined) {
+      playersByTeamId.set(playerSnapshot.teamId, [playerSnapshot]);
+    } else {
+      teamPlayers.push(playerSnapshot);
+    }
+  }
+
+  const scoreboardTeams = matchSnapshot.teams
+    .map((teamSnapshot) => {
+      const players = Object.freeze(
+        (playersByTeamId.get(teamSnapshot.teamId) ?? [])
+          .map((playerSnapshot) =>
+            createCombatScoreboardPlayerSnapshot(playerSnapshot, localPlayerId)
+          )
+          .sort(compareScoreboardPlayers)
+      );
+
+      return Object.freeze({
+        playerCount: players.length,
+        players,
+        score: teamSnapshot.score,
+        teamId: teamSnapshot.teamId
+      } satisfies MetaverseHudSnapshot["combat"]["scoreboard"]["teams"][number]);
+    })
+    .sort((leftTeam, rightTeam) =>
+      compareScoreboardTeams(leftTeam, rightTeam, matchSnapshot.winnerTeamId)
+    );
+
+  return Object.freeze({
+    available: true,
+    phase: matchSnapshot.phase,
+    scoreLimit: matchSnapshot.scoreLimit,
+    teams: Object.freeze(scoreboardTeams),
+    timeRemainingMs: Number(matchSnapshot.timeRemainingMs),
+    winnerTeamId: matchSnapshot.winnerTeamId
+  });
+}
+
+function readNearestWeaponResourceInteraction(input: {
+  readonly localPlayerSnapshot: MetaverseRealtimePlayerSnapshot;
+  readonly localPosition: {
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+  };
+  readonly mountedInteraction: MetaverseMountedInteractionSnapshot;
+  readonly worldSnapshot: MetaverseRealtimeWorldSnapshot;
+}): MetaverseHudSnapshot["interaction"]["weaponResource"] {
+  if (
+    input.mountedInteraction.mountedEnvironment !== null ||
+    input.localPlayerSnapshot.combat?.alive === false
+  ) {
+    return null;
+  }
+
+  let nearestResource:
+    | MetaverseHudSnapshot["interaction"]["weaponResource"]
+    | null = null;
+
+  for (const resourceSpawn of input.worldSnapshot.resourceSpawns) {
+    const distanceMeters = Math.hypot(
+      input.localPosition.x - resourceSpawn.position.x,
+      input.localPosition.y - resourceSpawn.position.y,
+      input.localPosition.z - resourceSpawn.position.z
+    );
+
+    if (
+      distanceMeters > resourceSpawn.pickupRadiusMeters ||
+      (nearestResource !== null &&
+        distanceMeters >= nearestResource.distanceMeters)
+    ) {
+      continue;
+    }
+
+    nearestResource = Object.freeze({
+      distanceMeters,
+      weaponId: resourceSpawn.weaponId
+    });
+  }
+
+  return nearestResource;
+}
+
+function createInteractionSnapshot(input: {
+  readonly localPlayerSnapshot: MetaverseRealtimePlayerSnapshot | null;
+  readonly mountedInteraction: MetaverseMountedInteractionSnapshot;
+  readonly traversalRuntime: MetaverseTraversalRuntime;
+  readonly worldSnapshot: MetaverseRealtimeWorldSnapshot | null;
+}): MetaverseHudSnapshot["interaction"] {
+  const { localPlayerSnapshot, worldSnapshot } = input;
+
+  if (localPlayerSnapshot === null || worldSnapshot === null) {
+    return emptyInteractionSnapshot;
+  }
+
+  const localBodySnapshot =
+    readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(localPlayerSnapshot);
+  const localPosition =
+    input.traversalRuntime.localTraversalPoseSnapshot?.position ??
+    localBodySnapshot.position;
+  const weaponResource = readNearestWeaponResourceInteraction({
+    localPlayerSnapshot,
+    localPosition,
+    mountedInteraction: input.mountedInteraction,
+    worldSnapshot
+  });
+
+  return weaponResource === null
+    ? emptyInteractionSnapshot
+    : Object.freeze({
+        weaponResource
+      });
+}
+
 function freezeHudSnapshot(
   lifecycle: MetaverseHudSnapshot["lifecycle"],
   failureReason: string | null,
@@ -162,6 +449,7 @@ function freezeHudSnapshot(
   camera: MetaverseHudSnapshot["camera"],
   focusedPortal: FocusedExperiencePortalSnapshot | null,
   mountedInteraction: MetaverseMountedInteractionSnapshot,
+  interaction: MetaverseHudSnapshot["interaction"],
   controlMode: MetaverseHudSnapshot["controlMode"],
   combat: MetaverseHudSnapshot["combat"],
   locomotionMode: MetaverseHudSnapshot["locomotionMode"],
@@ -183,6 +471,7 @@ function freezeHudSnapshot(
     mountedInteraction,
     mountedInteractionHud:
       createMetaverseMountedInteractionHudSnapshot(mountedInteraction),
+    interaction,
     presence,
     radar,
     telemetry,
@@ -230,11 +519,12 @@ export class MetaverseRuntimeHudPublisher {
         rendererInitialized: false,
         scenePrewarmed: false
       }),
-      this.#traversalRuntime.cameraSnapshot,
-      null,
-      createMetaverseMountedInteractionSnapshot(null, null),
-      initialControlMode,
-      hiddenCombatHudSnapshot,
+	      this.#traversalRuntime.cameraSnapshot,
+	      null,
+	      createMetaverseMountedInteractionSnapshot(null, null),
+	      emptyInteractionSnapshot,
+	      initialControlMode,
+	      hiddenCombatHudSnapshot,
       this.#traversalRuntime.locomotionMode,
       this.#presenceRuntime.resolveHudSnapshot(),
       createEmptyRadarSnapshot(this.#presenceRuntime.localTeamId),
@@ -272,6 +562,14 @@ export class MetaverseRuntimeHudPublisher {
   ): void {
     const resolvedNowMs = nowMs ?? this.#readNowMs();
     const presenceSnapshot = this.#presenceRuntime.resolveHudSnapshot();
+    const worldSnapshot =
+      this.#remoteWorldRuntime.readFreshAuthoritativeWorldSnapshot(
+        metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
+      );
+    const localPlayerSnapshot =
+      this.#remoteWorldRuntime.readFreshAuthoritativeLocalPlayerSnapshot(
+        metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
+      );
 
     this.#hudSnapshot = freezeHudSnapshot(
       input.lifecycle,
@@ -284,8 +582,14 @@ export class MetaverseRuntimeHudPublisher {
       this.#traversalRuntime.cameraSnapshot,
       input.focusedPortal,
       input.mountedInteraction,
+      createInteractionSnapshot({
+        localPlayerSnapshot,
+        mountedInteraction: input.mountedInteraction,
+        traversalRuntime: this.#traversalRuntime,
+        worldSnapshot
+      }),
       input.controlMode,
-      this.#createCombatSnapshot(presenceSnapshot),
+      this.#createCombatSnapshot(presenceSnapshot, worldSnapshot, localPlayerSnapshot),
       this.#traversalRuntime.locomotionMode,
       presenceSnapshot,
       this.#createRadarSnapshot(presenceSnapshot),
@@ -388,17 +692,11 @@ export class MetaverseRuntimeHudPublisher {
     return this.#weaponPresentationRuntime?.hudSnapshot ?? hiddenWeaponHudSnapshot;
   }
 
-  #createCombatSnapshot(
-    presenceSnapshot: MetaverseHudSnapshot["presence"]
-  ): MetaverseHudSnapshot["combat"] {
-    const worldSnapshot =
-      this.#remoteWorldRuntime.readFreshAuthoritativeWorldSnapshot(
-        metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
-      );
-    const localPlayerSnapshot =
-      this.#remoteWorldRuntime.readFreshAuthoritativeLocalPlayerSnapshot(
-        metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
-      );
+	  #createCombatSnapshot(
+	    presenceSnapshot: MetaverseHudSnapshot["presence"],
+	    worldSnapshot: MetaverseRealtimeWorldSnapshot | null,
+	    localPlayerSnapshot: MetaverseRealtimePlayerSnapshot | null
+	  ): MetaverseHudSnapshot["combat"] {
     const combatSnapshot = localPlayerSnapshot?.combat ?? null;
 
     if (worldSnapshot === null || localPlayerSnapshot === null || combatSnapshot === null) {
@@ -440,36 +738,55 @@ export class MetaverseRuntimeHudPublisher {
         ? null
         : matchSnapshot.teams.find((teamSnapshot) => teamSnapshot.teamId !== localTeamId) ??
           null;
-    const usernameByPlayerId = new Map(
+    const playerSnapshotById = new Map(
       worldSnapshot.players.map((playerSnapshot) => [
         playerSnapshot.playerId,
-        playerSnapshot.username
+        playerSnapshot
       ])
     );
     const summarizePlayer = (playerId: typeof localPlayerSnapshot.playerId): string =>
       playerId === localPlayerSnapshot.playerId
         ? "You"
-        : usernameByPlayerId.get(playerId) ?? playerId;
+        : playerSnapshotById.get(playerId)?.username ?? playerId;
     const killFeed = Object.freeze(
       worldSnapshot.combatFeed.slice(-4).map((eventSnapshot) => {
+        const eventAgeMs = Math.max(
+          0,
+          Number(worldSnapshot.tick.simulationTimeMs) - Number(eventSnapshot.timeMs)
+        );
+
         switch (eventSnapshot.type) {
           case "damage":
             return Object.freeze({
+              ageMs: eventAgeMs,
+              local:
+                eventSnapshot.attackerPlayerId === localPlayerSnapshot.playerId ||
+                eventSnapshot.targetPlayerId === localPlayerSnapshot.playerId,
               sequence: eventSnapshot.sequence,
               summary: `${summarizePlayer(eventSnapshot.attackerPlayerId)} hit ${summarizePlayer(eventSnapshot.targetPlayerId)} for ${eventSnapshot.damage}`,
               type: eventSnapshot.type
             });
           case "kill":
             return Object.freeze({
+              ageMs: eventAgeMs,
+              local:
+                eventSnapshot.attackerPlayerId === localPlayerSnapshot.playerId ||
+                eventSnapshot.targetPlayerId === localPlayerSnapshot.playerId,
               sequence: eventSnapshot.sequence,
               summary:
                 eventSnapshot.attackerPlayerId === eventSnapshot.targetPlayerId
                   ? `${summarizePlayer(eventSnapshot.targetPlayerId)} fell`
-                  : `${summarizePlayer(eventSnapshot.attackerPlayerId)} eliminated ${summarizePlayer(eventSnapshot.targetPlayerId)}${eventSnapshot.headshot ? " (headshot)" : ""}`,
+                  : eventSnapshot.attackerPlayerId === localPlayerSnapshot.playerId
+                    ? `You killed ${summarizePlayer(eventSnapshot.targetPlayerId)}${eventSnapshot.headshot ? " (headshot)" : ""}`
+                    : eventSnapshot.targetPlayerId === localPlayerSnapshot.playerId
+                      ? `You were killed by ${summarizePlayer(eventSnapshot.attackerPlayerId)}${eventSnapshot.headshot ? " (headshot)" : ""}`
+                      : `${summarizePlayer(eventSnapshot.targetPlayerId)} was killed by ${summarizePlayer(eventSnapshot.attackerPlayerId)}${eventSnapshot.headshot ? " (headshot)" : ""}`,
               type: eventSnapshot.type
             });
           case "spawn":
             return Object.freeze({
+              ageMs: eventAgeMs,
+              local: eventSnapshot.playerId === localPlayerSnapshot.playerId,
               sequence: eventSnapshot.sequence,
               summary: `${summarizePlayer(eventSnapshot.playerId)} spawned`,
               type: eventSnapshot.type
@@ -477,6 +794,59 @@ export class MetaverseRuntimeHudPublisher {
         }
       })
     );
+    const localBodySnapshot =
+      readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(localPlayerSnapshot);
+    const localDamagePosition =
+      this.#traversalRuntime.localTraversalPoseSnapshot?.position ??
+      localBodySnapshot.position;
+    const localDamageYawRadians = this.#traversalRuntime.cameraSnapshot.yawRadians;
+    const damageIndicatorSnapshots: MetaverseHudSnapshot["combat"]["damageIndicators"][number][] =
+      [];
+
+    for (
+      let eventIndex = worldSnapshot.combatFeed.length - 1;
+      eventIndex >= 0 &&
+      damageIndicatorSnapshots.length < metaverseDamageIndicatorMaxEntries;
+      eventIndex -= 1
+    ) {
+      const eventSnapshot = worldSnapshot.combatFeed[eventIndex];
+
+      if (
+        eventSnapshot === undefined ||
+        eventSnapshot.type !== "damage" ||
+        eventSnapshot.targetPlayerId !== localPlayerSnapshot.playerId
+      ) {
+        continue;
+      }
+
+      const eventAgeMs = Math.max(
+        0,
+        Number(worldSnapshot.tick.simulationTimeMs) - Number(eventSnapshot.timeMs)
+      );
+      const attackerPlayerSnapshot =
+        playerSnapshotById.get(eventSnapshot.attackerPlayerId) ?? null;
+      const attackerBodyPosition =
+        attackerPlayerSnapshot === null
+          ? null
+          : readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(
+              attackerPlayerSnapshot
+            ).position;
+      const damageIndicatorSnapshot = freezeDamageIndicatorSnapshot(
+        localDamageYawRadians,
+        localDamagePosition,
+        attackerBodyPosition,
+        eventSnapshot.damage,
+        combatSnapshot.maxHealth,
+        eventAgeMs,
+        eventSnapshot.sequence
+      );
+
+      if (damageIndicatorSnapshot !== null) {
+        damageIndicatorSnapshots.push(damageIndicatorSnapshot);
+      }
+    }
+
+    const damageIndicators = Object.freeze(damageIndicatorSnapshots);
     const shotsFired = displayedWeaponStats?.shotsFired ?? 0;
     const shotsHit = displayedWeaponStats?.shotsHit ?? 0;
 
@@ -489,6 +859,7 @@ export class MetaverseRuntimeHudPublisher {
       assists: combatSnapshot.assists,
       available: true,
       deaths: combatSnapshot.deaths,
+      damageIndicators,
       enemyScore: enemyTeamSnapshot?.score ?? null,
       friendlyFireEnabled: matchSnapshot?.friendlyFireEnabled ?? false,
       headshotKills: combatSnapshot.headshotKills,
@@ -499,6 +870,10 @@ export class MetaverseRuntimeHudPublisher {
       maxHealth: combatSnapshot.maxHealth,
       reloadRemainingMs: Number(displayedWeaponSnapshot?.reloadRemainingMs ?? 0),
       respawnRemainingMs: Number(combatSnapshot.respawnRemainingMs),
+      scoreboard: createCombatScoreboardSnapshot(
+        worldSnapshot,
+        localPlayerSnapshot.playerId
+      ),
       scoreLimit: matchSnapshot?.scoreLimit ?? null,
       shotsFired,
       shotsHit,

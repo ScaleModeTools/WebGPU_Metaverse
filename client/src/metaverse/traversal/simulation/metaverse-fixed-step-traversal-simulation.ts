@@ -3,8 +3,7 @@ import {
   type MetaverseGroundedBodyRuntime,
   type MetaverseGroundedBodySnapshot,
   type PhysicsVector3Snapshot,
-  type RapierColliderHandle,
-  type RapierPhysicsRuntime
+  type RapierColliderHandle
 } from "@/physics";
 import {
   advanceMetaverseUnmountedTraversalBodyStep,

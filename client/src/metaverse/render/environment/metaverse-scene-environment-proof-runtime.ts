@@ -1,8 +1,6 @@
 import { resolveMetaverseWorldSurfaceScaleVector } from "@webgpu-metaverse/shared/metaverse/world";
 import {
-  Group,
-  Quaternion,
-  Vector3
+  Group
 } from "three/webgpu";
 
 import type {

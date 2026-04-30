@@ -41,7 +41,7 @@ test("MetaverseRuntimeCombatLifecycle freezes on death, resets weapon presentati
   const deathCameraCalls = [];
   const respawnLockCalls = [];
   const weaponSuppressionCalls = [];
-  let clearLocalDeathAnimationCount = 0;
+  let clearLocalDeathPresentationCount = 0;
   let spawnBootstrapCount = 0;
   let weaponResetCount = 0;
   let combatSnapshot = Object.freeze({
@@ -65,8 +65,8 @@ test("MetaverseRuntimeCombatLifecycle freezes on death, resets weapon presentati
         respawnLockCalls.push(locked);
       }
     },
-    clearLocalCombatDeathAnimation() {
-      clearLocalDeathAnimationCount += 1;
+    clearLocalCombatDeathPresentation() {
+      clearLocalDeathPresentationCount += 1;
     },
     remoteWorldRuntime: {
       readFreshAuthoritativeLocalPlayerSnapshot() {
@@ -103,7 +103,7 @@ test("MetaverseRuntimeCombatLifecycle freezes on death, resets weapon presentati
   assert.equal(spawnBootstrapCount, 0);
   assert.deepEqual(weaponSuppressionCalls, [false]);
   assert.equal(weaponResetCount, 0);
-  assert.equal(clearLocalDeathAnimationCount, 0);
+  assert.equal(clearLocalDeathPresentationCount, 0);
 
   combatSnapshot = Object.freeze({
     alive: false,
@@ -118,7 +118,7 @@ test("MetaverseRuntimeCombatLifecycle freezes on death, resets weapon presentati
   assert.equal(spawnBootstrapCount, 0);
   assert.deepEqual(weaponSuppressionCalls, [false, true]);
   assert.equal(weaponResetCount, 1);
-  assert.equal(clearLocalDeathAnimationCount, 0);
+  assert.equal(clearLocalDeathPresentationCount, 0);
 
   combatLifecycle.syncLocalCombatState(
     createCameraSnapshot({
@@ -152,7 +152,7 @@ test("MetaverseRuntimeCombatLifecycle freezes on death, resets weapon presentati
   assert.deepEqual(weaponSuppressionCalls, [false, true, false]);
   assert.equal(spawnBootstrapCount, 1);
   assert.equal(weaponResetCount, 1);
-  assert.equal(clearLocalDeathAnimationCount, 1);
+  assert.equal(clearLocalDeathPresentationCount, 1);
 });
 
 test("MetaverseRuntimeCombatLifecycle rearms the spawn snap when team deathmatch starts", async () => {

@@ -67,20 +67,24 @@ test("MetaverseScenePresentationState resets presentation state and syncs a null
     localCharacterPresentationState: {
       syncPresentation(
         snapshot,
+        nowMs,
         deltaSeconds,
         nextCharacterPresentation,
         nextMountedEnvironment,
         nextWeaponState,
-        nextWeaponAdsBlend
+        nextWeaponAdsBlend,
+        nextSemanticAimFrame
       ) {
         calls.push([
           "sync-local-character-presentation",
           snapshot,
+          nowMs,
           deltaSeconds,
           nextCharacterPresentation,
           nextMountedEnvironment,
           nextWeaponState,
-          nextWeaponAdsBlend
+          nextWeaponAdsBlend,
+          nextSemanticAimFrame
         ]);
         return snapshot;
       }
@@ -91,10 +95,11 @@ test("MetaverseScenePresentationState resets presentation state and syncs a null
       }
     },
     remoteCharacterPresentationState: {
-      syncPresentation(remoteCharacterPresentations, deltaSeconds) {
+      syncPresentation(remoteCharacterPresentations, nowMs, deltaSeconds) {
         calls.push([
           "sync-remote-character-presentation",
           remoteCharacterPresentations,
+          nowMs,
           deltaSeconds
         ]);
       }
@@ -119,14 +124,16 @@ test("MetaverseScenePresentationState resets presentation state and syncs a null
     [
       "sync-local-character-presentation",
       cameraSnapshot,
+      123,
       1 / 60,
       null,
       mountedPresentationSnapshot,
       null,
+      null,
       null
     ],
     ["sync-camera-presentation", cameraSnapshot, 123],
-    ["sync-remote-character-presentation", [], 1 / 60],
+    ["sync-remote-character-presentation", [], 123, 1 / 60],
     ["sync-portal-presentation", null, 123],
     ["sync-scene-interaction", cameraSnapshot, mountedPresentationSnapshot]
   ]);

@@ -35,18 +35,6 @@ export const metaverseCombatProjectileResolutionIds = [
   "expired"
 ] as const;
 
-export const metaverseCombatProjectileCameraRayTargetSourceIds = [
-  "max-distance",
-  "player-hit",
-  "world-hit"
-] as const;
-
-export const metaverseCombatProjectileFirstImpactKindIds = [
-  "expired",
-  "player",
-  "world"
-] as const;
-
 export const metaverseCombatEventKindIds = [
   "hitscan-resolved",
   "projectile-spawned",
@@ -140,12 +128,6 @@ export const metaverseCombatShotResolutionFinalReasonIds = [
   "rejected-invalid-direction"
 ] as const;
 
-export const metaverseCombatShotResolutionRewindSourceIds = [
-  "none",
-  "current",
-  "history"
-] as const;
-
 export const metaverseCombatWeaponFireModeIds = [
   "semi",
   "burst",
@@ -175,10 +157,6 @@ export type MetaverseCombatMatchPhaseId =
   (typeof metaverseCombatMatchPhaseIds)[number];
 export type MetaverseCombatProjectileResolutionId =
   (typeof metaverseCombatProjectileResolutionIds)[number];
-export type MetaverseCombatProjectileCameraRayTargetSourceId =
-  (typeof metaverseCombatProjectileCameraRayTargetSourceIds)[number];
-export type MetaverseCombatProjectileFirstImpactKindId =
-  (typeof metaverseCombatProjectileFirstImpactKindIds)[number];
 export type MetaverseCombatEventKindId =
   (typeof metaverseCombatEventKindIds)[number];
 export type MetaverseCombatEventHitscanHitKindId =
@@ -201,8 +179,6 @@ export type MetaverseCombatHurtRegionId =
   (typeof metaverseCombatHurtRegionIds)[number];
 export type MetaverseCombatShotResolutionFinalReasonId =
   (typeof metaverseCombatShotResolutionFinalReasonIds)[number];
-export type MetaverseCombatShotResolutionRewindSourceId =
-  (typeof metaverseCombatShotResolutionRewindSourceIds)[number];
 export type MetaverseCombatWeaponFireModeId =
   (typeof metaverseCombatWeaponFireModeIds)[number];
 export type MetaverseCombatWeaponDeliveryModelId =
@@ -815,36 +791,6 @@ export interface MetaverseCombatProjectileSnapshotInput {
   readonly weaponId: string;
 }
 
-export interface MetaverseCombatProjectileLaunchTelemetrySnapshot {
-  readonly bodyYawReferenceOriginWorld: MetaversePresenceVector3Snapshot | null;
-  readonly cameraRayForwardWorld: MetaversePresenceVector3Snapshot;
-  readonly cameraRayOriginWorld: MetaversePresenceVector3Snapshot;
-  readonly cameraRayTargetSource:
-    MetaverseCombatProjectileCameraRayTargetSourceId;
-  readonly cameraRayTargetWorld: MetaversePresenceVector3Snapshot;
-  readonly firstImpactKind: MetaverseCombatProjectileFirstImpactKindId | null;
-  readonly firstImpactPointWorld: MetaversePresenceVector3Snapshot | null;
-  readonly launchConvergenceAngleRadians: Radians;
-  readonly launchForwardWorld: MetaversePresenceVector3Snapshot;
-  readonly weaponTipOriginWorld: MetaversePresenceVector3Snapshot;
-}
-
-export interface MetaverseCombatProjectileLaunchTelemetrySnapshotInput {
-  readonly bodyYawReferenceOriginWorld?: MetaversePresenceVector3SnapshotInput | null;
-  readonly cameraRayForwardWorld: MetaversePresenceVector3SnapshotInput;
-  readonly cameraRayOriginWorld: MetaversePresenceVector3SnapshotInput;
-  readonly cameraRayTargetSource?:
-    MetaverseCombatProjectileCameraRayTargetSourceId;
-  readonly cameraRayTargetWorld: MetaversePresenceVector3SnapshotInput;
-  readonly firstImpactKind?:
-    | MetaverseCombatProjectileFirstImpactKindId
-    | null;
-  readonly firstImpactPointWorld?: MetaversePresenceVector3SnapshotInput | null;
-  readonly launchConvergenceAngleRadians?: number;
-  readonly launchForwardWorld: MetaversePresenceVector3SnapshotInput;
-  readonly weaponTipOriginWorld: MetaversePresenceVector3SnapshotInput;
-}
-
 export interface MetaverseCombatEventHitscanSnapshot {
   readonly finalReason: MetaverseCombatShotResolutionFinalReasonId;
   readonly hitKind: MetaverseCombatEventHitscanHitKindId;
@@ -886,7 +832,6 @@ export interface MetaverseCombatEventSnapshot {
   readonly projectile: MetaverseCombatEventProjectileSnapshot | null;
   readonly projectileId: string | null;
   readonly semanticMuzzleWorld: MetaversePresenceVector3Snapshot | null;
-  readonly serverTick: number;
   readonly shotId: string;
   readonly weaponId: string;
   readonly weaponInstanceId: string | null;
@@ -907,7 +852,6 @@ export interface MetaverseCombatEventSnapshotInput {
   readonly projectile?: MetaverseCombatEventProjectileSnapshotInput | null;
   readonly projectileId?: string | null;
   readonly semanticMuzzleWorld?: MetaversePresenceVector3SnapshotInput | null;
-  readonly serverTick?: number;
   readonly shotId?: string;
   readonly weaponId: string;
   readonly weaponInstanceId?: string | null;
@@ -1060,76 +1004,6 @@ export interface MetaverseCombatClosestHurtVolumePointSnapshot {
   readonly regionId: MetaverseCombatHurtRegionId;
 }
 
-export interface MetaverseCombatShotResolutionPlayerCandidateSnapshot {
-  readonly distanceMeters: number;
-  readonly hitZone: MetaverseCombatHitZoneId;
-  readonly point: MetaversePresenceVector3Snapshot;
-  readonly regionId: MetaverseCombatHurtRegionId;
-  readonly targetPlayerId: MetaversePlayerId;
-}
-
-export interface MetaverseCombatShotResolutionPlayerCandidateSnapshotInput {
-  readonly distanceMeters?: number;
-  readonly hitZone?: MetaverseCombatHitZoneId;
-  readonly point?: MetaversePresenceVector3SnapshotInput | null;
-  readonly regionId?: MetaverseCombatHurtRegionId;
-  readonly targetPlayerId?: MetaversePlayerId | null;
-}
-
-export interface MetaverseCombatShotResolutionTelemetrySnapshot {
-  readonly actionSequence: number;
-  readonly candidatePlayerHit:
-    | MetaverseCombatShotResolutionPlayerCandidateSnapshot
-    | null;
-  readonly finalReason: MetaverseCombatShotResolutionFinalReasonId;
-  readonly firingReferenceOriginWorld: MetaversePresenceVector3Snapshot | null;
-  readonly lineOfSightBlocked: boolean;
-  readonly lineOfSightBlockerDistanceMeters: number | null;
-  readonly lineOfSightBlockerKind: "bullet-blocking-world" | null;
-  readonly lineOfSightBlockerPoint: MetaversePresenceVector3Snapshot | null;
-  readonly lineOfSightChecked: boolean;
-  readonly processedAtTimeMs: Milliseconds;
-  readonly rayForwardWorld: MetaversePresenceVector3Snapshot | null;
-  readonly rayOriginWorld: MetaversePresenceVector3Snapshot | null;
-  readonly rewindSource: MetaverseCombatShotResolutionRewindSourceId;
-  readonly selectedPlayerHit:
-    | MetaverseCombatShotResolutionPlayerCandidateSnapshot
-    | null;
-  readonly weaponId: string;
-  readonly worldHitColliderKind: "bullet-blocking-world" | null;
-  readonly worldHitDistanceMeters: number | null;
-  readonly worldHitPoint: MetaversePresenceVector3Snapshot | null;
-}
-
-export interface MetaverseCombatShotResolutionTelemetrySnapshotInput {
-  readonly actionSequence?: number;
-  readonly candidatePlayerHit?:
-    | MetaverseCombatShotResolutionPlayerCandidateSnapshotInput
-    | null;
-  readonly finalReason?: MetaverseCombatShotResolutionFinalReasonId;
-  readonly firingReferenceOriginWorld?:
-    | MetaversePresenceVector3SnapshotInput
-    | null;
-  readonly lineOfSightBlocked?: boolean;
-  readonly lineOfSightBlockerDistanceMeters?: number | null;
-  readonly lineOfSightBlockerKind?: "bullet-blocking-world" | null;
-  readonly lineOfSightBlockerPoint?:
-    | MetaversePresenceVector3SnapshotInput
-    | null;
-  readonly lineOfSightChecked?: boolean;
-  readonly processedAtTimeMs?: number;
-  readonly rayForwardWorld?: MetaversePresenceVector3SnapshotInput | null;
-  readonly rayOriginWorld?: MetaversePresenceVector3SnapshotInput | null;
-  readonly rewindSource?: MetaverseCombatShotResolutionRewindSourceId;
-  readonly selectedPlayerHit?:
-    | MetaverseCombatShotResolutionPlayerCandidateSnapshotInput
-    | null;
-  readonly weaponId?: string;
-  readonly worldHitColliderKind?: "bullet-blocking-world" | null;
-  readonly worldHitDistanceMeters?: number | null;
-  readonly worldHitPoint?: MetaversePresenceVector3SnapshotInput | null;
-}
-
 const defaultCombatWeaponAccuracy = Object.freeze({
   adsAffectsAccuracy: false,
   bloomDegrees: 0,
@@ -1278,14 +1152,6 @@ function normalizeProjectileResolution(
     : "active";
 }
 
-function normalizePlayerActionKind(
-  value: string | undefined
-): MetaversePlayerActionKindId {
-  return metaversePlayerActionKindIds.includes(value as MetaversePlayerActionKindId)
-    ? (value as MetaversePlayerActionKindId)
-    : "fire-weapon";
-}
-
 function normalizePlayerActionReceiptStatus(
   value: string | undefined
 ): MetaversePlayerActionReceiptStatusId {
@@ -1394,16 +1260,6 @@ function normalizeShotResolutionFinalReason(
   )
     ? (value as MetaverseCombatShotResolutionFinalReasonId)
     : "miss-no-hurtbox";
-}
-
-function normalizeShotResolutionRewindSource(
-  value: string | undefined
-): MetaverseCombatShotResolutionRewindSourceId {
-  return metaverseCombatShotResolutionRewindSourceIds.includes(
-    value as MetaverseCombatShotResolutionRewindSourceId
-  )
-    ? (value as MetaverseCombatShotResolutionRewindSourceId)
-    : "none";
 }
 
 function normalizeMatchPhase(
@@ -1771,88 +1627,6 @@ function readLengthSquared(
   value: Pick<MetaversePresenceVector3Snapshot, "x" | "y" | "z">
 ): number {
   return readDot(value, value);
-}
-
-function readSegmentClosestApproach(
-  segmentStart: MetaversePresenceVector3Snapshot,
-  segmentEnd: MetaversePresenceVector3Snapshot,
-  axisStart: MetaversePresenceVector3Snapshot,
-  axisEnd: MetaversePresenceVector3Snapshot
-): {
-  readonly distanceSquared: number;
-  readonly segmentAlpha: number;
-} {
-  const epsilon = 0.000001;
-  const segmentDirection = subtractVectors(segmentEnd, segmentStart);
-  const axisDirection = subtractVectors(axisEnd, axisStart);
-  const betweenStarts = subtractVectors(segmentStart, axisStart);
-  const segmentLengthSquared = readLengthSquared(segmentDirection);
-  const axisLengthSquared = readLengthSquared(axisDirection);
-  const segmentAxisDot = readDot(segmentDirection, axisDirection);
-  const segmentStartDot = readDot(segmentDirection, betweenStarts);
-  const axisStartDot = readDot(axisDirection, betweenStarts);
-  const denominator =
-    segmentLengthSquared * axisLengthSquared - segmentAxisDot * segmentAxisDot;
-
-  let segmentAlpha = 0;
-  let axisAlpha = 0;
-
-  if (segmentLengthSquared <= epsilon && axisLengthSquared <= epsilon) {
-    segmentAlpha = 0;
-    axisAlpha = 0;
-  } else if (segmentLengthSquared <= epsilon) {
-    segmentAlpha = 0;
-    axisAlpha = Math.max(
-      0,
-      Math.min(1, axisStartDot / Math.max(axisLengthSquared, epsilon))
-    );
-  } else if (axisLengthSquared <= epsilon) {
-    axisAlpha = 0;
-    segmentAlpha = Math.max(
-      0,
-      Math.min(1, -segmentStartDot / Math.max(segmentLengthSquared, epsilon))
-    );
-  } else if (Math.abs(denominator) <= epsilon) {
-    segmentAlpha = Math.max(
-      0,
-      Math.min(1, -segmentStartDot / Math.max(segmentLengthSquared, epsilon))
-    );
-    const projectedAxisAlpha =
-      (segmentAxisDot * segmentAlpha + axisStartDot) /
-      Math.max(axisLengthSquared, epsilon);
-
-    axisAlpha = Math.max(0, Math.min(1, projectedAxisAlpha));
-  } else {
-    segmentAlpha = Math.max(
-      0,
-      Math.min(
-        1,
-        (segmentAxisDot * axisStartDot - axisLengthSquared * segmentStartDot) /
-          denominator
-      )
-    );
-    axisAlpha = Math.max(
-      0,
-      Math.min(
-        1,
-        (segmentLengthSquared * axisStartDot - segmentAxisDot * segmentStartDot) /
-          denominator
-      )
-    );
-  }
-
-  const closestSegmentPoint = createPointOnSegment(
-    segmentStart,
-    segmentEnd,
-    segmentAlpha
-  );
-  const closestAxisPoint = createPointOnSegment(axisStart, axisEnd, axisAlpha);
-  const separation = subtractVectors(closestSegmentPoint, closestAxisPoint);
-
-  return Object.freeze({
-    distanceSquared: readLengthSquared(separation),
-    segmentAlpha
-  });
 }
 
 function readSegmentSphereIntersectionDistance(
@@ -2667,12 +2441,6 @@ export function createMetaversePlayerActionReceiptSnapshot(
 export function createMetaverseCombatActionReceiptSnapshot(
   input: MetaverseCombatActionReceiptSnapshotInput
 ): MetaverseCombatActionReceiptSnapshot {
-  const compatibilityProjectileId =
-    "projectileId" in input &&
-    typeof input.projectileId === "string"
-      ? input.projectileId
-      : undefined;
-
   return createMetaversePlayerActionReceiptSnapshot({
     ...(input.actionSequence === undefined
       ? {}
@@ -2695,12 +2463,6 @@ export function createMetaverseCombatActionReceiptSnapshot(
       : {
           sourceProjectileId: input.sourceProjectileId
         }),
-    ...(input.sourceProjectileId === undefined &&
-    compatibilityProjectileId !== undefined
-      ? {
-          sourceProjectileId: compatibilityProjectileId
-        }
-      : {}),
     ...(input.status === undefined
       ? {}
       : {
@@ -2708,101 +2470,6 @@ export function createMetaverseCombatActionReceiptSnapshot(
         }),
     weaponId: input.weaponId
   }) as MetaverseCombatActionReceiptSnapshot;
-}
-
-function createMetaverseCombatShotResolutionPlayerCandidateSnapshot(
-  input:
-    | MetaverseCombatShotResolutionPlayerCandidateSnapshotInput
-    | null
-    | undefined
-): MetaverseCombatShotResolutionPlayerCandidateSnapshot | null {
-  if (input === null || input === undefined) {
-    return null;
-  }
-
-  const regionId = normalizeHurtRegionId(input.regionId, null);
-  const hitZone = normalizeHitZone(input.hitZone, null);
-  const point = createNullableVector3Snapshot(input.point);
-  const targetPlayerId =
-    input.targetPlayerId === null || input.targetPlayerId === undefined
-      ? null
-      : input.targetPlayerId;
-
-  if (
-    regionId === null ||
-    hitZone === null ||
-    point === null ||
-    targetPlayerId === null
-  ) {
-    return null;
-  }
-
-  return Object.freeze({
-    distanceMeters: normalizeFiniteNonNegativeNumber(input.distanceMeters),
-    hitZone,
-    point,
-    regionId,
-    targetPlayerId
-  });
-}
-
-function normalizeOptionalDistance(rawValue: number | null | undefined): number | null {
-  if (rawValue === null || rawValue === undefined) {
-    return null;
-  }
-
-  return normalizeFiniteNonNegativeNumber(rawValue);
-}
-
-export function createMetaverseCombatShotResolutionTelemetrySnapshot(
-  input: MetaverseCombatShotResolutionTelemetrySnapshotInput = {}
-): MetaverseCombatShotResolutionTelemetrySnapshot {
-  const lineOfSightBlocked = input.lineOfSightBlocked === true;
-
-  return Object.freeze({
-    actionSequence: normalizeFiniteNonNegativeInteger(input.actionSequence),
-    candidatePlayerHit:
-      createMetaverseCombatShotResolutionPlayerCandidateSnapshot(
-        input.candidatePlayerHit
-      ),
-    finalReason: normalizeShotResolutionFinalReason(input.finalReason),
-    firingReferenceOriginWorld: createNullableVector3Snapshot(
-      input.firingReferenceOriginWorld
-    ),
-    lineOfSightBlocked,
-    lineOfSightBlockerDistanceMeters: lineOfSightBlocked
-      ? normalizeOptionalDistance(input.lineOfSightBlockerDistanceMeters)
-      : null,
-    lineOfSightBlockerKind: lineOfSightBlocked
-      ? input.lineOfSightBlockerKind ?? "bullet-blocking-world"
-      : null,
-    lineOfSightBlockerPoint: lineOfSightBlocked
-      ? createNullableVector3Snapshot(input.lineOfSightBlockerPoint)
-      : null,
-    lineOfSightChecked: input.lineOfSightChecked === true,
-    processedAtTimeMs: createMilliseconds(
-      normalizeFiniteNonNegativeNumber(input.processedAtTimeMs)
-    ),
-    rayForwardWorld: createNullableVector3Snapshot(input.rayForwardWorld),
-    rayOriginWorld: createNullableVector3Snapshot(input.rayOriginWorld),
-    rewindSource: normalizeShotResolutionRewindSource(input.rewindSource),
-    selectedPlayerHit:
-      createMetaverseCombatShotResolutionPlayerCandidateSnapshot(
-        input.selectedPlayerHit
-      ),
-    weaponId: normalizeIdentifier(
-      input.weaponId ?? "unknown",
-      "Metaverse combat shot telemetry weaponId"
-    ),
-    worldHitColliderKind:
-      input.worldHitColliderKind === "bullet-blocking-world"
-        ? "bullet-blocking-world"
-        : null,
-    worldHitDistanceMeters: normalizeOptionalDistance(
-      input.worldHitDistanceMeters
-    ),
-    worldHitPoint: createNullableVector3Snapshot(input.worldHitPoint)
-  });
 }
 
 function createMetaverseCombatEventHitscanSnapshot(
@@ -2886,7 +2553,6 @@ export function createMetaverseCombatEventSnapshot(
     semanticMuzzleWorld: createNullableVector3Snapshot(
       input.semanticMuzzleWorld
     ),
-    serverTick: normalizeFiniteNonNegativeInteger(input.serverTick),
     shotId,
     weaponId,
     weaponInstanceId: normalizeOptionalIdentifier(

@@ -18,6 +18,13 @@ const strudelOptimizeDeps = [
   "@strudel/webaudio"
 ] as const;
 const physicsOptimizeDeps = ["@dimforge/rapier3d"] as const;
+const clientOptimizeDepEntries = [
+  "index.html",
+  "src/metaverse/index.ts",
+  "src/engine-tool/routes/game-playlists-stage-screen.tsx",
+  "src/engine-tool/routes/map-editor-stage-screen.tsx",
+  "src/experiences/duck-hunt/components/duck-hunt-gameplay-stage-screen.tsx"
+];
 
 export default defineConfig({
   build: {
@@ -42,6 +49,9 @@ export default defineConfig({
     }
   },
   optimizeDeps: {
+    // Lazy stage roots need cold-start scanning so first navigation does not
+    // invalidate already-served optimized React dependency URLs.
+    entries: clientOptimizeDepEntries,
     exclude: [...strudelOptimizeDeps, ...physicsOptimizeDeps]
   },
   plugins: [react(), wasm(), tailwindcss()],

@@ -75,7 +75,6 @@ test("MetaverseSceneLocalCharacterPresentationState owns local animation advance
   const mountedPresentationSnapshot =
     createMetaverseSceneMountedPresentationSnapshot(mountedEnvironment);
   const characterRuntime = {
-    activeAnimationActionSetId: "full-body",
     activeAnimationVocabulary: "idle",
     actionsByVocabulary: new Map([
       [
@@ -92,6 +91,16 @@ test("MetaverseSceneLocalCharacterPresentationState owns local animation advance
       update(deltaSeconds) {
         calls.push(["mixer-update", deltaSeconds]);
       }
+    },
+    deathRagdollRuntime: {
+      apply() {},
+      clear() {},
+      isActive: false,
+      trigger() {}
+    },
+    proceduralHitReactionRuntime: {
+      apply() {},
+      trigger() {}
     },
     skeletonId: "humanoid_v2"
   };
@@ -151,6 +160,7 @@ test("MetaverseSceneLocalCharacterPresentationState owns local animation advance
 
   const presentedCameraSnapshot = localCharacterPresentationState.syncPresentation(
     cameraSnapshot,
+    125,
     1 / 60,
     characterPresentation,
     mountedPresentationSnapshot

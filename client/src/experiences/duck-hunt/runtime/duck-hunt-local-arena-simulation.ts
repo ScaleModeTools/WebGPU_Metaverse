@@ -153,10 +153,6 @@ export class DuckHuntLocalArenaSimulation {
     return this.#hudSnapshot;
   }
 
-  get telemetrySnapshot(): null {
-    return null;
-  }
-
   get worldTimeMs(): number {
     return this.#worldTimeMs;
   }

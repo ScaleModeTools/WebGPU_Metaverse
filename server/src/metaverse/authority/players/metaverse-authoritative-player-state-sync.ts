@@ -10,7 +10,6 @@ import {
   resolveMetaverseMountedLookConstraintBounds,
   resolveMetaverseTraversalAngularVelocityRadiansPerSecond,
   resolveMetaverseTraversalAuthoritySnapshotForActionState,
-  resolveMetaverseTraversalKinematicState,
   wrapRadians,
   type MetaverseMountedLookLimitPolicyId,
   type MetaversePlayerLookConstraintBounds,

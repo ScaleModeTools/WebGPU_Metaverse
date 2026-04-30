@@ -8,6 +8,13 @@ server_port="3210"
 webtransport_host="127.0.0.1"
 webtransport_port="3211"
 local_dev_dir="$repo_root/.local-dev"
+local_dev_node_modules_dir="$local_dev_dir/node_modules"
+local_dev_shared_package_dir="$local_dev_node_modules_dir/@webgpu-metaverse/shared"
+local_dev_shared_dist="$local_dev_shared_package_dir/dist"
+local_dev_server_dist="$local_dev_dir/server-dist"
+local_dev_shared_tsconfig="$local_dev_dir/webgpu-metaverse-dev-shared.tsconfig.json"
+local_dev_server_tsconfig="$local_dev_dir/webgpu-metaverse-dev-server.tsconfig.json"
+local_dev_server_entry="$local_dev_server_dist/index.js"
 server_pid_file="$local_dev_dir/webgpu-metaverse-dev-server.pid"
 server_ready_file="$local_dev_dir/webgpu-metaverse-dev-server.ready"
 client_env_file="$local_dev_dir/webgpu-metaverse-dev-client.env"
@@ -464,6 +471,75 @@ start_watch_build() {
   pids+=("$started_watch_pid")
 }
 
+write_localdev_runtime_tsconfigs() {
+  mkdir -p "$local_dev_shared_package_dir"
+  cp "$repo_root/packages/shared/package.json" \
+    "$local_dev_shared_package_dir/package.json"
+
+  node \
+    --input-type=module \
+    --eval '
+      import { writeFileSync } from "node:fs";
+      import { resolve } from "node:path";
+
+      const localDevDir = process.argv[1];
+      const sharedTsconfigPath = process.argv[2];
+      const serverTsconfigPath = process.argv[3];
+      const sharedDistPath = "./node_modules/@webgpu-metaverse/shared/dist";
+
+      const writeJson = (filePath, value) => {
+        writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+      };
+
+      writeJson(sharedTsconfigPath, {
+        extends: resolve(localDevDir, "../packages/shared/tsconfig.json"),
+        compilerOptions: {
+          outDir: sharedDistPath
+        }
+      });
+
+      writeJson(serverTsconfigPath, {
+        extends: resolve(localDevDir, "../server/tsconfig.json"),
+        compilerOptions: {
+          outDir: "./server-dist",
+          paths: {
+            "@webgpu-metaverse/shared/experiences/duck-hunt": [
+              `${sharedDistPath}/experiences/duck-hunt/index.d.ts`
+            ],
+            "@webgpu-metaverse/shared/experiences": [
+              `${sharedDistPath}/experiences/index.d.ts`
+            ],
+            "@webgpu-metaverse/shared/metaverse/portal": [
+              `${sharedDistPath}/metaverse/portal/index.d.ts`
+            ],
+            "@webgpu-metaverse/shared/metaverse/realtime": [
+              `${sharedDistPath}/metaverse/realtime/index.d.ts`
+            ],
+            "@webgpu-metaverse/shared/metaverse/session": [
+              `${sharedDistPath}/metaverse/session/index.d.ts`
+            ],
+            "@webgpu-metaverse/shared/metaverse/traversal": [
+              `${sharedDistPath}/metaverse/traversal/index.d.ts`
+            ],
+            "@webgpu-metaverse/shared/metaverse/world": [
+              `${sharedDistPath}/metaverse/world/index.d.ts`
+            ],
+            "@webgpu-metaverse/shared/metaverse/presence": [
+              `${sharedDistPath}/metaverse/presence/index.d.ts`
+            ],
+            "@webgpu-metaverse/shared/metaverse": [
+              `${sharedDistPath}/metaverse/index.d.ts`
+            ],
+            "@webgpu-metaverse/shared": [`${sharedDistPath}/index.d.ts`]
+          }
+        }
+      });
+    ' \
+    "$local_dev_dir" \
+    "$local_dev_shared_tsconfig" \
+    "$local_dev_server_tsconfig"
+}
+
 wait_for_watch_build_ready() {
   local label="$1"
   local log_file="$2"
@@ -539,15 +615,18 @@ resolve_existing_managed_server_watch_pid() {
       continue
     fi
 
-    if [[ "$process_args" != *"$repo_root/server/dist/index.js"* ]]; then
+    if [[ "$process_args" != *"$local_dev_server_entry"* ]] &&
+      [[ "$process_args" != *"$repo_root/server/dist/index.js"* ]]; then
       continue
     fi
 
-    if [[ "$process_args" != *"--watch-path $repo_root/packages/shared/dist"* ]]; then
+    if [[ "$process_args" != *"--watch-path $local_dev_shared_dist"* ]] &&
+      [[ "$process_args" != *"--watch-path $repo_root/packages/shared/dist"* ]]; then
       continue
     fi
 
-    if [[ "$process_args" != *"--watch-path $repo_root/server/dist"* ]]; then
+    if [[ "$process_args" != *"--watch-path $local_dev_server_dist"* ]] &&
+      [[ "$process_args" != *"--watch-path $repo_root/server/dist"* ]]; then
       continue
     fi
 
@@ -564,7 +643,8 @@ resolve_existing_repo_server_runtime_pids() {
       continue
     fi
 
-    if [[ "$process_args" != *"$repo_root/server/dist/index.js"* ]]; then
+    if [[ "$process_args" != *"$local_dev_server_entry"* ]] &&
+      [[ "$process_args" != *"$repo_root/server/dist/index.js"* ]]; then
       continue
     fi
 
@@ -733,20 +813,21 @@ if [[ -n "$localdev_webtransport_boot_status" ]]; then
   export WEBGPU_METAVERSE_LOCALDEV_WEBTRANSPORT_BOOT_ERROR="$localdev_webtransport_boot_error"
 fi
 
-# Avoid the workspace build scripts here because they aggressively clean `dist/`
-# trees. Cleaning during dev startup can race an already-running watcher and
-# temporarily remove package outputs that the server process imports.
-./node_modules/.bin/tsc -p "$repo_root/packages/shared/tsconfig.json"
-./node_modules/.bin/tsc -p "$repo_root/server/tsconfig.json"
+# Keep the watched dev runtime out of product `dist/` trees so build, test, and
+# verify can rebuild shipped artifacts without restarting the local server.
+rm -rf "$local_dev_shared_dist" "$local_dev_server_dist"
+write_localdev_runtime_tsconfigs
+./node_modules/.bin/tsc -p "$local_dev_shared_tsconfig"
+./node_modules/.bin/tsc -p "$local_dev_server_tsconfig"
 
 start_watch_build \
   "$shared_watch_log" \
-  npm run watch:build --workspace @webgpu-metaverse/shared
+  ./node_modules/.bin/tsc -p "$local_dev_shared_tsconfig" --watch --preserveWatchOutput
 shared_watch_pid="$started_watch_pid"
 
 start_watch_build \
   "$server_watch_log" \
-  npm run watch:build --workspace @webgpu-metaverse/server
+  ./node_modules/.bin/tsc -p "$local_dev_server_tsconfig" --watch --preserveWatchOutput
 server_watch_pid="$started_watch_pid"
 
 wait_for_watch_build_ready "shared" "$shared_watch_log" "$shared_watch_pid"
@@ -757,9 +838,9 @@ echo "WebGPU Metaverse dev watch builds are ready. Starting server runtime."
 node \
   --watch \
   --watch-preserve-output \
-  --watch-path "$repo_root/packages/shared/dist" \
-  --watch-path "$repo_root/server/dist" \
-  "$repo_root/server/dist/index.js" \
+  --watch-path "$local_dev_shared_dist" \
+  --watch-path "$local_dev_server_dist" \
+  "$local_dev_server_entry" \
   2> >(relay_server_runtime_stderr) &
 pids+=($!)
 

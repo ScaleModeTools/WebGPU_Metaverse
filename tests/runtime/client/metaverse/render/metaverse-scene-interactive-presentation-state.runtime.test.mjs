@@ -61,6 +61,21 @@ function findOptionalNode(scene, nodeName) {
   return scene.getObjectByName(nodeName) ?? null;
 }
 
+function createUnusedRagdollPhysicsRuntime() {
+  const unexpected = () => {
+    throw new Error("unexpected ragdoll physics access");
+  };
+
+  return {
+    isInitialized: false,
+    createDynamicCuboidBody: unexpected,
+    createSphericalImpulseJoint: unexpected,
+    createVector3: unexpected,
+    removeImpulseJoint: unexpected,
+    removeRigidBody: unexpected
+  };
+}
+
 function upsertSyntheticSocketNode(
   Bone,
   characterScene,
@@ -345,6 +360,7 @@ test("MetaverseSceneInteractivePresentationState boots manifest-driven character
       findBoneNode,
       findSocketNode
     },
+    physicsRuntime: createUnusedRagdollPhysicsRuntime(),
     scene,
     warn(message) {
       warnings.push(message);
@@ -354,7 +370,17 @@ test("MetaverseSceneInteractivePresentationState boots manifest-driven character
   await interactivePresentationState.boot();
 
   const activeWeaponState = Object.freeze({
+    activeSlotId: "primary",
     aimMode: "hip-fire",
+    slots: Object.freeze([
+      Object.freeze({
+        attachmentId: "metaverse-service-pistol-v1",
+        equipped: true,
+        slotId: "primary",
+        weaponId: "metaverse-service-pistol-v1",
+        weaponInstanceId: "test-player:primary:metaverse-service-pistol-v1"
+      })
+    ]),
     weaponId: "metaverse-service-pistol-v1"
   });
 
@@ -469,6 +495,7 @@ test("MetaverseSceneInteractivePresentationState rejects attachment proof slices
       findBoneNode,
       findSocketNode
     },
+    physicsRuntime: createUnusedRagdollPhysicsRuntime(),
     scene: new Scene(),
     warn() {}
   });

@@ -1,4 +1,3 @@
-import { readMetaverseCombatWeaponProfile } from "@webgpu-metaverse/shared";
 import type {
   MetaverseCombatEventSnapshot,
   MetaverseCombatFeedEventSnapshot,
@@ -116,16 +115,6 @@ const metaverseCombatHitSpatialProfile = Object.freeze({
   rolloffFactor: 1.85
 });
 
-function readWeaponPresentationDeliveryModel(
-  weaponId: string
-): "hitscan-tracer" | "authoritative-projectile" {
-  try {
-    return readMetaverseCombatWeaponProfile(weaponId).presentationDeliveryModel;
-  } catch {
-    return "hitscan-tracer";
-  }
-}
-
 function createSpatialAudioOptions(
   position: { readonly x: number; readonly y: number; readonly z: number },
   cameraSnapshot: MetaverseCameraSnapshot,
@@ -165,6 +154,31 @@ function readPlayerHitAudioPosition(
     x: activeBodySnapshot.position.x,
     y: activeBodySnapshot.position.y + (hitZone === "head" ? 1.72 : 1.12),
     z: activeBodySnapshot.position.z
+  });
+}
+
+function createDamageSourceDirectionWorld(
+  targetPlayerSnapshot: MetaverseRealtimePlayerSnapshot,
+  attackerPlayerSnapshot: MetaverseRealtimePlayerSnapshot
+) {
+  const targetBodySnapshot =
+    readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(targetPlayerSnapshot);
+  const attackerBodySnapshot =
+    readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(attackerPlayerSnapshot);
+  const deltaX =
+    attackerBodySnapshot.position.x - targetBodySnapshot.position.x;
+  const deltaZ =
+    attackerBodySnapshot.position.z - targetBodySnapshot.position.z;
+  const horizontalDistance = Math.hypot(deltaX, deltaZ);
+
+  if (horizontalDistance <= 0.000001) {
+    return null;
+  }
+
+  return Object.freeze({
+    x: deltaX / horizontalDistance,
+    y: 0,
+    z: deltaZ / horizontalDistance
   });
 }
 
@@ -377,25 +391,6 @@ function resolvePistolEndpointPresentation(input: {
     finiteEndpointPolicy: "normal-tracer",
     visualEndWorld: endpointWorld
   });
-}
-
-function isAuthoritativeProjectilePresentationWeapon(
-  weaponId: string
-): boolean {
-  return readWeaponPresentationDeliveryModel(weaponId) ===
-    "authoritative-projectile";
-}
-
-function readCombatFeedSequence(
-  eventSnapshot: MetaverseCombatFeedEventSnapshot
-): number {
-  return eventSnapshot.sequence;
-}
-
-function readCombatEventSequence(
-  eventSnapshot: MetaverseCombatEventSnapshot
-): number {
-  return eventSnapshot.eventSequence;
 }
 
 function readLatestCombatEventSequence(
@@ -707,11 +702,6 @@ export class MetaverseCombatFeedbackRuntime {
         localPredictedShotOrigin.originCaptured
           ? readFiniteVector3(localPredictedShotOrigin.originWorld)
           : null;
-      const postSyncFireActionMuzzleSource =
-        postSyncFireActionMuzzleWorld === null
-          ? null
-          : localPredictedShotOrigin?.originSource ??
-            "rendered-muzzle-post-sync";
       const postSyncFireActionMuzzleForwardWorld =
         postSyncFireActionMuzzleWorld === null
           ? null
@@ -731,10 +721,6 @@ export class MetaverseCombatFeedbackRuntime {
           postSyncFireActionMuzzleWorld ??
           renderedVisualStartWorld ??
           semanticFallbackStartWorld;
-        const selectedRenderedMuzzleWorld =
-          postSyncFireActionMuzzleSource === "rendered-muzzle-post-sync"
-            ? postSyncFireActionMuzzleWorld
-            : renderedMuzzleWorld;
         const selectedRenderedMuzzleForwardWorld =
           postSyncFireActionMuzzleForwardWorld ?? renderedMuzzleForwardWorld;
 
@@ -1379,6 +1365,8 @@ export class MetaverseCombatFeedbackRuntime {
         this.#triggerHit(
           worldSnapshot,
           eventSnapshot.targetPlayerId,
+          eventSnapshot.attackerPlayerId,
+          eventSnapshot.damage,
           eventSnapshot.hitZone,
           eventSnapshot.sequence,
           eventSnapshot.weaponId,
@@ -1387,9 +1375,11 @@ export class MetaverseCombatFeedbackRuntime {
         );
       } else if (eventSnapshot.type === "kill") {
         this.#triggerDeath(
+          worldSnapshot,
           eventSnapshot.targetPlayerId,
           eventSnapshot.sequence,
-          eventSnapshot.weaponId
+          eventSnapshot.weaponId,
+          eventSnapshot.attackerPlayerId
         );
       }
     }
@@ -1400,6 +1390,8 @@ export class MetaverseCombatFeedbackRuntime {
   #triggerHit(
     worldSnapshot: MetaverseRealtimeWorldSnapshot,
     targetPlayerId: MetaversePlayerId,
+    attackerPlayerId: MetaversePlayerId,
+    damageAmount: number,
     hitZone: "body" | "head",
     sequence: number,
     weaponId: string,
@@ -1407,6 +1399,17 @@ export class MetaverseCombatFeedbackRuntime {
     localTarget: boolean
   ): void {
     const targetPlayerSnapshot = readPlayerById(worldSnapshot, targetPlayerId);
+    const attackerPlayerSnapshot = readPlayerById(
+      worldSnapshot,
+      attackerPlayerId
+    );
+    const damageSourceDirectionWorld =
+      targetPlayerSnapshot === null || attackerPlayerSnapshot === null
+        ? null
+        : createDamageSourceDirectionWorld(
+            targetPlayerSnapshot,
+            attackerPlayerSnapshot
+          );
 
     if (targetPlayerSnapshot !== null) {
       this.#playAudioCue?.(
@@ -1426,6 +1429,9 @@ export class MetaverseCombatFeedbackRuntime {
     }
 
     this.#triggerPresentationEvent({
+      damageAmount,
+      damageSourceDirectionWorld,
+      hitZone,
       kind: "hit",
       playerId: targetPlayerId,
       sequence,
@@ -1455,6 +1461,7 @@ export class MetaverseCombatFeedbackRuntime {
 
       if (!alive) {
         this.#triggerDeath(
+          worldSnapshot,
           playerSnapshot.playerId,
           playerSnapshot.stateSequence,
           playerSnapshot.combat?.activeWeapon?.weaponId ?? null
@@ -1464,9 +1471,11 @@ export class MetaverseCombatFeedbackRuntime {
   }
 
   #triggerDeath(
+    worldSnapshot: MetaverseRealtimeWorldSnapshot,
     playerId: MetaversePlayerId,
     sequence: number,
-    weaponId: string | null
+    weaponId: string | null,
+    attackerPlayerId?: MetaversePlayerId | null
   ): void {
     const lastDeathSequence =
       this.#deathPresentationSequenceByPlayerId.get(playerId) ?? 0;
@@ -1480,7 +1489,22 @@ export class MetaverseCombatFeedbackRuntime {
 
     this.#deathPresentationActiveByPlayerId.set(playerId, true);
     this.#deathPresentationSequenceByPlayerId.set(playerId, sequence);
+
+    const targetPlayerSnapshot = readPlayerById(worldSnapshot, playerId);
+    const attackerPlayerSnapshot =
+      attackerPlayerId === null || attackerPlayerId === undefined
+        ? null
+        : readPlayerById(worldSnapshot, attackerPlayerId);
+    const damageSourceDirectionWorld =
+      targetPlayerSnapshot === null || attackerPlayerSnapshot === null
+        ? null
+        : createDamageSourceDirectionWorld(
+            targetPlayerSnapshot,
+            attackerPlayerSnapshot
+          );
+
     this.#triggerPresentationEvent({
+      damageSourceDirectionWorld,
       kind: "death",
       playerId,
       sequence,

@@ -6,7 +6,7 @@ import {
   syncLocalCharacterPresentation
 } from "./metaverse-scene-local-character-presentation";
 import {
-  clearCharacterCombatDeathAnimation,
+  clearCharacterCombatDeathPresentation,
   triggerCharacterCombatPresentationEvent
 } from "./metaverse-scene-character-animation";
 import type {
@@ -80,6 +80,13 @@ export class MetaverseSceneLocalCharacterPresentationState {
   }
 
   resetPresentation(): void {
+    const characterRuntime =
+      this.#dependencies.interactivePresentationState.characterProofRuntime;
+
+    if (characterRuntime !== null) {
+      clearCharacterCombatDeathPresentation(characterRuntime);
+    }
+
     this.#dependencies.interactivePresentationState.syncAttachmentMount(null);
   }
 
@@ -96,7 +103,7 @@ export class MetaverseSceneLocalCharacterPresentationState {
     triggerCharacterCombatPresentationEvent(characterRuntime, event);
   }
 
-  clearCombatDeathAnimation(): void {
+  clearCombatDeathPresentation(): void {
     const characterRuntime =
       this.#dependencies.interactivePresentationState.characterProofRuntime;
 
@@ -104,11 +111,12 @@ export class MetaverseSceneLocalCharacterPresentationState {
       return;
     }
 
-    clearCharacterCombatDeathAnimation(characterRuntime);
+    clearCharacterCombatDeathPresentation(characterRuntime);
   }
 
   syncPresentation(
     cameraSnapshot: MetaverseCameraSnapshot,
+    nowMs: number,
     deltaSeconds: number,
     characterPresentation: MetaverseCharacterPresentationSnapshot | null = null,
     mountedPresentationSnapshot: MetaverseSceneMountedPresentationSnapshot | null =
@@ -162,6 +170,7 @@ export class MetaverseSceneLocalCharacterPresentationState {
         null,
         mountedCharacterRuntime,
         cameraSnapshot,
+        nowMs,
         characterPresentation,
         config.bodyPresentation,
         weaponState,
@@ -179,6 +188,7 @@ export class MetaverseSceneLocalCharacterPresentationState {
       attachmentProofRuntime,
       mountedCharacterRuntime,
       cameraSnapshot,
+      nowMs,
       characterPresentation,
       config.bodyPresentation,
       weaponState,

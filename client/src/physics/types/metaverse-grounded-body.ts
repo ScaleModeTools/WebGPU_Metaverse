@@ -101,7 +101,10 @@ export type RapierQueryFilterPredicate = (
 
 export interface RapierRigidBodyHandle {
   linvel(): RapierVectorLike;
+  rotation(): PhysicsQuaternionSnapshot;
+  setAngvel(velocity: RapierVectorLike, wakeUp: boolean): void;
   setLinvel(velocity: RapierVectorLike, wakeUp: boolean): void;
+  setRotation(rotation: PhysicsQuaternionSnapshot, wakeUp: boolean): void;
   setTranslation(translation: RapierVectorLike, wakeUp: boolean): void;
   translation(): RapierVectorLike;
 }
@@ -143,8 +146,15 @@ export interface RapierWorldHandle {
     colliderDesc: RapierColliderDescHandle,
     parentBody?: RapierRigidBodyHandle
   ): RapierColliderHandle;
+  createImpulseJoint(
+    jointData: RapierJointDataHandle,
+    parentBody: RapierRigidBodyHandle,
+    childBody: RapierRigidBodyHandle,
+    wakeUp: boolean
+  ): RapierImpulseJointHandle;
   createRigidBody(bodyDesc: RapierRigidBodyDescHandle): RapierRigidBodyHandle;
   removeCollider(collider: RapierColliderHandle, wakeUp: boolean): void;
+  removeImpulseJoint(joint: RapierImpulseJointHandle, wakeUp: boolean): void;
   removeRigidBody(body: RapierRigidBodyHandle): void;
   step(): void;
   timestep: number;
@@ -154,8 +164,22 @@ export interface RapierWorldConstructor {
   new (gravity: RapierVectorLike): RapierWorldHandle;
 }
 
+export interface RapierJointDataHandle {}
+
+export interface RapierImpulseJointHandle {
+  readonly handle: number;
+}
+
+export interface RapierJointDataFactory {
+  spherical(
+    parentAnchor: RapierVectorLike,
+    childAnchor: RapierVectorLike
+  ): RapierJointDataHandle;
+}
+
 export interface RapierApiHandle {
   readonly ColliderDesc: RapierColliderDescFactory;
+  readonly JointData: RapierJointDataFactory;
   readonly RigidBodyDesc: RapierRigidBodyDescFactory;
   readonly Vector3: RapierVectorConstructor;
   readonly World: RapierWorldConstructor;

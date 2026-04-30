@@ -1,6 +1,6 @@
 import { resolveMetaverseWorldSurfaceScaleVector } from "@webgpu-metaverse/shared/metaverse/world";
 
-import { createMetaverseCameraSnapshot, directionFromYawPitch } from "../states/metaverse-flight";
+import { directionFromYawPitch } from "../states/metaverse-flight";
 import type { FocusedExperiencePortalSnapshot } from "../types/mounted";
 import type { MetaverseCameraSnapshot, MetaverseEnvironmentProofConfig } from "../types/metaverse-runtime";
 import type { MetaversePortalConfig, MetaverseRuntimeConfig } from "../types/runtime-config";

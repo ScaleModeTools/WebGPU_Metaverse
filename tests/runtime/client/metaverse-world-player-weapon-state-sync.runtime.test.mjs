@@ -22,6 +22,23 @@ after(async () => {
   await clientLoader?.close();
 });
 
+function createTestWeaponState(weaponId, aimMode = "hip-fire") {
+  return Object.freeze({
+    activeSlotId: "primary",
+    aimMode,
+    slots: Object.freeze([
+      Object.freeze({
+        attachmentId: weaponId,
+        equipped: true,
+        slotId: "primary",
+        weaponId,
+        weaponInstanceId: `test-player:primary:${weaponId}`
+      })
+    ]),
+    weaponId
+  });
+}
+
 test("MetaverseWorldPlayerWeaponStateSync sends an initial null weapon state", async () => {
   const { MetaverseWorldPlayerWeaponStateSync } = await clientLoader.load(
     "/src/network/classes/metaverse-world-player-weapon-state-sync.ts"
@@ -120,10 +137,7 @@ test("MetaverseWorldPlayerWeaponStateSync resends weapon state until authoritati
 
   weaponStateSync.syncPlayerWeaponState({
     playerId,
-    weaponState: {
-      aimMode: "ads",
-      weaponId: "duck-hunt-pistol"
-    }
+    weaponState: createTestWeaponState("duck-hunt-pistol", "ads")
   });
 
   assert.equal(weaponStateSync.latestPlayerWeaponSequence, 1);
@@ -198,10 +212,7 @@ test("MetaverseWorldPlayerWeaponStateSync rebases queued weapon sequences above 
 
   weaponStateSync.syncPlayerWeaponState({
     playerId,
-    weaponState: {
-      aimMode: "ads",
-      weaponId: "duck-hunt-pistol"
-    }
+    weaponState: createTestWeaponState("duck-hunt-pistol", "ads")
   });
 
   assert.equal(weaponStateSync.latestPlayerWeaponSequence, 1);

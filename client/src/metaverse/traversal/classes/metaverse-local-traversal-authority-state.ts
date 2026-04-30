@@ -5,10 +5,6 @@ import {
   type MetaverseTraversalAuthoritySnapshot,
   type MetaverseUnmountedTraversalStateSnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
-import type {
-  MetaversePlayerTraversalIntentSnapshot
-} from "@webgpu-metaverse/shared/metaverse/realtime";
-
 import type { MetaverseLocomotionModeId } from "../../types/metaverse-locomotion-mode";
 import {
   createMetaverseIssuedTraversalIntentSnapshot,

@@ -14,17 +14,14 @@ import type { GameplayInputModeId } from "@webgpu-metaverse/shared";
 
 import type { MetaverseShellControllerAction } from "../../client/src/app/types/metaverse-shell-controller";
 import {
-  gameplayDebugPanelModes,
   gameplayRuntimeLifecycleStates,
   gameplayReticleVisualStates,
   localArenaEnemyBehaviorStates,
   localArenaTargetFeedbackStates,
   type FirstPlayableWeaponId,
-  type GameplayDebugPanelMode,
   type GameplayHudSnapshot,
   type GameplayRuntimeConfig,
   type GameplayReticleVisualState,
-  type GameplayTelemetrySnapshot,
   type GameplayRuntimeLifecycleState,
   type GameplaySignal,
   type GameplaySignalType,
@@ -63,7 +60,6 @@ type ExpectedShellActionType =
   | "duckHuntControllerSchemeChanged"
   | "experienceLaunchRequested"
   | "globalBindingPresetChanged"
-  | "gameplayDebugPanelModeChanged"
   | "gameplayExited"
   | "gameplayMenuSetOpen"
   | "inputModeChanged"
@@ -112,10 +108,6 @@ type ExpectedWeaponReadinessState =
   | "reloading";
 type ExpectedWeaponReloadState = "full" | "blocked" | "reloading";
 type ExpectedWeaponReloadRule = "reticle-offscreen";
-type ExpectedGameplayDebugPanelMode =
-  | "hidden"
-  | "telemetry"
-  | "aim-inspector";
 type ExpectedGameplayReticleVisualState =
   | "hidden"
   | "tracking-unavailable"
@@ -127,12 +119,6 @@ type ExpectedGameplayReticleVisualState =
   | "round-paused";
 type ExpectedGameplayInputModeId = "camera-thumb-trigger" | "mouse";
 type ExpectedGameplaySessionMode = "single-player" | "co-op";
-type ExpectedGameplaySessionPhase =
-  | "active"
-  | "completed"
-  | "failed"
-  | "waiting-for-players";
-
 type ShellActionTypesMatch = AssertTrue<
   IsEqual<MetaverseShellControllerActionType, ExpectedShellActionType>
 >;
@@ -190,21 +176,6 @@ type FoundationFirstPlayableWeaponUsesWeaponId = AssertTrue<
     FirstPlayableWeaponId
   >
 >;
-type GameplayDebugPanelModeMatches = AssertTrue<
-  IsEqual<GameplayDebugPanelMode, ExpectedGameplayDebugPanelMode>
->;
-type GameplayDebugPanelModeCatalogMatches = AssertTrue<
-  IsEqual<(typeof gameplayDebugPanelModes)[number], GameplayDebugPanelMode>
->;
-type GameplayDebugActionModeMatches = AssertTrue<
-  IsEqual<
-    Extract<
-      MetaverseShellControllerAction,
-      { readonly type: "gameplayDebugPanelModeChanged" }
-    >["mode"],
-    GameplayDebugPanelMode
-  >
->;
 type GameplayReticleVisualStateMatches = AssertTrue<
   IsEqual<GameplayReticleVisualState, ExpectedGameplayReticleVisualState>
 >;
@@ -237,15 +208,6 @@ type MatchModeActionPayloadMatches = AssertTrue<
     >["matchMode"],
     MetaverseMatchModeId
   >
->;
-type GameplayTelemetryReticleStateMatches = AssertTrue<
-  IsEqual<
-    GameplayTelemetrySnapshot["reticleVisualState"],
-    GameplayReticleVisualState
-  >
->;
-type GameplayTelemetrySessionPhaseMatches = AssertTrue<
-  IsEqual<GameplayTelemetrySnapshot["sessionPhase"], ExpectedGameplaySessionPhase>
 >;
 type WeaponReadinessMatches = AssertTrue<
   IsEqual<WeaponReadinessState, ExpectedWeaponReadinessState>
@@ -413,9 +375,6 @@ export type ClientShellGameplayTypeTests =
   | GameplayHudFeedbackUsesTargetFeedbackState
   | GameplayHudWeaponUsesFirstPlayableWeaponId
   | FoundationFirstPlayableWeaponUsesWeaponId
-  | GameplayDebugPanelModeMatches
-  | GameplayDebugPanelModeCatalogMatches
-  | GameplayDebugActionModeMatches
   | GameplayReticleVisualStateMatches
   | GameplayReticleVisualStateCatalogMatches
   | GameplayInputModeMatches
@@ -424,8 +383,6 @@ export type ClientShellGameplayTypeTests =
   | GameplaySessionModeCatalogMatches
   | GameplayHudSessionModeMatches
   | MatchModeActionPayloadMatches
-  | GameplayTelemetryReticleStateMatches
-  | GameplayTelemetrySessionPhaseMatches
   | WeaponReadinessMatches
   | WeaponReadinessCatalogMatches
   | GameplayHudWeaponReadinessMatches

@@ -114,7 +114,6 @@ test("walk animation restart preserves negative playback for backward movement",
   const idleAction = createAnimationActionStub();
   const walkAction = createAnimationActionStub(2.4);
   const characterRuntime = {
-    activeAnimationActionSetId: "full-body",
     activeAnimationCycleId: 0,
     activeAnimationVocabulary: "idle",
     actionsByVocabulary: new Map([

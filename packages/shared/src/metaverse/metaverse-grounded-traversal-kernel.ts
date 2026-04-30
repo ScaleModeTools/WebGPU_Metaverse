@@ -119,10 +119,6 @@ const groundedBodyMinimumJumpNormalY = 0.001;
 const metaverseGroundedBodyDefaultSupportNormal =
   createMetaverseSurfaceTraversalVector3Snapshot(0, 1, 0);
 
-function normalizeFiniteNonNegativeSeconds(value: number): number {
-  return Math.max(0, toFiniteNumber(value, 0));
-}
-
 function hasGroundedBodyMovementDeltaDivergence(
   desiredDelta: number,
   appliedDelta: number

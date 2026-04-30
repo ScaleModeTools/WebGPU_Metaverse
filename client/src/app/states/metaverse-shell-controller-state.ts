@@ -132,7 +132,6 @@ export function createInitialMetaverseShellControllerState({
       gameplayInputMode: hydratedProfile.inputMode,
       metaverseControlMode: defaultMetaverseControlMode
     }),
-    debugPanelMode: "hidden",
     hasConfirmedProfile: hydratedProfile.profile !== null,
     hydrationSource: hydratedProfile.source,
     inputMode: hydratedProfile.inputMode,
@@ -213,7 +212,6 @@ export function reduceMetaverseShellControllerState(
         : {
             ...state,
             activeExperienceId: action.experienceId,
-            debugPanelMode: "hidden",
             isMenuOpen: false,
             shellStage: "gameplay"
           };
@@ -223,7 +221,6 @@ export function reduceMetaverseShellControllerState(
         activeExperienceId: null,
         activeMetaverseBundleId: action.launchSelection.bundleId,
         activeMetaverseLaunchVariationId: action.launchSelection.variationId,
-        debugPanelMode: "hidden",
         hasConfirmedProfile: true,
         isMenuOpen: false,
         matchMode: action.launchSelection.matchMode ?? "free-roam",
@@ -236,7 +233,6 @@ export function reduceMetaverseShellControllerState(
         : {
             ...state,
             activeExperienceId: null,
-            debugPanelMode: "hidden",
             isMenuOpen: false,
             shellStage: "tool"
           };
@@ -246,7 +242,6 @@ export function reduceMetaverseShellControllerState(
         : {
             ...state,
             activeExperienceId: null,
-            debugPanelMode: "hidden",
             isMenuOpen: false,
             shellStage: "playlists"
           };
@@ -304,7 +299,6 @@ export function reduceMetaverseShellControllerState(
               activeExperienceId: null,
               activeMetaverseBundleId,
               activeMetaverseLaunchVariationId,
-              debugPanelMode: "hidden",
               hasConfirmedProfile: true,
               isMenuOpen: false,
               matchMode: nextMatchMode,
@@ -320,7 +314,6 @@ export function reduceMetaverseShellControllerState(
         : {
             ...state,
             activeExperienceId: null,
-            debugPanelMode: "hidden",
             isMenuOpen: false,
             matchMode: action.matchMode,
             shellStage: resolveNextShellStageAfterModeChange(state)
@@ -332,13 +325,6 @@ export function reduceMetaverseShellControllerState(
             isMenuOpen: false
           }
         : state;
-    case "gameplayDebugPanelModeChanged":
-      return action.mode === state.debugPanelMode
-        ? state
-        : {
-            ...state,
-            debugPanelMode: action.mode
-          };
     case "gameplayMenuSetOpen":
       return action.open === state.isMenuOpen
         ? state
@@ -354,7 +340,6 @@ export function reduceMetaverseShellControllerState(
         : {
             ...state,
             activeExperienceId: null,
-            debugPanelMode: "hidden",
             controllerConfiguration: reduceControllerConfigurationState(
               state.controllerConfiguration,
               {
@@ -393,7 +378,6 @@ export function reduceMetaverseShellControllerState(
         : {
             ...state,
             activeExperienceId: null,
-            debugPanelMode: "hidden",
             isMenuOpen: false,
             shellStage: "metaverse"
           };
@@ -431,8 +415,7 @@ export function reduceMetaverseShellControllerState(
         matchMode: defaultMatchMode,
         coopRoomIdDraft: defaultDuckHuntCoopRoomId,
         shellStage: "main-menu",
-        usernameDraft: "",
-        debugPanelMode: "hidden"
+        usernameDraft: ""
       };
     case "profileConfirmed":
       return {
@@ -446,7 +429,6 @@ export function reduceMetaverseShellControllerState(
       return {
         ...state,
         activeExperienceId: null,
-        debugPanelMode: "hidden",
         hasConfirmedProfile: false,
         isMenuOpen: false,
         shellStage: "main-menu"
@@ -461,7 +443,6 @@ export function reduceMetaverseShellControllerState(
         : {
             ...state,
             activeExperienceId: null,
-            debugPanelMode: "hidden",
             isMenuOpen: false,
             shellStage: "main-menu"
           };

@@ -12,7 +12,6 @@ import type {
   AudioSessionSnapshot
 } from "../../audio";
 import type {
-  GameplayDebugPanelMode,
   GameplaySignal
 } from "../../experiences/duck-hunt";
 import type {
@@ -48,7 +47,6 @@ export interface MetaverseShellController {
   readonly coopRoomIdDraft: string;
   readonly controllerActionMatrix: ControllerActionMatrix;
   readonly controllerConfiguration: ControllerConfigurationState;
-  readonly debugPanelMode: GameplayDebugPanelMode;
   readonly gameplayInputSource: GameplayInputSource;
   readonly metaverseControlMode: MetaverseControlModeId;
   readonly metaverseLaunchError: string | null;
@@ -79,9 +77,6 @@ export interface MetaverseShellController {
   ) => void;
   readonly onEditProfile: () => void;
   readonly onGameplaySignal: (signal: GameplaySignal) => void;
-  readonly onGameplayDebugPanelModeChange: (
-    mode: GameplayDebugPanelMode
-  ) => void;
   readonly onMetaverseCombatAudioCue: (
     cueId: MetaverseCombatAudioCueId,
     options?: AudioCuePlaybackOptions
@@ -127,7 +122,6 @@ export interface MetaverseShellControllerState {
   readonly capabilitySnapshot: WebGpuMetaverseCapabilitySnapshot;
   readonly coopRoomIdDraft: string;
   readonly controllerConfiguration: ControllerConfigurationState;
-  readonly debugPanelMode: GameplayDebugPanelMode;
   readonly hasConfirmedProfile: boolean;
   readonly hydrationSource: StoredProfileHydrationResult["source"];
   readonly inputMode: GameplayInputModeId;
@@ -207,10 +201,6 @@ export type MetaverseShellControllerAction =
     }
   | {
       readonly type: "gameplayExited";
-    }
-  | {
-      readonly mode: GameplayDebugPanelMode;
-      readonly type: "gameplayDebugPanelModeChanged";
     }
   | {
       readonly type: "globalBindingPresetChanged";

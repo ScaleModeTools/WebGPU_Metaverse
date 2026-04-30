@@ -32,16 +32,6 @@ interface ActiveProjectileVisual {
   birthStartedAtMs: number | null;
 }
 
-export type MetaverseRocketProjectileVisualCreatedFrom =
-  | "launch-event"
-  | "snapshot-self-heal";
-
-export interface MetaverseRocketProjectileVisualLifecycleSnapshot {
-  readonly createdFrom: MetaverseRocketProjectileVisualCreatedFrom;
-  readonly launchBridgeConsumed: boolean;
-  readonly projectileId: string;
-}
-
 interface TransientFxVisual {
   readonly expiresAtMs: number;
   readonly group: Group;
@@ -175,10 +165,6 @@ export class MetaverseSceneCombatFxState {
   readonly #activeProjectilesById = new Map<string, ActiveProjectileVisual>();
   readonly #consumedVisualKeys = new Map<string, number>();
   readonly #launchBridgeOriginsByProjectileId = new Map<string, Vector3>();
-  readonly #projectileVisualLifecycleById = new Map<
-    string,
-    MetaverseRocketProjectileVisualLifecycleSnapshot
-  >();
   readonly #projectileSnapshotSelfHealBridgeExpiresAtById = new Map<
     string,
     number
@@ -208,16 +194,10 @@ export class MetaverseSceneCombatFxState {
     this.#activeProjectilesById.clear();
     this.#consumedVisualKeys.clear();
     this.#launchBridgeOriginsByProjectileId.clear();
-    this.#projectileVisualLifecycleById.clear();
     this.#projectileSnapshotSelfHealBridgeExpiresAtById.clear();
     this.#projectileImpactVisualIds.clear();
     this.#rocketLaunchVisualIds.clear();
     this.#transientFx.length = 0;
-  }
-
-  get projectileVisualLifecycleSnapshots():
-    readonly MetaverseRocketProjectileVisualLifecycleSnapshot[] {
-    return Object.freeze([...this.#projectileVisualLifecycleById.values()]);
   }
 
   triggerCombatPresentationEvent(event: MetaverseCombatPresentationEvent): void {
@@ -307,18 +287,6 @@ export class MetaverseSceneCombatFxState {
             activeProjectileVisual.body.position
           );
           activeProjectileVisual.body.position.copy(origin);
-          const lifecycleSnapshot =
-            this.#projectileVisualLifecycleById.get(event.projectileId) ?? null;
-
-          if (lifecycleSnapshot !== null) {
-            this.#projectileVisualLifecycleById.set(
-              event.projectileId,
-              Object.freeze({
-                ...lifecycleSnapshot,
-                launchBridgeConsumed: true
-              })
-            );
-          }
         }
 
         if (!launchBridgeAllowed) {
@@ -429,18 +397,10 @@ export class MetaverseSceneCombatFxState {
 
       if (projectileVisual === null) {
         projectileVisual = createRocketProjectileVisual();
-        this.#activeProjectilesById.set(projectile.projectileId, projectileVisual);
+      this.#activeProjectilesById.set(projectile.projectileId, projectileVisual);
       const createdFrom = this.#rocketLaunchVisualIds.has(projectile.projectileId)
         ? "launch-event"
         : "snapshot-self-heal";
-      this.#projectileVisualLifecycleById.set(
-        projectile.projectileId,
-        Object.freeze({
-          createdFrom,
-          launchBridgeConsumed: false,
-          projectileId: projectile.projectileId
-        })
-      );
       if (createdFrom === "snapshot-self-heal") {
         this.#projectileSnapshotSelfHealBridgeExpiresAtById.set(
           projectile.projectileId,
@@ -481,20 +441,6 @@ export class MetaverseSceneCombatFxState {
         projectileVisual.birthOrigin.copy(launchOrigin);
         projectileVisual.birthTarget.copy(position);
         projectileVisual.birthBridgeConsumed = true;
-
-        const lifecycleSnapshot =
-          this.#projectileVisualLifecycleById.get(projectile.projectileId) ??
-          null;
-
-        if (lifecycleSnapshot !== null) {
-          this.#projectileVisualLifecycleById.set(
-            projectile.projectileId,
-            Object.freeze({
-              ...lifecycleSnapshot,
-              launchBridgeConsumed: true
-            })
-          );
-        }
       } else if (launchOrigin !== null || bridgeWindowExpired) {
         projectileVisual.birthBridgeConsumed = true;
       }
@@ -542,7 +488,6 @@ export class MetaverseSceneCombatFxState {
 
     this.#activeProjectilesById.delete(projectileId);
     this.#launchBridgeOriginsByProjectileId.delete(projectileId);
-    this.#projectileVisualLifecycleById.delete(projectileId);
     this.#projectileSnapshotSelfHealBridgeExpiresAtById.delete(projectileId);
     this.#scene.remove(projectileVisual.group);
   }

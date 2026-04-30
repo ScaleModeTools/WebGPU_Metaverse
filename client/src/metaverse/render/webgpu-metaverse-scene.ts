@@ -51,6 +51,9 @@ import { MetaverseSceneScenicState } from "./metaverse-scene-scenic-state";
 import { MetaverseScenePortalPresentationState } from "./portals/metaverse-scene-portal-presentation-state";
 import { MetaverseSceneResourceSpawnPresentationState } from "./resources/metaverse-scene-resource-spawn-presentation-state";
 import type { MetaverseSemanticAimFrame } from "../aim/metaverse-semantic-aim";
+import {
+  RapierPhysicsRuntime
+} from "@/physics";
 
 import type {
   MetaverseAttachmentProofConfig,
@@ -83,6 +86,7 @@ interface MetaverseSceneDependencies {
   environmentProofConfig?: MetaverseEnvironmentProofConfig | null;
   createSceneAssetLoader?: () => MetaverseSceneAssetLoader;
   localPlayerId?: string | null;
+  physicsRuntime?: RapierPhysicsRuntime;
   warn?: (message: string) => void;
 }
 
@@ -112,7 +116,7 @@ export function createMetaverseScene(
   bootInteractivePresentation(): Promise<void>;
   bootScenicEnvironment(): Promise<void>;
   resetPresentation(): void;
-  clearLocalCombatDeathAnimation(): void;
+  clearLocalCombatDeathPresentation(): void;
   triggerCombatPresentationEvent(
     event: MetaverseCombatPresentationEvent
   ): void;
@@ -196,6 +200,7 @@ export function createMetaverseScene(
   const localProjectileMuzzleForwardWorldScratch = new Vector3();
   const localProjectileMuzzleWorldPositionScratch = new Vector3();
   const localProjectileMuzzleWorldQuaternionScratch = new Quaternion();
+  const physicsRuntime = dependencies.physicsRuntime ?? new RapierPhysicsRuntime();
   let presentationRenderFrame = 0;
 
   function resolveMountedEnvironmentRuntime(
@@ -222,6 +227,7 @@ export function createMetaverseScene(
       characterProofRuntimeNodeResolvers,
       createSceneAssetLoader,
       heldWeaponPoseRuntimeNodeResolvers,
+      physicsRuntime,
       scene,
       warn:
         dependencies.warn ?? ((message) => globalThis.console?.warn(message))
@@ -246,6 +252,7 @@ export function createMetaverseScene(
       attachmentRuntimeNodeResolvers,
       characterProofRuntimeNodeResolvers,
       heldWeaponPoseRuntimeNodeResolvers,
+      physicsRuntime,
       resolveMountedEnvironmentRuntime
     });
 
@@ -352,8 +359,8 @@ export function createMetaverseScene(
       combatFxState.reset();
       resourceSpawnPresentationState.reset();
     },
-    clearLocalCombatDeathAnimation() {
-      presentationState.clearLocalCombatDeathAnimation();
+    clearLocalCombatDeathPresentation() {
+      presentationState.clearLocalCombatDeathPresentation();
     },
     triggerCombatPresentationEvent(event) {
       presentationState.triggerCombatPresentationEvent(event, localPlayerId);

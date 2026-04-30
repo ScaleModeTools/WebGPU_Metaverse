@@ -2,8 +2,6 @@ import {
   createMetaverseTraversalFacingSnapshot,
   metaverseTraversalActionBufferSeconds,
   queueMetaverseUnmountedTraversalAction,
-  type MetaverseTraversalBodyControlSnapshot,
-  type MetaverseTraversalFacingSnapshot,
   type MetaverseUnmountedTraversalStateSnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 import {
@@ -15,7 +13,6 @@ import {
   createMetaverseSyncPlayerLookIntentCommand,
   createMetaversePlayerTraversalIntentSnapshot,
   createMetaverseSyncPlayerTraversalIntentCommand,
-  type MetaversePlayerTraversalActionIntentSnapshot,
   type MetaversePlayerTraversalIntentSnapshot,
   type MetaverseSyncPlayerLookIntentCommand,
   type MetaverseSyncPlayerTraversalIntentCommand

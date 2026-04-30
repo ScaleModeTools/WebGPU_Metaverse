@@ -97,6 +97,15 @@ test("MetaverseAuthoritativeWorldRuntime accepts armed unmounted look intent for
       playerId,
       weaponState: {
         aimMode: "hip-fire",
+        slots: [
+          {
+            attachmentId: "metaverse-service-pistol-v2",
+            equipped: true,
+            slotId: "primary",
+            weaponId: "metaverse-service-pistol-v2",
+            weaponInstanceId: `test-player:primary:metaverse-service-pistol-v2`
+          }
+        ],
         weaponId: "metaverse-service-pistol-v2"
       },
       weaponSequence: 1

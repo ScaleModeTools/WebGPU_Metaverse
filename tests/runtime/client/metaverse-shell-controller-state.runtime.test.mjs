@@ -57,7 +57,6 @@ test("createInitialMetaverseShellControllerState seeds typed shell policy from h
   assert.equal(state.controllerConfiguration.globalBindingPresetId, "standard");
   assert.equal(state.controllerConfiguration.duckHuntControllerSchemeId, "mouse");
   assert.equal(state.controllerConfiguration.metaverseControllerSchemeId, "keyboard");
-  assert.equal(state.debugPanelMode, "hidden");
   assert.equal(state.metaverseControlMode, "keyboard");
   assert.equal(state.shellStage, "main-menu");
   assert.equal(state.activeExperienceId, null);
@@ -271,10 +270,6 @@ test("reduceMetaverseShellControllerState keeps hub and experience mutations beh
     permissionState: "granted"
   });
   state = reduceMetaverseShellControllerState(state, {
-    mode: "aim-inspector",
-    type: "gameplayDebugPanelModeChanged"
-  });
-  state = reduceMetaverseShellControllerState(state, {
     type: "gameplayMenuSetOpen",
     open: true
   });
@@ -297,7 +292,6 @@ test("reduceMetaverseShellControllerState keeps hub and experience mutations beh
 
   assert.equal(state.hasConfirmedProfile, true);
   assert.equal(state.permissionState, "granted");
-  assert.equal(state.debugPanelMode, "hidden");
   assert.equal(state.shellStage, "main-menu");
   assert.equal(state.isMenuOpen, false);
   assert.equal(state.profile?.snapshot.bestScore, 300);

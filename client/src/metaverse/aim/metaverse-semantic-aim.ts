@@ -12,14 +12,12 @@ import type {
 
 export type MetaverseLocalHeldWeaponAimSourceId =
   | "local_camera"
-  | "remote_replicated"
-  | "debug";
+  | "remote_replicated";
 
 export type MetaverseLocalHeldWeaponAimSourceQualityId =
   | "full_camera_ray"
   | "replicated_pitch_yaw"
-  | "last_known_replicated"
-  | "debug";
+  | "last_known_replicated";
 
 export interface MetaverseSemanticAimFrame {
   readonly actorFacingYawRadians: number;
@@ -120,7 +118,7 @@ export function createMetaverseSemanticAimFrameFromCameraSnapshot(input: {
   readonly cameraSnapshot: MetaverseCameraSnapshot;
   readonly quality: Extract<
     MetaverseLocalHeldWeaponAimSourceQualityId,
-    "full_camera_ray" | "replicated_pitch_yaw" | "last_known_replicated" | "debug"
+    "full_camera_ray" | "replicated_pitch_yaw" | "last_known_replicated"
   >;
   readonly source: MetaverseLocalHeldWeaponAimSourceId;
   readonly weaponState?: MetaverseRealtimePlayerWeaponStateSnapshot | null;

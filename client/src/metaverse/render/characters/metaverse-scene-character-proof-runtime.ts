@@ -21,18 +21,19 @@ import {
 import type { SocketId } from "@/assets/types/asset-socket";
 
 import {
-  createMetaverseCharacterCombatAnimationRuntime,
-  type MetaverseCharacterCombatAnimationRuntime,
+  MetaverseCharacterProceduralHitReactionRuntime,
   type MetaverseCharacterAnimationRuntimeLike
 } from "./metaverse-scene-character-animation";
+import {
+  MetaverseCharacterRapierRagdollRuntime,
+  type MetaverseCharacterRagdollPhysicsRuntimeLike
+} from "./metaverse-scene-character-ragdoll";
 
 import type {
   MetaverseCharacterAnimationClipLoopMode,
   MetaverseCharacterAnimationVocabularyId,
-  MetaverseCharacterCombatAnimationActionId,
   MetaverseCharacterProofConfig,
 } from "../../types/metaverse-runtime";
-import { metaverseCharacterCombatAnimationActionIds } from "../../types/metaverse-runtime";
 
 const humanoidV2GripSocketBlendAlpha = 0.72;
 const humanoidV2PalmSocketBlendAlpha = 0.45;
@@ -94,7 +95,6 @@ export interface LoadedMetaverseCharacterProofRuntime<
     MetaverseCharacterAnimationVocabularyId,
     MetaverseCharacterAnimationClipLoopMode
   >;
-  readonly combatAnimationRuntime: MetaverseCharacterCombatAnimationRuntime | null;
   readonly firstPersonHeadAnchorNodes: readonly Object3D[];
   readonly heldWeaponPoseRuntime: THeldWeaponPoseRuntime | null;
   readonly mixer: AnimationMixer;
@@ -450,13 +450,11 @@ function createCharacterProofRuntime<THeldWeaponPoseRuntime>(
     MetaverseCharacterAnimationVocabularyId,
     MetaverseCharacterAnimationClipLoopMode
   >,
-  combatAnimationClipsByActionId:
-    | ReadonlyMap<MetaverseCharacterCombatAnimationActionId, AnimationClip>
-    | null,
   dependencies: {
     readonly createHeldWeaponPoseRuntime: (
       characterScene: Group
     ) => THeldWeaponPoseRuntime | null;
+    readonly physicsRuntime: MetaverseCharacterRagdollPhysicsRuntimeLike;
   } & Pick<
     MetaverseCharacterProofRuntimeNodeResolvers,
     "findOptionalNode" | "findSocketNode"
@@ -508,7 +506,6 @@ function createCharacterProofRuntime<THeldWeaponPoseRuntime>(
   idleAction.play();
 
   return {
-    activeAnimationActionSetId: "full-body",
     activeAnimationCycleId: 0,
     activeAnimationVocabulary: "idle",
     actionsByVocabulary,
@@ -516,16 +513,15 @@ function createCharacterProofRuntime<THeldWeaponPoseRuntime>(
     characterId,
     clipsByVocabulary,
     clipLoopModesByVocabulary,
-    combatAnimationRuntime:
-      combatAnimationClipsByActionId === null
-        ? null
-        : createMetaverseCharacterCombatAnimationRuntime(
-            mixer,
-            combatAnimationClipsByActionId
-          ),
+    deathRagdollRuntime: new MetaverseCharacterRapierRagdollRuntime({
+      characterScene,
+      physicsRuntime: dependencies.physicsRuntime
+    }),
     firstPersonHeadAnchorNodes,
     heldWeaponPoseRuntime: dependencies.createHeldWeaponPoseRuntime(characterScene),
     mixer,
+    proceduralHitReactionRuntime:
+      new MetaverseCharacterProceduralHitReactionRuntime(),
     scene: characterScene,
     seatSocketNode,
     skeletonId
@@ -539,6 +535,7 @@ export function cloneMetaverseCharacterProofRuntime<THeldWeaponPoseRuntime>(
     readonly createHeldWeaponPoseRuntime: (
       characterScene: Group
     ) => THeldWeaponPoseRuntime | null;
+    readonly physicsRuntime: MetaverseCharacterRagdollPhysicsRuntimeLike;
   } & Pick<
     MetaverseCharacterProofRuntimeNodeResolvers,
     "findOptionalNode" | "findSocketNode"
@@ -550,7 +547,6 @@ export function cloneMetaverseCharacterProofRuntime<THeldWeaponPoseRuntime>(
     cloneCharacterScene(sourceRuntime.scene),
     sourceRuntime.clipsByVocabulary,
     sourceRuntime.clipLoopModesByVocabulary,
-    sourceRuntime.combatAnimationRuntime?.clipsByActionId ?? null,
     dependencies
   );
 
@@ -569,6 +565,7 @@ export async function loadMetaverseCharacterProofRuntime<
     ) => THeldWeaponPoseRuntime | null;
     readonly createSceneAssetLoader: () => SceneAssetLoaderLike;
     readonly heldWeaponSolveDirectionEpsilon: number;
+    readonly physicsRuntime: MetaverseCharacterRagdollPhysicsRuntimeLike;
     readonly warn: (message: string) => void;
   } & MetaverseCharacterProofRuntimeNodeResolvers
 ): Promise<LoadedMetaverseCharacterProofRuntime<THeldWeaponPoseRuntime>> {
@@ -637,68 +634,12 @@ export async function loadMetaverseCharacterProofRuntime<
     );
   }
 
-  let combatAnimationClipsByActionId:
-    | ReadonlyMap<MetaverseCharacterCombatAnimationActionId, AnimationClip>
-    | null = null;
-
-  if (
-    characterProofConfig.combatAnimationProofConfig !== null &&
-    characterProofConfig.combatAnimationProofConfig !== undefined
-  ) {
-    const combatAnimationProofConfig =
-      characterProofConfig.combatAnimationProofConfig;
-
-    try {
-      const clipsByActionId = new Map<
-        MetaverseCharacterCombatAnimationActionId,
-        AnimationClip
-      >();
-      let missingClipName: string | null = null;
-
-      for (const actionId of metaverseCharacterCombatAnimationActionIds) {
-        const sourcePath =
-          combatAnimationProofConfig.sourcePathByActionId[actionId];
-        let animationAsset = animationAssetsByPath.get(sourcePath);
-
-        if (animationAsset === undefined) {
-          animationAsset = await sceneAssetLoader.loadAsync(sourcePath);
-          animationAssetsByPath.set(sourcePath, animationAsset);
-        }
-
-        const clipName = combatAnimationProofConfig.clipNamesByActionId[actionId];
-        const clip = animationAsset.animations.find(
-          (animation) => animation.name === clipName
-        );
-
-        if (clip === undefined) {
-          missingClipName = clipName;
-          break;
-        }
-
-        clipsByActionId.set(actionId, clip);
-      }
-
-      if (missingClipName === null) {
-        combatAnimationClipsByActionId = clipsByActionId;
-      } else {
-        dependencies.warn(
-          `Metaverse combat animation overlay disabled because it is missing ${missingClipName}.`
-        );
-      }
-    } catch {
-      dependencies.warn(
-        "Metaverse combat animation overlay disabled because an animation source could not load."
-      );
-    }
-  }
-
   return createCharacterProofRuntime(
     characterProofConfig.characterId,
     characterProofConfig.skeletonId,
     characterAsset.scene,
     clipsByVocabulary,
     clipLoopModesByVocabulary,
-    combatAnimationClipsByActionId,
     dependencies
   );
 }

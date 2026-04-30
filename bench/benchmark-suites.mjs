@@ -171,15 +171,6 @@ const defaultMetaverseWorldSnapshotStreamTelemetrySnapshot = Object.freeze({
   reconnectCount: 0
 });
 
-const defaultCoopRoomSnapshotStreamTelemetrySnapshot = Object.freeze({
-  available: false,
-  fallbackActive: false,
-  lastTransportError: null,
-  liveness: "inactive",
-  path: "http-polling",
-  reconnectCount: 0
-});
-
 class FakeMetaverseWorldClient {
   constructor(tickIntervalMs) {
     this.currentPollIntervalMs = tickIntervalMs;
@@ -567,13 +558,6 @@ function createDuckHuntCoopArenaCadenceBenchmarkSuite(
         roomId,
         roomSnapshot: null,
         roomSnapshotBuffer: Object.freeze([]),
-        telemetrySnapshot: Object.freeze({
-          latestSnapshotUpdateRateHz: null,
-          playerPresenceDatagramSendFailureCount: 0,
-          playerPresenceLastTransportError: null,
-          playerPresenceReliableFallbackActive: false,
-          snapshotStream: defaultCoopRoomSnapshotStreamTelemetrySnapshot
-        }),
         fireShot() {},
         syncPlayerPresence() {}
       };
@@ -610,15 +594,6 @@ function createDuckHuntCoopArenaCadenceBenchmarkSuite(
             battleCadenceBenchmarkConfig.maxBufferedSnapshots
           );
           roomSource.roomSnapshot = roomSnapshot;
-          roomSource.telemetrySnapshot = Object.freeze({
-            latestSnapshotUpdateRateHz: resolveLatestSnapshotUpdateRateHz(
-              roomSource.roomSnapshotBuffer
-            ),
-            playerPresenceDatagramSendFailureCount: 0,
-            playerPresenceLastTransportError: null,
-            playerPresenceReliableFallbackActive: false,
-            snapshotStream: defaultCoopRoomSnapshotStreamTelemetrySnapshot
-          });
           nextSnapshotTick += 1;
         }
       };
@@ -641,12 +616,12 @@ function createDuckHuntCoopArenaCadenceBenchmarkSuite(
           );
         }
 
-        const telemetrySnapshot = simulation.telemetrySnapshot;
+        const firstEnemyRenderState = simulation.enemyRenderStates[0] ?? null;
 
         benchmarkSink =
           simulation.enemyRenderStates.length +
-          telemetrySnapshot.bufferDepth +
-          Math.round(telemetrySnapshot.projectedSimulationLagMs ?? 0);
+          simulation.hudSnapshot.arena.liveEnemyCount +
+          Math.round((firstEnemyRenderState?.positionZ ?? 0) * 1000);
       };
     }
   };

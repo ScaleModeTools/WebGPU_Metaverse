@@ -8,6 +8,7 @@ import {
   syncRemoteCharacterPresentations
 } from "./metaverse-scene-remote-character-presentations";
 import {
+  clearCharacterCombatDeathPresentation,
   triggerCharacterCombatPresentationEvent
 } from "./metaverse-scene-character-animation";
 import type {
@@ -70,6 +71,9 @@ export class MetaverseSceneRemoteCharacterPresentationState {
 
   resetPresentation(): void {
     for (const remoteCharacterRuntime of this.#remoteCharacterRuntimesByPlayerId.values()) {
+      clearCharacterCombatDeathPresentation(
+        remoteCharacterRuntime.characterRuntime
+      );
       remoteCharacterRuntime.characterRuntime.anchorGroup.parent?.remove(
         remoteCharacterRuntime.characterRuntime.anchorGroup
       );
@@ -148,6 +152,7 @@ export class MetaverseSceneRemoteCharacterPresentationState {
 
   syncPresentation(
     remoteCharacterPresentations: readonly MetaverseRemoteCharacterPresentationSnapshot[],
+    nowMs: number,
     deltaSeconds: number
   ): void {
     syncRemoteCharacterPresentations(
@@ -159,6 +164,7 @@ export class MetaverseSceneRemoteCharacterPresentationState {
       this.#remoteCharacterRuntimesByPlayerId,
       remoteCharacterPresentations,
       deltaSeconds,
+      nowMs,
       this.#dependencies.remoteCharacterPresentationDependencies
     );
   }

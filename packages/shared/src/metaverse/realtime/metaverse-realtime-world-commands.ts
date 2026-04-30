@@ -41,8 +41,7 @@ import {
 } from "./metaverse-realtime-player-weapon-state.js";
 import type { MetaverseWeaponSlotId } from "../metaverse-weapon-loadout.js";
 import type {
-  MetaverseIssuePlayerActionCommand as MetaverseCombatIssuePlayerActionCommand,
-  MetaverseIssuePlayerActionCommandInput as MetaverseCombatIssuePlayerActionCommandInput
+  MetaverseIssuePlayerActionCommand as MetaverseCombatIssuePlayerActionCommand
 } from "../metaverse-combat.js";
 
 export const metaverseRealtimeWorldClientCommandTypes = [
@@ -225,8 +224,6 @@ export interface MetaverseSyncPlayerWeaponStateCommandInput {
 }
 
 type MetaverseIssuePlayerActionCommand = MetaverseCombatIssuePlayerActionCommand;
-type MetaverseIssuePlayerActionCommandInput =
-  MetaverseCombatIssuePlayerActionCommandInput;
 
 export type MetaverseRealtimeWorldClientCommand =
   | MetaverseIssuePlayerActionCommand

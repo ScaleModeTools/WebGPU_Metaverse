@@ -39,7 +39,6 @@ export {
   DuckHuntWeaponRuntime
 } from "./runtime";
 export {
-  gameplayDebugPanelModes,
   gameplayReticleStyledStates,
   gameplayReticleVisualStates,
   gameplayRuntimeLifecycleStates,
@@ -60,7 +59,6 @@ export type {
   GameplayArenaRuntime,
   GameplayArenaHudSnapshot,
   GameplayCameraSnapshot,
-  GameplayDebugPanelMode,
   GameplayHudSnapshot,
   GameplayReticleStyledState,
   GameplayReticleVisualState,
@@ -70,7 +68,6 @@ export type {
   GameplaySessionSnapshot,
   GameplaySignal,
   GameplaySignalType,
-  GameplayTelemetrySnapshot,
   GameplayVector3Snapshot,
   GameplayViewportSnapshot,
   LocalArenaArenaSnapshot,

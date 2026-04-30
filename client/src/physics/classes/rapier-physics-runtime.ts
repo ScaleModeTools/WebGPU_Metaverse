@@ -7,6 +7,7 @@ import type {
   RapierApiHandle,
   RapierCharacterControllerHandle,
   RapierColliderHandle,
+  RapierImpulseJointHandle,
   RapierRigidBodyHandle,
   RapierPhysicsAddon
 } from "../types/metaverse-grounded-body";
@@ -342,6 +343,26 @@ export class RapierPhysicsRuntime {
     });
   }
 
+  createSphericalImpulseJoint(
+    parentBody: RapierRigidBodyHandle,
+    childBody: RapierRigidBodyHandle,
+    parentAnchor: PhysicsVector3Snapshot,
+    childAnchor: PhysicsVector3Snapshot
+  ): RapierImpulseJointHandle {
+    const addon = this.#requireAddon();
+    const jointData = addon.RAPIER.JointData.spherical(
+      this.createVector3(parentAnchor.x, parentAnchor.y, parentAnchor.z),
+      this.createVector3(childAnchor.x, childAnchor.y, childAnchor.z)
+    );
+
+    return addon.world.createImpulseJoint(
+      jointData,
+      parentBody,
+      childBody,
+      true
+    );
+  }
+
   createVector3(
     x: number,
     y: number,
@@ -358,6 +379,10 @@ export class RapierPhysicsRuntime {
 
   removeCollider(collider: RapierColliderHandle): void {
     this.#requireAddon().world.removeCollider(collider, false);
+  }
+
+  removeImpulseJoint(joint: RapierImpulseJointHandle): void {
+    this.#requireAddon().world.removeImpulseJoint(joint, true);
   }
 
   removeRigidBody(body: RapierRigidBodyHandle): void {

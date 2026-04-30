@@ -6,7 +6,6 @@ import {
   useState,
   useSyncExternalStore,
   type CSSProperties,
-  type ReactNode
 } from "react";
 
 import type {
@@ -47,7 +46,10 @@ import {
 import { createMetaverseWorldClient } from "../config/metaverse-world-network";
 import { WebGpuMetaverseRuntime } from "../classes/webgpu-metaverse-runtime";
 import { registerMetaverseWorldBundleOnServer } from "../world/map-bundles";
+import { MetaverseDamageDirectionOverlay } from "./metaverse-damage-direction-overlay";
+import { MetaverseInteractionFeedHud } from "./metaverse-interaction-feed-hud";
 import { MetaversePlayerRadarHud } from "./metaverse-player-radar-hud";
+import { MetaverseTeamDeathmatchScoreboardHud } from "./metaverse-team-deathmatch-scoreboard-hud";
 import { MetaverseWeaponReticleOverlay } from "./metaverse-weapon-reticle-overlay";
 import type { AudioCuePlaybackOptions } from "../../audio";
 import type { MetaverseCombatAudioCueId } from "../audio";
@@ -86,12 +88,6 @@ interface MetaverseStageScreenProps {
   readonly weaponLayoutId?: string | null;
 }
 
-interface MetaverseHudSurfaceProps {
-  readonly children: ReactNode;
-  readonly className?: string;
-  readonly strong?: boolean;
-}
-
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
@@ -120,13 +116,17 @@ function resolveMetaverseHudScale(
 
 function createMetaverseHudStyle(scale: number): CSSProperties {
   return {
+    "--game-text-shadow":
+      "1px 1px 0 rgb(0 0 0 / 1), 0 0 1px rgb(0 0 0 / 1)",
     "--game-ui-scale": `${scale}`,
     "--metaverse-hud-edge": `${24 * scale}px`,
     "--metaverse-hud-gap": `${24 * scale}px`,
     "--metaverse-hud-inset-padding": `${14 * scale}px`,
     "--metaverse-hud-inset-radius": `${8 * scale}px`,
     "--metaverse-hud-panel-padding": `${20 * scale}px`,
-    "--metaverse-hud-panel-radius": `${8 * scale}px`
+    "--metaverse-hud-panel-radius": `${8 * scale}px`,
+    "--metaverse-hud-text-shadow":
+      "1px 1px 0 rgb(0 0 0 / 1), 0 0 1px rgb(0 0 0 / 1)"
   } as CSSProperties;
 }
 
@@ -137,26 +137,6 @@ function isEditableKeyboardTarget(eventTarget: EventTarget | null): boolean {
       eventTarget instanceof HTMLInputElement ||
       eventTarget instanceof HTMLTextAreaElement ||
       eventTarget instanceof HTMLSelectElement)
-  );
-}
-
-function MetaverseHudSurface({
-  children,
-  className,
-  strong = false
-}: MetaverseHudSurfaceProps) {
-  return (
-    <div
-      className={[
-        "pointer-events-auto min-w-0 w-full rounded-[var(--metaverse-hud-panel-radius)] p-[var(--metaverse-hud-panel-padding)] shadow-[0_18px_48px_rgb(2_6_23_/_0.22)]",
-        strong ? "surface-shell-panel-strong" : "surface-shell-panel",
-        className
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      {children}
-    </div>
   );
 }
 
@@ -309,6 +289,8 @@ export function MetaverseStageScreen({
     width: 1280
   });
   const [isPauseMenuOpen, setPauseMenuOpen] = useState(false);
+  const [isScoreboardKeyboardOpen, setScoreboardKeyboardOpen] = useState(false);
+  const [isScoreboardGamepadHeld, setScoreboardGamepadHeld] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const subscribeUiUpdates = useCallback(
     (notifyReact: () => void) => metaverseRuntime.subscribeUiUpdates(notifyReact),
@@ -319,6 +301,10 @@ export function MetaverseStageScreen({
     () => metaverseRuntime.hudSnapshot,
     () => metaverseRuntime.hudSnapshot
   );
+  const hudSnapshotRef = useRef(hudSnapshot);
+  useEffect(() => {
+    hudSnapshotRef.current = hudSnapshot;
+  }, [hudSnapshot]);
   const subscribeWeaponUiUpdates = useCallback(
     (notifyReact: () => void) =>
       metaverseRuntime.subscribeWeaponUiUpdates(notifyReact),
@@ -331,6 +317,8 @@ export function MetaverseStageScreen({
   );
   const [isQuitConfirmOpen, setQuitConfirmOpen] = useState(false);
   const togglePauseMenu = useCallback(() => {
+    setScoreboardKeyboardOpen(false);
+    setScoreboardGamepadHeld(false);
     setQuitConfirmOpen(false);
     setPauseMenuOpen((currentValue) => !currentValue);
   }, []);
@@ -339,6 +327,9 @@ export function MetaverseStageScreen({
 
     if (!open) {
       setQuitConfirmOpen(false);
+    } else {
+      setScoreboardKeyboardOpen(false);
+      setScoreboardGamepadHeld(false);
     }
   }, []);
   const handleQuitToMenu = useCallback(() => {
@@ -358,6 +349,7 @@ export function MetaverseStageScreen({
     }
 
     let isStartPressed = false;
+    let isSelectPressed = false;
     let frameId = 0;
     let isMounted = true;
 
@@ -366,12 +358,24 @@ export function MetaverseStageScreen({
       const nextIsStartPressed = gamepads.some(
         (gamepad) => gamepad !== null && gamepad.buttons[9]?.pressed === true
       );
+      const nextIsSelectPressed =
+        matchMode === "team-deathmatch" &&
+        !isPauseMenuOpen &&
+        !isQuitConfirmOpen &&
+        gamepads.some(
+          (gamepad) => gamepad !== null && gamepad.buttons[8]?.pressed === true
+        );
 
       if (nextIsStartPressed && !isStartPressed) {
         togglePauseMenu();
       }
 
       isStartPressed = nextIsStartPressed;
+
+      if (nextIsSelectPressed !== isSelectPressed) {
+        isSelectPressed = nextIsSelectPressed;
+        setScoreboardGamepadHeld(nextIsSelectPressed);
+      }
 
       if (isMounted) {
         frameId = globalThis.requestAnimationFrame(pollPauseStart);
@@ -384,7 +388,114 @@ export function MetaverseStageScreen({
       isMounted = false;
       globalThis.cancelAnimationFrame(frameId);
     };
-  }, [togglePauseMenu]);
+  }, [isPauseMenuOpen, isQuitConfirmOpen, matchMode, togglePauseMenu]);
+
+  useEffect(() => {
+    const handleScoreboardKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key !== "Tab" ||
+        event.repeat ||
+        matchMode !== "team-deathmatch" ||
+        isPauseMenuOpen ||
+        isQuitConfirmOpen
+      ) {
+        return;
+      }
+
+      if (isEditableKeyboardTarget(event.target)) {
+        return;
+      }
+
+      event.preventDefault();
+      setScoreboardKeyboardOpen((currentValue) => !currentValue);
+    };
+
+    globalThis.addEventListener("keydown", handleScoreboardKeyDown);
+
+    return () => {
+      globalThis.removeEventListener("keydown", handleScoreboardKeyDown);
+    };
+  }, [isPauseMenuOpen, isQuitConfirmOpen, matchMode]);
+
+  useEffect(() => {
+    const handleMountedInteractionKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat || isPauseMenuOpen || isQuitConfirmOpen) {
+        return;
+      }
+
+      if (isEditableKeyboardTarget(event.target)) {
+        return;
+      }
+
+      const currentHudSnapshot = hudSnapshotRef.current;
+      const mountedInteraction = currentHudSnapshot.mountedInteraction;
+      const hasWeaponResourcePrompt =
+        currentHudSnapshot.interaction.weaponResource !== null;
+      const consumeEvent = () => {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+      };
+
+      if (event.code === "KeyE") {
+        if (mountedInteraction.mountedEnvironment !== null) {
+          consumeEvent();
+          metaverseRuntime.leaveMountedEnvironment();
+          return;
+        }
+
+        if (
+          !hasWeaponResourcePrompt &&
+          mountedInteraction.focusedMountable !== null
+        ) {
+          consumeEvent();
+          metaverseRuntime.toggleMount();
+        }
+
+        return;
+      }
+
+      if (
+        mountedInteraction.mountedEnvironment === null ||
+        (event.code !== "Digit1" && event.code !== "Digit2")
+      ) {
+        return;
+      }
+
+      const seatIndex = event.code === "Digit1" ? 0 : 1;
+      const seatTarget =
+        mountedInteraction.selectableSeatTargets[seatIndex] ?? null;
+
+      if (seatTarget === null) {
+        return;
+      }
+
+      consumeEvent();
+      metaverseRuntime.occupySeat(seatTarget.seatId);
+    };
+    const listenerOptions = { capture: true };
+
+    globalThis.addEventListener(
+      "keydown",
+      handleMountedInteractionKeyDown,
+      listenerOptions
+    );
+
+    return () => {
+      globalThis.removeEventListener(
+        "keydown",
+        handleMountedInteractionKeyDown,
+        listenerOptions
+      );
+    };
+  }, [isPauseMenuOpen, isQuitConfirmOpen, metaverseRuntime]);
+
+  useEffect(() => {
+    if (matchMode !== "team-deathmatch" || isPauseMenuOpen || isQuitConfirmOpen) {
+      setScoreboardKeyboardOpen(false);
+      setScoreboardGamepadHeld(false);
+    }
+  }, [isPauseMenuOpen, isQuitConfirmOpen, matchMode]);
 
   useEffect(() => {
     const handlePauseKeyDown = (event: KeyboardEvent) => {
@@ -535,16 +646,13 @@ export function MetaverseStageScreen({
   const isTeamDeathmatchHudMode = matchMode === "team-deathmatch";
   const showTeamDeathmatchCombatHud =
     isTeamDeathmatchHudMode && combatSnapshot.available;
+  const isScoreboardOpen =
+    isTeamDeathmatchHudMode &&
+    !isPauseMenuOpen &&
+    (isScoreboardKeyboardOpen || isScoreboardGamepadHeld);
   const healthRatio = combatSnapshot.available
     ? clamp(combatSnapshot.health / Math.max(1, combatSnapshot.maxHealth), 0, 1)
     : 0;
-  const accuracyLabel =
-    combatSnapshot.accuracyRatio === null
-      ? "--%"
-      : `${Math.round(combatSnapshot.accuracyRatio * 100)}%`;
-  const healthLabel = combatSnapshot.available
-    ? `${Math.round(combatSnapshot.health)}/${Math.round(combatSnapshot.maxHealth)}`
-    : "--/--";
   const weaponLabel =
     weaponHudSnapshot.visible && weaponHudSnapshot.weaponLabel !== null
       ? weaponHudSnapshot.weaponLabel
@@ -567,6 +675,19 @@ export function MetaverseStageScreen({
           }
           weaponHudSnapshot={weaponHudSnapshot}
         />
+
+        <MetaverseDamageDirectionOverlay
+          damageIndicators={combatSnapshot.damageIndicators}
+          hidden={
+            !showTeamDeathmatchCombatHud ||
+            hudSnapshot.boot.phase !== "ready" ||
+            runtimeError !== null
+          }
+        />
+
+        {isScoreboardOpen ? (
+          <MetaverseTeamDeathmatchScoreboardHud combatSnapshot={combatSnapshot} />
+        ) : null}
 
         {showTeamDeathmatchCombatHud ? (
           <div
@@ -596,81 +717,26 @@ export function MetaverseStageScreen({
             ref={overlayRef}
             style={hudStyle}
           >
-            {isTeamDeathmatchHudMode ? (
-              <div className="flex flex-wrap items-start justify-between gap-[var(--metaverse-hud-gap)]">
-                <MetaverseHudSurface
-                  className="max-w-[min(18rem,100%)]"
-                  strong
-                >
-                  <p className="type-shell-heading truncate">{username}</p>
-                  <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3">
-                    <div className="min-w-0">
-                      <span className="type-shell-banner block truncate">
-                        Accuracy
-                      </span>
-                      <p className="type-shell-heading mt-1 tabular-nums">
-                        {accuracyLabel}
-                      </p>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="type-shell-banner block truncate">
-                        K / D / A
-                      </span>
-                      <p className="type-shell-heading mt-1 tabular-nums">
-                        {combatSnapshot.kills}/{combatSnapshot.deaths}/{combatSnapshot.assists}
-                      </p>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="type-shell-banner block truncate">
-                        Headshots
-                      </span>
-                      <p className="type-shell-heading mt-1 tabular-nums">
-                        {combatSnapshot.headshotKills}
-                      </p>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="type-shell-banner block truncate">
-                        Health
-                      </span>
-                      <p className="type-shell-heading mt-1 tabular-nums">
-                        {healthLabel}
-                      </p>
-                    </div>
-                  </div>
-                </MetaverseHudSurface>
+            <div className="flex flex-wrap items-start justify-between gap-[var(--metaverse-hud-gap)]">
+              <MetaverseInteractionFeedHud hudSnapshot={hudSnapshot} />
 
-                <MetaverseHudSurface
-                  className="max-w-[min(17rem,100%)] shrink-0"
-                  strong
-                >
-                  <div className="flex min-w-0 items-center justify-between gap-3">
-                    <span className="type-shell-banner">Ammo</span>
-                    <span className="type-shell-caption truncate text-right">
-                      {weaponLabel}
+              {isTeamDeathmatchHudMode ? (
+                <div className="pointer-events-none ml-auto max-w-[min(14rem,100%)] shrink-0 text-right text-game-foreground [text-shadow:var(--metaverse-hud-text-shadow)]">
+                  <p className="type-game-heading truncate text-game-foreground">
+                    {weaponLabel}
+                  </p>
+                  <div className="mt-1 flex min-w-0 items-center justify-end gap-3">
+                    <span className="type-game-value min-w-[3ch] text-right text-game-foreground tabular-nums">
+                      {combatSnapshot.ammoInMagazine}
+                    </span>
+                    <span className="h-8 w-px shrink-0 bg-white/90" />
+                    <span className="type-game-value min-w-[4ch] text-right text-game-foreground tabular-nums">
+                      {combatSnapshot.ammoInReserve}
                     </span>
                   </div>
-                  <div className="mt-3 grid grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] items-end gap-4">
-                    <div className="min-w-0">
-                      <span className="type-shell-caption block truncate">
-                        Mag
-                      </span>
-                      <p className="type-shell-value mt-1 min-w-[3ch] tabular-nums">
-                        {combatSnapshot.ammoInMagazine}
-                      </p>
-                    </div>
-                    <div className="h-10 w-px bg-slate-950/12" />
-                    <div className="min-w-0">
-                      <span className="type-shell-caption block truncate">
-                        Reserve
-                      </span>
-                      <p className="type-shell-value mt-1 min-w-[4ch] tabular-nums">
-                        {combatSnapshot.ammoInReserve}
-                      </p>
-                    </div>
-                  </div>
-                </MetaverseHudSurface>
-              </div>
-            ) : null}
+                </div>
+              ) : null}
+            </div>
 
             {isTeamDeathmatchHudMode ? (
               <div className="flex flex-wrap items-end justify-between gap-[var(--metaverse-hud-gap)]">
@@ -680,77 +746,44 @@ export function MetaverseStageScreen({
                   ) : null}
                 </div>
 
-                {showTeamDeathmatchCombatHud ? (
-                  <MetaverseHudSurface
-                    className="max-w-[16rem]"
-                    strong
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="type-shell-heading">Team Deathmatch</p>
-                      <p className="type-shell-body">
-                        {formatMatchTimeLabel(combatSnapshot.timeRemainingMs)}
-                      </p>
-                    </div>
+	                {showTeamDeathmatchCombatHud ? (
+	                  <div className="pointer-events-none ml-auto max-w-[16rem] text-right text-game-foreground [text-shadow:var(--metaverse-hud-text-shadow)]">
+	                    <div className="flex flex-col items-end gap-1">
+	                      <p className="type-game-heading">Team Deathmatch</p>
+	                      <p className="type-game-body text-game-foreground">
+	                        {formatMatchTimeLabel(combatSnapshot.timeRemainingMs)}
+	                      </p>
+	                    </div>
 
-                    <div className="mt-3 flex flex-col gap-3">
-                      <div>
-                        <div className="mb-2 flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-700">
-                          <svg
-                            aria-hidden="true"
-                            className="size-2.5 text-sky-300"
-                            fill="currentColor"
-                            viewBox="0 0 10 10"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <rect
-                              height="10"
-                              width="10"
-                              x="0"
-                              y="0"
-                            />
-                          </svg>
-                          <span className="w-8 tabular-nums text-slate-950">
-                            {blueTeamScore}
-                          </span>
-                          <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-950/12">
-                            <div
-                              className="h-full bg-sky-300 transition-[width] duration-150 ease-out"
-                              style={{ width: blueScorePercent }}
-                            />
-                          </div>
-                        </div>
-                      </div>
+	                    <div className="mt-3 flex flex-col items-end gap-2">
+	                      <div className="flex w-full items-center justify-end gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-game-foreground">
+	                        <span className="size-2.5 shrink-0 bg-sky-300" />
+	                        <span className="w-8 tabular-nums text-game-foreground">
+	                          {blueTeamScore}
+	                        </span>
+	                        <div className="h-2 w-28 overflow-hidden rounded-full">
+	                          <div
+	                            className="h-full bg-sky-300 transition-[width] duration-150 ease-out"
+	                            style={{ width: blueScorePercent }}
+	                          />
+	                        </div>
+	                      </div>
 
-                      <div>
-                        <div className="mb-2 flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-700">
-                          <svg
-                            aria-hidden="true"
-                            className="size-2.5 text-rose-300"
-                            fill="currentColor"
-                            viewBox="0 0 10 10"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <rect
-                              height="10"
-                              width="10"
-                              x="0"
-                              y="0"
-                            />
-                          </svg>
-                          <span className="w-8 tabular-nums text-slate-950">
-                            {redTeamScore}
-                          </span>
-                          <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-950/12">
-                            <div
-                              className="h-full bg-rose-300 transition-[width] duration-150 ease-out"
-                              style={{ width: redScorePercent }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </MetaverseHudSurface>
-                ) : null}
+	                      <div className="flex w-full items-center justify-end gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-game-foreground">
+	                        <span className="size-2.5 shrink-0 bg-rose-300" />
+	                        <span className="w-8 tabular-nums text-game-foreground">
+	                          {redTeamScore}
+	                        </span>
+	                        <div className="h-2 w-28 overflow-hidden rounded-full">
+	                          <div
+	                            className="h-full bg-rose-300 transition-[width] duration-150 ease-out"
+	                            style={{ width: redScorePercent }}
+	                          />
+	                        </div>
+	                      </div>
+	                    </div>
+	                  </div>
+	                ) : null}
               </div>
             ) : null}
           </div>

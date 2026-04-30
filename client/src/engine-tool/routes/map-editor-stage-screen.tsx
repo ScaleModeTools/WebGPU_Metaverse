@@ -473,14 +473,6 @@ function createTerrainPatchGridFromTransform(
   });
 }
 
-function createTerrainVertexTransformTargetId(
-  terrainPatchId: string,
-  cellX: number,
-  cellZ: number
-): string {
-  return `${encodeURIComponent(terrainPatchId)}:${cellX}:${cellZ}`;
-}
-
 function readTerrainVertexTransformTargetId(
   targetId: string
 ): {

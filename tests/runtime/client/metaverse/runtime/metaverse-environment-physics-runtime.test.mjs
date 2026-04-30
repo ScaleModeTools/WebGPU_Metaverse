@@ -103,7 +103,6 @@ test("MetaverseEnvironmentPhysicsRuntime keeps mountable skiff mesh collision an
     syncInteractionSnapshot() {}
   };
   const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
-    metaverseRuntimeConfig,
     {
       createSceneAssetLoader,
       environmentProofConfig,
@@ -182,7 +181,6 @@ test("MetaverseEnvironmentPhysicsRuntime clears and restores dynamic skiff colli
     syncInteractionSnapshot() {}
   };
   const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
-    metaverseRuntimeConfig,
     {
       createSceneAssetLoader,
       environmentProofConfig,
@@ -269,7 +267,6 @@ test("MetaverseEnvironmentPhysicsRuntime boots authored terrain as heightfield c
   assert.notEqual(terrainSurfaceCollider, null);
 
   const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
-    metaverseRuntimeConfig,
     {
       createSceneAssetLoader: () => ({
         async loadAsync() {
@@ -375,7 +372,6 @@ test("MetaverseEnvironmentPhysicsRuntime does not add render surface meshes as d
   assert.notEqual(terrainSurfaceCollider, null);
 
   const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
-    metaverseRuntimeConfig,
     {
       createSceneAssetLoader: () => ({
         async loadAsync() {
@@ -477,7 +473,6 @@ test("MetaverseEnvironmentPhysicsRuntime loads proof-authored collision meshes a
     )
   );
   const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
-    metaverseRuntimeConfig,
     {
       createSceneAssetLoader: () => ({
         async loadAsync() {
@@ -592,7 +587,6 @@ test("MetaverseEnvironmentPhysicsRuntime uses proof-authored collisionPath for s
   collisionMesh.position.y = 0.17;
   collisionScene.add(collisionMesh);
   const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
-    metaverseRuntimeConfig,
     {
       createSceneAssetLoader: () => ({
         async loadAsync(path) {
@@ -696,7 +690,6 @@ test("MetaverseEnvironmentPhysicsRuntime boots static barrier colliders from com
   const { physicsRuntime, world } =
     createFakePhysicsRuntimeWithWorld(RapierPhysicsRuntime);
   const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
-    metaverseRuntimeConfig,
     {
       createSceneAssetLoader: () => ({
         async loadAsync() {
@@ -807,7 +800,6 @@ test("MetaverseEnvironmentPhysicsRuntime keeps sampled remote player blockers ph
   const { physicsRuntime, world } =
     createFakePhysicsRuntimeWithWorld(RapierPhysicsRuntime);
   const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
-    metaverseRuntimeConfig,
     {
       createSceneAssetLoader: () => ({
         async loadAsync() {
@@ -895,7 +887,6 @@ test("MetaverseEnvironmentPhysicsRuntime removes absent sampled remote player bl
   const { physicsRuntime, world } =
     createFakePhysicsRuntimeWithWorld(RapierPhysicsRuntime);
   const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
-    metaverseRuntimeConfig,
     {
       createSceneAssetLoader: () => ({
         async loadAsync() {
@@ -959,7 +950,6 @@ test("MetaverseEnvironmentPhysicsRuntime keeps authoritative environment-body co
   const pushableCrateYawRadians = Math.PI * 0.04;
   const scenePoseCalls = [];
   const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
-    metaverseRuntimeConfig,
     {
       createSceneAssetLoader,
       environmentProofConfig,

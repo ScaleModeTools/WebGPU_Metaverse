@@ -5,7 +5,6 @@ import {
   createMetaverseCombatMatchSnapshot,
   createMetaverseCombatProjectileSnapshot,
   createMetaverseCombatAimSnapshot,
-  createMetaverseCombatShotResolutionTelemetrySnapshot,
   createMetaversePlayerCombatHurtVolumes,
   createMetaversePlayerCombatSnapshot,
   createMetaverseUnmountedTraversalStateSnapshot,
@@ -15,7 +14,6 @@ import {
   resolveMetaverseCombatHitForSegment,
   resolveMetaverseCombatSemanticWeaponTipFrame,
   tryReadMetaverseCombatWeaponProfile,
-  type MetaverseCombatActionRejectionReasonId,
   type MetaverseCombatAimSnapshot,
   type MetaverseCombatEventSnapshot,
   type MetaverseCombatEventSnapshotInput,
@@ -26,13 +24,9 @@ import {
   type MetaverseCombatPlayerWeaponSnapshotInput,
   type MetaverseCombatProjectileSnapshot,
   type MetaverseCombatProjectileSnapshotInput,
-  type MetaverseCombatProjectileLaunchTelemetrySnapshotInput,
   type MetaverseCombatProjectileResolutionId,
-  type MetaverseCombatShotResolutionPlayerCandidateSnapshotInput,
   type MetaverseCombatShotResolutionFinalReasonId,
-  type MetaverseCombatShotResolutionRewindSourceId,
-  type MetaverseCombatShotResolutionTelemetrySnapshot,
-  type MetaverseCombatShotResolutionTelemetrySnapshotInput,
+  type MetaverseCombatWeaponPresentationDeliveryModelId,
   type MetaverseFireWeaponPlayerActionSnapshot,
   type MetaverseInteractWeaponResourcePlayerActionSnapshot,
   type MetaverseIssuePlayerActionCommand,
@@ -64,6 +58,11 @@ import type {
   RapierColliderHandle
 } from "../../types/metaverse-authoritative-rapier.js";
 import type { MetaverseAuthoritativeRapierPhysicsRuntime } from "../../classes/metaverse-authoritative-rapier-physics-runtime.js";
+
+type MetaverseCombatShotResolutionRewindSourceId =
+  | "current"
+  | "history"
+  | "none";
 
 interface MetaverseCombatMountedOccupancyRuntimeState {
   readonly occupancyKind: string;
@@ -113,9 +112,6 @@ interface MutableMetaverseCombatPlayerRuntimeState {
   highestProcessedPlayerActionSequence: number;
   health: number;
   kills: number;
-  latestShotResolutionTelemetry:
-    | MetaverseCombatShotResolutionTelemetrySnapshot
-    | null;
   maxHealth: number;
   readonly playerId: MetaversePlayerId;
   readonly playerActionReceiptSequenceOrder: number[];
@@ -129,10 +125,13 @@ interface MutableMetaverseCombatPlayerRuntimeState {
 }
 
 interface MutableMetaverseCombatProjectileRuntimeState {
+  readonly aimTargetWorld: PhysicsVector3Snapshot;
+  readonly cameraRayForwardWorld: PhysicsVector3Snapshot;
+  readonly cameraRayOriginWorld: PhysicsVector3Snapshot;
   readonly direction: PhysicsVector3Snapshot;
   expiresAtTimeMs: number;
-  launchTelemetry: MetaverseCombatProjectileLaunchTelemetrySnapshotInput | null;
   readonly ownerPlayerId: MetaversePlayerId;
+  readonly presentationDeliveryModel: MetaverseCombatWeaponPresentationDeliveryModelId;
   positionX: number;
   positionY: number;
   positionZ: number;
@@ -142,6 +141,7 @@ interface MutableMetaverseCombatProjectileRuntimeState {
   resolvedHitZone: MetaverseCombatHitZoneId | null;
   resolvedPlayerId: MetaversePlayerId | null;
   readonly sourceActionSequence: number;
+  readonly semanticMuzzleWorld: PhysicsVector3Snapshot;
   spawnedAtTimeMs: number;
   readonly velocityMetersPerSecond: number;
   readonly weaponId: string;
@@ -219,7 +219,6 @@ interface MetaverseAuthoritativeCombatAuthorityDependencies<
 }
 
 const defaultCombatWeaponId = "metaverse-service-pistol-v2" as const;
-const combatActionReceiptRingMaxEntries = 8;
 const combatEventJournalMaxEntries = 64;
 const combatPlayerActionDedupeCacheMaxEntries = 16;
 const combatRewindWindowMs = 200;
@@ -413,21 +412,6 @@ function createDistanceBetweenPoints(
   right: Pick<PhysicsVector3Snapshot, "x" | "y" | "z">
 ): number {
   return Math.hypot(left.x - right.x, left.y - right.y, left.z - right.z);
-}
-
-function readVectorDot(
-  left: Pick<PhysicsVector3Snapshot, "x" | "y" | "z">,
-  right: Pick<PhysicsVector3Snapshot, "x" | "y" | "z">
-): number {
-  return left.x * right.x + left.y * right.y + left.z * right.z;
-}
-
-function clampUnit(value: number): number {
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-
-  return Math.min(1, Math.max(-1, value));
 }
 
 function createPlayerBodyPositionSnapshot(
@@ -1076,15 +1060,6 @@ export class MetaverseAuthoritativeCombatAuthority<
         reason: fireRay.rejectionReason,
         weaponId
       });
-      this.#storeShotResolutionTelemetry(combatState, {
-        actionSequence: action.actionSequence,
-        finalReason: fireRay.telemetryReason,
-        firingReferenceOriginWorld: firingReferenceOrigin,
-        processedAtTimeMs: nowMs,
-        rayForwardWorld: aimSnapshot.rayForwardWorld,
-        rayOriginWorld: aimSnapshot.rayOriginWorld,
-        weaponId
-      });
       return;
     }
 
@@ -1180,7 +1155,6 @@ export class MetaverseAuthoritativeCombatAuthority<
 
       const projectileLaunch = this.#resolveProjectileLaunch({
         attackerPlayerId: playerId,
-        bodyYawReferenceOrigin: firingReferenceOrigin,
         cameraRayDirection: fireRay.direction,
         cameraRayOrigin: fireRay.origin,
         firingReferenceOrigin: semanticMuzzleWorld,
@@ -1191,11 +1165,13 @@ export class MetaverseAuthoritativeCombatAuthority<
       this.#spawnProjectileFireAction({
         actionSequence: action.actionSequence,
         attackerPlayerId: playerId,
+        aimTargetWorld: projectileLaunch.aimTargetWorld,
+        cameraRayForwardWorld: fireRay.direction,
+        cameraRayOriginWorld: fireRay.origin,
         combatState,
         direction: projectileLaunch.direction,
         eventBase: combatEventBase,
         issuedAtTimeMs,
-        launchTelemetry: projectileLaunch.telemetry,
         nowMs,
         origin: semanticMuzzleWorld,
         weaponId,
@@ -1277,28 +1253,19 @@ export class MetaverseAuthoritativeCombatAuthority<
           MetaversePlayerActionFireWeaponRejectionReasonId,
           "invalid-direction" | "invalid-origin"
         >;
-        readonly telemetryReason: Extract<
-          MetaverseCombatShotResolutionFinalReasonId,
-          | "rejected-missing-origin"
-          | "rejected-missing-direction"
-          | "rejected-invalid-origin"
-          | "rejected-invalid-direction"
-        >;
       } {
     const hasRayOrigin = aimSnapshot.rayOriginWorld !== null;
     const hasRayForward = aimSnapshot.rayForwardWorld !== null;
 
     if (!hasRayOrigin) {
       return {
-        rejectionReason: "invalid-origin",
-        telemetryReason: "rejected-missing-origin"
+        rejectionReason: "invalid-origin"
       };
     }
 
     if (!hasRayForward) {
       return {
-        rejectionReason: "invalid-direction",
-        telemetryReason: "rejected-missing-direction"
+        rejectionReason: "invalid-direction"
       };
     }
 
@@ -1306,8 +1273,7 @@ export class MetaverseAuthoritativeCombatAuthority<
 
     if (origin === null) {
       return {
-        rejectionReason: "invalid-origin",
-        telemetryReason: "rejected-invalid-origin"
+        rejectionReason: "invalid-origin"
       };
     }
 
@@ -1316,8 +1282,7 @@ export class MetaverseAuthoritativeCombatAuthority<
       combatRayOriginMaxDistanceFromFiringReferenceMeters
     ) {
       return {
-        rejectionReason: "invalid-origin",
-        telemetryReason: "rejected-invalid-origin"
+        rejectionReason: "invalid-origin"
       };
     }
 
@@ -1325,8 +1290,7 @@ export class MetaverseAuthoritativeCombatAuthority<
 
     if (direction === null) {
       return {
-        rejectionReason: "invalid-direction",
-        telemetryReason: "rejected-invalid-direction"
+        rejectionReason: "invalid-direction"
       };
     }
 
@@ -1361,15 +1325,14 @@ export class MetaverseAuthoritativeCombatAuthority<
 
   #resolveProjectileLaunch(input: {
     readonly attackerPlayerId: MetaversePlayerId;
-    readonly bodyYawReferenceOrigin: PhysicsVector3Snapshot | null;
     readonly cameraRayDirection: PhysicsVector3Snapshot;
     readonly cameraRayOrigin: PhysicsVector3Snapshot;
     readonly firingReferenceOrigin: PhysicsVector3Snapshot;
     readonly issuedAtTimeMs: number;
     readonly weaponProfile: ReturnType<typeof readMetaverseCombatWeaponProfile>;
   }): {
+    readonly aimTargetWorld: PhysicsVector3Snapshot;
     readonly direction: PhysicsVector3Snapshot;
-    readonly telemetry: MetaverseCombatProjectileLaunchTelemetrySnapshotInput;
   } {
     const maxDistanceMeters = this.#resolveFireRangeMeters(input.weaponProfile);
     const worldHit = this.#dependencies.physicsRuntime.castRay(
@@ -1393,42 +1356,20 @@ export class MetaverseAuthoritativeCombatAuthority<
       worldHit !== null &&
       (closestPlayerHit === null ||
         worldHit.distanceMeters < closestPlayerHit.distanceMeters)
-        ? {
-            point: worldHit.point,
-            source: "world-hit" as const
-          }
+        ? worldHit.point
         : closestPlayerHit === null
-          ? {
-              point: cameraRayEnd,
-              source: "max-distance" as const
-            }
-          : {
-              point: closestPlayerHit.point,
-              source: "player-hit" as const
-            };
+          ? cameraRayEnd
+          : closestPlayerHit.point;
     const convergedDirection = normalizeDirection({
-      x: aimTarget.point.x - input.firingReferenceOrigin.x,
-      y: aimTarget.point.y - input.firingReferenceOrigin.y,
-      z: aimTarget.point.z - input.firingReferenceOrigin.z
+      x: aimTarget.x - input.firingReferenceOrigin.x,
+      y: aimTarget.y - input.firingReferenceOrigin.y,
+      z: aimTarget.z - input.firingReferenceOrigin.z
     });
     const launchForward = convergedDirection ?? input.cameraRayDirection;
 
     return {
-      direction: launchForward,
-      telemetry: {
-        bodyYawReferenceOriginWorld: input.bodyYawReferenceOrigin,
-        cameraRayForwardWorld: input.cameraRayDirection,
-        cameraRayOriginWorld: input.cameraRayOrigin,
-        cameraRayTargetSource: aimTarget.source,
-        cameraRayTargetWorld: aimTarget.point,
-        firstImpactKind: null,
-        firstImpactPointWorld: null,
-        launchConvergenceAngleRadians: Math.acos(
-          clampUnit(readVectorDot(input.cameraRayDirection, launchForward))
-        ),
-        launchForwardWorld: launchForward,
-        weaponTipOriginWorld: input.firingReferenceOrigin
-      }
+      aimTargetWorld: aimTarget,
+      direction: launchForward
     };
   }
 
@@ -1502,6 +1443,9 @@ export class MetaverseAuthoritativeCombatAuthority<
   #spawnProjectileFireAction(input: {
     readonly actionSequence: number;
     readonly attackerPlayerId: MetaversePlayerId;
+    readonly aimTargetWorld: PhysicsVector3Snapshot;
+    readonly cameraRayForwardWorld: PhysicsVector3Snapshot;
+    readonly cameraRayOriginWorld: PhysicsVector3Snapshot;
     readonly combatState: MutableMetaverseCombatPlayerRuntimeState;
     readonly direction: PhysicsVector3Snapshot;
     readonly eventBase: Pick<
@@ -1516,7 +1460,6 @@ export class MetaverseAuthoritativeCombatAuthority<
       readonly shotId: string;
     };
     readonly issuedAtTimeMs: number;
-    readonly launchTelemetry: MetaverseCombatProjectileLaunchTelemetrySnapshotInput;
     readonly nowMs: number;
     readonly origin: PhysicsVector3Snapshot;
     readonly weaponId: string;
@@ -1524,12 +1467,15 @@ export class MetaverseAuthoritativeCombatAuthority<
   }): void {
     const projectileId = input.eventBase.shotId;
     const projectileRuntime: MutableMetaverseCombatProjectileRuntimeState = {
+      aimTargetWorld: input.aimTargetWorld,
+      cameraRayForwardWorld: input.cameraRayForwardWorld,
+      cameraRayOriginWorld: input.cameraRayOriginWorld,
       direction: input.direction,
       expiresAtTimeMs:
         input.issuedAtTimeMs +
         Number(input.weaponProfile.accuracy.projectileLifetimeMs),
-      launchTelemetry: input.launchTelemetry,
       ownerPlayerId: input.attackerPlayerId,
+      presentationDeliveryModel: input.weaponProfile.presentationDeliveryModel,
       positionX: input.origin.x,
       positionY: input.origin.y,
       positionZ: input.origin.z,
@@ -1539,6 +1485,7 @@ export class MetaverseAuthoritativeCombatAuthority<
       resolvedHitZone: null,
       resolvedPlayerId: null,
       sourceActionSequence: input.actionSequence,
+      semanticMuzzleWorld: input.origin,
       spawnedAtTimeMs: input.issuedAtTimeMs,
       velocityMetersPerSecond:
         input.weaponProfile.accuracy.projectileVelocityMetersPerSecond,
@@ -1554,9 +1501,9 @@ export class MetaverseAuthoritativeCombatAuthority<
 
     this.#storeCombatEvent({
       ...input.eventBase,
-      aimTargetWorld: input.launchTelemetry.cameraRayTargetWorld,
-      cameraRayForwardWorld: input.launchTelemetry.cameraRayForwardWorld,
-      cameraRayOriginWorld: input.launchTelemetry.cameraRayOriginWorld,
+      aimTargetWorld: input.aimTargetWorld,
+      cameraRayForwardWorld: input.cameraRayForwardWorld,
+      cameraRayOriginWorld: input.cameraRayOriginWorld,
       eventKind: "projectile-spawned",
       launchDirectionWorld: input.direction,
       projectileId,
@@ -1661,33 +1608,12 @@ export class MetaverseAuthoritativeCombatAuthority<
       }
     }
 
-    const telemetryBase = {
+    const shotResolutionBase = {
       actionSequence: input.actionSequence,
-      candidatePlayerHit: this.#createShotTelemetryPlayerCandidate(
-        closestPlayerHit
-      ),
-      firingReferenceOriginWorld: input.firingReferenceOrigin,
-      processedAtTimeMs: input.nowMs,
       rayForwardWorld: input.direction,
       rayOriginWorld: input.origin,
-      rewindSource: closestPlayerHit?.rewindSource ?? "none",
-      selectedPlayerHit: this.#createShotTelemetryPlayerCandidate(
-        closestPlayerHit
-      ),
-      weaponId: input.weaponId,
-      worldHitColliderKind:
-        worldHit === null ? null : ("bullet-blocking-world" as const),
-      worldHitDistanceMeters: worldHit?.distanceMeters ?? null,
-      worldHitPoint: worldHit?.point ?? null
-    } satisfies Omit<
-      MetaverseCombatShotResolutionTelemetrySnapshotInput,
-      | "finalReason"
-      | "lineOfSightBlocked"
-      | "lineOfSightBlockerDistanceMeters"
-      | "lineOfSightBlockerKind"
-      | "lineOfSightBlockerPoint"
-      | "lineOfSightChecked"
-    >;
+      weaponId: input.weaponId
+    };
 
     if (
       worldHit !== null &&
@@ -1702,11 +1628,9 @@ export class MetaverseAuthoritativeCombatAuthority<
         semanticMuzzleWorld: input.semanticMuzzleWorld,
         shotId: input.shotId,
         targetPlayerId: null,
-        telemetry: {
-          ...telemetryBase,
-          finalReason:
-            closestPlayerHit === null ? "hit-world" : "hit-world-before-player"
-        }
+        finalReason:
+          closestPlayerHit === null ? "hit-world" : "hit-world-before-player",
+        ...shotResolutionBase
       });
       return;
     }
@@ -1720,10 +1644,8 @@ export class MetaverseAuthoritativeCombatAuthority<
         semanticMuzzleWorld: input.semanticMuzzleWorld,
         shotId: input.shotId,
         targetPlayerId: null,
-        telemetry: {
-          ...telemetryBase,
-          finalReason: "miss-no-hurtbox"
-        }
+        finalReason: "miss-no-hurtbox",
+        ...shotResolutionBase
       });
       return;
     }
@@ -1742,15 +1664,8 @@ export class MetaverseAuthoritativeCombatAuthority<
         semanticMuzzleWorld: input.semanticMuzzleWorld,
         shotId: input.shotId,
         targetPlayerId: null,
-        telemetry: {
-          ...telemetryBase,
-          finalReason: "blocked-by-firing-reference-los",
-          lineOfSightBlocked: true,
-          lineOfSightBlockerDistanceMeters: lineOfSightBlocker.distanceMeters,
-          lineOfSightBlockerKind: "bullet-blocking-world",
-          lineOfSightBlockerPoint: lineOfSightBlocker.point,
-          lineOfSightChecked: true
-        }
+        finalReason: "blocked-by-firing-reference-los",
+        ...shotResolutionBase
       });
       return;
     }
@@ -1763,12 +1678,8 @@ export class MetaverseAuthoritativeCombatAuthority<
       semanticMuzzleWorld: input.semanticMuzzleWorld,
       shotId: input.shotId,
       targetPlayerId: closestPlayerHit.targetPlayerId,
-      telemetry: {
-        ...telemetryBase,
-        finalReason: "hit-player",
-        lineOfSightBlocked: false,
-        lineOfSightChecked: true
-      }
+      finalReason: "hit-player",
+      ...shotResolutionBase
     });
     this.#applyCombatHit(
       {
@@ -1998,9 +1909,6 @@ export class MetaverseAuthoritativeCombatAuthority<
 
   readPlayerCombatActionObserverSnapshot(playerId: MetaversePlayerId): {
     readonly highestProcessedPlayerActionSequence: number;
-    readonly latestShotResolutionTelemetry:
-      | MetaverseCombatShotResolutionTelemetrySnapshot
-      | null;
     readonly recentPlayerActionReceipts:
       readonly MetaversePlayerActionReceiptSnapshot[];
   } | null {
@@ -2013,7 +1921,6 @@ export class MetaverseAuthoritativeCombatAuthority<
     return Object.freeze({
       highestProcessedPlayerActionSequence:
         combatState.highestProcessedPlayerActionSequence,
-      latestShotResolutionTelemetry: combatState.latestShotResolutionTelemetry,
       recentPlayerActionReceipts: Object.freeze(
         combatState.playerActionReceiptSequenceOrder
           .map(
@@ -2862,7 +2769,6 @@ export class MetaverseAuthoritativeCombatAuthority<
       highestProcessedPlayerActionSequence: 0,
       health: 100,
       kills: 0,
-      latestShotResolutionTelemetry: null,
       maxHealth: 100,
       playerId: playerRuntime.playerId,
       playerActionReceiptSequenceOrder: [],
@@ -2998,12 +2904,6 @@ export class MetaverseAuthoritativeCombatAuthority<
     };
   }
 
-  #readCurrentTick(): number {
-    return normalizeFiniteNonNegativeNumber(
-      this.#dependencies.readCurrentTick?.()
-    );
-  }
-
   #resolveProjectile(
     projectileRuntime: MutableMetaverseCombatProjectileRuntimeState,
     resolution: MetaverseCombatProjectileResolutionId,
@@ -3020,27 +2920,6 @@ export class MetaverseAuthoritativeCombatAuthority<
     projectileRuntime.resolvedHitZone = resolvedHitZone;
     projectileRuntime.resolvedPlayerId = resolvedPlayerId;
 
-    if (
-      projectileRuntime.launchTelemetry !== null &&
-      projectileRuntime.launchTelemetry.firstImpactKind === null
-    ) {
-      projectileRuntime.launchTelemetry = {
-        ...projectileRuntime.launchTelemetry,
-        firstImpactKind:
-          resolution === "hit-player"
-            ? "player"
-            : resolution === "hit-world"
-              ? "world"
-              : resolution === "expired"
-                ? "expired"
-                : null,
-        firstImpactPointWorld: createProjectilePositionSnapshot(projectileRuntime)
-      };
-    }
-
-    const weaponProfile =
-      tryReadMetaverseCombatWeaponProfile(projectileRuntime.weaponId) ??
-      readMetaverseCombatWeaponProfile(defaultCombatWeaponId);
     const ownerRuntime =
       this.#dependencies.playersById.get(projectileRuntime.ownerPlayerId) ??
       null;
@@ -3051,23 +2930,19 @@ export class MetaverseAuthoritativeCombatAuthority<
     this.#storeCombatEvent({
       actionSequence: projectileRuntime.sourceActionSequence,
       activeSlotId: activeWeaponSlot?.activeSlotId ?? null,
-      aimTargetWorld:
-        projectileRuntime.launchTelemetry?.cameraRayTargetWorld ?? null,
-      cameraRayForwardWorld:
-        projectileRuntime.launchTelemetry?.cameraRayForwardWorld ?? null,
-      cameraRayOriginWorld:
-        projectileRuntime.launchTelemetry?.cameraRayOriginWorld ?? null,
+      aimTargetWorld: projectileRuntime.aimTargetWorld,
+      cameraRayForwardWorld: projectileRuntime.cameraRayForwardWorld,
+      cameraRayOriginWorld: projectileRuntime.cameraRayOriginWorld,
       eventKind: "projectile-resolved",
       launchDirectionWorld: projectileRuntime.direction,
       playerId: projectileRuntime.ownerPlayerId,
-      presentationDeliveryModel: weaponProfile.presentationDeliveryModel,
+      presentationDeliveryModel: projectileRuntime.presentationDeliveryModel,
       projectile: {
         impactPointWorld,
         resolutionKind: resolution
       },
       projectileId: projectileRuntime.projectileId,
-      semanticMuzzleWorld:
-        projectileRuntime.launchTelemetry?.weaponTipOriginWorld ?? null,
+      semanticMuzzleWorld: projectileRuntime.semanticMuzzleWorld,
       shotId: projectileRuntime.projectileId,
       weaponId: projectileRuntime.weaponId,
       weaponInstanceId: activeWeaponSlot?.weaponInstanceId ?? null
@@ -3154,7 +3029,6 @@ export class MetaverseAuthoritativeCombatAuthority<
       combatState.deaths = 0;
       combatState.headshotKills = 0;
       combatState.kills = 0;
-      combatState.latestShotResolutionTelemetry = null;
       combatState.highestProcessedPlayerActionSequence = 0;
       combatState.playerActionReceiptSequenceOrder.length = 0;
       combatState.recentPlayerActionReceiptsBySequence.clear();
@@ -3164,12 +3038,11 @@ export class MetaverseAuthoritativeCombatAuthority<
   }
 
   #storeCombatEvent(
-    input: Omit<MetaverseCombatEventSnapshotInput, "eventSequence" | "serverTick">
+    input: Omit<MetaverseCombatEventSnapshotInput, "eventSequence">
   ): void {
     this.#combatEvents.push({
       ...input,
-      eventSequence: ++this.#combatEventSequence,
-      serverTick: this.#readCurrentTick()
+      eventSequence: ++this.#combatEventSequence
     });
 
     while (this.#combatEvents.length > combatEventJournalMaxEntries) {
@@ -3435,54 +3308,41 @@ export class MetaverseAuthoritativeCombatAuthority<
   }
 
   #storeHitscanShotResolution(input: {
+    readonly actionSequence: number;
     readonly combatState: MutableMetaverseCombatPlayerRuntimeState;
+    readonly finalReason: MetaverseCombatShotResolutionFinalReasonId;
     readonly hitKind: "miss" | "player" | "world";
     readonly hitPointWorld: PhysicsVector3Snapshot | null;
+    readonly rayForwardWorld: PhysicsVector3Snapshot;
+    readonly rayOriginWorld: PhysicsVector3Snapshot;
     readonly regionId: MetaverseCombatHurtRegionId | null;
     readonly semanticMuzzleWorld: PhysicsVector3Snapshot;
     readonly shotId: string;
     readonly targetPlayerId: MetaversePlayerId | null;
-    readonly telemetry: MetaverseCombatShotResolutionTelemetrySnapshotInput;
+    readonly weaponId: string;
   }): void {
-    this.#storeShotResolutionTelemetry(input.combatState, input.telemetry);
-
-    const weaponId = input.telemetry.weaponId ?? defaultCombatWeaponId;
-    const weaponProfile =
-      tryReadMetaverseCombatWeaponProfile(weaponId) ??
-      readMetaverseCombatWeaponProfile(defaultCombatWeaponId);
+    const weaponProfile = readMetaverseCombatWeaponProfile(input.weaponId);
     const playerRuntime =
       this.#dependencies.playersById.get(input.combatState.playerId) ?? null;
     const activeWeaponSlot =
       playerRuntime === null ? null : this.#resolveActiveWeaponSlot(playerRuntime);
-    const rayOrigin =
-      input.telemetry.rayOriginWorld === null ||
-      input.telemetry.rayOriginWorld === undefined
-        ? null
-        : createFinitePhysicsVector3Snapshot(input.telemetry.rayOriginWorld);
-    const rayForward =
-      input.telemetry.rayForwardWorld === null ||
-      input.telemetry.rayForwardWorld === undefined
-        ? null
-        : normalizeDirection(input.telemetry.rayForwardWorld);
     const aimTargetWorld =
       input.hitPointWorld ??
-      (rayOrigin === null || rayForward === null
-        ? null
-        : createOffsetVector(
-            rayOrigin,
-            rayForward,
-            this.#resolveFireRangeMeters(weaponProfile)
-          ));
+      createOffsetVector(
+        input.rayOriginWorld,
+        input.rayForwardWorld,
+        this.#resolveFireRangeMeters(weaponProfile)
+      );
 
     this.#storeCombatEvent({
-      actionSequence: input.telemetry.actionSequence ?? 0,
+      actionSequence: input.actionSequence,
       activeSlotId: activeWeaponSlot?.activeSlotId ?? null,
       aimTargetWorld,
-      cameraRayForwardWorld: input.telemetry.rayForwardWorld ?? null,
-      cameraRayOriginWorld: input.telemetry.rayOriginWorld ?? null,
+      cameraRayForwardWorld: input.rayForwardWorld,
+      cameraRayOriginWorld: input.rayOriginWorld,
       eventKind: "hitscan-resolved",
       hitscan: {
-        finalReason: input.telemetry.finalReason ?? "miss-no-hurtbox",
+        finalReason: input.finalReason,
         hitKind: input.hitKind,
         hitPointWorld: input.hitPointWorld,
         regionId: input.regionId,
@@ -3492,37 +3352,9 @@ export class MetaverseAuthoritativeCombatAuthority<
       presentationDeliveryModel: weaponProfile.presentationDeliveryModel,
       semanticMuzzleWorld: input.semanticMuzzleWorld,
       shotId: input.shotId,
-      weaponId,
+      weaponId: input.weaponId,
       weaponInstanceId: activeWeaponSlot?.weaponInstanceId ?? null
     });
-  }
-
-  #storeShotResolutionTelemetry(
-    combatState: MutableMetaverseCombatPlayerRuntimeState,
-    input: MetaverseCombatShotResolutionTelemetrySnapshotInput
-  ): void {
-    const telemetrySnapshot =
-      createMetaverseCombatShotResolutionTelemetrySnapshot(input);
-
-    combatState.latestShotResolutionTelemetry = telemetrySnapshot;
-
-    this.#dependencies.incrementSnapshotSequence();
-  }
-
-  #createShotTelemetryPlayerCandidate(
-    hit: MetaverseCombatResolvedPlayerHit | null
-  ): MetaverseCombatShotResolutionPlayerCandidateSnapshotInput | null {
-    if (hit === null) {
-      return null;
-    }
-
-    return {
-      distanceMeters: hit.distanceMeters,
-      hitZone: hit.hitZone,
-      point: hit.point,
-      regionId: hit.regionId,
-      targetPlayerId: hit.targetPlayerId
-    };
   }
 
   #readPlayerHurtVolumesForFire(

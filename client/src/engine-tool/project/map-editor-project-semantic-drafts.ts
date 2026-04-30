@@ -565,31 +565,6 @@ export function createSemanticSurfaceSnapshotFromDraft(
   });
 }
 
-function createRectangularLoop(
-  size: MetaverseWorldSurfaceVector3Snapshot
-): MetaverseMapBundleSemanticPlanarLoopSnapshot {
-  return Object.freeze({
-    points: Object.freeze([
-      Object.freeze({
-        x: -size.x * 0.5,
-        z: -size.z * 0.5
-      }),
-      Object.freeze({
-        x: size.x * 0.5,
-        z: -size.z * 0.5
-      }),
-      Object.freeze({
-        x: size.x * 0.5,
-        z: size.z * 0.5
-      }),
-      Object.freeze({
-        x: -size.x * 0.5,
-        z: size.z * 0.5
-      })
-    ])
-  });
-}
-
 export function createSemanticRegionSnapshotFromDraft(
   draft: MapEditorRegionDraftSnapshot
 ): MetaverseMapBundleSemanticRegionSnapshot {

@@ -21,7 +21,7 @@ after(async () => {
   await clientLoader?.close();
 });
 
-test("syncCharacterAnimation uses authored jump vocabularies before locomotion fallback", async () => {
+test("syncCharacterAnimation uses authored jump vocabularies directly", async () => {
   const [
     { AnimationClip, AnimationMixer, Group, NumberKeyframeTrack },
     { syncCharacterAnimation }
@@ -49,7 +49,6 @@ test("syncCharacterAnimation uses authored jump vocabularies before locomotion f
   const jumpMidAction = createAction("jump-mid", 3);
   const jumpDownAction = createAction("jump-down", 4);
   const characterRuntime = {
-    activeAnimationActionSetId: "full-body",
     activeAnimationCycleId: 0,
     activeAnimationVocabulary: "idle",
     actionsByVocabulary: new Map([
@@ -78,45 +77,23 @@ test("syncCharacterAnimation uses authored jump vocabularies before locomotion f
   assert.equal(characterRuntime.activeAnimationCycleId, 3);
 });
 
-test("shot combat presentation stays out of legacy pistol pose overlays", async () => {
+test("combat presentation keeps shots out of animation overlays and routes hit and death procedurally", async () => {
   const { triggerCharacterCombatPresentationEvent } = await clientLoader.load(
     "/src/metaverse/render/characters/metaverse-scene-character-animation.ts"
   );
-  const createAction = () => {
-    const calls = {
-      play: 0,
-      reset: 0,
-      setEffectiveWeight: []
-    };
-
-    return {
-      action: {
-        clampWhenFinished: false,
-        enabled: false,
-        play() {
-          calls.play += 1;
-        },
-        reset() {
-          calls.reset += 1;
-        },
-        setEffectiveTimeScale() {},
-        setEffectiveWeight(weight) {
-          calls.setEffectiveWeight.push(weight);
-        },
-        setLoop() {},
-        stop() {}
-      },
-      calls
-    };
-  };
-  const hit = createAction();
-  const death = createAction();
+  const deathRagdollEvents = [];
+  const proceduralHitReactionEvents = [];
   const characterRuntime = {
-    combatAnimationRuntime: {
-      actionsByActionId: new Map([
-        ["hit", hit.action],
-        ["death", death.action]
-      ])
+    deathRagdollRuntime: {
+      clear() {},
+      trigger(event) {
+        deathRagdollEvents.push(event);
+      }
+    },
+    proceduralHitReactionRuntime: {
+      trigger(event) {
+        proceduralHitReactionEvents.push(event);
+      }
     }
   };
 
@@ -128,21 +105,215 @@ test("shot combat presentation stays out of legacy pistol pose overlays", async 
     weaponId: "metaverse-service-pistol-v2"
   });
 
-  assert.equal(hit.calls.play, 0);
-  assert.equal(death.calls.play, 0);
+  assert.equal(proceduralHitReactionEvents.length, 0);
 
-  triggerCharacterCombatPresentationEvent(characterRuntime, {
+  const hitEvent = {
     kind: "hit",
     playerId: "local-player",
     sequence: 2,
     startedAtMs: 20,
     weaponId: "metaverse-service-pistol-v2"
+  };
+
+  triggerCharacterCombatPresentationEvent(characterRuntime, hitEvent);
+
+  assert.deepEqual(proceduralHitReactionEvents, [hitEvent]);
+
+  const deathEvent = {
+    kind: "death",
+    playerId: "local-player",
+    sequence: 3,
+    startedAtMs: 30,
+    weaponId: "metaverse-service-pistol-v2"
+  };
+
+  triggerCharacterCombatPresentationEvent(characterRuntime, deathEvent);
+
+  assert.deepEqual(deathRagdollEvents, [deathEvent]);
+});
+
+function createFakeRagdollPhysicsRuntime() {
+  const bodies = [];
+  const joints = [];
+  const removedBodies = [];
+  const removedJoints = [];
+
+  return {
+    bodies,
+    isInitialized: true,
+    joints,
+    removedBodies,
+    removedJoints,
+    createDynamicCuboidBody(halfExtents, translation, options = {}) {
+      const state = {
+        angularVelocity: { x: 0, y: 0, z: 0 },
+        halfExtents,
+        linearVelocity: { x: 0, y: 0, z: 0 },
+        rotation: options.rotation ?? { x: 0, y: 0, z: 0, w: 1 },
+        translation: { ...translation }
+      };
+      const body = {
+        state,
+        linvel() {
+          return state.linearVelocity;
+        },
+        rotation() {
+          return state.rotation;
+        },
+        setAngvel(velocity) {
+          state.angularVelocity = { ...velocity };
+        },
+        setLinvel(velocity) {
+          state.linearVelocity = { ...velocity };
+        },
+        setRotation(rotation) {
+          state.rotation = { ...rotation };
+        },
+        setTranslation(nextTranslation) {
+          state.translation = { ...nextTranslation };
+        },
+        translation() {
+          return state.translation;
+        }
+      };
+
+      bodies.push(body);
+
+      return {
+        body,
+        collider: {
+          setRotation() {},
+          setTranslation() {},
+          translation() {
+            return state.translation;
+          }
+        }
+      };
+    },
+    createSphericalImpulseJoint(parentBody, childBody, parentAnchor, childAnchor) {
+      const joint = {
+        childAnchor,
+        childBody,
+        handle: joints.length + 1,
+        parentAnchor,
+        parentBody
+      };
+
+      joints.push(joint);
+
+      return joint;
+    },
+    createVector3(x, y, z) {
+      return { x, y, z };
+    },
+    removeImpulseJoint(joint) {
+      removedJoints.push(joint);
+    },
+    removeRigidBody(body) {
+      removedBodies.push(body);
+    }
+  };
+}
+
+test("MetaverseCharacterRapierRagdollRuntime drives humanoid bones from Rapier bodies and joints", async () => {
+  const [
+    { Bone, Group, Vector3 },
+    { MetaverseCharacterRapierRagdollRuntime }
+  ] = await Promise.all([
+    import("three/webgpu"),
+    clientLoader.load(
+      "/src/metaverse/render/characters/metaverse-scene-character-ragdoll.ts"
+    )
+  ]);
+  const characterScene = new Group();
+  const physicsRuntime = createFakeRagdollPhysicsRuntime();
+  const addBone = (boneName, parentBone = null, position = null) => {
+    const bone = new Bone();
+
+    bone.name = boneName;
+    if (position !== null) {
+      bone.position.copy(position);
+    }
+
+    if (parentBone === null) {
+      characterScene.add(bone);
+    } else {
+      parentBone.add(bone);
+    }
+
+    return bone;
+  };
+
+  const root = addBone("root");
+  const pelvis = addBone("pelvis", root, new Vector3(0, 0.94, 0));
+  const spine01 = addBone("spine_01", pelvis, new Vector3(0, 0.16, 0));
+  const spine02 = addBone("spine_02", spine01, new Vector3(0, 0.17, 0));
+  const spine03 = addBone("spine_03", spine02, new Vector3(0, 0.18, 0));
+  const neck = addBone("neck_01", spine03, new Vector3(0, 0.12, 0));
+  const head = addBone("head", neck, new Vector3(0, 0.12, 0));
+  addBone("head_leaf", head, new Vector3(0, 0.14, 0));
+  const clavicleL = addBone("clavicle_l", spine03, new Vector3(-0.11, 0.08, 0));
+  const upperarmL = addBone("upperarm_l", clavicleL, new Vector3(-0.17, 0, 0));
+  const lowerarmL = addBone("lowerarm_l", upperarmL, new Vector3(-0.22, 0, 0));
+  const handL = addBone("hand_l", lowerarmL, new Vector3(-0.17, 0, 0));
+  addBone("middle_01_l", handL, new Vector3(-0.045, 0.04, 0));
+  const clavicleR = addBone("clavicle_r", spine03, new Vector3(0.11, 0.08, 0));
+  const upperarmR = addBone("upperarm_r", clavicleR, new Vector3(0.17, 0, 0));
+  const lowerarmR = addBone("lowerarm_r", upperarmR, new Vector3(0.22, 0, 0));
+  const handR = addBone("hand_r", lowerarmR, new Vector3(0.17, 0, 0));
+  addBone("middle_01_r", handR, new Vector3(0.045, 0.04, 0));
+  const thighL = addBone("thigh_l", pelvis, new Vector3(-0.09, -0.12, 0));
+  const calfL = addBone("calf_l", thighL, new Vector3(0, -0.39, 0));
+  const footL = addBone("foot_l", calfL, new Vector3(0, -0.36, 0.03));
+  addBone("ball_l", footL, new Vector3(0, -0.03, 0.15));
+  const thighR = addBone("thigh_r", pelvis, new Vector3(0.09, -0.12, 0));
+  const calfR = addBone("calf_r", thighR, new Vector3(0, -0.39, 0));
+  const footR = addBone("foot_r", calfR, new Vector3(0, -0.36, 0.03));
+  addBone("ball_r", footR, new Vector3(0, -0.03, 0.15));
+  characterScene.updateMatrixWorld(true);
+
+  const pelvisStartWorld = pelvis.getWorldPosition(new Vector3());
+  const ragdollRuntime = new MetaverseCharacterRapierRagdollRuntime({
+    characterScene,
+    physicsRuntime
   });
 
-  assert.equal(hit.action.enabled, true);
-  assert.equal(hit.calls.reset, 1);
-  assert.equal(hit.calls.play, 1);
-  assert.deepEqual(hit.calls.setEffectiveWeight, [0.86]);
+  ragdollRuntime.trigger({
+    damageSourceDirectionWorld: {
+      x: 1,
+      y: 0,
+      z: 0
+    },
+    kind: "death",
+    playerId: "local-player",
+    sequence: 4,
+    startedAtMs: 100,
+    weaponId: "metaverse-service-pistol-v2"
+  });
+
+  assert.equal(ragdollRuntime.isActive, true);
+  assert.equal(physicsRuntime.bodies.length, 17);
+  assert.equal(physicsRuntime.joints.length, 16);
+  assert.ok(physicsRuntime.bodies[0].state.halfExtents.x > 0);
+  assert.ok(physicsRuntime.bodies[0].state.halfExtents.y > 0);
+  assert.ok(physicsRuntime.bodies[0].state.halfExtents.z > 0);
+  assert.ok(physicsRuntime.bodies[0].state.linearVelocity.x < 0);
+
+  physicsRuntime.bodies[0].setTranslation({
+    ...physicsRuntime.bodies[0].state.translation,
+    x: physicsRuntime.bodies[0].state.translation.x - 0.42
+  });
+  ragdollRuntime.apply(140);
+
+  assert.ok(pelvis.getWorldPosition(new Vector3()).x < pelvisStartWorld.x - 0.3);
+
+  ragdollRuntime.clear();
+  assert.equal(ragdollRuntime.isActive, false);
+  assert.ok(
+    pelvis.getWorldPosition(new Vector3()).distanceTo(pelvisStartWorld) < 0.000001
+  );
+  assert.equal(physicsRuntime.removedBodies.length, 17);
+  assert.equal(physicsRuntime.removedJoints.length, 16);
 });
 
 test("product metaverse runtime does not consume legacy pistol aim pose identifiers", async () => {
@@ -935,7 +1106,6 @@ test("held weapon presentation stays inactive without an active weapon state", a
   const [
     { Group },
     {
-      resolveHeldCharacterAnimationVocabulary,
       shouldUseHeldWeaponCharacterPresentation
     },
     { advanceLocalCharacterAnimation, syncLocalCharacterPresentation }
@@ -952,7 +1122,6 @@ test("held weapon presentation stays inactive without an active weapon state", a
     actionsByVocabulary: new Map([
       ["idle", { setEffectiveTimeScale() {} }]
     ]),
-    activeAnimationActionSetId: "full-body",
     activeAnimationCycleId: null,
     activeAnimationVocabulary: "idle",
     anchorGroup: new Group(),
@@ -960,6 +1129,16 @@ test("held weapon presentation stays inactive without an active weapon state", a
     heldWeaponPoseRuntime: {},
     mixer: {
       update() {}
+    },
+    deathRagdollRuntime: {
+      apply() {},
+      clear() {},
+      isActive: false,
+      trigger() {}
+    },
+    proceduralHitReactionRuntime: {
+      apply() {},
+      trigger() {}
     },
     skeletonId: "humanoid_v2"
   };
@@ -1014,17 +1193,6 @@ test("held weapon presentation stays inactive without an active weapon state", a
     ),
     true
   );
-  assert.equal(
-    resolveHeldCharacterAnimationVocabulary(
-      characterRuntime,
-      attachmentRuntime,
-      "idle",
-      null,
-      null
-    ),
-    "idle"
-  );
-
   advanceLocalCharacterAnimation(
     characterRuntime,
     attachmentRuntime,
@@ -1057,6 +1225,7 @@ test("held weapon presentation stays inactive without an active weapon state", a
     attachmentRuntime,
     null,
     cameraSnapshot,
+    0,
     characterPresentation,
     bodyPresentation,
     null,
@@ -1467,7 +1636,17 @@ test("createMetaverseScene keeps traversal as the held-object IK base locally an
     yawRadians: 0
   };
   const activeWeaponState = Object.freeze({
+    activeSlotId: "primary",
     aimMode: "hip-fire",
+    slots: Object.freeze([
+      Object.freeze({
+        attachmentId: "metaverse-service-pistol-v1",
+        equipped: true,
+        slotId: "primary",
+        weaponId: "metaverse-service-pistol-v1",
+        weaponInstanceId: "test-player:primary:metaverse-service-pistol-v1"
+      })
+    ]),
     weaponId: "metaverse-service-pistol-v1"
   });
   const traversalCameraPosition = new Vector3(
@@ -2019,7 +2198,17 @@ test("createMetaverseScene keeps traversal as the held-object IK base locally an
     1 / 60,
     characterPresentation,
     Object.freeze({
+      activeSlotId: "primary",
       aimMode: "ads",
+      slots: Object.freeze([
+        Object.freeze({
+          attachmentId: "metaverse-service-pistol-v1",
+          equipped: true,
+          slotId: "primary",
+          weaponId: "metaverse-service-pistol-v1",
+          weaponInstanceId: "test-player:primary:metaverse-service-pistol-v1"
+        })
+      ]),
       weaponId: "metaverse-service-pistol-v1"
     }),
     1,

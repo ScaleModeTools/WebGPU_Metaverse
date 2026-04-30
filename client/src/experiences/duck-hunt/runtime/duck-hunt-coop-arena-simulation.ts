@@ -47,7 +47,6 @@ import {
   type LatestHandTrackingSnapshot
 } from "../../../tracking";
 import { DuckHuntWeaponRuntime } from "./duck-hunt-weapon-runtime";
-import type { GameplayTelemetrySnapshot } from "../types/duck-hunt-gameplay-presentation";
 
 const defaultViewportSnapshot = Object.freeze({
   height: 1,
@@ -262,21 +261,6 @@ function resolveRoomSnapshotBuffer(
       : [roomSource.roomSnapshot];
 }
 
-const defaultCoopRoomClientTelemetrySnapshot = Object.freeze({
-  latestSnapshotUpdateRateHz: null,
-  playerPresenceDatagramSendFailureCount: 0,
-  playerPresenceLastTransportError: null,
-  playerPresenceReliableFallbackActive: false,
-  snapshotStream: Object.freeze({
-    available: false,
-    fallbackActive: false,
-    lastTransportError: null,
-    liveness: "inactive",
-    path: "http-polling",
-    reconnectCount: 0
-  })
-});
-
 function wrapRadians(rawValue: number): number {
   if (!Number.isFinite(rawValue)) {
     return 0;
@@ -431,52 +415,6 @@ export class DuckHuntCoopArenaSimulation {
 
   get hudSnapshot(): GameplayArenaHudSnapshot {
     return this.#hudSnapshot;
-  }
-
-  get telemetrySnapshot(): GameplayTelemetrySnapshot["coopRoom"] {
-    const roomSnapshotBuffer = resolveRoomSnapshotBuffer(this.#roomSource);
-    const latestRoomSnapshot =
-      roomSnapshotBuffer[roomSnapshotBuffer.length - 1] ??
-      this.#roomSource.roomSnapshot;
-    const roomClientTelemetrySnapshot =
-      this.#roomSource.telemetrySnapshot ??
-      defaultCoopRoomClientTelemetrySnapshot;
-
-    return Object.freeze({
-      bufferDepth: roomSnapshotBuffer.length,
-      clockOffsetEstimateMs: this.#authoritativeServerClock.clockOffsetEstimateMs,
-      latestSnapshotUpdateRateHz:
-        roomClientTelemetrySnapshot.latestSnapshotUpdateRateHz,
-      playerPresenceDatagramSendFailureCount:
-        roomClientTelemetrySnapshot.playerPresenceDatagramSendFailureCount,
-      playerPresenceLastTransportError:
-        roomClientTelemetrySnapshot.playerPresenceLastTransportError,
-      playerPresenceReliableFallbackActive:
-        roomClientTelemetrySnapshot.playerPresenceReliableFallbackActive,
-      projectedSimulationLagMs:
-        latestRoomSnapshot === null
-          ? null
-          : Math.max(
-              0,
-              this.#worldTimeMs -
-                Number(latestRoomSnapshot.tick.simulationTimeMs)
-            ),
-      projectionSource:
-        roomSnapshotBuffer.length <= 0
-          ? "unavailable"
-          : roomSnapshotBuffer.length === 1
-            ? "latest-snapshot"
-            : "buffered-snapshots",
-      snapshotStreamAvailable:
-        roomClientTelemetrySnapshot.snapshotStream.available,
-      snapshotStreamLastTransportError:
-        roomClientTelemetrySnapshot.snapshotStream.lastTransportError,
-      snapshotStreamLiveness:
-        roomClientTelemetrySnapshot.snapshotStream.liveness,
-      snapshotStreamPath: roomClientTelemetrySnapshot.snapshotStream.path,
-      snapshotStreamReconnectCount:
-        roomClientTelemetrySnapshot.snapshotStream.reconnectCount
-    });
   }
 
   get worldTimeMs(): number {

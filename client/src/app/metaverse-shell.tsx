@@ -15,7 +15,6 @@ export function MetaverseShell() {
     activeStep === "metaverse" ||
     activeStep === "gameplay";
   const isMinimalEntryStage = activeStep === "main-menu";
-  const showDeveloperUi = import.meta.env.DEV;
   const stageRouter = (
     <ShellStageRouter
       activeExperienceId={controller.activeExperienceId}
@@ -29,7 +28,6 @@ export function MetaverseShell() {
       capabilityStatus={controller.capabilityStatus}
       calibrationQualityLabel={controller.shellView.calibrationQualityLabel}
       coopRoomIdDraft={controller.coopRoomIdDraft}
-      debugPanelMode={controller.debugPanelMode}
       gameplayInputSource={controller.gameplayInputSource}
       handTrackingRuntime={controller.handTrackingRuntime}
       hasStoredProfile={controller.hydrationSource !== "empty"}
@@ -117,13 +115,11 @@ export function MetaverseShell() {
         <DuckHuntGameMenuDialog
           audioStatusLabel={controller.shellView.audioStatusLabel}
           calibrationQualityLabel={controller.shellView.calibrationQualityLabel}
-          debugPanelMode={controller.debugPanelMode}
           gameplayStatusLabel={
             "Duck Hunt mini-game session active"
           }
           inputMode={controller.inputMode}
           musicVolume={controller.shellView.musicVolumeSliderValue}
-          onDebugPanelModeChange={controller.onGameplayDebugPanelModeChange}
           onInputModeChange={controller.onInputModeChange}
           onMusicVolumeChange={controller.onMusicVolumeChange}
           onOpenChange={controller.onGameplayMenuOpen}
@@ -135,7 +131,6 @@ export function MetaverseShell() {
             activeStep === "gameplay" && controller.isMenuOpen
           }
           sessionMode="single-player"
-          showDebugControls={showDeveloperUi}
           sfxVolume={controller.shellView.sfxVolumeSliderValue}
         />
       ) : null}

@@ -1,7 +1,4 @@
-import type {
-  NormalizedViewportPoint,
-  NormalizedViewportPointInput
-} from "@webgpu-metaverse/shared";
+import type { NormalizedViewportPoint } from "@webgpu-metaverse/shared";
 import {
   ACESFilmicToneMapping,
   type Camera,
@@ -18,10 +15,7 @@ import {
   createGameplayScene,
   type GameplaySceneCanvasHost
 } from "../render/duck-hunt-webgpu-gameplay-scene";
-import type {
-  GameplayReticleVisualState,
-  GameplayTelemetrySnapshot
-} from "../types/duck-hunt-gameplay-presentation";
+import type { GameplayReticleVisualState } from "../types/duck-hunt-gameplay-presentation";
 import type { GameplayArenaRuntime } from "../types/duck-hunt-gameplay-arena-runtime";
 import type {
   GameplayArenaHudSnapshot,
@@ -29,24 +23,13 @@ import type {
   GameplayHudSnapshot,
   GameplayRuntimeConfig
 } from "../types/duck-hunt-gameplay-runtime";
-import {
-  handAimObservationConfig,
-  readObservedAimPoint,
-  type LatestHandTrackingSnapshot
-} from "../../../tracking";
+import type { LatestHandTrackingSnapshot } from "../../../tracking";
 
 interface GameplayTrackingSource {
   readonly latestPose: LatestHandTrackingSnapshot;
 }
 
 interface GameplayRendererHost {
-  readonly info?: {
-    readonly render?: {
-      readonly calls?: number;
-      readonly drawCalls?: number;
-      readonly triangles?: number;
-    };
-  };
   init(): Promise<void | GameplayRendererHost>;
   render(scene: Scene, camera: Camera): void;
   setPixelRatio(pixelRatio: number): void;
@@ -147,64 +130,6 @@ function resolveRenderLoopFailureReason(error: unknown): string {
   return "WebGPU gameplay failed during rendering.";
 }
 
-function freezeRendererTelemetrySnapshot(
-  snapshot: GameplayTelemetrySnapshot["renderer"]
-): GameplayTelemetrySnapshot["renderer"] {
-  return Object.freeze({
-    devicePixelRatio: snapshot.devicePixelRatio,
-    drawCallCount: snapshot.drawCallCount,
-    label: snapshot.label,
-    triangleCount: snapshot.triangleCount
-  });
-}
-
-function freezeGameplayTelemetrySnapshot(
-  snapshot: GameplayTelemetrySnapshot
-): GameplayTelemetrySnapshot {
-  return Object.freeze({
-    aimPoint: snapshot.aimPoint,
-    coopRoom:
-      snapshot.coopRoom === null
-        ? null
-        : Object.freeze({
-            bufferDepth: snapshot.coopRoom.bufferDepth,
-            clockOffsetEstimateMs: snapshot.coopRoom.clockOffsetEstimateMs,
-            latestSnapshotUpdateRateHz:
-              snapshot.coopRoom.latestSnapshotUpdateRateHz,
-            playerPresenceDatagramSendFailureCount:
-              snapshot.coopRoom.playerPresenceDatagramSendFailureCount,
-            playerPresenceLastTransportError:
-              snapshot.coopRoom.playerPresenceLastTransportError,
-            playerPresenceReliableFallbackActive:
-              snapshot.coopRoom.playerPresenceReliableFallbackActive,
-            projectedSimulationLagMs:
-              snapshot.coopRoom.projectedSimulationLagMs,
-            projectionSource: snapshot.coopRoom.projectionSource,
-            snapshotStreamAvailable: snapshot.coopRoom.snapshotStreamAvailable,
-            snapshotStreamLastTransportError:
-              snapshot.coopRoom.snapshotStreamLastTransportError,
-            snapshotStreamLiveness:
-              snapshot.coopRoom.snapshotStreamLiveness,
-            snapshotStreamPath: snapshot.coopRoom.snapshotStreamPath,
-            snapshotStreamReconnectCount:
-              snapshot.coopRoom.snapshotStreamReconnectCount
-          }),
-    frameDeltaMs: snapshot.frameDeltaMs,
-    frameRate: snapshot.frameRate,
-    observedAimPoint: snapshot.observedAimPoint,
-    renderer: freezeRendererTelemetrySnapshot(snapshot.renderer),
-    renderedFrameCount: snapshot.renderedFrameCount,
-    reticleVisualState: snapshot.reticleVisualState,
-    sessionPhase: snapshot.sessionPhase,
-    targetFeedbackState: snapshot.targetFeedbackState,
-    thumbDropDistance: snapshot.thumbDropDistance,
-    trackingPoseAgeMs: snapshot.trackingPoseAgeMs,
-    trackingSequenceNumber: snapshot.trackingSequenceNumber,
-    weaponReadiness: snapshot.weaponReadiness,
-    worldTimeMs: snapshot.worldTimeMs
-  });
-}
-
 function readViewportSnapshot(
   canvasHost: GameplaySceneCanvasHost | null
 ): GameplayViewportSnapshot {
@@ -263,19 +188,12 @@ export class DuckHuntWebGpuGameplayRuntime {
   #animationFrameHandle = 0;
   #animationStartAtMs = 0;
   #canvasHost: GameplaySceneCanvasHost | null = null;
-  #frameDeltaMs = 0;
-  #frameRate = 0;
   #hudSnapshot: GameplayHudSnapshot;
   #lastUiUpdateAtMs = Number.NEGATIVE_INFINITY;
-  #lastObservedAimPoint: NormalizedViewportPointInput | null = null;
-  #lastRenderAtMs: number | null = null;
-  #lastThumbDropDistance: number | null = null;
-  #renderedFrameCount = 0;
   #renderer: GameplayRendererHost | null = null;
   #reticleVisualState: GameplayReticleVisualState = "hidden";
   #runtimeEpoch = 0;
   #startPromise: Promise<GameplayHudSnapshot> | null = null;
-  #trackingPoseAgeMs: number | null = null;
 
   constructor(
     trackingSource: GameplayTrackingSource,
@@ -312,33 +230,6 @@ export class DuckHuntWebGpuGameplayRuntime {
 
   get reticleVisualState(): GameplayReticleVisualState {
     return this.#reticleVisualState;
-  }
-
-  get telemetrySnapshot(): GameplayTelemetrySnapshot {
-    const renderInfo = this.#renderer?.info?.render;
-
-    return freezeGameplayTelemetrySnapshot({
-      aimPoint: this.#hudSnapshot.aimPoint,
-      coopRoom: this.#arenaSimulation.telemetrySnapshot,
-      frameDeltaMs: this.#frameDeltaMs,
-      frameRate: this.#frameRate,
-      observedAimPoint: this.#lastObservedAimPoint,
-      renderer: {
-        devicePixelRatio: this.#devicePixelRatio,
-        drawCallCount: renderInfo?.drawCalls ?? renderInfo?.calls ?? 0,
-        label: "WebGPU",
-        triangleCount: renderInfo?.triangles ?? 0
-      },
-      renderedFrameCount: this.#renderedFrameCount,
-      reticleVisualState: this.#reticleVisualState,
-      sessionPhase: this.#hudSnapshot.session.phase,
-      targetFeedbackState: this.#hudSnapshot.targetFeedback.state,
-      thumbDropDistance: this.#lastThumbDropDistance,
-      trackingPoseAgeMs: this.#trackingPoseAgeMs,
-      trackingSequenceNumber: this.#trackingSource.latestPose.sequenceNumber,
-      weaponReadiness: this.#hudSnapshot.weapon.readiness,
-      worldTimeMs: this.#arenaSimulation.worldTimeMs
-    });
   }
 
   subscribeUiUpdates(listener: () => void): () => void {
@@ -513,14 +404,7 @@ export class DuckHuntWebGpuGameplayRuntime {
     this.#renderer = null;
     this.#canvasHost = null;
     this.#animationStartAtMs = 0;
-    this.#frameDeltaMs = 0;
-    this.#frameRate = 0;
-    this.#lastObservedAimPoint = null;
-    this.#lastRenderAtMs = null;
-    this.#lastThumbDropDistance = null;
-    this.#renderedFrameCount = 0;
     this.#reticleVisualState = "hidden";
-    this.#trackingPoseAgeMs = null;
     this.#arenaSimulation.reset();
     this.#gameplayScene.resetPresentation();
 
@@ -563,13 +447,6 @@ export class DuckHuntWebGpuGameplayRuntime {
     }
 
     const nowMs = this.#readNowMs();
-    const frameDeltaMs =
-      this.#lastRenderAtMs === null ? 0 : Math.max(0, nowMs - this.#lastRenderAtMs);
-
-    this.#frameDeltaMs = frameDeltaMs;
-    this.#frameRate = frameDeltaMs === 0 ? 0 : 1000 / frameDeltaMs;
-    this.#lastRenderAtMs = nowMs;
-    this.#renderedFrameCount += 1;
     this.#syncViewport();
     this.#syncArenaFrame(nowMs);
     this.#gameplayScene.updateReticleDrift(
@@ -603,18 +480,6 @@ export class DuckHuntWebGpuGameplayRuntime {
     );
     this.#reticleVisualState = reticleVisualState;
     this.#publishReticleUpdate();
-    this.#lastObservedAimPoint =
-      trackingSnapshot.trackingState === "tracked"
-        ? readObservedAimPoint(trackingSnapshot.pose, handAimObservationConfig)
-        : null;
-    this.#lastThumbDropDistance =
-      trackingSnapshot.trackingState === "tracked"
-        ? trackingSnapshot.pose.thumbTip.y - trackingSnapshot.pose.indexTip.y
-        : null;
-    this.#trackingPoseAgeMs =
-      trackingSnapshot.timestampMs === null
-        ? null
-        : Math.max(0, nowMs - trackingSnapshot.timestampMs);
   }
 
   #syncViewport(): void {

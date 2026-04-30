@@ -25,7 +25,6 @@ import type { SceneAssetLoader } from "../render/webgpu-metaverse-scene";
 import type {
   MetaverseEnvironmentAssetProofConfig,
   MetaverseEnvironmentProofConfig,
-  MetaverseRuntimeConfig,
   MetaverseVector3Snapshot
 } from "../types/metaverse-runtime";
 import {
@@ -325,7 +324,6 @@ class MetaverseDynamicEnvironmentCollisionMeshRuntime {
 }
 
 export class MetaverseEnvironmentPhysicsRuntime {
-  readonly #config: MetaverseRuntimeConfig;
   readonly #createSceneAssetLoader: () => SceneAssetLoader;
   readonly #environmentProofConfig: MetaverseEnvironmentProofConfig | null;
   readonly #groundedBodyRuntime: MetaverseGroundedBodyRuntime;
@@ -375,7 +373,6 @@ export class MetaverseEnvironmentPhysicsRuntime {
   >();
 
   constructor(
-    config: MetaverseRuntimeConfig,
     {
       createSceneAssetLoader,
       environmentProofConfig,
@@ -384,7 +381,6 @@ export class MetaverseEnvironmentPhysicsRuntime {
       sceneRuntime
     }: MetaverseEnvironmentPhysicsRuntimeDependencies
   ) {
-    this.#config = config;
     this.#createSceneAssetLoader = createSceneAssetLoader;
     this.#environmentProofConfig = environmentProofConfig;
     this.#groundedBodyRuntime = groundedBodyRuntime;

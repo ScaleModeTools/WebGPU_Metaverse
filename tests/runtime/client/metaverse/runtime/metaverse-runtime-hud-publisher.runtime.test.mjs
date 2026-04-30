@@ -461,6 +461,132 @@ test("MetaverseRuntimeHudPublisher keeps in-range radar contacts live from smoot
   assert.equal(publisher.hudSnapshot.radar.enemyContacts.length, 0);
 });
 
+test("MetaverseRuntimeHudPublisher exposes recent local damage direction indicators", async () => {
+  const { MetaverseRuntimeHudPublisher } = await clientLoader.load(
+    "/src/metaverse/hud/metaverse-runtime-hud-publisher.ts"
+  );
+  const localPlayerId = createMetaversePlayerId("damage-hud-local-player");
+  const attackerPlayerId = createMetaversePlayerId("damage-hud-attacker");
+  const localUsername = createUsername("Damage Local");
+  const attackerUsername = createUsername("Damage Attacker");
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(attackerPlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(attackerUsername, null);
+
+  const dependencies = createFakeHudPublisherDependencies(() => 2_000);
+  dependencies.remoteWorldRuntime.isConnected = true;
+  dependencies.presenceRuntime.isJoined = true;
+  dependencies.presenceRuntime.localTeamId = "blue";
+
+  const localPlayerSnapshot = createMetaverseRealtimePlayerSnapshot({
+    characterId: "mesh2motion-humanoid-v1",
+    combat: {
+      activeWeapon: {
+        ammoInMagazine: 9,
+        ammoInReserve: 36,
+        reloadRemainingMs: 0,
+        weaponId: "metaverse-service-pistol-v2"
+      },
+      alive: true,
+      health: 75,
+      maxHealth: 100,
+      weaponStats: [
+        {
+          shotsFired: 0,
+          shotsHit: 0,
+          weaponId: "metaverse-service-pistol-v2"
+        }
+      ]
+    },
+    groundedBody: {
+      linearVelocity: {
+        x: 0,
+        y: 0,
+        z: 0
+      },
+      position: {
+        x: 0,
+        y: 0,
+        z: 0
+      },
+      yawRadians: 0
+    },
+    look: {
+      pitchRadians: 0,
+      yawRadians: 0
+    },
+    playerId: localPlayerId,
+    teamId: "blue",
+    username: localUsername
+  });
+  const attackerPlayerSnapshot = createMetaverseRealtimePlayerSnapshot({
+    characterId: "mesh2motion-humanoid-v1",
+    groundedBody: {
+      linearVelocity: {
+        x: 0,
+        y: 0,
+        z: 0
+      },
+      position: {
+        x: 5,
+        y: 0,
+        z: 0
+      },
+      yawRadians: 0
+    },
+    look: {
+      pitchRadians: 0,
+      yawRadians: 0
+    },
+    playerId: attackerPlayerId,
+    teamId: "red",
+    username: attackerUsername
+  });
+  const worldSnapshot = createMetaverseRealtimeWorldSnapshot({
+    combatFeed: [
+      {
+        attackerPlayerId,
+        damage: 25,
+        hitZone: "body",
+        sequence: 3,
+        sourceActionSequence: 11,
+        targetPlayerId: localPlayerId,
+        timeMs: 1_800,
+        type: "damage",
+        weaponId: "metaverse-service-pistol-v2"
+      }
+    ],
+    players: [localPlayerSnapshot, attackerPlayerSnapshot],
+    tick: {
+      currentTick: 40,
+      emittedAtServerTimeMs: 2_000,
+      simulationTimeMs: 2_000,
+      tickIntervalMs: 50
+    },
+    vehicles: []
+  });
+
+  dependencies.remoteWorldRuntime.readFreshAuthoritativeLocalPlayerSnapshot =
+    () => localPlayerSnapshot;
+  dependencies.remoteWorldRuntime.readFreshAuthoritativeWorldSnapshot =
+    () => worldSnapshot;
+
+  const publisher = new MetaverseRuntimeHudPublisher(dependencies);
+
+  publisher.publishSnapshot(createPublishInput(), true, 2_000);
+
+  const damageIndicator = publisher.hudSnapshot.combat.damageIndicators[0];
+
+  assert.notEqual(damageIndicator, undefined);
+  assert.equal(damageIndicator.damage, 25);
+  assert.equal(damageIndicator.ageMs, 200);
+  assert.equal(damageIndicator.directionX, 1);
+  assert.ok(Math.abs(damageIndicator.directionY) < 0.000001);
+  assert.ok(Math.abs(damageIndicator.intensity - 0.8) < 0.000001);
+});
+
 test("MetaverseRuntimeHudPublisher displays optimistic selected weapon inventory", async () => {
   const { MetaverseRuntimeHudPublisher } = await clientLoader.load(
     "/src/metaverse/hud/metaverse-runtime-hud-publisher.ts"

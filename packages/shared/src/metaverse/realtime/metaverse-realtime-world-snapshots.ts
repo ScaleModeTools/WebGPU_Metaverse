@@ -24,8 +24,6 @@ import {
 } from "../metaverse-presence-contract.js";
 import {
   createMetaverseTraversalAuthoritySnapshot,
-  createMetaverseTraversalBodyControlSnapshot,
-  createMetaverseTraversalFacingSnapshot,
   type MetaverseTraversalAuthoritySnapshot as MetaverseSharedTraversalAuthoritySnapshot,
   type MetaverseTraversalAuthoritySnapshotInput as MetaverseSharedTraversalAuthoritySnapshotInput,
   type MetaverseTraversalBodyControlSnapshot as MetaverseSharedTraversalBodyControlSnapshot,
@@ -35,8 +33,7 @@ import {
 } from "../metaverse-traversal-contract.js";
 import {
   createMetaverseGroundedJumpBodySnapshot,
-  resolveMetaverseGroundedJumpBodyTraversalActionSnapshot,
-  type MetaverseGroundedJumpBodySnapshot
+  resolveMetaverseGroundedJumpBodyTraversalActionSnapshot
 } from "../metaverse-grounded-jump-physics.js";
 import {
   createMetaverseGroundedBodyRuntimeSnapshot,
@@ -49,8 +46,7 @@ import {
 } from "../metaverse-surface-drive-body-contract.js";
 import {
   createMetaverseGroundedBodyContactSnapshot,
-  createMetaverseGroundedBodyInteractionSnapshot,
-  type MetaverseGroundedBodyContactSnapshot
+  createMetaverseGroundedBodyInteractionSnapshot
 } from "../metaverse-grounded-traversal-kernel.js";
 import { createMetaverseSurfaceTraversalDriveTargetSnapshot } from "../metaverse-surface-traversal-simulation.js";
 import {

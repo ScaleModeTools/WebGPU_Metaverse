@@ -128,15 +128,14 @@ test("metaverse weapon loadout contracts resolve pistol-only and pistol-rocket s
     ]
   );
 
-  const legacyState = createMetaverseRealtimePlayerWeaponStateSnapshot({
-    aimMode: "ads",
-    weaponId: "metaverse-service-pistol-v2"
-  });
-
-  assert.equal(legacyState.activeSlotId, "primary");
-  assert.equal(legacyState.weaponId, "metaverse-service-pistol-v2");
-  assert.equal(legacyState.slots.length, 1);
-  assert.equal(legacyState.slots[0]?.slotId, "primary");
+  assert.throws(
+    () =>
+      createMetaverseRealtimePlayerWeaponStateSnapshot({
+        aimMode: "ads",
+        weaponId: "metaverse-service-pistol-v2"
+      }),
+    /slots must not be empty/
+  );
 
   const fullState = createMetaverseRealtimePlayerWeaponStateSnapshot({
     activeSlotId: "secondary",
@@ -1153,7 +1152,6 @@ test("metaverse realtime world contracts keep combat action receipts observer-lo
           y: 1.42,
           z: -0.55
         },
-        serverTick: 24.8,
         weaponId: " metaverse-service-pistol-v2 "
       }
     ],
@@ -1190,7 +1188,7 @@ test("metaverse realtime world contracts keep combat action receipts observer-lo
           actionSequence: 3.4,
           kind: "fire-weapon",
           processedAtTimeMs: 1_240.9,
-          projectileId: " projectile-3 ",
+          sourceProjectileId: " projectile-3 ",
           status: "accepted",
           weaponId: " metaverse-service-pistol-v2 "
         })
@@ -1268,6 +1266,7 @@ test("metaverse realtime world contracts keep combat action receipts observer-lo
   assert.equal("velocityMetersPerSecond" in worldSnapshot.projectiles[0], false);
   assert.equal(worldSnapshot.combatEvents[0]?.eventSequence, 7);
   assert.equal(worldSnapshot.combatEvents[0]?.shotId, `${playerId}:3`);
+  assert.equal("serverTick" in worldSnapshot.combatEvents[0], false);
   assert.equal(
     worldSnapshot.combatEvents[0]?.presentationDeliveryModel,
     "hitscan-tracer"

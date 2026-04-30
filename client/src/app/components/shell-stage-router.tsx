@@ -10,7 +10,6 @@ import {
 } from "@webgpu-metaverse/shared";
 
 import {
-  type GameplayDebugPanelMode,
   type GameplaySignal
 } from "../../experiences/duck-hunt";
 import type { MetaverseControlModeId } from "../../metaverse";
@@ -87,7 +86,6 @@ interface ShellStageRouterProps {
   readonly capabilityStatus: WebGpuMetaverseCapabilitySnapshot["status"];
   readonly calibrationQualityLabel: string;
   readonly coopRoomIdDraft: string;
-  readonly debugPanelMode: GameplayDebugPanelMode;
   readonly gameplayInputSource: GameplayInputSource;
   readonly handTrackingRuntime: HandTrackingRuntime;
   readonly hasStoredProfile: boolean;
@@ -192,7 +190,6 @@ export function ShellStageRouter({
   capabilityStatus,
   calibrationQualityLabel,
   coopRoomIdDraft,
-  debugPanelMode,
   gameplayInputSource,
   handTrackingRuntime,
   hasStoredProfile,
@@ -399,7 +396,6 @@ export function ShellStageRouter({
             audioStatusLabel={audioStatusLabel}
             bestScore={bestScore}
             coopRoomId={gameplayCoopRoomId}
-            debugPanelMode={debugPanelMode}
             inputMode={inputMode}
             onBestScoreChange={onBestScoreChange}
             onGameplaySignal={onGameplaySignal}

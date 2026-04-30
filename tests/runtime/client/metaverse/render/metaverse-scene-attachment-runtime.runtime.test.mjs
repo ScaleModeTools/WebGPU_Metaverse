@@ -53,6 +53,23 @@ function assertQuaternionArraysEquivalent(actual, expected, tolerance, message) 
   );
 }
 
+function createTestWeaponState(weaponId) {
+  return Object.freeze({
+    activeSlotId: "primary",
+    aimMode: "hip-fire",
+    slots: Object.freeze([
+      Object.freeze({
+        attachmentId: weaponId,
+        equipped: true,
+        slotId: "primary",
+        weaponId,
+        weaponInstanceId: `test-player:primary:${weaponId}`
+      })
+    ]),
+    weaponId
+  });
+}
+
 before(async () => {
   clientLoader = await createClientModuleLoader();
 });
@@ -125,10 +142,7 @@ test("syncAttachmentProofRuntimeMount hides weapon attachments until weapon stat
     { scene: characterScene },
     null,
     nodeResolvers,
-    Object.freeze({
-      aimMode: "hip-fire",
-      weaponId: "metaverse-battle-rifle-v1"
-    })
+    createTestWeaponState("metaverse-battle-rifle-v1")
   );
 
   assert.equal(attachmentRuntime.activeMountKind, null);
@@ -139,10 +153,7 @@ test("syncAttachmentProofRuntimeMount hides weapon attachments until weapon stat
     { scene: characterScene },
     null,
     nodeResolvers,
-    Object.freeze({
-      aimMode: "hip-fire",
-      weaponId: "metaverse-service-pistol-v1"
-    })
+    createTestWeaponState("metaverse-service-pistol-v1")
   );
 
   assert.equal(attachmentRuntime.activeMountKind, "held");
@@ -157,10 +168,7 @@ test("syncAttachmentProofRuntimeMount hides weapon attachments until weapon stat
       holsterHeldAttachment: true
     }),
     nodeResolvers,
-    Object.freeze({
-      aimMode: "hip-fire",
-      weaponId: "metaverse-service-pistol-v1"
-    })
+    createTestWeaponState("metaverse-service-pistol-v1")
   );
 
   assert.equal(attachmentRuntime.activeMountKind, "mounted-holster");
@@ -386,10 +394,7 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
 
   await sceneRuntime.boot();
 
-  const activeWeaponState = Object.freeze({
-    aimMode: "hip-fire",
-    weaponId: "metaverse-service-pistol-v1"
-  });
+  const activeWeaponState = createTestWeaponState("metaverse-service-pistol-v1");
 
   const characterRoot = sceneRuntime.scene.getObjectByName(
     "metaverse_character/mesh2motion-humanoid-v1"

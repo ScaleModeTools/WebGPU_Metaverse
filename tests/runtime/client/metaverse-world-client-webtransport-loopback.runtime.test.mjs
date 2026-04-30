@@ -1746,6 +1746,14 @@ test("MetaverseWorldClient uses the WebTransport weapon-state datagram lane and 
       playerId,
       weaponState: {
         aimMode: "ads",
+        slots: [
+          {
+            attachmentId: "metaverse-service-pistol-v1",
+            equipped: true,
+            slotId: "primary",
+            weaponId: "metaverse-service-pistol-v1"
+          }
+        ],
         weaponId: "metaverse-service-pistol-v1"
       }
     });

@@ -1,4 +1,4 @@
-import { LifeBuoyIcon, PlusIcon, SparklesIcon, WavesIcon } from "lucide-react";
+import { LifeBuoyIcon, SparklesIcon, WavesIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";

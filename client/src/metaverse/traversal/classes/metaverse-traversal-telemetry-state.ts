@@ -15,8 +15,7 @@ import type { MetaverseLocomotionModeId } from "../../types/metaverse-locomotion
 import type { MetaverseRuntimeConfig } from "../../types/runtime-config";
 import type { MetaverseTelemetrySnapshot } from "../../types/telemetry";
 import {
-  resolveAutomaticSurfaceLocomotionSnapshot,
-  readMetaverseSurfacePolicyConfig
+  resolveAutomaticSurfaceLocomotionSnapshot
 } from "../policies/surface-routing";
 import type { MetaverseLocalTraversalAuthorityState } from "./metaverse-local-traversal-authority-state";
 import type { MetaverseLocalAuthorityReconciliationState } from "../reconciliation/classes/metaverse-local-authority-reconciliation-state";

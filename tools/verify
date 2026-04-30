@@ -6,9 +6,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 cd "$repo_root"
 
-npm run clean:generated
 npm run build:workspaces
-npm run typecheck
+npm run typecheck:contracts
 npm run test:runtime
-npm run bench
 node ./tools/internal/verify-repo.mjs

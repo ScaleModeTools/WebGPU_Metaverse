@@ -1,15 +1,14 @@
 import {
   AnimationAction,
-  AnimationClip,
-  AnimationMixer,
-  Group,
-  LoopOnce
+  Group
 } from "three/webgpu";
 import type { MetaverseRealtimePlayerWeaponStateSnapshot } from "@webgpu-metaverse/shared";
+import {
+  MetaverseCharacterRapierRagdollRuntime
+} from "./metaverse-scene-character-ragdoll";
 
 import type {
   MetaverseCharacterAnimationVocabularyId,
-  MetaverseCharacterCombatAnimationActionId,
   MetaverseCombatPresentationEvent,
   MetaverseCharacterPresentationSnapshot,
   MetaverseCharacterProofConfig
@@ -17,20 +16,136 @@ import type {
 
 const metaverseCharacterRenderYawOffsetRadians = Math.PI;
 const minimumAnimationPlaybackRateMagnitude = 0.01;
+const metaverseCharacterHitReactionDurationMs = 185;
+const metaverseCharacterHitReactionDirectionEpsilon = 0.000001;
+const metaverseCharacterHitReactionMaxHorizontalMeters = 0.035;
+const metaverseCharacterHitReactionMaxLiftMeters = 0.018;
+const metaverseCharacterHitReactionMaxPitchRadians = 0.018;
+const metaverseCharacterHitReactionMaxRollRadians = 0.032;
 
-export interface MetaverseCharacterCombatAnimationRuntime {
-  readonly actionsByActionId: ReadonlyMap<
-    MetaverseCharacterCombatAnimationActionId,
-    AnimationAction
-  >;
-  readonly clipsByActionId: ReadonlyMap<
-    MetaverseCharacterCombatAnimationActionId,
-    AnimationClip
-  >;
+function clampUnit(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.min(1, Math.max(0, value));
+}
+
+function clampSignedUnit(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.min(1, Math.max(-1, value));
+}
+
+function resolveProceduralHitReactionIntensity(
+  event: MetaverseCombatPresentationEvent
+): number {
+  const damageAmount = event.damageAmount ?? 0;
+  const damageIntensity = Number.isFinite(damageAmount)
+    ? clampUnit(damageAmount / 42)
+    : 0;
+  const hitZoneMultiplier = event.hitZone === "head" ? 1.18 : 1;
+
+  return Math.min(1.15, Math.max(0.34, damageIntensity) * hitZoneMultiplier);
+}
+
+function resolveFallbackHitReactionDirection(
+  sequence: number
+): {
+  readonly x: number;
+  readonly z: number;
+} {
+  const angle = sequence * 2.399963229728653;
+
+  return Object.freeze({
+    x: Math.sin(angle),
+    z: -Math.cos(angle)
+  });
+}
+
+export class MetaverseCharacterProceduralHitReactionRuntime {
+  #activeSequence = -1;
+  #intensity = 0;
+  #sourceDirectionX = 0;
+  #sourceDirectionZ = -1;
+  #startedAtMs = 0;
+
+  trigger(event: MetaverseCombatPresentationEvent): void {
+    if (event.sequence < this.#activeSequence) {
+      return;
+    }
+
+    const sourceDirection = event.damageSourceDirectionWorld ?? null;
+    const sourceDirectionLength =
+      sourceDirection === null
+        ? 0
+        : Math.hypot(sourceDirection.x, sourceDirection.z);
+    const fallbackDirection = resolveFallbackHitReactionDirection(
+      event.sequence
+    );
+
+    this.#activeSequence = event.sequence;
+    this.#startedAtMs = event.startedAtMs;
+    this.#intensity = resolveProceduralHitReactionIntensity(event);
+
+    if (
+      sourceDirection !== null &&
+      sourceDirectionLength > metaverseCharacterHitReactionDirectionEpsilon
+    ) {
+      this.#sourceDirectionX = sourceDirection.x / sourceDirectionLength;
+      this.#sourceDirectionZ = sourceDirection.z / sourceDirectionLength;
+    } else {
+      this.#sourceDirectionX = fallbackDirection.x;
+      this.#sourceDirectionZ = fallbackDirection.z;
+    }
+  }
+
+  apply(anchorGroup: Group, nowMs: number): void {
+    if (this.#activeSequence < 0) {
+      return;
+    }
+
+    const ageMs = Math.max(0, nowMs - this.#startedAtMs);
+
+    if (ageMs >= metaverseCharacterHitReactionDurationMs) {
+      return;
+    }
+
+    const alpha = clampUnit(ageMs / metaverseCharacterHitReactionDurationMs);
+    const decay = (1 - alpha) * (1 - alpha);
+    const oscillation = Math.sin(alpha * Math.PI * 5.25);
+    const horizontalMeters =
+      metaverseCharacterHitReactionMaxHorizontalMeters *
+      this.#intensity *
+      decay *
+      (0.68 + Math.abs(oscillation) * 0.32);
+    const liftMeters =
+      metaverseCharacterHitReactionMaxLiftMeters *
+      this.#intensity *
+      Math.sin(alpha * Math.PI) *
+      decay;
+
+    anchorGroup.position.x -= this.#sourceDirectionX * horizontalMeters;
+    anchorGroup.position.z -= this.#sourceDirectionZ * horizontalMeters;
+    anchorGroup.position.y += liftMeters;
+    anchorGroup.rotation.x +=
+      metaverseCharacterHitReactionMaxPitchRadians *
+      this.#intensity *
+      decay *
+      oscillation;
+    anchorGroup.rotation.z +=
+      metaverseCharacterHitReactionMaxRollRadians *
+      this.#intensity *
+      decay *
+      clampSignedUnit(this.#sourceDirectionX) *
+      (0.7 + Math.abs(oscillation) * 0.3);
+    anchorGroup.updateMatrixWorld(true);
+  }
 }
 
 export interface MetaverseCharacterAnimationRuntimeLike {
-  activeAnimationActionSetId: "full-body";
   activeAnimationCycleId: number | null;
   activeAnimationVocabulary: MetaverseCharacterAnimationVocabularyId;
   readonly actionsByVocabulary: ReadonlyMap<
@@ -38,7 +153,8 @@ export interface MetaverseCharacterAnimationRuntimeLike {
     AnimationAction
   >;
   readonly anchorGroup: Group;
-  readonly combatAnimationRuntime: MetaverseCharacterCombatAnimationRuntime | null;
+  readonly deathRagdollRuntime: MetaverseCharacterRapierRagdollRuntime;
+  readonly proceduralHitReactionRuntime: MetaverseCharacterProceduralHitReactionRuntime;
   readonly skeletonId: MetaverseCharacterProofConfig["skeletonId"];
 }
 
@@ -59,10 +175,6 @@ export function shouldUseHeldWeaponCharacterPresentation(
     weaponState.weaponId === attachmentRuntime.attachmentId &&
     attachmentRuntime.activeMountKind === "held"
   );
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
 }
 
 function wrapRadians(rawValue: number): number {
@@ -102,57 +214,20 @@ function resolveAnimationPlaybackRate(
   return 1;
 }
 
-export function createMetaverseCharacterCombatAnimationRuntime(
-  mixer: AnimationMixer,
-  clipsByActionId: ReadonlyMap<
-    MetaverseCharacterCombatAnimationActionId,
-    AnimationClip
-  >
-): MetaverseCharacterCombatAnimationRuntime {
-  const actionsByActionId = new Map<
-    MetaverseCharacterCombatAnimationActionId,
-    AnimationAction
-  >();
-
-  for (const [actionId, clip] of clipsByActionId) {
-    const action = mixer.clipAction(clip);
-
-    action.enabled = false;
-    action.clampWhenFinished = false;
-    action.setLoop(LoopOnce, 1);
-    action.setEffectiveTimeScale(1);
-    action.setEffectiveWeight(0);
-    actionsByActionId.set(actionId, action);
-  }
-
-  return {
-    actionsByActionId,
-    clipsByActionId
-  };
-}
-
-export function clearCharacterCombatDeathAnimation(
+export function clearCharacterCombatDeathPresentation(
   characterRuntime: Pick<
     MetaverseCharacterAnimationRuntimeLike,
-    "combatAnimationRuntime"
+    "deathRagdollRuntime"
   >
 ): void {
-  const deathAction =
-    characterRuntime.combatAnimationRuntime?.actionsByActionId.get("death");
-
-  if (deathAction === undefined) {
-    return;
-  }
-
-  deathAction.stop();
-  deathAction.enabled = false;
-  deathAction.setEffectiveWeight(0);
+  characterRuntime.deathRagdollRuntime.clear();
 }
 
 export function triggerCharacterCombatPresentationEvent(
   characterRuntime: Pick<
     MetaverseCharacterAnimationRuntimeLike,
-    "combatAnimationRuntime"
+    | "deathRagdollRuntime"
+    | "proceduralHitReactionRuntime"
   >,
   event: MetaverseCombatPresentationEvent
 ): void {
@@ -161,27 +236,37 @@ export function triggerCharacterCombatPresentationEvent(
     return;
   }
 
-  const combatAnimationRuntime = characterRuntime.combatAnimationRuntime;
-
-  if (combatAnimationRuntime === null) {
+  if (event.kind === "hit") {
+    characterRuntime.proceduralHitReactionRuntime.trigger(event);
     return;
   }
 
-  const actionId: MetaverseCharacterCombatAnimationActionId = event.kind;
-  const action = combatAnimationRuntime.actionsByActionId.get(actionId);
-
-  if (action === undefined) {
-    return;
+  if (event.kind === "death") {
+    characterRuntime.deathRagdollRuntime.trigger(event);
   }
+}
 
-  action.stop();
-  action.enabled = true;
-  action.clampWhenFinished = event.kind === "death";
-  action.reset();
-  action.setLoop(LoopOnce, 1);
-  action.setEffectiveTimeScale(1);
-  action.setEffectiveWeight(0.86);
-  action.play();
+export function syncCharacterProceduralHitReaction(
+  characterRuntime: Pick<
+    MetaverseCharacterAnimationRuntimeLike,
+    "anchorGroup" | "proceduralHitReactionRuntime"
+  >,
+  nowMs: number
+): void {
+  characterRuntime.proceduralHitReactionRuntime.apply(
+    characterRuntime.anchorGroup,
+    nowMs
+  );
+}
+
+export function syncCharacterDeathRagdollPresentation(
+  characterRuntime: Pick<
+    MetaverseCharacterAnimationRuntimeLike,
+    "deathRagdollRuntime"
+  >,
+  nowMs: number
+): void {
+  characterRuntime.deathRagdollRuntime.apply(nowMs);
 }
 
 export function syncCharacterPresentation(
@@ -211,62 +296,36 @@ export function syncCharacterPresentation(
   characterRuntime.anchorGroup.updateMatrixWorld(true);
 }
 
-export function resolveHeldCharacterAnimationVocabulary(
-  characterRuntime: Pick<
-    MetaverseCharacterAnimationRuntimeLike,
-    "actionsByVocabulary" | "skeletonId"
-  >,
-  attachmentRuntime: MetaverseAttachmentAnimationRuntimeLike | null,
-  targetVocabulary: MetaverseCharacterAnimationVocabularyId,
-  weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null,
-  mountedCharacterRuntime: object | null
-): MetaverseCharacterAnimationVocabularyId {
-  return targetVocabulary;
-}
-
 export function syncCharacterAnimation(
   characterRuntime: MetaverseCharacterAnimationRuntimeLike,
   targetVocabulary: MetaverseCharacterAnimationVocabularyId,
   animationCycleId?: number | null,
   animationPlaybackRateMultiplier: number = 1
 ): void {
-  const resolveNextVocabulary = (): MetaverseCharacterAnimationVocabularyId => {
-    const fallbackCandidates: readonly MetaverseCharacterAnimationVocabularyId[] =
-      targetVocabulary === "swim-idle"
-        ? ["swim-idle", "idle"]
-        : targetVocabulary === "swim"
-          ? ["swim", "walk", "idle"]
-          : targetVocabulary === "jump-up" ||
-              targetVocabulary === "jump-mid" ||
-              targetVocabulary === "jump-down"
-            ? [targetVocabulary, "walk", "idle"]
-            : [targetVocabulary, "idle"];
+  let nextVocabulary = targetVocabulary;
+  let nextAction = characterRuntime.actionsByVocabulary.get(nextVocabulary);
 
-    for (const vocabulary of fallbackCandidates) {
-      if (characterRuntime.actionsByVocabulary.has(vocabulary)) {
-        return vocabulary;
-      }
+  if (nextAction === undefined) {
+    if (targetVocabulary === "swim") {
+      nextVocabulary = "walk";
+      nextAction = characterRuntime.actionsByVocabulary.get(nextVocabulary);
     }
 
-    return "idle";
-  };
-  const nextVocabulary = resolveNextVocabulary();
-  const resolveActionByVocabulary = (
-    vocabulary: MetaverseCharacterAnimationVocabularyId
-  ): {
-    readonly action: AnimationAction;
-    readonly actionSetId: MetaverseCharacterAnimationRuntimeLike["activeAnimationActionSetId"];
-  } | null => {
-    const fullBodyAction = characterRuntime.actionsByVocabulary.get(vocabulary);
+    if (
+      nextAction === undefined &&
+      (targetVocabulary === "jump-up" ||
+        targetVocabulary === "jump-mid" ||
+        targetVocabulary === "jump-down")
+    ) {
+      nextVocabulary = "walk";
+      nextAction = characterRuntime.actionsByVocabulary.get(nextVocabulary);
+    }
 
-    return fullBodyAction === undefined
-      ? null
-      : {
-          action: fullBodyAction,
-          actionSetId: "full-body"
-        };
-  };
-  const nextActionSelection = resolveActionByVocabulary(nextVocabulary);
+    if (nextAction === undefined) {
+      nextVocabulary = "idle";
+      nextAction = characterRuntime.actionsByVocabulary.get(nextVocabulary);
+    }
+  }
   const resolvedAnimationCycleId =
     animationCycleId === null || animationCycleId === undefined
       ? characterRuntime.activeAnimationCycleId
@@ -289,25 +348,21 @@ export function syncCharacterAnimation(
     resolvedAnimationCycleId !== null &&
     resolvedAnimationCycleId !== characterRuntime.activeAnimationCycleId;
 
-  if (nextActionSelection === null) {
+  if (nextAction === undefined) {
     return;
   }
 
   if (
     nextVocabulary === characterRuntime.activeAnimationVocabulary &&
-    nextActionSelection.actionSetId ===
-      characterRuntime.activeAnimationActionSetId &&
     !shouldRestartCurrentAction
   ) {
-    nextActionSelection.action.setEffectiveTimeScale(nextPlaybackRate);
+    nextAction.setEffectiveTimeScale(nextPlaybackRate);
     return;
   }
 
-  const previousActionSelection = resolveActionByVocabulary(
+  const previousAction = characterRuntime.actionsByVocabulary.get(
     characterRuntime.activeAnimationVocabulary
   );
-  const nextAction = nextActionSelection.action;
-  const previousAction = previousActionSelection?.action;
   const previousVocabulary = characterRuntime.activeAnimationVocabulary;
 
   nextAction.enabled = true;
@@ -338,7 +393,6 @@ export function syncCharacterAnimation(
     }
   }
 
-  characterRuntime.activeAnimationActionSetId = nextActionSelection.actionSetId;
   characterRuntime.activeAnimationCycleId = resolvedAnimationCycleId;
   characterRuntime.activeAnimationVocabulary = nextVocabulary;
 }

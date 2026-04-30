@@ -32,7 +32,7 @@ interface MetaverseRuntimeCombatLifecycleRemoteWorldRuntime {
 interface MetaverseRuntimeCombatLifecycleDependencies {
   readonly authoritativeWorldSync: MetaverseRuntimeCombatLifecycleAuthoritativeWorldSync;
   readonly bootLifecycle: MetaverseRuntimeCombatLifecycleBootLifecycle;
-  readonly clearLocalCombatDeathAnimation?: (() => void) | null;
+  readonly clearLocalCombatDeathPresentation?: (() => void) | null;
   readonly remoteWorldRuntime: MetaverseRuntimeCombatLifecycleRemoteWorldRuntime;
   readonly weaponPresentationRuntime?: {
     reset(): void;
@@ -43,7 +43,7 @@ interface MetaverseRuntimeCombatLifecycleDependencies {
 export class MetaverseRuntimeCombatLifecycle {
   readonly #authoritativeWorldSync: MetaverseRuntimeCombatLifecycleAuthoritativeWorldSync;
   readonly #bootLifecycle: MetaverseRuntimeCombatLifecycleBootLifecycle;
-  readonly #clearLocalCombatDeathAnimation: (() => void) | null;
+  readonly #clearLocalCombatDeathPresentation: (() => void) | null;
   readonly #remoteWorldRuntime: MetaverseRuntimeCombatLifecycleRemoteWorldRuntime;
   readonly #weaponPresentationRuntime: {
     reset(): void;
@@ -60,14 +60,14 @@ export class MetaverseRuntimeCombatLifecycle {
   constructor({
     authoritativeWorldSync,
     bootLifecycle,
-    clearLocalCombatDeathAnimation,
+    clearLocalCombatDeathPresentation,
     remoteWorldRuntime,
     weaponPresentationRuntime
   }: MetaverseRuntimeCombatLifecycleDependencies) {
     this.#authoritativeWorldSync = authoritativeWorldSync;
     this.#bootLifecycle = bootLifecycle;
-    this.#clearLocalCombatDeathAnimation =
-      clearLocalCombatDeathAnimation ?? null;
+    this.#clearLocalCombatDeathPresentation =
+      clearLocalCombatDeathPresentation ?? null;
     this.#remoteWorldRuntime = remoteWorldRuntime;
     this.#weaponPresentationRuntime = weaponPresentationRuntime ?? null;
   }
@@ -75,7 +75,7 @@ export class MetaverseRuntimeCombatLifecycle {
   reset(): void {
     this.#lastAuthoritativeAlive = null;
     this.#lastAuthoritativeMatchPhase = null;
-    this.#clearLocalCombatDeathAnimation?.();
+    this.#clearLocalCombatDeathPresentation?.();
     this.#weaponPresentationRuntime?.setCombatPresentationSuppressed?.(false);
   }
 
@@ -110,7 +110,7 @@ export class MetaverseRuntimeCombatLifecycle {
       if (this.#lastAuthoritativeAlive === false) {
         this.#bootLifecycle.setDeathCameraSnapshot(null);
         this.#bootLifecycle.setRespawnControlLocked(false);
-        this.#clearLocalCombatDeathAnimation?.();
+        this.#clearLocalCombatDeathPresentation?.();
         this.#authoritativeWorldSync.armLocalSpawnBootstrap();
       }
     } else if (this.#lastAuthoritativeAlive !== false) {

@@ -7,10 +7,15 @@ import type {
   MetaverseRuntimeConfig
 } from "../../types/metaverse-runtime";
 import {
-  clearCharacterCombatDeathAnimation,
+  clearCharacterCombatDeathPresentation,
   shouldUseHeldWeaponCharacterPresentation,
-  type MetaverseCharacterAnimationRuntimeLike
+  syncCharacterDeathRagdollPresentation,
+  syncCharacterProceduralHitReaction,
+  type MetaverseCharacterProceduralHitReactionRuntime
 } from "./metaverse-scene-character-animation";
+import type {
+  MetaverseCharacterRapierRagdollRuntime
+} from "./metaverse-scene-character-ragdoll";
 import type { HeldObjectAimState } from "./metaverse-scene-held-weapon-pose";
 import {
   createMetaverseSemanticAimFrameFromCameraSnapshot,
@@ -20,16 +25,14 @@ import type { HeldObjectPoseProfileId } from "@/assets/types/held-object-authori
 
 const remoteCharacterInterpolationRatePerSecond = 12;
 const remoteCharacterTeleportSnapDistanceMeters = 3.5;
-const remoteCharacterDeathCollapsePitchRadians = -Math.PI * 0.5;
-const remoteCharacterDeathCollapseGroundLiftMeters = 0.08;
 const remoteHeldWeaponLastKnownAimTtlSeconds = 0.25;
 
 interface CharacterRuntimeLike {
   readonly anchorGroup: Group;
-  readonly combatAnimationRuntime:
-    MetaverseCharacterAnimationRuntimeLike["combatAnimationRuntime"];
+  readonly deathRagdollRuntime: MetaverseCharacterRapierRagdollRuntime;
   readonly heldWeaponPoseRuntime: object | null;
   readonly mixer: AnimationMixer;
+  readonly proceduralHitReactionRuntime: MetaverseCharacterProceduralHitReactionRuntime;
 }
 
 interface AttachmentRuntimeLike {
@@ -80,13 +83,6 @@ export interface MetaverseRemoteCharacterPresentationDependencies<
     sourceCharacterRuntime: TCharacterRuntime,
     playerId: string
   ) => TCharacterRuntime;
-  readonly resolveHeldAnimationVocabulary: (
-    characterRuntime: TCharacterRuntime,
-    attachmentRuntime: TAttachmentRuntime | null,
-    targetVocabulary: MetaverseCharacterAnimationVocabularyId,
-    weaponState: MetaverseRemoteCharacterPresentationSnapshot["weaponState"],
-    mountedCharacterRuntime: TMountedCharacterRuntime | null
-  ) => MetaverseCharacterAnimationVocabularyId;
   readonly resolveMountedEnvironmentRuntime: (
     environmentAssetId: string
   ) => TMountedEnvironmentRuntime | null;
@@ -235,31 +231,25 @@ function syncRemoteCharacterCombatDeathPresentation<
   TCharacterRuntime extends CharacterRuntimeLike
 >(
   characterRuntime: TCharacterRuntime,
-  remoteCharacterPresentation: MetaverseRemoteCharacterPresentationSnapshot
+  remoteCharacterPresentation: MetaverseRemoteCharacterPresentationSnapshot,
+  nowMs: number
 ): void {
   if (remoteCharacterPresentation.combatAlive !== false) {
-    clearCharacterCombatDeathAnimation(characterRuntime);
+    clearCharacterCombatDeathPresentation(characterRuntime);
     return;
   }
 
-  const deathAction =
-    characterRuntime.combatAnimationRuntime?.actionsByActionId.get("death");
-
-  if (
-    deathAction !== undefined &&
-    deathAction.enabled &&
-    deathAction.getEffectiveWeight() > 0
-  ) {
-    return;
+  if (!characterRuntime.deathRagdollRuntime.isActive) {
+    characterRuntime.deathRagdollRuntime.trigger({
+      kind: "death",
+      playerId: remoteCharacterPresentation.playerId,
+      sequence: remoteCharacterPresentation.presentation.animationCycleId ?? 0,
+      startedAtMs: nowMs,
+      weaponId: remoteCharacterPresentation.weaponState?.weaponId ?? null
+    });
   }
 
-  const anchorGroup = characterRuntime.anchorGroup;
-
-  anchorGroup.position.y =
-    remoteCharacterPresentation.presentation.position.y +
-    remoteCharacterDeathCollapseGroundLiftMeters;
-  anchorGroup.rotation.x = remoteCharacterDeathCollapsePitchRadians;
-  anchorGroup.updateMatrixWorld(true);
+  syncCharacterDeathRagdollPresentation(characterRuntime, nowMs);
 }
 
 export function syncRemoteCharacterPresentations<
@@ -288,6 +278,7 @@ export function syncRemoteCharacterPresentations<
   >,
   remoteCharacterPresentations: readonly MetaverseRemoteCharacterPresentationSnapshot[],
   deltaSeconds: number,
+  nowMs: number,
   dependencies: MetaverseRemoteCharacterPresentationDependencies<
     TCharacterRuntime,
     TAttachmentRuntime,
@@ -297,6 +288,9 @@ export function syncRemoteCharacterPresentations<
 ): void {
   if (sourceCharacterRuntime === null) {
     for (const remoteCharacterRuntime of remoteCharacterRuntimesByPlayerId.values()) {
+      clearCharacterCombatDeathPresentation(
+        remoteCharacterRuntime.characterRuntime
+      );
       remoteCharacterRuntime.characterRuntime.anchorGroup.parent?.remove(
         remoteCharacterRuntime.characterRuntime.anchorGroup
       );
@@ -439,20 +433,16 @@ export function syncRemoteCharacterPresentations<
       );
     }
 
-    dependencies.syncCharacterAnimation(
-      remoteCharacterRuntime.characterRuntime,
-      dependencies.resolveHeldAnimationVocabulary(
+    if (!remoteCharacterRuntime.characterRuntime.deathRagdollRuntime.isActive) {
+      dependencies.syncCharacterAnimation(
         remoteCharacterRuntime.characterRuntime,
-        remoteCharacterRuntime.attachmentRuntime,
         remoteCharacterPresentation.presentation.animationVocabulary,
-        remoteCharacterPresentation.weaponState,
-        remoteCharacterRuntime.mountedCharacterRuntime
-      ),
-      remoteCharacterPresentation.presentation.animationCycleId,
-      remoteCharacterPresentation.presentation.animationPlaybackRateMultiplier
-    );
+        remoteCharacterPresentation.presentation.animationCycleId,
+        remoteCharacterPresentation.presentation.animationPlaybackRateMultiplier
+      );
 
-    remoteCharacterRuntime.characterRuntime.mixer.update(deltaSeconds);
+      remoteCharacterRuntime.characterRuntime.mixer.update(deltaSeconds);
+    }
 
     if (remoteCharacterRuntime.characterRuntime.heldWeaponPoseRuntime !== null) {
       dependencies.captureHeldWeaponPoseRuntime(
@@ -475,6 +465,10 @@ export function syncRemoteCharacterPresentations<
       dependencies.applyMountedAnchorTransform(
         remoteCharacterRuntime.characterRuntime,
         remoteCharacterRuntime.mountedCharacterRuntime
+      );
+      syncCharacterProceduralHitReaction(
+        remoteCharacterRuntime.characterRuntime,
+        nowMs
       );
       continue;
     }
@@ -499,6 +493,11 @@ export function syncRemoteCharacterPresentations<
         deltaSeconds
       );
     }
+
+    syncCharacterProceduralHitReaction(
+      remoteCharacterRuntime.characterRuntime,
+      nowMs
+    );
 
     if (
       heldWeaponPresentationActive &&
@@ -545,7 +544,8 @@ export function syncRemoteCharacterPresentations<
       if (heldObjectAimState === null) {
         syncRemoteCharacterCombatDeathPresentation(
           remoteCharacterRuntime.characterRuntime,
-          remoteCharacterPresentation
+          remoteCharacterPresentation,
+          nowMs
         );
         continue;
       }
@@ -562,7 +562,8 @@ export function syncRemoteCharacterPresentations<
 
     syncRemoteCharacterCombatDeathPresentation(
       remoteCharacterRuntime.characterRuntime,
-      remoteCharacterPresentation
+      remoteCharacterPresentation,
+      nowMs
     );
   }
 
@@ -574,6 +575,7 @@ export function syncRemoteCharacterPresentations<
     remoteCharacterRuntime.characterRuntime.anchorGroup.parent?.remove(
       remoteCharacterRuntime.characterRuntime.anchorGroup
     );
+    clearCharacterCombatDeathPresentation(remoteCharacterRuntime.characterRuntime);
     remoteCharacterRuntimesByPlayerId.delete(playerId);
   }
 }

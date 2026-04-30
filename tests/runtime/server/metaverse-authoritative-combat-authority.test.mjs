@@ -18,10 +18,7 @@ function createPlayerRuntimeState(
   teamId,
   position,
   yawRadians = 0,
-  weaponState = createMetaverseRealtimePlayerWeaponStateSnapshot({
-    aimMode: "hip-fire",
-    weaponId: "metaverse-service-pistol-v2"
-  })
+  weaponState = createSingleWeaponState(playerId, "metaverse-service-pistol-v2")
 ) {
   return {
     linearVelocityX: 0,
@@ -1089,10 +1086,6 @@ test("MetaverseAuthoritativeCombatAuthority rejects invalid reticle ray origin a
     receiptSnapshot?.recentPlayerActionReceipts[4]?.rejectionReason,
     "invalid-origin"
   );
-  assert.equal(
-    receiptSnapshot?.latestShotResolutionTelemetry?.finalReason,
-    "rejected-missing-origin"
-  );
 });
 
 test("MetaverseAuthoritativeCombatAuthority validates camera-ray hits against authoritative firing line of sight", () => {
@@ -1205,16 +1198,14 @@ test("MetaverseAuthoritativeCombatAuthority validates camera-ray hits against au
       )?.shotsHit,
     0
   );
+  const combatEvents = combatAuthority.readCombatEventSnapshots();
+  const shotEvent = combatEvents[combatEvents.length - 1] ?? null;
+
   assert.equal(
-    combatAuthority.readPlayerCombatActionObserverSnapshot(redPlayerId)
-      ?.latestShotResolutionTelemetry?.finalReason,
+    shotEvent?.hitscan?.finalReason,
     "blocked-by-firing-reference-los"
   );
-  assert.equal(
-    combatAuthority.readPlayerCombatActionObserverSnapshot(redPlayerId)
-      ?.latestShotResolutionTelemetry?.lineOfSightBlocked,
-    true
-  );
+  assert.equal(shotEvent?.hitscan?.hitKind, "world");
 });
 
 test("MetaverseAuthoritativeCombatAuthority orders world blockers and player hits on the same semantic ray", () => {
@@ -1279,11 +1270,10 @@ test("MetaverseAuthoritativeCombatAuthority orders world blockers and player hit
     1_200
   );
 
-  assert.equal(
-    combatAuthority.readPlayerCombatActionObserverSnapshot(redPlayerId)
-      ?.latestShotResolutionTelemetry?.finalReason,
-    "hit-world-before-player"
-  );
+  const firstCombatEvents = combatAuthority.readCombatEventSnapshots();
+  const firstShotEvent = firstCombatEvents[firstCombatEvents.length - 1] ?? null;
+
+  assert.equal(firstShotEvent?.hitscan?.finalReason, "hit-world-before-player");
   assert.equal(
     combatAuthority
       .readPlayerCombatSnapshot(redPlayerId)
@@ -1306,11 +1296,11 @@ test("MetaverseAuthoritativeCombatAuthority orders world blockers and player hit
     1_500
   );
 
-  assert.equal(
-    combatAuthority.readPlayerCombatActionObserverSnapshot(redPlayerId)
-      ?.latestShotResolutionTelemetry?.finalReason,
-    "hit-player"
-  );
+  const secondCombatEvents = combatAuthority.readCombatEventSnapshots();
+  const secondShotEvent =
+    secondCombatEvents[secondCombatEvents.length - 1] ?? null;
+
+  assert.equal(secondShotEvent?.hitscan?.finalReason, "hit-player");
   assert.equal(combatAuthority.readPlayerCombatSnapshot(bluePlayerId)?.health, 76);
 });
 

@@ -16,6 +16,7 @@ import type {
   RealtimeReliableTransportStatusSnapshot
 } from "@/network";
 import type {
+  MetaversePlayerId,
   MetaversePlayerTeamId,
   ReticleColor,
   ReticleId
@@ -87,9 +88,51 @@ export interface MetaverseHudRadarSnapshot {
 }
 
 export interface MetaverseHudCombatFeedEntrySnapshot {
+  readonly ageMs: number;
+  readonly local: boolean;
   readonly sequence: number;
   readonly summary: string;
   readonly type: "damage" | "kill" | "spawn";
+}
+
+export interface MetaverseHudDamageIndicatorSnapshot {
+  readonly ageMs: number;
+  readonly damage: number;
+  readonly directionX: number;
+  readonly directionY: number;
+  readonly intensity: number;
+  readonly sequence: number;
+}
+
+export interface MetaverseHudCombatScoreboardPlayerSnapshot {
+  readonly accuracyRatio: number | null;
+  readonly alive: boolean;
+  readonly assists: number;
+  readonly deaths: number;
+  readonly headshotKills: number;
+  readonly isLocalPlayer: boolean;
+  readonly kills: number;
+  readonly playerId: MetaversePlayerId;
+  readonly shotsFired: number;
+  readonly shotsHit: number;
+  readonly teamId: MetaversePlayerTeamId;
+  readonly username: string;
+}
+
+export interface MetaverseHudCombatScoreboardTeamSnapshot {
+  readonly playerCount: number;
+  readonly players: readonly MetaverseHudCombatScoreboardPlayerSnapshot[];
+  readonly score: number;
+  readonly teamId: MetaversePlayerTeamId;
+}
+
+export interface MetaverseHudCombatScoreboardSnapshot {
+  readonly available: boolean;
+  readonly phase: "active" | "completed" | "waiting-for-players" | null;
+  readonly scoreLimit: number | null;
+  readonly teams: readonly MetaverseHudCombatScoreboardTeamSnapshot[];
+  readonly timeRemainingMs: number | null;
+  readonly winnerTeamId: MetaversePlayerTeamId | null;
 }
 
 export interface MetaverseHudCombatSnapshot {
@@ -100,6 +143,7 @@ export interface MetaverseHudCombatSnapshot {
   readonly assists: number;
   readonly available: boolean;
   readonly deaths: number;
+  readonly damageIndicators: readonly MetaverseHudDamageIndicatorSnapshot[];
   readonly enemyScore: number | null;
   readonly friendlyFireEnabled: boolean;
   readonly headshotKills: number;
@@ -110,6 +154,7 @@ export interface MetaverseHudCombatSnapshot {
   readonly maxHealth: number;
   readonly reloadRemainingMs: number;
   readonly respawnRemainingMs: number;
+  readonly scoreboard: MetaverseHudCombatScoreboardSnapshot;
   readonly scoreLimit: number | null;
   readonly shotsFired: number;
   readonly shotsHit: number;
@@ -117,6 +162,15 @@ export interface MetaverseHudCombatSnapshot {
   readonly teamScore: number | null;
   readonly timeRemainingMs: number | null;
   readonly weaponId: string | null;
+}
+
+export interface MetaverseHudWeaponResourceInteractionSnapshot {
+  readonly distanceMeters: number;
+  readonly weaponId: string;
+}
+
+export interface MetaverseHudInteractionSnapshot {
+  readonly weaponResource: MetaverseHudWeaponResourceInteractionSnapshot | null;
 }
 
 export interface MetaverseHudSnapshot {
@@ -136,6 +190,7 @@ export interface MetaverseHudSnapshot {
   readonly locomotionMode: MetaverseLocomotionModeId;
   readonly mountedInteraction: MetaverseMountedInteractionSnapshot;
   readonly mountedInteractionHud: MetaverseMountedInteractionHudSnapshot;
+  readonly interaction: MetaverseHudInteractionSnapshot;
   readonly presence: {
     readonly joined: boolean;
     readonly lastError: string | null;

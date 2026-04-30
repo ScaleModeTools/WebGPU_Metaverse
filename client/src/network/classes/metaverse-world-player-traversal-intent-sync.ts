@@ -172,8 +172,6 @@ export class MetaverseWorldPlayerTraversalIntentSync {
   #nextTraversalSequence = 0;
   #pendingPlayerTraversalIntentSamples: MetaversePlayerTraversalIntentSnapshot[] =
     [];
-  #previewPlayerTraversalIntent: MetaversePlayerTraversalIntentSnapshot | null =
-    null;
   #playerTraversalIntentSyncDirty = false;
   #playerTraversalInputSyncHandle: TimeoutHandle | null = null;
   #playerTraversalInputSyncInFlight = false;
@@ -212,16 +210,11 @@ export class MetaverseWorldPlayerTraversalIntentSync {
     commandInput: MetaverseSyncPlayerTraversalIntentCommandInput | null
   ): MetaversePlayerTraversalIntentSnapshot | null {
     if (commandInput === null) {
-      this.#previewPlayerTraversalIntent = null;
       return null;
     }
 
-    const previewIntentSnapshot =
-      this.#resolveNextPlayerTraversalIntentSnapshot(commandInput).intentSnapshot;
-
-    this.#previewPlayerTraversalIntent = previewIntentSnapshot;
-
-    return previewIntentSnapshot;
+    return this.#resolveNextPlayerTraversalIntentSnapshot(commandInput)
+      .intentSnapshot;
   }
 
   syncFromAuthoritativeWorld(): void {
@@ -244,7 +237,6 @@ export class MetaverseWorldPlayerTraversalIntentSync {
       this.#lastPlayerTraversalIntentCommand = null;
       this.#lastPlayerTraversalIntent = null;
       this.#pendingPlayerTraversalIntentSamples = [];
-      this.#previewPlayerTraversalIntent = null;
       this.#playerTraversalIntentSyncDirty = false;
       this.#cancelScheduledPlayerTraversalInputSync();
       return null;
@@ -256,7 +248,6 @@ export class MetaverseWorldPlayerTraversalIntentSync {
       traversalIntentChanged
     } = this.#resolveNextPlayerTraversalIntentSnapshot(commandInput);
 
-    this.#previewPlayerTraversalIntent = null;
     this.#lastTraversalActionPressed = actionPressed;
 
     if (!traversalIntentChanged) {
@@ -438,7 +429,6 @@ export class MetaverseWorldPlayerTraversalIntentSync {
         });
       this.#lastPlayerTraversalIntentCommand = null;
       this.#pendingPlayerTraversalIntentSamples = [];
-      this.#previewPlayerTraversalIntent = null;
       this.#playerTraversalIntentSyncDirty = true;
       return;
     }

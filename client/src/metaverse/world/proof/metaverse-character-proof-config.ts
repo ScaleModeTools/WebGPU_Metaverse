@@ -1,9 +1,5 @@
 import { animationClipManifest } from "@/assets/config/animation-clip-manifest";
 import {
-  metaverseCombatAnimationClipNamesByActionId,
-  metaverseCombatAnimationSourcePathByActionId,
-} from "@/assets/config/metaverse-combat-animation-source";
-import {
   attachmentModelManifest,
   metaverseBattleRifleAttachmentAssetId,
   metaverseBreacherShotgunAttachmentAssetId,
@@ -276,10 +272,6 @@ function resolveMetaverseCharacterProofConfig(): MetaverseCharacterProofConfig {
       }),
     ),
     characterId: characterDescriptor.id,
-    combatAnimationProofConfig: Object.freeze({
-      clipNamesByActionId: metaverseCombatAnimationClipNamesByActionId,
-      sourcePathByActionId: metaverseCombatAnimationSourcePathByActionId,
-    }),
     label: characterDescriptor.label,
     modelPath: resolveMetaverseProofLodModelPath(
       characterDescriptor.renderModel,

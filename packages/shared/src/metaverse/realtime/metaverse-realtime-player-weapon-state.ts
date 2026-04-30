@@ -47,7 +47,7 @@ export interface MetaverseRealtimeWeaponSlotSnapshotInput {
 export interface MetaverseRealtimePlayerWeaponStateSnapshotInput {
   readonly activeSlotId?: MetaverseWeaponSlotId | null;
   readonly aimMode?: MetaverseRealtimePlayerWeaponAimModeId;
-  readonly slots?: readonly MetaverseRealtimeWeaponSlotSnapshotInput[];
+  readonly slots: readonly MetaverseRealtimeWeaponSlotSnapshotInput[];
   readonly weaponId: string;
 }
 
@@ -125,18 +125,13 @@ export function createMetaverseRealtimePlayerWeaponStateSnapshot(
     input.weaponId,
     "Metaverse realtime weaponId"
   );
+
+  if (input.slots === undefined || input.slots.length === 0) {
+    throw new Error("Metaverse realtime weapon state slots must not be empty.");
+  }
+
   const normalizedSlots = Object.freeze(
-    (input.slots === undefined || input.slots.length === 0
-      ? [
-          {
-            attachmentId: normalizedInputWeaponId,
-            equipped: true,
-            slotId: input.activeSlotId ?? "primary",
-            weaponId: normalizedInputWeaponId
-          }
-        ]
-      : input.slots
-    ).map((slot) => createMetaverseRealtimeWeaponSlotSnapshot(slot))
+    input.slots.map((slot) => createMetaverseRealtimeWeaponSlotSnapshot(slot))
   );
   const activeSlotId = resolveActiveSlotId(input, normalizedSlots);
   const activeSlot =

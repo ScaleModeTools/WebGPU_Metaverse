@@ -194,7 +194,6 @@ function createHitscanResolvedEvent({
     playerId,
     presentationDeliveryModel: "hitscan-tracer",
     semanticMuzzleWorld,
-    serverTick: eventSequence,
     shotId: `${playerId}:${actionSequence}`,
     weaponId: eventWeaponId
   });
@@ -222,7 +221,6 @@ function createProjectileSpawnedEvent({
     presentationDeliveryModel: "authoritative-projectile",
     projectileId,
     semanticMuzzleWorld,
-    serverTick: eventSequence,
     shotId: `${playerId}:${actionSequence}`,
     weaponId: eventWeaponId
   });
@@ -248,7 +246,6 @@ function createProjectileResolvedEvent({
       resolutionKind
     }),
     projectileId,
-    serverTick: eventSequence,
     shotId: `${playerId}:${actionSequence}`,
     weaponId: eventWeaponId
   });
@@ -2269,7 +2266,7 @@ test("MetaverseCombatFeedbackRuntime emits local, spatial remote, hit, and death
         combatFeed: [
           {
             attackerPlayerId: remotePlayerId,
-            damageAmount: 37,
+            damage: 37,
             hitZone: "body",
             sequence: 1,
             sourceActionSequence: 8,
@@ -2343,6 +2340,18 @@ test("MetaverseCombatFeedbackRuntime emits local, spatial remote, hit, and death
         `shot:${remotePlayerId}`
       ]
     );
+    assert.equal(presentationEvents[0].damageAmount, 37);
+    assert.equal(presentationEvents[0].hitZone, "body");
+    assert.deepEqual(presentationEvents[0].damageSourceDirectionWorld, {
+      x: 6 / Math.hypot(6, -4),
+      y: 0,
+      z: -4 / Math.hypot(6, -4)
+    });
+    assert.deepEqual(presentationEvents[1].damageSourceDirectionWorld, {
+      x: 6 / Math.hypot(6, -4),
+      y: 0,
+      z: -4 / Math.hypot(6, -4)
+    });
 
     runtime.syncAuthoritativeWorld(
       createWorldSnapshot({

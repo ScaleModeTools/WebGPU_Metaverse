@@ -69,8 +69,8 @@ export class MetaverseScenePresentationState {
     );
   }
 
-  clearLocalCombatDeathAnimation(): void {
-    this.#dependencies.localCharacterPresentationState.clearCombatDeathAnimation();
+  clearLocalCombatDeathPresentation(): void {
+    this.#dependencies.localCharacterPresentationState.clearCombatDeathPresentation();
   }
 
   async prewarm(renderer: import("./camera/metaverse-scene-camera").MetaverseSceneRendererHost): Promise<void> {
@@ -100,6 +100,7 @@ export class MetaverseScenePresentationState {
       createMetaverseSceneMountedPresentationSnapshot(mountedEnvironment);
     const presentedCameraSnapshot = localCharacterPresentationState.syncPresentation(
       cameraSnapshot,
+      nowMs,
       deltaSeconds,
       characterPresentation,
       mountedPresentationSnapshot,
@@ -114,6 +115,7 @@ export class MetaverseScenePresentationState {
     );
     remoteCharacterPresentationState.syncPresentation(
       remoteCharacterPresentations,
+      nowMs,
       deltaSeconds
     );
     portalPresentationState.syncPresentation(focusedPortal, nowMs);

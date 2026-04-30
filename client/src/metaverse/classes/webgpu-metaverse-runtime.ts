@@ -41,6 +41,7 @@ import { MetaverseCombatFeedbackRuntime } from "./metaverse-combat-feedback-runt
 import { MetaverseEnvironmentPhysicsRuntime } from "./metaverse-environment-physics-runtime";
 import { MetaverseFlightInputRuntime } from "./metaverse-flight-input-runtime";
 import { MetaverseMountedInteractionRuntime } from "./metaverse-mounted-interaction-runtime";
+import { MetaverseMovementAudioRuntime } from "./metaverse-movement-audio-runtime";
 import { MetaverseRuntimeCameraPhaseState } from "./metaverse-runtime-camera-phase-state";
 import { MetaverseRuntimeCombatLifecycle } from "./metaverse-runtime-combat-lifecycle";
 import {
@@ -202,10 +203,10 @@ export class WebGpuMetaverseRuntime {
       characterProofConfig: dependencies.characterProofConfig ?? null,
       createSceneAssetLoader,
       environmentProofConfig,
-      localPlayerId: dependencies.localPlayerIdentity?.playerId ?? null
+      localPlayerId: dependencies.localPlayerIdentity?.playerId ?? null,
+      physicsRuntime
     });
     const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
-      config,
       {
         createSceneAssetLoader,
         environmentProofConfig,
@@ -337,8 +338,8 @@ export class WebGpuMetaverseRuntime {
     const combatLifecycle = new MetaverseRuntimeCombatLifecycle({
       authoritativeWorldSync,
       bootLifecycle,
-      clearLocalCombatDeathAnimation: () =>
-        sceneRuntime.clearLocalCombatDeathAnimation(),
+      clearLocalCombatDeathPresentation: () =>
+        sceneRuntime.clearLocalCombatDeathPresentation(),
       remoteWorldRuntime,
       weaponPresentationRuntime: this.#weaponPresentationRuntime
     });
@@ -347,6 +348,9 @@ export class WebGpuMetaverseRuntime {
       readLocalPlayerId: () => dependencies.localPlayerIdentity?.playerId ?? null,
       triggerPresentationEvent: (event) =>
         sceneRuntime.triggerCombatPresentationEvent(event)
+    });
+    const movementAudioRuntime = new MetaverseMovementAudioRuntime({
+      playAudioCue: dependencies.playCombatAudioCue ?? null
     });
 
     this.#hudPublisher = new MetaverseRuntimeHudPublisher({
@@ -367,6 +371,7 @@ export class WebGpuMetaverseRuntime {
       devicePixelRatio,
       environmentPhysicsRuntime,
       flightInputRuntime: this.#flightInputRuntime,
+      movementAudioRuntime,
       portals: config.portals,
       presenceRuntime,
       remoteWorldRuntime,

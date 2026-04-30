@@ -23,23 +23,6 @@ export interface MetaverseCharacterAnimationClipProofConfig {
 
 export type MetaverseCharacterAnimationClipLoopMode = "once" | "repeat";
 
-export const metaverseCharacterCombatAnimationActionIds = [
-  "hit",
-  "death",
-] as const;
-
-export type MetaverseCharacterCombatAnimationActionId =
-  (typeof metaverseCharacterCombatAnimationActionIds)[number];
-
-export interface MetaverseCharacterCombatAnimationProofConfig {
-  readonly clipNamesByActionId: Readonly<
-    Record<MetaverseCharacterCombatAnimationActionId, string>
-  >;
-  readonly sourcePathByActionId: Readonly<
-    Record<MetaverseCharacterCombatAnimationActionId, string>
-  >;
-}
-
 export const metaverseCharacterSkeletonIds = ["humanoid_v2"] as const;
 
 export type MetaverseCharacterSkeletonId =
@@ -59,7 +42,6 @@ export type MetaverseCanonicalSocketName =
 export interface MetaverseCharacterProofConfig {
   readonly animationClips: readonly MetaverseCharacterAnimationClipProofConfig[];
   readonly characterId: string;
-  readonly combatAnimationProofConfig?: MetaverseCharacterCombatAnimationProofConfig | null;
   readonly label: string;
   readonly modelPath: string;
   readonly skeletonId: MetaverseCharacterSkeletonId;

@@ -20,10 +20,12 @@ import {
   type MetaverseRemoteCharacterPresentationDependencies
 } from "./metaverse-scene-remote-character-presentations";
 import {
-  resolveHeldCharacterAnimationVocabulary,
   syncCharacterAnimation,
   syncCharacterPresentation
 } from "./metaverse-scene-character-animation";
+import type {
+  MetaverseCharacterRagdollPhysicsRuntimeLike
+} from "./metaverse-scene-character-ragdoll";
 import {
   resolveMetaverseMountedOccupancyPresentationStateSnapshot
 } from "../../states/mounted-occupancy";
@@ -46,6 +48,7 @@ interface CreateMetaverseSceneRemoteCharacterPresentationDependencies {
   readonly attachmentRuntimeNodeResolvers: MetaverseAttachmentRuntimeNodeResolvers;
   readonly characterProofRuntimeNodeResolvers: MetaverseCharacterProofRuntimeNodeResolvers;
   readonly heldWeaponPoseRuntimeNodeResolvers: MetaverseHeldWeaponPoseRuntimeNodeResolvers;
+  readonly physicsRuntime: MetaverseCharacterRagdollPhysicsRuntimeLike;
   readonly resolveMountedEnvironmentRuntime: (
     environmentAssetId: string
   ) => MetaverseMountableEnvironmentDynamicAssetRuntime | null;
@@ -55,6 +58,7 @@ export function createMetaverseSceneRemoteCharacterPresentationDependencies({
   attachmentRuntimeNodeResolvers,
   characterProofRuntimeNodeResolvers,
   heldWeaponPoseRuntimeNodeResolvers,
+  physicsRuntime,
   resolveMountedEnvironmentRuntime
 }: CreateMetaverseSceneRemoteCharacterPresentationDependencies): MetaverseRemoteCharacterPresentationDependencies<
   MetaverseSceneCharacterProofRuntime,
@@ -82,9 +86,9 @@ export function createMetaverseSceneRemoteCharacterPresentationDependencies({
                   characterScene,
                   heldWeaponPoseRuntimeNodeResolvers
                 ),
+        physicsRuntime,
         ...characterProofRuntimeNodeResolvers
       }),
-    resolveHeldAnimationVocabulary: resolveHeldCharacterAnimationVocabulary,
     resolveMountedEnvironmentRuntime,
     restoreHeldWeaponPoseRuntime: restoreHumanoidV2HeldWeaponPoseRuntime,
     syncAttachmentMount: (

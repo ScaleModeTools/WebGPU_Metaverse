@@ -8,10 +8,11 @@ import {
   type MetaverseSemanticAimFrame
 } from "../../aim/metaverse-semantic-aim";
 import {
-  resolveHeldCharacterAnimationVocabulary,
   shouldUseHeldWeaponCharacterPresentation,
   syncCharacterAnimation,
+  syncCharacterDeathRagdollPresentation,
   syncCharacterPresentation,
+  syncCharacterProceduralHitReaction,
   type MetaverseAttachmentAnimationRuntimeLike,
   type MetaverseCharacterAnimationRuntimeLike
 } from "./metaverse-scene-character-animation";
@@ -115,6 +116,10 @@ export function advanceLocalCharacterAnimation<
     ) => void;
   }
 ): void {
+  if (characterRuntime.deathRagdollRuntime.isActive) {
+    return;
+  }
+
   const heldWeaponPresentationActive =
     shouldUseHeldWeaponCharacterPresentation(
       attachmentRuntime,
@@ -130,13 +135,7 @@ export function advanceLocalCharacterAnimation<
 
   syncCharacterAnimation(
     characterRuntime,
-    resolveHeldCharacterAnimationVocabulary(
-      characterRuntime,
-      attachmentRuntime,
-      characterPresentation?.animationVocabulary ?? "idle",
-      weaponState,
-      mountedCharacterRuntime
-    ),
+    characterPresentation?.animationVocabulary ?? "idle",
     characterPresentation?.animationCycleId,
     characterPresentation?.animationPlaybackRateMultiplier
   );
@@ -168,6 +167,7 @@ export function syncLocalCharacterPresentation<
   attachmentRuntime: TAttachmentRuntime | null,
   mountedCharacterRuntime: TMountedCharacterRuntime | null,
   cameraSnapshot: MetaverseCameraSnapshot,
+  nowMs: number,
   characterPresentation: MetaverseCharacterPresentationSnapshot | null,
   bodyPresentation: MetaverseRuntimeConfig["bodyPresentation"],
   weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null,
@@ -207,6 +207,8 @@ export function syncLocalCharacterPresentation<
       mountedCharacterRuntime
     );
   }
+
+  syncCharacterProceduralHitReaction(characterRuntime, nowMs);
 
   const presentedCameraSnapshot =
     mountedCharacterRuntime !== null
@@ -256,6 +258,8 @@ export function syncLocalCharacterPresentation<
       weaponState
     );
   }
+
+  syncCharacterDeathRagdollPresentation(characterRuntime, nowMs);
 
   return presentedCameraSnapshot;
 }

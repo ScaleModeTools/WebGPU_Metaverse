@@ -61,15 +61,18 @@ test("MetaverseSceneRemoteCharacterPresentationState owns remote runtime sync an
               update(deltaSeconds) {
                 mixerUpdateCalls.push(deltaSeconds);
               }
+            },
+            deathRagdollRuntime: {
+              apply() {},
+              clear() {},
+              isActive: false,
+              trigger() {}
+            },
+            proceduralHitReactionRuntime: {
+              apply() {},
+              trigger() {}
             }
           };
-        },
-        resolveHeldAnimationVocabulary(
-          _characterRuntime,
-          _attachmentRuntime,
-          targetVocabulary
-        ) {
-          return targetVocabulary;
         },
         resolveMountedEnvironmentRuntime() {
           return null;
@@ -121,6 +124,7 @@ test("MetaverseSceneRemoteCharacterPresentationState owns remote runtime sync an
         })
       })
     ],
+    100,
     1 / 60
   );
 
@@ -212,15 +216,18 @@ test("MetaverseSceneRemoteCharacterPresentationState restores held pose runtime 
             heldWeaponPoseRuntime: {},
             mixer: {
               update() {}
+            },
+            deathRagdollRuntime: {
+              apply() {},
+              clear() {},
+              isActive: false,
+              trigger() {}
+            },
+            proceduralHitReactionRuntime: {
+              apply() {},
+              trigger() {}
             }
           };
-        },
-        resolveHeldAnimationVocabulary(
-          _characterRuntime,
-          _attachmentRuntime,
-          targetVocabulary
-        ) {
-          return targetVocabulary;
         },
         resolveMountedEnvironmentRuntime() {
           return null;
@@ -280,7 +287,11 @@ test("MetaverseSceneRemoteCharacterPresentationState restores held pose runtime 
     weaponState: null
   });
 
-  remoteCharacterPresentationState.syncPresentation([remotePresentation], 1 / 60);
+  remoteCharacterPresentationState.syncPresentation(
+    [remotePresentation],
+    100,
+    1 / 60
+  );
 
   assert.deepEqual(calls, {
     captureHeldWeaponPoseRuntime: 1,
@@ -305,6 +316,7 @@ test("MetaverseSceneRemoteCharacterPresentationState restores held pose runtime 
         })
       })
     ],
+    116,
     1 / 60
   );
 
@@ -336,6 +348,7 @@ test("MetaverseSceneRemoteCharacterPresentationState restores held pose runtime 
         })
       })
     ],
+    132,
     1 / 60
   );
 
@@ -355,6 +368,7 @@ test("MetaverseSceneRemoteCharacterPresentationState restores held pose runtime 
         })
       })
     ],
+    432,
     0.3
   );
 

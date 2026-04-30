@@ -7,10 +7,7 @@ import type {
   CoopVector3SnapshotInput
 } from "@webgpu-metaverse/shared";
 
-import type {
-  AuthoritativeServerClockConfig,
-  CoopRoomClientTelemetrySnapshot
-} from "../../../network";
+import type { AuthoritativeServerClockConfig } from "../../../network";
 import type { LocalArenaSimulationConfig } from "./duck-hunt-local-arena-simulation";
 import type { WeaponDefinition } from "./duck-hunt-weapon-contract";
 
@@ -34,7 +31,6 @@ export interface CoopArenaRoomSource {
   readonly roomId: CoopRoomId;
   readonly roomSnapshotBuffer?: readonly CoopRoomSnapshot[];
   readonly roomSnapshot: CoopRoomSnapshot | null;
-  readonly telemetrySnapshot?: CoopRoomClientTelemetrySnapshot;
   fireShot: (
     origin: CoopVector3SnapshotInput,
     aimDirection: CoopVector3SnapshotInput,

@@ -381,17 +381,7 @@ export function syncAttachmentProofRuntimeMount<
         slot.equipped &&
         (slot.attachmentId === attachmentRuntime.attachmentId ||
           slot.weaponId === attachmentRuntime.attachmentId)
-    ) ??
-    (weaponState !== null &&
-    weaponState.weaponId === attachmentRuntime.attachmentId
-      ? {
-          attachmentId: attachmentRuntime.attachmentId,
-          equipped: true,
-          slotId: weaponState.activeSlotId ?? "primary",
-          weaponId: weaponState.weaponId,
-          weaponInstanceId: `${weaponState.weaponId}:legacy`
-        }
-      : null);
+    ) ?? null;
   const isActiveAttachment =
     attachmentSlot !== null &&
     weaponState !== null &&

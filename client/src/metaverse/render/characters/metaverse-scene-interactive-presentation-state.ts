@@ -18,6 +18,9 @@ import {
   type HumanoidV2HeldWeaponPoseRuntime,
   type MetaverseHeldWeaponPoseRuntimeNodeResolvers
 } from "./metaverse-scene-held-weapon-pose";
+import type {
+  MetaverseCharacterRagdollPhysicsRuntimeLike
+} from "./metaverse-scene-character-ragdoll";
 
 import type {
   MetaverseAttachmentProofConfig,
@@ -49,6 +52,7 @@ interface MetaverseSceneInteractivePresentationStateDependencies {
   readonly characterProofRuntimeNodeResolvers: MetaverseCharacterProofRuntimeNodeResolvers;
   readonly createSceneAssetLoader: () => MetaverseSceneAssetLoader;
   readonly heldWeaponPoseRuntimeNodeResolvers: MetaverseHeldWeaponPoseRuntimeNodeResolvers;
+  readonly physicsRuntime: MetaverseCharacterRagdollPhysicsRuntimeLike;
   readonly scene: Scene;
   readonly warn: (message: string) => void;
 }
@@ -111,18 +115,19 @@ export class MetaverseSceneInteractivePresentationState {
 
       if (attachmentProofConfigs.length > 0 && characterProofConfig !== null) {
         const loadedCharacterProofRuntime = await loadMetaverseCharacterProofRuntime(
-          characterProofConfig,
-          {
-            createHeldWeaponPoseRuntime: (characterScene) =>
-              createHeldWeaponPoseRuntime(
-                characterScene,
-                heldWeaponPoseRuntimeNodeResolvers
-              ),
-            createSceneAssetLoader,
-            heldWeaponSolveDirectionEpsilon,
-            warn,
-            ...characterProofRuntimeNodeResolvers
-          }
+        characterProofConfig,
+        {
+          createHeldWeaponPoseRuntime: (characterScene) =>
+            createHeldWeaponPoseRuntime(
+              characterScene,
+              heldWeaponPoseRuntimeNodeResolvers
+            ),
+          createSceneAssetLoader,
+          heldWeaponSolveDirectionEpsilon,
+          physicsRuntime: this.#dependencies.physicsRuntime,
+          warn,
+          ...characterProofRuntimeNodeResolvers
+        }
         );
 
         this.characterProofRuntime = loadedCharacterProofRuntime;
@@ -145,14 +150,15 @@ export class MetaverseSceneInteractivePresentationState {
         }
       } else if (characterProofConfig !== null) {
         const loadedCharacterProofRuntime = await loadMetaverseCharacterProofRuntime(
-          characterProofConfig,
-          {
-            createHeldWeaponPoseRuntime: () => null,
-            createSceneAssetLoader,
-            heldWeaponSolveDirectionEpsilon,
-            warn,
-            ...characterProofRuntimeNodeResolvers
-          }
+        characterProofConfig,
+        {
+          createHeldWeaponPoseRuntime: () => null,
+          createSceneAssetLoader,
+          heldWeaponSolveDirectionEpsilon,
+          physicsRuntime: this.#dependencies.physicsRuntime,
+          warn,
+          ...characterProofRuntimeNodeResolvers
+        }
         );
 
         this.characterProofRuntime = loadedCharacterProofRuntime;

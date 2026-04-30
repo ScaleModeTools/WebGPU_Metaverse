@@ -365,7 +365,6 @@ export class MetaverseWeaponPresentationRuntime {
   #activeSlotId: MetaverseWeaponSlotId | null = null;
   #adsLatched = false;
   #adsBlend = 0;
-  #aimMode: MetaverseRealtimePlayerWeaponAimModeId = "hip-fire";
   #cameraFieldOfViewDegrees: number;
   #combatPresentationSuppressed = false;
   #firePressedThisFrame = false;
@@ -512,7 +511,6 @@ export class MetaverseWeaponPresentationRuntime {
     if (previousWeaponId !== this.#activeWeapon?.weaponId) {
       this.#adsLatched = false;
       this.#adsBlend = 0;
-      this.#aimMode = "hip-fire";
       this.#cameraFieldOfViewDegrees = this.#baseFieldOfViewDegrees;
     }
   }
@@ -528,7 +526,6 @@ export class MetaverseWeaponPresentationRuntime {
   reset(): void {
     this.#adsLatched = false;
     this.#adsBlend = 0;
-    this.#aimMode = "hip-fire";
     this.#cameraFieldOfViewDegrees = this.#baseFieldOfViewDegrees;
     this.#firePressedThisFrame = false;
     this.#fireTriggerHeld = false;
@@ -591,7 +588,6 @@ export class MetaverseWeaponPresentationRuntime {
         ? 1
         : clamp(deltaSeconds / adsTransitionSeconds, 0, 1);
 
-    this.#aimMode = targetAimMode;
     this.#firePressedThisFrame = primaryActionPressedThisFrame;
     this.#fireTriggerHeld = visible && canActiveWeaponFire && flightInput.primaryAction;
     this.#adsBlend = moveToward(
@@ -637,7 +633,6 @@ export class MetaverseWeaponPresentationRuntime {
     });
     this.#adsLatched = false;
     this.#adsBlend = 0;
-    this.#aimMode = "hip-fire";
     this.#cameraFieldOfViewDegrees = this.#baseFieldOfViewDegrees;
   }
 

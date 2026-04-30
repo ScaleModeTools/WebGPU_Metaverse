@@ -83,7 +83,7 @@ export const metaverseRocketLauncherWeaponAssetId = createAttachmentAssetId(
 export const weaponArchetypeManifest = defineWeaponArchetypeManifest([
   createWeaponBase({
     id: metaverseServicePistolV2WeaponAssetId,
-    label: "Metaverse service pistol v2",
+    label: "Service Pistol",
     family: "pistol",
     holdProfile: createHeldObjectHoldProfile({
       adsPolicy: "iron_sights",
@@ -270,7 +270,7 @@ export const weaponArchetypeManifest = defineWeaponArchetypeManifest([
   }),
   createWeaponBase({
     id: metaverseCompactSmgWeaponAssetId,
-    label: "Metaverse compact SMG",
+    label: "Compact SMG",
     family: "smg",
     holdProfile: createHeldObjectHoldProfile({
       adsPolicy: "optic_anchor",
@@ -460,7 +460,7 @@ export const weaponArchetypeManifest = defineWeaponArchetypeManifest([
   }),
   createWeaponBase({
     id: metaverseBattleRifleWeaponAssetId,
-    label: "Metaverse battle rifle",
+    label: "Battle Rifle",
     family: "battle-rifle",
     holdProfile: createHeldObjectHoldProfile({
       adsPolicy: "optic_anchor",
@@ -651,7 +651,7 @@ export const weaponArchetypeManifest = defineWeaponArchetypeManifest([
   }),
   createWeaponBase({
     id: metaverseBreacherShotgunWeaponAssetId,
-    label: "Metaverse breacher shotgun",
+    label: "Breacher Shotgun",
     family: "shotgun",
     holdProfile: createHeldObjectHoldProfile({
       adsPolicy: "iron_sights",
@@ -845,7 +845,7 @@ export const weaponArchetypeManifest = defineWeaponArchetypeManifest([
   }),
   createWeaponBase({
     id: metaverseLongshotSniperWeaponAssetId,
-    label: "Metaverse longshot sniper",
+    label: "Longshot Sniper",
     family: "sniper",
     holdProfile: createHeldObjectHoldProfile({
       adsPolicy: "optic_anchor",
@@ -1039,7 +1039,7 @@ export const weaponArchetypeManifest = defineWeaponArchetypeManifest([
   }),
   createWeaponBase({
     id: metaverseRocketLauncherWeaponAssetId,
-    label: "Metaverse rocket launcher",
+    label: "Rocket Launcher",
     family: "launcher",
     holdProfile: createHeldObjectHoldProfile({
       adsPolicy: "shouldered_heavy",

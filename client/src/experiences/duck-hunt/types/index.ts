@@ -1,6 +1,5 @@
 export { gameplaySessionModes } from "@webgpu-metaverse/shared";
 export {
-  gameplayDebugPanelModes,
   gameplayReticleStyledStates,
   gameplayReticleVisualStates
 } from "./duck-hunt-gameplay-presentation";
@@ -27,10 +26,8 @@ export type {
 export type { GameMenuPlan } from "./duck-hunt-game-menu-plan";
 export type { GameplayArenaRuntime } from "./duck-hunt-gameplay-arena-runtime";
 export type {
-  GameplayDebugPanelMode,
   GameplayReticleStyledState,
-  GameplayReticleVisualState,
-  GameplayTelemetrySnapshot
+  GameplayReticleVisualState
 } from "./duck-hunt-gameplay-presentation";
 export type {
   GameplayArenaHudSnapshot,

@@ -53,9 +53,6 @@ import {
   type MetaverseAuthoritativePlayerStateSyncRuntimeState
 } from "../authority/players/metaverse-authoritative-player-state-sync.js";
 import { MetaverseAuthoritativePlayerWeaponStateAuthority } from "../authority/players/metaverse-authoritative-player-weapon-state-authority.js";
-import {
-  createMetaverseAuthoritativeWorldEvent
-} from "../authority/snapshots/metaverse-authoritative-world-snapshot-assembly.js";
 import { MetaverseAuthoritativePlayerLifecycleAuthority } from "../authority/players/metaverse-authoritative-player-lifecycle-authority.js";
 import { MetaverseAuthoritativeMountedOccupancyAuthority } from "../authority/mounted/metaverse-authoritative-mounted-occupancy-authority.js";
 import { MetaverseAuthoritativePlayerPoseAuthority } from "../authority/players/metaverse-authoritative-player-pose-authority.js";

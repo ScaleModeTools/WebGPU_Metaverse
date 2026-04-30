@@ -1,5 +1,3 @@
-import { Object3D } from "three/webgpu";
-
 import type {
   MetaverseMountedOccupancyPresentationStateSnapshot
 } from "../../states/mounted-occupancy";
@@ -7,7 +5,6 @@ import {
   createMountedCharacterSeatTransformSnapshot,
   resolveMountedCharacterSeatTransform
 } from "../../traversal/presentation/mount-presentation";
-import type { MountedEnvironmentSnapshot } from "../../types/metaverse-runtime";
 import type {
   MetaverseSceneMountedCharacterPresentationRuntime,
   MetaverseSceneMountableEnvironmentRuntime,

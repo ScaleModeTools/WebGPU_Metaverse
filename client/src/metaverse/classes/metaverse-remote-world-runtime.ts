@@ -38,9 +38,6 @@ import type {
   AckedAuthoritativeLocalPlayerPose,
   ConsumedAckedAuthoritativeLocalPlayerSample
 } from "../traversal/reconciliation/authoritative-local-player-reconciliation";
-import {
-  resolveMetaverseRemoteWorldSampledFrame
-} from "../remote-world/metaverse-remote-world-sampling";
 import { MetaverseRemoteWorldCommandTransport } from "../remote-world/metaverse-remote-world-command-transport";
 import { MetaverseRemoteWorldConnectionLifecycle } from "../remote-world/metaverse-remote-world-connection-lifecycle";
 import {

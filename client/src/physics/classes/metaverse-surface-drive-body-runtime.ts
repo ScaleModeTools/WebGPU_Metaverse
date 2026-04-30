@@ -4,7 +4,6 @@ import {
   constrainMetaverseWorldPlanarPositionAgainstBlockers,
   resolveMetaverseSurfaceDriveBodyStep,
   createMetaverseSurfaceTraversalVector3Snapshot as freezeVector3,
-  toFiniteNumber,
   wrapRadians,
   type MetaverseSurfaceDriveBodyConfigSnapshot,
   type MetaverseSurfaceTraversalConfig,

@@ -2309,15 +2309,6 @@ export function resolveHeldWeaponMainHandContactFrameRuntime(
   ][solverProfile.contactBindings.primary.contactFrameId];
 }
 
-function resolveHeldWeaponMainHandSocketId(
-  gripAssignment: Pick<ActiveGripAssignment, "primaryCharacterSocketRole">
-): "grip" | "palm" {
-  return gripAssignment.primaryCharacterSocketRole === "palm_l_socket" ||
-    gripAssignment.primaryCharacterSocketRole === "palm_r_socket"
-    ? "palm"
-    : "grip";
-}
-
 export function resolveHeldWeaponOffHandEffectorNode(
   heldWeaponPoseRuntime: Pick<
     HumanoidV2HeldWeaponPoseRuntime,
@@ -2362,26 +2353,6 @@ export function resolveHeldWeaponOffHandContactFrameRuntime(
   return heldWeaponPoseRuntime.contactFrameRuntimeByHand[
     gripAssignment.secondaryHand
   ][secondaryBinding.contactFrameId];
-}
-
-function resolveHeldWeaponOffHandSocketId(
-  gripAssignment: Pick<ActiveGripAssignment, "secondaryCharacterSocketRole">
-): "grip" | "palm" | "support" {
-  if (
-    gripAssignment.secondaryCharacterSocketRole === "palm_l_socket" ||
-    gripAssignment.secondaryCharacterSocketRole === "palm_r_socket"
-  ) {
-    return "palm";
-  }
-
-  if (
-    gripAssignment.secondaryCharacterSocketRole === "support_l_socket" ||
-    gripAssignment.secondaryCharacterSocketRole === "support_r_socket"
-  ) {
-    return "support";
-  }
-
-  return "grip";
 }
 
 function resolvePrimaryGripHand(

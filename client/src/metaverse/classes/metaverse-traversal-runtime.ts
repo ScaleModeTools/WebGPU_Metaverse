@@ -59,12 +59,7 @@ export class MetaverseTraversalRuntime {
   readonly #config: MetaverseRuntimeConfig;
   readonly #groundedBodyRuntime: MetaverseGroundedBodyRuntime;
   readonly #physicsRuntime: RapierPhysicsRuntime;
-  readonly #readDynamicEnvironmentCollisionPose:
-    MetaverseTraversalRuntimeDependencies["readDynamicEnvironmentCollisionPose"];
   readonly #readMountedEnvironmentAnchorSnapshot: MetaverseTraversalRuntimeDependencies["readMountedEnvironmentAnchorSnapshot"];
-  readonly #readMountableEnvironmentConfig: MetaverseTraversalRuntimeDependencies["readMountableEnvironmentConfig"];
-  readonly #resolveGroundedTraversalFilterPredicate: MetaverseTraversalRuntimeDependencies["resolveGroundedTraversalFilterPredicate"];
-  readonly #setDynamicEnvironmentPose: MetaverseTraversalRuntimeDependencies["setDynamicEnvironmentPose"];
   readonly #surfaceColliderSnapshots: MetaverseTraversalRuntimeDependencies["surfaceColliderSnapshots"];
   readonly #surfaceLocomotionState: MetaverseUnmountedSurfaceLocomotionState;
 
@@ -87,15 +82,8 @@ export class MetaverseTraversalRuntime {
     this.#config = config;
     this.#groundedBodyRuntime = dependencies.groundedBodyRuntime;
     this.#physicsRuntime = dependencies.physicsRuntime;
-    this.#readDynamicEnvironmentCollisionPose =
-      dependencies.readDynamicEnvironmentCollisionPose;
     this.#readMountedEnvironmentAnchorSnapshot =
       dependencies.readMountedEnvironmentAnchorSnapshot;
-    this.#readMountableEnvironmentConfig =
-      dependencies.readMountableEnvironmentConfig;
-    this.#resolveGroundedTraversalFilterPredicate =
-      dependencies.resolveGroundedTraversalFilterPredicate;
-    this.#setDynamicEnvironmentPose = dependencies.setDynamicEnvironmentPose;
     this.#surfaceColliderSnapshots = dependencies.surfaceColliderSnapshots;
     this.#cameraSnapshot = createMetaverseCameraSnapshot(config.camera);
     this.#characterPresentationState =

@@ -1,3 +1,5 @@
+import type { MetaverseCombatHitZoneId } from "@webgpu-metaverse/shared";
+
 import type { AudioCuePlaybackOptions } from "../../audio";
 import type { MetaverseCombatAudioCueId } from "../audio";
 
@@ -53,6 +55,12 @@ export type MetaverseRenderedWeaponMuzzleResolver = (
 
 export interface MetaverseCombatPresentationEvent {
   readonly actionSequence?: number | null;
+  readonly damageAmount?: number | null;
+  readonly damageSourceDirectionWorld?: {
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+  } | null;
   readonly directionWorld?: {
     readonly x: number;
     readonly y: number;
@@ -64,6 +72,7 @@ export interface MetaverseCombatPresentationEvent {
     readonly z: number;
   } | null;
   readonly kind: MetaverseCombatPresentationEventKind;
+  readonly hitZone?: MetaverseCombatHitZoneId | null;
   readonly originWorld?: {
     readonly x: number;
     readonly y: number;

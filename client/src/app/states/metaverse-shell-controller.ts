@@ -183,7 +183,6 @@ export function useMetaverseShellController(): MetaverseShellController {
     coopRoomIdDraft: state.coopRoomIdDraft,
     controllerActionMatrix,
     controllerConfiguration: state.controllerConfiguration,
-    debugPanelMode: state.debugPanelMode,
     gameplayInputSource,
     handTrackingRuntime,
     hydrationSource: state.hydrationSource,
@@ -214,12 +213,6 @@ export function useMetaverseShellController(): MetaverseShellController {
     onDuckHuntControllerSchemeChange:
       flowPolicy.onDuckHuntControllerSchemeChange,
     onEditProfile: profilePolicy.onEditProfile,
-    onGameplayDebugPanelModeChange: (mode) => {
-      dispatch({
-        mode,
-        type: "gameplayDebugPanelModeChanged"
-      });
-    },
     onGameplaySignal: (signal: GameplaySignal) => {
       audioPolicy.onGameplaySignal(signal);
     },

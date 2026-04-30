@@ -6,9 +6,6 @@ import {
   type GameplayInputModeId,
   type GameplaySessionMode
 } from "@webgpu-metaverse/shared";
-import {
-  type GameplayDebugPanelMode,
-} from "../types/duck-hunt-gameplay-presentation";
 import { StableInlineText } from "@/components/text-stability";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,7 +26,6 @@ import {
 
 type SliderValue = [number];
 
-const debugModeButtonLabels = ["Active", "Enable"] as const;
 const audioStatusLabels = [
   "Awaiting user gesture",
   "Unlocking audio",
@@ -42,11 +38,9 @@ const audioStatusLabels = [
 interface DuckHuntGameMenuDialogProps {
   readonly audioStatusLabel: string;
   readonly calibrationQualityLabel: string;
-  readonly debugPanelMode: GameplayDebugPanelMode;
   readonly gameplayStatusLabel: string;
   readonly inputMode: GameplayInputModeId;
   readonly musicVolume: SliderValue;
-  readonly onDebugPanelModeChange: (mode: GameplayDebugPanelMode) => void;
   readonly onInputModeChange: (inputMode: GameplayInputModeId) => void;
   readonly onReturnToMetaverseRequest: () => void;
   readonly sfxVolume: SliderValue;
@@ -57,17 +51,14 @@ interface DuckHuntGameMenuDialogProps {
   readonly onSessionModeChange: (mode: GameplaySessionMode) => void;
   readonly onSfxVolumeChange: (nextValue: number) => void;
   readonly sessionMode: GameplaySessionMode;
-  readonly showDebugControls: boolean;
 }
 
 export function DuckHuntGameMenuDialog({
   audioStatusLabel,
   calibrationQualityLabel,
-  debugPanelMode,
   gameplayStatusLabel,
   inputMode,
   musicVolume,
-  onDebugPanelModeChange,
   onInputModeChange,
   onReturnToMetaverseRequest,
   sfxVolume,
@@ -77,8 +68,7 @@ export function DuckHuntGameMenuDialog({
   onRecalibrationRequest,
   onSessionModeChange,
   onSfxVolumeChange,
-  sessionMode,
-  showDebugControls
+  sessionMode
 }: DuckHuntGameMenuDialogProps) {
   const selectedInputMode = resolveGameplayInputMode(inputMode);
   const menuInsetClassName = "surface-game-inset rounded-xl p-3";
@@ -274,54 +264,7 @@ export function DuckHuntGameMenuDialog({
             </div>
           </section>
 
-          {showDebugControls ? (
-            <>
-              <Separator className={menuSeparatorClassName} />
-
-              <section className="flex flex-col gap-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="type-game-title">Developer overlays</p>
-                    <p className="type-game-body">
-                      Development-only telemetry stays separate from the player HUD.
-                    </p>
-                  </div>
-                  <Badge variant="outline">
-                    {gameMenuPlan.sections.find((section) => section.id === "debug")?.label}
-                  </Badge>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-3">
-                  {gameMenuPlan.debugModes.map((mode) => (
-                    <div
-                      className={menuInsetClassName}
-                      key={mode.mode}
-                    >
-                      <p className="type-game-title">{mode.label}</p>
-                      <p className="type-game-body mt-2">
-                        {mode.description}
-                      </p>
-                      <Button
-                        className="mt-3 w-full"
-                        onClick={() => onDebugPanelModeChange(mode.mode)}
-                        type="button"
-                        variant={debugPanelMode === mode.mode ? "secondary" : "outline"}
-                      >
-                        <StableInlineText
-                          reserveTexts={debugModeButtonLabels}
-                          text={debugPanelMode === mode.mode ? "Active" : "Enable"}
-                        />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <Separator className={menuSeparatorClassName} />
-            </>
-          ) : (
-            <Separator className={menuSeparatorClassName} />
-          )}
+          <Separator className={menuSeparatorClassName} />
 
           <section className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-3">

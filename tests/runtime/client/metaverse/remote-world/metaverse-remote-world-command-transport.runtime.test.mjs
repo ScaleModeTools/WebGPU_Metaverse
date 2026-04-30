@@ -69,6 +69,15 @@ test("MetaverseRemoteWorldCommandTransport adapts grounded traversal, look, moun
   commandTransport.syncLocalPlayerWeaponState(
     createMetaverseRealtimePlayerWeaponStateSnapshot({
       aimMode: "ads",
+      slots: [
+        {
+          attachmentId: "duck-hunt-pistol",
+          equipped: true,
+          slotId: "primary",
+          weaponId: "duck-hunt-pistol",
+          weaponInstanceId: "test-player:primary:duck-hunt-pistol"
+        }
+      ],
       weaponId: "duck-hunt-pistol"
     })
   );

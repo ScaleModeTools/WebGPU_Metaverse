@@ -15,6 +15,7 @@ export type {
   PhysicsVector3Snapshot,
   RapierCharacterControllerHandle,
   RapierColliderHandle,
+  RapierImpulseJointHandle,
   RapierPhysicsAddon,
   RapierQueryFilterPredicate,
   RapierRigidBodyHandle,

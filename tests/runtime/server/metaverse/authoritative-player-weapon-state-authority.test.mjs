@@ -20,6 +20,23 @@ function createPlayerRuntime(playerId) {
   };
 }
 
+function createTestWeaponState(weaponId, aimMode = "hip-fire") {
+  return {
+    activeSlotId: "primary",
+    aimMode,
+    slots: [
+      {
+        attachmentId: weaponId,
+        equipped: true,
+        slotId: "primary",
+        weaponId,
+        weaponInstanceId: `test-player:primary:${weaponId}`
+      }
+    ],
+    weaponId
+  };
+}
+
 test("Metaverse authoritative player weapon-state authority applies newer weapon state and bumps snapshot sequence on change", () => {
   const playerId = createMetaversePlayerId("authoritative-weapon-state-1");
 
@@ -38,10 +55,7 @@ test("Metaverse authoritative player weapon-state authority applies newer weapon
     createMetaverseSyncPlayerWeaponStateCommand({
       playerId,
       weaponSequence: 2,
-      weaponState: {
-        aimMode: "ads",
-        weaponId: "duck-hunt-pistol"
-      }
+      weaponState: createTestWeaponState("duck-hunt-pistol", "ads")
     }),
     125
   );
@@ -72,10 +86,7 @@ test("Metaverse authoritative player weapon-state authority ignores stale sequen
     createMetaverseSyncPlayerWeaponStateCommand({
       playerId,
       weaponSequence: 3,
-      weaponState: {
-        aimMode: "ads",
-        weaponId: "duck-hunt-pistol"
-      }
+      weaponState: createTestWeaponState("duck-hunt-pistol", "ads")
     }),
     200
   );
@@ -83,10 +94,7 @@ test("Metaverse authoritative player weapon-state authority ignores stale sequen
     createMetaverseSyncPlayerWeaponStateCommand({
       playerId,
       weaponSequence: 4,
-      weaponState: {
-        aimMode: "ads",
-        weaponId: "duck-hunt-pistol"
-      }
+      weaponState: createTestWeaponState("duck-hunt-pistol", "ads")
     }),
     220
   );
@@ -94,10 +102,7 @@ test("Metaverse authoritative player weapon-state authority ignores stale sequen
     createMetaverseSyncPlayerWeaponStateCommand({
       playerId,
       weaponSequence: 2,
-      weaponState: {
-        aimMode: "hip-fire",
-        weaponId: "duck-hunt-pistol"
-      }
+      weaponState: createTestWeaponState("duck-hunt-pistol", "hip-fire")
     }),
     240
   );

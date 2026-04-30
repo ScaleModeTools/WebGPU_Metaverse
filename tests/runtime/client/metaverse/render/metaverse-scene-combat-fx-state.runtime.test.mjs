@@ -548,13 +548,6 @@ test("MetaverseSceneCombatFxState self-heals active rockets from projectile snap
     countSceneChildrenByName(scene, "metaverse_combat_fx/pistol_tracer"),
     0
   );
-  assert.deepEqual(combatFxState.projectileVisualLifecycleSnapshots, [
-    {
-      createdFrom: "snapshot-self-heal",
-      launchBridgeConsumed: false,
-      projectileId: "rocket-owner:launch-bridge"
-    }
-  ]);
 
   combatFxState.syncProjectiles([projectile], 180);
 
@@ -566,13 +559,6 @@ test("MetaverseSceneCombatFxState self-heals active rockets from projectile snap
     countSceneChildrenByName(scene, "metaverse_combat_fx/pistol_tracer"),
     0
   );
-  assert.deepEqual(combatFxState.projectileVisualLifecycleSnapshots, [
-    {
-      createdFrom: "snapshot-self-heal",
-      launchBridgeConsumed: false,
-      projectileId: "rocket-owner:launch-bridge"
-    }
-  ]);
 });
 
 test("MetaverseSceneCombatFxState prefers rocket launch bridge origin from projectile launch event", async () => {
@@ -676,13 +662,6 @@ test("MetaverseSceneCombatFxState starts rocket bridge from launch event when a 
     countSceneChildrenByName(scene, "metaverse_combat_fx/rocket_projectile"),
     1
   );
-  assert.deepEqual(combatFxState.projectileVisualLifecycleSnapshots, [
-    {
-      createdFrom: "snapshot-self-heal",
-      launchBridgeConsumed: false,
-      projectileId
-    }
-  ]);
   combatFxState.triggerCombatPresentationEvent(
     Object.freeze({
       actionSequence: 8,
@@ -710,11 +689,4 @@ test("MetaverseSceneCombatFxState starts rocket bridge from launch event when a 
   assert.equal(rocketBody.position.x, launchBridgeOrigin.x);
   assert.equal(rocketBody.position.y, launchBridgeOrigin.y);
   assert.equal(rocketBody.position.z, launchBridgeOrigin.z);
-  assert.deepEqual(combatFxState.projectileVisualLifecycleSnapshots, [
-    {
-      createdFrom: "snapshot-self-heal",
-      launchBridgeConsumed: true,
-      projectileId
-    }
-  ]);
 });

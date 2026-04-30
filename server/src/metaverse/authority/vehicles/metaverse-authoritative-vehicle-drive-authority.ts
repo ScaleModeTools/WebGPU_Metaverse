@@ -26,7 +26,6 @@ import {
 } from "@webgpu-metaverse/shared/metaverse/world";
 
 import type {
-  PhysicsVector3Snapshot,
   RapierQueryFilterPredicate
 } from "../../types/metaverse-authoritative-rapier.js";
 

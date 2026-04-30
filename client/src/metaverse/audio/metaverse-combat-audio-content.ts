@@ -10,7 +10,9 @@ export const metaverseCombatAudioCueIds = [
   "metaverse-rocket-launch",
   "metaverse-rocket-explosion",
   "metaverse-world-impact",
-  "metaverse-armor-hit"
+  "metaverse-armor-hit",
+  "metaverse-footstep-left",
+  "metaverse-footstep-right"
 ] as const;
 
 export type MetaverseCombatAudioCueId =
@@ -253,6 +255,88 @@ export const metaverseCombatAudioContentCatalog = {
           "sine",
           0.012,
           1060
+        );
+      }
+    },
+    "metaverse-footstep-left": {
+      label: "Metaverse left footstep",
+      play({ context, options, sfxBus }) {
+        const browserContext = context as AudioContext;
+        const destination = createAudioCueDestination({
+          context,
+          ...(options === undefined ? {} : { options }),
+          sfxBus
+        });
+        const now = browserContext.currentTime + 0.004;
+
+        scheduleNoiseBurst(
+          browserContext,
+          destination,
+          now,
+          0.044,
+          0.23,
+          460,
+          "lowpass"
+        );
+        schedulePulse(
+          browserContext,
+          destination,
+          now,
+          74,
+          0.058,
+          "triangle",
+          0.14,
+          42
+        );
+        scheduleNoiseBurst(
+          browserContext,
+          destination,
+          now + 0.017,
+          0.04,
+          0.11,
+          900,
+          "bandpass"
+        );
+      }
+    },
+    "metaverse-footstep-right": {
+      label: "Metaverse right footstep",
+      play({ context, options, sfxBus }) {
+        const browserContext = context as AudioContext;
+        const destination = createAudioCueDestination({
+          context,
+          ...(options === undefined ? {} : { options }),
+          sfxBus
+        });
+        const now = browserContext.currentTime + 0.004;
+
+        scheduleNoiseBurst(
+          browserContext,
+          destination,
+          now,
+          0.042,
+          0.215,
+          520,
+          "lowpass"
+        );
+        schedulePulse(
+          browserContext,
+          destination,
+          now,
+          84,
+          0.054,
+          "triangle",
+          0.13,
+          48
+        );
+        scheduleNoiseBurst(
+          browserContext,
+          destination,
+          now + 0.018,
+          0.038,
+          0.105,
+          1060,
+          "bandpass"
         );
       }
     }

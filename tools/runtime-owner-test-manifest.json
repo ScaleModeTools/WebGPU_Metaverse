@@ -140,6 +140,12 @@
       ]
     },
     {
+      "ownerPath": "client/src/metaverse/classes/metaverse-movement-audio-runtime.ts",
+      "testPaths": [
+        "tests/runtime/client/metaverse/runtime/metaverse-movement-audio-runtime.runtime.test.mjs"
+      ]
+    },
+    {
       "ownerPath": "client/src/metaverse/boot/metaverse-runtime-start-coordinator.ts",
       "testPaths": [
         "tests/runtime/client/metaverse/boot/metaverse-runtime-start-coordinator.runtime.test.mjs"

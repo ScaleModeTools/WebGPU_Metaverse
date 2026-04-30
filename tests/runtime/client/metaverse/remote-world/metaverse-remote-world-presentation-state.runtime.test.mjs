@@ -47,6 +47,23 @@ function createSampledFrame({
   });
 }
 
+function createTestWeaponState(weaponId, aimMode = "hip-fire") {
+  return Object.freeze({
+    activeSlotId: "primary",
+    aimMode,
+    slots: Object.freeze([
+      Object.freeze({
+        attachmentId: weaponId,
+        equipped: true,
+        slotId: "primary",
+        weaponId,
+        weaponInstanceId: `test-player:primary:${weaponId}`
+      })
+    ]),
+    weaponId
+  });
+}
+
 test("MetaverseRemoteWorldPresentationState interpolates remote character, vehicle, and environment-body presentation from authoritative samples", async () => {
   const presentationState = await createPresentationState();
   const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
@@ -216,7 +233,7 @@ test("MetaverseRemoteWorldPresentationState keeps remote character root on fresh
   );
 });
 
-test("MetaverseRemoteWorldPresentationState keeps dead remote players presented for death animation and restores them on respawn", async () => {
+test("MetaverseRemoteWorldPresentationState keeps dead remote players presented for ragdoll death and restores them on respawn", async () => {
   const presentationState = await createPresentationState();
   const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
   const remotePlayerId = createMetaversePlayerId("remote-respawn-2");
@@ -748,10 +765,10 @@ test("MetaverseRemoteWorldPresentationState orients unmounted remote character r
     remoteLookPitchRadians: -0.35,
     remoteLookYawRadians: Math.PI * 0.5,
     remotePlayerId,
-    remoteWeaponState: {
-      aimMode: "ads",
-      weaponId: "metaverse-service-pistol-v1"
-    },
+    remoteWeaponState: createTestWeaponState(
+      "metaverse-service-pistol-v1",
+      "ads"
+    ),
     remotePlayerX: 8,
     remoteUsername,
     serverTimeMs: 1_000,
@@ -863,10 +880,7 @@ test("MetaverseRemoteWorldPresentationState starts remote grounded jump presenta
           resolvedActionState: "none"
         }),
         username: remoteUsername,
-        weaponState: {
-          aimMode: "hip-fire",
-          weaponId: "metaverse-service-pistol-v1"
-        }
+        weaponState: createTestWeaponState("metaverse-service-pistol-v1")
       }
     ],
     snapshotSequence: 2,
@@ -914,10 +928,7 @@ test("MetaverseRemoteWorldPresentationState keeps a remote held-weapon pose came
     remoteLookYawRadians: 0.35,
     remoteLocomotionMode: "grounded",
     remotePlayerId,
-    remoteWeaponState: {
-      aimMode: "hip-fire",
-      weaponId: "metaverse-service-pistol-v1"
-    },
+    remoteWeaponState: createTestWeaponState("metaverse-service-pistol-v1"),
     remotePlayerX: 6,
     remoteUsername,
     serverTimeMs: 1_000,
@@ -1018,10 +1029,10 @@ test("MetaverseRemoteWorldPresentationState keeps remote jump loop airborne and 
           resolvedActionState: "accepted"
         }),
         username: remoteUsername,
-        weaponState: {
-          aimMode: "ads",
-          weaponId: "metaverse-service-pistol-v1"
-        }
+        weaponState: createTestWeaponState(
+          "metaverse-service-pistol-v1",
+          "ads"
+        )
       }
     ],
     snapshotSequence: 2,
@@ -1107,10 +1118,10 @@ test("MetaverseRemoteWorldPresentationState keeps remote jump loop airborne and 
           resolvedActionState: "accepted"
         }),
         username: remoteUsername,
-        weaponState: {
-          aimMode: "ads",
-          weaponId: "metaverse-service-pistol-v1"
-        }
+        weaponState: createTestWeaponState(
+          "metaverse-service-pistol-v1",
+          "ads"
+        )
       }
     ],
     snapshotSequence: 3,
@@ -1195,10 +1206,10 @@ test("MetaverseRemoteWorldPresentationState keeps remote jump loop airborne and 
           resolvedActionState: "accepted"
         }),
         username: remoteUsername,
-        weaponState: {
-          aimMode: "ads",
-          weaponId: "metaverse-service-pistol-v1"
-        }
+        weaponState: createTestWeaponState(
+          "metaverse-service-pistol-v1",
+          "ads"
+        )
       }
     ],
     snapshotSequence: 4,
@@ -1283,10 +1294,10 @@ test("MetaverseRemoteWorldPresentationState keeps remote jump loop airborne and 
           resolvedActionState: "accepted"
         }),
         username: remoteUsername,
-        weaponState: {
-          aimMode: "ads",
-          weaponId: "metaverse-service-pistol-v1"
-        }
+        weaponState: createTestWeaponState(
+          "metaverse-service-pistol-v1",
+          "ads"
+        )
       }
     ],
     snapshotSequence: 5,
