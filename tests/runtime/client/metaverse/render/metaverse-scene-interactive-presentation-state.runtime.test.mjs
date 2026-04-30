@@ -67,7 +67,6 @@ function upsertSyntheticSocketNode(
   parentBone,
   socketName,
   localPosition,
-  _showSocketDebug,
   localQuaternion
 ) {
   const existingSocketNode = characterScene.getObjectByName(socketName);
@@ -299,7 +298,6 @@ test("MetaverseSceneInteractivePresentationState boots manifest-driven character
       socketNames: characterFixture.socketNames
     },
     characterProofRuntimeNodeResolvers: {
-      ensureSocketDebugMarker() {},
       findBoneNode,
       findOptionalNode,
       findSocketNode,
@@ -308,7 +306,6 @@ test("MetaverseSceneInteractivePresentationState boots manifest-driven character
         parentBone,
         socketName,
         localPosition,
-        showSocketDebug,
         localQuaternion
       ) =>
         upsertSyntheticSocketNode(
@@ -317,7 +314,6 @@ test("MetaverseSceneInteractivePresentationState boots manifest-driven character
           parentBone,
           socketName,
           localPosition,
-          showSocketDebug,
           localQuaternion
         )
     },
@@ -350,7 +346,6 @@ test("MetaverseSceneInteractivePresentationState boots manifest-driven character
       findSocketNode
     },
     scene,
-    showSocketDebug: false,
     warn(message) {
       warnings.push(message);
     }
@@ -458,7 +453,6 @@ test("MetaverseSceneInteractivePresentationState rejects attachment proof slices
     },
     characterProofConfig: null,
     characterProofRuntimeNodeResolvers: {
-      ensureSocketDebugMarker() {},
       findBoneNode,
       findOptionalNode,
       findSocketNode,
@@ -476,7 +470,6 @@ test("MetaverseSceneInteractivePresentationState rejects attachment proof slices
       findSocketNode
     },
     scene: new Scene(),
-    showSocketDebug: false,
     warn() {}
   });
 

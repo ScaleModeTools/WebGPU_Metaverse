@@ -107,8 +107,6 @@ interface MetaverseRuntimeDependencies {
   readonly readWallClockMs?: () => number;
   readonly requestAnimationFrame?: typeof globalThis.requestAnimationFrame;
   readonly runtimeCameraPhaseConfig?: MetaverseRuntimeCameraPhaseConfig;
-  readonly showPhysicsDebug?: boolean;
-  readonly showSocketDebug?: boolean;
   readonly weaponLayoutId?: string | null;
 }
 
@@ -204,8 +202,7 @@ export class WebGpuMetaverseRuntime {
       characterProofConfig: dependencies.characterProofConfig ?? null,
       createSceneAssetLoader,
       environmentProofConfig,
-      localPlayerId: dependencies.localPlayerIdentity?.playerId ?? null,
-      showSocketDebug: dependencies.showSocketDebug ?? false
+      localPlayerId: dependencies.localPlayerIdentity?.playerId ?? null
     });
     const environmentPhysicsRuntime = new MetaverseEnvironmentPhysicsRuntime(
       config,
@@ -214,8 +211,7 @@ export class WebGpuMetaverseRuntime {
         environmentProofConfig,
         groundedBodyRuntime,
         physicsRuntime,
-        sceneRuntime,
-        showPhysicsDebug: dependencies.showPhysicsDebug ?? false
+        sceneRuntime
       }
     );
     const traversalRuntime = new MetaverseTraversalRuntime(config, {
@@ -354,16 +350,10 @@ export class WebGpuMetaverseRuntime {
     });
 
     this.#hudPublisher = new MetaverseRuntimeHudPublisher({
-      config,
       devicePixelRatio,
-      environmentPhysicsRuntime,
       initialControlMode: this.#controlMode,
       presenceRuntime,
-      readLocalHeldWeaponGripTelemetrySnapshot: (nowMs) =>
-        sceneRuntime.readLocalHeldWeaponGripTelemetrySnapshot(nowMs),
       readNowMs: readNowMsImpl,
-      readProjectilePresentationTelemetrySnapshots: () =>
-        combatFeedbackRuntime.projectilePresentationDebugSnapshots,
       remoteWorldRuntime,
       traversalRuntime,
       weaponPresentationRuntime: this.#weaponPresentationRuntime
@@ -377,7 +367,6 @@ export class WebGpuMetaverseRuntime {
       devicePixelRatio,
       environmentPhysicsRuntime,
       flightInputRuntime: this.#flightInputRuntime,
-      hudPublisher: this.#hudPublisher,
       portals: config.portals,
       presenceRuntime,
       remoteWorldRuntime,

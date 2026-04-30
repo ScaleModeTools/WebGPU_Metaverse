@@ -272,6 +272,18 @@ export class MetaverseAuthoritativeWorldSync {
       return;
     }
 
+    const authoritativeLocalPlayerSnapshot =
+      this.#remoteWorldRuntime.readFreshAuthoritativeLocalPlayerSnapshot(
+        metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs
+      );
+
+    if (
+      authoritativeLocalPlayerSnapshot?.locomotionMode === "mounted" ||
+      authoritativeLocalPlayerSnapshot?.mountedOccupancy != null
+    ) {
+      return;
+    }
+
     const authoritativeLocalPlayerPose =
       this.#remoteWorldRuntime.consumeFreshAckedAuthoritativeLocalPlayerSample?.(
         metaverseLocalAuthorityReconciliationConfig.maxAuthoritativeSnapshotAgeMs

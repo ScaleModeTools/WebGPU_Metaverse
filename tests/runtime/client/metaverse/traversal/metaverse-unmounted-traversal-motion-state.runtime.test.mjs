@@ -13,11 +13,10 @@ function createPredictedLocalReconciliationSample({
   localPredictionTick,
   localWallClockMs,
   positionX,
-  traversalSampleId = 0
+  traversalSequence = 0
 }) {
   return Object.freeze({
     groundedBody: null,
-    sequence: 8,
     issuedTraversalIntent: null,
     localGrounded: true,
     localPredictionTick,
@@ -29,8 +28,7 @@ function createPredictedLocalReconciliationSample({
       yawRadians: 0
     }),
     swimBody: null,
-    traversalSampleId,
-    traversalOrientationSequence: 5
+    traversalSequence
   });
 }
 
@@ -44,19 +42,19 @@ test("resolvePredictedLocalReconciliationSampleFromMatchingHistory prefers a uni
     localPredictionTick: 401,
     localWallClockMs: 4_000,
     positionX: 1,
-    traversalSampleId: 17
+    traversalSequence: 17
   });
   const exactSampleIdMatch = createPredictedLocalReconciliationSample({
     localPredictionTick: 402,
     localWallClockMs: 4_016,
     positionX: 2,
-    traversalSampleId: 18
+    traversalSequence: 18
   });
   const newerSample = createPredictedLocalReconciliationSample({
     localPredictionTick: 403,
     localWallClockMs: 4_032,
     positionX: 3,
-    traversalSampleId: 19
+    traversalSequence: 19
   });
 
   const matchedSample =
@@ -65,7 +63,6 @@ test("resolvePredictedLocalReconciliationSampleFromMatchingHistory prefers a uni
       {
         authoritativeSnapshotAgeMs: 8,
         authoritativeTraversalSampleId: 18,
-        authoritativeTick: 999,
         receivedAtWallClockMs: 4_040
       }
     );
@@ -84,7 +81,7 @@ after(async () => {
   await clientLoader?.close();
 });
 
-test("resolvePredictedLocalReconciliationSampleFromMatchingHistory ignores authoritative tick coincidence inside a repeated ack bucket and uses authoritative time instead", async () => {
+test("resolvePredictedLocalReconciliationSampleFromMatchingHistory uses authoritative time inside a repeated ack bucket", async () => {
   const {
     resolvePredictedLocalReconciliationSampleFromMatchingHistory
   } = await clientLoader.load(
@@ -94,19 +91,19 @@ test("resolvePredictedLocalReconciliationSampleFromMatchingHistory ignores autho
     localPredictionTick: 101,
     localWallClockMs: 1_000,
     positionX: 1,
-    traversalSampleId: 22
+    traversalSequence: 22
   });
   const coincidentalTickSample = createPredictedLocalReconciliationSample({
     localPredictionTick: 102,
     localWallClockMs: 1_016,
     positionX: 2,
-    traversalSampleId: 22
+    traversalSequence: 22
   });
   const newestSample = createPredictedLocalReconciliationSample({
     localPredictionTick: 103,
     localWallClockMs: 1_032,
     positionX: 3,
-    traversalSampleId: 22
+    traversalSequence: 22
   });
 
   const matchedSample =
@@ -115,7 +112,6 @@ test("resolvePredictedLocalReconciliationSampleFromMatchingHistory ignores autho
       {
         authoritativeSnapshotAgeMs: 31,
         authoritativeTraversalSampleId: 22,
-        authoritativeTick: 102,
         receivedAtWallClockMs: 1_035
       }
     );
@@ -129,7 +125,7 @@ test("resolvePredictedLocalReconciliationSampleFromMatchingHistory ignores autho
   assert.equal(matchedSample.timeDeltaMs, -4);
 });
 
-test("resolvePredictedLocalReconciliationSampleFromMatchingHistory uses authoritative time inside a repeated traversal sample-id bucket when tick does not match exactly", async () => {
+test("resolvePredictedLocalReconciliationSampleFromMatchingHistory uses authoritative time inside a repeated traversal sequence bucket", async () => {
   const {
     resolvePredictedLocalReconciliationSampleFromMatchingHistory
   } = await clientLoader.load(
@@ -139,19 +135,19 @@ test("resolvePredictedLocalReconciliationSampleFromMatchingHistory uses authorit
     localPredictionTick: 111,
     localWallClockMs: 1_100,
     positionX: 1,
-    traversalSampleId: 24
+    traversalSequence: 24
   });
   const expectedTimeMatchedSample = createPredictedLocalReconciliationSample({
     localPredictionTick: 112,
     localWallClockMs: 1_116,
     positionX: 2,
-    traversalSampleId: 24
+    traversalSequence: 24
   });
   const newestSample = createPredictedLocalReconciliationSample({
     localPredictionTick: 113,
     localWallClockMs: 1_132,
     positionX: 3,
-    traversalSampleId: 24
+    traversalSequence: 24
   });
 
   const matchedSample =
@@ -160,7 +156,6 @@ test("resolvePredictedLocalReconciliationSampleFromMatchingHistory uses authorit
       {
         authoritativeSnapshotAgeMs: 14,
         authoritativeTraversalSampleId: 24,
-        authoritativeTick: 999,
         receivedAtWallClockMs: 1_132
       }
     );
@@ -202,7 +197,6 @@ test("resolvePredictedLocalReconciliationSampleFromMatchingHistory prefers the l
       {
         authoritativeSnapshotAgeMs: 30,
         authoritativeTraversalSampleId: null,
-        authoritativeTick: null,
         receivedAtWallClockMs: 2_034
       }
     );
@@ -239,7 +233,6 @@ test("resolvePredictedLocalReconciliationSampleFromMatchingHistory falls forward
       {
         authoritativeSnapshotAgeMs: 20,
         authoritativeTraversalSampleId: null,
-        authoritativeTick: null,
         receivedAtWallClockMs: 2_990
       }
     );

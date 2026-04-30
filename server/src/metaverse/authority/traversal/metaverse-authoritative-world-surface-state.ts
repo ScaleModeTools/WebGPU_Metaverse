@@ -111,19 +111,37 @@ function createYawQuaternion(yawRadians: number) {
 class MetaverseAuthoritativeDynamicSurfaceCollisionMeshRuntime {
   readonly #environmentAssetId: string;
   readonly #physicsRuntime: MetaverseAuthoritativeRapierPhysicsRuntime;
+  readonly #resolveDynamicSurfaceColliders: (
+    environmentAssetId: string,
+    poseSnapshot: {
+      readonly position: PhysicsVector3Snapshot;
+      readonly yawRadians: number;
+    }
+  ) => readonly MetaverseAuthoritativeSurfaceColliderSnapshot[];
   readonly #triMeshes: MetaverseAuthoritativeCollisionMeshSeedSnapshot["triMeshes"];
 
   #colliders: RapierColliderHandle[] = [];
+  #semanticColliders: RapierColliderHandle[] = [];
+  #semanticColliderSnapshots:
+    readonly MetaverseAuthoritativeSurfaceColliderSnapshot[] = Object.freeze([]);
   #surfaceColliderSnapshots:
     readonly MetaverseAuthoritativeSurfaceColliderSnapshot[] = Object.freeze([]);
 
   constructor(
     seedSnapshot: MetaverseAuthoritativeCollisionMeshSeedSnapshot,
-    physicsRuntime: MetaverseAuthoritativeRapierPhysicsRuntime
+    physicsRuntime: MetaverseAuthoritativeRapierPhysicsRuntime,
+    resolveDynamicSurfaceColliders: (
+      environmentAssetId: string,
+      poseSnapshot: {
+        readonly position: PhysicsVector3Snapshot;
+        readonly yawRadians: number;
+      }
+    ) => readonly MetaverseAuthoritativeSurfaceColliderSnapshot[]
   ) {
     this.#environmentAssetId = seedSnapshot.environmentAssetId;
     this.#triMeshes = seedSnapshot.triMeshes;
     this.#physicsRuntime = physicsRuntime;
+    this.#resolveDynamicSurfaceColliders = resolveDynamicSurfaceColliders;
   }
 
   get colliders(): readonly RapierColliderHandle[] {
@@ -149,21 +167,40 @@ class MetaverseAuthoritativeDynamicSurfaceCollisionMeshRuntime {
     }
 
     const rotation = createYawQuaternion(poseSnapshot.yawRadians);
-    this.#surfaceColliderSnapshots = Object.freeze(
-      this.#triMeshes.flatMap((triMesh) => {
-        const supportSnapshot =
-          createMetaverseWorldPlacedSurfaceTriMeshSupportSnapshot(
-            this.#environmentAssetId,
-            triMesh,
-            {
-              position: poseSnapshot.position,
-              yawRadians: poseSnapshot.yawRadians
-            }
-          );
+    const semanticSurfaceColliderSnapshots =
+      this.#resolveDynamicSurfaceColliders(
+        this.#environmentAssetId,
+        poseSnapshot
+      );
+    const semanticSupportColliderSnapshots =
+      semanticSurfaceColliderSnapshots.filter(
+        (colliderSnapshot) =>
+          colliderSnapshot.shape === "box" &&
+          colliderSnapshot.traversalAffordance === "support"
+      );
+    const meshSupportSnapshots = this.#triMeshes.flatMap((triMesh) => {
+      const supportSnapshot =
+        createMetaverseWorldPlacedSurfaceTriMeshSupportSnapshot(
+          this.#environmentAssetId,
+          triMesh,
+          {
+            position: poseSnapshot.position,
+            yawRadians: poseSnapshot.yawRadians
+          }
+        );
 
-        return supportSnapshot === null ? [] : [supportSnapshot];
-      })
+      return supportSnapshot === null ? [] : [supportSnapshot];
+    });
+
+    this.#semanticColliderSnapshots = Object.freeze(
+      semanticSupportColliderSnapshots
     );
+    this.#surfaceColliderSnapshots = Object.freeze([
+      ...semanticSurfaceColliderSnapshots,
+      ...meshSupportSnapshots
+    ]);
+
+    this.#syncSemanticSupportColliders();
 
     if (this.#colliders.length === 0) {
       this.#colliders = this.#triMeshes.map((triMesh) =>
@@ -201,8 +238,63 @@ class MetaverseAuthoritativeDynamicSurfaceCollisionMeshRuntime {
       this.#physicsRuntime.removeCollider(collider);
     }
 
+    for (const collider of this.#semanticColliders) {
+      this.#physicsRuntime.removeCollider(collider);
+    }
+
     this.#colliders = [];
+    this.#semanticColliders = [];
+    this.#semanticColliderSnapshots = Object.freeze([]);
     this.#surfaceColliderSnapshots = Object.freeze([]);
+  }
+
+  get semanticColliders(): readonly RapierColliderHandle[] {
+    return this.#semanticColliders;
+  }
+
+  get semanticColliderSnapshots():
+    readonly MetaverseAuthoritativeSurfaceColliderSnapshot[] {
+    return this.#semanticColliderSnapshots;
+  }
+
+  #syncSemanticSupportColliders(): void {
+    if (this.#semanticColliderSnapshots.length === 0) {
+      for (const collider of this.#semanticColliders) {
+        this.#physicsRuntime.removeCollider(collider);
+      }
+
+      this.#semanticColliders = [];
+      return;
+    }
+
+    if (this.#semanticColliders.length === 0) {
+      this.#semanticColliders = this.#semanticColliderSnapshots.map(
+        (colliderSnapshot) =>
+          this.#physicsRuntime.createCuboidCollider(
+            colliderSnapshot.halfExtents,
+            colliderSnapshot.translation,
+            colliderSnapshot.rotation
+          )
+      );
+      return;
+    }
+
+    if (this.#semanticColliders.length !== this.#semanticColliderSnapshots.length) {
+      throw new Error(
+        `Metaverse authoritative dynamic support collider count drifted for ${this.#environmentAssetId}.`
+      );
+    }
+
+    for (const [colliderIndex, collider] of this.#semanticColliders.entries()) {
+      const colliderSnapshot = this.#semanticColliderSnapshots[colliderIndex];
+
+      if (colliderSnapshot === undefined) {
+        continue;
+      }
+
+      collider.setTranslation(colliderSnapshot.translation);
+      collider.setRotation(colliderSnapshot.rotation);
+    }
   }
 }
 
@@ -496,7 +588,8 @@ export class MetaverseAuthoritativeWorldSurfaceState<
       const collisionMeshRuntime =
         new MetaverseAuthoritativeDynamicSurfaceCollisionMeshRuntime(
           seedSnapshot,
-          this.#dependencies.physicsRuntime
+          this.#dependencies.physicsRuntime,
+          this.#dependencies.resolveDynamicSurfaceColliders
         );
 
       collisionMeshRuntime.syncPose({
@@ -538,6 +631,24 @@ export class MetaverseAuthoritativeWorldSurfaceState<
         ownerEnvironmentAssetId: collisionMeshRuntime.environmentAssetId,
         traversalAffordance: "blocker"
       });
+    }
+
+    for (const [
+      colliderIndex,
+      collider
+    ] of collisionMeshRuntime.semanticColliders.entries()) {
+      const colliderSnapshot =
+        collisionMeshRuntime.semanticColliderSnapshots[colliderIndex] ?? null;
+
+      if (colliderSnapshot === null) {
+        this.#surfaceColliderMetadataByHandle.delete(collider);
+        continue;
+      }
+
+      this.#surfaceColliderMetadataByHandle.set(
+        collider,
+        createMetaverseTraversalColliderMetadataSnapshot(colliderSnapshot)
+      );
     }
   }
 }

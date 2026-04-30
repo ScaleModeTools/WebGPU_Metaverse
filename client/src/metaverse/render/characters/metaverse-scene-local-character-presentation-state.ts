@@ -9,7 +9,6 @@ import {
   clearCharacterCombatDeathAnimation,
   triggerCharacterCombatPresentationEvent
 } from "./metaverse-scene-character-animation";
-import { MetaverseSceneHeldWeaponGripDebugState } from "./metaverse-scene-held-weapon-grip-debug-state";
 import type {
   MetaverseRemoteCharacterPresentationDependencies
 } from "./metaverse-scene-remote-character-presentations";
@@ -45,7 +44,6 @@ interface MetaverseSceneLocalCharacterPresentationStateDependencies {
     MetaverseRuntimeConfig,
     "bodyPresentation" | "orientation"
   >;
-  readonly heldWeaponGripDebugState: MetaverseSceneHeldWeaponGripDebugState;
   readonly interactivePresentationState: Pick<
     MetaverseSceneInteractivePresentationState,
     "attachmentProofRuntime" | "characterProofRuntime" | "syncAttachmentMount"
@@ -82,7 +80,6 @@ export class MetaverseSceneLocalCharacterPresentationState {
   }
 
   resetPresentation(): void {
-    this.#dependencies.heldWeaponGripDebugState.reset();
     this.#dependencies.interactivePresentationState.syncAttachmentMount(null);
   }
 
@@ -111,7 +108,6 @@ export class MetaverseSceneLocalCharacterPresentationState {
   }
 
   syncPresentation(
-    nowMs: number,
     cameraSnapshot: MetaverseCameraSnapshot,
     deltaSeconds: number,
     characterPresentation: MetaverseCharacterPresentationSnapshot | null = null,
@@ -123,7 +119,6 @@ export class MetaverseSceneLocalCharacterPresentationState {
   ): MetaverseCameraSnapshot {
     const {
       config,
-      heldWeaponGripDebugState,
       interactivePresentationState,
       localCharacterPresentationDependencies,
       mountInteractionState
@@ -158,30 +153,10 @@ export class MetaverseSceneLocalCharacterPresentationState {
     );
 
     if (interactivePresentationState.characterProofRuntime === null) {
-      heldWeaponGripDebugState.recordSkippedFrame({
-        adsBlend: weaponAdsBlend,
-        attachmentMountKind: null,
-        secondaryGripContactAvailable: false,
-        heldMountSocketName: null,
-        offHandGripAnchorAvailable: false,
-        phase: "no-character-runtime",
-        weaponState
-      }, nowMs);
-
       return cameraSnapshot;
     }
 
     if (interactivePresentationState.attachmentProofRuntime === null) {
-      heldWeaponGripDebugState.recordSkippedFrame({
-        adsBlend: weaponAdsBlend,
-        attachmentMountKind: null,
-        secondaryGripContactAvailable: false,
-        heldMountSocketName: null,
-        offHandGripAnchorAvailable: false,
-        phase: "no-attachment-runtime",
-        weaponState
-      }, nowMs);
-
       return syncLocalCharacterPresentation(
         interactivePresentationState.characterProofRuntime,
         null,
@@ -198,63 +173,6 @@ export class MetaverseSceneLocalCharacterPresentationState {
 
     const { attachmentProofRuntime, characterProofRuntime } =
       interactivePresentationState;
-
-    if (characterProofRuntime.heldWeaponPoseRuntime === null) {
-      heldWeaponGripDebugState.recordSkippedFrame({
-        adsBlend: weaponAdsBlend,
-        attachmentMountKind: attachmentProofRuntime.activeMountKind,
-        secondaryGripContactAvailable: false,
-        heldMountSocketName: attachmentProofRuntime.heldMount.socketName,
-        offHandGripAnchorAvailable:
-          attachmentProofRuntime.offHandGripAnchorNode !== null,
-        phase: "no-held-weapon-pose-runtime",
-        weaponState
-      }, nowMs);
-    } else if (characterPresentation === null) {
-      heldWeaponGripDebugState.recordSkippedFrame({
-        adsBlend: weaponAdsBlend,
-        attachmentMountKind: attachmentProofRuntime.activeMountKind,
-        secondaryGripContactAvailable: false,
-        heldMountSocketName: attachmentProofRuntime.heldMount.socketName,
-        offHandGripAnchorAvailable:
-          attachmentProofRuntime.offHandGripAnchorNode !== null,
-        phase: "no-character-presentation",
-        weaponState
-      }, nowMs);
-    } else if (mountedCharacterRuntime !== null) {
-      heldWeaponGripDebugState.recordSkippedFrame({
-        adsBlend: weaponAdsBlend,
-        attachmentMountKind: attachmentProofRuntime.activeMountKind,
-        secondaryGripContactAvailable: false,
-        heldMountSocketName: attachmentProofRuntime.heldMount.socketName,
-        offHandGripAnchorAvailable:
-          attachmentProofRuntime.offHandGripAnchorNode !== null,
-        phase: "mounted",
-        weaponState
-      }, nowMs);
-    } else if (weaponState === null) {
-      heldWeaponGripDebugState.recordSkippedFrame({
-        adsBlend: weaponAdsBlend,
-        attachmentMountKind: attachmentProofRuntime.activeMountKind,
-        secondaryGripContactAvailable: false,
-        heldMountSocketName: attachmentProofRuntime.heldMount.socketName,
-        offHandGripAnchorAvailable:
-          attachmentProofRuntime.offHandGripAnchorNode !== null,
-        phase: "no-weapon-state",
-        weaponState
-      }, nowMs);
-    } else if (attachmentProofRuntime.activeMountKind !== "held") {
-      heldWeaponGripDebugState.recordSkippedFrame({
-        adsBlend: weaponAdsBlend,
-        attachmentMountKind: attachmentProofRuntime.activeMountKind,
-        secondaryGripContactAvailable: false,
-        heldMountSocketName: attachmentProofRuntime.heldMount.socketName,
-        offHandGripAnchorAvailable:
-          attachmentProofRuntime.offHandGripAnchorNode !== null,
-        phase: "attachment-not-held",
-        weaponState
-      }, nowMs);
-    }
 
     return syncLocalCharacterPresentation(
       characterProofRuntime,

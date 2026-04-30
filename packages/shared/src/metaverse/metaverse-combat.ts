@@ -48,8 +48,6 @@ export const metaverseCombatProjectileFirstImpactKindIds = [
 ] as const;
 
 export const metaverseCombatEventKindIds = [
-  "fire-accepted",
-  "fire-rejected",
   "hitscan-resolved",
   "projectile-spawned",
   "projectile-resolved"
@@ -795,33 +793,23 @@ export type MetaverseCombatActionReceiptSnapshotInput =
 
 export interface MetaverseCombatProjectileSnapshot {
   readonly direction: MetaversePresenceVector3Snapshot;
-  readonly expiresAtTimeMs: Milliseconds;
-  readonly launchTelemetry: MetaverseCombatProjectileLaunchTelemetrySnapshot | null;
-  readonly ownerPlayerId: MetaversePlayerId;
   readonly position: MetaversePresenceVector3Snapshot;
   readonly projectileId: string;
   readonly resolution: MetaverseCombatProjectileResolutionId;
-  readonly resolvedAtTimeMs: Milliseconds | null;
-  readonly resolvedHitZone: MetaverseCombatHitZoneId | null;
-  readonly resolvedPlayerId: MetaversePlayerId | null;
-  readonly sourceActionSequence: number;
-  readonly spawnedAtTimeMs: Milliseconds;
-  readonly velocityMetersPerSecond: number;
   readonly weaponId: string;
 }
 
 export interface MetaverseCombatProjectileSnapshotInput {
   readonly direction: MetaversePresenceVector3SnapshotInput;
   readonly expiresAtTimeMs?: number;
-  readonly launchTelemetry?: MetaverseCombatProjectileLaunchTelemetrySnapshotInput | null;
-  readonly ownerPlayerId: MetaversePlayerId;
+  readonly ownerPlayerId?: MetaversePlayerId;
   readonly position: MetaversePresenceVector3SnapshotInput;
   readonly projectileId: string;
   readonly resolution?: MetaverseCombatProjectileResolutionId;
   readonly resolvedAtTimeMs?: number | null;
   readonly resolvedHitZone?: MetaverseCombatHitZoneId | null;
   readonly resolvedPlayerId?: MetaversePlayerId | null;
-  readonly sourceActionSequence: number;
+  readonly sourceActionSequence?: number;
   readonly spawnedAtTimeMs?: number;
   readonly velocityMetersPerSecond?: number;
   readonly weaponId: string;
@@ -891,7 +879,6 @@ export interface MetaverseCombatEventSnapshot {
   readonly cameraRayOriginWorld: MetaversePresenceVector3Snapshot | null;
   readonly eventKind: MetaverseCombatEventKindId;
   readonly eventSequence: number;
-  readonly fireRejectionReason: MetaversePlayerActionFireWeaponRejectionReasonId | null;
   readonly hitscan: MetaverseCombatEventHitscanSnapshot | null;
   readonly launchDirectionWorld: MetaversePresenceVector3Snapshot | null;
   readonly playerId: MetaversePlayerId;
@@ -913,9 +900,6 @@ export interface MetaverseCombatEventSnapshotInput {
   readonly cameraRayOriginWorld?: MetaversePresenceVector3SnapshotInput | null;
   readonly eventKind: MetaverseCombatEventKindId;
   readonly eventSequence?: number;
-  readonly fireRejectionReason?:
-    | MetaversePlayerActionFireWeaponRejectionReasonId
-    | null;
   readonly hitscan?: MetaverseCombatEventHitscanSnapshotInput | null;
   readonly launchDirectionWorld?: MetaversePresenceVector3SnapshotInput | null;
   readonly playerId: MetaversePlayerId;
@@ -1294,30 +1278,6 @@ function normalizeProjectileResolution(
     : "active";
 }
 
-function normalizeProjectileCameraRayTargetSource(
-  value: string | undefined
-): MetaverseCombatProjectileCameraRayTargetSourceId {
-  return metaverseCombatProjectileCameraRayTargetSourceIds.includes(
-    value as MetaverseCombatProjectileCameraRayTargetSourceId
-  )
-    ? (value as MetaverseCombatProjectileCameraRayTargetSourceId)
-    : "max-distance";
-}
-
-function normalizeProjectileFirstImpactKind(
-  value: string | null | undefined
-): MetaverseCombatProjectileFirstImpactKindId | null {
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  return metaverseCombatProjectileFirstImpactKindIds.includes(
-    value as MetaverseCombatProjectileFirstImpactKindId
-  )
-    ? (value as MetaverseCombatProjectileFirstImpactKindId)
-    : null;
-}
-
 function normalizePlayerActionKind(
   value: string | undefined
 ): MetaversePlayerActionKindId {
@@ -1385,7 +1345,7 @@ function normalizeCombatEventKind(
     value as MetaverseCombatEventKindId
   )
     ? (value as MetaverseCombatEventKindId)
-    : "fire-rejected";
+    : "hitscan-resolved";
 }
 
 function normalizeCombatEventHitscanHitKind(
@@ -2845,38 +2805,6 @@ export function createMetaverseCombatShotResolutionTelemetrySnapshot(
   });
 }
 
-function createMetaverseCombatProjectileLaunchTelemetrySnapshot(
-  input:
-    | MetaverseCombatProjectileLaunchTelemetrySnapshotInput
-    | null
-    | undefined
-): MetaverseCombatProjectileLaunchTelemetrySnapshot | null {
-  if (input === null || input === undefined) {
-    return null;
-  }
-
-  return Object.freeze({
-    bodyYawReferenceOriginWorld: createNullableVector3Snapshot(
-      input.bodyYawReferenceOriginWorld
-    ),
-    cameraRayForwardWorld: createVector3Snapshot(input.cameraRayForwardWorld),
-    cameraRayOriginWorld: createVector3Snapshot(input.cameraRayOriginWorld),
-    cameraRayTargetSource: normalizeProjectileCameraRayTargetSource(
-      input.cameraRayTargetSource
-    ),
-    cameraRayTargetWorld: createVector3Snapshot(input.cameraRayTargetWorld),
-    firstImpactKind: normalizeProjectileFirstImpactKind(input.firstImpactKind),
-    firstImpactPointWorld: createNullableVector3Snapshot(
-      input.firstImpactPointWorld
-    ),
-    launchConvergenceAngleRadians: createRadians(
-      normalizeFiniteNonNegativeNumber(input.launchConvergenceAngleRadians)
-    ),
-    launchForwardWorld: createVector3Snapshot(input.launchForwardWorld),
-    weaponTipOriginWorld: createVector3Snapshot(input.weaponTipOriginWorld)
-  });
-}
-
 function createMetaverseCombatEventHitscanSnapshot(
   input: MetaverseCombatEventHitscanSnapshotInput | null | undefined
 ): MetaverseCombatEventHitscanSnapshot | null {
@@ -2939,9 +2867,6 @@ export function createMetaverseCombatEventSnapshot(
     ),
     eventKind: normalizeCombatEventKind(input.eventKind),
     eventSequence: normalizeFiniteNonNegativeInteger(input.eventSequence),
-    fireRejectionReason: normalizePlayerActionFireWeaponRejectionReason(
-      input.fireRejectionReason
-    ),
     hitscan: createMetaverseCombatEventHitscanSnapshot(input.hitscan),
     launchDirectionWorld: createNullableVector3Snapshot(
       input.launchDirectionWorld
@@ -2980,31 +2905,12 @@ export function createMetaverseCombatProjectileSnapshot(
       y: clampToUnitRange(input.direction.y),
       z: clampToUnitRange(input.direction.z)
     }),
-    expiresAtTimeMs: createMilliseconds(
-      normalizeFiniteNonNegativeNumber(input.expiresAtTimeMs)
-    ),
-    launchTelemetry: createMetaverseCombatProjectileLaunchTelemetrySnapshot(
-      input.launchTelemetry
-    ),
-    ownerPlayerId: input.ownerPlayerId,
     position: createVector3Snapshot(input.position),
     projectileId: normalizeIdentifier(
       input.projectileId,
       "Metaverse combat projectileId"
     ),
     resolution: normalizeProjectileResolution(input.resolution),
-    resolvedAtTimeMs: normalizeTimeMs(input.resolvedAtTimeMs),
-    resolvedHitZone: normalizeHitZone(input.resolvedHitZone, null),
-    resolvedPlayerId: input.resolvedPlayerId ?? null,
-    sourceActionSequence: normalizeFiniteNonNegativeInteger(
-      input.sourceActionSequence
-    ),
-    spawnedAtTimeMs: createMilliseconds(
-      normalizeFiniteNonNegativeNumber(input.spawnedAtTimeMs)
-    ),
-    velocityMetersPerSecond: normalizeFiniteNonNegativeNumber(
-      input.velocityMetersPerSecond
-    ),
     weaponId: normalizeIdentifier(input.weaponId, "Metaverse combat weaponId")
   });
 }

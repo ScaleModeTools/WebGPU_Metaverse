@@ -48,19 +48,9 @@ function resolveTraversalMovementSequence(input: {
 export type MetaverseRealtimeAuthoritativeLocalPlayerSnapshot =
   MetaverseRealtimePlayerSnapshot & {
     readonly highestProcessedPlayerActionSequence: number;
-    readonly jumpDebug:
-      NonNullable<MetaverseRealtimeWorldSnapshot["observerPlayer"]>["jumpDebug"];
     readonly lastProcessedLookSequence: number;
     readonly lastProcessedTraversalSequence: number;
     readonly lastProcessedWeaponSequence: number;
-    readonly latestShotResolutionTelemetry:
-      NonNullable<
-        MetaverseRealtimeWorldSnapshot["observerPlayer"]
-      >["latestShotResolutionTelemetry"];
-    readonly recentShotResolutionTelemetry:
-      NonNullable<
-        MetaverseRealtimeWorldSnapshot["observerPlayer"]
-      >["recentShotResolutionTelemetry"];
     readonly recentPlayerActionReceipts:
       readonly MetaversePlayerActionReceiptSnapshot[];
   };
@@ -461,17 +451,12 @@ export class MetaverseRemoteWorldAuthoritativeSnapshotState {
       highestProcessedPlayerActionSequence:
         observerPlayerSnapshot.highestProcessedPlayerActionSequence,
       ...playerSnapshot,
-      jumpDebug: observerPlayerSnapshot.jumpDebug,
       lastProcessedLookSequence:
         observerPlayerSnapshot.lastProcessedLookSequence,
       lastProcessedTraversalSequence:
         observerPlayerSnapshot.lastProcessedTraversalSequence,
       lastProcessedWeaponSequence:
         observerPlayerSnapshot.lastProcessedWeaponSequence,
-      latestShotResolutionTelemetry:
-        observerPlayerSnapshot.latestShotResolutionTelemetry,
-      recentShotResolutionTelemetry:
-        observerPlayerSnapshot.recentShotResolutionTelemetry,
       recentPlayerActionReceipts:
         observerPlayerSnapshot.recentPlayerActionReceipts
     });

@@ -15,7 +15,6 @@ import {
   MeshStandardNodeMaterial,
   PointLight,
   Quaternion,
-  SphereGeometry,
   SpotLight,
   Vector3,
   type Object3D
@@ -824,8 +823,7 @@ async function loadDynamicEnvironmentAssetProofRuntime(
     scene: Group,
     nodeName: string,
     label: string
-  ) => Object3D,
-  showSocketDebug: boolean
+  ) => Object3D
 ): Promise<MetaverseEnvironmentDynamicAssetRuntime> {
   if (environmentAssetProofConfig.placements.length !== 1) {
     throw new Error(
@@ -940,21 +938,6 @@ async function loadDynamicEnvironmentAssetProofRuntime(
           authoredSeatNode.getWorldScale(dynamicEnvironmentSeatSocketScaleScratch)
         );
 
-        if (showSocketDebug) {
-          const material = new MeshBasicNodeMaterial();
-
-          material.colorNode = color(0.62, 0.96, 0.96);
-          material.depthWrite = false;
-
-          const marker = new Mesh(
-            new SphereGeometry(0.08, 12, 10),
-            material
-          );
-
-          marker.name = `seat_debug/${seat.seatId}`;
-          authoredSeatNode.add(marker);
-        }
-
         return Object.freeze({
           anchorGroup: simulationSeatAnchor,
           seat
@@ -1017,8 +1000,7 @@ export async function loadMetaverseEnvironmentProofRuntime(
     scene: Group,
     nodeName: string,
     label: string
-  ) => Object3D,
-  showSocketDebug: boolean
+  ) => Object3D
 ): Promise<MetaverseEnvironmentProofRuntime> {
   const anchorGroup = new Group();
   const dynamicAssets: MetaverseEnvironmentDynamicAssetRuntime[] = [];
@@ -1063,8 +1045,7 @@ export async function loadMetaverseEnvironmentProofRuntime(
         createSceneAssetLoader,
         materialDefinitions,
         environmentAssetIndex,
-        findNamedNode,
-        showSocketDebug
+        findNamedNode
       );
 
       dynamicAssets.push(dynamicAssetRuntime);

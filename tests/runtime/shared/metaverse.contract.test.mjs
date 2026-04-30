@@ -34,6 +34,7 @@ import {
   createMetaverseRealtimeWorldSnapshot,
   createMetaverseRealtimeWorldEvent,
   createMetaverseRealtimeWorldWebTransportCommandRequest,
+  createMetaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagram,
   createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram,
   createMetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram,
   createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram,
@@ -52,6 +53,7 @@ import {
   metaversePresenceCompatibilityLocomotionModeIds,
   metaversePresencePrimaryLocomotionModeIds,
   metaverseUnmountedPlayerLookConstraintBounds,
+  parseMetaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagram,
   parseMetaverseMapBundleSnapshot,
   readMetaverseWeaponLayout,
   readMetaverseCombatWeaponProfile,
@@ -956,6 +958,25 @@ test("metaverse realtime world contracts freeze snapshots and derive seated occu
         spawnId: " resource:pistol ",
         weaponId: " metaverse-service-pistol-v2 ",
         yawRadians: 0.2
+      },
+      {
+        ammoGrantRounds: 48,
+        assetId: " metaverse-service-pistol-v2 ",
+        available: false,
+        label: " Hidden pistol pickup ",
+        modeTags: [" team-deathmatch "],
+        nextRespawnAtServerTimeMs: 12_000,
+        pickupRadiusMeters: 1.4,
+        position: {
+          x: -9.2,
+          y: 0.6,
+          z: -23.2
+        },
+        resourceKind: "weapon-pickup",
+        respawnCooldownMs: 30_000,
+        spawnId: " resource:hidden-pistol ",
+        weaponId: " metaverse-service-pistol-v2 ",
+        yawRadians: 0.2
       }
     ],
     snapshotSequence: 9.6,
@@ -997,7 +1018,6 @@ test("metaverse realtime world contracts freeze snapshots and derive seated occu
   assert.equal(worldSnapshot.snapshotSequence, 9);
   assert.equal(worldSnapshot.tick.currentTick, 42);
   assert.equal(worldSnapshot.tick.emittedAtServerTimeMs, 7_650.75);
-  assert.equal(worldSnapshot.tick.serverTimeMs, 7_650.75);
   assert.equal(worldSnapshot.tick.simulationTimeMs, 7_500.25);
   assert.equal(worldSnapshot.players.length, 1);
   assert.equal(worldSnapshot.resourceSpawns.length, 1);
@@ -1007,11 +1027,15 @@ test("metaverse realtime world contracts freeze snapshots and derive seated occu
     "metaverse-service-pistol-v2"
   );
   assert.equal(worldSnapshot.resourceSpawns[0]?.assetId, "metaverse-service-pistol-v2");
-  assert.equal(worldSnapshot.resourceSpawns[0]?.available, true);
-  assert.equal(worldSnapshot.resourceSpawns[0]?.nextRespawnAtServerTimeMs, null);
-  assert.deepEqual(worldSnapshot.resourceSpawns[0]?.modeTags, [
-    "team-deathmatch"
-  ]);
+  assert.equal("available" in worldSnapshot.resourceSpawns[0], false);
+  assert.equal("ammoGrantRounds" in worldSnapshot.resourceSpawns[0], false);
+  assert.equal("label" in worldSnapshot.resourceSpawns[0], false);
+  assert.equal("modeTags" in worldSnapshot.resourceSpawns[0], false);
+  assert.equal(
+    "nextRespawnAtServerTimeMs" in worldSnapshot.resourceSpawns[0],
+    false
+  );
+  assert.equal("respawnCooldownMs" in worldSnapshot.resourceSpawns[0], false);
   assert.equal(worldSnapshot.players[0]?.characterId, "mesh2motion-humanoid-v1");
   assert.equal(worldSnapshot.players[0]?.angularVelocityRadiansPerSecond, 1.25);
   assert.equal(
@@ -1234,7 +1258,14 @@ test("metaverse realtime world contracts keep combat action receipts observer-lo
     worldSnapshot.observerPlayer?.recentPlayerActionReceipts[0]?.sourceProjectileId,
     "projectile-3"
   );
-  assert.equal(worldSnapshot.projectiles[0]?.sourceActionSequence, 3);
+  assert.equal("ownerPlayerId" in worldSnapshot.projectiles[0], false);
+  assert.equal("expiresAtTimeMs" in worldSnapshot.projectiles[0], false);
+  assert.equal("resolvedAtTimeMs" in worldSnapshot.projectiles[0], false);
+  assert.equal("resolvedHitZone" in worldSnapshot.projectiles[0], false);
+  assert.equal("resolvedPlayerId" in worldSnapshot.projectiles[0], false);
+  assert.equal("sourceActionSequence" in worldSnapshot.projectiles[0], false);
+  assert.equal("spawnedAtTimeMs" in worldSnapshot.projectiles[0], false);
+  assert.equal("velocityMetersPerSecond" in worldSnapshot.projectiles[0], false);
   assert.equal(worldSnapshot.combatEvents[0]?.eventSequence, 7);
   assert.equal(worldSnapshot.combatEvents[0]?.shotId, `${playerId}:3`);
   assert.equal(
@@ -2274,6 +2305,40 @@ test("webtransport datagram shared contracts wrap latest-wins channels with expl
       }),
       roomId: metaverseRoomId
     });
+  const compactPlayerTraversalIntentDatagram =
+    createMetaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagram({
+      command: createMetaverseSyncPlayerTraversalIntentCommand({
+        intent: {
+          boost: true,
+          jump: false,
+          locomotionMode: "grounded",
+          moveAxis: 1,
+          sequence: 17,
+          strafeAxis: 1,
+          yawAxis: 0
+        },
+        pendingIntentSamples: [12, 13, 14, 15, 16].map((sequence) => ({
+          bodyControl: {
+            boost: true,
+            moveAxis: sequence % 2 === 0 ? 1 : -1,
+            strafeAxis: sequence === 15 ? -1 : 0,
+            turnAxis: 0
+          },
+          facing: {
+            pitchRadians: -0.25,
+            yawRadians: 0
+          },
+          locomotionMode: "grounded",
+          sequence
+        })),
+        playerId: metaversePlayerId
+      }),
+      roomId: metaverseRoomId
+    });
+  const expandedCompactPlayerTraversalIntentDatagram =
+    parseMetaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagram(
+      JSON.parse(JSON.stringify(compactPlayerTraversalIntentDatagram))
+    );
   const playerLookIntentDatagram =
     createMetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram({
       command: createMetaverseSyncPlayerLookIntentCommand({
@@ -2347,6 +2412,20 @@ test("webtransport datagram shared contracts wrap latest-wins channels with expl
     1
   );
   assert.ok(Object.isFrozen(playerTraversalIntentDatagram));
+  assert.equal(compactPlayerTraversalIntentDatagram.t, "pt");
+  assert.equal(compactPlayerTraversalIntentDatagram.h?.length, 5);
+  assert.ok(
+    new TextEncoder().encode(JSON.stringify(compactPlayerTraversalIntentDatagram))
+      .byteLength < 1_000
+  );
+  assert.equal(
+    expandedCompactPlayerTraversalIntentDatagram.command.pendingIntentSamples?.length,
+    5
+  );
+  assert.equal(
+    expandedCompactPlayerTraversalIntentDatagram.command.intent.bodyControl.strafeAxis,
+    1
+  );
   assert.equal(
     playerLookIntentDatagram.type,
     "world-player-look-intent-datagram"

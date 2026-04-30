@@ -10,7 +10,6 @@ import {
 import type { MetaverseRealtimePlayerWeaponStateSnapshot } from "@webgpu-metaverse/shared";
 import type { MetaverseSemanticAimFrame } from "../../aim/metaverse-semantic-aim";
 
-import type { MetaverseSceneHeldWeaponGripDebugState } from "./metaverse-scene-held-weapon-grip-debug-state";
 import {
   resolveMetaverseHeldObjectSolverProfile,
   type MetaverseHeldObjectFingerPoseId,
@@ -19,11 +18,9 @@ import {
 } from "./metaverse-held-object-solver-profile";
 
 import type { MetaverseAttachmentProofRuntime } from "../attachments/metaverse-scene-attachment-runtime";
-import type { HeldObjectSocketRoleId } from "@/assets/types/held-object-authoring-manifest";
 
 import type {
   MetaverseLocalHeldObjectContactFrameId,
-  MetaverseLocalHeldWeaponGripDebugSolveFailureReason,
   MetaverseRuntimeConfig,
   MetaverseVector3Snapshot
 } from "../../types/metaverse-runtime";
@@ -129,23 +126,6 @@ export interface ActiveGripAssignment {
 
 export type HeldObjectAimState = MetaverseSemanticAimFrame;
 
-interface HeldWeaponArmReachTelemetry {
-  clampDeltaMeters: number | null;
-  maxReachMeters: number | null;
-  targetDistanceMeters: number | null;
-}
-
-interface HeldWeaponAdsTelemetry {
-  adsAnchorPositionErrorMeters: number | null;
-  appliedGripDeltaMeters: number | null;
-  readonly desiredAdsAnchorWorldPosition: Vector3;
-  desiredAdsAnchorWorldPositionActive: boolean;
-  readonly desiredWeaponForwardWorld: Vector3;
-  gripDeltaClamped: boolean;
-  muzzleAimAngularErrorRadians: number | null;
-  positionalWeight: number | null;
-}
-
 interface HeldWeaponContactFrameDescriptor {
   readonly baseSocket: "grip" | "palm" | "support";
   readonly handOverrides?: Partial<
@@ -249,9 +229,6 @@ const heldWeaponCameraWorldPositionScratch = new Vector3();
 const heldWeaponHipFireGripWorldPositionScratch = new Vector3();
 const heldWeaponAdsGripWorldPositionScratch = new Vector3();
 const heldWeaponAdsGripDeltaScratch = new Vector3();
-const heldWeaponAdsAnchorWorldPositionScratch = new Vector3();
-const heldWeaponActualWeaponForwardScratch = new Vector3();
-const heldWeaponDesiredAdsAnchorWorldPositionScratch = new Vector3();
 const heldWeaponHeadToCameraScratch = new Vector3();
 const heldWeaponHeadWorldPositionScratch = new Vector3();
 const heldWeaponEffectorWorldPositionScratch = new Vector3();
@@ -302,8 +279,6 @@ const heldWeaponCurrentWorldQuaternionScratch = new Quaternion();
 const heldWeaponEffectorWorldQuaternionScratch = new Quaternion();
 const heldWeaponWorldDeltaQuaternionScratch = new Quaternion();
 const heldWeaponParentLocalDeltaQuaternionScratch = new Quaternion();
-const heldWeaponMainHandPreWristWorldQuaternionScratch = new Quaternion();
-const heldWeaponOffHandPreWristWorldQuaternionScratch = new Quaternion();
 const heldWeaponSupportPalmPreAlignLocalQuaternionScratch = new Quaternion();
 const heldWeaponGripAlignmentMatrixScratch = new Matrix4();
 const heldWeaponFingerCurlQuaternionScratch = new Quaternion();
@@ -313,32 +288,9 @@ const heldWeaponSolveInfluenceScaleScratch = new Vector3();
 const heldWeaponContactFrameOffsetPositionScratch = new Vector3();
 const heldWeaponContactFrameOffsetQuaternionScratch = new Quaternion();
 const heldWeaponContactFrameOffsetEulerScratch = new Euler();
-const heldWeaponArmReachTelemetryScratch: HeldWeaponArmReachTelemetry = {
-  clampDeltaMeters: null,
-  maxReachMeters: null,
-  targetDistanceMeters: null
-};
-const heldWeaponAdsTelemetryScratch: HeldWeaponAdsTelemetry = {
-  adsAnchorPositionErrorMeters: null,
-  appliedGripDeltaMeters: null,
-  desiredAdsAnchorWorldPosition: heldWeaponDesiredAdsAnchorWorldPositionScratch,
-  desiredAdsAnchorWorldPositionActive: false,
-  desiredWeaponForwardWorld: new Vector3(),
-  gripDeltaClamped: false,
-  muzzleAimAngularErrorRadians: null,
-  positionalWeight: null
-};
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
-}
-
-function createVector3Snapshot(vector: Vector3): MetaverseVector3Snapshot {
-  return {
-    x: vector.x,
-    y: vector.y,
-    z: vector.z
-  };
 }
 
 function createHeldWeaponFingerContactNode(
@@ -1175,17 +1127,6 @@ function shouldUseSupportPalmHintPose(
   return attachmentRuntime.offHandTargetKind === "support-palm-hint";
 }
 
-function resetHeldWeaponAdsTelemetry(output: HeldWeaponAdsTelemetry): void {
-  output.adsAnchorPositionErrorMeters = null;
-  output.appliedGripDeltaMeters = null;
-  output.desiredAdsAnchorWorldPosition.set(0, 0, 0);
-  output.desiredAdsAnchorWorldPositionActive = false;
-  output.desiredWeaponForwardWorld.set(0, 0, 0);
-  output.gripDeltaClamped = false;
-  output.muzzleAimAngularErrorRadians = null;
-  output.positionalWeight = null;
-}
-
 function resolveSupportPalmFade(
   solverProfile: Pick<MetaverseHeldObjectSolverProfile, "adsCalibration">,
   aimState: Pick<HeldObjectAimState, "pitchRadians">
@@ -1347,10 +1288,8 @@ function resolveHeldWeaponGripAimTarget(
       >
     | null,
   outputGripWorldPosition: Vector3,
-  outputGripWorldQuaternion: Quaternion,
-  outputAdsTelemetry: HeldWeaponAdsTelemetry
-): MetaverseLocalHeldWeaponGripDebugSolveFailureReason | null {
-  resetHeldWeaponAdsTelemetry(outputAdsTelemetry);
+  outputGripWorldQuaternion: Quaternion
+): boolean {
   heldWeaponLookDirectionScratch.set(
     aimState.cameraForwardWorld.x,
     aimState.cameraForwardWorld.y,
@@ -1358,7 +1297,7 @@ function resolveHeldWeaponGripAimTarget(
   );
 
   if (heldWeaponLookDirectionScratch.lengthSq() <= heldWeaponSolveDirectionEpsilon) {
-    return "look-direction-degenerate";
+    return false;
   }
 
   heldWeaponLookDirectionScratch.normalize();
@@ -1377,7 +1316,7 @@ function resolveHeldWeaponGripAimTarget(
   }
 
   if (heldWeaponGripUpDirectionScratch.lengthSq() <= heldWeaponSolveDirectionEpsilon) {
-    return "grip-up-direction-degenerate";
+    return false;
   }
 
   heldWeaponGripUpDirectionScratch.normalize();
@@ -1386,7 +1325,7 @@ function resolveHeldWeaponGripAimTarget(
     .cross(heldWeaponGripUpDirectionScratch);
 
   if (heldWeaponGripAcrossDirectionScratch.lengthSq() <= heldWeaponSolveDirectionEpsilon) {
-    return "grip-across-direction-degenerate";
+    return false;
   }
 
   heldWeaponGripAcrossDirectionScratch.normalize();
@@ -1406,9 +1345,6 @@ function resolveHeldWeaponGripAimTarget(
       .copy(attachmentRuntime.heldGripLocalAimQuaternion)
       .invert()
   ).normalize();
-  outputAdsTelemetry.desiredWeaponForwardWorld.copy(
-    heldWeaponLookDirectionScratch
-  );
   resolveHipFireGripTargetWorldPosition(
     heldWeaponPoseRuntime,
     heldWeaponLookDirectionScratch,
@@ -1455,10 +1391,6 @@ function resolveHeldWeaponGripAimTarget(
           attachmentRuntime.heldAdsCameraTargetOffset.across
         );
     }
-    outputAdsTelemetry.desiredAdsAnchorWorldPosition.copy(
-      heldWeaponCameraWorldPositionScratch
-    );
-    outputAdsTelemetry.desiredAdsAnchorWorldPositionActive = true;
     resolveGripTargetWorldPositionFromLocalGripOffset(
       heldWeaponCameraWorldPositionScratch,
       outputGripWorldQuaternion,
@@ -1483,11 +1415,6 @@ function resolveHeldWeaponGripAimTarget(
       maxAdsGripTargetDeltaMeters
     );
 
-    outputAdsTelemetry.appliedGripDeltaMeters = appliedAdsGripDeltaMeters;
-    outputAdsTelemetry.gripDeltaClamped =
-      requestedAdsGripDeltaMeters >
-      maxAdsGripTargetDeltaMeters + heldWeaponSolveDirectionEpsilon;
-    outputAdsTelemetry.positionalWeight = adsPositionalWeight;
     outputGripWorldPosition.copy(heldWeaponHipFireGripWorldPositionScratch);
 
     if (
@@ -1500,68 +1427,10 @@ function resolveHeldWeaponGripAimTarget(
       );
     }
 
-    return null;
+    return true;
   }
 
-  return null;
-}
-
-function resolveAttachmentAdsReferenceRole(
-  attachmentRuntime: Pick<MetaverseAttachmentProofRuntime, "holdProfile">
-): HeldObjectSocketRoleId | null {
-  if (
-    attachmentRuntime.holdProfile.adsPolicy === "none" ||
-    attachmentRuntime.holdProfile.adsPolicy === "third_person_hint_only"
-  ) {
-    return null;
-  }
-
-  return attachmentRuntime.holdProfile.adsReferenceRole ?? "camera.ads_anchor";
-}
-
-function updateHeldWeaponAimTelemetryAfterSolve(
-  attachmentRuntime: MetaverseAttachmentProofRuntime,
-  outputAdsTelemetry: HeldWeaponAdsTelemetry
-): void {
-  const actualWeaponForwardWorld = heldWeaponActualWeaponForwardScratch
-    .set(1, 0, 0)
-    .applyQuaternion(
-      attachmentRuntime.heldGripSocketNode
-        .getWorldQuaternion(heldWeaponAttachmentWorldQuaternionScratch)
-        .multiply(attachmentRuntime.heldGripLocalAimQuaternion)
-        .normalize()
-    );
-
-  if (actualWeaponForwardWorld.lengthSq() <= heldWeaponSolveDirectionEpsilon) {
-    outputAdsTelemetry.muzzleAimAngularErrorRadians = null;
-  } else {
-    actualWeaponForwardWorld.normalize();
-    outputAdsTelemetry.muzzleAimAngularErrorRadians =
-      outputAdsTelemetry.desiredWeaponForwardWorld.lengthSq() <=
-      heldWeaponSolveDirectionEpsilon
-        ? null
-        : actualWeaponForwardWorld.angleTo(
-            outputAdsTelemetry.desiredWeaponForwardWorld
-          );
-  }
-
-  if (!outputAdsTelemetry.desiredAdsAnchorWorldPositionActive) {
-    outputAdsTelemetry.adsAnchorPositionErrorMeters = null;
-    return;
-  }
-
-  const adsReferenceRole = resolveAttachmentAdsReferenceRole(attachmentRuntime);
-  const adsAnchorNode =
-    adsReferenceRole === null
-      ? null
-      : attachmentRuntime.socketNodesByRole.get(adsReferenceRole) ?? null;
-
-  outputAdsTelemetry.adsAnchorPositionErrorMeters =
-    adsAnchorNode === null
-      ? null
-      : adsAnchorNode
-          .getWorldPosition(heldWeaponAdsAnchorWorldPositionScratch)
-          .distanceTo(outputAdsTelemetry.desiredAdsAnchorWorldPosition);
+  return true;
 }
 
 function alignOffHandBoneTowardHeldWeaponTarget(
@@ -2644,82 +2513,6 @@ function assertCurrentHeldObjectSolverHandSupport(
   }
 }
 
-function measureHeldWeaponEffectorWorldErrorMeters(
-  effectorNode: Object3D,
-  targetWorldPosition: Vector3
-): number {
-  return effectorNode
-    .getWorldPosition(heldWeaponEffectorWorldPositionScratch)
-    .distanceTo(targetWorldPosition);
-}
-
-function measureHeldWeaponEffectorWorldAngularErrorRadians(
-  effectorNode: Object3D,
-  targetWorldQuaternion: Quaternion
-): number {
-  return effectorNode
-    .getWorldQuaternion(heldWeaponEffectorWorldQuaternionScratch)
-    .angleTo(targetWorldQuaternion);
-}
-
-function measureRightHandSocketComparisonErrorMeters(
-  handEffectorNode: Object3D,
-  gripTargetWorldPosition: Vector3
-): number {
-  return measureHeldWeaponEffectorWorldErrorMeters(
-    handEffectorNode,
-    gripTargetWorldPosition
-  );
-}
-
-function resolveTwoBoneReachTelemetry(
-  rootBone: Bone,
-  middleBone: Bone,
-  effectorNode: Object3D,
-  effectorWorldTargetPosition: Vector3,
-  reachSlackMeters: number,
-  output: HeldWeaponArmReachTelemetry
-): void {
-  rootBone.getWorldPosition(heldWeaponShoulderWorldPositionScratch);
-  middleBone.getWorldPosition(heldWeaponElbowWorldPositionScratch);
-  effectorNode.getWorldPosition(heldWeaponWristWorldPositionScratch);
-  const upperarmLength = heldWeaponShoulderWorldPositionScratch.distanceTo(
-    heldWeaponElbowWorldPositionScratch
-  );
-  const lowerarmLength = heldWeaponElbowWorldPositionScratch.distanceTo(
-    heldWeaponWristWorldPositionScratch
-  );
-
-  if (
-    upperarmLength <= heldWeaponSolveDirectionEpsilon ||
-    lowerarmLength <= heldWeaponSolveDirectionEpsilon
-  ) {
-    output.clampDeltaMeters = null;
-    output.maxReachMeters = null;
-    output.targetDistanceMeters = null;
-    return;
-  }
-
-  const targetDistanceMeters = heldWeaponShoulderWorldPositionScratch.distanceTo(
-    effectorWorldTargetPosition
-  );
-  const minReachMeters = Math.max(
-    heldWeaponSolveDirectionEpsilon,
-    Math.abs(upperarmLength - lowerarmLength) + 0.0001
-  );
-  const maxReachMeters = Math.max(
-    heldWeaponSolveDirectionEpsilon,
-    upperarmLength + lowerarmLength - reachSlackMeters
-  );
-
-  output.clampDeltaMeters = Math.abs(
-    clamp(targetDistanceMeters, minReachMeters, maxReachMeters) -
-      targetDistanceMeters
-  );
-  output.maxReachMeters = maxReachMeters;
-  output.targetDistanceMeters = targetDistanceMeters;
-}
-
 export function syncHumanoidV2HeldWeaponPose<
   TCharacterRuntime extends {
     readonly anchorGroup: Group;
@@ -2730,15 +2523,14 @@ export function syncHumanoidV2HeldWeaponPose<
   heldWeaponPoseRuntime: HumanoidV2HeldWeaponPoseRuntime,
   attachmentRuntime: MetaverseAttachmentProofRuntime,
   aimState: HeldObjectAimState,
-  weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null = null,
+  _weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null = null,
   bodyPresentation:
     | Pick<
         MetaverseRuntimeConfig["bodyPresentation"],
         | "groundedFirstPersonHeadClearanceMeters"
         | "groundedFirstPersonHeadOcclusionRadiusMeters"
       >
-    | null = null,
-  heldWeaponGripDebugState: MetaverseSceneHeldWeaponGripDebugState | null = null
+    | null = null
 ): void {
   const solverProfile =
     resolveMetaverseHeldObjectSolverProfile(attachmentRuntime.holdProfile);
@@ -2755,11 +2547,7 @@ export function syncHumanoidV2HeldWeaponPose<
   );
   characterProofRuntime.anchorGroup.updateMatrixWorld(true);
 
-  const adsAnchorPoseActive = shouldUseAdsAnchorPose(
-    attachmentRuntime,
-    aimState
-  );
-  const gripTargetSolveFailureReason = resolveHeldWeaponGripAimTarget(
+  const gripTargetResolved = resolveHeldWeaponGripAimTarget(
     heldWeaponPoseRuntime,
     characterProofRuntime.firstPersonHeadAnchorNodes,
     attachmentRuntime,
@@ -2767,24 +2555,10 @@ export function syncHumanoidV2HeldWeaponPose<
     aimState,
     bodyPresentation,
     heldWeaponGripSocketWorldPositionScratch,
-    heldWeaponTargetWorldQuaternionScratch,
-    heldWeaponAdsTelemetryScratch
+    heldWeaponTargetWorldQuaternionScratch
   );
 
-  if (gripTargetSolveFailureReason !== null) {
-    heldWeaponGripDebugState?.recordGripTargetSolveFailure({
-      adsBlend: aimState.adsBlend,
-      aimSource: aimState.source,
-      aimSourceQuality: aimState.quality,
-      attachmentMountKind: attachmentRuntime.activeMountKind,
-      failureReason: gripTargetSolveFailureReason,
-      secondaryGripContactAvailable:
-        attachmentRuntime.offHandGripAnchorNode !== null,
-      heldMountSocketName: attachmentRuntime.heldMount.socketName,
-      offHandGripAnchorAvailable:
-        attachmentRuntime.offHandGripAnchorNode !== null,
-      weaponState
-    });
+  if (!gripTargetResolved) {
     return;
   }
 
@@ -2834,22 +2608,6 @@ export function syncHumanoidV2HeldWeaponPose<
     solverProfile
   );
   const mainHandEffectorNode = mainHandContactFrameRuntime.node;
-  const mainHandSocket = resolveHeldWeaponMainHandSocketId(gripAssignment);
-  const mainHandContactFrameId =
-    solverProfile.contactBindings.primary.contactFrameId;
-  const mainHandWeaponSocketRole =
-    solverProfile.contactBindings.primary.weaponSocketRole;
-  let mainHandAngularErrorRadians: number | null = null;
-  let mainHandGripErrorMeters: number | null = null;
-  let mainHandGripSocketComparisonErrorMeters: number | null = null;
-  let mainHandMaxReachMeters: number | null = null;
-  let mainHandPalmSocketComparisonErrorMeters: number | null = null;
-  let mainHandPoleAngleRadians: number | null = null;
-  let mainHandPostPoleBiasErrorMeters: number | null = null;
-  let mainHandReachClampDeltaMeters: number | null = null;
-  let mainHandSolveErrorMeters: number | null = null;
-  let mainHandTargetDistanceMeters: number | null = null;
-  let mainHandWristCorrectionRadians: number | null = null;
 
   resolveRightHandWorldTargetPosition(
     heldWeaponPoseRuntime,
@@ -2866,18 +2624,6 @@ export function syncHumanoidV2HeldWeaponPose<
     heldWeaponRightElbowPoleTargetScratch,
     heldWeaponRightArmReachSlackMeters
   );
-  if (heldWeaponGripDebugState !== null) {
-    mainHandSolveErrorMeters = measureHeldWeaponEffectorWorldErrorMeters(
-      mainHandEffectorNode,
-      heldWeaponGripSocketWorldPositionScratch
-    );
-    mainHandPoleAngleRadians = measureElbowPoleAngleRadians(
-      heldWeaponPoseRuntime.rightUpperarmBone,
-      heldWeaponPoseRuntime.rightLowerarmBone,
-      heldWeaponPoseRuntime.rightHandBone,
-      heldWeaponRightElbowPoleTargetScratch
-    );
-  }
   applyElbowPoleBias(
     heldWeaponPoseRuntime.rightUpperarmBone,
     heldWeaponPoseRuntime.rightLowerarmBone,
@@ -2885,34 +2631,12 @@ export function syncHumanoidV2HeldWeaponPose<
     heldWeaponRightElbowPoleTargetScratch,
     heldWeaponElbowPoleBiasWeight
   );
-  if (heldWeaponGripDebugState !== null) {
-    mainHandPostPoleBiasErrorMeters = measureHeldWeaponEffectorWorldErrorMeters(
-      mainHandEffectorNode,
-      heldWeaponGripSocketWorldPositionScratch
-    );
-    heldWeaponPoseRuntime.rightHandBone.getWorldQuaternion(
-      heldWeaponMainHandPreWristWorldQuaternionScratch
-    );
-  }
   alignBoneTowardEffectorWorldQuaternion(
     heldWeaponPoseRuntime.rightHandBone,
     mainHandEffectorNode,
     heldWeaponTargetWorldQuaternionScratch
   );
   characterProofRuntime.anchorGroup.updateMatrixWorld(true);
-  if (heldWeaponGripDebugState !== null) {
-    mainHandWristCorrectionRadians =
-      heldWeaponMainHandPreWristWorldQuaternionScratch.angleTo(
-        heldWeaponPoseRuntime.rightHandBone.getWorldQuaternion(
-          heldWeaponCurrentWorldQuaternionScratch
-        )
-      );
-    mainHandAngularErrorRadians =
-      measureHeldWeaponEffectorWorldAngularErrorRadians(
-        mainHandEffectorNode,
-        heldWeaponTargetWorldQuaternionScratch
-      );
-  }
   applyHeldObjectFingerPose(
     heldWeaponPoseRuntime,
     heldWeaponPoseRuntime.fingerChainsByHand[gripAssignment.primaryHand],
@@ -2928,110 +2652,9 @@ export function syncHumanoidV2HeldWeaponPose<
   );
   characterProofRuntime.anchorGroup.updateMatrixWorld(true);
 
-  if (heldWeaponGripDebugState !== null) {
-    mainHandGripErrorMeters = measureHeldWeaponEffectorWorldErrorMeters(
-      mainHandEffectorNode,
-      heldWeaponGripSocketWorldPositionScratch
-    );
-    mainHandGripSocketComparisonErrorMeters =
-      measureRightHandSocketComparisonErrorMeters(
-        heldWeaponPoseRuntime.rightGripSocketNode,
-        heldWeaponGripSocketWorldPositionScratch
-      );
-    mainHandPalmSocketComparisonErrorMeters =
-      measureRightHandSocketComparisonErrorMeters(
-        heldWeaponPoseRuntime.rightPalmSocketNode,
-        heldWeaponGripSocketWorldPositionScratch
-      );
-    resolveTwoBoneReachTelemetry(
-      heldWeaponPoseRuntime.rightUpperarmBone,
-      heldWeaponPoseRuntime.rightLowerarmBone,
-      heldWeaponPoseRuntime.rightHandBone,
-      heldWeaponRightHandTargetWorldPositionScratch,
-      heldWeaponRightArmReachSlackMeters,
-      heldWeaponArmReachTelemetryScratch
-    );
-    mainHandMaxReachMeters = heldWeaponArmReachTelemetryScratch.maxReachMeters;
-    mainHandReachClampDeltaMeters =
-      heldWeaponArmReachTelemetryScratch.clampDeltaMeters;
-    mainHandTargetDistanceMeters =
-      heldWeaponArmReachTelemetryScratch.targetDistanceMeters;
-  }
-
   if (attachmentRuntime.offHandGripMount === null) {
     normalizeHumanoidV2HeldWeaponDrivenBoneQuaternions(heldWeaponPoseRuntime);
     characterProofRuntime.anchorGroup.updateMatrixWorld(true);
-    if (heldWeaponGripDebugState !== null) {
-      updateHeldWeaponAimTelemetryAfterSolve(
-        attachmentRuntime,
-        heldWeaponAdsTelemetryScratch
-      );
-    }
-    if (heldWeaponGripDebugState !== null) {
-      heldWeaponGripDebugState.recordSolvedFrame({
-        actualWeaponForwardWorld: createVector3Snapshot(
-          heldWeaponActualWeaponForwardScratch
-        ),
-        adsAnchorPositionErrorMeters:
-          heldWeaponAdsTelemetryScratch.adsAnchorPositionErrorMeters,
-        adsBlend: aimState.adsBlend,
-        adsAppliedGripDeltaMeters:
-          heldWeaponAdsTelemetryScratch.appliedGripDeltaMeters,
-        attachmentMountKind: attachmentRuntime.activeMountKind,
-        adsGripDeltaClamped: heldWeaponAdsTelemetryScratch.gripDeltaClamped,
-        adsPositionalWeight: heldWeaponAdsTelemetryScratch.positionalWeight,
-        aimSource: aimState.source,
-        aimSourceQuality: aimState.quality,
-        deprecatedAimPoseActive: false,
-        desiredWeaponForwardWorld: createVector3Snapshot(
-          heldWeaponAdsTelemetryScratch.desiredWeaponForwardWorld
-        ),
-        secondaryGripContactAvailable:
-          attachmentRuntime.offHandGripAnchorNode !== null,
-        heldMountSocketName: attachmentRuntime.heldMount.socketName,
-        legacyFullBodyAimFallbackActive: false,
-        legacyPistolShootOverlayActive: false,
-        legacyUpperBodyAimOverlayActive: false,
-        mainHandAngularErrorRadians,
-        mainHandContactFrameId,
-        mainHandGripErrorMeters: mainHandGripErrorMeters!,
-        mainHandGripSocketComparisonErrorMeters:
-          mainHandGripSocketComparisonErrorMeters!,
-        mainHandMaxReachMeters,
-        mainHandPalmSocketComparisonErrorMeters:
-          mainHandPalmSocketComparisonErrorMeters!,
-        mainHandPoleAngleRadians,
-        mainHandPostPoleBiasErrorMeters,
-        mainHandReachClampDeltaMeters,
-        mainHandReachSlackMeters: heldWeaponRightArmReachSlackMeters,
-        mainHandSolveErrorMeters,
-        mainHandSocket,
-        mainHandTargetDistanceMeters,
-        mainHandWeaponSocketRole,
-        mainHandWristCorrectionRadians,
-        muzzleAimAngularErrorRadians:
-          heldWeaponAdsTelemetryScratch.muzzleAimAngularErrorRadians,
-        offHandAngularErrorRadians: null,
-        offHandContactFrameId: null,
-        offHandFinalErrorMeters: null,
-        offHandGripMounted: false,
-        offHandInitialSolveErrorMeters: null,
-        offHandPoleAngleRadians: null,
-        offHandPreSolveErrorMeters: null,
-        offHandRefinementPassCount: 0,
-        offHandSocket: resolveHeldWeaponOffHandSocketId(gripAssignment),
-        offHandGripAnchorAvailable:
-          attachmentRuntime.offHandGripAnchorNode !== null,
-        offHandWeaponSocketRole: null,
-        offHandWristCorrectionRadians: null,
-        adsAnchorPoseActive,
-        offHandTargetKind: attachmentRuntime.offHandTargetKind,
-        poseProfileId: attachmentRuntime.holdProfile.poseProfileId,
-        supportPalmFade: null,
-        supportPalmHintActive: false,
-        weaponState
-      });
-    }
     return;
   }
 
@@ -3051,11 +2674,6 @@ export function syncHumanoidV2HeldWeaponPose<
       heldWeaponPoseRuntime,
       gripAssignment
     );
-  const offHandSocket = resolveHeldWeaponOffHandSocketId(gripAssignment);
-  const offHandContactFrameId =
-    solverProfile.contactBindings.secondary?.contactFrameId ?? null;
-  const offHandWeaponSocketRole =
-    solverProfile.contactBindings.secondary?.weaponSocketRole ?? null;
   attachmentRuntime.attachmentRoot.localToWorld(
     heldWeaponGripSocketWorldPositionScratch.copy(offHandGripLocalPosition)
   );
@@ -3077,15 +2695,6 @@ export function syncHumanoidV2HeldWeaponPose<
       supportPalmFade
     );
   }
-  const offHandPreSolveErrorMeters = measureHeldWeaponEffectorWorldErrorMeters(
-    offHandEffectorNode,
-    heldWeaponGripSocketWorldPositionScratch
-  );
-  let offHandInitialSolveErrorMeters: number | null = null;
-  let offHandAngularErrorRadians: number | null = null;
-  let offHandPoleAngleRadians: number | null = null;
-  let offHandWristCorrectionRadians: number | null = null;
-
   heldWeaponSupportHandTargetWorldQuaternionScratch
     .copy(
       attachmentRuntime.attachmentRoot.getWorldQuaternion(
@@ -3114,18 +2723,6 @@ export function syncHumanoidV2HeldWeaponPose<
         ? heldWeaponSupportPalmHintLeftArmReachSlackMeters
         : heldWeaponLeftArmReachSlackMeters
     );
-  if (heldWeaponGripDebugState !== null) {
-    offHandInitialSolveErrorMeters = measureHeldWeaponEffectorWorldErrorMeters(
-      offHandEffectorNode,
-      heldWeaponGripSocketWorldPositionScratch
-    );
-    offHandPoleAngleRadians = measureElbowPoleAngleRadians(
-      heldWeaponPoseRuntime.leftUpperarmBone,
-      heldWeaponPoseRuntime.leftLowerarmBone,
-      heldWeaponPoseRuntime.leftHandBone,
-      heldWeaponLeftElbowPoleTargetScratch
-    );
-  }
   applyElbowPoleBias(
     heldWeaponPoseRuntime.leftUpperarmBone,
     heldWeaponPoseRuntime.leftLowerarmBone,
@@ -3133,11 +2730,6 @@ export function syncHumanoidV2HeldWeaponPose<
     heldWeaponLeftElbowPoleTargetScratch,
     heldWeaponElbowPoleBiasWeight
   );
-  if (heldWeaponGripDebugState !== null) {
-    heldWeaponPoseRuntime.leftHandBone.getWorldQuaternion(
-      heldWeaponOffHandPreWristWorldQuaternionScratch
-    );
-  }
   alignOffHandBoneTowardHeldWeaponTarget(
     heldWeaponPoseRuntime,
     offHandEffectorNode,
@@ -3146,21 +2738,6 @@ export function syncHumanoidV2HeldWeaponPose<
     supportPalmHintActive
   );
   characterProofRuntime.anchorGroup.updateMatrixWorld(true);
-  if (heldWeaponGripDebugState !== null) {
-    offHandWristCorrectionRadians =
-      useSupportPalmHintPose && !supportPalmHintActive
-        ? 0
-        : heldWeaponOffHandPreWristWorldQuaternionScratch.angleTo(
-            heldWeaponPoseRuntime.leftHandBone.getWorldQuaternion(
-              heldWeaponCurrentWorldQuaternionScratch
-            )
-          );
-    offHandAngularErrorRadians =
-      measureHeldWeaponEffectorWorldAngularErrorRadians(
-        offHandEffectorNode,
-        heldWeaponSupportHandTargetWorldQuaternionScratch
-      );
-  }
   if (
     gripAssignment.secondaryHand !== null &&
     solverProfile.fingerPose.secondary !== null &&
@@ -3173,7 +2750,6 @@ export function syncHumanoidV2HeldWeaponPose<
     );
     characterProofRuntime.anchorGroup.updateMatrixWorld(true);
   }
-  let offHandRefinementPassCount = 0;
 
   if (
     attachmentRuntime.offHandGripAnchorNode !== null ||
@@ -3201,7 +2777,6 @@ export function syncHumanoidV2HeldWeaponPose<
         break;
       }
 
-      offHandRefinementPassCount += 1;
       heldWeaponLeftHandTargetWorldPositionScratch.add(
         heldWeaponTargetDirectionScratch
       );
@@ -3239,81 +2814,4 @@ export function syncHumanoidV2HeldWeaponPose<
   );
   normalizeHumanoidV2HeldWeaponDrivenBoneQuaternions(heldWeaponPoseRuntime);
   characterProofRuntime.anchorGroup.updateMatrixWorld(true);
-  if (heldWeaponGripDebugState !== null) {
-    updateHeldWeaponAimTelemetryAfterSolve(
-      attachmentRuntime,
-      heldWeaponAdsTelemetryScratch
-    );
-    offHandAngularErrorRadians =
-      measureHeldWeaponEffectorWorldAngularErrorRadians(
-        offHandEffectorNode,
-        heldWeaponSupportHandTargetWorldQuaternionScratch
-      );
-    heldWeaponGripDebugState.recordSolvedFrame({
-      actualWeaponForwardWorld: createVector3Snapshot(
-        heldWeaponActualWeaponForwardScratch
-      ),
-      adsAnchorPositionErrorMeters:
-        heldWeaponAdsTelemetryScratch.adsAnchorPositionErrorMeters,
-      adsBlend: aimState.adsBlend,
-      adsAppliedGripDeltaMeters:
-        heldWeaponAdsTelemetryScratch.appliedGripDeltaMeters,
-      attachmentMountKind: attachmentRuntime.activeMountKind,
-      adsGripDeltaClamped: heldWeaponAdsTelemetryScratch.gripDeltaClamped,
-      adsPositionalWeight: heldWeaponAdsTelemetryScratch.positionalWeight,
-      aimSource: aimState.source,
-      aimSourceQuality: aimState.quality,
-      deprecatedAimPoseActive: false,
-      desiredWeaponForwardWorld: createVector3Snapshot(
-        heldWeaponAdsTelemetryScratch.desiredWeaponForwardWorld
-      ),
-      secondaryGripContactAvailable:
-        attachmentRuntime.offHandGripAnchorNode !== null,
-      heldMountSocketName: attachmentRuntime.heldMount.socketName,
-      legacyFullBodyAimFallbackActive: false,
-      legacyPistolShootOverlayActive: false,
-      legacyUpperBodyAimOverlayActive: false,
-      mainHandAngularErrorRadians,
-      mainHandContactFrameId,
-      mainHandGripErrorMeters: mainHandGripErrorMeters!,
-      mainHandGripSocketComparisonErrorMeters:
-        mainHandGripSocketComparisonErrorMeters!,
-      mainHandMaxReachMeters,
-      mainHandPalmSocketComparisonErrorMeters:
-        mainHandPalmSocketComparisonErrorMeters!,
-      mainHandPoleAngleRadians,
-      mainHandPostPoleBiasErrorMeters,
-      mainHandReachClampDeltaMeters,
-      mainHandReachSlackMeters: heldWeaponRightArmReachSlackMeters,
-      mainHandSolveErrorMeters,
-      mainHandSocket,
-      mainHandTargetDistanceMeters,
-      mainHandWeaponSocketRole,
-      mainHandWristCorrectionRadians,
-      muzzleAimAngularErrorRadians:
-        heldWeaponAdsTelemetryScratch.muzzleAimAngularErrorRadians,
-      offHandAngularErrorRadians,
-      offHandContactFrameId,
-      offHandFinalErrorMeters: measureHeldWeaponEffectorWorldErrorMeters(
-        offHandEffectorNode,
-        heldWeaponGripSocketWorldPositionScratch
-      ),
-      offHandGripMounted: true,
-      offHandInitialSolveErrorMeters,
-      offHandPoleAngleRadians,
-      offHandPreSolveErrorMeters,
-      offHandRefinementPassCount,
-      offHandSocket,
-      offHandGripAnchorAvailable:
-        attachmentRuntime.offHandGripAnchorNode !== null,
-      offHandWeaponSocketRole,
-      offHandWristCorrectionRadians,
-      adsAnchorPoseActive,
-      offHandTargetKind: attachmentRuntime.offHandTargetKind,
-      poseProfileId: attachmentRuntime.holdProfile.poseProfileId,
-      supportPalmFade: useSupportPalmHintPose ? supportPalmFade : null,
-      supportPalmHintActive,
-      weaponState
-    });
-  }
 }

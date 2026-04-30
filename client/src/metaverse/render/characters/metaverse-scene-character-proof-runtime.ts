@@ -63,10 +63,6 @@ interface SceneAssetLoaderLike {
 }
 
 export interface MetaverseCharacterProofRuntimeNodeResolvers {
-  readonly ensureSocketDebugMarker: (
-    socketNode: Object3D,
-    socketName: string
-  ) => void;
   readonly findBoneNode: (
     characterScene: Group,
     boneName: string,
@@ -82,7 +78,6 @@ export interface MetaverseCharacterProofRuntimeNodeResolvers {
     parentBone: Bone,
     socketName: string,
     localPosition: Vector3,
-    showSocketDebug: boolean,
     localQuaternion?: Quaternion
   ) => Bone;
 }
@@ -123,7 +118,6 @@ function ensureSkinnedMesh(characterScene: Group): void {
 
 function synthesizeHumanoidV2PalmSockets(
   characterScene: Group,
-  showSocketDebug: boolean,
   heldWeaponSolveDirectionEpsilon: number,
   nodeResolvers: Pick<
     MetaverseCharacterProofRuntimeNodeResolvers,
@@ -267,7 +261,6 @@ function synthesizeHumanoidV2PalmSockets(
       parentBone,
       palmSocketDescriptor.synthesizedSocketName,
       palmLocalPosition,
-      showSocketDebug,
       synthesizedHandQuaternion
     );
     nodeResolvers.upsertSyntheticSocketNode(
@@ -275,7 +268,6 @@ function synthesizeHumanoidV2PalmSockets(
       parentBone,
       palmSocketDescriptor.gripSocketName,
       gripLocalPosition,
-      showSocketDebug,
       synthesizedHandQuaternion
     );
     nodeResolvers.upsertSyntheticSocketNode(
@@ -283,7 +275,6 @@ function synthesizeHumanoidV2PalmSockets(
       parentBone,
       palmSocketDescriptor.supportSocketName,
       supportLocalPosition,
-      showSocketDebug,
       synthesizedHandQuaternion
     );
   }
@@ -291,7 +282,6 @@ function synthesizeHumanoidV2PalmSockets(
 
 function synthesizeHumanoidV2BackSocket(
   characterScene: Group,
-  showSocketDebug: boolean,
   nodeResolvers: Pick<
     MetaverseCharacterProofRuntimeNodeResolvers,
     "findBoneNode" | "upsertSyntheticSocketNode"
@@ -331,14 +321,12 @@ function synthesizeHumanoidV2BackSocket(
     characterScene,
     spineBone,
     "back_socket",
-    clavicleMidpointLocal,
-    showSocketDebug
+    clavicleMidpointLocal
   );
 }
 
 function synthesizeRuntimeSocketNodes(
   characterScene: Group,
-  showSocketDebug: boolean,
   heldWeaponSolveDirectionEpsilon: number,
   nodeResolvers: Pick<
     MetaverseCharacterProofRuntimeNodeResolvers,
@@ -349,15 +337,10 @@ function synthesizeRuntimeSocketNodes(
 
   synthesizeHumanoidV2PalmSockets(
     characterScene,
-    showSocketDebug,
     heldWeaponSolveDirectionEpsilon,
     nodeResolvers
   );
-  synthesizeHumanoidV2BackSocket(
-    characterScene,
-    showSocketDebug,
-    nodeResolvers
-  );
+  synthesizeHumanoidV2BackSocket(characterScene, nodeResolvers);
 
   characterScene.updateMatrixWorld(true);
 }
@@ -373,7 +356,6 @@ function isHumanoidV2SocketId(socketName: string): socketName is SocketId {
 function ensureHumanoidV2CanonicalSocketNodes(
   characterScene: Group,
   socketNames: readonly string[],
-  showSocketDebug: boolean,
   nodeResolvers: Pick<
     MetaverseCharacterProofRuntimeNodeResolvers,
     | "findBoneNode"
@@ -408,7 +390,6 @@ function ensureHumanoidV2CanonicalSocketNodes(
         transform.position.y,
         transform.position.z
       ),
-      showSocketDebug,
       new Quaternion(
         transform.quaternion.x,
         transform.quaternion.y,
@@ -588,7 +569,6 @@ export async function loadMetaverseCharacterProofRuntime<
     ) => THeldWeaponPoseRuntime | null;
     readonly createSceneAssetLoader: () => SceneAssetLoaderLike;
     readonly heldWeaponSolveDirectionEpsilon: number;
-    readonly showSocketDebug: boolean;
     readonly warn: (message: string) => void;
   } & MetaverseCharacterProofRuntimeNodeResolvers
 ): Promise<LoadedMetaverseCharacterProofRuntime<THeldWeaponPoseRuntime>> {
@@ -602,21 +582,11 @@ export async function loadMetaverseCharacterProofRuntime<
   ensureHumanoidV2CanonicalSocketNodes(
     characterAsset.scene,
     characterProofConfig.socketNames,
-    dependencies.showSocketDebug,
     dependencies
   );
 
-  for (const socketName of characterProofConfig.socketNames) {
-    const socketNode = dependencies.findSocketNode(characterAsset.scene, socketName);
-
-    if (dependencies.showSocketDebug) {
-      dependencies.ensureSocketDebugMarker(socketNode, socketName);
-    }
-  }
-
   synthesizeRuntimeSocketNodes(
     characterAsset.scene,
-    dependencies.showSocketDebug,
     dependencies.heldWeaponSolveDirectionEpsilon,
     dependencies
   );

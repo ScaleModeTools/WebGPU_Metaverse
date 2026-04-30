@@ -46,7 +46,7 @@ test("scene environment runtime builds shared water regions and visual atmospher
   assert.equal(environmentRuntime.skyMesh.isSkyMesh, true);
   assert.equal(environmentRuntime.skyMesh.geometry.type, "SphereGeometry");
   assert.equal(environmentRuntime.skyMesh.children.length, 1);
-  assert.equal(environmentRuntime.skyMesh.children[0]?.name, "metaverse_scene_environment/sky_horizon_overlay");
+  assert.equal(environmentRuntime.skyMesh.children[0]?.name, "metaverse_scene_environment/sky_lower_extension");
   assert.equal(
     environmentRuntime.skyMesh.cloudScale.value,
     metaverseRuntimeConfig.environment.cloudScale

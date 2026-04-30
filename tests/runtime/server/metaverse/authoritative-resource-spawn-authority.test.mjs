@@ -72,8 +72,11 @@ test("MetaverseAuthoritativeResourceSpawnAuthority consumes only when ammo is gr
 
   assert.equal(grantCount, 1);
   assert.equal(snapshots.length, 1);
-  assert.equal(snapshots[0]?.available, true);
-  assert.equal(snapshots[0]?.nextRespawnAtServerTimeMs, null);
+  assert.equal(snapshots[0]?.spawnId, "resource:pistol");
+  assert.equal("available" in snapshots[0], false);
+  assert.equal("nextRespawnAtServerTimeMs" in snapshots[0], false);
+  assert.equal("ammoGrantRounds" in snapshots[0], false);
+  assert.equal("modeTags" in snapshots[0], false);
   assert.equal(snapshotSequenceIncrements, 0);
 
   grantAllowed = true;
@@ -81,24 +84,19 @@ test("MetaverseAuthoritativeResourceSpawnAuthority consumes only when ammo is gr
   snapshots = authority.readResourceSpawnSnapshots();
 
   assert.equal(grantCount, 2);
-  assert.equal(snapshots.length, 1);
-  assert.equal(snapshots[0]?.available, false);
-  assert.equal(snapshots[0]?.nextRespawnAtServerTimeMs, 1_600);
+  assert.equal(snapshots.length, 0);
   assert.equal(snapshotSequenceIncrements, 1);
 
   authority.advanceResourceSpawns(0.1, 1_500);
   snapshots = authority.readResourceSpawnSnapshots();
 
-  assert.equal(snapshots.length, 1);
-  assert.equal(snapshots[0]?.available, false);
+  assert.equal(snapshots.length, 0);
   assert.equal(grantCount, 2);
 
   authority.advanceResourceSpawns(0.1, 1_600);
   snapshots = authority.readResourceSpawnSnapshots();
 
-  assert.equal(snapshots.length, 1);
-  assert.equal(snapshots[0]?.available, false);
-  assert.equal(snapshots[0]?.nextRespawnAtServerTimeMs, 2_100);
+  assert.equal(snapshots.length, 0);
   assert.equal(grantCount, 3);
   assert.equal(snapshotSequenceIncrements, 2);
 });
@@ -147,6 +145,7 @@ test("MetaverseAuthoritativeResourceSpawnAuthority filters pickups by match mode
     snapshots.map((snapshot) => snapshot.spawnId),
     ["resource:all-modes"]
   );
-  assert.equal(snapshots[0]?.available, true);
+  assert.equal("available" in snapshots[0], false);
+  assert.equal("modeTags" in snapshots[0], false);
   assert.equal(grantCount, 2);
 });

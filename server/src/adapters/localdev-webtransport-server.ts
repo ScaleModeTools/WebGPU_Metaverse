@@ -32,7 +32,9 @@ import {
   createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram,
   createMetaverseRealtimeWorldWebTransportErrorMessage,
   createMetaverseRealtimeWorldWebTransportSnapshotRequest,
-  createMetaverseRealtimeWorldWebTransportSnapshotSubscribeRequest
+  createMetaverseRealtimeWorldWebTransportSnapshotSubscribeRequest,
+  metaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagramType,
+  parseMetaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagram
 } from "@webgpu-metaverse/shared";
 
 import type { DuckHuntCoopRoomWebTransportDatagramAdapter } from "../experiences/duck-hunt/adapters/duck-hunt-coop-room-webtransport-datagram-adapter.js";
@@ -397,6 +399,15 @@ function parseMetaverseWorldClientDatagram(
 ): MetaverseRealtimeWorldWebTransportClientDatagram {
   if (!isRecord(payload)) {
     throw new Error("Metaverse world WebTransport datagram must be an object.");
+  }
+
+  if (
+    payload.t ===
+    metaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagramType
+  ) {
+    return parseMetaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagram(
+      payload
+    );
   }
 
   const datagramType = readNonEmptyStringField(payload.type, "type");

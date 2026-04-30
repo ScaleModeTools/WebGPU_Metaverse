@@ -347,11 +347,6 @@ export class MetaverseSceneCombatFxState {
       return;
     }
 
-    if (shotFx === "muzzle-only") {
-      this.#spawnMuzzleFlash(origin, event.startedAtMs, 0.08, [0.95, 0.74, 0.28]);
-      return;
-    }
-
     if (shotFx === "pistol-world-impact") {
       this.#spawnPistolWorldImpact(origin, event.startedAtMs);
       return;
@@ -374,6 +369,7 @@ export class MetaverseSceneCombatFxState {
       direction.normalize();
       tempEnd.copy(origin).add(direction.multiplyScalar(48));
     }
+    this.#spawnMuzzleFlash(origin, event.startedAtMs, 0.08, [0.95, 0.74, 0.28]);
     this.#spawnTracer(tempStart, tempEnd, event.startedAtMs);
   }
 

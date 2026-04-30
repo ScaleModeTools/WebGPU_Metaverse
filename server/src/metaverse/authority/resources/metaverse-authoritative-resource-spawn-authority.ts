@@ -259,22 +259,16 @@ export class MetaverseAuthoritativeResourceSpawnAuthority<
   readResourceSpawnSnapshots(): readonly MetaverseRealtimeResourceSpawnSnapshotInput[] {
     return Object.freeze(
       [...this.#resourceSpawnStatesById.values()]
+        .filter((state) => state.available)
         .sort((leftState, rightState) =>
           leftState.resourceSpawn.spawnId.localeCompare(
             rightState.resourceSpawn.spawnId
           )
         )
         .map((state) => ({
-          ammoGrantRounds: state.resourceSpawn.ammoGrantRounds,
           assetId: state.resourceSpawn.assetId,
-          available: state.available,
-          label: state.resourceSpawn.label,
-          modeTags: state.resourceSpawn.modeTags,
-          nextRespawnAtServerTimeMs: state.nextRespawnAtServerTimeMs,
           pickupRadiusMeters: state.resourceSpawn.pickupRadiusMeters,
           position: state.resourceSpawn.position,
-          resourceKind: state.resourceSpawn.resourceKind,
-          respawnCooldownMs: state.resourceSpawn.respawnCooldownMs,
           spawnId: state.resourceSpawn.spawnId,
           weaponId: state.resourceSpawn.weaponId,
           yawRadians: state.resourceSpawn.yawRadians

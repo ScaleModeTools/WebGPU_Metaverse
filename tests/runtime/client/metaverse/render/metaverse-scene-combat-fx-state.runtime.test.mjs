@@ -66,7 +66,7 @@ function assertCylinderAxisMatchesSegment(Vector3, cylinder, startInput, endInpu
   assert.ok(cylinderAxis.dot(expectedDirection) > 0.999);
 }
 
-test("MetaverseSceneCombatFxState keeps authoritative muzzle flashes and tracers keyed", async () => {
+test("MetaverseSceneCombatFxState keeps authoritative pistol tracers keyed", async () => {
   const [{ Scene }, { MetaverseSceneCombatFxState }] = await Promise.all([
     import("three/webgpu"),
     clientLoader.load(
@@ -76,19 +76,6 @@ test("MetaverseSceneCombatFxState keeps authoritative muzzle flashes and tracers
   const scene = new Scene();
   const combatFxState = new MetaverseSceneCombatFxState({
     scene
-  });
-  const authoritativeMuzzleEvent = Object.freeze({
-    actionSequence: 4,
-    directionWorld: Object.freeze({ x: 0, y: 0, z: -1 }),
-    kind: "shot",
-    originWorld: Object.freeze({ x: 0.2, y: 1.4, z: 0 }),
-    playerId: "local-player",
-    sequence: 4,
-    shotFx: "muzzle-only",
-    source: "authoritative-fire-event",
-    startedAtMs: 100,
-    visualKey: "authoritative-fire-event:muzzle:local-player:pistol:4",
-    weaponId: "metaverse-service-pistol-v2"
   });
   const authoritativeTracerEvent = Object.freeze({
     actionSequence: 4,
@@ -105,8 +92,6 @@ test("MetaverseSceneCombatFxState keeps authoritative muzzle flashes and tracers
     weaponId: "metaverse-service-pistol-v2"
   });
 
-  combatFxState.triggerCombatPresentationEvent(authoritativeMuzzleEvent);
-  combatFxState.triggerCombatPresentationEvent(authoritativeMuzzleEvent);
   combatFxState.triggerCombatPresentationEvent(authoritativeTracerEvent);
   combatFxState.triggerCombatPresentationEvent(authoritativeTracerEvent);
 
@@ -213,9 +198,9 @@ test("MetaverseSceneCombatFxState ignores unspecified shot FX", async () => {
       originWorld: Object.freeze({ x: 0.2, y: 1.4, z: 0 }),
       playerId: "local-player",
       sequence: 4,
-      source: "authoritative-fire-event",
+      source: "authoritative-shot-resolution",
       startedAtMs: 100,
-      visualKey: "authoritative-fire-event:unspecified:local-player:pistol:4",
+      visualKey: "authoritative-shot-resolution:unspecified:local-player:pistol:4",
       weaponId: "metaverse-service-pistol-v2"
     })
   );
@@ -294,7 +279,6 @@ test("MetaverseSceneCombatFxState updates one rocket visual and emits event-owne
   const projectileBase = Object.freeze({
     direction: Object.freeze({ x: 0, y: 0, z: -1 }),
     expiresAtTimeMs: 7_000,
-    launchTelemetry: null,
     ownerPlayerId: "rocket-owner",
     position: Object.freeze({ x: 0, y: 1.4, z: -2 }),
     projectileId: "rocket-owner:8",
@@ -485,7 +469,6 @@ test("MetaverseSceneCombatFxState removes expired rockets without explosion slot
   const projectileBase = Object.freeze({
     direction: Object.freeze({ x: 0, y: 0, z: -1 }),
     expiresAtTimeMs: 7_000,
-    launchTelemetry: null,
     ownerPlayerId: "rocket-owner",
     position: Object.freeze({ x: 0, y: 1.4, z: -2 }),
     projectileId: "rocket-owner:expired",
@@ -542,17 +525,6 @@ test("MetaverseSceneCombatFxState self-heals active rockets from projectile snap
   const projectile = Object.freeze({
     direction: Object.freeze({ x: 0, y: 0, z: -1 }),
     expiresAtTimeMs: 7_000,
-    launchTelemetry: Object.freeze({
-      cameraRayForwardWorld: Object.freeze({ x: 0, y: 0, z: -1 }),
-      cameraRayOriginWorld: Object.freeze({ x: 0, y: 1.6, z: 0 }),
-      cameraRayTargetSource: "max-distance",
-      cameraRayTargetWorld: Object.freeze({ x: 0, y: 1.6, z: -120 }),
-      firstImpactKind: null,
-      firstImpactPointWorld: null,
-      launchConvergenceAngleRadians: 0,
-      launchForwardWorld: Object.freeze({ x: 0, y: 0, z: -1 }),
-      weaponTipOriginWorld: Object.freeze({ x: 0.1, y: 1.34, z: -0.95 })
-    }),
     ownerPlayerId: "rocket-owner",
     position: Object.freeze({ x: 0.1, y: 1.34, z: -3.1 }),
     projectileId: "rocket-owner:launch-bridge",
@@ -619,17 +591,6 @@ test("MetaverseSceneCombatFxState prefers rocket launch bridge origin from proje
   const projectile = Object.freeze({
     direction: Object.freeze({ x: 0, y: 0, z: -1 }),
     expiresAtTimeMs: 7_000,
-    launchTelemetry: Object.freeze({
-      cameraRayForwardWorld: Object.freeze({ x: 0, y: 0, z: -1 }),
-      cameraRayOriginWorld: Object.freeze({ x: 0, y: 1.6, z: 0 }),
-      cameraRayTargetSource: "max-distance",
-      cameraRayTargetWorld: Object.freeze({ x: 0, y: 1.6, z: -120 }),
-      firstImpactKind: null,
-      firstImpactPointWorld: null,
-      launchConvergenceAngleRadians: 0,
-      launchForwardWorld: Object.freeze({ x: 0, y: 0, z: -1 }),
-      weaponTipOriginWorld: Object.freeze({ x: 0.1, y: 1.34, z: -0.95 })
-    }),
     ownerPlayerId: "rocket-owner",
     position: Object.freeze({ x: 0.1, y: 1.34, z: -3.1 }),
     projectileId,
@@ -696,17 +657,6 @@ test("MetaverseSceneCombatFxState starts rocket bridge from launch event when a 
   const projectile = Object.freeze({
     direction: Object.freeze({ x: 0, y: 0, z: -1 }),
     expiresAtTimeMs: 7_000,
-    launchTelemetry: Object.freeze({
-      cameraRayForwardWorld: Object.freeze({ x: 0, y: 0, z: -1 }),
-      cameraRayOriginWorld: Object.freeze({ x: 0, y: 1.6, z: 0 }),
-      cameraRayTargetSource: "max-distance",
-      cameraRayTargetWorld: Object.freeze({ x: 0, y: 1.6, z: -120 }),
-      firstImpactKind: null,
-      firstImpactPointWorld: null,
-      launchConvergenceAngleRadians: 0,
-      launchForwardWorld: Object.freeze({ x: 0, y: 0, z: -1 }),
-      weaponTipOriginWorld: Object.freeze({ x: 0.1, y: 1.34, z: -0.95 })
-    }),
     ownerPlayerId: "rocket-owner",
     position: Object.freeze({ x: 0.1, y: 1.34, z: -3.1 }),
     projectileId,

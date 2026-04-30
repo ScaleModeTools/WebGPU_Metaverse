@@ -33,11 +33,11 @@ export function readPrimaryPlayerActiveBodySnapshot(worldSnapshot) {
   return readPlayerActiveBodySnapshot(worldSnapshot.players[0]);
 }
 
-export function createAuthoritativeRuntime() {
+export function createAuthoritativeRuntime(launchVariationId = null) {
   return new MetaverseAuthoritativeWorldRuntime({
     playerInactivityTimeoutMs: createMilliseconds(5_000),
     tickIntervalMs: createMilliseconds(100)
-  });
+  }, undefined, launchVariationId);
 }
 
 export function joinSurfacePlayer(runtime, playerId, username, poseOverrides = {}) {

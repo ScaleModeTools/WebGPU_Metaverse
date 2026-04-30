@@ -74,7 +74,6 @@ export function createRealtimeWorldSnapshot({
   localAnimationVocabulary = "idle",
   localCombat = undefined,
   localJumpAuthorityState,
-  localJumpDebug,
   localGroundedBody,
   localLatestCombatActionReceipt = null,
   localLastAcceptedJumpActionSequence = 0,
@@ -175,19 +174,6 @@ export function createRealtimeWorldSnapshot({
       : localLastAcceptedJumpActionSequence > 0
         ? "accepted"
         : "none";
-  const resolvedLocalJumpDebug =
-    localJumpDebug === undefined &&
-    derivedLocalResolvedJumpActionSequence === 0
-      ? undefined
-      : {
-          ...localJumpDebug,
-          resolvedActionSequence:
-            localJumpDebug?.resolvedActionSequence ??
-            derivedLocalResolvedJumpActionSequence,
-          resolvedActionState:
-            localJumpDebug?.resolvedActionState ??
-            derivedLocalResolvedJumpActionState
-        };
   const localTraversalAuthority =
     localJumpAuthorityState === undefined
       ? undefined
@@ -208,16 +194,13 @@ export function createRealtimeWorldSnapshot({
               ? "swim"
               : "grounded",
           mounted: localMountedOccupancy !== null,
-          pendingActionKind:
-            resolvedLocalJumpDebug?.pendingActionSequence > 0 ? "jump" : "none",
-          pendingActionSequence:
-            resolvedLocalJumpDebug?.pendingActionSequence ?? 0,
+          pendingActionKind: "none",
+          pendingActionSequence: 0,
           resolvedActionKind:
-            resolvedLocalJumpDebug?.resolvedActionSequence > 0 ? "jump" : "none",
+            derivedLocalResolvedJumpActionSequence > 0 ? "jump" : "none",
           resolvedActionSequence:
-            resolvedLocalJumpDebug?.resolvedActionSequence ?? 0,
-          resolvedActionState:
-            resolvedLocalJumpDebug?.resolvedActionState ?? "none"
+            derivedLocalResolvedJumpActionSequence,
+          resolvedActionState: derivedLocalResolvedJumpActionState
         });
   const localCanonicalPosition = {
     x: localPlayerX,
@@ -262,7 +245,6 @@ export function createRealtimeWorldSnapshot({
 
   return createMetaverseRealtimeWorldSnapshot({
     observerPlayer: {
-      jumpDebug: resolvedLocalJumpDebug,
       lastProcessedCombatActionSequence:
         localLastProcessedCombatActionSequence,
       lastProcessedTraversalSequence:

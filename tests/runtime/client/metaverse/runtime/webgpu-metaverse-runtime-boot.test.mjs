@@ -58,151 +58,8 @@ test("WebGpuMetaverseRuntime starts from an idle snapshot and rejects missing na
   assert.equal(runtime.hudSnapshot.boot.rendererInitialized, false);
   assert.equal(runtime.hudSnapshot.telemetry.renderer.active, false);
   assert.equal(runtime.hudSnapshot.telemetry.renderer.label, "WebGPU");
-  assert.equal(runtime.hudSnapshot.telemetry.worldCadence.worldPollIntervalMs, 33);
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldCadence.remoteInterpolationDelayMs,
-    66
-  );
-  assert.equal(runtime.hudSnapshot.telemetry.worldCadence.maxExtrapolationMs, 66);
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldCadence.localAuthoritativeFreshnessMaxAgeMs,
-    66
-  );
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldCadence.authoritativeTickIntervalMs,
-    null
-  );
-  assert.equal(runtime.hudSnapshot.telemetry.worldSnapshot.bufferDepth, 0);
-  assert.equal(runtime.hudSnapshot.telemetry.worldSnapshot.clockOffsetEstimateMs, null);
-  assert.equal(runtime.hudSnapshot.telemetry.worldSnapshot.currentExtrapolationMs, 0);
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.datagramSendFailureCount,
-    0
-  );
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.extrapolatedFramePercent,
-    0
-  );
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount,
-    0
-  );
-  assert.deepEqual(
-    runtime.hudSnapshot.telemetry.worldSnapshot.localReconciliation,
-    Object.freeze({
-      lastLocalAuthorityPoseCorrectionDetail: Object.freeze({
-        authoritativeGrounded: null,
-        authoritativeSnapshotAgeMs: null,
-        authoritativeSnapshotSequence: null,
-        authoritativeTick: null,
-        bodyStateDivergence: null,
-        convergenceEpisodeStarted: false,
-        convergenceEpisodeStartIntentionalDiscontinuityCause: "none",
-        convergenceEpisodeStartHistoricalLocalSampleMatched: null,
-        convergenceEpisodeStartHistoricalLocalSampleSelectionReason: null,
-        convergenceEpisodeStartHistoricalLocalSampleTimeDeltaMs: null,
-        convergenceEpisodeStartPlanarMagnitudeMeters: null,
-        convergenceEpisodeStartReason: "none",
-        convergenceEpisodeStartVerticalMagnitudeMeters: null,
-        convergenceEpisodeStartYawMagnitudeRadians: null,
-        groundedBodyStateDivergence: null,
-        lastProcessedTraversalSequence: null,
-        localGrounded: null,
-        planarMagnitudeMeters: null,
-        planarVelocityMagnitudeUnitsPerSecond: null,
-        verticalMagnitudeMeters: null,
-        verticalVelocityMagnitudeUnitsPerSecond: null
-      }),
-      lastLocalAuthorityPoseCorrectionSnapshot: null,
-      lastLocalAuthorityPoseCorrectionReason: "none",
-      lastCorrectionAgeMs: null,
-      lastCorrectionSource: "none",
-      localAuthorityPoseCorrectionCount: 0,
-      localAuthorityPoseConvergenceEpisodeCount: 0,
-      localAuthorityPoseConvergenceStepCount: 0,
-      mountedVehicleAuthorityCorrectionCount: 0,
-      recentCorrectionCountPast5Seconds: 0,
-      recentLocalAuthorityPoseCorrectionCountPast5Seconds: 0,
-      recentLocalAuthorityPoseConvergenceEpisodeCountPast5Seconds: 0,
-      recentLocalAuthorityPoseConvergenceStepCountPast5Seconds: 0,
-      recentMountedVehicleAuthorityCorrectionCountPast5Seconds: 0,
-      totalCorrectionCount: 0
-    })
-  );
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.locomotionMode,
-    "grounded"
-  );
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.decisionReason,
-    "capability-maintained"
-  );
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local
-      .resolvedSupportHeightMeters,
-    0.6
-  );
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local
-      .blockingAffordanceDetected,
-    false
-  );
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local
-      .supportingAffordanceSampleCount,
-    0
-  );
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.autostepHeightMeters,
-    null
-  );
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.issuedTraversalIntent,
-    null
-  );
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
-      .groundedBody,
-    null
-  );
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
-      .surfaceRouting.decisionReason,
-    null
-  );
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
-      .surfaceRouting.resolvedSupportHeightMeters,
-    null
-  );
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
-      .surfaceRouting.supportingAffordanceSampleCount,
-    null
-  );
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
-      .surfaceRouting.blockingAffordanceDetected,
-    null
-  );
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer
-      .lastProcessedTraversalSequence,
-    null
-  );
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeCorrection
-      .planarMagnitudeMeters,
-    0
-  );
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.latestSimulationAgeMs,
-    null
-  );
-  assert.equal(
-    runtime.hudSnapshot.telemetry.worldSnapshot.latestSnapshotUpdateRateHz,
-    null
-  );
+  assert.equal(runtime.hudSnapshot.telemetry.frameRate, 0);
+  assert.equal(runtime.hudSnapshot.telemetry.renderedFrameCount, 0);
   assert.equal(runtime.hudSnapshot.transport.presenceReliable.enabled, false);
   assert.equal(runtime.hudSnapshot.transport.worldReliable.enabled, false);
   assert.equal(runtime.hudSnapshot.transport.worldDriverDatagram.enabled, false);
@@ -543,11 +400,6 @@ test("WebGpuMetaverseRuntime publishes boot-phase progression and per-lane trans
     assert.equal(runtime.hudSnapshot.telemetry.renderer.active, true);
     assert.equal(runtime.hudSnapshot.telemetry.renderer.drawCallCount, 7);
     assert.equal(runtime.hudSnapshot.telemetry.renderer.triangleCount, 1440);
-    assert.equal(runtime.hudSnapshot.telemetry.worldCadence.worldPollIntervalMs, 33);
-    assert.equal(
-      runtime.hudSnapshot.telemetry.worldCadence.authoritativeTickIntervalMs,
-      null
-    );
     assert.equal(runtime.hudSnapshot.boot.phase, "presence-joining");
     assert.equal(
       runtime.hudSnapshot.transport.presenceReliable.webTransportStatus,
@@ -566,10 +418,6 @@ test("WebGpuMetaverseRuntime publishes boot-phase progression and per-lane trans
       runtime.hudSnapshot.transport.worldSnapshotStream.liveness,
       "reconnecting"
     );
-    assert.equal(
-      runtime.hudSnapshot.telemetry.worldSnapshot.datagramSendFailureCount,
-      1
-    );
 
     joinDeferred.resolve();
     await Promise.resolve();
@@ -586,21 +434,12 @@ test("WebGpuMetaverseRuntime publishes boot-phase progression and per-lane trans
     assert.equal(runtime.hudSnapshot.boot.authoritativeWorldConnected, true);
     assert.equal(runtime.hudSnapshot.boot.phase, "ready");
     assert.equal(
-      runtime.hudSnapshot.telemetry.worldCadence.authoritativeTickIntervalMs,
-      50
-    );
-    assert.equal(
       runtime.hudSnapshot.transport.worldSnapshotStream.path,
       "reliable-snapshot-stream"
     );
     assert.equal(
       runtime.hudSnapshot.transport.worldSnapshotStream.liveness,
       "subscribed"
-    );
-    assert.equal(runtime.hudSnapshot.telemetry.worldSnapshot.bufferDepth, 1);
-    assert.equal(
-      runtime.hudSnapshot.telemetry.worldSnapshot.latestSnapshotUpdateRateHz,
-      20
     );
 
     runtime.dispose();

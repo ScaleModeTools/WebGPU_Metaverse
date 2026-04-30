@@ -97,7 +97,6 @@ test("MetaverseRuntimeFrameLoop owns the live frame sequencing and frame state o
     z: 8,
     yawRadians: 0.5
   });
-  const trackedTelemetry = [];
   const previewInputs = [];
   const syncedTraversalInputs = [];
   const issuedIntents = [];
@@ -129,9 +128,6 @@ test("MetaverseRuntimeFrameLoop owns the live frame sequencing and frame state o
     },
     devicePixelRatio: 2,
     environmentPhysicsRuntime: {
-      syncDebugPresentation() {
-        callLog.push("syncDebugPresentation");
-      },
       syncDynamicEnvironmentBodyPresentations() {
         callLog.push("syncDynamicEnvironmentBodyPresentations");
       },
@@ -152,16 +148,6 @@ test("MetaverseRuntimeFrameLoop owns the live frame sequencing and frame state o
           secondaryAction: false,
           strafeAxis: -0.25,
           yawAxis: 0.5
-        });
-      }
-    },
-    hudPublisher: {
-      trackFrameTelemetry(nowMs, presentationCameraSnapshot, renderedCamera) {
-        callLog.push("trackFrameTelemetry");
-        trackedTelemetry.push({
-          nowMs,
-          presentationCameraSnapshot,
-          renderedCamera
         });
       }
     },
@@ -344,8 +330,6 @@ test("MetaverseRuntimeFrameLoop owns the live frame sequencing and frame state o
   assert.equal(scenePresentationCalls[0].characterPresentationSnapshot, localCharacterPresentation);
   assert.equal(scenePresentationCalls[0].nextRemoteCharacterPresentations, remoteCharacterPresentations);
   assert.equal(scenePresentationCalls[0].focusedPortal, null);
-  assert.equal(trackedTelemetry[0].nowMs, 1000);
-  assert.equal(trackedTelemetry[0].presentationCameraSnapshot, traversalCameraSnapshot);
   assert.equal(frameLoop.mountedInteraction.focusedMountable, focusedMountable);
   assert.equal(frameLoop.focusedPortal, null);
   assert.equal(frameLoop.mountedInteraction.mountedEnvironment, null);
@@ -389,7 +373,6 @@ test("MetaverseRuntimeFrameLoop keeps blocked camera-phase frames neutral and su
     },
     devicePixelRatio: 1,
     environmentPhysicsRuntime: {
-      syncDebugPresentation() {},
       syncDynamicEnvironmentBodyPresentations() {},
       syncSampledRemotePlayerBlockers() {}
     },
@@ -407,9 +390,6 @@ test("MetaverseRuntimeFrameLoop keeps blocked camera-phase frames neutral and su
           yawAxis: 1
         });
       }
-    },
-    hudPublisher: {
-      trackFrameTelemetry() {}
     },
     portals: Object.freeze([]),
     presenceRuntime: {
@@ -584,7 +564,6 @@ test("MetaverseRuntimeFrameLoop routes local weapon fire, look sync, and present
     },
     devicePixelRatio: 1,
     environmentPhysicsRuntime: {
-      syncDebugPresentation() {},
       syncDynamicEnvironmentBodyPresentations() {},
       syncSampledRemotePlayerBlockers() {}
     },
@@ -601,9 +580,6 @@ test("MetaverseRuntimeFrameLoop routes local weapon fire, look sync, and present
           yawAxis: 0
         });
       }
-    },
-    hudPublisher: {
-      trackFrameTelemetry() {}
     },
     portals: Object.freeze([]),
     presenceRuntime: {

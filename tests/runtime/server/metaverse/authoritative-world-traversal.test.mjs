@@ -48,6 +48,8 @@ function createFireWeaponPlayerActionCommand({
       actionSequence,
       aimSnapshot: {
         pitchRadians: Math.atan2(forwardDirection.y, planarMagnitude),
+        rayForwardWorld: forwardDirection,
+        rayOriginWorld: origin,
         yawRadians: Math.atan2(forwardDirection.x, -forwardDirection.z)
       },
       issuedAtAuthoritativeTimeMs,
@@ -311,7 +313,7 @@ test("MetaverseAuthoritativeWorldRuntime keeps other grounded players as solid t
 });
 
 test("MetaverseAuthoritativeWorldRuntime stops using dead players as traversal blockers", () => {
-  const runtime = createAuthoritativeRuntime();
+  const runtime = createAuthoritativeRuntime("shell-team-deathmatch");
   const moverPlayerId = requireValue(
     createMetaversePlayerId("dead-blocker-mover"),
     "moverPlayerId"
@@ -369,20 +371,29 @@ test("MetaverseAuthoritativeWorldRuntime stops using dead players as traversal b
   );
   runtime.advanceToTime(1_200);
 
+  const armedSnapshot = runtime.readWorldSnapshot(1_200, moverPlayerId);
+  const armedMover = armedSnapshot.players.find(
+    (player) => player.playerId === moverPlayerId
+  );
+  const armedBlocker = armedSnapshot.players.find(
+    (player) => player.playerId === blockerPlayerId
+  );
+  const armedMoverPosition = readPlayerActiveBodySnapshot(armedMover).position;
+  const armedBlockerPosition = readPlayerActiveBodySnapshot(armedBlocker).position;
   const muzzleOrigin = Object.freeze({
-    x: moverSpawnPosition.x,
-    y: moverSpawnPosition.y + 1.62,
-    z: moverSpawnPosition.z
+    x: armedMoverPosition.x,
+    y: armedMoverPosition.y + 1.62,
+    z: armedMoverPosition.z
   });
   const blockerBodyTarget = Object.freeze({
-    x: blockerSpawnPosition.x,
-    y: blockerSpawnPosition.y + 0.95,
-    z: blockerSpawnPosition.z
+    x: armedBlockerPosition.x,
+    y: armedBlockerPosition.y + 0.95,
+    z: armedBlockerPosition.z
   });
   const blockerHeadTarget = Object.freeze({
-    x: blockerSpawnPosition.x,
-    y: blockerSpawnPosition.y + 1.58,
-    z: blockerSpawnPosition.z
+    x: armedBlockerPosition.x,
+    y: armedBlockerPosition.y + 1.58,
+    z: armedBlockerPosition.z
   });
 
   runtime.acceptWorldCommand(
@@ -433,9 +444,18 @@ test("MetaverseAuthoritativeWorldRuntime stops using dead players as traversal b
 
   assert.equal(deadBlocker?.combat?.alive, false);
 
+  const movementYawRadians = Math.atan2(
+    armedBlockerPosition.x - armedMoverPosition.x,
+    -(armedBlockerPosition.z - armedMoverPosition.z)
+  );
+  const blockerDistanceBefore = Math.hypot(
+    armedMoverPosition.x - armedBlockerPosition.x,
+    armedMoverPosition.z - armedBlockerPosition.z
+  );
   runtime.acceptWorldCommand(
     createMetaverseSyncPlayerTraversalIntentCommand({
       intent: {
+        bodyYawRadians: movementYawRadians,
         boost: true,
         sequence: 2,
         jump: false,
@@ -448,13 +468,17 @@ test("MetaverseAuthoritativeWorldRuntime stops using dead players as traversal b
     }),
     1_800
   );
-  runtime.advanceToTime(2_300);
+  runtime.advanceToTime(4_200);
 
-  const movedSnapshot = runtime.readWorldSnapshot(2_300, moverPlayerId);
+  const movedSnapshot = runtime.readWorldSnapshot(4_200, moverPlayerId);
   const mover = movedSnapshot.players.find(
     (player) => player.playerId === moverPlayerId
   );
   const moverActiveBodySnapshot = readPlayerActiveBodySnapshot(mover);
+  const blockerDistanceAfter = Math.hypot(
+    moverActiveBodySnapshot.position.x - armedBlockerPosition.x,
+    moverActiveBodySnapshot.position.z - armedBlockerPosition.z
+  );
 
-  assert.ok(moverActiveBodySnapshot.position.z < blockerSpawnPosition.z);
+  assert.ok(blockerDistanceAfter < blockerDistanceBefore - 1.5);
 });

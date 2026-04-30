@@ -24,10 +24,10 @@ type LocalPlayerTraversalCommandAckSnapshot = {
   readonly traversalAuthority: MetaverseRealtimePlayerTraversalAuthoritySnapshot;
 };
 const metaverseSequencedTraversalActionKind = "jump";
-// Keep enough history to preserve compressed jump and direction edges without
-// letting latest-wins traversal datagrams grow past practical QUIC payload
-// budgets.
-const metaversePlayerTraversalPendingIntentMaxEntries = 2;
+// Keep a bounded unacked input window. Rapid WASD/boost changes can span more
+// than two samples while a datagram is in flight, and dropping those edges makes
+// authority replay a different path than local prediction.
+const metaversePlayerTraversalPendingIntentMaxEntries = 8;
 
 export interface MetaverseWorldPlayerTraversalIntentSyncDependencies {
   readonly acceptWorldEvent: (

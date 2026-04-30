@@ -1,4 +1,4 @@
-import type { Object3D, Scene } from "three/webgpu";
+import type { Scene } from "three/webgpu";
 import {
   resolveMetaverseDynamicCuboidBodyConfigSnapshotFromSurfaceAsset,
   createMetaverseTraversalColliderMetadataSnapshot,
@@ -28,7 +28,6 @@ import type {
   MetaverseRuntimeConfig,
   MetaverseVector3Snapshot
 } from "../types/metaverse-runtime";
-import { metaverseDebugSimpleSpawnSupportCollider } from "../config/metaverse-debug-simple-spawn-support";
 import {
   resolveDynamicEnvironmentCuboidColliders,
   resolveDynamicCollisionTriMeshes,
@@ -54,41 +53,9 @@ interface MetaverseEnvironmentPhysicsRuntimeDependencies {
   readonly groundedBodyRuntime: MetaverseGroundedBodyRuntime;
   readonly physicsRuntime: RapierPhysicsRuntime;
   readonly sceneRuntime: MetaverseEnvironmentPhysicsSceneRuntime;
-  readonly showPhysicsDebug: boolean;
 }
-
-type MetaversePhysicsDebugObject = Object3D & {
-  dispose?(): void;
-  update?(): void;
-};
 
 const emptyColliderHandleList = Object.freeze([]) as readonly RapierColliderHandle[];
-
-function resolveBooleanEnvFlag(rawValue: string | undefined): boolean | null {
-  if (rawValue === undefined) {
-    return null;
-  }
-
-  const normalizedValue = rawValue.trim().toLowerCase();
-
-  if (normalizedValue === "1" || normalizedValue === "true") {
-    return true;
-  }
-
-  if (normalizedValue === "0" || normalizedValue === "false") {
-    return false;
-  }
-
-  return null;
-}
-
-function shouldUseSimpleSpawnSupportOverride(): boolean {
-  return (
-    resolveBooleanEnvFlag(
-      import.meta.env?.VITE_METAVERSE_SIMPLE_SPAWN_SUPPORT_ENABLED
-    ) ?? false
-  );
-}
 
 function toFiniteNumber(value: number, fallback = 0): number {
   return Number.isFinite(value) ? value : fallback;
@@ -364,7 +331,6 @@ export class MetaverseEnvironmentPhysicsRuntime {
   readonly #groundedBodyRuntime: MetaverseGroundedBodyRuntime;
   readonly #physicsRuntime: RapierPhysicsRuntime;
   readonly #sceneRuntime: MetaverseEnvironmentPhysicsSceneRuntime;
-  readonly #showPhysicsDebug: boolean;
   readonly #staticSurfaceColliderSnapshots:
     MetaverseWorldPlacedSurfaceColliderSnapshot[];
   readonly #surfaceColliderSnapshots:
@@ -399,7 +365,6 @@ export class MetaverseEnvironmentPhysicsRuntime {
     MetaverseDynamicCuboidBodyRuntime
   >();
   #authoritativeEnvironmentBodyCollisionSyncEnvironmentAssetIds = new Set<string>();
-  #physicsDebugObject: MetaversePhysicsDebugObject | null = null;
   #remoteCharacterBlockerCollidersByPlayerId = new Map<
     string,
     RapierColliderHandle
@@ -416,8 +381,7 @@ export class MetaverseEnvironmentPhysicsRuntime {
       environmentProofConfig,
       groundedBodyRuntime,
       physicsRuntime,
-      sceneRuntime,
-      showPhysicsDebug
+      sceneRuntime
     }: MetaverseEnvironmentPhysicsRuntimeDependencies
   ) {
     this.#config = config;
@@ -426,15 +390,10 @@ export class MetaverseEnvironmentPhysicsRuntime {
     this.#groundedBodyRuntime = groundedBodyRuntime;
     this.#physicsRuntime = physicsRuntime;
     this.#sceneRuntime = sceneRuntime;
-    this.#showPhysicsDebug = showPhysicsDebug;
     const staticSurfaceColliderSnapshots =
       environmentProofConfig === null
         ? []
         : [...(environmentProofConfig.surfaceColliders ?? [])];
-
-    if (shouldUseSimpleSpawnSupportOverride()) {
-      staticSurfaceColliderSnapshots.push(metaverseDebugSimpleSpawnSupportCollider);
-    }
 
     this.#staticSurfaceColliderSnapshots = staticSurfaceColliderSnapshots;
     this.#surfaceColliderSnapshots = [...this.#staticSurfaceColliderSnapshots];
@@ -631,24 +590,9 @@ export class MetaverseEnvironmentPhysicsRuntime {
         this.#dynamicBodyRuntimesByEnvironmentAssetId.size > 0
     });
     await this.#groundedBodyRuntime.init(initialYawRadians);
-
-    if (this.#showPhysicsDebug && this.#physicsDebugObject === null) {
-      const physicsDebugObject = this.#physicsRuntime.createDebugHelper();
-
-      if (physicsDebugObject !== null) {
-        this.#physicsDebugObject = physicsDebugObject;
-        this.#sceneRuntime.scene.add(physicsDebugObject);
-      }
-    }
   }
 
   dispose(): void {
-    if (this.#physicsDebugObject !== null) {
-      this.#physicsDebugObject.parent?.remove(this.#physicsDebugObject);
-      this.#physicsDebugObject.dispose?.();
-      this.#physicsDebugObject = null;
-    }
-
     for (const environmentCollider of this.#environmentColliders) {
       this.#physicsRuntime.removeCollider(environmentCollider);
       this.#surfaceColliderMetadataByHandle.delete(environmentCollider);
@@ -798,10 +742,6 @@ export class MetaverseEnvironmentPhysicsRuntime {
       this.#remoteCharacterBlockerCollidersByPlayerId.delete(playerId);
       this.#remoteCharacterBlockerSnapshotsByPlayerId.delete(playerId);
     }
-  }
-
-  syncDebugPresentation(): void {
-    this.#physicsDebugObject?.update?.();
   }
 
   async #bootStaticEnvironmentCollision(): Promise<void> {

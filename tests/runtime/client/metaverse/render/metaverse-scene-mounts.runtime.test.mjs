@@ -296,6 +296,8 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
     0,
     0,
     null,
+    null,
+    null,
     [],
     passengerSeatMountedEnvironment
   );
@@ -312,6 +314,8 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
     null,
     0,
     0,
+    null,
+    null,
     null,
     [],
     null
@@ -331,6 +335,8 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
     null,
     0,
     0,
+    null,
+    null,
     null,
     [],
     boardedMountedEnvironment
@@ -365,6 +371,8 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
     null,
     0,
     0,
+    null,
+    null,
     null,
     [],
     driverSeatMountedEnvironment
@@ -431,6 +439,8 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
     1000,
     0.016,
     null,
+    null,
+    null,
     [],
     driverSeatMountedEnvironment
   );
@@ -467,6 +477,8 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
     null,
     0,
     0.016,
+    null,
+    null,
     null,
     [],
     driverSeatMountedEnvironment
@@ -508,6 +520,8 @@ test("createMetaverseScene separates deck boarding from direct seat entry on a d
     null,
     0,
     0,
+    null,
+    null,
     null,
     [],
     null

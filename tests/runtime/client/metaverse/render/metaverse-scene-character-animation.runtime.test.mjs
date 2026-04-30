@@ -487,43 +487,37 @@ test("createHeldWeaponPoseRuntime captures sampled TRS for held-object arms and 
     characterScene,
     handLBone,
     "grip_l_socket",
-    new Vector3(-0.06, 0.05, 0.01),
-    false
+    new Vector3(-0.06, 0.05, 0.01)
   );
   upsertMetaverseSceneSyntheticSocketNode(
     characterScene,
     handLBone,
     "palm_l_socket",
-    new Vector3(-0.04, 0.03, 0),
-    false
+    new Vector3(-0.04, 0.03, 0)
   );
   upsertMetaverseSceneSyntheticSocketNode(
     characterScene,
     handLBone,
     "support_l_socket",
-    new Vector3(-0.04, 0.03, 0),
-    false
+    new Vector3(-0.04, 0.03, 0)
   );
   upsertMetaverseSceneSyntheticSocketNode(
     characterScene,
     handRBone,
     "grip_r_socket",
-    new Vector3(0.06, 0.05, -0.01),
-    false
+    new Vector3(0.06, 0.05, -0.01)
   );
   upsertMetaverseSceneSyntheticSocketNode(
     characterScene,
     handRBone,
     "palm_r_socket",
-    new Vector3(0.04, 0.03, 0),
-    false
+    new Vector3(0.04, 0.03, 0)
   );
   upsertMetaverseSceneSyntheticSocketNode(
     characterScene,
     handRBone,
     "support_r_socket",
-    new Vector3(0.04, 0.03, 0),
-    false
+    new Vector3(0.04, 0.03, 0)
   );
   characterScene.updateMatrixWorld(true);
   const rightGripSocketNode = findMetaverseSceneSocketNode(
@@ -1758,45 +1752,6 @@ test("createMetaverseScene keeps traversal as the held-object IK base locally an
     leftPinkyBaseNode.quaternion.angleTo(new Quaternion()) > 0.01,
     "Expected the optional support-palm solver profile to pose the secondary hand when support is active."
   );
-  const hipFireGripTelemetry =
-    sceneRuntime.readLocalHeldWeaponGripTelemetrySnapshot(144);
-
-  assert.equal(
-    hipFireGripTelemetry.mainHandContactFrameId,
-    "primary_trigger_grip"
-  );
-  assert.equal(hipFireGripTelemetry.mainHandWeaponSocketRole, "grip.primary");
-  assert.equal(hipFireGripTelemetry.offHandContactFrameId, "support_palm");
-  assert.equal(hipFireGripTelemetry.offHandWeaponSocketRole, "grip.secondary");
-  assert.equal(hipFireGripTelemetry.adsAppliedGripDeltaMeters, null);
-  assert.equal(hipFireGripTelemetry.adsGripDeltaClamped, false);
-  assert.equal(hipFireGripTelemetry.aimSource, "local_camera");
-  assert.equal(hipFireGripTelemetry.aimSourceQuality, "full_camera_ray");
-  assert.equal(hipFireGripTelemetry.deprecatedAimPoseActive, false);
-  assert.equal(hipFireGripTelemetry.legacyPistolShootOverlayActive, false);
-  assert.equal(hipFireGripTelemetry.legacyFullBodyAimFallbackActive, false);
-  assert.equal(hipFireGripTelemetry.legacyUpperBodyAimOverlayActive, false);
-  assert.ok(
-    hipFireGripTelemetry.desiredWeaponForwardWorld !== null,
-    "Expected held-object aim telemetry to record the desired weapon forward."
-  );
-  assert.ok(
-    hipFireGripTelemetry.actualWeaponForwardWorld !== null,
-    "Expected held-object aim telemetry to record the actual weapon forward."
-  );
-  assert.ok(
-    hipFireGripTelemetry.muzzleAimAngularErrorRadians !== null &&
-      hipFireGripTelemetry.muzzleAimAngularErrorRadians < 0.32,
-    `Expected semantic aim telemetry to keep pistol muzzle error bounded, got ${hipFireGripTelemetry.muzzleAimAngularErrorRadians}.`
-  );
-  assert.ok(
-    Number.isFinite(hipFireGripTelemetry.mainHandAngularErrorRadians),
-    "Expected main-hand contact angular error telemetry to be finite."
-  );
-  assert.ok(
-    Number.isFinite(hipFireGripTelemetry.mainHandWristCorrectionRadians),
-    "Expected main-hand wrist correction telemetry to be finite."
-  );
   assert.ok(
     renderedCameraPosition.distanceTo(traversalCameraPosition) < 0.000001,
     `Expected rendered held-weapon camera ${renderedCameraPosition.toArray()} to stay locked to the raw traversal camera ${traversalCameraPosition.toArray()}.`
@@ -2072,8 +2027,6 @@ test("createMetaverseScene keeps traversal as the held-object IK base locally an
   );
   sceneRuntime.scene.updateMatrixWorld(true);
 
-  const adsDownGripTelemetry =
-    sceneRuntime.readLocalHeldWeaponGripTelemetrySnapshot(192);
   const adsDownPrimaryContactCameraForwardDistance =
     rightPrimaryTriggerContactFrameNode
       .getWorldPosition(new Vector3())
@@ -2086,33 +2039,6 @@ test("createMetaverseScene keeps traversal as the held-object IK base locally an
       )
       .dot(downAdsLookDirection);
 
-  assert.equal(adsDownGripTelemetry.adsAnchorPoseActive, true);
-  assert.equal(adsDownGripTelemetry.mainHandContactFrameId, "primary_trigger_grip");
-  assert.equal(adsDownGripTelemetry.aimSource, "local_camera");
-  assert.equal(adsDownGripTelemetry.aimSourceQuality, "full_camera_ray");
-  assert.ok(
-    adsDownGripTelemetry.adsAppliedGripDeltaMeters !== null &&
-      adsDownGripTelemetry.adsAppliedGripDeltaMeters <= 0.160001,
-    `Expected sidearm ADS pull to clamp at 16cm, got ${adsDownGripTelemetry.adsAppliedGripDeltaMeters}.`
-  );
-  assert.equal(adsDownGripTelemetry.adsGripDeltaClamped, true);
-  assert.ok(
-    adsDownGripTelemetry.adsAnchorPositionErrorMeters !== null,
-    "Expected ADS telemetry to report anchor position error separately from muzzle aim."
-  );
-  assert.ok(
-    adsDownGripTelemetry.muzzleAimAngularErrorRadians !== null &&
-      adsDownGripTelemetry.muzzleAimAngularErrorRadians < 0.34,
-    `Expected sidearm ADS muzzle aim error to stay bounded, got ${adsDownGripTelemetry.muzzleAimAngularErrorRadians}.`
-  );
-  assert.equal(
-    adsDownGripTelemetry.supportPalmFade,
-    1,
-    "Expected steep down ADS to keep sidearm support palm position anchored instead of fading off the pistol."
-  );
-  assert.equal(adsDownGripTelemetry.supportPalmHintActive, true);
-  assert.equal(adsDownGripTelemetry.offHandContactFrameId, "support_palm");
-  assert.equal(adsDownGripTelemetry.offHandWeaponSocketRole, "grip.secondary");
   const adsDownLeftSupportContactLocalPosition = attachmentRoot.worldToLocal(
     leftSupportPalmContactFrameNode.getWorldPosition(new Vector3())
   );

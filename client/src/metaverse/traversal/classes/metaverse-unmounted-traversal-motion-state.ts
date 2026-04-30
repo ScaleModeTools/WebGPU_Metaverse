@@ -121,12 +121,10 @@ export function resolvePredictedLocalReconciliationSampleFromMatchingHistory(
   {
     authoritativeSnapshotAgeMs,
     authoritativeTraversalSampleId,
-    authoritativeTick,
     receivedAtWallClockMs
   }: {
     readonly authoritativeSnapshotAgeMs: number | null;
     readonly authoritativeTraversalSampleId: number | null;
-    readonly authoritativeTick: number | null;
     readonly receivedAtWallClockMs: number | null;
   }
 ): PredictedLocalReconciliationSampleMatch | null {
@@ -401,12 +399,10 @@ export class MetaverseUnmountedTraversalMotionState {
 
   readPredictedLocalReconciliationSampleMatch({
     authoritativeSnapshotAgeMs,
-    authoritativeTick,
     lastProcessedTraversalSequence,
     receivedAtWallClockMs
   }: {
     readonly authoritativeSnapshotAgeMs: number | null;
-    readonly authoritativeTick: number | null;
     readonly lastProcessedTraversalSequence: number;
     readonly receivedAtWallClockMs: number | null;
   }): PredictedLocalReconciliationSampleMatch | null {
@@ -444,7 +440,6 @@ export class MetaverseUnmountedTraversalMotionState {
           lastProcessedTraversalSequence > 0
             ? lastProcessedTraversalSequence
             : null,
-        authoritativeTick,
         receivedAtWallClockMs
       }
     );

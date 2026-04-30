@@ -1,4 +1,5 @@
 import type {
+  MetaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagram,
   MetaverseRealtimeWorldWebTransportClientDatagram,
   MetaverseSyncDriverVehicleControlCommand,
   MetaverseSyncPlayerLookIntentCommand,
@@ -7,10 +8,10 @@ import type {
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 import type { MetaverseRoomId } from "@webgpu-metaverse/shared";
 import {
+  createMetaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagram,
   createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram,
   createMetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram,
   createMetaverseRealtimeWorldWebTransportPlayerWeaponStateDatagram,
-  createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import { LatestWinsWebTransportJsonDatagramChannel } from "./latest-wins-webtransport-json-datagram-channel";
@@ -24,9 +25,13 @@ interface MetaverseRealtimeWorldLatestWinsWebTransportDatagramTransportConfig {
 interface MetaverseRealtimeWorldLatestWinsWebTransportDatagramChannel {
   dispose(): void;
   sendDatagram(
-    datagram: MetaverseRealtimeWorldWebTransportClientDatagram
+    datagram: MetaverseRealtimeWorldWebTransportOutgoingClientDatagram
   ): Promise<void>;
 }
+
+type MetaverseRealtimeWorldWebTransportOutgoingClientDatagram =
+  | MetaverseRealtimeWorldWebTransportClientDatagram
+  | MetaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagram;
 
 interface WebTransportDatagramStreamLike {
   readonly writable: WritableStream<Uint8Array>;
@@ -53,7 +58,7 @@ export function createMetaverseRealtimeWorldLatestWinsWebTransportDatagramTransp
 ): MetaverseRealtimeWorldLatestWinsDatagramTransport {
   const channel =
     dependencies.channel ??
-    new LatestWinsWebTransportJsonDatagramChannel<MetaverseRealtimeWorldWebTransportClientDatagram>(
+    new LatestWinsWebTransportJsonDatagramChannel<MetaverseRealtimeWorldWebTransportOutgoingClientDatagram>(
       {
         url: config.webTransportUrl
       },
@@ -82,7 +87,7 @@ export function createMetaverseRealtimeWorldLatestWinsWebTransportDatagramTransp
       command: MetaverseSyncPlayerTraversalIntentCommand
     ): Promise<void> {
       await channel.sendDatagram(
-        createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram({
+        createMetaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagram({
           command,
           roomId: config.roomId
         })

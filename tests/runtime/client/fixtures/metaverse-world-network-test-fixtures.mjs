@@ -229,16 +229,8 @@ function createWorldEvent({
         : {
             combatMatch
           }),
-      observerPlayer: {
-        ...(authoritativeJumpActionSequence > 0
-          ? {
-              jumpDebug: {
-                resolvedActionSequence: authoritativeJumpActionSequence,
-                resolvedActionState: "accepted"
-              }
-            }
-          : {}),
-        highestProcessedPlayerActionSequence:
+    observerPlayer: {
+      highestProcessedPlayerActionSequence:
           highestProcessedPlayerActionSequence ??
           lastProcessedCombatActionSequence,
         lastProcessedTraversalSequence: resolvedLastProcessedTraversalSequence,

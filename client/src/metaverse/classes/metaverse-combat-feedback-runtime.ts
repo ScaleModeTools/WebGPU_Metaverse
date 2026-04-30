@@ -1,7 +1,4 @@
-import {
-  readMetaverseCombatWeaponProfile,
-  resolveMetaverseCombatSemanticWeaponTipFrame
-} from "@webgpu-metaverse/shared";
+import { readMetaverseCombatWeaponProfile } from "@webgpu-metaverse/shared";
 import type {
   MetaverseCombatEventSnapshot,
   MetaverseCombatFeedEventSnapshot,
@@ -17,12 +14,6 @@ import type {
   MetaverseCameraSnapshot,
   MetaverseCombatAudioCuePlayer,
   MetaverseCombatPresentationEvent,
-  MetaverseProjectilePresentationDebugFiniteEndpointPolicy,
-  MetaverseProjectilePresentationDebugHitscanHitKind,
-  MetaverseProjectilePresentationDebugSnapshot,
-  MetaverseProjectilePresentationDebugTracerSuppressedReason,
-  MetaverseProjectilePresentationDebugTracerStartSource,
-  MetaverseProjectilePresentationDebugVisualEndpointSource,
   MetaverseRenderedWeaponMuzzleResolver
 } from "../types/metaverse-runtime";
 import { MetaverseCombatHapticsRuntime } from "./metaverse-combat-haptics-runtime";
@@ -36,22 +27,20 @@ interface MetaverseCombatFeedbackRuntimeDependencies {
 }
 
 type MetaverseQueuedCombatVisualKind =
-  | "muzzle-only"
   | "pistol-tracer"
   | "rocket-muzzle";
 
 interface MetaversePistolEndpointResolution {
-  readonly endpointRayDistanceMeters: number | null;
-  readonly endpointRayPerpendicularErrorMeters: number | null;
-  readonly finiteEndpointPolicy: MetaverseProjectilePresentationDebugFiniteEndpointPolicy;
-  readonly muzzleToEndpointDistanceMeters: number | null;
-  readonly tracerSuppressedReason: MetaverseProjectilePresentationDebugTracerSuppressedReason | null;
+  readonly finiteEndpointPolicy:
+    | "normal-tracer"
+    | "forward-converged-tracer"
+    | "near-field-tracer"
+    | "suppressed-invalid-endpoint";
   readonly visualEndWorld: {
     readonly x: number;
     readonly y: number;
     readonly z: number;
   } | null;
-  readonly visualEndpointSource: MetaverseProjectilePresentationDebugVisualEndpointSource | null;
 }
 
 interface MetaverseQueuedCombatVisualIntent {
@@ -82,7 +71,7 @@ interface MetaverseQueuedCombatVisualIntent {
   readonly playerId: MetaversePlayerId;
   readonly projectileId: string | null;
   readonly shotId: string | null;
-  readonly hitscanHitKind: MetaverseProjectilePresentationDebugHitscanHitKind | null;
+  readonly hitscanHitKind: "miss" | "player" | "world" | null;
   readonly rayOriginWorld: {
     readonly x: number;
     readonly y: number;
@@ -105,7 +94,6 @@ interface MetaverseQueuedCombatVisualIntent {
   readonly weaponInstanceId: string | null;
 }
 
-const metaverseCombatProjectilePresentationDebugMaxEntries = 16;
 const metaverseCombatRecentVisualKeyMaxEntries = 64;
 const metaverseCombatPresentationVisualKeyTtlMs = 5_000;
 const metaverseCombatVisualIntentMuzzleWaitFrames = 2;
@@ -166,47 +154,6 @@ function createSpatialAudioOptions(
   });
 }
 
-function readPlayerSemanticWeaponTipPosition(
-  playerSnapshot: MetaverseRealtimePlayerSnapshot,
-  weaponId: string,
-  semanticAimForward:
-    | { readonly x: number; readonly y: number; readonly z: number }
-    | null
-    | undefined
-): { readonly x: number; readonly y: number; readonly z: number } | null {
-  let weaponProfile: ReturnType<typeof readMetaverseCombatWeaponProfile> | null =
-    null;
-
-  try {
-    weaponProfile = readMetaverseCombatWeaponProfile(weaponId);
-  } catch {
-    return null;
-  }
-
-  const activeBodySnapshot =
-    readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(playerSnapshot);
-
-  return resolveMetaverseCombatSemanticWeaponTipFrame({
-    actorBodyPosition: activeBodySnapshot.position,
-    actorBodyYawRadians: activeBodySnapshot.yawRadians,
-    aimYawInfluence: 1,
-    authoredMuzzleFromGrip:
-      weaponProfile.projectilePresentation.authoredMuzzleFromGrip,
-    firingOriginOffset: weaponProfile.firingOriginOffset,
-    objectLocalMuzzleFrame:
-      weaponProfile.projectilePresentation.objectLocalMuzzleFrame,
-    objectLocalPrimaryGripFrame:
-      weaponProfile.projectilePresentation.objectLocalPrimaryGripFrame,
-    primaryGripAnchorOffset:
-      weaponProfile.projectilePresentation.primaryGripAnchorOffset,
-    semanticAimForward:
-      readFiniteVector3(semanticAimForward) ??
-      createDirectionFromPitchYaw(playerSnapshot.look),
-    semanticLaunchOriginOffset:
-      weaponProfile.projectilePresentation.semanticLaunchOriginOffset
-  }).originWorld;
-}
-
 function readPlayerHitAudioPosition(
   playerSnapshot: MetaverseRealtimePlayerSnapshot,
   hitZone: "body" | "head"
@@ -218,21 +165,6 @@ function readPlayerHitAudioPosition(
     x: activeBodySnapshot.position.x,
     y: activeBodySnapshot.position.y + (hitZone === "head" ? 1.72 : 1.12),
     z: activeBodySnapshot.position.z
-  });
-}
-
-function createDirectionFromPitchYaw(input: {
-  readonly pitchRadians: number;
-  readonly yawRadians: number;
-}) {
-  const pitch = Number.isFinite(input.pitchRadians) ? input.pitchRadians : 0;
-  const yaw = Number.isFinite(input.yawRadians) ? input.yawRadians : 0;
-  const cosPitch = Math.cos(pitch);
-
-  return Object.freeze({
-    x: Math.sin(yaw) * cosPitch,
-    y: Math.sin(pitch),
-    z: -Math.cos(yaw) * cosPitch
   });
 }
 
@@ -332,103 +264,11 @@ function readNormalizedVector3(
   });
 }
 
-function readSegmentDirection(
-  start: { readonly x: number; readonly y: number; readonly z: number } | null,
-  end: { readonly x: number; readonly y: number; readonly z: number } | null
-): { readonly x: number; readonly y: number; readonly z: number } | null {
-  if (start === null || end === null) {
-    return null;
-  }
-
-  return readNormalizedVector3({
-    x: end.x - start.x,
-    y: end.y - start.y,
-    z: end.z - start.z
-  });
-}
-
-function readVectorAngleRadians(
-  left:
-    | { readonly x: number; readonly y: number; readonly z: number }
-    | null
-    | undefined,
-  right:
-    | { readonly x: number; readonly y: number; readonly z: number }
-    | null
-    | undefined
-): number | null {
-  const leftUnit = readNormalizedVector3(left);
-  const rightUnit = readNormalizedVector3(right);
-
-  if (leftUnit === null || rightUnit === null) {
-    return null;
-  }
-
-  const dot =
-    leftUnit.x * rightUnit.x + leftUnit.y * rightUnit.y + leftUnit.z * rightUnit.z;
-  const clampedDot = Math.max(-1, Math.min(1, dot));
-
-  return Math.acos(clampedDot);
-}
-
-function readEndpointRayProjection(input: {
-  readonly endpointWorld:
-    | { readonly x: number; readonly y: number; readonly z: number }
-    | null;
-  readonly rayForwardWorld:
-    | { readonly x: number; readonly y: number; readonly z: number }
-    | null;
-  readonly rayOriginWorld:
-    | { readonly x: number; readonly y: number; readonly z: number }
-    | null;
-}): {
-  readonly distanceMeters: number | null;
-  readonly perpendicularErrorMeters: number | null;
-} {
-  const endpointWorld = readFiniteVector3(input.endpointWorld);
-  const rayOriginWorld = readFiniteVector3(input.rayOriginWorld);
-  const rayForwardWorld = readNormalizedVector3(input.rayForwardWorld);
-
-  if (
-    endpointWorld === null ||
-    rayOriginWorld === null ||
-    rayForwardWorld === null
-  ) {
-    return Object.freeze({
-      distanceMeters: null,
-      perpendicularErrorMeters: null
-    });
-  }
-
-  const endpointOffset = {
-    x: endpointWorld.x - rayOriginWorld.x,
-    y: endpointWorld.y - rayOriginWorld.y,
-    z: endpointWorld.z - rayOriginWorld.z
-  };
-  const distanceMeters =
-    endpointOffset.x * rayForwardWorld.x +
-    endpointOffset.y * rayForwardWorld.y +
-    endpointOffset.z * rayForwardWorld.z;
-  const closestPoint = {
-    x: rayOriginWorld.x + rayForwardWorld.x * distanceMeters,
-    y: rayOriginWorld.y + rayForwardWorld.y * distanceMeters,
-    z: rayOriginWorld.z + rayForwardWorld.z * distanceMeters
-  };
-
-  return Object.freeze({
-    distanceMeters,
-    perpendicularErrorMeters: readVectorDistanceMeters(
-      endpointWorld,
-      closestPoint
-    )
-  });
-}
-
 function resolvePistolEndpointPresentation(input: {
   readonly endpointWorld:
     | { readonly x: number; readonly y: number; readonly z: number }
     | null;
-  readonly hitscanHitKind: MetaverseProjectilePresentationDebugHitscanHitKind | null;
+  readonly hitscanHitKind: "miss" | "player" | "world" | null;
   readonly rayForwardWorld:
     | { readonly x: number; readonly y: number; readonly z: number }
     | null;
@@ -447,50 +287,22 @@ function resolvePistolEndpointPresentation(input: {
   const presentationForwardWorld =
     readNormalizedVector3(input.rayForwardWorld) ??
     readNormalizedVector3(input.muzzleForwardWorld);
-  const projection = readEndpointRayProjection({
-    endpointWorld,
-    rayForwardWorld: input.rayForwardWorld,
-    rayOriginWorld: input.rayOriginWorld
-  });
   const muzzleToEndpointDistanceMeters = readVectorDistanceMeters(
     visualStartWorld,
     endpointWorld
   );
-  const visualEndpointSource:
-    | MetaverseProjectilePresentationDebugVisualEndpointSource
-    | null =
-    input.hitscanHitKind === "miss"
-      ? "camera-ray-max-distance"
-      : endpointWorld === null
-        ? null
-        : "authoritative-hit-point";
 
   if (visualStartWorld === null) {
     return Object.freeze({
-      endpointRayDistanceMeters: projection.distanceMeters,
-      endpointRayPerpendicularErrorMeters: projection.perpendicularErrorMeters,
       finiteEndpointPolicy: "suppressed-invalid-endpoint",
-      muzzleToEndpointDistanceMeters,
-      tracerSuppressedReason: "missing-rendered-muzzle",
-      visualEndWorld: endpointWorld,
-      visualEndpointSource
+      visualEndWorld: endpointWorld
     });
   }
 
   if (endpointWorld === null) {
     return Object.freeze({
-      endpointRayDistanceMeters: projection.distanceMeters,
-      endpointRayPerpendicularErrorMeters: projection.perpendicularErrorMeters,
       finiteEndpointPolicy: "suppressed-invalid-endpoint",
-      muzzleToEndpointDistanceMeters,
-      tracerSuppressedReason:
-        input.hitscanHitKind === "miss" &&
-        (input.rayOriginWorld === null ||
-          readNormalizedVector3(input.rayForwardWorld) === null)
-          ? "missing-camera-ray"
-          : "missing-endpoint",
-      visualEndWorld: null,
-      visualEndpointSource
+      visualEndWorld: null
     });
   }
 
@@ -517,11 +329,7 @@ function resolvePistolEndpointPresentation(input: {
       metaverseCombatPistolTracerMinimumForwardDistanceMeters
   ) {
     return Object.freeze({
-      endpointRayDistanceMeters: projection.distanceMeters,
-      endpointRayPerpendicularErrorMeters: projection.perpendicularErrorMeters,
       finiteEndpointPolicy: "forward-converged-tracer",
-      muzzleToEndpointDistanceMeters,
-      tracerSuppressedReason: null,
       visualEndWorld: Object.freeze({
         x:
           visualStartWorld.x +
@@ -535,8 +343,7 @@ function resolvePistolEndpointPresentation(input: {
           visualStartWorld.z +
           presentationForwardWorld.z *
             metaverseCombatPistolTracerForwardConvergedLengthMeters
-      }),
-      visualEndpointSource
+      })
     });
   }
 
@@ -548,11 +355,7 @@ function resolvePistolEndpointPresentation(input: {
       metaverseCombatPistolTracerNearFieldMinimumLengthMeters
   ) {
     return Object.freeze({
-      endpointRayDistanceMeters: projection.distanceMeters,
-      endpointRayPerpendicularErrorMeters: projection.perpendicularErrorMeters,
       finiteEndpointPolicy: "near-field-tracer",
-      muzzleToEndpointDistanceMeters,
-      tracerSuppressedReason: null,
       visualEndWorld: Object.freeze({
         x:
           visualStartWorld.x +
@@ -566,29 +369,14 @@ function resolvePistolEndpointPresentation(input: {
           visualStartWorld.z +
           presentationForwardWorld.z *
             metaverseCombatPistolTracerNearFieldMinimumLengthMeters
-      }),
-      visualEndpointSource
+      })
     });
   }
 
   return Object.freeze({
-    endpointRayDistanceMeters: projection.distanceMeters,
-    endpointRayPerpendicularErrorMeters: projection.perpendicularErrorMeters,
     finiteEndpointPolicy: "normal-tracer",
-    muzzleToEndpointDistanceMeters,
-    tracerSuppressedReason: null,
-    visualEndWorld: endpointWorld,
-    visualEndpointSource
+    visualEndWorld: endpointWorld
   });
-}
-
-function readSharedObjectLocalMuzzleFrame(weaponId: string) {
-  try {
-    return readMetaverseCombatWeaponProfile(weaponId).projectilePresentation
-      .objectLocalMuzzleFrame;
-  } catch {
-    return null;
-  }
 }
 
 function isAuthoritativeProjectilePresentationWeapon(
@@ -608,6 +396,38 @@ function readCombatEventSequence(
   eventSnapshot: MetaverseCombatEventSnapshot
 ): number {
   return eventSnapshot.eventSequence;
+}
+
+function readLatestCombatEventSequence(
+  eventSnapshots: readonly MetaverseCombatEventSnapshot[],
+  fallbackSequence: number | null
+): number | null {
+  let latestSequence = fallbackSequence;
+
+  for (const eventSnapshot of eventSnapshots) {
+    latestSequence =
+      latestSequence === null
+        ? eventSnapshot.eventSequence
+        : Math.max(latestSequence, eventSnapshot.eventSequence);
+  }
+
+  return latestSequence;
+}
+
+function readLatestCombatFeedSequence(
+  eventSnapshots: readonly MetaverseCombatFeedEventSnapshot[],
+  fallbackSequence: number | null
+): number | null {
+  let latestSequence = fallbackSequence;
+
+  for (const eventSnapshot of eventSnapshots) {
+    latestSequence =
+      latestSequence === null
+        ? eventSnapshot.sequence
+        : Math.max(latestSequence, eventSnapshot.sequence);
+  }
+
+  return latestSequence;
 }
 
 function readPresentationNowMs(): number {
@@ -675,7 +495,9 @@ export class MetaverseCombatFeedbackRuntime {
         | { readonly x: number; readonly y: number; readonly z: number }
         | null;
       readonly originSource:
-        | MetaverseProjectilePresentationDebugTracerStartSource
+        | "rendered-muzzle-post-sync"
+        | "rendered-muzzle-drain-time"
+        | "semantic-muzzle-fallback"
         | null;
       readonly originForwardWorld:
         | { readonly x: number; readonly y: number; readonly z: number }
@@ -684,8 +506,6 @@ export class MetaverseCombatFeedbackRuntime {
       readonly weaponId: string;
     }
   >();
-  readonly #projectilePresentationDebugSnapshots: MetaverseProjectilePresentationDebugSnapshot[] =
-    [];
   readonly #triggerPresentationEvent:
     MetaverseCombatFeedbackRuntimeDependencies["triggerPresentationEvent"];
 
@@ -699,10 +519,6 @@ export class MetaverseCombatFeedbackRuntime {
     this.#playAudioCue = dependencies.playAudioCue ?? null;
     this.#readLocalPlayerId = dependencies.readLocalPlayerId;
     this.#triggerPresentationEvent = dependencies.triggerPresentationEvent;
-  }
-
-  get projectilePresentationDebugSnapshots(): readonly MetaverseProjectilePresentationDebugSnapshot[] {
-    return Object.freeze([...this.#projectilePresentationDebugSnapshots]);
   }
 
   reset(): void {
@@ -720,7 +536,6 @@ export class MetaverseCombatFeedbackRuntime {
     this.#presentationVisualKeys.clear();
     this.#projectileImpactVisualIdOrder.length = 0;
     this.#projectileImpactVisualIds.clear();
-    this.#projectilePresentationDebugSnapshots.length = 0;
   }
 
   registerPendingLocalShot(input: {
@@ -788,7 +603,9 @@ export class MetaverseCombatFeedbackRuntime {
       readonly z: number;
     } | null;
     readonly originSource?:
-      | MetaverseProjectilePresentationDebugTracerStartSource
+      | "rendered-muzzle-post-sync"
+      | "rendered-muzzle-drain-time"
+      | "semantic-muzzle-fallback"
       | null;
     readonly originForwardWorld?: {
       readonly x: number;
@@ -882,8 +699,6 @@ export class MetaverseCombatFeedbackRuntime {
               visualIntent.actionSequence
             ) ?? null
           : null;
-      const localVisualIntent =
-        localPlayerId !== null && visualIntent.playerId === localPlayerId;
       const localPendingShotMatches =
         localPredictedShotOrigin?.weaponId === visualIntent.weaponId;
       const postSyncFireActionMuzzleWorld =
@@ -916,16 +731,6 @@ export class MetaverseCombatFeedbackRuntime {
           postSyncFireActionMuzzleWorld ??
           renderedVisualStartWorld ??
           semanticFallbackStartWorld;
-        const tracerStartSource:
-          | MetaverseProjectilePresentationDebugTracerStartSource
-          | null =
-          postSyncFireActionMuzzleWorld !== null
-            ? postSyncFireActionMuzzleSource
-            : renderedVisualStartWorld !== null
-              ? "rendered-muzzle-drain-time"
-              : semanticFallbackStartWorld !== null
-                ? "semantic-muzzle-fallback"
-                : null;
         const selectedRenderedMuzzleWorld =
           postSyncFireActionMuzzleSource === "rendered-muzzle-post-sync"
             ? postSyncFireActionMuzzleWorld
@@ -953,42 +758,8 @@ export class MetaverseCombatFeedbackRuntime {
           visualStartWorld
         });
         const finiteEndpointPolicy = endpointResolution.finiteEndpointPolicy;
-        const tracerSuppressedReason =
-          endpointResolution.tracerSuppressedReason;
 
         if (visualStartWorld === null) {
-          this.#recordProjectilePresentationDebug({
-            actionSequence: visualIntent.actionSequence,
-            actorId: visualIntent.playerId,
-            drainTimeRenderedMuzzleWorld: renderedMuzzleWorld,
-            endpointRayDistanceMeters:
-              endpointResolution.endpointRayDistanceMeters,
-            endpointRayPerpendicularErrorMeters:
-              endpointResolution.endpointRayPerpendicularErrorMeters,
-            eventCameraRayForwardWorld:
-              visualIntent.eventCameraRayForwardWorld ??
-              visualIntent.directionWorld,
-            finiteEndpointPolicy,
-            firstProjectileSnapshotWorld:
-              visualIntent.firstProjectileSnapshotWorld,
-            hitscanHitKind: visualIntent.hitscanHitKind,
-            muzzleToEndpointDistanceMeters:
-              endpointResolution.muzzleToEndpointDistanceMeters,
-            postSyncFireActionMuzzleWorld,
-            projectileId: visualIntent.projectileId,
-            renderedMuzzleForwardWorld: selectedRenderedMuzzleForwardWorld,
-            renderedMuzzleWorld: selectedRenderedMuzzleWorld,
-            semanticTipWorld: visualIntent.semanticOriginWorld,
-            serverProjectileOriginWorld: visualIntent.serverOriginWorld,
-            tracerStartSource,
-            tracerSuppressedReason:
-              tracerSuppressedReason ?? "muzzle-unavailable-after-wait",
-            visualEndpointSource: endpointResolution.visualEndpointSource,
-            visualEndWorld: endpointResolution.visualEndWorld,
-            visualStartWorld,
-            weaponId: visualIntent.weaponId,
-            weaponInstanceId: visualIntent.weaponInstanceId
-          });
           this.#localPredictedShotOriginByActionSequence.delete(
             visualIntent.actionSequence
           );
@@ -1037,16 +808,14 @@ export class MetaverseCombatFeedbackRuntime {
         }
 
         if (finiteEndpointPolicy !== "suppressed-invalid-endpoint") {
-          if (localVisualIntent) {
-            this.#playAudioCue?.(
-              resolveShotAudioCueId(visualIntent.weaponId),
-              createSpatialAudioOptions(
-                visualStartWorld,
-                input.cameraSnapshot,
-                metaverseCombatShotSpatialProfile
-              )
-            );
-          }
+          this.#playAudioCue?.(
+            resolveShotAudioCueId(visualIntent.weaponId),
+            createSpatialAudioOptions(
+              visualStartWorld,
+              input.cameraSnapshot,
+              metaverseCombatShotSpatialProfile
+            )
+          );
 
           this.#triggerPresentationEvent({
             actionSequence: visualIntent.actionSequence,
@@ -1065,35 +834,6 @@ export class MetaverseCombatFeedbackRuntime {
           });
         }
 
-        this.#recordProjectilePresentationDebug({
-          actionSequence: visualIntent.actionSequence,
-          actorId: visualIntent.playerId,
-          drainTimeRenderedMuzzleWorld: renderedMuzzleWorld,
-          endpointRayDistanceMeters:
-            endpointResolution.endpointRayDistanceMeters,
-          endpointRayPerpendicularErrorMeters:
-            endpointResolution.endpointRayPerpendicularErrorMeters,
-          eventCameraRayForwardWorld:
-            visualIntent.eventCameraRayForwardWorld ?? visualIntent.directionWorld,
-          finiteEndpointPolicy,
-          firstProjectileSnapshotWorld: visualIntent.firstProjectileSnapshotWorld,
-          hitscanHitKind: visualIntent.hitscanHitKind,
-          muzzleToEndpointDistanceMeters:
-            endpointResolution.muzzleToEndpointDistanceMeters,
-          postSyncFireActionMuzzleWorld,
-          projectileId: visualIntent.projectileId,
-          renderedMuzzleForwardWorld: selectedRenderedMuzzleForwardWorld,
-          renderedMuzzleWorld: selectedRenderedMuzzleWorld,
-          semanticTipWorld: visualIntent.semanticOriginWorld,
-          serverProjectileOriginWorld: visualIntent.serverOriginWorld,
-          tracerStartSource,
-          tracerSuppressedReason,
-          visualEndpointSource: endpointResolution.visualEndpointSource,
-          visualEndWorld: endpointResolution.visualEndWorld,
-          visualStartWorld,
-          weaponId: visualIntent.weaponId,
-          weaponInstanceId: visualIntent.weaponInstanceId
-        });
         this.#localPredictedShotOriginByActionSequence.delete(
           visualIntent.actionSequence
         );
@@ -1118,31 +858,6 @@ export class MetaverseCombatFeedbackRuntime {
       }
 
       if (visualStartWorld === null) {
-        if (visualIntent.kind !== "muzzle-only") {
-          this.#recordProjectilePresentationDebug({
-            actionSequence: visualIntent.actionSequence,
-            actorId: visualIntent.playerId,
-            drainTimeRenderedMuzzleWorld: renderedMuzzleWorld,
-            eventCameraRayForwardWorld:
-              visualIntent.eventCameraRayForwardWorld ??
-              visualIntent.directionWorld,
-            firstProjectileSnapshotWorld:
-              visualIntent.firstProjectileSnapshotWorld,
-            postSyncFireActionMuzzleWorld,
-            projectileId: visualIntent.projectileId,
-            renderedMuzzleForwardWorld,
-            renderedMuzzleWorld,
-            semanticTipWorld: visualIntent.semanticOriginWorld,
-            serverProjectileOriginWorld: visualIntent.serverOriginWorld,
-            tracerStartSource: null,
-            tracerSuppressedReason: "muzzle-unavailable-after-wait",
-            visualEndWorld:
-              visualIntent.endWorld ?? visualIntent.firstProjectileSnapshotWorld,
-            visualStartWorld,
-            weaponId: visualIntent.weaponId,
-            weaponInstanceId: visualIntent.weaponInstanceId
-          });
-        }
         this.#removeQueuedVisualIntent(visualKey);
         continue;
       }
@@ -1152,31 +867,7 @@ export class MetaverseCombatFeedbackRuntime {
         continue;
       }
 
-      const tracerStartSource:
-        | MetaverseProjectilePresentationDebugTracerStartSource
-        | null =
-        postSyncFireActionMuzzleWorld !== null
-          ? postSyncFireActionMuzzleSource
-          : renderedVisualStartWorld !== null
-          ? "rendered-muzzle-drain-time"
-          : semanticFallbackStartWorld !== null
-          ? "semantic-muzzle-fallback"
-          : null;
-      const selectedRenderedMuzzleWorld =
-        postSyncFireActionMuzzleSource === "rendered-muzzle-post-sync"
-          ? postSyncFireActionMuzzleWorld
-          : renderedMuzzleWorld;
-
-      if (visualIntent.kind === "muzzle-only") {
-        this.#playAudioCue?.(
-          resolveShotAudioCueId(visualIntent.weaponId),
-          createSpatialAudioOptions(
-            visualStartWorld,
-            input.cameraSnapshot,
-            metaverseCombatShotSpatialProfile
-          )
-        );
-      } else if (visualIntent.kind === "rocket-muzzle") {
+      if (visualIntent.kind === "rocket-muzzle") {
         this.#playAudioCue?.(
           "metaverse-rocket-launch",
           createSpatialAudioOptions(
@@ -1202,29 +893,6 @@ export class MetaverseCombatFeedbackRuntime {
         visualKey: visualIntent.visualKey,
         weaponId: visualIntent.weaponId
       });
-
-      if (visualIntent.kind !== "muzzle-only") {
-        this.#recordProjectilePresentationDebug({
-          actionSequence: visualIntent.actionSequence,
-          actorId: visualIntent.playerId,
-          drainTimeRenderedMuzzleWorld: renderedMuzzleWorld,
-          eventCameraRayForwardWorld:
-            visualIntent.eventCameraRayForwardWorld ?? visualIntent.directionWorld,
-          firstProjectileSnapshotWorld: visualIntent.firstProjectileSnapshotWorld,
-          postSyncFireActionMuzzleWorld,
-          projectileId: visualIntent.projectileId,
-          renderedMuzzleForwardWorld,
-          renderedMuzzleWorld: selectedRenderedMuzzleWorld,
-          semanticTipWorld: visualIntent.semanticOriginWorld,
-          serverProjectileOriginWorld: visualIntent.serverOriginWorld,
-          tracerStartSource,
-          visualEndWorld:
-            visualIntent.endWorld ?? visualIntent.firstProjectileSnapshotWorld,
-          visualStartWorld,
-          weaponId: visualIntent.weaponId,
-          weaponInstanceId: visualIntent.weaponInstanceId
-        });
-      }
 
       this.#localPredictedShotOriginByActionSequence.delete(
         visualIntent.actionSequence
@@ -1265,168 +933,14 @@ export class MetaverseCombatFeedbackRuntime {
     }
   }
 
-  #recordProjectilePresentationDebug(input: {
-    readonly actionSequence?: number | null;
-    readonly actorId: string;
-    readonly drainTimeRenderedMuzzleWorld?:
-      | { readonly x: number; readonly y: number; readonly z: number }
-      | null;
-    readonly eventCameraRayForwardWorld?:
-      | { readonly x: number; readonly y: number; readonly z: number }
-      | null;
-    readonly firstProjectileSnapshotWorld?:
-      | { readonly x: number; readonly y: number; readonly z: number }
-      | null;
-    readonly endpointRayDistanceMeters?: number | null;
-    readonly endpointRayPerpendicularErrorMeters?: number | null;
-    readonly finiteEndpointPolicy?:
-      | MetaverseProjectilePresentationDebugFiniteEndpointPolicy
-      | null;
-    readonly hitscanHitKind?:
-      | MetaverseProjectilePresentationDebugHitscanHitKind
-      | null;
-    readonly muzzleToEndpointDistanceMeters?: number | null;
-    readonly postSyncFireActionMuzzleWorld?:
-      | { readonly x: number; readonly y: number; readonly z: number }
-      | null;
-    readonly projectileId?: string | null;
-    readonly renderedMuzzleForwardWorld?:
-      | { readonly x: number; readonly y: number; readonly z: number }
-      | null;
-    readonly renderedMuzzleWorld?:
-      | { readonly x: number; readonly y: number; readonly z: number }
-      | null;
-    readonly semanticTipWorld?:
-      | { readonly x: number; readonly y: number; readonly z: number }
-      | null;
-    readonly serverProjectileOriginWorld?:
-      | { readonly x: number; readonly y: number; readonly z: number }
-      | null;
-    readonly tracerStartSource?:
-      | MetaverseProjectilePresentationDebugTracerStartSource
-      | null;
-    readonly tracerSuppressedReason?:
-      | MetaverseProjectilePresentationDebugTracerSuppressedReason
-      | null;
-    readonly visualEndWorld?:
-      | { readonly x: number; readonly y: number; readonly z: number }
-      | null;
-    readonly visualEndpointSource?:
-      | MetaverseProjectilePresentationDebugVisualEndpointSource
-      | null;
-    readonly visualStartWorld?:
-      | { readonly x: number; readonly y: number; readonly z: number }
-      | null;
-    readonly weaponId: string;
-    readonly weaponInstanceId?: string | null;
-  }): void {
-    const drainTimeRenderedMuzzleWorld = readFiniteVector3(
-      input.drainTimeRenderedMuzzleWorld
-    );
-    const eventCameraRayForwardWorld = readNormalizedVector3(
-      input.eventCameraRayForwardWorld
-    );
-    const renderedMuzzleWorld = readFiniteVector3(input.renderedMuzzleWorld);
-    const postSyncFireActionMuzzleWorld = readFiniteVector3(
-      input.postSyncFireActionMuzzleWorld
-    );
-    const renderedMuzzleForwardWorld = readNormalizedVector3(
-      input.renderedMuzzleForwardWorld
-    );
-    const semanticTipWorld = readFiniteVector3(input.semanticTipWorld);
-    const firstProjectileSnapshotWorld = readFiniteVector3(
-      input.firstProjectileSnapshotWorld
-    );
-    const serverProjectileOriginWorld = readFiniteVector3(
-      input.serverProjectileOriginWorld
-    );
-    const visualEndWorld = readFiniteVector3(input.visualEndWorld);
-    const visualStartWorld = readFiniteVector3(input.visualStartWorld);
-    const visualSegmentDirectionWorld = readSegmentDirection(
-      visualStartWorld,
-      visualEndWorld
-    );
-
-    this.#projectilePresentationDebugSnapshots.unshift(
-      Object.freeze({
-        actionSequence:
-          input.actionSequence === undefined || input.actionSequence === null
-            ? null
-            : Math.max(0, Math.trunc(input.actionSequence)),
-        actorId: input.actorId,
-        cameraRayToVisualSegmentAngleRadians: readVectorAngleRadians(
-          eventCameraRayForwardWorld,
-          visualSegmentDirectionWorld
-        ),
-        deliveryModel: readWeaponPresentationDeliveryModel(input.weaponId),
-        drainTimeRenderedMuzzleWorld,
-        endpointRayDistanceMeters: input.endpointRayDistanceMeters ?? null,
-        endpointRayPerpendicularErrorMeters:
-          input.endpointRayPerpendicularErrorMeters ?? null,
-        eventCameraRayForwardWorld,
-        finiteEndpointPolicy: input.finiteEndpointPolicy ?? null,
-        firstProjectileSnapshotWorld,
-        hitscanHitKind: input.hitscanHitKind ?? null,
-        muzzleToEndpointDistanceMeters:
-          input.muzzleToEndpointDistanceMeters ?? null,
-        postSyncFireActionMuzzleWorld,
-        postSyncFireActionToDrainTimeMuzzleDeltaMeters: readVectorDistanceMeters(
-          postSyncFireActionMuzzleWorld,
-          drainTimeRenderedMuzzleWorld
-        ),
-        muzzleToSemanticTipDeltaMeters: readVectorDistanceMeters(
-          renderedMuzzleWorld,
-          semanticTipWorld
-        ),
-        muzzleForwardToVisualSegmentAngleRadians: readVectorAngleRadians(
-          renderedMuzzleForwardWorld,
-          visualSegmentDirectionWorld
-        ),
-        projectileId: input.projectileId ?? null,
-        renderedMuzzleCapturedAt:
-          renderedMuzzleWorld === null ? "unavailable" : "post-sync",
-        renderedMuzzleForwardWorld,
-        renderedMuzzleWorld,
-        renderedToServerDeltaMeters: readVectorDistanceMeters(
-          renderedMuzzleWorld,
-          serverProjectileOriginWorld
-        ),
-        semanticTipToFirstSnapshotDeltaMeters: readVectorDistanceMeters(
-          semanticTipWorld,
-          firstProjectileSnapshotWorld
-        ),
-        semanticTipWorld,
-        serverProjectileOriginWorld,
-        sharedObjectLocalMuzzleFrame: readSharedObjectLocalMuzzleFrame(
-          input.weaponId
-        ),
-        tracerSuppressedReason: input.tracerSuppressedReason ?? null,
-        tracerStartSource: input.tracerStartSource ?? null,
-        visualEndWorld,
-        visualEndpointSource: input.visualEndpointSource ?? null,
-        visualSegmentDirectionWorld,
-        visualStartWorld,
-        weaponId: input.weaponId,
-        weaponInstanceId: input.weaponInstanceId ?? null
-      })
-    );
-
-    while (
-      this.#projectilePresentationDebugSnapshots.length >
-      metaverseCombatProjectilePresentationDebugMaxEntries
-    ) {
-      this.#projectilePresentationDebugSnapshots.pop();
-    }
-  }
-
   #syncCombatEvents(
     worldSnapshot: MetaverseRealtimeWorldSnapshot,
     cameraSnapshot: MetaverseCameraSnapshot
   ): void {
-    const latestCombatEventSequence =
-      worldSnapshot.combatEvents.length === 0
-        ? this.#lastCombatEventSequence
-        : Math.max(...worldSnapshot.combatEvents.map(readCombatEventSequence));
+    const latestCombatEventSequence = readLatestCombatEventSequence(
+      worldSnapshot.combatEvents,
+      this.#lastCombatEventSequence
+    );
 
     if (this.#lastCombatEventSequence === null) {
       const localPlayerId = this.#readLocalPlayerId();
@@ -1507,17 +1021,31 @@ export class MetaverseCombatFeedbackRuntime {
       return;
     }
 
-    const newEvents = worldSnapshot.combatEvents.filter(
-      (eventSnapshot) =>
-        eventSnapshot.eventSequence > (this.#lastCombatEventSequence ?? 0)
-    );
-    const combatEvents = [
-      ...this.#deferredCombatEventsBySequence.values(),
-      ...newEvents
-    ].sort(
-      (leftEvent, rightEvent) =>
-        leftEvent.eventSequence - rightEvent.eventSequence
-    );
+    const lastCombatEventSequence = this.#lastCombatEventSequence ?? 0;
+    let newEvents: MetaverseCombatEventSnapshot[] | null = null;
+
+    for (const eventSnapshot of worldSnapshot.combatEvents) {
+      if (eventSnapshot.eventSequence <= lastCombatEventSequence) {
+        continue;
+      }
+
+      if (newEvents === null) {
+        newEvents = [];
+      }
+
+      newEvents.push(eventSnapshot);
+    }
+
+    const combatEvents =
+      this.#deferredCombatEventsBySequence.size === 0
+        ? newEvents ?? []
+        : [
+            ...this.#deferredCombatEventsBySequence.values(),
+            ...(newEvents ?? [])
+          ].sort(
+            (leftEvent, rightEvent) =>
+              leftEvent.eventSequence - rightEvent.eventSequence
+          );
 
     for (const eventSnapshot of combatEvents) {
       const processed = this.#triggerCombatEvent(
@@ -1548,15 +1076,6 @@ export class MetaverseCombatFeedbackRuntime {
     cameraSnapshot: MetaverseCameraSnapshot
   ): boolean {
     switch (eventSnapshot.eventKind) {
-      case "fire-accepted":
-        this.#triggerFireAcceptedEvent(
-          eventSnapshot,
-          worldSnapshot,
-          cameraSnapshot
-        );
-        return true;
-      case "fire-rejected":
-        return true;
       case "hitscan-resolved":
         return this.#triggerHitscanResolvedEvent(eventSnapshot, worldSnapshot);
       case "projectile-spawned":
@@ -1572,69 +1091,6 @@ export class MetaverseCombatFeedbackRuntime {
         );
       }
     }
-  }
-
-  #triggerFireAcceptedEvent(
-    eventSnapshot: MetaverseCombatEventSnapshot,
-    worldSnapshot: MetaverseRealtimeWorldSnapshot,
-    _cameraSnapshot: MetaverseCameraSnapshot
-  ): void {
-    const localPlayerId = this.#readLocalPlayerId();
-
-    if (
-      eventSnapshot.playerId === localPlayerId ||
-      eventSnapshot.presentationDeliveryModel !== "hitscan-tracer"
-    ) {
-      return;
-    }
-
-    const playerSnapshot = readPlayerById(worldSnapshot, eventSnapshot.playerId);
-    const directionWorld =
-      readFiniteVector3(eventSnapshot.cameraRayForwardWorld) ??
-      (playerSnapshot === null
-        ? null
-        : createDirectionFromPitchYaw(playerSnapshot.look));
-    const semanticOriginWorld =
-      readFiniteVector3(eventSnapshot.semanticMuzzleWorld) ??
-      (playerSnapshot === null
-        ? null
-        : readPlayerSemanticWeaponTipPosition(
-            playerSnapshot,
-            eventSnapshot.weaponId,
-            directionWorld
-          ));
-
-    const visualKey = createCombatVisualKey({
-      actionSequence: eventSnapshot.actionSequence,
-      eventKind: "muzzle",
-      playerId: eventSnapshot.playerId,
-      shotId: eventSnapshot.shotId,
-      source: "authoritative-fire-event",
-      weaponId: eventSnapshot.weaponId
-    });
-
-    this.#queueVisualIntent({
-      actionSequence: eventSnapshot.actionSequence,
-      activeSlotId: eventSnapshot.activeSlotId ?? null,
-      directionWorld,
-      endWorld: null,
-      eventCameraRayForwardWorld: directionWorld,
-      fallbackWaitCount: 0,
-      firstProjectileSnapshotWorld: null,
-      hitscanHitKind: null,
-      kind: "muzzle-only",
-      playerId: eventSnapshot.playerId,
-      projectileId: null,
-      rayOriginWorld: readFiniteVector3(eventSnapshot.cameraRayOriginWorld),
-      semanticOriginWorld,
-      sequence: eventSnapshot.eventSequence,
-      serverOriginWorld: semanticOriginWorld,
-      shotId: eventSnapshot.shotId,
-      source: "authoritative-fire-event",
-      visualKey,
-      weaponId: eventSnapshot.weaponId,
-      weaponInstanceId: eventSnapshot.weaponInstanceId ?? null
-    });
   }
 
   #triggerHitscanResolvedEvent(
@@ -1902,10 +1358,10 @@ export class MetaverseCombatFeedbackRuntime {
     worldSnapshot: MetaverseRealtimeWorldSnapshot,
     cameraSnapshot: MetaverseCameraSnapshot
   ): void {
-    const latestFeedSequence =
-      worldSnapshot.combatFeed.length === 0
-        ? this.#lastCombatFeedSequence
-        : Math.max(...worldSnapshot.combatFeed.map(readCombatFeedSequence));
+    const latestFeedSequence = readLatestCombatFeedSequence(
+      worldSnapshot.combatFeed,
+      this.#lastCombatFeedSequence
+    );
 
     if (this.#lastCombatFeedSequence === null) {
       this.#lastCombatFeedSequence = latestFeedSequence ?? 0;

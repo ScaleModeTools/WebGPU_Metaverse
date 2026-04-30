@@ -29,7 +29,7 @@
     "typecheck:workspaces": "npm run typecheck --workspace @webgpu-metaverse/shared && npm run typecheck --workspace @webgpu-metaverse/server && npm run typecheck --workspace @webgpu-metaverse/client",
     "typecheck:contracts": "tsc -p tests/tsconfig.json --noEmit",
     "typecheck": "npm run typecheck:workspaces && npm run typecheck:contracts",
-    "test:runtime": "node --test --test-concurrency=1 tests/runtime/**/*.test.mjs",
+    "test:runtime": "find tests/runtime -name '*.test.mjs' -print0 | sort -z | xargs -0 node --test --test-concurrency=1",
     "check": "npm run typecheck && npm run test:runtime"
   },
   "devDependencies": {

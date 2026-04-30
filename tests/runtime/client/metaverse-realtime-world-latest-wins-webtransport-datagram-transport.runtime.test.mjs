@@ -3,9 +3,9 @@ import test, { after, before } from "node:test";
 
 import {
   createMetaversePlayerId,
+  createMetaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagram,
   createMetaverseRealtimeWorldWebTransportDriverVehicleControlDatagram,
   createMetaverseRealtimeWorldWebTransportPlayerLookIntentDatagram,
-  createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram,
   createMetaverseSyncDriverVehicleControlCommand,
   createMetaverseSyncPlayerLookIntentCommand,
   createMetaverseSyncPlayerTraversalIntentCommand,
@@ -105,7 +105,7 @@ test("createMetaverseRealtimeWorldLatestWinsWebTransportDatagramTransport sends 
   );
   assert.deepEqual(
     sentDatagrams[2],
-    createMetaverseRealtimeWorldWebTransportPlayerTraversalIntentDatagram({
+    createMetaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagram({
       command: playerTraversalIntentCommand,
       roomId
     })

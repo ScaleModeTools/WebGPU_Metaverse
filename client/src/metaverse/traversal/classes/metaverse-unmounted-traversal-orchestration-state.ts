@@ -404,14 +404,26 @@ export class MetaverseUnmountedTraversalOrchestrationState {
     }
 
     if (this.#dependencies.readLocomotionMode() === "swim") {
-      this.clearGroundedPredictionAccumulator();
+      const clearedTraversalState =
+        this.#dependencies.unmountedTraversalMotionState.clearGroundedPredictionAccumulator(
+          this.#dependencies.readTraversalState()
+        );
+      const swimTraversalState =
+        clearedTraversalState.locomotionMode === "swim"
+          ? clearedTraversalState
+          : createMetaverseUnmountedTraversalStateSnapshot({
+              actionState: clearedTraversalState.actionState,
+              locomotionMode: "swim"
+            });
+
+      this.#dependencies.writeTraversalState(swimTraversalState);
       const swimAdvanceResult =
         this.#dependencies.unmountedTraversalMotionState.advanceSwimLocomotion({
           cameraSnapshot,
           deltaSeconds,
           movementInput,
           traversalIntentInput,
-          traversalState: this.#dependencies.readTraversalState()
+          traversalState: swimTraversalState
         });
       this.#dependencies.writeTraversalState(swimAdvanceResult.traversalState);
 
@@ -459,7 +471,6 @@ export class MetaverseUnmountedTraversalOrchestrationState {
             .readPredictedLocalReconciliationSampleMatch({
               authoritativeSnapshotAgeMs:
                 authoritativeSample.authoritativeSnapshotAgeMs,
-              authoritativeTick: authoritativeSample.authoritativeTick,
               lastProcessedTraversalSequence:
                 authoritativeSample.lastProcessedTraversalSequence,
               receivedAtWallClockMs: authoritativeSample.receivedAtWallClockMs

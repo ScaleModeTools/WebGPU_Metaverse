@@ -159,52 +159,6 @@ function createWorldSnapshot({
 });
 }
 
-function createShotResolutionTelemetry({
-  actionSequence,
-  finalReason = "hit-player",
-  point = Object.freeze({ x: 0, y: 1.2, z: -8 }),
-  rayForwardWorld = Object.freeze({ x: 0, y: 0, z: -1 }),
-  rayOriginWorld = Object.freeze({ x: 0, y: 1.62, z: 0 }),
-  targetPlayerId
-}) {
-  return Object.freeze({
-    actionSequence,
-    candidatePlayerHit: Object.freeze({
-      distanceMeters: 8,
-      hitZone: "body",
-      point,
-      regionId: "upper_torso",
-      targetPlayerId
-    }),
-    finalReason,
-    firingReferenceOriginWorld: Object.freeze({
-      x: 0.18,
-      y: 1.42,
-      z: -0.55
-    }),
-    lineOfSightBlocked: false,
-    lineOfSightBlockerDistanceMeters: null,
-    lineOfSightBlockerKind: null,
-    lineOfSightBlockerPoint: null,
-    lineOfSightChecked: true,
-    processedAtTimeMs: 1_240 + actionSequence,
-    rayForwardWorld,
-    rayOriginWorld,
-    rewindSource: "none",
-    selectedPlayerHit: Object.freeze({
-      distanceMeters: 8,
-      hitZone: "body",
-      point,
-      regionId: "upper_torso",
-      targetPlayerId
-    }),
-    weaponId,
-    worldHitColliderKind: null,
-    worldHitDistanceMeters: null,
-    worldHitPoint: null
-  });
-}
-
 function createHitscanResolvedEvent({
   actionSequence,
   aimTargetWorld,
@@ -239,33 +193,6 @@ function createHitscanResolvedEvent({
     }),
     playerId,
     presentationDeliveryModel: "hitscan-tracer",
-    semanticMuzzleWorld,
-    serverTick: eventSequence,
-    shotId: `${playerId}:${actionSequence}`,
-    weaponId: eventWeaponId
-  });
-}
-
-function createFireAcceptedEvent({
-  actionSequence,
-  eventSequence,
-  playerId,
-  rayForwardWorld = Object.freeze({ x: 0, y: 0, z: -1 }),
-  rayOriginWorld = Object.freeze({ x: 0, y: 1.62, z: 0 }),
-  semanticMuzzleWorld = Object.freeze({ x: 0.18, y: 1.42, z: -0.55 }),
-  weaponId: eventWeaponId = weaponId
-}) {
-  return Object.freeze({
-    actionSequence,
-    cameraRayForwardWorld: rayForwardWorld,
-    cameraRayOriginWorld: rayOriginWorld,
-    eventKind: "fire-accepted",
-    eventSequence,
-    playerId,
-    presentationDeliveryModel:
-      eventWeaponId === "metaverse-rocket-launcher-v1"
-        ? "authoritative-projectile"
-        : "hitscan-tracer",
     semanticMuzzleWorld,
     serverTick: eventSequence,
     shotId: `${playerId}:${actionSequence}`,
@@ -497,17 +424,6 @@ test("MetaverseCombatFeedbackRuntime emits rocket launch and explosion cues from
   const projectileBase = Object.freeze({
     direction: Object.freeze({ x: 0, y: 0, z: -1 }),
     expiresAtTimeMs: 7_200,
-    launchTelemetry: Object.freeze({
-      cameraRayForwardWorld: Object.freeze({ x: 0, y: 0, z: -1 }),
-      cameraRayOriginWorld: Object.freeze({ x: 0, y: 1.62, z: 0 }),
-      cameraRayTargetSource: "max-distance",
-      cameraRayTargetWorld: Object.freeze({ x: 0, y: 1.62, z: -120 }),
-      firstImpactKind: null,
-      firstImpactPointWorld: null,
-      launchConvergenceAngleRadians: 0,
-      launchForwardWorld: Object.freeze({ x: 0, y: 0, z: -1 }),
-      weaponTipOriginWorld
-    }),
     ownerPlayerId: localPlayerId,
     position: Object.freeze({ x: 0, y: 1.44, z: -2 }),
     projectileId: `${localPlayerId}:12`,
@@ -638,15 +554,6 @@ test("MetaverseCombatFeedbackRuntime emits rocket launch and explosion cues from
     z: 0
   });
   assert.match(presentationEvents[0]?.visualKey ?? "", /authoritative-projectile/);
-  assert.equal(runtime.projectilePresentationDebugSnapshots.length, 1);
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]?.tracerStartSource,
-    "rendered-muzzle-post-sync"
-  );
-  assert.deepEqual(
-    runtime.projectilePresentationDebugSnapshots[0]?.serverProjectileOriginWorld,
-    weaponTipOriginWorld
-  );
 });
 
 test("MetaverseCombatFeedbackRuntime consumes pending local pistol events in the first authoritative snapshot", async () => {
@@ -712,44 +619,6 @@ test("MetaverseCombatFeedbackRuntime consumes pending local pistol events in the
   assert.equal(tracerEvents.length, 1);
   assert.deepEqual(tracerEvents[0]?.originWorld, predictedOrigin);
   assert.deepEqual(tracerEvents[0]?.endWorld, hitPointWorld);
-  assert.equal(runtime.projectilePresentationDebugSnapshots.length, 1);
-  assert.deepEqual(
-    runtime.projectilePresentationDebugSnapshots[0]?.postSyncFireActionMuzzleWorld,
-    predictedOrigin
-  );
-  assert.deepEqual(
-    runtime.projectilePresentationDebugSnapshots[0]?.drainTimeRenderedMuzzleWorld,
-    drainTimeOrigin
-  );
-  assert.ok(
-    Math.abs(
-      (runtime.projectilePresentationDebugSnapshots[0]
-        ?.postSyncFireActionToDrainTimeMuzzleDeltaMeters ?? 0) -
-        Math.hypot(
-          drainTimeOrigin.x - predictedOrigin.x,
-          drainTimeOrigin.y - predictedOrigin.y,
-          drainTimeOrigin.z - predictedOrigin.z
-        )
-    ) < 0.000001
-  );
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]?.tracerStartSource,
-    "rendered-muzzle-post-sync"
-  );
-  assert.equal(
-    Number.isFinite(
-      runtime.projectilePresentationDebugSnapshots[0]
-        ?.cameraRayToVisualSegmentAngleRadians
-    ),
-    true
-  );
-  assert.equal(
-    Number.isFinite(
-      runtime.projectilePresentationDebugSnapshots[0]
-        ?.muzzleForwardToVisualSegmentAngleRadians
-    ),
-    true
-  );
 });
 
 test("MetaverseCombatFeedbackRuntime consumes pending local rocket spawn events in the first authoritative snapshot", async () => {
@@ -814,7 +683,6 @@ test("MetaverseCombatFeedbackRuntime consumes pending local rocket spawn events 
         Object.freeze({
           direction: Object.freeze({ x: 0, y: 0, z: -1 }),
           expiresAtTimeMs: 7_000,
-          launchTelemetry: null,
           ownerPlayerId: localPlayerId,
           position: firstProjectileSnapshotWorld,
           projectileId,
@@ -852,19 +720,6 @@ test("MetaverseCombatFeedbackRuntime consumes pending local rocket spawn events 
   assert.equal(launchEvents[0]?.projectileId, projectileId);
   assert.deepEqual(launchEvents[0]?.originWorld, renderedMuzzle);
   assert.deepEqual(launchEvents[0]?.endWorld, launchAimTarget);
-  assert.equal(runtime.projectilePresentationDebugSnapshots.length, 1);
-  assert.deepEqual(
-    runtime.projectilePresentationDebugSnapshots[0]?.postSyncFireActionMuzzleWorld,
-    renderedMuzzle
-  );
-  assert.deepEqual(
-    runtime.projectilePresentationDebugSnapshots[0]?.drainTimeRenderedMuzzleWorld,
-    drainTimeMuzzle
-  );
-  assert.deepEqual(
-    runtime.projectilePresentationDebugSnapshots[0]?.firstProjectileSnapshotWorld,
-    firstProjectileSnapshotWorld
-  );
 });
 
 test("MetaverseCombatFeedbackRuntime consumes active rocket spawn events in the first authoritative snapshot", async () => {
@@ -906,7 +761,6 @@ test("MetaverseCombatFeedbackRuntime consumes active rocket spawn events in the 
         Object.freeze({
           direction: Object.freeze({ x: 0, y: 0, z: -1 }),
           expiresAtTimeMs: 7_000,
-          launchTelemetry: null,
           ownerPlayerId: remotePlayerId,
           position: Object.freeze({ x: 0.1, y: 1.34, z: -2 }),
           projectileId,
@@ -1054,7 +908,6 @@ test("MetaverseCombatFeedbackRuntime plays fresh initial rocket ground impact ev
         Object.freeze({
           direction: Object.freeze({ x: 0, y: -0.3, z: -1 }),
           expiresAtTimeMs: 7_200,
-          launchTelemetry: null,
           ownerPlayerId: remotePlayerId,
           position: impactPointWorld,
           projectileId,
@@ -1255,10 +1108,8 @@ test("MetaverseCombatFeedbackRuntime does not replay observer shot-count when lo
       localUsername,
       observerPlayer: {
         highestProcessedPlayerActionSequence: 1,
-        latestShotResolutionTelemetry: null,
         playerId: localPlayerId,
-        recentPlayerActionReceipts: [],
-        recentShotResolutionTelemetry: []
+        recentPlayerActionReceipts: []
       },
       remotePlayerId,
       remoteUsername,
@@ -1273,10 +1124,8 @@ test("MetaverseCombatFeedbackRuntime does not replay observer shot-count when lo
       localUsername,
       observerPlayer: {
         highestProcessedPlayerActionSequence: 1,
-        latestShotResolutionTelemetry: null,
         playerId: localPlayerId,
-        recentPlayerActionReceipts: [],
-        recentShotResolutionTelemetry: []
+        recentPlayerActionReceipts: []
       },
       remotePlayerId,
       remoteUsername,
@@ -1394,14 +1243,12 @@ test("MetaverseCombatFeedbackRuntime ignores aggregate remote pistol shot-count 
     cameraSnapshot
   );
 
-  const remoteMuzzleEvents = presentationEvents.filter(
+  const remoteShotEvents = presentationEvents.filter(
     (event) =>
-      event.kind === "shot" &&
-      event.playerId === remotePlayerId &&
-      event.shotFx === "muzzle-only"
+      event.kind === "shot" && event.playerId === remotePlayerId
   );
 
-  assert.equal(remoteMuzzleEvents.length, 0);
+  assert.equal(remoteShotEvents.length, 0);
 });
 
 test("MetaverseCombatFeedbackRuntime renders remote pistol fire from combat events", async () => {
@@ -1446,15 +1293,9 @@ test("MetaverseCombatFeedbackRuntime renders remote pistol fire from combat even
   runtime.syncAuthoritativeWorld(
     createWorldSnapshot({
       combatEvents: [
-        createFireAcceptedEvent({
-          actionSequence: 9,
-          eventSequence: 1,
-          playerId: remotePlayerId,
-          semanticMuzzleWorld: remoteMuzzle
-        }),
         createHitscanResolvedEvent({
           actionSequence: 9,
-          eventSequence: 2,
+          eventSequence: 1,
           hitPointWorld: remoteHitPoint,
           playerId: remotePlayerId,
           semanticMuzzleWorld: remoteMuzzle,
@@ -1475,12 +1316,6 @@ test("MetaverseCombatFeedbackRuntime renders remote pistol fire from combat even
     new Map([[remotePlayerId, remoteMuzzle]])
   );
 
-  const remoteMuzzleEvents = presentationEvents.filter(
-    (event) =>
-      event.kind === "shot" &&
-      event.playerId === remotePlayerId &&
-      event.shotFx === "muzzle-only"
-  );
   const remoteTracerEvents = presentationEvents.filter(
     (event) =>
       event.kind === "shot" &&
@@ -1489,8 +1324,6 @@ test("MetaverseCombatFeedbackRuntime renders remote pistol fire from combat even
   );
 
   assert.deepEqual(audioCalls, ["metaverse-pistol-shot"]);
-  assert.equal(remoteMuzzleEvents.length, 1);
-  assert.deepEqual(remoteMuzzleEvents[0]?.originWorld, remoteMuzzle);
   assert.equal(remoteTracerEvents.length, 1);
   assert.deepEqual(remoteTracerEvents[0]?.originWorld, remoteMuzzle);
   assert.deepEqual(remoteTracerEvents[0]?.endWorld, remoteHitPoint);
@@ -1670,14 +1503,6 @@ test("MetaverseCombatFeedbackRuntime sends pistol miss tracers to the authoritat
   assert.equal(tracerEvents.length, 1);
   assert.deepEqual(tracerEvents[0]?.originWorld, renderedMuzzle);
   assert.deepEqual(tracerEvents[0]?.endWorld, authoritativeMissEnd);
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]?.visualEndpointSource,
-    "camera-ray-max-distance"
-  );
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]?.finiteEndpointPolicy,
-    "normal-tracer"
-  );
 });
 
 test("MetaverseCombatFeedbackRuntime renders far pistol world hits as tracer plus impact", async () => {
@@ -1760,23 +1585,6 @@ test("MetaverseCombatFeedbackRuntime renders far pistol world hits as tracer plu
   assert.deepEqual(tracerEvents[0]?.endWorld, worldHitPoint);
   assert.equal(impactEvents.length, 1);
   assert.deepEqual(impactEvents[0]?.originWorld, worldHitPoint);
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]?.hitscanHitKind,
-    "world"
-  );
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]?.visualEndpointSource,
-    "authoritative-hit-point"
-  );
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]?.finiteEndpointPolicy,
-    "normal-tracer"
-  );
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]
-      ?.endpointRayPerpendicularErrorMeters,
-    0
-  );
 });
 
 test("MetaverseCombatFeedbackRuntime renders close pistol world hits as tracer plus impact", async () => {
@@ -1860,14 +1668,6 @@ test("MetaverseCombatFeedbackRuntime renders close pistol world hits as tracer p
   assert.deepEqual(tracerEvents[0]?.endWorld, expectedTracerEnd);
   assert.equal(impactEvents.length, 1);
   assert.deepEqual(impactEvents[0]?.originWorld, closeWorldHitPoint);
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]?.finiteEndpointPolicy,
-    "near-field-tracer"
-  );
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]?.tracerSuppressedReason,
-    null
-  );
 });
 
 test("MetaverseCombatFeedbackRuntime trusts finite diagnostic off-ray pistol world endpoints", async () => {
@@ -1980,25 +1780,6 @@ test("MetaverseCombatFeedbackRuntime trusts finite diagnostic off-ray pistol wor
       "20:pistol-tracer"
     ]
   );
-  assert.deepEqual(
-    runtime.projectilePresentationDebugSnapshots
-      .slice(0, 2)
-      .map((snapshot) => snapshot.finiteEndpointPolicy),
-    ["normal-tracer", "normal-tracer"]
-  );
-  assert.deepEqual(
-    runtime.projectilePresentationDebugSnapshots
-      .slice(0, 2)
-      .map((snapshot) => snapshot.tracerSuppressedReason),
-    [null, null]
-  );
-  assert.equal(
-    Number(
-      runtime.projectilePresentationDebugSnapshots[1]
-        ?.endpointRayPerpendicularErrorMeters
-    ) > 0.12,
-    true
-  );
 });
 
 test("MetaverseCombatFeedbackRuntime keeps close behind-muzzle world impacts authoritative while drawing tracers forward", async () => {
@@ -2106,21 +1887,6 @@ test("MetaverseCombatFeedbackRuntime keeps close behind-muzzle world impacts aut
   );
   assert.equal(impactEvents.length, 1);
   assert.deepEqual(impactEvents[0]?.originWorld, backwardWorldHitPoint);
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]?.finiteEndpointPolicy,
-    "forward-converged-tracer"
-  );
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]?.tracerSuppressedReason,
-    null
-  );
-  assert.equal(
-    Number(
-      runtime.projectilePresentationDebugSnapshots[0]
-        ?.muzzleForwardToVisualSegmentAngleRadians
-    ) < Math.PI / 2,
-    true
-  );
 });
 
 test("MetaverseCombatFeedbackRuntime suppresses missing pistol world endpoints", async () => {
@@ -2199,14 +1965,6 @@ test("MetaverseCombatFeedbackRuntime suppresses missing pistol world endpoints",
     ).length,
     0
   );
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]?.finiteEndpointPolicy,
-    "suppressed-invalid-endpoint"
-  );
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]?.tracerSuppressedReason,
-    "missing-endpoint"
-  );
 });
 
 test("MetaverseCombatFeedbackRuntime falls back to semantic muzzle without rendered muzzle", async () => {
@@ -2278,23 +2036,6 @@ test("MetaverseCombatFeedbackRuntime falls back to semantic muzzle without rende
 
   assert.equal(tracerEvents.length, 1);
   assert.deepEqual(tracerEvents[0]?.originWorld, expectedSemanticTip);
-  assert.equal(runtime.projectilePresentationDebugSnapshots.length, 1);
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]?.tracerStartSource,
-    "semantic-muzzle-fallback"
-  );
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]?.finiteEndpointPolicy,
-    "normal-tracer"
-  );
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]?.tracerSuppressedReason,
-    null
-  );
-  assert.deepEqual(
-    runtime.projectilePresentationDebugSnapshots[0]?.semanticTipWorld,
-    expectedSemanticTip
-  );
 });
 
 test("MetaverseCombatFeedbackRuntime uses drain-time rendered muzzle when action capture is missing", async () => {
@@ -2366,78 +2107,6 @@ test("MetaverseCombatFeedbackRuntime uses drain-time rendered muzzle when action
 
   assert.equal(tracerEvents.length, 1);
   assert.deepEqual(tracerEvents[0]?.originWorld, drainTimeMuzzle);
-  assert.equal(runtime.projectilePresentationDebugSnapshots.length, 1);
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]?.tracerStartSource,
-    "rendered-muzzle-drain-time"
-  );
-  assert.deepEqual(
-    runtime.projectilePresentationDebugSnapshots[0]?.drainTimeRenderedMuzzleWorld,
-    drainTimeMuzzle
-  );
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]?.tracerSuppressedReason,
-    null
-  );
-  assert.equal(
-    runtime.projectilePresentationDebugSnapshots[0]?.postSyncFireActionMuzzleWorld,
-    null
-  );
-});
-
-test("MetaverseCombatFeedbackRuntime ignores stale local pistol resolution telemetry without a pending visual shot", async () => {
-  const { MetaverseCombatFeedbackRuntime } = await clientLoader.load(
-    "/src/metaverse/classes/metaverse-combat-feedback-runtime.ts"
-  );
-  const localPlayerId = createMetaversePlayerId("combat-feedback-stale-local");
-  const remotePlayerId = createMetaversePlayerId("combat-feedback-stale-remote");
-  const localUsername = createUsername("Stale Feedback Local");
-  const remoteUsername = createUsername("Stale Feedback Remote");
-
-  assert.notEqual(localPlayerId, null);
-  assert.notEqual(remotePlayerId, null);
-  assert.notEqual(localUsername, null);
-  assert.notEqual(remoteUsername, null);
-
-  const presentationEvents = [];
-  const runtime = new MetaverseCombatFeedbackRuntime({
-    readLocalPlayerId: () => localPlayerId,
-    triggerPresentationEvent(event) {
-      presentationEvents.push(event);
-    }
-  });
-  const cameraSnapshot = createCameraSnapshot();
-  const staleTelemetry = [1, 2, 3, 4].map((actionSequence) =>
-    createShotResolutionTelemetry({
-      actionSequence,
-      targetPlayerId: remotePlayerId
-    })
-  );
-
-  runtime.syncAuthoritativeWorld(
-    createWorldSnapshot({
-      localPlayerId,
-      localUsername,
-      observerPlayer: {
-        highestProcessedPlayerActionSequence: 4,
-        latestShotResolutionTelemetry: staleTelemetry.at(-1),
-        playerId: localPlayerId,
-        recentPlayerActionReceipts: [],
-        recentShotResolutionTelemetry: staleTelemetry
-      },
-      remotePlayerId,
-      remoteUsername,
-      snapshotSequence: 1
-    }),
-    cameraSnapshot
-  );
-
-  assert.equal(
-    presentationEvents.filter(
-      (event) => event.kind === "shot" && event.shotFx === "pistol-tracer"
-    ).length,
-    0
-  );
 });
 
 test("MetaverseCombatFeedbackRuntime preserves two quick authoritative pistol tracer events", async () => {
@@ -2584,15 +2253,17 @@ test("MetaverseCombatFeedbackRuntime emits local, spatial remote, hit, and death
     runtime.syncAuthoritativeWorld(
       createWorldSnapshot({
         combatEvents: [
-          createFireAcceptedEvent({
+          createHitscanResolvedEvent({
             actionSequence: 8,
             eventSequence: 1,
+            hitPointWorld: Object.freeze({ x: 0, y: 1.62, z: -8 }),
             playerId: remotePlayerId,
             semanticMuzzleWorld: Object.freeze({
               x: 6.18,
               y: 2.32,
               z: -4.55
-            })
+            }),
+            targetPlayerId: localPlayerId
           })
         ],
         combatFeed: [

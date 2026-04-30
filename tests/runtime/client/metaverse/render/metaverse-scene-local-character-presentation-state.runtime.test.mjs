@@ -114,14 +114,6 @@ test("MetaverseSceneLocalCharacterPresentationState owns local animation advance
           calls.push(["sync-attachment-mount", nextMountedEnvironment]);
         }
       },
-      heldWeaponGripDebugState: {
-        recordSkippedFrame() {
-          calls.push("record-held-weapon-skipped-frame");
-        },
-        reset() {
-          calls.push("reset-held-weapon-grip-debug-state");
-        }
-      },
       localCharacterPresentationDependencies: {
         captureHeldWeaponPoseRuntime() {
           calls.push("capture-held-weapon-pose-runtime");
@@ -158,7 +150,6 @@ test("MetaverseSceneLocalCharacterPresentationState owns local animation advance
     });
 
   const presentedCameraSnapshot = localCharacterPresentationState.syncPresentation(
-    10,
     cameraSnapshot,
     1 / 60,
     characterPresentation,
@@ -175,8 +166,7 @@ test("MetaverseSceneLocalCharacterPresentationState owns local animation advance
       mountedOccupancyPresentationState
     ],
     "read-mounted-character-runtime",
-    ["sync-attachment-mount", mountedOccupancyPresentationState],
-    "record-held-weapon-skipped-frame"
+    ["sync-attachment-mount", mountedOccupancyPresentationState]
   ]);
   assert.equal(characterRuntime.anchorGroup.position.x, 1);
   assert.equal(characterRuntime.anchorGroup.position.y, 2);
@@ -184,8 +174,5 @@ test("MetaverseSceneLocalCharacterPresentationState owns local animation advance
 
   localCharacterPresentationState.resetPresentation();
 
-  assert.deepEqual(calls.slice(6), [
-    "reset-held-weapon-grip-debug-state",
-    ["sync-attachment-mount", null]
-  ]);
+  assert.deepEqual(calls.slice(5), [["sync-attachment-mount", null]]);
 });

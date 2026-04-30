@@ -48,6 +48,7 @@ import type {
   MetaverseDriverVehicleControlIntentSnapshot,
   MetaverseRealtimeEnvironmentBodySnapshot,
   MetaverseRealtimeMountedOccupancySnapshot,
+  MetaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagram,
   MetaverseRealtimeWorldClientCommand,
   MetaverseRealtimeWorldWebTransportClientDatagram,
   MetaverseRealtimeWorldWebTransportClientDatagramType,
@@ -343,9 +344,6 @@ type MetaverseRealtimeVehicleSeatRoleMatches = AssertTrue<
     ExpectedMetaversePresenceMountedOccupantRoleId
   >
 >;
-type MetaverseRealtimeTickOwnerMatches = AssertTrue<
-  IsEqual<MetaverseRealtimeWorldSnapshot["tick"]["owner"], "server">
->;
 type MetaverseRealtimeTickIntervalUsesMilliseconds = AssertTrue<
   IsEqual<MetaverseRealtimeWorldSnapshot["tick"]["tickIntervalMs"], Milliseconds>
 >;
@@ -465,6 +463,13 @@ type MetaverseRealtimeWorldWebTransportDatagramWrapsDriverControl = AssertTrue<
     | "sync-player-traversal-intent"
   >
 >;
+type MetaverseRealtimeWorldCompactTraversalDatagramUsesShortTransportType =
+  AssertTrue<
+    IsEqual<
+      MetaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagram["t"],
+      "pt"
+    >
+  >;
 type MetaverseSessionUsesExperienceId = AssertTrue<
   IsEqual<MetaverseSessionSnapshot["activeExperienceId"], ExperienceId | null>
 >;

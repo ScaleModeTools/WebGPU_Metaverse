@@ -1,5 +1,3 @@
-import { type Camera } from "three/webgpu";
-
 import {
   readMetaverseRealtimePlayerActiveBodyKinematicSnapshot
 } from "@webgpu-metaverse/shared";
@@ -9,8 +7,7 @@ import type { MetaverseControlModeId } from "../types/metaverse-control-mode";
 import type {
   FocusedExperiencePortalSnapshot,
   MetaverseHudSnapshot,
-  MetaverseMountedInteractionSnapshot,
-  MetaverseRuntimeConfig,
+  MetaverseMountedInteractionSnapshot
 } from "../types/metaverse-runtime";
 import {
   createMetaverseMountedInteractionHudSnapshot
@@ -18,28 +15,26 @@ import {
 import {
   createMetaverseMountedInteractionSnapshot
 } from "../states/metaverse-mounted-interaction-snapshot";
-import { MetaverseEnvironmentPhysicsRuntime } from "../classes/metaverse-environment-physics-runtime";
 import { MetaversePresenceRuntime } from "../classes/metaverse-presence-runtime";
 import { MetaverseRemoteWorldRuntime } from "../classes/metaverse-remote-world-runtime";
 import { MetaverseTraversalRuntime } from "../classes/metaverse-traversal-runtime";
 import { MetaverseWeaponPresentationRuntime } from "../classes/metaverse-weapon-presentation-runtime";
-import {
-  MetaverseRuntimeHudTelemetryState,
-  type MetaverseRendererTelemetrySource
-} from "./debug/metaverse-runtime-hud-telemetry-state";
+
+interface MetaverseRendererTelemetrySource {
+  readonly info?: {
+    readonly render?: {
+      readonly calls?: number;
+      readonly drawCalls?: number;
+      readonly triangles?: number;
+    };
+  };
+}
 
 interface MetaverseRuntimeHudPublisherDependencies {
-  readonly config: MetaverseRuntimeConfig;
   readonly devicePixelRatio: number;
-  readonly environmentPhysicsRuntime: MetaverseEnvironmentPhysicsRuntime;
   readonly initialControlMode: MetaverseControlModeId;
   readonly presenceRuntime: MetaversePresenceRuntime;
-  readonly readLocalHeldWeaponGripTelemetrySnapshot: (
-    nowMs: number
-  ) => MetaverseHudSnapshot["telemetry"]["localHeldWeaponGrip"];
   readonly readNowMs: () => number;
-  readonly readProjectilePresentationTelemetrySnapshots?: (() =>
-    MetaverseHudSnapshot["telemetry"]["projectilePresentation"]) | null;
   readonly remoteWorldRuntime: MetaverseRemoteWorldRuntime;
   readonly traversalRuntime: MetaverseTraversalRuntime;
   readonly weaponPresentationRuntime?: MetaverseWeaponPresentationRuntime;
@@ -197,10 +192,10 @@ function freezeHudSnapshot(
 }
 
 export class MetaverseRuntimeHudPublisher {
+  readonly #devicePixelRatio: number;
   readonly #presenceRuntime: MetaversePresenceRuntime;
   readonly #readNowMs: () => number;
   readonly #remoteWorldRuntime: MetaverseRemoteWorldRuntime;
-  readonly #telemetryState: MetaverseRuntimeHudTelemetryState;
   readonly #traversalRuntime: MetaverseTraversalRuntime;
   readonly #weaponPresentationRuntime:
     | Pick<MetaverseWeaponPresentationRuntime, "hudSnapshot">
@@ -211,32 +206,20 @@ export class MetaverseRuntimeHudPublisher {
   #lastUiUpdateAtMs = Number.NEGATIVE_INFINITY;
 
   constructor({
-    config,
     devicePixelRatio,
-    environmentPhysicsRuntime,
     initialControlMode,
     presenceRuntime,
-    readLocalHeldWeaponGripTelemetrySnapshot,
     readNowMs,
-    readProjectilePresentationTelemetrySnapshots,
     remoteWorldRuntime,
     traversalRuntime,
     weaponPresentationRuntime
   }: MetaverseRuntimeHudPublisherDependencies) {
+    this.#devicePixelRatio = devicePixelRatio;
     this.#presenceRuntime = presenceRuntime;
     this.#readNowMs = readNowMs;
     this.#remoteWorldRuntime = remoteWorldRuntime;
     this.#traversalRuntime = traversalRuntime;
     this.#weaponPresentationRuntime = weaponPresentationRuntime ?? null;
-    this.#telemetryState = new MetaverseRuntimeHudTelemetryState({
-      config,
-      devicePixelRatio,
-      environmentPhysicsRuntime,
-      readLocalHeldWeaponGripTelemetrySnapshot,
-      readProjectilePresentationTelemetrySnapshots,
-      remoteWorldRuntime,
-      traversalRuntime
-    });
     this.#hudSnapshot = freezeHudSnapshot(
       "idle",
       null,
@@ -255,7 +238,7 @@ export class MetaverseRuntimeHudPublisher {
       this.#traversalRuntime.locomotionMode,
       this.#presenceRuntime.resolveHudSnapshot(),
       createEmptyRadarSnapshot(this.#presenceRuntime.localTeamId),
-      this.#telemetryState.createSnapshot(this.#readNowMs(), {
+      this.#createTelemetrySnapshot({
         frameDeltaMs: 0,
         frameRate: 0,
         renderedFrameCount: 0,
@@ -279,20 +262,7 @@ export class MetaverseRuntimeHudPublisher {
   }
 
   resetTelemetryState(): void {
-    this.#telemetryState.reset();
     this.#lastUiUpdateAtMs = Number.NEGATIVE_INFINITY;
-  }
-
-  trackFrameTelemetry(
-    nowMs: number,
-    referenceCameraSnapshot: MetaverseHudSnapshot["camera"],
-    renderedCamera: Camera
-  ): void {
-    this.#telemetryState.trackFrame(
-      nowMs,
-      referenceCameraSnapshot,
-      renderedCamera
-    );
   }
 
   publishSnapshot(
@@ -319,7 +289,7 @@ export class MetaverseRuntimeHudPublisher {
       this.#traversalRuntime.locomotionMode,
       presenceSnapshot,
       this.#createRadarSnapshot(presenceSnapshot),
-      this.#telemetryState.createSnapshot(resolvedNowMs, {
+      this.#createTelemetrySnapshot({
         frameDeltaMs: input.frameDeltaMs,
         frameRate: input.frameRate,
         renderedFrameCount: input.renderedFrameCount,
@@ -341,6 +311,28 @@ export class MetaverseRuntimeHudPublisher {
     for (const listener of this.#uiUpdateListeners) {
       listener();
     }
+  }
+
+  #createTelemetrySnapshot(input: {
+    readonly frameDeltaMs: number;
+    readonly frameRate: number;
+    readonly renderedFrameCount: number;
+    readonly renderer: MetaverseRendererTelemetrySource | null;
+  }): MetaverseHudSnapshot["telemetry"] {
+    const renderInfo = input.renderer?.info?.render;
+
+    return Object.freeze({
+      frameDeltaMs: input.frameDeltaMs,
+      frameRate: input.frameRate,
+      renderedFrameCount: input.renderedFrameCount,
+      renderer: Object.freeze({
+        active: input.renderer !== null,
+        devicePixelRatio: this.#devicePixelRatio,
+        drawCallCount: renderInfo?.drawCalls ?? renderInfo?.calls ?? 0,
+        label: "WebGPU",
+        triangleCount: renderInfo?.triangles ?? 0
+      })
+    });
   }
 
   #createBootSnapshot(

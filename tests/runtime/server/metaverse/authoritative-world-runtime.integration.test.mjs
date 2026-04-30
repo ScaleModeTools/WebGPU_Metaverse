@@ -657,10 +657,6 @@ test("MetaverseAuthoritativeWorldRuntime simulates grounded jump ascent, descent
     landedSnapshot.players[0]?.traversalAuthority.lastConsumedActionSequence,
     2
   );
-  assert.equal(
-    landedSnapshot.observerPlayer?.jumpDebug.resolvedActionSequence,
-    2
-  );
   assert.ok(Math.abs(landedActiveBodySnapshot.linearVelocity.y) < 0.001);
   assert.ok(
     landedActiveBodySnapshot.position.y >
@@ -950,7 +946,6 @@ test("MetaverseAuthoritativeWorldRuntime accepts a grounded-spawn jump after rec
     (jumpSnapshot.players[0]?.groundedBody.jumpBody
       .verticalSpeedUnitsPerSecond ?? 0) > 0
   );
-  assert.equal(jumpSnapshot.observerPlayer?.jumpDebug.resolvedActionState, "accepted");
 });
 
 test("MetaverseAuthoritativeWorldRuntime accepts a grounded jump when shared spawn support is within snap distance", () => {
@@ -1083,7 +1078,6 @@ test("MetaverseAuthoritativeWorldRuntime accepts a grounded jump from a latest-w
     jumpSnapshot.players[0]?.traversalAuthority.lastConsumedActionSequence,
     2
   );
-  assert.equal(jumpSnapshot.observerPlayer?.jumpDebug.resolvedActionState, "accepted");
   assert.ok(jumpActiveBodySnapshot.position.y > initialHeight);
   assert.ok(jumpActiveBodySnapshot.linearVelocity.y > 0);
 });
@@ -1172,17 +1166,6 @@ test("MetaverseAuthoritativeWorldRuntime briefly buffers an airborne jump edge b
     bufferedJumpSnapshot.players[0]?.traversalAuthority.lastConsumedActionSequence,
     2
   );
-  assert.equal(
-    bufferedJumpSnapshot.observerPlayer?.jumpDebug.pendingActionSequence,
-    4
-  );
-  assert.ok(
-    (bufferedJumpSnapshot.observerPlayer?.jumpDebug.pendingActionBufferAgeMs ?? 0) >= 100
-  );
-  assert.equal(
-    bufferedJumpSnapshot.observerPlayer?.jumpDebug.resolvedActionState,
-    "accepted"
-  );
   runtime.advanceToTime(500);
 
   const clearedBufferedJumpSnapshot = runtime.readWorldSnapshot(500, playerId);
@@ -1197,18 +1180,6 @@ test("MetaverseAuthoritativeWorldRuntime briefly buffers an airborne jump edge b
   assert.equal(
     clearedBufferedJumpSnapshot.players[0]?.traversalAuthority.lastRejectedActionSequence,
     0
-  );
-  assert.equal(
-    clearedBufferedJumpSnapshot.observerPlayer?.jumpDebug.pendingActionSequence,
-    0
-  );
-  assert.equal(
-    clearedBufferedJumpSnapshot.observerPlayer?.jumpDebug.resolvedActionSequence,
-    2
-  );
-  assert.equal(
-    clearedBufferedJumpSnapshot.observerPlayer?.jumpDebug.resolvedActionState,
-    "accepted"
   );
   assert.ok(
     clearedBufferedJumpActiveBodySnapshot.position.y >

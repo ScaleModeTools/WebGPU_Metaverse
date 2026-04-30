@@ -14,8 +14,6 @@ import {
   type MetaversePresenceRosterSnapshot
 } from "@webgpu-metaverse/shared/metaverse/presence";
 import {
-  metaverseTraversalActionBufferSeconds,
-  readMetaverseTraversalPendingActionBufferAgeMs,
   type MetaverseTraversalBodyControlSnapshot,
   type MetaverseSurfaceDriveBodyRuntimeSnapshot,
   type MetaverseTraversalAuthoritySnapshot,
@@ -38,7 +36,6 @@ import type {
   MetaverseCombatFeedEventSnapshot,
   MetaverseCombatMatchSnapshot,
   MetaverseCombatProjectileSnapshot,
-  MetaverseCombatShotResolutionTelemetrySnapshot,
   MetaversePlayerActionReceiptSnapshot,
   MetaversePlayerCombatSnapshot
 } from "@webgpu-metaverse/shared/metaverse";
@@ -143,11 +140,6 @@ export interface MetaverseAuthoritativeWorldSnapshotAssemblyConfig {
     MetaversePlayerId,
     {
       readonly highestProcessedPlayerActionSequence: number;
-      readonly latestShotResolutionTelemetry:
-        | MetaverseCombatShotResolutionTelemetrySnapshot
-        | null;
-      readonly recentShotResolutionTelemetry:
-        readonly MetaverseCombatShotResolutionTelemetrySnapshot[];
       readonly recentPlayerActionReceipts:
         readonly MetaversePlayerActionReceiptSnapshot[];
     }
@@ -186,11 +178,6 @@ function createObserverPlayerSnapshot(
   combatActionObserverSnapshot:
     | {
         readonly highestProcessedPlayerActionSequence: number;
-        readonly latestShotResolutionTelemetry:
-          | MetaverseCombatShotResolutionTelemetrySnapshot
-          | null;
-        readonly recentShotResolutionTelemetry:
-          readonly MetaverseCombatShotResolutionTelemetrySnapshot[];
         readonly recentPlayerActionReceipts:
           readonly MetaversePlayerActionReceiptSnapshot[];
       }
@@ -199,44 +186,11 @@ function createObserverPlayerSnapshot(
   return {
     highestProcessedPlayerActionSequence:
       combatActionObserverSnapshot?.highestProcessedPlayerActionSequence ?? 0,
-    jumpDebug: {
-      pendingActionSequence:
-        playerRuntime.unmountedTraversalState.actionState.pendingActionKind ===
-        "jump"
-          ? playerRuntime.unmountedTraversalState.actionState
-              .pendingActionSequence
-          : 0,
-      pendingActionBufferAgeMs:
-        playerRuntime.unmountedTraversalState.actionState.pendingActionKind ===
-        "jump"
-          ? readMetaverseTraversalPendingActionBufferAgeMs(
-              playerRuntime.unmountedTraversalState.actionState,
-              metaverseTraversalActionBufferSeconds,
-              "jump"
-            )
-          : null,
-      resolvedActionSequence:
-        playerRuntime.unmountedTraversalState.actionState.resolvedActionKind ===
-        "jump"
-          ? playerRuntime.unmountedTraversalState.actionState
-              .resolvedActionSequence
-          : 0,
-      resolvedActionState:
-        playerRuntime.unmountedTraversalState.actionState.resolvedActionKind ===
-        "jump"
-          ? playerRuntime.unmountedTraversalState.actionState
-              .resolvedActionState
-          : "none"
-    },
     lastProcessedLookSequence: playerRuntime.lastProcessedLookSequence,
     lastProcessedTraversalSequence:
       playerRuntime.lastProcessedTraversalSequence,
     lastProcessedWeaponSequence: playerRuntime.lastProcessedWeaponSequence,
-    latestShotResolutionTelemetry:
-      combatActionObserverSnapshot?.latestShotResolutionTelemetry ?? null,
     playerId: playerRuntime.playerId,
-    recentShotResolutionTelemetry:
-      combatActionObserverSnapshot?.recentShotResolutionTelemetry ?? [],
     recentPlayerActionReceipts:
       combatActionObserverSnapshot?.recentPlayerActionReceipts ?? []
   };

@@ -8,7 +8,6 @@ import type {
   MetaverseCombatFeedEventSnapshot,
   MetaverseCombatMatchSnapshot,
   MetaverseCombatProjectileSnapshot,
-  MetaverseCombatShotResolutionTelemetrySnapshot,
   MetaversePlayerActionReceiptSnapshot,
   MetaversePlayerCombatSnapshot
 } from "@webgpu-metaverse/shared/metaverse";
@@ -61,11 +60,6 @@ interface MetaverseAuthoritativeWorldReadStateDependencies<
     playerId: MetaversePlayerId
   ) => {
     readonly highestProcessedPlayerActionSequence: number;
-    readonly latestShotResolutionTelemetry:
-      | MetaverseCombatShotResolutionTelemetrySnapshot
-      | null;
-    readonly recentShotResolutionTelemetry:
-      readonly MetaverseCombatShotResolutionTelemetrySnapshot[];
     readonly recentPlayerActionReceipts:
       readonly MetaversePlayerActionReceiptSnapshot[];
   } | null;
@@ -143,11 +137,6 @@ export class MetaverseAuthoritativeWorldReadState<
       MetaversePlayerId,
       {
         readonly highestProcessedPlayerActionSequence: number;
-        readonly latestShotResolutionTelemetry:
-          | MetaverseCombatShotResolutionTelemetrySnapshot
-          | null;
-        readonly recentShotResolutionTelemetry:
-          readonly MetaverseCombatShotResolutionTelemetrySnapshot[];
         readonly recentPlayerActionReceipts:
           readonly MetaversePlayerActionReceiptSnapshot[];
       }

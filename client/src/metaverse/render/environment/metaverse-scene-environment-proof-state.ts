@@ -32,7 +32,6 @@ interface MetaverseSceneEnvironmentProofStateDependencies {
   readonly markSceneBundleGroupsDirty: () => void;
   readonly readCurrentCameraSnapshot: () => MetaverseCameraSnapshot;
   readonly scene: Scene;
-  readonly showSocketDebug: boolean;
 }
 
 export class MetaverseSceneEnvironmentProofState {
@@ -46,7 +45,6 @@ export class MetaverseSceneEnvironmentProofState {
   readonly #markSceneBundleGroupsDirty: () => void;
   readonly #readCurrentCameraSnapshot: () => MetaverseCameraSnapshot;
   readonly #scene: Scene;
-  readonly #showSocketDebug: boolean;
   readonly #dynamicEnvironmentPoseState =
     new MetaverseSceneDynamicEnvironmentPoseState();
 
@@ -60,8 +58,7 @@ export class MetaverseSceneEnvironmentProofState {
     findNamedNode,
     markSceneBundleGroupsDirty,
     readCurrentCameraSnapshot,
-    scene,
-    showSocketDebug
+    scene
   }: MetaverseSceneEnvironmentProofStateDependencies) {
     this.#createSceneAssetLoader = createSceneAssetLoader;
     this.#environmentProofConfig = environmentProofConfig;
@@ -69,7 +66,6 @@ export class MetaverseSceneEnvironmentProofState {
     this.#markSceneBundleGroupsDirty = markSceneBundleGroupsDirty;
     this.#readCurrentCameraSnapshot = readCurrentCameraSnapshot;
     this.#scene = scene;
-    this.#showSocketDebug = showSocketDebug;
   }
 
   get runtime(): MetaverseEnvironmentProofRuntime | null {
@@ -91,8 +87,7 @@ export class MetaverseSceneEnvironmentProofState {
         this.#runtime = await loadMetaverseEnvironmentProofRuntime(
           this.#environmentProofConfig,
           this.#createSceneAssetLoader,
-          this.#findNamedNode,
-          this.#showSocketDebug
+          this.#findNamedNode
         );
         this.#scene.add(this.#runtime.anchorGroup);
         this.#markSceneBundleGroupsDirty();

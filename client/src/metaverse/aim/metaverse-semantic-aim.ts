@@ -9,10 +9,17 @@ import type {
   MetaverseCameraSnapshot,
   MetaverseVector3Snapshot
 } from "../types/presentation";
-import type {
-  MetaverseLocalHeldWeaponAimSourceId,
-  MetaverseLocalHeldWeaponAimSourceQualityId
-} from "../types/telemetry";
+
+export type MetaverseLocalHeldWeaponAimSourceId =
+  | "local_camera"
+  | "remote_replicated"
+  | "debug";
+
+export type MetaverseLocalHeldWeaponAimSourceQualityId =
+  | "full_camera_ray"
+  | "replicated_pitch_yaw"
+  | "last_known_replicated"
+  | "debug";
 
 export interface MetaverseSemanticAimFrame {
   readonly actorFacingYawRadians: number;

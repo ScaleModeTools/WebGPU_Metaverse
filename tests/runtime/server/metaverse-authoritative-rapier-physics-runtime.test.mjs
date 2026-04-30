@@ -107,7 +107,8 @@ test("private-build ground shots resolve to the floor hit point instead of world
       playerInactivityTimeoutMs: createMilliseconds(5_000),
       tickIntervalMs: createMilliseconds(50)
     },
-    "private-build"
+    "private-build",
+    "shell-team-deathmatch"
   );
   const redPlayerId = requireValue(
     createMetaversePlayerId("private-build-ground-shot-red"),
@@ -184,14 +185,8 @@ test("private-build ground shots resolve to the floor hit point instead of world
     resolvedEvent.hitscan?.hitPointWorld ?? null,
     "hitPointWorld"
   );
-  const telemetry = requireValue(
-    postShotSnapshot.observerPlayer?.recentShotResolutionTelemetry[0] ?? null,
-    "telemetry"
-  );
-
   assert.equal(resolvedEvent.hitscan?.hitKind, "world");
   assert.equal(resolvedEvent.hitscan?.targetPlayerId, null);
-  assert.ok(telemetry.worldHitDistanceMeters > 0);
   assert.ok(Math.abs(hitPointWorld.y - 0.6) < 0.01);
   assert.ok(
     Math.hypot(hitPointWorld.x, hitPointWorld.z) > 1,

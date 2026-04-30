@@ -113,7 +113,6 @@ test("MetaverseEnvironmentPhysicsRuntime keeps mountable skiff mesh collision an
         scene: new Group(),
         setDynamicEnvironmentPose() {}
       },
-      showPhysicsDebug: false
     }
   );
 
@@ -193,7 +192,6 @@ test("MetaverseEnvironmentPhysicsRuntime clears and restores dynamic skiff colli
         scene: new Group(),
         setDynamicEnvironmentPose() {}
       },
-      showPhysicsDebug: false
     }
   );
 
@@ -314,7 +312,6 @@ test("MetaverseEnvironmentPhysicsRuntime boots authored terrain as heightfield c
         scene: new Group(),
         setDynamicEnvironmentPose() {}
       },
-      showPhysicsDebug: false
     }
   );
 
@@ -438,7 +435,6 @@ test("MetaverseEnvironmentPhysicsRuntime does not add render surface meshes as d
         scene: new Group(),
         setDynamicEnvironmentPose() {}
       },
-      showPhysicsDebug: false
     }
   );
 
@@ -541,7 +537,6 @@ test("MetaverseEnvironmentPhysicsRuntime loads proof-authored collision meshes a
         scene: new Group(),
         setDynamicEnvironmentPose() {}
       },
-      showPhysicsDebug: false
     }
   );
 
@@ -663,7 +658,6 @@ test("MetaverseEnvironmentPhysicsRuntime uses proof-authored collisionPath for s
         scene: new Group(),
         setDynamicEnvironmentPose() {}
       },
-      showPhysicsDebug: false
     }
   );
 
@@ -769,7 +763,6 @@ test("MetaverseEnvironmentPhysicsRuntime boots static barrier colliders from com
         scene: new Group(),
         setDynamicEnvironmentPose() {}
       },
-      showPhysicsDebug: false
     }
   );
 
@@ -835,7 +828,6 @@ test("MetaverseEnvironmentPhysicsRuntime keeps sampled remote player blockers ph
         scene: new Group(),
         setDynamicEnvironmentPose() {}
       },
-      showPhysicsDebug: false
     }
   );
 
@@ -924,7 +916,6 @@ test("MetaverseEnvironmentPhysicsRuntime removes absent sampled remote player bl
         scene: new Group(),
         setDynamicEnvironmentPose() {}
       },
-      showPhysicsDebug: false
     }
   );
 
@@ -989,7 +980,6 @@ test("MetaverseEnvironmentPhysicsRuntime keeps authoritative environment-body co
           );
         }
       },
-      showPhysicsDebug: false
     }
   );
 

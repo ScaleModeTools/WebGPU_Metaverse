@@ -530,11 +530,11 @@ test("MetaverseWorldPlayerTraversalIntentSync bundles unacked traversal samples 
   assert.equal(scheduler.pendingTasks.length, 0);
 });
 
-test("MetaverseWorldPlayerTraversalIntentSync caps bundled traversal history to the newest two pending samples", async () => {
+test("MetaverseWorldPlayerTraversalIntentSync keeps a bounded boosted WASD history window", async () => {
   const { MetaverseWorldPlayerTraversalIntentSync } = await clientLoader.load(
     "/src/network/classes/metaverse-world-player-traversal-intent-sync.ts"
   );
-  const playerId = createMetaversePlayerId("intent-sync-traversal-history-cap-1");
+  const playerId = createMetaversePlayerId("intent-sync-traversal-history-window-1");
 
   assert.notEqual(playerId, null);
 
@@ -610,6 +610,28 @@ test("MetaverseWorldPlayerTraversalIntentSync caps bundled traversal history to 
     }),
     playerId
   });
+  traversalSync.syncPlayerTraversalIntent({
+    intent: createTraversalIntentInput({
+      boost: true,
+      jump: false,
+      locomotionMode: "grounded",
+      moveAxis: 1,
+      strafeAxis: -1,
+      yawAxis: 0.4
+    }),
+    playerId
+  });
+  traversalSync.syncPlayerTraversalIntent({
+    intent: createTraversalIntentInput({
+      boost: true,
+      jump: false,
+      locomotionMode: "grounded",
+      moveAxis: 1,
+      strafeAxis: 1,
+      yawAxis: 0.5
+    }),
+    playerId
+  });
 
   scheduler.runNext(0);
   await flushAsyncWork();
@@ -617,9 +639,18 @@ test("MetaverseWorldPlayerTraversalIntentSync caps bundled traversal history to 
   assert.equal(sentTraversalCommands.length, 1);
   assert.deepEqual(
     sentTraversalCommands[0]?.pendingIntentSamples?.map((sample) => sample.sequence),
-    [2, 3]
+    [1, 2, 3, 4, 5]
   );
-  assert.equal(sentTraversalCommands[0]?.intent.sequence, 4);
+  assert.equal(sentTraversalCommands[0]?.intent.sequence, 6);
+  assert.equal(
+    sentTraversalCommands[0]?.pendingIntentSamples?.some(
+      (sample) =>
+        sample.bodyControl.boost &&
+        sample.bodyControl.moveAxis === -1 &&
+        sample.bodyControl.strafeAxis === 0
+    ),
+    true
+  );
 });
 
 test("MetaverseWorldPlayerTraversalIntentSync resends the exact previously sent traversal command so bundled traversal samples do not reorder", async () => {

@@ -9,7 +9,6 @@ import {
 } from "@webgpu-metaverse/shared";
 
 import {
-  authoredWaterBayDockEntryPosition,
   authoredWaterBaySkiffPlacement,
   authoredWaterBaySkiffYawRadians
 } from "../../metaverse-authored-world-test-fixtures.mjs";
@@ -78,7 +77,7 @@ test("MetaverseAuthoritativeWorldRuntime simulates driver-controlled vehicles fr
   assert.equal(worldSnapshot.tick.simulationTimeMs, 1_000);
   assert.equal(worldSnapshot.players.length, 1);
   assert.equal(worldSnapshot.players[0]?.locomotionMode, "mounted");
-  assert.equal(activeBodySnapshot.position.y, 0.4);
+  assert.equal(activeBodySnapshot.position.y, authoredWaterBaySkiffPlacement.y);
   assert.ok(activeBodySnapshot.position.x > authoredWaterBaySkiffPlacement.x);
   assert.ok(activeBodySnapshot.linearVelocity.x > 0);
   assert.equal(
@@ -357,69 +356,4 @@ test("MetaverseAuthoritativeWorldRuntime rejects mounted occupancy for unauthore
   assert.equal(worldSnapshot.players[0]?.mountedOccupancy, null);
   assert.equal(worldSnapshot.players[0]?.locomotionMode, "swim");
   assert.equal(worldSnapshot.vehicles.length, 0);
-});
-
-test("MetaverseAuthoritativeWorldRuntime ignores mounted driver propulsion when the vehicle is beached out of authored water", () => {
-  const runtime = createAuthoritativeRuntime();
-  const playerId = requireValue(
-    createMetaversePlayerId("beached-harbor-pilot"),
-    "playerId"
-  );
-  const username = requireValue(createUsername("Beached Harbor Pilot"), "username");
-
-  runtime.acceptPresenceCommand(
-    createMetaverseJoinPresenceCommand({
-      characterId: "mesh2motion-humanoid-v1",
-      playerId,
-      pose: {
-        animationVocabulary: "idle",
-        locomotionMode: "mounted",
-        mountedOccupancy: {
-          environmentAssetId: "metaverse-hub-skiff-v1",
-          entryId: null,
-          occupancyKind: "seat",
-          occupantRole: "driver",
-          seatId: "driver-seat"
-        },
-        position: authoredWaterBayDockEntryPosition,
-        stateSequence: 1,
-        yawRadians: authoredWaterBaySkiffYawRadians
-      },
-      username
-    }),
-    0
-  );
-  runtime.acceptWorldCommand(
-    createMetaverseSyncDriverVehicleControlCommand({
-      controlIntent: {
-        boost: false,
-        environmentAssetId: "metaverse-hub-skiff-v1",
-        moveAxis: 1,
-        strafeAxis: 0,
-        yawAxis: 0
-      },
-      controlSequence: 1,
-      playerId
-    }),
-    100
-  );
-  runtime.advanceToTime(1_000);
-
-  const worldSnapshot = runtime.readWorldSnapshot(1_000, playerId);
-  const authoritativeVehicle = worldSnapshot.vehicles[0];
-
-  assert.ok(
-    Math.abs(
-      (authoritativeVehicle?.position.x ?? Number.POSITIVE_INFINITY) -
-        authoredWaterBayDockEntryPosition.x
-    ) < 0.00001
-  );
-  assert.ok(
-    Math.abs(
-      (authoritativeVehicle?.position.z ?? Number.POSITIVE_INFINITY) -
-        authoredWaterBayDockEntryPosition.z
-    ) < 0.00001
-  );
-  assert.equal(authoritativeVehicle?.linearVelocity.x, 0);
-  assert.equal(authoritativeVehicle?.linearVelocity.z, 0);
 });

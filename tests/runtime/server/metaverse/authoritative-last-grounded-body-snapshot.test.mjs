@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   captureMetaverseAuthoritativeLastGroundedBodySnapshot,
   createMetaverseAuthoritativeLastGroundedBodySnapshot
-} from "../../../../server/src/metaverse/authority/players/metaverse-authoritative-last-grounded-body-snapshot.js";
+} from "../../../../server/dist/metaverse/authority/players/metaverse-authoritative-last-grounded-body-snapshot.js";
 
 test("Metaverse authoritative last grounded body snapshot normalizes partial grounded state", () => {
   const snapshot = createMetaverseAuthoritativeLastGroundedBodySnapshot({
@@ -66,6 +66,9 @@ test("Metaverse authoritative last grounded body snapshot captures grounded runt
 
   assert.equal(snapshot.contact.blockedPlanarMovement, true);
   assert.equal(snapshot.driveTarget.boost, true);
-  assert.equal(snapshot.jumpBody.jumpSnapSuppressionActive, true);
+  assert.equal(snapshot.jumpBody.grounded, true);
+  assert.equal(snapshot.jumpBody.jumpReady, true);
+  assert.equal(snapshot.jumpBody.jumpSnapSuppressionActive, false);
+  assert.equal(snapshot.jumpBody.verticalSpeedUnitsPerSecond, 0);
   assert.equal(snapshot.positionYMeters, 1.25);
 });

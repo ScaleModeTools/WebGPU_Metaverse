@@ -110,12 +110,6 @@
       ]
     },
     {
-      "ownerPath": "client/src/metaverse/hud/debug/metaverse-runtime-hud-telemetry-state.ts",
-      "testPaths": [
-        "tests/runtime/client/metaverse/runtime/metaverse-runtime-hud-telemetry-state.runtime.test.mjs"
-      ]
-    },
-    {
       "ownerPath": "client/src/metaverse/boot/metaverse-runtime-boot-lifecycle.ts",
       "testPaths": [
         "tests/runtime/client/metaverse/boot/metaverse-runtime-boot-lifecycle.runtime.test.mjs"

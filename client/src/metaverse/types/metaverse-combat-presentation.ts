@@ -12,13 +12,11 @@ export type MetaverseCombatPresentationEventKind =
   (typeof metaverseCombatPresentationEventKinds)[number];
 
 export type MetaverseCombatPresentationEventSource =
-  | "authoritative-fire-event"
   | "authoritative-projectile"
   | "authoritative-projectile-resolution"
   | "authoritative-shot-resolution";
 
 export type MetaverseCombatPresentationShotFx =
-  | "muzzle-only"
   | "pistol-world-impact"
   | "pistol-tracer"
   | "rocket-muzzle";

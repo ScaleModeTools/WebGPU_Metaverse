@@ -111,22 +111,36 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
   const footRBone = addBone("foot_r", calfRBone, new Vector3(0, -0.4, 0.06));
   const ballRBone = addBone("ball_r", footRBone, new Vector3(0, 0, 0.12));
 
-  addBone("thumb_01_l", handLBone, new Vector3(-0.04, -0.02, 0.06));
+  const thumb01LBone = addBone("thumb_01_l", handLBone, new Vector3(-0.04, -0.02, 0.06));
+  const thumb02LBone = addBone("thumb_02_l", thumb01LBone, new Vector3(-0.035, -0.004, 0.012));
+  addBone("thumb_03_l", thumb02LBone, new Vector3(-0.03, -0.004, 0.01));
   const index01LBone = addBone("index_01_l", handLBone, new Vector3(-0.1, 0, 0.03));
   const index02LBone = addBone("index_02_l", index01LBone, new Vector3(-0.055, -0.004, -0.004));
   addBone("index_03_l", index02LBone, new Vector3(-0.04, -0.004, -0.003));
   const middle01LBone = addBone("middle_01_l", handLBone, new Vector3(-0.11, 0, 0));
   const middle02LBone = addBone("middle_02_l", middle01LBone, new Vector3(-0.055, -0.004, 0));
   addBone("middle_03_l", middle02LBone, new Vector3(-0.04, -0.004, 0));
-  addBone("ring_01_l", handLBone, new Vector3(-0.1, 0, -0.03));
-  addBone("pinky_01_l", handLBone, new Vector3(-0.08, 0, -0.05));
-  addBone("thumb_01_r", handRBone, new Vector3(0.04, -0.02, 0.06));
+  const ring01LBone = addBone("ring_01_l", handLBone, new Vector3(-0.1, 0, -0.03));
+  const ring02LBone = addBone("ring_02_l", ring01LBone, new Vector3(-0.052, -0.004, 0.004));
+  addBone("ring_03_l", ring02LBone, new Vector3(-0.038, -0.004, 0.003));
+  const pinky01LBone = addBone("pinky_01_l", handLBone, new Vector3(-0.08, 0, -0.05));
+  const pinky02LBone = addBone("pinky_02_l", pinky01LBone, new Vector3(-0.046, -0.004, 0.006));
+  addBone("pinky_03_l", pinky02LBone, new Vector3(-0.032, -0.004, 0.004));
+  const thumb01RBone = addBone("thumb_01_r", handRBone, new Vector3(0.04, -0.02, 0.06));
+  const thumb02RBone = addBone("thumb_02_r", thumb01RBone, new Vector3(0.035, -0.004, 0.012));
+  addBone("thumb_03_r", thumb02RBone, new Vector3(0.03, -0.004, 0.01));
   const index01RBone = addBone("index_01_r", handRBone, new Vector3(0.1, 0, 0.03));
-  addBone("index_02_r", index01RBone, new Vector3(0.055, -0.004, -0.004));
-  addBone("index_03_r", bonesByName.get("index_02_r"), new Vector3(0.04, -0.004, -0.003));
-  addBone("middle_01_r", handRBone, new Vector3(0.11, 0, 0));
-  addBone("ring_01_r", handRBone, new Vector3(0.1, 0, -0.03));
-  addBone("pinky_01_r", handRBone, new Vector3(0.08, 0, -0.05));
+  const index02RBone = addBone("index_02_r", index01RBone, new Vector3(0.055, -0.004, -0.004));
+  addBone("index_03_r", index02RBone, new Vector3(0.04, -0.004, -0.003));
+  const middle01RBone = addBone("middle_01_r", handRBone, new Vector3(0.11, 0, 0));
+  const middle02RBone = addBone("middle_02_r", middle01RBone, new Vector3(0.055, -0.004, 0));
+  addBone("middle_03_r", middle02RBone, new Vector3(0.04, -0.004, 0));
+  const ring01RBone = addBone("ring_01_r", handRBone, new Vector3(0.1, 0, -0.03));
+  const ring02RBone = addBone("ring_02_r", ring01RBone, new Vector3(0.052, -0.004, 0.004));
+  addBone("ring_03_r", ring02RBone, new Vector3(0.038, -0.004, 0.003));
+  const pinky01RBone = addBone("pinky_01_r", handRBone, new Vector3(0.08, 0, -0.05));
+  const pinky02RBone = addBone("pinky_02_r", pinky01RBone, new Vector3(0.046, -0.004, 0.006));
+  addBone("pinky_03_r", pinky02RBone, new Vector3(0.032, -0.004, 0.004));
 
   const headSocketBone = addBone("head_socket", headBone, new Vector3(0, 0.12, 0));
   const handLSocketBone = addBone("hand_l_socket", handLBone, new Vector3(-0.05, 0, 0));
@@ -141,52 +155,7 @@ test("createMetaverseScene synthesizes mirrored humanoid_v2 palm and grip socket
     new MeshStandardMaterial({ color: 0x9ca3af })
   );
   const characterScene = new Group();
-  const skeleton = new Skeleton([
-    rootBone,
-    pelvisBone,
-    spine01Bone,
-    spine02Bone,
-    spine03Bone,
-    neckBone,
-    headBone,
-    clavicleLBone,
-    upperarmLBone,
-    lowerarmLBone,
-    handLBone,
-    clavicleRBone,
-    upperarmRBone,
-    lowerarmRBone,
-    handRBone,
-    thighLBone,
-    calfLBone,
-    footLBone,
-    ballLBone,
-    thighRBone,
-    calfRBone,
-    footRBone,
-    ballRBone,
-    bonesByName.get("thumb_01_l"),
-    bonesByName.get("index_01_l"),
-    bonesByName.get("index_02_l"),
-    bonesByName.get("index_03_l"),
-    bonesByName.get("middle_01_l"),
-    bonesByName.get("middle_02_l"),
-    bonesByName.get("middle_03_l"),
-    bonesByName.get("ring_01_l"),
-    bonesByName.get("pinky_01_l"),
-    bonesByName.get("thumb_01_r"),
-    bonesByName.get("index_01_r"),
-    bonesByName.get("index_02_r"),
-    bonesByName.get("index_03_r"),
-    bonesByName.get("middle_01_r"),
-    bonesByName.get("ring_01_r"),
-    bonesByName.get("pinky_01_r"),
-    headSocketBone,
-    handLSocketBone,
-    handRSocketBone,
-    hipSocketBone,
-    seatSocketBone
-  ]);
+  const skeleton = new Skeleton([...bonesByName.values()]);
 
   skinnedMesh.add(rootBone);
   skinnedMesh.bind(skeleton);
@@ -601,32 +570,6 @@ test("createMetaverseScene synthesizes canonical humanoid_v2 sockets when the ba
   assert.ok(sceneRuntime.scene.getObjectByName("palm_r_socket"));
   assert.ok(sceneRuntime.scene.getObjectByName("grip_r_socket"));
   assert.ok(sceneRuntime.scene.getObjectByName("back_socket"));
-});
-
-test("createMetaverseScene keeps socket debug markers opt-in", async () => {
-  const [{ createMetaverseScene }, { metaverseRuntimeConfig }] = await Promise.all([
-    clientLoader.load("/src/metaverse/render/webgpu-metaverse-scene.ts"),
-    clientLoader.load("/src/metaverse/config/metaverse-runtime.ts")
-  ]);
-  const {
-    characterProofConfig,
-    createSceneAssetLoader,
-    environmentProofConfig
-  } = await createSkiffMountProofSlice();
-  const sceneRuntime = createMetaverseScene(metaverseRuntimeConfig, {
-    characterProofConfig,
-    createSceneAssetLoader,
-    environmentProofConfig,
-    showSocketDebug: true,
-    warn() {}
-  });
-
-  await sceneRuntime.boot();
-
-  assert.ok(sceneRuntime.scene.getObjectByName("socket_debug/hand_r_socket"));
-  assert.ok(sceneRuntime.scene.getObjectByName("socket_debug/head_socket"));
-  assert.ok(sceneRuntime.scene.getObjectByName("socket_debug/seat_socket"));
-  assert.ok(sceneRuntime.scene.getObjectByName("seat_debug/driver-seat"));
 });
 
 test("createMetaverseScene requires an authored walk clip when walk vocabulary is requested", async () => {

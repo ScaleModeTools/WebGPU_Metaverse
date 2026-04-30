@@ -58,6 +58,33 @@ const metaverseRuntimeTraversalFixedStepEpsilonSeconds = 0.000001;
 const metaverseRuntimeTraversalMaxAccumulatedSeconds =
   metaverseRuntimeTraversalFixedStepSeconds * 4;
 
+function clampTraversalAxis(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.min(1, Math.max(-1, value));
+}
+
+function resolveMovementInputWithLookAxes(
+  movementInput: MetaverseFlightInputSnapshot,
+  pitchAxis: number,
+  yawAxis: number
+): MetaverseFlightInputSnapshot {
+  if (
+    movementInput.pitchAxis === pitchAxis &&
+    movementInput.yawAxis === yawAxis
+  ) {
+    return movementInput;
+  }
+
+  return Object.freeze({
+    ...movementInput,
+    pitchAxis,
+    yawAxis
+  });
+}
+
 interface MetaverseRuntimeFrameCanvasHost {
   readonly clientHeight: number;
   readonly clientWidth: number;
@@ -140,7 +167,6 @@ interface MetaverseRuntimeFrameAuthoritativeWorldSync {
 }
 
 interface MetaverseRuntimeFrameEnvironmentPhysicsRuntime {
-  syncDebugPresentation(): void;
   syncDynamicEnvironmentBodyPresentations(): void;
   syncSampledRemotePlayerBlockers(
     remotePlayerBlockers: readonly MetaverseTraversalPlayerBodyBlockerSnapshot[]
@@ -149,14 +175,6 @@ interface MetaverseRuntimeFrameEnvironmentPhysicsRuntime {
 
 interface MetaverseRuntimeFrameFlightInputRuntime {
   readSnapshot(): MetaverseFlightInputSnapshot;
-}
-
-interface MetaverseRuntimeFrameHudPublisher {
-  trackFrameTelemetry(
-    nowMs: number,
-    presentationCameraSnapshot: MetaverseCameraSnapshot,
-    renderedCamera: Camera
-  ): void;
 }
 
 interface MetaverseRuntimeFramePresenceRuntime {
@@ -334,7 +352,6 @@ interface MetaverseRuntimeFrameLoopDependencies {
   readonly devicePixelRatio: number;
   readonly environmentPhysicsRuntime: MetaverseRuntimeFrameEnvironmentPhysicsRuntime;
   readonly flightInputRuntime: MetaverseRuntimeFrameFlightInputRuntime;
-  readonly hudPublisher: MetaverseRuntimeFrameHudPublisher;
   readonly portals: readonly MetaversePortalConfig[];
   readonly presenceRuntime: MetaverseRuntimeFramePresenceRuntime;
   readonly remoteWorldRuntime: MetaverseRuntimeFrameRemoteWorldRuntime;
@@ -357,7 +374,6 @@ export class MetaverseRuntimeFrameLoop {
   readonly #devicePixelRatio: number;
   readonly #environmentPhysicsRuntime: MetaverseRuntimeFrameEnvironmentPhysicsRuntime;
   readonly #flightInputRuntime: MetaverseRuntimeFrameFlightInputRuntime;
-  readonly #hudPublisher: MetaverseRuntimeFrameHudPublisher;
   readonly #portals: readonly MetaversePortalConfig[];
   readonly #presenceRuntime: MetaverseRuntimeFramePresenceRuntime;
   readonly #remoteWorldRuntime: MetaverseRuntimeFrameRemoteWorldRuntime;
@@ -372,6 +388,8 @@ export class MetaverseRuntimeFrameLoop {
   #frameRate = 0;
   #lastFrameAtMs: number | null = null;
   #mountedInteraction = createMetaverseMountedInteractionSnapshot(null, null);
+  #pendingLookPitchAxisSeconds = 0;
+  #pendingLookYawAxisSeconds = 0;
   #renderedFrameCount = 0;
   #traversalAccumulatorSeconds = 0;
 
@@ -383,7 +401,6 @@ export class MetaverseRuntimeFrameLoop {
     devicePixelRatio,
     environmentPhysicsRuntime,
     flightInputRuntime,
-    hudPublisher,
     portals,
     presenceRuntime,
     remoteWorldRuntime,
@@ -398,7 +415,6 @@ export class MetaverseRuntimeFrameLoop {
     this.#devicePixelRatio = devicePixelRatio;
     this.#environmentPhysicsRuntime = environmentPhysicsRuntime;
     this.#flightInputRuntime = flightInputRuntime;
-    this.#hudPublisher = hudPublisher;
     this.#portals = portals;
     this.#presenceRuntime = presenceRuntime;
     this.#remoteWorldRuntime = remoteWorldRuntime;
@@ -436,8 +452,44 @@ export class MetaverseRuntimeFrameLoop {
       null,
       null
     );
+    this.#pendingLookPitchAxisSeconds = 0;
+    this.#pendingLookYawAxisSeconds = 0;
     this.#renderedFrameCount = 0;
     this.#traversalAccumulatorSeconds = 0;
+  }
+
+  #resolveFixedStepMovementInput(
+    movementInput: MetaverseFlightInputSnapshot,
+    deltaSeconds: number,
+    consumeLookAxes: boolean
+  ): MetaverseFlightInputSnapshot {
+    const safeDeltaSeconds = Math.max(0, deltaSeconds);
+
+    if (safeDeltaSeconds <= metaverseRuntimeTraversalFixedStepEpsilonSeconds) {
+      return resolveMovementInputWithLookAxes(
+        movementInput,
+        clampTraversalAxis(movementInput.pitchAxis),
+        clampTraversalAxis(movementInput.yawAxis)
+      );
+    }
+
+    const consumedPitchAxisSeconds = clampTraversalAxis(
+      this.#pendingLookPitchAxisSeconds / safeDeltaSeconds
+    ) * safeDeltaSeconds;
+    const consumedYawAxisSeconds = clampTraversalAxis(
+      this.#pendingLookYawAxisSeconds / safeDeltaSeconds
+    ) * safeDeltaSeconds;
+
+    if (consumeLookAxes) {
+      this.#pendingLookPitchAxisSeconds -= consumedPitchAxisSeconds;
+      this.#pendingLookYawAxisSeconds -= consumedYawAxisSeconds;
+    }
+
+    return resolveMovementInputWithLookAxes(
+      movementInput,
+      clampTraversalAxis(consumedPitchAxisSeconds / safeDeltaSeconds),
+      clampTraversalAxis(consumedYawAxisSeconds / safeDeltaSeconds)
+    );
   }
 
   syncFrame({
@@ -484,6 +536,8 @@ export class MetaverseRuntimeFrameLoop {
     const movementInput = preAdvanceCameraPhaseState.blocksMovementInput
       ? neutralMetaverseFlightInputSnapshot
       : this.#flightInputRuntime.readSnapshot();
+    this.#pendingLookPitchAxisSeconds += movementInput.pitchAxis * deltaSeconds;
+    this.#pendingLookYawAxisSeconds += movementInput.yawAxis * deltaSeconds;
     let authoritativeWorldPrepared = false;
     const prepareAuthoritativeWorld = () => {
       if (authoritativeWorldPrepared) {
@@ -501,9 +555,14 @@ export class MetaverseRuntimeFrameLoop {
         metaverseRuntimeTraversalFixedStepEpsilonSeconds >=
       metaverseRuntimeTraversalFixedStepSeconds
     ) {
+      const fixedStepMovementInput = this.#resolveFixedStepMovementInput(
+        movementInput,
+        metaverseRuntimeTraversalFixedStepSeconds,
+        true
+      );
       const localTraversalIntentInput =
         this.#traversalRuntime.resolveLocalTraversalIntentInput(
-          movementInput,
+          fixedStepMovementInput,
           metaverseRuntimeTraversalFixedStepSeconds
         );
 
@@ -514,7 +573,7 @@ export class MetaverseRuntimeFrameLoop {
       );
       prepareAuthoritativeWorld();
       this.#traversalRuntime.advance(
-        movementInput,
+        fixedStepMovementInput,
         metaverseRuntimeTraversalFixedStepSeconds,
         localTraversalIntentInput
       );
@@ -531,9 +590,14 @@ export class MetaverseRuntimeFrameLoop {
     }
 
     if (!authoritativeWorldPrepared) {
+      const previewMovementInput = this.#resolveFixedStepMovementInput(
+        movementInput,
+        metaverseRuntimeTraversalFixedStepSeconds,
+        false
+      );
       const previewTraversalIntentInput =
         this.#traversalRuntime.resolveLocalTraversalIntentInput(
-          movementInput,
+          previewMovementInput,
           metaverseRuntimeTraversalFixedStepSeconds
         );
 
@@ -759,13 +823,6 @@ export class MetaverseRuntimeFrameLoop {
       authoritativeWorldSnapshot?.resourceSpawns ?? [],
       nowMs
     );
-
-    this.#hudPublisher.trackFrameTelemetry(
-      nowMs,
-      presentationCameraSnapshot,
-      this.#sceneRuntime.camera
-    );
-    this.#environmentPhysicsRuntime.syncDebugPresentation();
 
     this.#focusedPortal = cameraPhaseState.suppressesInteractionFocus
       ? null

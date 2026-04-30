@@ -212,10 +212,6 @@ export class MetaverseSceneResourceSpawnPresentationState {
     const availableSpawnIds = new Set<string>();
 
     for (const resourceSpawn of resourceSpawns) {
-      if (!resourceSpawn.available) {
-        continue;
-      }
-
       availableSpawnIds.add(resourceSpawn.spawnId);
       this.#syncAvailableResourceSpawn(resourceSpawn);
     }

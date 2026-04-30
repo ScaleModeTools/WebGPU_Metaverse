@@ -183,12 +183,6 @@ test("MetaverseRuntimeHudPublisher keeps in-range radar contacts live from smoot
       teamId: "blue",
       username: localUsername
     }),
-    jumpDebug: Object.freeze({
-      pendingActionBufferAgeMs: null,
-      pendingActionSequence: 0,
-      resolvedActionSequence: 0,
-      resolvedActionState: "none"
-    }),
     lastProcessedLookSequence: 0,
     lastProcessedTraversalSequence: 0,
     lastProcessedWeaponSequence: 0
@@ -543,12 +537,6 @@ test("MetaverseRuntimeHudPublisher displays optimistic selected weapon inventory
       playerId: localPlayerId,
       teamId: "blue",
       username: localUsername
-    }),
-    jumpDebug: Object.freeze({
-      pendingActionBufferAgeMs: null,
-      pendingActionSequence: 0,
-      resolvedActionSequence: 0,
-      resolvedActionState: "none"
     }),
     lastProcessedLookSequence: 0,
     lastProcessedTraversalSequence: 0,

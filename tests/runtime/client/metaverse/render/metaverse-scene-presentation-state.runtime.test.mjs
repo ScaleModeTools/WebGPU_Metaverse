@@ -66,7 +66,6 @@ test("MetaverseScenePresentationState resets presentation state and syncs a null
     },
     localCharacterPresentationState: {
       syncPresentation(
-        nowMs,
         snapshot,
         deltaSeconds,
         nextCharacterPresentation,
@@ -76,7 +75,6 @@ test("MetaverseScenePresentationState resets presentation state and syncs a null
       ) {
         calls.push([
           "sync-local-character-presentation",
-          nowMs,
           snapshot,
           deltaSeconds,
           nextCharacterPresentation,
@@ -120,7 +118,6 @@ test("MetaverseScenePresentationState resets presentation state and syncs a null
   assert.deepEqual(calls, [
     [
       "sync-local-character-presentation",
-      123,
       cameraSnapshot,
       1 / 60,
       null,

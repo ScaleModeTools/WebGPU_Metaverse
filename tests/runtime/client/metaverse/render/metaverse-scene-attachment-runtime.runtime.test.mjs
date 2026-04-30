@@ -404,8 +404,6 @@ test("createMetaverseScene boots one manifest-driven character and hand socket a
     false
   );
   assert.ok(characterRoot);
-  assert.equal(sceneRuntime.scene.getObjectByName("socket_debug/hand_r_socket"), undefined);
-  assert.equal(sceneRuntime.scene.getObjectByName("socket_debug/head_socket"), undefined);
 
   sceneRuntime.syncPresentation(
     {

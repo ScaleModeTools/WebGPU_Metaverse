@@ -3,7 +3,7 @@ import type {
 } from "./metaverse-control-mode";
 import type { MetaverseLocomotionModeId } from "./metaverse-locomotion-mode";
 import type { MetaverseCameraSnapshot } from "./presentation";
-import type { MetaverseTelemetrySnapshot } from "./telemetry";
+import type { MetaverseSceneTelemetrySnapshot } from "./telemetry";
 import type {
   FocusedExperiencePortalSnapshot,
   MetaverseMountedInteractionSnapshot,
@@ -144,7 +144,7 @@ export interface MetaverseHudSnapshot {
     readonly state: MetaversePresenceHudState;
   };
   readonly radar: MetaverseHudRadarSnapshot;
-  readonly telemetry: MetaverseTelemetrySnapshot;
+  readonly telemetry: MetaverseSceneTelemetrySnapshot;
   readonly transport: {
     readonly presenceReliable: RealtimeReliableTransportStatusSnapshot;
     readonly worldDriverDatagram: RealtimeDatagramTransportStatusSnapshot;

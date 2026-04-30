@@ -26,8 +26,6 @@ import {
   createMetaverseTraversalAuthoritySnapshot,
   createMetaverseTraversalBodyControlSnapshot,
   createMetaverseTraversalFacingSnapshot,
-  metaverseTraversalActionResolutionStateIds,
-  type MetaverseTraversalActionResolutionStateId as MetaverseSharedTraversalActionResolutionStateId,
   type MetaverseTraversalAuthoritySnapshot as MetaverseSharedTraversalAuthoritySnapshot,
   type MetaverseTraversalAuthoritySnapshotInput as MetaverseSharedTraversalAuthoritySnapshotInput,
   type MetaverseTraversalBodyControlSnapshot as MetaverseSharedTraversalBodyControlSnapshot,
@@ -80,8 +78,6 @@ import type {
   MetaverseCombatMatchSnapshotInput,
   MetaverseCombatProjectileSnapshot,
   MetaverseCombatProjectileSnapshotInput,
-  MetaverseCombatShotResolutionTelemetrySnapshot,
-  MetaverseCombatShotResolutionTelemetrySnapshotInput,
   MetaversePlayerCombatSnapshot,
   MetaversePlayerCombatSnapshotInput
 } from "../metaverse-combat.js";
@@ -91,7 +87,6 @@ import {
   createMetaverseCombatFeedEventSnapshot,
   createMetaverseCombatMatchSnapshot,
   createMetaverseCombatProjectileSnapshot,
-  createMetaverseCombatShotResolutionTelemetrySnapshot,
   createMetaversePlayerCombatSnapshot
 } from "../metaverse-combat.js";
 
@@ -99,15 +94,8 @@ export const metaverseRealtimeWorldServerEventTypes = [
   "world-snapshot"
 ] as const;
 
-export const metaverseRealtimePlayerTraversalActionResolutionStateIds =
-  metaverseTraversalActionResolutionStateIds;
-
 export type MetaverseRealtimeWorldServerEventType =
   (typeof metaverseRealtimeWorldServerEventTypes)[number];
-export type MetaverseRealtimePlayerTraversalActionResolutionStateId =
-  MetaverseSharedTraversalActionResolutionStateId;
-export type MetaverseRealtimePlayerJumpResolutionStateId =
-  MetaverseRealtimePlayerTraversalActionResolutionStateId;
 
 export type MetaverseVehicleId = TypeBrand<string, "MetaverseVehicleId">;
 
@@ -118,8 +106,6 @@ export type MetaverseRealtimeVector3SnapshotInput =
 export interface MetaverseRealtimeTickSnapshot {
   readonly currentTick: number;
   readonly emittedAtServerTimeMs: Milliseconds;
-  readonly owner: "server";
-  readonly serverTimeMs: Milliseconds;
   readonly simulationTimeMs: Milliseconds;
   readonly tickIntervalMs: Milliseconds;
 }
@@ -204,20 +190,6 @@ export interface MetaverseRealtimePlayerGroundedBodySnapshotInput
 export interface MetaverseRealtimePlayerSwimBodySnapshotInput
   extends Partial<MetaverseRealtimePlayerSwimBodySnapshot> {}
 
-export interface MetaverseRealtimePlayerJumpDebugSnapshot {
-  readonly pendingActionSequence: number;
-  readonly pendingActionBufferAgeMs: Milliseconds | null;
-  readonly resolvedActionSequence: number;
-  readonly resolvedActionState: MetaverseRealtimePlayerTraversalActionResolutionStateId;
-}
-
-export interface MetaverseRealtimePlayerJumpDebugSnapshotInput {
-  readonly pendingActionSequence?: number;
-  readonly pendingActionBufferAgeMs?: number | null;
-  readonly resolvedActionSequence?: number;
-  readonly resolvedActionState?: MetaverseRealtimePlayerTraversalActionResolutionStateId;
-}
-
 export type MetaverseRealtimePlayerTraversalAuthoritySnapshot =
   MetaverseSharedTraversalAuthoritySnapshot;
 export type MetaverseRealtimePlayerTraversalAuthoritySnapshotInput =
@@ -263,32 +235,20 @@ export interface MetaverseRealtimePlayerSnapshotInput {
 
 export interface MetaverseRealtimeObserverPlayerSnapshot {
   readonly highestProcessedPlayerActionSequence: number;
-  readonly jumpDebug: MetaverseRealtimePlayerJumpDebugSnapshot;
   readonly lastProcessedLookSequence: number;
   readonly lastProcessedTraversalSequence: number;
   readonly lastProcessedWeaponSequence: number;
-  readonly latestShotResolutionTelemetry:
-    | MetaverseCombatShotResolutionTelemetrySnapshot
-    | null;
   readonly playerId: MetaversePlayerId;
-  readonly recentShotResolutionTelemetry:
-    readonly MetaverseCombatShotResolutionTelemetrySnapshot[];
   readonly recentPlayerActionReceipts:
     readonly MetaversePlayerActionReceiptSnapshot[];
 }
 
 export interface MetaverseRealtimeObserverPlayerSnapshotInput {
   readonly highestProcessedPlayerActionSequence?: number;
-  readonly jumpDebug?: MetaverseRealtimePlayerJumpDebugSnapshotInput;
   readonly lastProcessedLookSequence?: number;
   readonly lastProcessedTraversalSequence?: number;
   readonly lastProcessedWeaponSequence?: number;
-  readonly latestShotResolutionTelemetry?:
-    | MetaverseCombatShotResolutionTelemetrySnapshotInput
-    | null;
   readonly playerId: MetaversePlayerId;
-  readonly recentShotResolutionTelemetry?:
-    readonly MetaverseCombatShotResolutionTelemetrySnapshotInput[];
   readonly recentPlayerActionReceipts?:
     readonly MetaversePlayerActionReceiptSnapshotInput[];
 }
@@ -328,32 +288,25 @@ export interface MetaverseRealtimeEnvironmentBodySnapshotInput {
 }
 
 export interface MetaverseRealtimeResourceSpawnSnapshot {
-  readonly ammoGrantRounds: number;
   readonly assetId: string | null;
-  readonly available: boolean;
-  readonly label: string;
-  readonly modeTags: readonly string[];
-  readonly nextRespawnAtServerTimeMs: Milliseconds | null;
   readonly pickupRadiusMeters: number;
   readonly position: MetaverseRealtimeVector3Snapshot;
-  readonly resourceKind: "weapon-pickup";
-  readonly respawnCooldownMs: Milliseconds;
   readonly spawnId: string;
   readonly weaponId: string;
   readonly yawRadians: Radians;
 }
 
 export interface MetaverseRealtimeResourceSpawnSnapshotInput {
-  readonly ammoGrantRounds: number;
+  readonly ammoGrantRounds?: number;
   readonly assetId?: string | null;
-  readonly available: boolean;
-  readonly label: string;
+  readonly available?: boolean;
+  readonly label?: string;
   readonly modeTags?: readonly string[];
   readonly nextRespawnAtServerTimeMs?: number | null;
   readonly pickupRadiusMeters: number;
   readonly position: MetaverseRealtimeVector3SnapshotInput;
-  readonly resourceKind: "weapon-pickup";
-  readonly respawnCooldownMs: number;
+  readonly resourceKind?: "weapon-pickup";
+  readonly respawnCooldownMs?: number;
   readonly spawnId: string;
   readonly weaponId: string;
   readonly yawRadians: number;
@@ -449,19 +402,6 @@ function resolveLocomotionMode(
   return "grounded";
 }
 
-function resolveActionResolutionState(
-  rawValue: MetaverseRealtimePlayerJumpDebugSnapshotInput["resolvedActionState"]
-): MetaverseRealtimePlayerTraversalActionResolutionStateId {
-  if (
-    rawValue !== undefined &&
-    metaverseRealtimePlayerTraversalActionResolutionStateIds.includes(rawValue)
-  ) {
-    return rawValue;
-  }
-
-  return "none";
-}
-
 function resolveMountedOccupancyKind(
   rawValue: MetaverseRealtimeMountedOccupancySnapshotInput["occupancyKind"]
 ): MetaversePresenceMountedOccupancyKind {
@@ -527,29 +467,6 @@ function freezePlayerPresentationIntentSnapshot(
   });
 }
 
-function freezePlayerJumpDebugSnapshot(
-  input: MetaverseRealtimePlayerJumpDebugSnapshotInput | undefined
-): MetaverseRealtimePlayerJumpDebugSnapshot {
-  return Object.freeze({
-    pendingActionSequence: normalizeFiniteNonNegativeInteger(
-      input?.pendingActionSequence ?? 0
-    ),
-    pendingActionBufferAgeMs:
-      input?.pendingActionBufferAgeMs === undefined ||
-      input.pendingActionBufferAgeMs === null
-        ? null
-        : createMilliseconds(
-            Math.max(0, normalizeFiniteNumber(input.pendingActionBufferAgeMs))
-          ),
-    resolvedActionSequence: normalizeFiniteNonNegativeInteger(
-      input?.resolvedActionSequence ?? 0
-    ),
-    resolvedActionState: resolveActionResolutionState(
-      input?.resolvedActionState
-    )
-  });
-}
-
 function freezePlayerActionReceiptSnapshots(
   input:
     | readonly MetaversePlayerActionReceiptSnapshotInput[]
@@ -571,7 +488,6 @@ function freezeObserverPlayerSnapshot(
     highestProcessedPlayerActionSequence: normalizeFiniteNonNegativeInteger(
       input.highestProcessedPlayerActionSequence ?? 0
     ),
-    jumpDebug: freezePlayerJumpDebugSnapshot(input.jumpDebug),
     lastProcessedLookSequence: normalizeFiniteNonNegativeInteger(
       input.lastProcessedLookSequence ?? 0
     ),
@@ -581,19 +497,7 @@ function freezeObserverPlayerSnapshot(
     lastProcessedWeaponSequence: normalizeFiniteNonNegativeInteger(
       input.lastProcessedWeaponSequence ?? 0
     ),
-    latestShotResolutionTelemetry:
-      input.latestShotResolutionTelemetry === undefined ||
-      input.latestShotResolutionTelemetry === null
-        ? null
-        : createMetaverseCombatShotResolutionTelemetrySnapshot(
-            input.latestShotResolutionTelemetry
-          ),
     playerId: input.playerId,
-    recentShotResolutionTelemetry: Object.freeze(
-      (input.recentShotResolutionTelemetry ?? []).map((telemetrySnapshot) =>
-        createMetaverseCombatShotResolutionTelemetrySnapshot(telemetrySnapshot)
-      )
-    ),
     recentPlayerActionReceipts: freezePlayerActionReceiptSnapshots(
       input.recentPlayerActionReceipts
     )
@@ -918,23 +822,16 @@ function freezeEnvironmentBodySnapshot(
 function freezeResourceSpawnSnapshot(
   input: MetaverseRealtimeResourceSpawnSnapshotInput
 ): MetaverseRealtimeResourceSpawnSnapshot {
-  if (input.resourceKind !== "weapon-pickup") {
+  if (
+    input.resourceKind !== undefined &&
+    input.resourceKind !== "weapon-pickup"
+  ) {
     throw new Error(
       `Unsupported metaverse realtime resource spawn kind: ${input.resourceKind}`
     );
   }
 
-  const ammoGrantRounds = normalizeFiniteNonNegativeInteger(
-    input.ammoGrantRounds
-  );
   const pickupRadiusMeters = normalizeFiniteNumber(input.pickupRadiusMeters);
-  const respawnCooldownMs = normalizeFiniteNumber(input.respawnCooldownMs);
-
-  if (ammoGrantRounds <= 0) {
-    throw new Error(
-      "Metaverse realtime resource spawn ammoGrantRounds must be greater than 0."
-    );
-  }
 
   if (pickupRadiusMeters <= 0) {
     throw new Error(
@@ -942,14 +839,7 @@ function freezeResourceSpawnSnapshot(
     );
   }
 
-  if (respawnCooldownMs < 0) {
-    throw new Error(
-      "Metaverse realtime resource spawn respawnCooldownMs must be at or above 0."
-    );
-  }
-
   return Object.freeze({
-    ammoGrantRounds,
     assetId:
       input.assetId === null || input.assetId === undefined
         ? null
@@ -957,28 +847,8 @@ function freezeResourceSpawnSnapshot(
             input.assetId,
             "Metaverse realtime resource spawn assetId"
           ),
-    available: input.available,
-    label: normalizeRequiredIdentifier(
-      input.label,
-      "Metaverse realtime resource spawn label"
-    ),
-    modeTags: Object.freeze(
-      (input.modeTags ?? []).map((modeTag) =>
-        normalizeRequiredIdentifier(
-          modeTag,
-          "Metaverse realtime resource spawn modeTag"
-        )
-      )
-    ),
-    nextRespawnAtServerTimeMs:
-      input.nextRespawnAtServerTimeMs === null ||
-      input.nextRespawnAtServerTimeMs === undefined
-        ? null
-        : createMilliseconds(input.nextRespawnAtServerTimeMs),
     pickupRadiusMeters,
     position: createMetaversePresenceVector3Snapshot(input.position),
-    resourceKind: "weapon-pickup",
-    respawnCooldownMs: createMilliseconds(respawnCooldownMs),
     spawnId: normalizeRequiredIdentifier(
       input.spawnId,
       "Metaverse realtime resource spawn spawnId"
@@ -1094,8 +964,6 @@ export function createMetaverseRealtimeTickSnapshot(
   return Object.freeze({
     currentTick,
     emittedAtServerTimeMs,
-    owner: "server",
-    serverTimeMs: emittedAtServerTimeMs,
     simulationTimeMs,
     tickIntervalMs
   });
@@ -1175,9 +1043,9 @@ export function createMetaverseRealtimeWorldSnapshot(
   const projectiles = (input.projectiles ?? []).map(
     createMetaverseCombatProjectileSnapshot
   );
-  const resourceSpawns = (input.resourceSpawns ?? []).map(
-    freezeResourceSpawnSnapshot
-  );
+  const resourceSpawns = (input.resourceSpawns ?? [])
+    .filter((resourceSpawn) => resourceSpawn.available !== false)
+    .map(freezeResourceSpawnSnapshot);
   const vehicles = input.vehicles.map(freezeVehicleSnapshot);
   const environmentBodySnapshotByEnvironmentAssetId = new Map<
     string,

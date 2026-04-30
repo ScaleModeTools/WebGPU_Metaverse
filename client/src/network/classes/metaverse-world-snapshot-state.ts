@@ -27,7 +27,7 @@ type LocalPlayerWorldSnapshot = {
     | null;
   readonly recentPlayerActionReceipts:
     readonly MetaversePlayerActionReceiptSnapshot[];
-  readonly serverTimeMs: number;
+  readonly emittedAtServerTimeMs: number;
   readonly traversalAuthority:
     MetaverseRealtimeWorldSnapshot["players"][number]["traversalAuthority"];
 };
@@ -315,7 +315,9 @@ export class MetaverseWorldSnapshotState {
       mountedOccupancy: localPlayerSnapshot.mountedOccupancy ?? null,
       recentPlayerActionReceipts:
         observerPlayerSnapshot.recentPlayerActionReceipts,
-      serverTimeMs: Number(latestWorldSnapshot.tick.serverTimeMs),
+      emittedAtServerTimeMs: Number(
+        latestWorldSnapshot.tick.emittedAtServerTimeMs
+      ),
       traversalAuthority: localPlayerSnapshot.traversalAuthority
     });
   }

@@ -50,7 +50,6 @@ interface MetaverseSceneInteractivePresentationStateDependencies {
   readonly createSceneAssetLoader: () => MetaverseSceneAssetLoader;
   readonly heldWeaponPoseRuntimeNodeResolvers: MetaverseHeldWeaponPoseRuntimeNodeResolvers;
   readonly scene: Scene;
-  readonly showSocketDebug: boolean;
   readonly warn: (message: string) => void;
 }
 
@@ -104,7 +103,6 @@ export class MetaverseSceneInteractivePresentationState {
         createSceneAssetLoader,
         heldWeaponPoseRuntimeNodeResolvers,
         scene,
-        showSocketDebug,
         warn
       } = this.#dependencies;
       const attachmentProofConfigs = resolveAttachmentProofConfigs(
@@ -122,7 +120,6 @@ export class MetaverseSceneInteractivePresentationState {
               ),
             createSceneAssetLoader,
             heldWeaponSolveDirectionEpsilon,
-            showSocketDebug,
             warn,
             ...characterProofRuntimeNodeResolvers
           }
@@ -153,7 +150,6 @@ export class MetaverseSceneInteractivePresentationState {
             createHeldWeaponPoseRuntime: () => null,
             createSceneAssetLoader,
             heldWeaponSolveDirectionEpsilon,
-            showSocketDebug,
             warn,
             ...characterProofRuntimeNodeResolvers
           }

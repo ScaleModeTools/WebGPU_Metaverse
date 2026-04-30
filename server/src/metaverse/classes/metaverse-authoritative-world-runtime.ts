@@ -723,9 +723,7 @@ export class MetaverseAuthoritativeWorldRuntime
           }
 
           if (playerRuntime.weaponState !== null) {
-            const requestedActiveSlotId =
-              command.weaponState?.activeSlotId ??
-              playerRuntime.weaponState.activeSlotId;
+            const requestedActiveSlotId = playerRuntime.weaponState.activeSlotId;
             const activeSlot =
               playerRuntime.weaponState.slots.find(
                 (slot) => slot.equipped && slot.slotId === requestedActiveSlotId
@@ -784,6 +782,7 @@ export class MetaverseAuthoritativeWorldRuntime
           (volume) => volume.volumeKind === "kill-floor"
         )
       ),
+      matchMode: launchVariation?.matchMode ?? null,
       physicsRuntime: this.#physicsRuntime,
       playerTraversalColliderHandles: this.#playerTraversalColliderHandles,
       playersById: this.#playersById,

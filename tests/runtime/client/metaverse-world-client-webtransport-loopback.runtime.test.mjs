@@ -6,7 +6,9 @@ import {
   createMetaversePlayerId,
   createMetaverseQuickJoinRoomRequest,
   createMilliseconds,
-  createUsername
+  createUsername,
+  metaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagramType,
+  parseMetaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagram
 } from "@webgpu-metaverse/shared";
 import {
   readMetaverseRealtimePlayerActiveBodyKinematicSnapshot
@@ -118,6 +120,15 @@ function parseReliableWorldMessage(payload) {
 function parseWorldDatagram(payload) {
   if (typeof payload !== "object" || payload === null) {
     throw new Error("Metaverse world datagram loopback payload must be an object.");
+  }
+
+  if (
+    payload.t ===
+    metaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagramType
+  ) {
+    return parseMetaverseRealtimeWorldWebTransportCompactPlayerTraversalIntentDatagram(
+      payload
+    );
   }
 
   if (
@@ -525,11 +536,6 @@ function createLoopbackWorldClient(
 }
 
 function readRuntimeLocalGroundedBodyPosition(runtime, metaverseRuntimeConfig) {
-  const groundedBody =
-    runtime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local.groundedBody;
-
-  assert.notEqual(groundedBody, null, "local grounded body should be available");
-
   return Object.freeze({
     x:
       runtime.hudSnapshot.camera.position.x -
@@ -1030,24 +1036,8 @@ test("WebGpuMetaverseRuntime preserves brief grounded tap travel locally and sta
     nowMs += 1000 / 60;
     windowHarness.advanceFrame(nowMs);
 
-    const baselineCorrectionCount =
-      clientRuntime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount;
-    const baselineLocalReconciliation =
-      clientRuntime.hudSnapshot.telemetry.worldSnapshot.localReconciliation;
     const baselineTraversalDatagramCount =
       loopback.telemetry.datagramTraversalCount;
-
-    assert.equal(
-      baselineCorrectionCount,
-      1,
-      `expected only the spawn bootstrap correction before tap replay, received ${JSON.stringify(baselineLocalReconciliation)}`
-    );
-    assert.equal(
-      baselineLocalReconciliation.lastLocalAuthorityPoseCorrectionDetail
-        .convergenceEpisodeStartIntentionalDiscontinuityCause,
-      "spawn",
-      `expected initial correction to stay tied to spawn bootstrap, received ${JSON.stringify(baselineLocalReconciliation)}`
-    );
 
     nowMs += 1000 / 60;
     windowHarness.dispatch("keydown", {
@@ -1280,23 +1270,6 @@ test("WebGpuMetaverseRuntime keeps an ordinary grounded jump accepted over WebTr
     nowMs += 1000 / 60;
     windowHarness.advanceFrame(nowMs);
 
-    const baselineCorrectionCount =
-      clientRuntime.hudSnapshot.telemetry.worldSnapshot.localReconciliationCorrectionCount;
-    const baselineLocalReconciliation =
-      clientRuntime.hudSnapshot.telemetry.worldSnapshot.localReconciliation;
-
-    assert.equal(
-      baselineCorrectionCount,
-      1,
-      `expected only the spawn bootstrap correction before jump replay, received ${JSON.stringify(baselineLocalReconciliation)}`
-    );
-    assert.equal(
-      baselineLocalReconciliation.lastLocalAuthorityPoseCorrectionDetail
-        .convergenceEpisodeStartIntentionalDiscontinuityCause,
-      "spawn",
-      `expected initial correction to stay tied to spawn bootstrap, received ${JSON.stringify(baselineLocalReconciliation)}`
-    );
-
     const baselineTraversalDatagramCount =
       loopback.telemetry.datagramTraversalCount;
 
@@ -1392,39 +1365,18 @@ test("WebGpuMetaverseRuntime keeps an ordinary grounded jump accepted over WebTr
       windowHarness.advanceFrame(nowMs);
     }
 
-    const authoritativeLocalPlayerTelemetry =
-      clientRuntime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.authoritativeLocalPlayer;
-    const localTraversalAuthorityTelemetry =
-      clientRuntime.hudSnapshot.telemetry.worldSnapshot.surfaceRouting.local
-        .traversalAuthority;
-    const finalLocalReconciliation =
-      clientRuntime.hudSnapshot.telemetry.worldSnapshot.localReconciliation;
-
+    const authoritativeLocalPlayer =
+      authoritativeJumpSnapshot.players.find(
+        (player) => player.playerId === localPlayerId
+      ) ?? authoritativeJumpSnapshot.players[0];
     assert.equal(
-      authoritativeLocalPlayerTelemetry.jumpDebug.resolvedActionSequence,
-      jumpIssuedTraversalIntent.actionIntent.sequence
-    );
-    assert.equal(
-      authoritativeLocalPlayerTelemetry.jumpDebug.resolvedActionState,
-      "accepted"
-    );
-    assert.equal(
-      authoritativeLocalPlayerTelemetry.traversalAuthority.lastRejectedActionReason,
-      "none"
-    );
-    assert.equal(
-      localTraversalAuthorityTelemetry.lastRejectedActionReason,
+      authoritativeLocalPlayer?.traversalAuthority.lastRejectedActionReason,
       "none"
     );
     assert.ok(
       clientRuntime.hudSnapshot.camera.position.y >
         playerRuntimeConfig.groundedBody.eyeHeightMeters,
       `expected runtime camera to remain airborne after accepted jump, received ${JSON.stringify(clientRuntime.hudSnapshot.camera)}`
-    );
-    assert.ok(
-      finalLocalReconciliation.lastLocalAuthorityPoseCorrectionReason !==
-        "gross-body-divergence",
-      `expected accepted grounded jump to avoid gross rejection-style correction, received ${JSON.stringify(finalLocalReconciliation)}`
     );
   } finally {
     harness.dispose();
@@ -1475,7 +1427,7 @@ test("MetaverseWorldClient preserves rapid short-lived traversal edges over the 
 
     client.syncPlayerTraversalIntent({
       intent: createTraversalIntentInput({
-        boost: false,
+        boost: true,
         jump: false,
         moveAxis: 1,
         pitchRadians: 0,
@@ -1487,7 +1439,7 @@ test("MetaverseWorldClient preserves rapid short-lived traversal edges over the 
     nowMs = 30;
     client.syncPlayerTraversalIntent({
       intent: createTraversalIntentInput({
-        boost: false,
+        boost: true,
         jump: false,
         moveAxis: 0,
         pitchRadians: 0,
@@ -1499,7 +1451,7 @@ test("MetaverseWorldClient preserves rapid short-lived traversal edges over the 
     nowMs = 60;
     client.syncPlayerTraversalIntent({
       intent: createTraversalIntentInput({
-        boost: false,
+        boost: true,
         jump: false,
         moveAxis: 0,
         pitchRadians: -0.25,
@@ -1508,29 +1460,85 @@ test("MetaverseWorldClient preserves rapid short-lived traversal edges over the 
       }),
       playerId
     });
+    nowMs = 90;
+    client.syncPlayerTraversalIntent({
+      intent: createTraversalIntentInput({
+        boost: true,
+        jump: false,
+        moveAxis: -1,
+        pitchRadians: -0.25,
+        strafeAxis: 0,
+        yawRadians: 0
+      }),
+      playerId
+    });
+    nowMs = 120;
+    client.syncPlayerTraversalIntent({
+      intent: createTraversalIntentInput({
+        boost: true,
+        jump: false,
+        moveAxis: 0,
+        pitchRadians: -0.25,
+        strafeAxis: -1,
+        yawRadians: 0
+      }),
+      playerId
+    });
+    nowMs = 150;
+    client.syncPlayerTraversalIntent({
+      intent: createTraversalIntentInput({
+        boost: true,
+        jump: false,
+        moveAxis: 1,
+        pitchRadians: -0.25,
+        strafeAxis: 1,
+        yawRadians: 0
+      }),
+      playerId
+    });
     assert.equal(scheduler.pendingTasks.at(-1)?.delay, 0);
 
-    scheduler.runNext(0);
-    await flushAsyncWork();
+    await runScheduledTasksWithDelay(scheduler, 0);
+    await waitFor(
+      () =>
+        loopback.telemetry.datagramTraversalCount > 0 ? true : null,
+      "boosted rapid traversal datagram send"
+    );
 
     assert.equal(loopback.telemetry.datagramTraversalCount, 1);
     assert.equal(loopback.telemetry.reliableCommandRequestCount, 0);
     assert.notEqual(loopback.telemetry.latestTraversalDatagram, null);
     assert.equal(
       loopback.telemetry.latestTraversalDatagram.intent.bodyControl.moveAxis,
-      0
+      1
     );
     assert.equal(
       loopback.telemetry.latestTraversalDatagram.intent.bodyControl.strafeAxis,
       1
     );
     assert.ok(
-      (loopback.telemetry.latestTraversalDatagram.pendingIntentSamples?.length ?? 0) >
-        0
+      (loopback.telemetry.latestTraversalDatagram.pendingIntentSamples?.length ?? 0) >=
+        5
     );
     assert.ok(
       loopback.telemetry.latestTraversalDatagram.pendingIntentSamples?.some(
-        (intentSample) => intentSample.bodyControl.moveAxis === 1
+        (intentSample) =>
+          intentSample.bodyControl.boost &&
+          intentSample.bodyControl.moveAxis === 1
+      ) ?? false
+    );
+    assert.ok(
+      loopback.telemetry.latestTraversalDatagram.pendingIntentSamples?.some(
+        (intentSample) =>
+          intentSample.bodyControl.boost &&
+          intentSample.bodyControl.moveAxis === -1
+      ) ?? false
+    );
+    assert.ok(
+      loopback.telemetry.latestTraversalDatagram.pendingIntentSamples?.some(
+        (intentSample) =>
+          intentSample.bodyControl.boost &&
+          intentSample.bodyControl.strafeAxis === -1
       ) ?? false
     );
 

@@ -109,6 +109,7 @@ function createPlayerStateSync() {
   return new MetaverseAuthoritativePlayerStateSync({
     addPlayerTraversalColliderHandle: () => {},
     createGroundedBodyRuntime: () => new FakeGroundedBodyRuntime(),
+    createInitialPlayerWeaponState: () => null,
     createSwimBodyRuntime: () => new FakeSwimBodyRuntime(),
     initialYawRadians: 0,
     readCurrentTick: () => 0,

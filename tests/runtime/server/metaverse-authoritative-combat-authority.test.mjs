@@ -1416,7 +1416,7 @@ test("MetaverseAuthoritativeCombatAuthority publishes exactly-once combat action
     combatAuthority
       .readCombatEventSnapshots()
       .map((eventSnapshot) => eventSnapshot.eventKind),
-    ["fire-accepted", "hitscan-resolved"]
+    ["hitscan-resolved"]
   );
   assert.equal(
     combatAuthority.readCombatEventSnapshots()[0]?.shotId,
@@ -1478,7 +1478,7 @@ test("MetaverseAuthoritativeCombatAuthority publishes exactly-once combat action
     combatAuthority
       .readCombatEventSnapshots()
       .map((eventSnapshot) => eventSnapshot.eventKind),
-    ["fire-accepted", "hitscan-resolved", "fire-rejected"]
+    ["hitscan-resolved"]
   );
 });
 
@@ -1620,10 +1620,10 @@ test("MetaverseAuthoritativeCombatAuthority rejects inactive pistol and accepts 
     combatAuthority
       .readCombatEventSnapshots()
       .map((eventSnapshot) => eventSnapshot.eventKind),
-    ["fire-rejected", "fire-accepted", "projectile-spawned"]
+    ["projectile-spawned"]
   );
   assert.equal(
-    combatAuthority.readCombatEventSnapshots()[2]?.projectileId,
+    combatAuthority.readCombatEventSnapshots()[0]?.projectileId,
     `${redPlayerId}:2`
   );
 });
@@ -1923,11 +1923,8 @@ test("MetaverseAuthoritativeCombatAuthority publishes one hitscan event per batt
   assert.deepEqual(
     events.map((eventSnapshot) => eventSnapshot.eventKind),
     [
-      "fire-accepted",
       "hitscan-resolved",
-      "fire-accepted",
       "hitscan-resolved",
-      "fire-accepted",
       "hitscan-resolved"
     ]
   );
@@ -1935,10 +1932,7 @@ test("MetaverseAuthoritativeCombatAuthority publishes one hitscan event per batt
     events.map((eventSnapshot) => eventSnapshot.shotId),
     [
       `${redPlayerId}:1`,
-      `${redPlayerId}:1`,
       `${redPlayerId}:1:2`,
-      `${redPlayerId}:1:2`,
-      `${redPlayerId}:1:3`,
       `${redPlayerId}:1:3`
     ]
   );
@@ -2025,15 +2019,11 @@ test("MetaverseAuthoritativeCombatAuthority resolves shotgun pellets as one ammo
   assert.ok((blueCombatSnapshot?.health ?? 100) < 100);
   assert.deepEqual(
     events.map((eventSnapshot) => eventSnapshot.eventKind),
-    [
-      "fire-accepted",
-      ...Array.from({ length: 12 }, () => "hitscan-resolved")
-    ]
+    Array.from({ length: 12 }, () => "hitscan-resolved")
   );
   assert.deepEqual(
     events.map((eventSnapshot) => eventSnapshot.shotId),
     [
-      `${redPlayerId}:1`,
       `${redPlayerId}:1`,
       ...Array.from(
         { length: 11 },
@@ -2392,11 +2382,6 @@ test("MetaverseAuthoritativeCombatAuthority resolves rocket direct player impact
   );
   assert.equal(combatAuthority.readProjectileSnapshots().length, 1);
   const spawnedProjectile = combatAuthority.readProjectileSnapshots()[0];
-  const expectedBodyYawReferenceOrigin = resolveWeaponTipOrigin(
-    redRootPosition,
-    0,
-    "metaverse-rocket-launcher-v1"
-  );
   const expectedWeaponTipOrigin = resolveSemanticWeaponTipOrigin(
     redRootPosition,
     0,
@@ -2405,39 +2390,24 @@ test("MetaverseAuthoritativeCombatAuthority resolves rocket direct player impact
   );
 
   assert.deepEqual(spawnedProjectile?.position, expectedWeaponTipOrigin);
-  assert.equal(
-    spawnedProjectile?.launchTelemetry?.cameraRayTargetSource,
-    "player-hit"
-  );
-  assert.deepEqual(
-    spawnedProjectile?.launchTelemetry?.weaponTipOriginWorld,
-    expectedWeaponTipOrigin
-  );
-  assert.deepEqual(
-    spawnedProjectile?.launchTelemetry?.bodyYawReferenceOriginWorld,
-    expectedBodyYawReferenceOrigin
-  );
 
   combatAuthority.advanceCombatRuntimes(0.25, 1_450);
 
   const projectileSnapshot = combatAuthority.readProjectileSnapshots()[0];
 
   assert.equal(projectileSnapshot?.resolution, "hit-player");
-  assert.equal(projectileSnapshot?.resolvedPlayerId, bluePlayerId);
-  assert.equal(projectileSnapshot?.launchTelemetry?.firstImpactKind, "player");
-  assert.notEqual(projectileSnapshot?.launchTelemetry?.firstImpactPointWorld, null);
   assert.deepEqual(
     combatAuthority
       .readCombatEventSnapshots()
       .map((eventSnapshot) => eventSnapshot.eventKind),
-    ["fire-accepted", "projectile-spawned", "projectile-resolved"]
+    ["projectile-spawned", "projectile-resolved"]
   );
   assert.equal(
-    combatAuthority.readCombatEventSnapshots()[1]?.semanticMuzzleWorld?.z,
+    combatAuthority.readCombatEventSnapshots()[0]?.semanticMuzzleWorld?.z,
     expectedWeaponTipOrigin.z
   );
   assert.equal(
-    combatAuthority.readCombatEventSnapshots()[2]?.projectile?.resolutionKind,
+    combatAuthority.readCombatEventSnapshots()[1]?.projectile?.resolutionKind,
     "hit-player"
   );
   assert.equal(
@@ -2545,11 +2515,6 @@ test("MetaverseAuthoritativeCombatAuthority launches no-hit rockets from weapon 
   const spawnedProjectile = combatAuthority.readProjectileSnapshots()[0];
 
   assert.deepEqual(spawnedProjectile?.position, expectedWeaponTipOrigin);
-  assert.equal(
-    spawnedProjectile?.launchTelemetry?.cameraRayTargetSource,
-    "max-distance"
-  );
-  assert.equal(spawnedProjectile?.launchTelemetry?.firstImpactKind, null);
 
   combatAuthority.advanceCombatRuntimes(0.05, 1_250);
 
@@ -2892,7 +2857,7 @@ test("MetaverseAuthoritativeCombatAuthority treats duplicate fire action sequenc
     combatAuthority
       .readCombatEventSnapshots()
       .map((eventSnapshot) => eventSnapshot.eventKind),
-    ["fire-accepted", "projectile-spawned"]
+    ["projectile-spawned"]
   );
 });
 
@@ -2987,10 +2952,10 @@ test("MetaverseAuthoritativeCombatAuthority emits one expired projectile resolut
     combatAuthority
       .readCombatEventSnapshots()
       .map((eventSnapshot) => eventSnapshot.eventKind),
-    ["fire-accepted", "projectile-spawned", "projectile-resolved"]
+    ["projectile-spawned", "projectile-resolved"]
   );
   assert.equal(
-    combatAuthority.readCombatEventSnapshots()[2]?.projectile?.resolutionKind,
+    combatAuthority.readCombatEventSnapshots()[1]?.projectile?.resolutionKind,
     "expired"
   );
 });
@@ -3096,7 +3061,6 @@ test("MetaverseAuthoritativeCombatAuthority applies rocket splash around direct 
   const projectileSnapshot = combatAuthority.readProjectileSnapshots()[0];
 
   assert.equal(projectileSnapshot?.resolution, "hit-player");
-  assert.equal(projectileSnapshot?.resolvedPlayerId, bluePlayerId);
   assert.equal(combatAuthority.readPlayerCombatSnapshot(redPlayerId)?.health, 100);
   assert.equal(
     combatAuthority.readPlayerCombatSnapshot(bluePlayerId)?.alive,

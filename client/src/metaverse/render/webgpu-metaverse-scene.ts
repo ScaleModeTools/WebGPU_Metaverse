@@ -22,7 +22,6 @@ import {
   type MetaverseSceneAssetLoader,
   type MetaverseSceneCharacterProofRuntime
 } from "./characters/metaverse-scene-interactive-presentation-state";
-import { MetaverseSceneHeldWeaponGripDebugState } from "./characters/metaverse-scene-held-weapon-grip-debug-state";
 import { syncHumanoidV2HeldWeaponPose } from "./characters/metaverse-scene-held-weapon-pose";
 import { MetaverseSceneLocalCharacterPresentationState } from "./characters/metaverse-scene-local-character-presentation-state";
 import { MetaverseSceneRemoteCharacterPresentationState } from "./characters/metaverse-scene-remote-character-presentation-state";
@@ -62,7 +61,6 @@ import type {
   MetaverseCameraSnapshot,
   MetaverseCombatPresentationEvent,
   MetaverseRemoteCharacterPresentationSnapshot,
-  MetaverseLocalHeldWeaponGripTelemetrySnapshot,
   MetaverseRenderedWeaponMuzzleFrame,
   MetaverseRenderedWeaponMuzzleQuery,
   MountedEnvironmentSnapshot,
@@ -84,7 +82,6 @@ interface MetaverseSceneDependencies {
   characterProofConfig?: MetaverseCharacterProofConfig | null;
   environmentProofConfig?: MetaverseEnvironmentProofConfig | null;
   createSceneAssetLoader?: () => MetaverseSceneAssetLoader;
-  showSocketDebug?: boolean;
   localPlayerId?: string | null;
   warn?: (message: string) => void;
 }
@@ -120,9 +117,6 @@ export function createMetaverseScene(
     event: MetaverseCombatPresentationEvent
   ): void;
   prewarm(renderer: MetaverseSceneRendererHost): Promise<void>;
-  readLocalHeldWeaponGripTelemetrySnapshot(
-    nowMs: number
-  ): MetaverseLocalHeldWeaponGripTelemetrySnapshot;
   readLocalWeaponProjectileMuzzleWorldPosition(
     weaponId: string
   ): { readonly x: number; readonly y: number; readonly z: number } | null;
@@ -229,7 +223,6 @@ export function createMetaverseScene(
       createSceneAssetLoader,
       heldWeaponPoseRuntimeNodeResolvers,
       scene,
-      showSocketDebug: dependencies.showSocketDebug ?? false,
       warn:
         dependencies.warn ?? ((message) => globalThis.console?.warn(message))
     }
@@ -267,13 +260,11 @@ export function createMetaverseScene(
     markSceneBundleGroupsDirty: () =>
       markMetaverseSceneBundleGroupsDirty(scene),
     readCurrentCameraSnapshot: createCurrentCameraSnapshot,
-    scene,
-    showSocketDebug: dependencies.showSocketDebug ?? false
+    scene
   });
   const portalPresentationState = new MetaverseScenePortalPresentationState({
     portalMeshes: scenicState.portalMeshes
   });
-  const heldWeaponGripDebugState = new MetaverseSceneHeldWeaponGripDebugState();
   const combatFxState = new MetaverseSceneCombatFxState({
     scene
   });
@@ -286,7 +277,6 @@ export function createMetaverseScene(
   const localCharacterPresentationState =
     new MetaverseSceneLocalCharacterPresentationState({
       config,
-      heldWeaponGripDebugState,
       interactivePresentationState,
       localCharacterPresentationDependencies: {
         applyMountedAnchorTransform:
@@ -302,7 +292,7 @@ export function createMetaverseScene(
           heldWeaponPoseRuntime,
           attachmentRuntime,
           aimState,
-          weaponState,
+          _weaponState,
           bodyPresentation
         ) =>
           syncHumanoidV2HeldWeaponPose(
@@ -310,9 +300,8 @@ export function createMetaverseScene(
             heldWeaponPoseRuntime,
             attachmentRuntime,
             aimState,
-            weaponState,
-            bodyPresentation,
-            heldWeaponGripDebugState
+            _weaponState,
+            bodyPresentation
           )
       },
       mountInteractionState
@@ -372,9 +361,6 @@ export function createMetaverseScene(
     },
     async prewarm(renderer) {
       await presentationState.prewarm(renderer);
-    },
-    readLocalHeldWeaponGripTelemetrySnapshot(nowMs) {
-      return heldWeaponGripDebugState.readSnapshot(nowMs);
     },
     readLocalWeaponProjectileMuzzleWorldPosition(weaponId) {
       const attachmentProofRuntime =
