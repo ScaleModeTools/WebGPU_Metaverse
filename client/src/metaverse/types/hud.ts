@@ -4,6 +4,7 @@ import type {
 import type { MetaverseLocomotionModeId } from "./metaverse-locomotion-mode";
 import type { MetaverseCameraSnapshot } from "./presentation";
 import type { MetaverseSceneTelemetrySnapshot } from "./telemetry";
+import type { MetaverseRuntimeCameraPhaseId } from "./metaverse-runtime-camera-phase";
 import type {
   FocusedExperiencePortalSnapshot,
   MetaverseMountedInteractionSnapshot,
@@ -182,6 +183,7 @@ export interface MetaverseHudSnapshot {
     readonly scenePrewarmed: boolean;
   };
   readonly camera: MetaverseCameraSnapshot;
+  readonly cameraPhaseId: MetaverseRuntimeCameraPhaseId | null;
   readonly controlMode: MetaverseControlModeId;
   readonly combat: MetaverseHudCombatSnapshot;
   readonly failureReason: string | null;

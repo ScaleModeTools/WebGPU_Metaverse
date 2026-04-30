@@ -53,9 +53,11 @@ interface MetaverseRuntimeBootSceneRuntime {
 }
 
 interface MetaverseRuntimeBootLifecycleDependencies {
+  readonly cancelAnimationFrame: (frameHandle: number) => void;
   readonly cameraPhaseState: MetaverseRuntimeCameraPhaseState;
   readonly devicePixelRatio: number;
   readonly readNowMs: () => number;
+  readonly requestAnimationFrame: (callback: (nowMs: number) => void) => number;
   readonly sceneRuntime: MetaverseRuntimeBootSceneRuntime;
 }
 
@@ -66,24 +68,31 @@ interface MetaverseRuntimeBootRequest {
 }
 
 export class MetaverseRuntimeBootLifecycle {
+  readonly #cancelAnimationFrame: (frameHandle: number) => void;
   readonly #cameraPhaseState: MetaverseRuntimeCameraPhaseState;
   readonly #devicePixelRatio: number;
   readonly #readNowMs: () => number;
+  readonly #requestAnimationFrame: (callback: (nowMs: number) => void) => number;
   readonly #sceneRuntime: MetaverseRuntimeBootSceneRuntime;
 
   #bootRendererInitialized = false;
   #bootScenePrewarmed = false;
+  #entryPreviewFrameHandle: number | null = null;
   #runtimeInputInstalled = false;
 
   constructor({
+    cancelAnimationFrame,
     cameraPhaseState,
     devicePixelRatio,
     readNowMs,
+    requestAnimationFrame,
     sceneRuntime
   }: MetaverseRuntimeBootLifecycleDependencies) {
+    this.#cancelAnimationFrame = cancelAnimationFrame;
     this.#cameraPhaseState = cameraPhaseState;
     this.#devicePixelRatio = devicePixelRatio;
     this.#readNowMs = readNowMs;
+    this.#requestAnimationFrame = requestAnimationFrame;
     this.#sceneRuntime = sceneRuntime;
   }
 
@@ -128,6 +137,7 @@ export class MetaverseRuntimeBootLifecycle {
   }
 
   reset(): void {
+    this.#stopEntryPreviewFrameLoop();
     this.#cameraPhaseState.reset();
     this.#bootRendererInitialized = false;
     this.#bootScenePrewarmed = false;
@@ -151,14 +161,18 @@ export class MetaverseRuntimeBootLifecycle {
       await this.#sceneRuntime.bootScenicEnvironment();
       this.#sceneRuntime.syncViewport(renderer, canvas, this.#devicePixelRatio);
       this.#renderEntryPreviewFrame(renderer, canvas, this.#readNowMs());
-      await this.#sceneRuntime.prewarm(renderer);
+      this.#startEntryPreviewFrameLoop(renderer, canvas);
+      try {
+        await this.#sceneRuntime.prewarm(renderer);
+        await bootGroundedRuntime();
+        await this.#sceneRuntime.bootInteractivePresentation();
+        this.#sceneRuntime.syncViewport(renderer, canvas, this.#devicePixelRatio);
+        await this.#sceneRuntime.prewarm(renderer);
+        this.#cameraPhaseState.markEntryPreviewLiveReady(this.#readNowMs());
+      } finally {
+        this.#stopEntryPreviewFrameLoop();
+      }
       this.#renderEntryPreviewFrame(renderer, canvas, this.#readNowMs());
-      await bootGroundedRuntime();
-      await this.#sceneRuntime.bootInteractivePresentation();
-      this.#sceneRuntime.syncViewport(renderer, canvas, this.#devicePixelRatio);
-      await this.#sceneRuntime.prewarm(renderer);
-      this.#renderEntryPreviewFrame(renderer, canvas, this.#readNowMs());
-      this.#cameraPhaseState.markEntryPreviewLiveReady(this.#readNowMs());
     } else {
       await this.#sceneRuntime.boot();
       await bootGroundedRuntime();
@@ -167,6 +181,34 @@ export class MetaverseRuntimeBootLifecycle {
     }
 
     this.#bootScenePrewarmed = true;
+  }
+
+  #startEntryPreviewFrameLoop(
+    renderer: MetaverseRuntimeBootRendererHost,
+    canvas: MetaverseRuntimeBootCanvasHost
+  ): void {
+    if (this.#entryPreviewFrameHandle !== null) {
+      return;
+    }
+
+    const renderNextFrame = () => {
+      this.#entryPreviewFrameHandle = null;
+      this.#renderEntryPreviewFrame(renderer, canvas, this.#readNowMs());
+      this.#entryPreviewFrameHandle =
+        this.#requestAnimationFrame(renderNextFrame);
+    };
+
+    this.#entryPreviewFrameHandle =
+      this.#requestAnimationFrame(renderNextFrame);
+  }
+
+  #stopEntryPreviewFrameLoop(): void {
+    if (this.#entryPreviewFrameHandle === null) {
+      return;
+    }
+
+    this.#cancelAnimationFrame(this.#entryPreviewFrameHandle);
+    this.#entryPreviewFrameHandle = null;
   }
 
   #renderEntryPreviewFrame(

@@ -2051,6 +2051,7 @@ export function MapEditorStageScreen({
         builderToolState.wallPresetId,
         {
           heightMeters: builderToolState.wallHeightMeters,
+          materialReferenceId: builderToolState.activeMaterialReferenceId,
           thicknessMeters: builderToolState.wallThicknessMeters
         }
       )
@@ -2872,6 +2873,7 @@ export function MapEditorStageScreen({
                       onBuilderToolStateChange={handleBuilderToolStateChange}
                       onCreateMaterialDefinition={handleCreateMaterialDefinition}
                       onUpdateMaterialDefinition={handleUpdateMaterialDefinition}
+                      onUpdateEdge={handleUpdateEdge}
                       onUpdateRegion={handleUpdateRegion}
                       onUpdateSelectedPlacement={handleUpdateSelectedPlacement}
                       onUpdateStructure={handleUpdateStructure}

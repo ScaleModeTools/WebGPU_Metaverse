@@ -487,6 +487,7 @@ test("MetaverseRuntimeFrameLoop keeps blocked camera-phase frames neutral and su
   assert.equal(previewInputs[0].actionIntent.pressed, false);
   assert.equal(scenePresentationCalls[0].characterPresentationSnapshot, null);
   assert.equal(scenePresentationCalls[0].focusedPortal?.experienceId, "duck-hunt");
+  assert.equal(frameLoop.cameraPhaseId, "entry-preview");
   assert.equal(frameLoop.mountedInteraction.focusedMountable, null);
   assert.equal(frameLoop.focusedPortal, null);
   assert.equal(frameLoop.renderedFrameCount, 1);
@@ -508,7 +509,9 @@ test("MetaverseRuntimeFrameLoop routes local weapon fire, look sync, and present
     cameraSnapshot.pitchRadians
   );
   const weaponState = Object.freeze({
+    activeSlotId: null,
     aimMode: "ads",
+    slots: Object.freeze([]),
     weaponId: "metaverse-service-pistol-v2"
   });
   let firedWeapon = null;

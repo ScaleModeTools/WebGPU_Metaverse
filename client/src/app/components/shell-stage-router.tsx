@@ -37,6 +37,7 @@ import { PermissionStageScreen } from "./permission-stage-screen";
 import { ShellEntryStageScreen } from "./shell-entry-stage-screen";
 import { TrackedHandCalibrationStageScreen } from "./tracked-hand-calibration-stage-screen";
 import { UnsupportedStageScreen } from "./unsupported-stage-screen";
+import { MetaverseStageScreen } from "../../metaverse";
 import {
   metaverseAttachmentProofConfig,
   metaverseAttachmentProofConfigs,
@@ -49,11 +50,6 @@ import {
   resolveMetaverseWorldBundleSourceBundleId
 } from "../../metaverse/world/bundle-registry";
 
-const MetaverseStageScreen = lazy(async () =>
-  import("../../metaverse").then((module) => ({
-    default: module.MetaverseStageScreen
-  }))
-);
 const MapEditorStageScreen = lazy(async () =>
   import("../../engine-tool/routes/map-editor-stage-screen").then((module) => ({
     default: module.MapEditorStageScreen
@@ -140,16 +136,7 @@ interface ShellStageRouterProps {
 
 function GameplayStageFallback() {
   return (
-    <ImmersiveStageFrame className="bg-game-stage">
-      <section className="flex flex-1 flex-col justify-end bg-[radial-gradient(circle_at_top,rgb(56_189_248/0.08),transparent_28%),linear-gradient(180deg,rgb(15_23_42/0.06),transparent_32%)] p-6 sm:p-8">
-        <div className="max-w-xl rounded-[1.5rem] border border-border/70 bg-card/72 p-5 backdrop-blur-md">
-          <p className="text-sm font-medium text-foreground">Booting WebGPU stage</p>
-          <p className="mt-3 text-sm text-muted-foreground">
-            Loading the live renderer and the current shell route.
-          </p>
-        </div>
-      </section>
-    </ImmersiveStageFrame>
+    <ImmersiveStageFrame className="bg-game-stage" />
   );
 }
 
@@ -334,30 +321,28 @@ export function ShellStageRouter({
       {activeStep === "metaverse" &&
       profile !== null &&
       resolvedMetaverseRoomAssignment !== null ? (
-        <Suspense fallback={<GameplayStageFallback />}>
-          <MetaverseStageScreen
-            attachmentProofConfig={activeMetaverseAttachmentProofConfig}
-            attachmentProofConfigs={activeMetaverseAttachmentProofConfigs}
-            audioStatusLabel={audioStatusLabel}
-            bundleId={activeMetaverseBundleId}
-            calibrationQualityLabel={calibrationQualityLabel}
-            characterProofConfig={metaverseCharacterProofConfig}
-            coopRoomIdDraft={coopRoomIdDraft}
-            environmentProofConfig={metaverseEnvironmentProofConfig}
-            equippedWeaponId={activeMetaverseEquippedWeaponId}
-            gameplayInputMode={inputMode}
-            metaverseControlMode={metaverseControlMode}
-            onCombatAudioCue={onMetaverseCombatAudioCue}
-            onCoopRoomIdDraftChange={onCoopRoomIdDraftChange}
-            onExperienceLaunchRequest={onExperienceLaunchRequest}
-            onRecalibrationRequest={onRecalibrationRequest}
-            roomAssignment={resolvedMetaverseRoomAssignment}
-            onSetupRequest={onSetupRequest}
-            matchMode={activeMetaverseMatchMode}
-            username={profile.snapshot.username}
-            weaponLayoutId={activeMetaverseWeaponLayoutId}
-          />
-        </Suspense>
+        <MetaverseStageScreen
+          attachmentProofConfig={activeMetaverseAttachmentProofConfig}
+          attachmentProofConfigs={activeMetaverseAttachmentProofConfigs}
+          audioStatusLabel={audioStatusLabel}
+          bundleId={activeMetaverseBundleId}
+          calibrationQualityLabel={calibrationQualityLabel}
+          characterProofConfig={metaverseCharacterProofConfig}
+          coopRoomIdDraft={coopRoomIdDraft}
+          environmentProofConfig={metaverseEnvironmentProofConfig}
+          equippedWeaponId={activeMetaverseEquippedWeaponId}
+          gameplayInputMode={inputMode}
+          metaverseControlMode={metaverseControlMode}
+          onCombatAudioCue={onMetaverseCombatAudioCue}
+          onCoopRoomIdDraftChange={onCoopRoomIdDraftChange}
+          onExperienceLaunchRequest={onExperienceLaunchRequest}
+          onRecalibrationRequest={onRecalibrationRequest}
+          roomAssignment={resolvedMetaverseRoomAssignment}
+          onSetupRequest={onSetupRequest}
+          matchMode={activeMetaverseMatchMode}
+          username={profile.snapshot.username}
+          weaponLayoutId={activeMetaverseWeaponLayoutId}
+        />
       ) : null}
 
       {activeStep === "tool" ? (

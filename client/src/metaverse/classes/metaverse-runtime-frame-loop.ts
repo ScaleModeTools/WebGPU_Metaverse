@@ -33,6 +33,7 @@ import type {
   MetaverseMountedInteractionSnapshot,
   MetaverseRemoteCharacterPresentationSnapshot,
   MetaverseCombatPresentationEvent,
+  MetaverseRuntimeCameraPhaseId,
   MetaverseRenderedWeaponMuzzleFrame,
   MetaverseRenderedWeaponMuzzleQuery,
   MountedEnvironmentSnapshot,
@@ -158,6 +159,7 @@ interface MetaverseRuntimeFrameBootLifecycle {
   }): {
     readonly blocksMovementInput: boolean;
     readonly hidesLocalCharacter: boolean;
+    readonly phaseId: MetaverseRuntimeCameraPhaseId;
     readonly presentationSnapshot: {
       readonly cameraSnapshot: MetaverseCameraSnapshot;
       readonly focusedPortal: FocusedExperiencePortalSnapshot | null;
@@ -465,6 +467,7 @@ export class MetaverseRuntimeFrameLoop {
     | null;
 
   #focusedPortal: FocusedExperiencePortalSnapshot | null = null;
+  #cameraPhaseId: MetaverseRuntimeCameraPhaseId | null = null;
   #frameDeltaMs = 0;
   #frameRate = 0;
   #lastFrameAtMs: number | null = null;
@@ -510,6 +513,10 @@ export class MetaverseRuntimeFrameLoop {
     return this.#focusedPortal;
   }
 
+  get cameraPhaseId(): MetaverseRuntimeCameraPhaseId | null {
+    return this.#cameraPhaseId;
+  }
+
   get frameDeltaMs(): number {
     return this.#frameDeltaMs;
   }
@@ -528,6 +535,7 @@ export class MetaverseRuntimeFrameLoop {
 
   reset(): void {
     this.#focusedPortal = null;
+    this.#cameraPhaseId = null;
     this.#frameDeltaMs = 0;
     this.#frameRate = 0;
     this.#lastFrameAtMs = null;
@@ -857,6 +865,7 @@ export class MetaverseRuntimeFrameLoop {
       presenceReady,
       worldReady
     });
+    this.#cameraPhaseId = cameraPhaseState.phaseId;
     const presentationSnapshot = cameraPhaseState.presentationSnapshot;
     const presentationCameraSnapshot =
       presentationSnapshot?.cameraSnapshot ?? cameraSnapshot;

@@ -119,6 +119,7 @@ function createPublishInput(overrides = {}) {
   return Object.freeze({
     bootRendererInitialized: true,
     bootScenePrewarmed: true,
+    cameraPhaseId: "live",
     controlMode: "keyboard",
     failureReason: null,
     focusedPortal: null,

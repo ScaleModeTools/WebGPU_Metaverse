@@ -27,6 +27,7 @@ interface MetaverseRuntimeRenderSessionBootLifecycle {
 }
 
 interface MetaverseRuntimeRenderSessionFrameLoop {
+  readonly cameraPhaseId: MetaverseHudSnapshot["cameraPhaseId"];
   readonly focusedPortal: FocusedExperiencePortalSnapshot | null;
   readonly frameDeltaMs: number;
   readonly frameRate: number;
@@ -45,6 +46,7 @@ interface MetaverseRuntimeRenderSessionHudPublisher {
     input: {
       readonly bootRendererInitialized: boolean;
       readonly bootScenePrewarmed: boolean;
+      readonly cameraPhaseId: MetaverseHudSnapshot["cameraPhaseId"];
       readonly controlMode: MetaverseHudSnapshot["controlMode"];
       readonly failureReason: string | null;
       readonly focusedPortal: FocusedExperiencePortalSnapshot | null;
@@ -195,6 +197,7 @@ export class MetaverseRuntimeRenderSession {
       {
         bootRendererInitialized: this.#bootLifecycle.bootRendererInitialized,
         bootScenePrewarmed: this.#bootLifecycle.bootScenePrewarmed,
+        cameraPhaseId: this.#frameLoop.cameraPhaseId,
         controlMode: this.#readControlMode(),
         failureReason,
         focusedPortal: this.#frameLoop.focusedPortal,

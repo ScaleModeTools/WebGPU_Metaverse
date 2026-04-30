@@ -2036,6 +2036,57 @@ test("map editor imports, edits, deletes, selects, and exports weapon resource s
   assert.equal(removedProject.resourceSpawnDrafts.length, 0);
 });
 
+test("map editor viewport keeps weapon resource spawn previews on real models instead of fake weapon proxies", async () => {
+  const {
+    createMapEditorViewportSceneDraftHandles,
+    disposeMapEditorViewportSceneDraftHandles,
+    syncMapEditorViewportSceneDrafts
+  } = await clientLoader.load(
+    "/src/engine-tool/viewport/map-editor-viewport-scene-drafts.ts"
+  );
+  const handles = createMapEditorViewportSceneDraftHandles();
+  const resourceSpawnDraft = Object.freeze({
+    ammoGrantRounds: 48,
+    assetId: "metaverse-service-pistol-v2",
+    label: "Pistol preview",
+    modeTags: Object.freeze(["team-deathmatch"]),
+    pickupRadiusMeters: 1.4,
+    position: Object.freeze({
+      x: 0,
+      y: 0.6,
+      z: 0
+    }),
+    respawnCooldownMs: 30_000,
+    spawnId: "resource-preview-test",
+    weaponId: "metaverse-service-pistol-v2",
+    yawRadians: 0
+  });
+
+  syncMapEditorViewportSceneDrafts(handles, {
+    playerSpawnDrafts: Object.freeze([]),
+    resourceSpawnDrafts: Object.freeze([resourceSpawnDraft]),
+    sceneObjectDrafts: Object.freeze([]),
+    waterRegionDrafts: Object.freeze([])
+  });
+
+  const resourceSpawnGroup =
+    handles.resourceSpawnGroupsById.get(resourceSpawnDraft.spawnId) ?? null;
+  const childNames = [];
+
+  resourceSpawnGroup?.traverse((node) => {
+    childNames.push(node.name);
+  });
+
+  assert.notEqual(resourceSpawnGroup, null);
+  assert.equal(resourceSpawnGroup?.children.length, 1);
+  assert.equal(
+    childNames.some((name) => name.includes("fallback") || name.includes("beacon")),
+    false
+  );
+
+  disposeMapEditorViewportSceneDraftHandles(handles);
+});
+
 test("private-build TDM loads and previews the weapon resource layout", async () => {
   const { createMapEditorProject } = await clientLoader.load(
     "/src/engine-tool/project/map-editor-project-state.ts"
@@ -2194,6 +2245,7 @@ test("map editor procedural build helpers export grid-canonical structures, game
     addMapEditorTerrainPatchDraft,
     addMapEditorTeamZoneDraft,
     addMapEditorVehicleRouteDraft,
+    addMapEditorWallSegment,
     applyMapEditorTerrainBrush,
     createMapEditorProject,
     paintMapEditorEntityMaterial
@@ -2268,6 +2320,17 @@ test("map editor procedural build helpers export grid-canonical structures, game
       materialReferenceId: customMaterialId
     }
   );
+  project = addMapEditorWallSegment(
+    project,
+    Object.freeze({ x: 20, y: 0, z: -4 }),
+    Object.freeze({ x: 28, y: 0, z: -4 }),
+    "wall",
+    {
+      heightMeters: 4,
+      materialReferenceId: customMaterialId,
+      thicknessMeters: 0.5
+    }
+  );
   project = addMapEditorTeamZoneDraft(
     project,
     Object.freeze({ x: -16, y: 0, z: -8 }),
@@ -2339,6 +2402,23 @@ test("map editor procedural build helpers export grid-canonical structures, game
   assert.equal(
     exportedBundle.semanticWorld.regions.some(
       (region) => region.regionKind === "path"
+    ),
+    true
+  );
+  assert.equal(
+    exportedBundle.semanticWorld.edges.some(
+      (edge) =>
+        edge.edgeKind === "wall" &&
+        edge.materialReferenceId === customMaterialId
+    ),
+    true
+  );
+  assert.equal(
+    exportedBundle.compiledWorld.compatibilityEnvironmentAssets.some(
+      (environmentAsset) =>
+        environmentAsset.placements.some(
+          (placement) => placement.materialReferenceId === customMaterialId
+        )
     ),
     true
   );

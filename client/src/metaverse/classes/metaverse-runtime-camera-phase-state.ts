@@ -34,6 +34,15 @@ interface Bounds3 {
   minZ: number;
 }
 
+interface EntryPreviewFramingSnapshot {
+  readonly distanceMeters: number;
+  readonly initialYawRadians: number;
+  readonly pitchRadians: number;
+  readonly targetX: number;
+  readonly targetY: number;
+  readonly targetZ: number;
+}
+
 function freezePresentationSnapshot(
   cameraSnapshot: MetaverseCameraSnapshot,
   focusedPortal: FocusedExperiencePortalSnapshot | null
@@ -125,13 +134,31 @@ function includeBox(
   );
 }
 
-function resolveEntryPreviewPresentationSnapshot({
+function freezeEntryPreviewFramingSnapshot({
+  distanceMeters,
+  initialYawRadians,
+  pitchRadians,
+  targetX,
+  targetY,
+  targetZ
+}: EntryPreviewFramingSnapshot): EntryPreviewFramingSnapshot {
+  return Object.freeze({
+    distanceMeters,
+    initialYawRadians,
+    pitchRadians,
+    targetX,
+    targetY,
+    targetZ
+  });
+}
+
+function resolveEntryPreviewFramingSnapshot({
   cameraConfig,
   config,
   environmentProofConfig,
   portals
 }: MetaverseRuntimeCameraPhaseStateDependencies):
-  | MetaverseRuntimeCameraPhasePresentationSnapshot
+  | EntryPreviewFramingSnapshot
   | null {
   if (!config.entryPreview.enabled) {
     return null;
@@ -200,11 +227,34 @@ function resolveEntryPreviewPresentationSnapshot({
     heightDistance
   );
 
+  return freezeEntryPreviewFramingSnapshot({
+    distanceMeters,
+    initialYawRadians: yawRadians,
+    pitchRadians,
+    targetX: centerX,
+    targetY: centerY,
+    targetZ: centerZ
+  });
+}
+
+function resolveEntryPreviewPresentationSnapshot(
+  framingSnapshot: EntryPreviewFramingSnapshot,
+  config: MetaverseRuntimeCameraPhaseConfig["entryPreview"],
+  startedAtMs: number,
+  nowMs: number
+): MetaverseRuntimeCameraPhasePresentationSnapshot {
+  const elapsedSeconds = Math.max(0, (nowMs - startedAtMs) / 1000);
+  const yawRadians =
+    framingSnapshot.initialYawRadians +
+    elapsedSeconds * config.orbitAngularSpeedRadiansPerSecond;
+  const pitchRadians = framingSnapshot.pitchRadians;
+  const lookDirection = directionFromYawPitch(yawRadians, pitchRadians);
+
   return freezePresentationSnapshot(
     freezeCameraSnapshot(
-      centerX - lookDirection.x * distanceMeters,
-      centerY - lookDirection.y * distanceMeters,
-      centerZ - lookDirection.z * distanceMeters,
+      framingSnapshot.targetX - lookDirection.x * framingSnapshot.distanceMeters,
+      framingSnapshot.targetY - lookDirection.y * framingSnapshot.distanceMeters,
+      framingSnapshot.targetZ - lookDirection.z * framingSnapshot.distanceMeters,
       yawRadians,
       pitchRadians
     ),
@@ -214,11 +264,10 @@ function resolveEntryPreviewPresentationSnapshot({
 
 export class MetaverseRuntimeCameraPhaseState {
   readonly #config: MetaverseRuntimeCameraPhaseConfig;
-  readonly #entryPreviewPresentationSnapshot:
-    | MetaverseRuntimeCameraPhasePresentationSnapshot
-    | null;
+  readonly #entryPreviewFramingSnapshot: EntryPreviewFramingSnapshot | null;
 
   #deathCameraSnapshot: MetaverseCameraSnapshot | null = null;
+  #entryPreviewCompleted = false;
   #entryPreviewLiveReadyAtMs: number | null = null;
   #entryPreviewStartedAtMs: number | null = null;
   #gameplayControlLocked = false;
@@ -226,16 +275,17 @@ export class MetaverseRuntimeCameraPhaseState {
 
   constructor(dependencies: MetaverseRuntimeCameraPhaseStateDependencies) {
     this.#config = dependencies.config;
-    this.#entryPreviewPresentationSnapshot =
-      resolveEntryPreviewPresentationSnapshot(dependencies);
+    this.#entryPreviewFramingSnapshot =
+      resolveEntryPreviewFramingSnapshot(dependencies);
   }
 
   get entryPreviewEnabled(): boolean {
-    return this.#entryPreviewPresentationSnapshot !== null;
+    return this.#entryPreviewFramingSnapshot !== null;
   }
 
   reset(): void {
     this.#deathCameraSnapshot = null;
+    this.#entryPreviewCompleted = false;
     this.#entryPreviewLiveReadyAtMs = null;
     this.#entryPreviewStartedAtMs = null;
     this.#gameplayControlLocked = false;
@@ -248,6 +298,7 @@ export class MetaverseRuntimeCameraPhaseState {
     }
 
     this.#entryPreviewStartedAtMs = nowMs;
+    this.#entryPreviewCompleted = false;
     this.#entryPreviewLiveReadyAtMs = null;
   }
 
@@ -274,11 +325,20 @@ export class MetaverseRuntimeCameraPhaseState {
   resolveBootPresentationSnapshot(
     nowMs: number
   ): MetaverseRuntimeCameraPhasePresentationSnapshot | null {
-    if (!this.#isEntryPreviewActive(nowMs)) {
+    if (
+      this.#entryPreviewFramingSnapshot === null ||
+      this.#entryPreviewStartedAtMs === null ||
+      this.#entryPreviewCompleted
+    ) {
       return null;
     }
 
-    return this.#entryPreviewPresentationSnapshot;
+    return resolveEntryPreviewPresentationSnapshot(
+      this.#entryPreviewFramingSnapshot,
+      this.#config.entryPreview,
+      this.#entryPreviewStartedAtMs,
+      nowMs
+    );
   }
 
   resolveRuntimeCameraPhaseState({
@@ -306,7 +366,11 @@ export class MetaverseRuntimeCameraPhaseState {
     }
 
     const entryPreviewPresentationSnapshot =
-      this.resolveBootPresentationSnapshot(nowMs);
+      this.#resolveRuntimeEntryPreviewPresentationSnapshot(
+        nowMs,
+        presenceReady,
+        worldReady
+      );
 
     if (entryPreviewPresentationSnapshot !== null) {
       return freezeStateSnapshot(
@@ -331,21 +395,43 @@ export class MetaverseRuntimeCameraPhaseState {
     );
   }
 
-  #isEntryPreviewActive(nowMs: number): boolean {
+  #resolveRuntimeEntryPreviewPresentationSnapshot(
+    nowMs: number,
+    presenceReady: boolean,
+    worldReady: boolean
+  ): MetaverseRuntimeCameraPhasePresentationSnapshot | null {
     if (
-      this.#entryPreviewPresentationSnapshot === null ||
-      this.#entryPreviewStartedAtMs === null
+      this.#entryPreviewFramingSnapshot === null ||
+      this.#entryPreviewStartedAtMs === null ||
+      this.#entryPreviewCompleted
     ) {
-      return false;
+      return null;
     }
 
-    if (this.#entryPreviewLiveReadyAtMs === null) {
-      return true;
+    const liveReadyElapsedMs =
+      this.#entryPreviewLiveReadyAtMs === null
+        ? 0
+        : nowMs - this.#entryPreviewLiveReadyAtMs;
+    const minimumDwellComplete =
+      this.#entryPreviewLiveReadyAtMs !== null &&
+      liveReadyElapsedMs >= this.#config.entryPreview.minimumDwellMs;
+
+    if (
+      this.#entryPreviewLiveReadyAtMs !== null &&
+      presenceReady &&
+      worldReady &&
+      !this.#gameplayControlLocked &&
+      minimumDwellComplete
+    ) {
+      this.#entryPreviewCompleted = true;
+      return null;
     }
 
-    return (
-      nowMs - this.#entryPreviewLiveReadyAtMs <
-      this.#config.entryPreview.minimumDwellMs
+    return resolveEntryPreviewPresentationSnapshot(
+      this.#entryPreviewFramingSnapshot,
+      this.#config.entryPreview,
+      this.#entryPreviewStartedAtMs,
+      nowMs
     );
   }
 }

@@ -51,6 +51,7 @@ export const disabledRuntimeCameraPhaseConfig = Object.freeze({
     minDistanceMeters: 0,
     minHeightMeters: 0,
     minimumDwellMs: 0,
+    orbitAngularSpeedRadiansPerSecond: 0,
     pitchRadians: -0.72
   })
 });

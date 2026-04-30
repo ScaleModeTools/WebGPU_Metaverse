@@ -60,6 +60,7 @@ test("MetaverseRuntimeCameraPhaseState resolves entry preview, spawn wait, respa
         minDistanceMeters: 8,
         minHeightMeters: 6,
         minimumDwellMs: 100,
+        orbitAngularSpeedRadiansPerSecond: 0.5,
         pitchRadians: -0.7
       })
     }),
@@ -75,7 +76,15 @@ test("MetaverseRuntimeCameraPhaseState resolves entry preview, spawn wait, respa
 
   state.startEntryPreview(100);
 
-  assert.notEqual(state.resolveBootPresentationSnapshot(100), null);
+  const bootPreviewStart = state.resolveBootPresentationSnapshot(100);
+  const bootPreviewAdvanced = state.resolveBootPresentationSnapshot(200);
+
+  assert.notEqual(bootPreviewStart, null);
+  assert.notEqual(bootPreviewAdvanced, null);
+  assert.notDeepEqual(
+    bootPreviewStart.cameraSnapshot.position,
+    bootPreviewAdvanced.cameraSnapshot.position
+  );
   assert.equal(
     state.resolveRuntimeCameraPhaseState({
       liveCameraSnapshot,
@@ -107,7 +116,7 @@ test("MetaverseRuntimeCameraPhaseState resolves entry preview, spawn wait, respa
       presenceReady: false,
       worldReady: true
     }).phaseId,
-    "spawn-wait"
+    "entry-preview"
   );
 
   state.setGameplayControlLocked(true);
@@ -119,7 +128,7 @@ test("MetaverseRuntimeCameraPhaseState resolves entry preview, spawn wait, respa
       presenceReady: true,
       worldReady: true
     }).phaseId,
-    "spawn-wait"
+    "entry-preview"
   );
 
   state.setGameplayControlLocked(false);

@@ -424,6 +424,7 @@ function createLegacySemanticDrafts(
             heightMeters: size.y,
             label: environmentAsset.assetId,
             lengthMeters: size.x,
+            materialReferenceId: placement.materialReferenceId,
             path: Object.freeze([
               createPlanarPoint(-size.x * 0.5, 0),
               createPlanarPoint(size.x * 0.5, 0)
@@ -3038,7 +3039,8 @@ function createMapEditorWallDraftsForSegment(
   dimensionsOverride?: {
     readonly heightMeters: number;
     readonly thicknessMeters: number;
-  }
+  },
+  materialReferenceId: string | null = null
 ): {
   readonly edgeId: string;
   readonly project: MapEditorProjectSnapshot;
@@ -3080,6 +3082,7 @@ function createMapEditorWallDraftsForSegment(
     heightMeters: dimensions.heightMeters,
     label: `${edgeKind[0]?.toUpperCase()}${edgeKind.slice(1)} ${project.edgeDrafts.length + 1}`,
     lengthMeters,
+    materialReferenceId,
     path: Object.freeze([
       createPlanarPoint(-lengthMeters * 0.5, 0),
       createPlanarPoint(lengthMeters * 0.5, 0)
@@ -4628,6 +4631,7 @@ export function addMapEditorEdgeDraft(
     heightMeters: 4,
     label: `Edge ${project.edgeDrafts.length + 1}`,
     lengthMeters: 8,
+    materialReferenceId: null,
     path: Object.freeze([
       createPlanarPoint(-4, 0),
       createPlanarPoint(4, 0)
@@ -5532,6 +5536,7 @@ export function addMapEditorWallSegment(
   edgeKind: MapEditorEdgeDraftSnapshot["edgeKind"],
   options?: {
     readonly heightMeters?: number;
+    readonly materialReferenceId?: string | null;
     readonly thicknessMeters?: number;
   }
 ): MapEditorProjectSnapshot {
@@ -5561,7 +5566,8 @@ export function addMapEditorWallSegment(
               resolveWallPresetDimensions(edgeKind).thicknessMeters
           )
         })
-      : undefined
+      : undefined,
+    options?.materialReferenceId ?? null
   );
 
   return nextDrafts === null

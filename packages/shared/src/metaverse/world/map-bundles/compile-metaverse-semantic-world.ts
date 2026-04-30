@@ -788,7 +788,9 @@ function buildEdgeCompatibilityPlacements(
               collisionBoxWithTerrainSupport
             ),
             collisionBoxWithTerrainSupport.rotationYRadians,
-            placementScale
+            placementScale,
+            "",
+            edge.materialReferenceId
           )
         ]),
         seats: null,

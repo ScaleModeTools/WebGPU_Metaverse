@@ -19,6 +19,7 @@ export interface MetaverseRuntimeCameraPhaseConfig {
     readonly minDistanceMeters: number;
     readonly minHeightMeters: number;
     readonly minimumDwellMs: number;
+    readonly orbitAngularSpeedRadiansPerSecond: number;
     readonly pitchRadians: number;
   };
 }

@@ -35,6 +35,8 @@ test("MetaverseRuntimeHudPublisher derives boot phases and throttles unforced UI
   const publisher = new MetaverseRuntimeHudPublisher(dependencies);
   let updateCount = 0;
 
+  assert.equal(publisher.hudSnapshot.cameraPhaseId, null);
+
   publisher.subscribeUiUpdates(() => {
     updateCount += 1;
   });
@@ -77,6 +79,7 @@ test("MetaverseRuntimeHudPublisher derives boot phases and throttles unforced UI
 
   assert.equal(updateCount, 2);
   assert.equal(publisher.hudSnapshot.boot.phase, "ready");
+  assert.equal(publisher.hudSnapshot.cameraPhaseId, "live");
 });
 
 test("MetaverseRuntimeHudPublisher resolves mounted HUD access copy from one mounted interaction snapshot", async () => {

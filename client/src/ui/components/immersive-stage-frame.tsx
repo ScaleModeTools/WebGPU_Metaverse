@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/class-name";
 
 interface ImmersiveStageFrameProps {
-  readonly children: ReactNode;
+  readonly children?: ReactNode;
   readonly className?: string;
 }
 

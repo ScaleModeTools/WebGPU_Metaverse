@@ -74,6 +74,10 @@ export const metaverseRuntimeCameraPhaseConfig = Object.freeze({
       import.meta.env?.VITE_METAVERSE_ENTRY_PREVIEW_MIN_DWELL_MS,
       1200
     ),
+    orbitAngularSpeedRadiansPerSecond: resolveFiniteNumber(
+      import.meta.env?.VITE_METAVERSE_ENTRY_PREVIEW_ORBIT_SPEED_RADIANS_PER_SECOND,
+      0.085
+    ),
     pitchRadians: resolveFiniteNumber(
       import.meta.env?.VITE_METAVERSE_ENTRY_PREVIEW_PITCH_RADIANS,
       -0.72

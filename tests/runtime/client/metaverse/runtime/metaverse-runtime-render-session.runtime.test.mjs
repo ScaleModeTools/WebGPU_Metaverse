@@ -60,6 +60,7 @@ test("MetaverseRuntimeRenderSession syncs the active frame loop and publishes ru
     },
     cancelAnimationFrame() {},
     frameLoop: {
+      cameraPhaseId: "live",
       focusedPortal: null,
       frameDeltaMs: 16.6,
       frameRate: 60,
@@ -129,6 +130,7 @@ test("MetaverseRuntimeRenderSession syncs the active frame loop and publishes ru
   assert.equal(publishCalls[0]?.input.controlMode, "gamepad");
   assert.equal(publishCalls[0]?.input.bootRendererInitialized, true);
   assert.equal(publishCalls[0]?.input.bootScenePrewarmed, true);
+  assert.equal(publishCalls[0]?.input.cameraPhaseId, "live");
   assert.equal(publishCalls[0]?.input.renderedFrameCount, 4);
   assert.equal(
     publishCalls[0]?.input.mountedInteraction.focusedMountable?.environmentAssetId,
@@ -151,6 +153,7 @@ test("MetaverseRuntimeRenderSession publishes the current HUD lifecycle when no 
     },
     cancelAnimationFrame() {},
     frameLoop: {
+      cameraPhaseId: null,
       focusedPortal: null,
       frameDeltaMs: 0,
       frameRate: 0,
@@ -237,6 +240,7 @@ test("MetaverseRuntimeRenderSession owns active-surface matching, frame scheduli
       cancelCalls.push(handle);
     },
     frameLoop: {
+      cameraPhaseId: "live",
       focusedPortal: null,
       frameDeltaMs: 16.6,
       frameRate: 60,

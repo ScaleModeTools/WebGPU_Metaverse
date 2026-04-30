@@ -26,6 +26,15 @@ import {
   createPortalSharedRenderResources,
   type PortalSharedRenderResources
 } from "@/metaverse/render/portals/metaverse-scene-portals";
+import { createDefaultMetaverseSceneAssetLoader } from "@/metaverse/render/metaverse-scene-asset-loader";
+import {
+  cloneMetaverseResourceSpawnModel,
+  loadMetaverseResourceSpawnModel,
+  resolveMetaverseResourceSpawnAssetKey,
+  resolveMetaverseResourceSpawnAttachmentModelPath,
+  type LoadedMetaverseResourceSpawnModel
+} from "@/metaverse/render/resources/metaverse-resource-spawn-models";
+import type { MetaverseSceneAssetLoader } from "@/metaverse/render/characters/metaverse-scene-interactive-presentation-state";
 
 interface SceneDraftMeshUserData {
   mapEditorOwnsGeometry?: boolean;
@@ -34,6 +43,71 @@ interface SceneDraftMeshUserData {
   resourceSpawnId?: string;
   sceneObjectId?: string;
   waterRegionId?: string;
+}
+
+export class MapEditorResourceSpawnPreviewLibrary {
+  readonly #createSceneAssetLoader: () => MetaverseSceneAssetLoader;
+  readonly #loadedModelsByAssetKey = new Map<
+    string,
+    Promise<LoadedMetaverseResourceSpawnModel | null>
+  >();
+
+  constructor(
+    createSceneAssetLoader: () => MetaverseSceneAssetLoader =
+      createDefaultMetaverseSceneAssetLoader
+  ) {
+    this.#createSceneAssetLoader = createSceneAssetLoader;
+  }
+
+  attachResourceSpawnModel(
+    resourceSpawnDraft: MapEditorResourceSpawnDraftSnapshot,
+    resourceSpawnGroup: Group,
+    isCurrentGroup: () => boolean
+  ): void {
+    const assetKey = resolveMetaverseResourceSpawnAssetKey(resourceSpawnDraft);
+
+    if (resolveMetaverseResourceSpawnAttachmentModelPath(assetKey) === null) {
+      return;
+    }
+
+    void this.#loadModel(assetKey).then((loadedModel) => {
+      if (loadedModel === null || !isCurrentGroup()) {
+        return;
+      }
+
+      const modelGroup = cloneMetaverseResourceSpawnModel(loadedModel);
+
+      tagResourceSpawnNodes(modelGroup, resourceSpawnDraft.spawnId);
+      resourceSpawnGroup.add(modelGroup);
+    });
+  }
+
+  #loadModel(
+    assetKey: string
+  ): Promise<LoadedMetaverseResourceSpawnModel | null> {
+    const cachedModel = this.#loadedModelsByAssetKey.get(assetKey);
+
+    if (cachedModel !== undefined) {
+      return cachedModel;
+    }
+
+    const modelPromise = loadMetaverseResourceSpawnModel(
+      assetKey,
+      this.#createSceneAssetLoader
+    ).catch(() => null);
+
+    this.#loadedModelsByAssetKey.set(assetKey, modelPromise);
+
+    return modelPromise;
+  }
+}
+
+function tagResourceSpawnNodes(group: Group, resourceSpawnId: string): void {
+  group.traverse((node) => {
+    const userData = node.userData as SceneDraftMeshUserData;
+
+    userData.resourceSpawnId = resourceSpawnId;
+  });
 }
 
 function disposeOwnedMesh(mesh: Mesh): void {
@@ -170,39 +244,11 @@ function createResourceSpawnDraftGroup(
       transparent: true
     })
   );
-  const pickup = createOwnedMesh(
-    resourceSpawnDraft.weaponId.includes("rocket")
-      ? new CylinderGeometry(0.18, 0.18, 1.05, 16)
-      : new BoxGeometry(0.95, 0.28, 0.42),
-    new MeshStandardMaterial({
-      color: resourceSpawnDraft.weaponId.includes("rocket")
-        ? "#fb923c"
-        : "#93c5fd",
-      emissive: resourceSpawnDraft.weaponId.includes("rocket")
-        ? "#7c2d12"
-        : "#1e3a8a",
-      roughness: 0.42
-    })
-  );
-  const beacon = createOwnedMesh(
-    new ConeGeometry(0.24, 0.7, 16),
-    new MeshStandardMaterial({
-      color: "#e0f2fe",
-      emissive: "#0369a1",
-      roughness: 0.38
-    })
-  );
 
   root.name = `map_editor_resource_spawn/${resourceSpawnDraft.spawnId}`;
   userData.resourceSpawnId = resourceSpawnDraft.spawnId;
   base.position.y = 0.04;
-  pickup.position.y = 0.38;
-  pickup.rotation.z = resourceSpawnDraft.weaponId.includes("rocket")
-    ? Math.PI * 0.5
-    : 0;
-  beacon.position.y = 1.2;
-  beacon.rotation.z = Math.PI;
-  root.add(base, pickup, beacon);
+  root.add(base);
   root.position.set(
     resourceSpawnDraft.position.x,
     resourceSpawnDraft.position.y,
@@ -302,6 +348,7 @@ export interface MapEditorViewportSceneDraftHandles {
   readonly sceneObjectGroupsById: Map<string, Group>;
   readonly playerSpawnGroupsById: Map<string, Group>;
   readonly portalSharedRenderResources: PortalSharedRenderResources;
+  readonly resourceSpawnPreviewLibrary: MapEditorResourceSpawnPreviewLibrary;
   readonly resourceSpawnGroupsById: Map<string, Group>;
   readonly rootGroup: Group;
   readonly waterRegionGroupsById: Map<string, Group>;
@@ -312,6 +359,7 @@ export function createMapEditorViewportSceneDraftHandles(): MapEditorViewportSce
     sceneObjectGroupsById: new Map<string, Group>(),
     playerSpawnGroupsById: new Map<string, Group>(),
     portalSharedRenderResources: createPortalSharedRenderResources(),
+    resourceSpawnPreviewLibrary: new MapEditorResourceSpawnPreviewLibrary(),
     resourceSpawnGroupsById: new Map<string, Group>(),
     rootGroup: new Group(),
     waterRegionGroupsById: new Map<string, Group>()
@@ -356,6 +404,13 @@ export function syncMapEditorViewportSceneDrafts(
       resourceSpawnGroup
     );
     handles.rootGroup.add(resourceSpawnGroup);
+    handles.resourceSpawnPreviewLibrary.attachResourceSpawnModel(
+      resourceSpawnDraft,
+      resourceSpawnGroup,
+      () =>
+        handles.resourceSpawnGroupsById.get(resourceSpawnDraft.spawnId) ===
+        resourceSpawnGroup
+    );
   }
 
   for (const sceneObjectDraft of drafts.sceneObjectDrafts) {

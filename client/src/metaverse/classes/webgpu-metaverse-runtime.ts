@@ -329,9 +329,11 @@ export class WebGpuMetaverseRuntime {
       portals: config.portals
     });
     const bootLifecycle = new MetaverseRuntimeBootLifecycle({
+      cancelAnimationFrame: cancelAnimationFrameImpl,
       cameraPhaseState,
       devicePixelRatio,
       readNowMs: readNowMsImpl,
+      requestAnimationFrame: requestAnimationFrameImpl,
       sceneRuntime
     });
     this.#bootLifecycle = bootLifecycle;

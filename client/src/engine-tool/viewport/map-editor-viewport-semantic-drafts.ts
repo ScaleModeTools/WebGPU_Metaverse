@@ -178,6 +178,32 @@ function resolveRegionTextureId(
 function resolveEdgeTextureId(
   edge: MapEditorEdgeDraftSnapshot
 ): MetaverseSceneSemanticPreviewTextureId {
+  switch (edge.materialReferenceId) {
+    case "alien-rock":
+    case "concrete":
+    case "glass":
+    case "metal":
+    case "terrain-ash":
+    case "terrain-basalt":
+    case "terrain-cliff":
+    case "terrain-dirt":
+    case "terrain-gravel":
+    case "terrain-grass":
+    case "terrain-moss":
+    case "terrain-rock":
+    case "terrain-sand":
+    case "terrain-snow":
+    case "team-blue":
+    case "team-red":
+    case "warning":
+    case "shell-floor-grid":
+    case "shell-metal-panel":
+    case "shell-painted-trim":
+      return edge.materialReferenceId;
+    default:
+      break;
+  }
+
   switch (edge.edgeKind) {
     case "fence":
     case "rail":
@@ -348,13 +374,24 @@ function createRegionGroup(
   return root;
 }
 
-function createEdgeGroup(edge: MapEditorEdgeDraftSnapshot): Group {
+function createEdgeGroup(
+  edge: MapEditorEdgeDraftSnapshot,
+  materialDefinitions: readonly MapEditorMaterialDefinitionDraftSnapshot[]
+): Group {
   const root = new Group();
   const userData = root.userData as SemanticDraftMeshUserData;
-  const material = createMetaverseSceneSemanticRenderMaterial(resolveEdgeTextureId(edge), null, {
+  const materialDefinition = resolveMetaverseSceneSemanticMaterialDefinition(
+    materialDefinitions,
+    edge.materialReferenceId
+  );
+  const textureId = materialDefinition?.baseMaterialId ?? resolveEdgeTextureId(edge);
+  const profile = resolveMetaverseSceneSemanticMaterialProfile(textureId);
+  const material = createMetaverseSceneSemanticRenderMaterial(textureId, materialDefinition, {
     emissive: "#160d08",
-    metalness: edge.edgeKind === "fence" || edge.edgeKind === "rail" ? 0.18 : 0.06,
-    roughness: 0.78
+    ...(materialDefinition === null
+      ? { metalness: edge.edgeKind === "fence" || edge.edgeKind === "rail" ? 0.18 : profile.metalness }
+      : {}),
+    ...(materialDefinition === null ? { roughness: Math.min(0.78, profile.roughness) } : {})
   });
 
   applyTextureScale(
@@ -679,7 +716,10 @@ export function syncMapEditorViewportSemanticDrafts(
   }
 
   for (const edge of drafts.edgeDrafts) {
-    const group = createEdgeGroup(edge);
+    const group = createEdgeGroup(
+      edge,
+      drafts.materialDefinitionDrafts ?? Object.freeze([])
+    );
 
     handles.edgeGroupsById.set(edge.edgeId, group);
     handles.rootGroup.add(group);

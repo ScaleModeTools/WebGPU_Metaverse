@@ -1,5 +1,6 @@
 import { useState, type ChangeEvent, type ReactNode } from "react";
 
+import { weaponArchetypeManifest } from "@/assets/config/weapon-archetype-manifest";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -355,6 +356,16 @@ function createCustomMaterialOptions(
   );
 }
 
+function createMaterialLibraryOptions(
+  materialDefinitions: readonly MapEditorMaterialDefinitionDraftSnapshot[]
+): readonly QuickMaterialOption[] {
+  return Object.freeze([
+    ...createCustomMaterialOptions(materialDefinitions),
+    ...shellMaterialQuickOptions,
+    ...allSemanticMaterialOptions
+  ]);
+}
+
 const quickTerrainBrushOptions = Object.freeze([
   Object.freeze({ id: "raise", label: "Raise" }),
   Object.freeze({ id: "lower", label: "Lower" }),
@@ -396,28 +407,29 @@ const quickTeamOptions = Object.freeze([
   readonly label: string;
 }[]);
 
-const weaponPickupOptions = Object.freeze([
-  Object.freeze({
-    ammoGrantRounds: 48,
-    assetId: "metaverse-service-pistol-v2",
-    label: "Service Pistol",
-    respawnCooldownMs: 30_000,
-    weaponId: "metaverse-service-pistol-v2"
-  }),
-  Object.freeze({
-    ammoGrantRounds: 6,
-    assetId: "metaverse-rocket-launcher-v1",
-    label: "Rocket Launcher",
-    respawnCooldownMs: 45_000,
-    weaponId: "metaverse-rocket-launcher-v1"
-  })
-] satisfies readonly {
+interface WeaponPickupOption {
   readonly ammoGrantRounds: number;
   readonly assetId: string;
   readonly label: string;
   readonly respawnCooldownMs: number;
   readonly weaponId: string;
-}[]);
+}
+
+const weaponPickupOptions: readonly WeaponPickupOption[] = Object.freeze(
+  weaponArchetypeManifest.archetypes.map((weaponArchetype) =>
+    Object.freeze({
+      ammoGrantRounds: weaponArchetype.stats.magazine.maxCarriedAmmo,
+      assetId: weaponArchetype.id,
+      label: weaponArchetype.label,
+      respawnCooldownMs:
+        weaponArchetype.family === "launcher" ||
+        weaponArchetype.family === "sniper"
+          ? 45_000
+          : 30_000,
+      weaponId: weaponArchetype.id
+    })
+  )
+);
 
 function readWeaponPickupOption(weaponId: string) {
   return (
@@ -1082,10 +1094,150 @@ function MaterialDefinitionEditorFields({
   );
 }
 
-type MaterialPaletteTabId = "custom" | "library" | "palette";
+function createEditableMaterialDefinitionDraft(
+  option: QuickMaterialOption,
+  materialId: string,
+  sourceDefinition: MapEditorMaterialDefinitionDraftSnapshot | null = null
+): MapEditorMaterialDefinitionDraftSnapshot {
+  const profileTextureId =
+    readSemanticPreviewTextureId(option.id) ?? option.baseMaterialId;
+  const materialProfile =
+    resolveMetaverseSceneSemanticMaterialProfile(profileTextureId);
+
+  return Object.freeze({
+    accentColorHex: sourceDefinition?.accentColorHex ?? null,
+    baseColorHex:
+      sourceDefinition?.baseColorHex ??
+      resolveCssRgbToHex(option.colorHex, "#94938c"),
+    baseMaterialId: sourceDefinition?.baseMaterialId ?? option.baseMaterialId,
+    label:
+      sourceDefinition?.label ??
+      (option.isCustom ? option.label : `${option.label} Custom`),
+    materialId,
+    metalness: sourceDefinition?.metalness ?? materialProfile.metalness,
+    opacity: sourceDefinition?.opacity ?? materialProfile.opacity,
+    roughness: sourceDefinition?.roughness ?? materialProfile.roughness,
+    textureBrightness: sourceDefinition?.textureBrightness ?? 1,
+    textureContrast: sourceDefinition?.textureContrast ?? 1,
+    textureImageDataUrl: sourceDefinition?.textureImageDataUrl ?? null,
+    texturePatternStrength: sourceDefinition?.texturePatternStrength ?? 1,
+    textureRepeat: sourceDefinition?.textureRepeat ?? 1
+  });
+}
+
+function EditableMaterialDefinitionControls({
+  activeDefinition,
+  activeOption,
+  fieldIdPrefix,
+  nextCustomMaterialId,
+  onActivateMaterialDefinition,
+  onCreateMaterialDefinition,
+  onUpdateMaterialDefinition
+}: {
+  readonly activeDefinition: MapEditorMaterialDefinitionDraftSnapshot | null;
+  readonly activeOption: QuickMaterialOption;
+  readonly fieldIdPrefix: string;
+  readonly nextCustomMaterialId: string | null;
+  readonly onActivateMaterialDefinition: (option: QuickMaterialOption) => void;
+  readonly onCreateMaterialDefinition: (
+    input: MapEditorMaterialDefinitionInput
+  ) => void;
+  readonly onUpdateMaterialDefinition: (
+    materialId: string,
+    update: (
+      draft: MapEditorMaterialDefinitionDraftSnapshot
+    ) => MapEditorMaterialDefinitionDraftSnapshot
+  ) => void;
+}) {
+  const editableMaterialId =
+    activeDefinition?.materialId ?? nextCustomMaterialId;
+
+  if (editableMaterialId === null) {
+    return null;
+  }
+
+  const editableDefinition =
+    activeDefinition ??
+    createEditableMaterialDefinitionDraft(activeOption, editableMaterialId);
+  const updateEditableDefinition = (
+    materialId: string,
+    update: (
+      draft: MapEditorMaterialDefinitionDraftSnapshot
+    ) => MapEditorMaterialDefinitionDraftSnapshot
+  ) => {
+    if (activeDefinition !== null) {
+      onUpdateMaterialDefinition(materialId, update);
+      return;
+    }
+
+    const nextDefinition = update(editableDefinition);
+
+    onCreateMaterialDefinition(nextDefinition);
+    onActivateMaterialDefinition(
+      Object.freeze({
+        baseMaterialId: nextDefinition.baseMaterialId,
+        colorHex: nextDefinition.baseColorHex,
+        id: nextDefinition.materialId,
+        isCustom: true,
+        label: nextDefinition.label
+      })
+    );
+  };
+
+  return (
+    <div className="border-t border-border/70 pt-3">
+      <MaterialDefinitionEditorFields
+        fieldIdPrefix={fieldIdPrefix}
+        materialDefinition={editableDefinition}
+        onUpdateMaterialDefinition={updateEditableDefinition}
+      />
+    </div>
+  );
+}
+
+function MaterialOptionSelect({
+  fieldId,
+  onMaterialChange,
+  options,
+  value
+}: {
+  readonly fieldId: string;
+  readonly onMaterialChange: (option: QuickMaterialOption) => void;
+  readonly options: readonly QuickMaterialOption[];
+  readonly value: string;
+}) {
+  return (
+    <Select
+      onValueChange={(nextMaterialReferenceId) => {
+        const nextOption =
+          options.find((option) => option.id === nextMaterialReferenceId) ?? null;
+
+        if (nextOption !== null) {
+          onMaterialChange(nextOption);
+        }
+      }}
+      value={value}
+    >
+      <SelectTrigger id={fieldId}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          {options.map((option) => (
+            <SelectItem key={option.id} value={option.id}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  );
+}
+
+type MaterialPaletteTabId = "library" | "palette";
 
 function readMaterialPaletteTabId(value: string): MaterialPaletteTabId {
-  return value === "custom" || value === "library" ? value : "palette";
+  return value === "library" ? value : "palette";
 }
 
 function MaterialPaletteTabs({
@@ -1133,10 +1285,6 @@ function MaterialPaletteTabs({
   const customTabEnabled =
     onCreateMaterialDefinition !== undefined &&
     onUpdateMaterialDefinition !== undefined;
-  const resolvedActiveMaterialTab =
-    customTabEnabled || activeMaterialTab !== "custom"
-      ? activeMaterialTab
-      : "palette";
   const addActiveMaterialToPalette = () => {
     if (!activeMaterialCanJoinPalette || activeMaterialIsInPalette) {
       return;
@@ -1182,76 +1330,73 @@ function MaterialPaletteTabs({
       })
     );
   };
-  const createCustomMaterial = () => {
-    if (
-      activeMaterialOption === null ||
-      nextCustomMaterialId === null ||
-      onCreateMaterialDefinition === undefined
-    ) {
-      return;
-    }
-
-    const materialProfile = resolveMetaverseSceneSemanticMaterialProfile(
-      activeMaterialOption.baseMaterialId
-    );
-
-    onCreateMaterialDefinition({
-      baseColorHex: resolveCssRgbToHex(
-        activeMaterialOption.colorHex,
-        "#94938c"
-      ),
-      baseMaterialId: activeMaterialOption.baseMaterialId,
-      label: `${activeMaterialOption.label} Custom`,
-      materialId: nextCustomMaterialId,
-      metalness: materialProfile.metalness,
-      opacity: materialProfile.opacity,
-      roughness: materialProfile.roughness,
-      textureBrightness: 1,
-      textureContrast: 1,
-      textureImageDataUrl: null,
-      texturePatternStrength: 1,
-      textureRepeat: 1
-    });
-    onBuilderToolStateChange((currentBuilderToolState) =>
-      Object.freeze({
-        ...currentBuilderToolState,
-        activeMaterialId: activeMaterialOption.baseMaterialId,
-        activeMaterialReferenceId: nextCustomMaterialId,
-        materialPaletteIds: Object.freeze([
-          ...currentBuilderToolState.materialPaletteIds.filter(
-            (materialId) => materialId !== nextCustomMaterialId
-          ),
-          nextCustomMaterialId
-        ])
-      })
-    );
-    setActiveMaterialTab("custom");
-  };
   return (
-    <Tabs
-      className="min-h-0"
-      onValueChange={(nextValue) =>
-        setActiveMaterialTab(readMaterialPaletteTabId(nextValue))
-      }
-      value={resolvedActiveMaterialTab}
-    >
-      <TabsList>
-        <TabsTrigger value="palette">Palette</TabsTrigger>
-        <TabsTrigger value="library">Library</TabsTrigger>
-        {customTabEnabled ? (
-          <TabsTrigger value="custom">Custom</TabsTrigger>
-        ) : null}
-      </TabsList>
-      <TabsContent value="palette">
-        <div className="flex flex-col gap-3">
-          <QuickMaterialButtonGroup
-            activeMaterialId={activeMaterialId}
-            label="Palette"
-            onMaterialChange={onMaterialChange}
-            options={paletteOptions}
-          />
-          <ButtonGroup aria-label="Palette actions" className="flex flex-wrap">
+    <>
+      <Tabs
+        className="min-h-0"
+        onValueChange={(nextValue) =>
+          setActiveMaterialTab(readMaterialPaletteTabId(nextValue))
+        }
+        value={activeMaterialTab}
+      >
+        <TabsList>
+          <TabsTrigger value="palette">Palette</TabsTrigger>
+          <TabsTrigger value="library">Library</TabsTrigger>
+        </TabsList>
+        <TabsContent value="palette">
+          <div className="flex flex-col gap-3">
+            <QuickMaterialButtonGroup
+              activeMaterialId={activeMaterialId}
+              label="Palette"
+              onMaterialChange={onMaterialChange}
+              options={paletteOptions}
+            />
+            <ButtonGroup aria-label="Palette actions" className="flex flex-wrap">
+              <Button
+                disabled={!activeMaterialCanJoinPalette || activeMaterialIsInPalette}
+                onClick={addActiveMaterialToPalette}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                <PlusIcon data-icon="inline-start" />
+                Add
+              </Button>
+              <Button
+                disabled={
+                  !activeMaterialIsInPalette ||
+                  builderToolState.materialPaletteIds.length <= 1
+                }
+                onClick={removeActiveMaterialFromPalette}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                <MinusIcon data-icon="inline-start" />
+                Remove
+              </Button>
+              <Button
+                onClick={resetMaterialPalette}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                <RotateCcwIcon data-icon="inline-start" />
+                Reset
+              </Button>
+            </ButtonGroup>
+          </div>
+        </TabsContent>
+        <TabsContent value="library">
+          <div className="flex flex-col gap-3">
+            <QuickMaterialButtonGroup
+              activeMaterialId={activeMaterialId}
+              label="Library"
+              onMaterialChange={onMaterialChange}
+              options={libraryOptions}
+            />
             <Button
+              className="w-fit"
               disabled={!activeMaterialCanJoinPalette || activeMaterialIsInPalette}
               onClick={addActiveMaterialToPalette}
               size="sm"
@@ -1259,85 +1404,44 @@ function MaterialPaletteTabs({
               variant="outline"
             >
               <PlusIcon data-icon="inline-start" />
-              Add
+              Add To Palette
             </Button>
-            <Button
-              disabled={
-                !activeMaterialIsInPalette ||
-                builderToolState.materialPaletteIds.length <= 1
-              }
-              onClick={removeActiveMaterialFromPalette}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              <MinusIcon data-icon="inline-start" />
-              Remove
-            </Button>
-            <Button
-              onClick={resetMaterialPalette}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              <RotateCcwIcon data-icon="inline-start" />
-              Reset
-            </Button>
-          </ButtonGroup>
-        </div>
-      </TabsContent>
-      <TabsContent value="library">
-        <div className="flex flex-col gap-3">
-          <QuickMaterialButtonGroup
-            activeMaterialId={activeMaterialId}
-            label="Library"
-            onMaterialChange={onMaterialChange}
-            options={libraryOptions}
-          />
-          <Button
-            className="w-fit"
-            disabled={!activeMaterialCanJoinPalette || activeMaterialIsInPalette}
-            onClick={addActiveMaterialToPalette}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            <PlusIcon data-icon="inline-start" />
-            Add To Palette
-          </Button>
-        </div>
-      </TabsContent>
-      {customTabEnabled ? (
-        <TabsContent value="custom">
-          <div className="flex flex-col gap-3">
-            <Button
-              className="w-fit"
-              disabled={activeMaterialOption === null}
-              onClick={createCustomMaterial}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              <PlusIcon data-icon="inline-start" />
-              New Custom
-            </Button>
-            {activeCustomDefinition === null ? null : (
-              <MaterialDefinitionEditorFields
-                fieldIdPrefix="active-custom-material"
-                materialDefinition={activeCustomDefinition}
-                onUpdateMaterialDefinition={onUpdateMaterialDefinition!}
-              />
-            )}
           </div>
         </TabsContent>
+      </Tabs>
+      {customTabEnabled && activeMaterialOption !== null ? (
+        <EditableMaterialDefinitionControls
+          activeDefinition={activeCustomDefinition}
+          activeOption={activeMaterialOption}
+          fieldIdPrefix="active-custom-material"
+          nextCustomMaterialId={nextCustomMaterialId}
+          onActivateMaterialDefinition={(option) => {
+            onBuilderToolStateChange((currentBuilderToolState) =>
+              Object.freeze({
+                ...currentBuilderToolState,
+                activeMaterialId: option.baseMaterialId,
+                activeMaterialReferenceId: option.id,
+                materialPaletteIds: Object.freeze([
+                  ...currentBuilderToolState.materialPaletteIds.filter(
+                    (materialId) => materialId !== option.id
+                  ),
+                  option.id
+                ])
+              })
+            );
+          }}
+          onCreateMaterialDefinition={onCreateMaterialDefinition!}
+          onUpdateMaterialDefinition={onUpdateMaterialDefinition!}
+        />
       ) : null}
-    </Tabs>
+    </>
   );
 }
 
 interface SelectedMaterialControlTarget {
   readonly activeMaterialReferenceId: string;
   readonly fallbackBaseMaterialId: MapEditorStructuralDraftSnapshot["materialId"];
+  readonly materialDefinitionControlsEnabled?: boolean;
   readonly onMaterialChange: (option: QuickMaterialOption) => void;
   readonly options: readonly QuickMaterialOption[];
   readonly title: string;
@@ -1404,44 +1508,9 @@ function SelectedMaterialControls({
     materialDefinitions.find(
       (materialDefinition) => materialDefinition.materialId === activeOption.id
     ) ?? null;
-  const profileTextureId =
-    readSemanticPreviewTextureId(activeOption.id) ?? activeOption.baseMaterialId;
-  const materialProfile =
-    resolveMetaverseSceneSemanticMaterialProfile(profileTextureId);
   const baseColorHex =
     activeMaterialDefinition?.baseColorHex ??
     resolveCssRgbToHex(activeOption.colorHex, "#94938c");
-  const createSelectedCustomMaterial = () => {
-    if (nextCustomMaterialId === null) {
-      return;
-    }
-
-    const label = `${activeOption.label} Custom`;
-
-    onCreateMaterialDefinition({
-      baseColorHex,
-      baseMaterialId: activeOption.baseMaterialId,
-      label,
-      materialId: nextCustomMaterialId,
-      metalness: activeMaterialDefinition?.metalness ?? materialProfile.metalness,
-      opacity: activeMaterialDefinition?.opacity ?? materialProfile.opacity,
-      roughness: activeMaterialDefinition?.roughness ?? materialProfile.roughness,
-      textureBrightness: activeMaterialDefinition?.textureBrightness ?? 1,
-      textureContrast: activeMaterialDefinition?.textureContrast ?? 1,
-      textureImageDataUrl: activeMaterialDefinition?.textureImageDataUrl ?? null,
-      texturePatternStrength: activeMaterialDefinition?.texturePatternStrength ?? 1,
-      textureRepeat: activeMaterialDefinition?.textureRepeat ?? 1
-    });
-    target.onMaterialChange(
-      Object.freeze({
-        baseMaterialId: activeOption.baseMaterialId,
-        colorHex: baseColorHex,
-        id: nextCustomMaterialId,
-        isCustom: true,
-        label
-      })
-    );
-  };
 
   return (
     <SelectionCard title={target.title}>
@@ -1460,53 +1529,25 @@ function SelectedMaterialControls({
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="selected-material-reference">Material</Label>
-        <Select
-          onValueChange={(nextMaterialReferenceId) => {
-            const nextOption =
-              options.find((option) => option.id === nextMaterialReferenceId) ??
-              null;
-
-            if (nextOption !== null) {
-              target.onMaterialChange(nextOption);
-            }
-          }}
+        <MaterialOptionSelect
+          fieldId="selected-material-reference"
+          onMaterialChange={target.onMaterialChange}
+          options={options}
           value={activeOption.id}
-        >
-          <SelectTrigger id="selected-material-reference">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              {options.map((option) => (
-                <SelectItem key={option.id} value={option.id}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
+        />
       </div>
 
-      {activeMaterialDefinition === null ? (
-        <Button
-          className="w-fit"
-          disabled={nextCustomMaterialId === null}
-          onClick={createSelectedCustomMaterial}
-          size="sm"
-          type="button"
-          variant="outline"
-        >
-          <PlusIcon data-icon="inline-start" />
-          New Custom
-        </Button>
-      ) : (
-        <MaterialDefinitionEditorFields
+      {target.materialDefinitionControlsEnabled === false ? null : (
+        <EditableMaterialDefinitionControls
+          activeDefinition={activeMaterialDefinition}
+          activeOption={activeOption}
           fieldIdPrefix="selected-custom-material"
-          materialDefinition={activeMaterialDefinition}
+          nextCustomMaterialId={nextCustomMaterialId}
+          onActivateMaterialDefinition={target.onMaterialChange}
+          onCreateMaterialDefinition={onCreateMaterialDefinition}
           onUpdateMaterialDefinition={onUpdateMaterialDefinition}
         />
       )}
-
     </SelectionCard>
   );
 }
@@ -1598,17 +1639,11 @@ function MapEditorBuildMaterialControlsPanel({
       : "flat";
   const semanticPaletteOptions = resolveQuickMaterialOptionsFromPalette(
     builderToolState.materialPaletteIds,
-    Object.freeze([
-      ...createCustomMaterialOptions(project.materialDefinitionDrafts),
-      ...shellMaterialQuickOptions,
-      ...allSemanticMaterialOptions
-    ])
+    createMaterialLibraryOptions(project.materialDefinitionDrafts)
   );
-  const semanticLibraryOptions = Object.freeze([
-    ...createCustomMaterialOptions(project.materialDefinitionDrafts),
-    ...shellMaterialQuickOptions,
-    ...allSemanticMaterialOptions
-  ]);
+  const semanticLibraryOptions = createMaterialLibraryOptions(
+    project.materialDefinitionDrafts
+  );
   const terrainPaletteOptions = resolveQuickMaterialOptionsFromPalette(
     builderToolState.materialPaletteIds,
     allTerrainMaterialOptions
@@ -1841,43 +1876,57 @@ function MapEditorBuildMaterialControlsPanel({
           ) : null}
 
           {viewportToolMode === "wall" ? (
-            <ButtonGroup aria-label="Wall preset" className="flex flex-wrap">
-              <ButtonGroupText>Preset</ButtonGroupText>
-              {quickWallPresetOptions.map((option) => (
-                <Button
-                  aria-pressed={builderToolState.wallPresetId === option.id}
-                  key={option.id}
-                  onClick={() => {
-                    const presetDimensions =
-                      option.id === "curb"
-                        ? { heightMeters: 0.75, thicknessMeters: 0.75 }
-                        : option.id === "rail"
-                          ? { heightMeters: 1.25, thicknessMeters: 0.3 }
-                          : option.id === "fence"
-                            ? { heightMeters: 2.5, thicknessMeters: 0.35 }
-                            : option.id === "retaining-wall"
-                              ? { heightMeters: 5, thicknessMeters: 0.75 }
-                              : { heightMeters: 4, thicknessMeters: 0.5 };
+            <>
+              <ButtonGroup aria-label="Wall preset" className="flex flex-wrap">
+                <ButtonGroupText>Preset</ButtonGroupText>
+                {quickWallPresetOptions.map((option) => (
+                  <Button
+                    aria-pressed={builderToolState.wallPresetId === option.id}
+                    key={option.id}
+                    onClick={() => {
+                      const presetDimensions =
+                        option.id === "curb"
+                          ? { heightMeters: 0.75, thicknessMeters: 0.75 }
+                          : option.id === "rail"
+                            ? { heightMeters: 1.25, thicknessMeters: 0.3 }
+                            : option.id === "fence"
+                              ? { heightMeters: 2.5, thicknessMeters: 0.35 }
+                              : option.id === "retaining-wall"
+                                ? { heightMeters: 5, thicknessMeters: 0.75 }
+                                : { heightMeters: 4, thicknessMeters: 0.5 };
 
-                    onBuilderToolStateChange((currentBuilderToolState) =>
-                      Object.freeze({
-                        ...currentBuilderToolState,
-                        wallHeightMeters: presetDimensions.heightMeters,
-                        wallPresetId: option.id,
-                        wallThicknessMeters: presetDimensions.thicknessMeters
-                      })
-                    );
-                  }}
-                  size="sm"
-                  type="button"
-                  variant={resolveQuickButtonVariant(
-                    builderToolState.wallPresetId === option.id
-                  )}
-                >
-                  {option.label}
-                </Button>
-              ))}
-            </ButtonGroup>
+                      onBuilderToolStateChange((currentBuilderToolState) =>
+                        Object.freeze({
+                          ...currentBuilderToolState,
+                          wallHeightMeters: presetDimensions.heightMeters,
+                          wallPresetId: option.id,
+                          wallThicknessMeters: presetDimensions.thicknessMeters
+                        })
+                      );
+                    }}
+                    size="sm"
+                    type="button"
+                    variant={resolveQuickButtonVariant(
+                      builderToolState.wallPresetId === option.id
+                    )}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </ButtonGroup>
+              <MaterialPaletteTabs
+                activeCustomDefinition={activeCustomDefinition}
+                activeMaterialId={builderToolState.activeMaterialReferenceId}
+                builderToolState={builderToolState}
+                libraryOptions={semanticLibraryOptions}
+                nextCustomMaterialId={nextCustomMaterialId}
+                onBuilderToolStateChange={onBuilderToolStateChange}
+                onCreateMaterialDefinition={onCreateMaterialDefinition}
+                onMaterialChange={setActiveMaterial}
+                onUpdateMaterialDefinition={onUpdateMaterialDefinition}
+                paletteOptions={semanticPaletteOptions}
+              />
+            </>
           ) : null}
 
           {(viewportToolMode === "cover" || viewportToolMode === "paint") ? (
@@ -2030,6 +2079,10 @@ interface MapEditorSelectionMaterialControlsPaneProps {
       draft: MapEditorMaterialDefinitionDraftSnapshot
     ) => MapEditorMaterialDefinitionDraftSnapshot
   ) => void;
+  readonly onUpdateEdge: (
+    edgeId: string,
+    update: (draft: MapEditorEdgeDraftSnapshot) => MapEditorEdgeDraftSnapshot
+  ) => void;
   readonly onUpdateRegion: (
     regionId: string,
     update: (draft: MapEditorRegionDraftSnapshot) => MapEditorRegionDraftSnapshot
@@ -2057,6 +2110,7 @@ export function MapEditorSelectionMaterialControlsPane({
   onBuilderToolStateChange,
   onCreateMaterialDefinition,
   onUpdateMaterialDefinition,
+  onUpdateEdge,
   onUpdateRegion,
   onUpdateSelectedPlacement,
   onUpdateStructure,
@@ -2077,6 +2131,11 @@ export function MapEditorSelectionMaterialControlsPane({
           (structure) => structure.structureId === selectedEntityRef.id
         ) ?? null)
       : null;
+  const selectedEdge =
+    selectedEntityRef?.kind === "edge"
+      ? (project.edgeDrafts.find((edge) => edge.edgeId === selectedEntityRef.id) ??
+        null)
+      : null;
   const selectedTerrainPatch =
     selectedEntityRef?.kind === "terrain-patch"
       ? (project.terrainPatchDrafts.find(
@@ -2085,11 +2144,9 @@ export function MapEditorSelectionMaterialControlsPane({
       : null;
   const showActiveToolSettings =
     shouldShowMapEditorActiveToolSettings(viewportToolMode);
-  const materialLibraryOptions = Object.freeze([
-    ...createCustomMaterialOptions(project.materialDefinitionDrafts),
-    ...shellMaterialQuickOptions,
-    ...allSemanticMaterialOptions
-  ]);
+  const materialLibraryOptions = createMaterialLibraryOptions(
+    project.materialDefinitionDrafts
+  );
   const nullableMaterialLibraryOptions = Object.freeze([
     defaultMaterialQuickOption,
     ...materialLibraryOptions
@@ -2124,6 +2181,20 @@ export function MapEditorSelectionMaterialControlsPane({
             options: materialLibraryOptions,
             title: "Selected Structure Material"
           }
+        : selectedEdge !== null
+          ? {
+              activeMaterialReferenceId:
+                selectedEdge.materialReferenceId ?? "concrete",
+              fallbackBaseMaterialId: "concrete",
+              onMaterialChange: (option) => {
+                onUpdateEdge(selectedEdge.edgeId, (draft) => ({
+                  ...draft,
+                  materialReferenceId: option.id
+                }));
+              },
+              options: materialLibraryOptions,
+              title: "Selected Wall Material"
+            }
         : selectedRegion !== null
           ? {
               activeMaterialReferenceId:
@@ -2164,6 +2235,7 @@ export function MapEditorSelectionMaterialControlsPane({
                   );
                 },
                 options: allTerrainMaterialOptions,
+                materialDefinitionControlsEnabled: false,
                 title: "Selected Terrain Material"
               }
             : null;
@@ -2380,6 +2452,42 @@ export function MapEditorSelectionPane({
   );
   const showActiveToolSettings =
     shouldShowMapEditorActiveToolSettings(viewportToolMode);
+  const builderMaterialOptions = createMaterialLibraryOptions(
+    project.materialDefinitionDrafts
+  );
+  const activeBuilderMaterialOption = resolveSelectedMaterialControlOption(
+    builderToolState.activeMaterialReferenceId,
+    builderToolState.activeMaterialId,
+    builderMaterialOptions
+  );
+  const activeBuilderMaterialOptions = builderMaterialOptions.some(
+    (option) => option.id === activeBuilderMaterialOption.id
+  )
+    ? builderMaterialOptions
+    : Object.freeze([activeBuilderMaterialOption, ...builderMaterialOptions]);
+  const updateBuilderActiveMaterial = (option: QuickMaterialOption) => {
+    onBuilderToolStateChange((currentBuilderToolState) =>
+      Object.freeze({
+        ...currentBuilderToolState,
+        activeMaterialId: option.baseMaterialId,
+        activeMaterialReferenceId: option.id
+      })
+    );
+  };
+  const updateBuilderTerrainMaterial = (option: QuickMaterialOption) => {
+    const terrainMaterialId = readTerrainMaterialId(option.baseMaterialId);
+
+    if (terrainMaterialId === null) {
+      return;
+    }
+
+    onBuilderToolStateChange((currentBuilderToolState) =>
+      Object.freeze({
+        ...currentBuilderToolState,
+        terrainMaterialId
+      })
+    );
+  };
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-background/84 backdrop-blur-sm">
@@ -2456,6 +2564,15 @@ export function MapEditorSelectionPane({
                             <SelectItem value="material">Paint Style</SelectItem>
                           </SelectContent>
                         </Select>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="selection-tool-terrain-material">Material</Label>
+                        <MaterialOptionSelect
+                          fieldId="selection-tool-terrain-material"
+                          onMaterialChange={updateBuilderTerrainMaterial}
+                          options={allTerrainMaterialOptions}
+                          value={builderToolState.terrainMaterialId}
+                        />
                       </div>
                     </div>
                     <div className="flex flex-col gap-2">
@@ -2645,33 +2762,12 @@ export function MapEditorSelectionPane({
                     <div className="grid grid-cols-2 gap-3">
                       <div className="flex flex-col gap-2">
                         <Label htmlFor="selection-tool-floor-material">Material</Label>
-                        <Select
-                          onValueChange={(nextValue) => {
-                            const nextMaterialId = readSemanticMaterialId(nextValue);
-
-                            if (nextMaterialId !== null) {
-                              onBuilderToolStateChange((currentBuilderToolState) =>
-                                Object.freeze({
-                                  ...currentBuilderToolState,
-                                  activeMaterialId: nextMaterialId,
-                                  activeMaterialReferenceId: nextMaterialId
-                                })
-                              );
-                            }
-                          }}
-                          value={builderToolState.activeMaterialId}
-                        >
-                          <SelectTrigger id="selection-tool-floor-material">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {allSemanticMaterialOptions.map((option) => (
-                              <SelectItem key={option.id} value={option.id}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <MaterialOptionSelect
+                          fieldId="selection-tool-floor-material"
+                          onMaterialChange={updateBuilderActiveMaterial}
+                          options={activeBuilderMaterialOptions}
+                          value={activeBuilderMaterialOption.id}
+                        />
                       </div>
                       <div className="flex flex-col gap-2">
                         <Label htmlFor="selection-tool-floor-elevation">Elevation Offset</Label>
@@ -2772,35 +2868,12 @@ export function MapEditorSelectionPane({
                 {(viewportToolMode === "cover" || viewportToolMode === "paint") ? (
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="selection-tool-active-material">Material</Label>
-                    <Select
-                      onValueChange={(nextValue) => {
-                        const nextMaterialId = readSemanticMaterialId(nextValue);
-
-                        if (nextMaterialId !== null) {
-                          onBuilderToolStateChange((currentBuilderToolState) =>
-                            Object.freeze({
-                              ...currentBuilderToolState,
-                              activeMaterialId: nextMaterialId,
-                              activeMaterialReferenceId: nextMaterialId
-                            })
-                          );
-                        }
-                      }}
-                      value={builderToolState.activeMaterialId}
-                    >
-                      <SelectTrigger id="selection-tool-active-material">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          {allSemanticMaterialOptions.map((option) => (
-                            <SelectItem key={option.id} value={option.id}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
+                    <MaterialOptionSelect
+                      fieldId="selection-tool-active-material"
+                      onMaterialChange={updateBuilderActiveMaterial}
+                      options={activeBuilderMaterialOptions}
+                      value={activeBuilderMaterialOption.id}
+                    />
                   </div>
                 ) : null}
 
@@ -3028,6 +3101,15 @@ export function MapEditorSelectionPane({
                         <SelectItem value="retaining-wall">Retaining Wall</SelectItem>
                       </SelectContent>
                     </Select>
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="selection-tool-wall-material">Material</Label>
+                      <MaterialOptionSelect
+                        fieldId="selection-tool-wall-material"
+                        onMaterialChange={updateBuilderActiveMaterial}
+                        options={activeBuilderMaterialOptions}
+                        value={activeBuilderMaterialOption.id}
+                      />
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="flex flex-col gap-2">
                         <Label htmlFor="selection-tool-wall-height">Height</Label>
@@ -3069,33 +3151,12 @@ export function MapEditorSelectionPane({
                   <>
                     <div className="flex flex-col gap-2">
                       <Label htmlFor="selection-tool-path-material">Material</Label>
-                      <Select
-                        onValueChange={(nextValue) => {
-                          const nextMaterialId = readSemanticMaterialId(nextValue);
-
-                          if (nextMaterialId !== null) {
-                            onBuilderToolStateChange((currentBuilderToolState) =>
-                              Object.freeze({
-                                ...currentBuilderToolState,
-                                activeMaterialId: nextMaterialId,
-                                activeMaterialReferenceId: nextMaterialId
-                              })
-                            );
-                          }
-                        }}
-                        value={builderToolState.activeMaterialId}
-                      >
-                        <SelectTrigger id="selection-tool-path-material">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {allSemanticMaterialOptions.map((option) => (
-                            <SelectItem key={option.id} value={option.id}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <MaterialOptionSelect
+                        fieldId="selection-tool-path-material"
+                        onMaterialChange={updateBuilderActiveMaterial}
+                        options={activeBuilderMaterialOptions}
+                        value={activeBuilderMaterialOption.id}
+                      />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="flex flex-col gap-2">
@@ -3372,20 +3433,32 @@ export function MapEditorSelectionPane({
                   </div>
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="selection-player-spawn-team">Team</Label>
-                    <Input
-                      id="selection-player-spawn-team"
-                      onChange={(event) =>
-                        onUpdatePlayerSpawn(selectedPlayerSpawn.spawnId, (draft) => ({
-                          ...draft,
-                          teamId:
-                            event.target.value === "blue" ||
-                            event.target.value === "red"
-                              ? event.target.value
-                              : "neutral"
-                        }))
-                      }
+                    <Select
+                      onValueChange={(nextValue) => {
+                        const nextTeamId = readGameplayTeamId(nextValue);
+
+                        if (nextTeamId !== null) {
+                          onUpdatePlayerSpawn(selectedPlayerSpawn.spawnId, (draft) => ({
+                            ...draft,
+                            teamId: nextTeamId
+                          }));
+                        }
+                      }}
                       value={selectedPlayerSpawn.teamId}
-                    />
+                    >
+                      <SelectTrigger id="selection-player-spawn-team">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {quickTeamOptions.map((option) => (
+                            <SelectItem key={option.id} value={option.id}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="selection-player-spawn-bias">Home Bias</Label>

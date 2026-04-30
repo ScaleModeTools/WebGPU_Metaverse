@@ -700,10 +700,15 @@ export function MetaverseStageScreen({
   const blueScorePercent = `${Math.round((blueTeamScore / scoreProgressDenominator) * 100)}%`;
   const redScorePercent = `${Math.round((redTeamScore / scoreProgressDenominator) * 100)}%`;
   const isTeamDeathmatchHudMode = matchMode === "team-deathmatch";
+  const showPlayerHud =
+    hudSnapshot.boot.phase === "ready" &&
+    hudSnapshot.cameraPhaseId === "live" &&
+    runtimeError === null;
   const showTeamDeathmatchCombatHud =
-    isTeamDeathmatchHudMode && combatSnapshot.available;
+    isTeamDeathmatchHudMode && combatSnapshot.available && showPlayerHud;
   const isScoreboardOpen =
     isTeamDeathmatchHudMode &&
+    showPlayerHud &&
     !isPostGameReportOpen &&
     !isPauseMenuOpen &&
     (isScoreboardKeyboardOpen || isScoreboardGamepadHeld);
@@ -740,8 +745,7 @@ export function MetaverseStageScreen({
         <MetaverseWeaponReticleOverlay
           hidden={
             !isTeamDeathmatchHudMode ||
-            hudSnapshot.boot.phase !== "ready" ||
-            runtimeError !== null
+            !showPlayerHud
           }
           weaponHudSnapshot={weaponHudSnapshot}
         />
@@ -750,8 +754,7 @@ export function MetaverseStageScreen({
           damageIndicators={combatSnapshot.damageIndicators}
           hidden={
             !showTeamDeathmatchCombatHud ||
-            hudSnapshot.boot.phase !== "ready" ||
-            runtimeError !== null
+            !showPlayerHud
           }
         />
 
@@ -798,9 +801,11 @@ export function MetaverseStageScreen({
             style={hudStyle}
           >
             <div className="flex flex-wrap items-start justify-between gap-[var(--metaverse-hud-gap)]">
-              <MetaverseInteractionFeedHud hudSnapshot={hudSnapshot} />
+              {showPlayerHud ? (
+                <MetaverseInteractionFeedHud hudSnapshot={hudSnapshot} />
+              ) : null}
 
-              {isTeamDeathmatchHudMode ? (
+              {isTeamDeathmatchHudMode && showPlayerHud ? (
                 <div className="pointer-events-none ml-auto max-w-[min(14rem,100%)] shrink-0 text-right text-game-foreground [text-shadow:var(--metaverse-hud-text-shadow)]">
                   <p className="type-game-heading truncate text-game-foreground">
                     {weaponLabel}
@@ -823,7 +828,7 @@ export function MetaverseStageScreen({
             {isTeamDeathmatchHudMode ? (
               <div className="flex flex-wrap items-end justify-between gap-[var(--metaverse-hud-gap)]">
                 <div className="pointer-events-none">
-                  {hudSnapshot.boot.phase === "ready" && runtimeError === null ? (
+                  {showPlayerHud ? (
                     <MetaversePlayerRadarHud radarSnapshot={hudSnapshot.radar} />
                   ) : null}
                 </div>

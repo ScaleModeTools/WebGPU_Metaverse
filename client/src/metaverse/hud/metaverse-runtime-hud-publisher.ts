@@ -46,6 +46,7 @@ interface MetaverseRuntimeHudPublisherDependencies {
 interface PublishRuntimeHudSnapshotInput {
   readonly bootRendererInitialized: boolean;
   readonly bootScenePrewarmed: boolean;
+  readonly cameraPhaseId: MetaverseHudSnapshot["cameraPhaseId"];
   readonly controlMode: MetaverseControlModeId;
   readonly failureReason: string | null;
   readonly focusedPortal: FocusedExperiencePortalSnapshot | null;
@@ -456,6 +457,7 @@ function freezeHudSnapshot(
   failureReason: string | null,
   boot: MetaverseHudSnapshot["boot"],
   camera: MetaverseHudSnapshot["camera"],
+  cameraPhaseId: MetaverseHudSnapshot["cameraPhaseId"],
   focusedPortal: FocusedExperiencePortalSnapshot | null,
   mountedInteraction: MetaverseMountedInteractionSnapshot,
   interaction: MetaverseHudSnapshot["interaction"],
@@ -471,6 +473,7 @@ function freezeHudSnapshot(
   return Object.freeze({
     boot,
     camera,
+    cameraPhaseId,
     combat,
     controlMode,
     failureReason,
@@ -529,6 +532,7 @@ export class MetaverseRuntimeHudPublisher {
         scenePrewarmed: false
       }),
 	      this.#traversalRuntime.cameraSnapshot,
+      null,
 	      null,
 	      createMetaverseMountedInteractionSnapshot(null, null),
 	      emptyInteractionSnapshot,
@@ -589,6 +593,7 @@ export class MetaverseRuntimeHudPublisher {
         input.bootScenePrewarmed
       ),
       this.#traversalRuntime.cameraSnapshot,
+      input.cameraPhaseId,
       input.focusedPortal,
       input.mountedInteraction,
       createInteractionSnapshot({

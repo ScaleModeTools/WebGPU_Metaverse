@@ -59,6 +59,37 @@ function createPreviewCameraSnapshot() {
   });
 }
 
+function createManualAnimationFrame() {
+  let nextHandle = 1;
+  const callbacks = new Map();
+
+  return {
+    cancelAnimationFrame(frameHandle) {
+      callbacks.delete(frameHandle);
+    },
+    flush(nowMs) {
+      const pendingCallbacks = [...callbacks.values()];
+
+      callbacks.clear();
+
+      for (const callback of pendingCallbacks) {
+        callback(nowMs);
+      }
+    },
+    get pendingCount() {
+      return callbacks.size;
+    },
+    requestAnimationFrame(callback) {
+      const frameHandle = nextHandle;
+
+      nextHandle += 1;
+      callbacks.set(frameHandle, callback);
+
+      return frameHandle;
+    }
+  };
+}
+
 before(async () => {
   clientLoader = await createClientModuleLoader();
 });
@@ -74,7 +105,9 @@ test("MetaverseRuntimeBootLifecycle boots the direct path without preview render
   const renderer = new FakeMetaverseRenderer();
   const callLog = [];
   const installCalls = [];
+  const animationFrame = createManualAnimationFrame();
   const lifecycle = new MetaverseRuntimeBootLifecycle({
+    cancelAnimationFrame: animationFrame.cancelAnimationFrame,
     cameraPhaseState: {
       entryPreviewEnabled: false,
       markEntryPreviewLiveReady() {
@@ -98,6 +131,7 @@ test("MetaverseRuntimeBootLifecycle boots the direct path without preview render
     },
     devicePixelRatio: 2,
     readNowMs: () => 100,
+    requestAnimationFrame: animationFrame.requestAnimationFrame,
     sceneRuntime: createFakeSceneRuntime(callLog)
   });
 
@@ -153,12 +187,14 @@ test("MetaverseRuntimeBootLifecycle stages the entry preview path and keeps rend
   );
   const renderer = new FakeMetaverseRenderer();
   const callLog = [];
+  const animationFrame = createManualAnimationFrame();
   let nowMs = 500;
   const previewSnapshot = {
     cameraSnapshot: createPreviewCameraSnapshot(),
     focusedPortal: null
   };
   const lifecycle = new MetaverseRuntimeBootLifecycle({
+    cancelAnimationFrame: animationFrame.cancelAnimationFrame,
     cameraPhaseState: {
       entryPreviewEnabled: true,
       markEntryPreviewLiveReady(value) {
@@ -183,7 +219,15 @@ test("MetaverseRuntimeBootLifecycle stages the entry preview path and keeps rend
     },
     devicePixelRatio: 1,
     readNowMs: () => nowMs,
-    sceneRuntime: createFakeSceneRuntime(callLog)
+    requestAnimationFrame: animationFrame.requestAnimationFrame,
+    sceneRuntime: {
+      ...createFakeSceneRuntime(callLog),
+      async prewarm() {
+        callLog.push("prewarm");
+        nowMs += 16;
+        animationFrame.flush(nowMs);
+      }
+    }
   });
 
   await lifecycle.bootRuntime({
@@ -197,7 +241,8 @@ test("MetaverseRuntimeBootLifecycle stages the entry preview path and keeps rend
   assert.equal(lifecycle.bootRendererInitialized, true);
   assert.equal(lifecycle.bootScenePrewarmed, true);
   assert.equal(renderer.initCalls, 1);
-  assert.equal(renderer.renderCalls, 3);
+  assert.equal(renderer.renderCalls, 4);
+  assert.equal(animationFrame.pendingCount, 0);
   assert.ok(callLog.indexOf("cameraPhase:start:500") !== -1);
   assert.ok(callLog.indexOf("bootScenicEnvironment") !== -1);
   assert.ok(callLog.indexOf("bootGroundedRuntime") !== -1);
@@ -216,9 +261,9 @@ test("MetaverseRuntimeBootLifecycle stages the entry preview path and keeps rend
   );
   assert.equal(
     callLog.filter((entry) => entry === "syncPresentation").length,
-    3
+    4
   );
   assert.ok(
-    callLog.some((entry) => entry === "cameraPhase:markReady:500")
+    callLog.some((entry) => entry === "cameraPhase:markReady:532")
   );
 });

@@ -690,6 +690,7 @@ test("terrain-linked semantic wall compatibility extends blocker walls down to t
           edgeKind: "wall",
           heightMeters: 4,
           label: "Terrain Wall",
+          materialReferenceId: "shell-metal-panel",
           path: Object.freeze([
             Object.freeze({ x: -2, z: 0 }),
             Object.freeze({ x: 2, z: 0 })
@@ -768,6 +769,7 @@ test("terrain-linked semantic wall compatibility extends blocker walls down to t
   assert.notEqual(wallAsset, undefined);
   assert.equal(wallAsset?.placements.length, 1);
   assert.equal(wallPlacement?.position.y, -2);
+  assert.equal(wallPlacement?.materialReferenceId, "shell-metal-panel");
   assert.equal(wallPlacement?.scale.x, 1);
   assert.equal(wallPlacement?.scale.y, 1.5);
   assert.equal(wallPlacement?.scale.z, 1);

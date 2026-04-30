@@ -920,7 +920,8 @@ function addWallSegmentPreview(
     readonly y: number;
     readonly z: number;
   },
-  builderToolState: MapEditorBuilderToolStateSnapshot
+  builderToolState: MapEditorBuilderToolStateSnapshot,
+  materialColor: string
 ): void {
   const wallSegment = resolveMapEditorBuildWallSegment(
     startPosition,
@@ -937,7 +938,7 @@ function addWallSegmentPreview(
       builderToolState.wallHeightMeters,
       builderToolState.wallThicknessMeters
     ),
-    createPreviewMaterial("#fb923c", 0.34)
+    createPreviewMaterial(materialColor, 0.34)
   );
 
   mesh.position.set(
@@ -3441,7 +3442,7 @@ export function MapEditorViewport({
                 0.5,
                 mapEditorBuildGridUnitMeters * 0.45
               ),
-              createPreviewMaterial("#fb923c", 0.38)
+              createPreviewMaterial(activeMaterialColor, 0.38)
             );
 
             marker.position.set(
@@ -3457,7 +3458,8 @@ export function MapEditorViewport({
             builderPreviewGroup,
             pendingWallAnchorRef.current,
             nextGroundPosition,
-            builderToolStateRef.current
+            builderToolStateRef.current,
+            activeMaterialColor
           );
           return;
         case "path": {

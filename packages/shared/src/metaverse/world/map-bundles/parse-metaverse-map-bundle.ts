@@ -1458,6 +1458,10 @@ function readSemanticEdge(
     edgeKind,
     heightMeters: readNumber(edge.heightMeters, `${fieldName}.heightMeters`),
     label: readString(edge.label, `${fieldName}.label`),
+    materialReferenceId: readNullableString(
+      edge.materialReferenceId ?? null,
+      `${fieldName}.materialReferenceId`
+    ),
     path: Object.freeze(
       readArray(edge.path, `${fieldName}.path`).map((point, pointIndex) =>
         readPlanarPoint(point, `${fieldName}.path[${pointIndex}]`)

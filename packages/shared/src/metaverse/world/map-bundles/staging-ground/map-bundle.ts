@@ -195,6 +195,7 @@ function createBarrierEdge(
     edgeKind: "wall",
     heightMeters: size.y,
     label: "Range Barrier",
+    materialReferenceId: null,
     path: Object.freeze([
       Object.freeze({
         x: -size.x * 0.5,

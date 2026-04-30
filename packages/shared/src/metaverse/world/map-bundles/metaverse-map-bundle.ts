@@ -233,6 +233,7 @@ export interface MetaverseMapBundleSemanticEdgeSnapshot {
     | "wall";
   readonly heightMeters: number;
   readonly label: string;
+  readonly materialReferenceId: string | null;
   readonly path: readonly MetaverseMapBundleSemanticPlanarPointSnapshot[];
   readonly surfaceId: string;
   readonly thicknessMeters: number;

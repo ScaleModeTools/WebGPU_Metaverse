@@ -72,6 +72,7 @@ export interface MapEditorEdgeDraftSnapshot {
   readonly heightMeters: number;
   readonly label: string;
   readonly lengthMeters: number;
+  readonly materialReferenceId: string | null;
   readonly path: readonly MetaverseMapBundleSemanticPlanarPointSnapshot[];
   readonly rotationYRadians: number;
   readonly surfaceId: string;
@@ -459,6 +460,7 @@ export function createMapEditorEdgeDrafts(
           0.5,
           Math.hypot(endPoint.x - startPoint.x, endPoint.z - startPoint.z)
         ),
+        materialReferenceId: edge.materialReferenceId,
         path: edge.path,
         rotationYRadians: surface?.rotationYRadians ?? 0,
         surfaceId: edge.surfaceId,
@@ -596,6 +598,7 @@ export function createSemanticEdgeSnapshotFromDraft(
     edgeKind: draft.edgeKind,
     heightMeters: draft.heightMeters,
     label: draft.label,
+    materialReferenceId: draft.materialReferenceId,
     path: Object.freeze(
       draft.path.map((point) =>
         Object.freeze({
