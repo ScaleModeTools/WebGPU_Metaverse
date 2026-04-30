@@ -122,12 +122,23 @@ export interface RapierCharacterControllerHandle {
 
 export interface RapierRayColliderHitHandle {
   readonly collider: RapierColliderHandle;
+  readonly normal?: RapierVectorLike;
   readonly timeOfImpact?: number;
   readonly toi?: number;
 }
 
 export interface RapierWorldHandle {
   castRay(
+    ray: RapierRayHandle,
+    maxToi: number,
+    solid: boolean,
+    filterFlags?: number,
+    filterGroups?: number,
+    excludeCollider?: RapierColliderHandle | null,
+    excludeRigidBody?: RapierRigidBodyHandle | null,
+    filterPredicate?: RapierQueryFilterPredicate
+  ): RapierRayColliderHitHandle | null;
+  castRayAndGetNormal(
     ray: RapierRayHandle,
     maxToi: number,
     solid: boolean,

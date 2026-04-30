@@ -21,6 +21,9 @@ import {
   metaverseTraversalActionResolutionStateIds,
   type MetaverseTraversalActionResolutionStateId
 } from "./metaverse-traversal-contract.js";
+import type {
+  MetaverseWorldSurfaceTraversalAffordanceId
+} from "./metaverse-world-surface-query.js";
 
 export const metaverseCombatMatchPhaseIds = [
   "waiting-for-players",
@@ -769,16 +772,21 @@ export type MetaverseCombatActionReceiptSnapshotInput =
 
 export interface MetaverseCombatProjectileSnapshot {
   readonly direction: MetaversePresenceVector3Snapshot;
+  readonly ownerPlayerId: MetaversePlayerId | null;
   readonly position: MetaversePresenceVector3Snapshot;
   readonly projectileId: string;
   readonly resolution: MetaverseCombatProjectileResolutionId;
+  readonly resolvedAtTimeMs: Milliseconds | null;
+  readonly sourceActionSequence: number;
+  readonly spawnedAtTimeMs: Milliseconds;
+  readonly velocityMetersPerSecond: number;
   readonly weaponId: string;
 }
 
 export interface MetaverseCombatProjectileSnapshotInput {
   readonly direction: MetaversePresenceVector3SnapshotInput;
   readonly expiresAtTimeMs?: number;
-  readonly ownerPlayerId?: MetaversePlayerId;
+  readonly ownerPlayerId?: MetaversePlayerId | null;
   readonly position: MetaversePresenceVector3SnapshotInput;
   readonly projectileId: string;
   readonly resolution?: MetaverseCombatProjectileResolutionId;
@@ -791,10 +799,22 @@ export interface MetaverseCombatProjectileSnapshotInput {
   readonly weaponId: string;
 }
 
+export interface MetaverseCombatImpactSurfaceSnapshot {
+  readonly ownerEnvironmentAssetId: string | null;
+  readonly traversalAffordance: MetaverseWorldSurfaceTraversalAffordanceId | null;
+}
+
+export interface MetaverseCombatImpactSurfaceSnapshotInput {
+  readonly ownerEnvironmentAssetId?: string | null;
+  readonly traversalAffordance?: MetaverseWorldSurfaceTraversalAffordanceId | null;
+}
+
 export interface MetaverseCombatEventHitscanSnapshot {
   readonly finalReason: MetaverseCombatShotResolutionFinalReasonId;
   readonly hitKind: MetaverseCombatEventHitscanHitKindId;
+  readonly hitNormalWorld: MetaversePresenceVector3Snapshot | null;
   readonly hitPointWorld: MetaversePresenceVector3Snapshot | null;
+  readonly hitSurface: MetaverseCombatImpactSurfaceSnapshot | null;
   readonly regionId: MetaverseCombatHurtRegionId | null;
   readonly targetPlayerId: MetaversePlayerId | null;
 }
@@ -802,19 +822,29 @@ export interface MetaverseCombatEventHitscanSnapshot {
 export interface MetaverseCombatEventHitscanSnapshotInput {
   readonly finalReason?: MetaverseCombatShotResolutionFinalReasonId;
   readonly hitKind?: MetaverseCombatEventHitscanHitKindId;
+  readonly hitNormalWorld?: MetaversePresenceVector3SnapshotInput | null;
   readonly hitPointWorld?: MetaversePresenceVector3SnapshotInput | null;
+  readonly hitSurface?: MetaverseCombatImpactSurfaceSnapshotInput | null;
   readonly regionId?: MetaverseCombatHurtRegionId | null;
   readonly targetPlayerId?: MetaversePlayerId | null;
 }
 
 export interface MetaverseCombatEventProjectileSnapshot {
+  readonly hitZone: MetaverseCombatHitZoneId | null;
+  readonly impactNormalWorld: MetaversePresenceVector3Snapshot | null;
   readonly impactPointWorld: MetaversePresenceVector3Snapshot | null;
+  readonly impactSurface: MetaverseCombatImpactSurfaceSnapshot | null;
   readonly resolutionKind: MetaverseCombatProjectileResolutionId | null;
+  readonly targetPlayerId: MetaversePlayerId | null;
 }
 
 export interface MetaverseCombatEventProjectileSnapshotInput {
+  readonly hitZone?: MetaverseCombatHitZoneId | null;
+  readonly impactNormalWorld?: MetaversePresenceVector3SnapshotInput | null;
   readonly impactPointWorld?: MetaversePresenceVector3SnapshotInput | null;
+  readonly impactSurface?: MetaverseCombatImpactSurfaceSnapshotInput | null;
   readonly resolutionKind?: MetaverseCombatProjectileResolutionId | null;
+  readonly targetPlayerId?: MetaversePlayerId | null;
 }
 
 export interface MetaverseCombatEventSnapshot {
@@ -833,6 +863,7 @@ export interface MetaverseCombatEventSnapshot {
   readonly projectileId: string | null;
   readonly semanticMuzzleWorld: MetaversePresenceVector3Snapshot | null;
   readonly shotId: string;
+  readonly timeMs: Milliseconds;
   readonly weaponId: string;
   readonly weaponInstanceId: string | null;
 }
@@ -853,6 +884,7 @@ export interface MetaverseCombatEventSnapshotInput {
   readonly projectileId?: string | null;
   readonly semanticMuzzleWorld?: MetaversePresenceVector3SnapshotInput | null;
   readonly shotId?: string;
+  readonly timeMs?: number;
   readonly weaponId: string;
   readonly weaponInstanceId?: string | null;
 }
@@ -2482,9 +2514,30 @@ function createMetaverseCombatEventHitscanSnapshot(
   return Object.freeze({
     finalReason: normalizeShotResolutionFinalReason(input.finalReason),
     hitKind: normalizeCombatEventHitscanHitKind(input.hitKind),
+    hitNormalWorld: createNullableVector3Snapshot(input.hitNormalWorld),
     hitPointWorld: createNullableVector3Snapshot(input.hitPointWorld),
+    hitSurface: createMetaverseCombatImpactSurfaceSnapshot(input.hitSurface),
     regionId: normalizeHurtRegionId(input.regionId, null),
-    targetPlayerId: input.targetPlayerId ?? null
+    targetPlayerId: normalizeOptionalIdentifier(
+      input.targetPlayerId,
+      "Metaverse combat hitscan targetPlayerId"
+    ) as MetaversePlayerId | null
+  });
+}
+
+function createMetaverseCombatImpactSurfaceSnapshot(
+  input: MetaverseCombatImpactSurfaceSnapshotInput | null | undefined
+): MetaverseCombatImpactSurfaceSnapshot | null {
+  if (input === null || input === undefined) {
+    return null;
+  }
+
+  return Object.freeze({
+    ownerEnvironmentAssetId: normalizeOptionalIdentifier(
+      input.ownerEnvironmentAssetId,
+      "Metaverse combat impact ownerEnvironmentAssetId"
+    ),
+    traversalAffordance: input.traversalAffordance ?? null
   });
 }
 
@@ -2496,8 +2549,15 @@ function createMetaverseCombatEventProjectileSnapshot(
   }
 
   return Object.freeze({
+    hitZone: normalizeHitZone(input.hitZone, null),
+    impactNormalWorld: createNullableVector3Snapshot(input.impactNormalWorld),
     impactPointWorld: createNullableVector3Snapshot(input.impactPointWorld),
-    resolutionKind: normalizeProjectileResolution(input.resolutionKind ?? undefined)
+    impactSurface: createMetaverseCombatImpactSurfaceSnapshot(input.impactSurface),
+    resolutionKind: normalizeProjectileResolution(input.resolutionKind ?? undefined),
+    targetPlayerId: normalizeOptionalIdentifier(
+      input.targetPlayerId,
+      "Metaverse combat projectile targetPlayerId"
+    ) as MetaversePlayerId | null
   });
 }
 
@@ -2554,6 +2614,7 @@ export function createMetaverseCombatEventSnapshot(
       input.semanticMuzzleWorld
     ),
     shotId,
+    timeMs: createMilliseconds(normalizeFiniteNonNegativeNumber(input.timeMs)),
     weaponId,
     weaponInstanceId: normalizeOptionalIdentifier(
       input.weaponInstanceId,
@@ -2571,12 +2632,31 @@ export function createMetaverseCombatProjectileSnapshot(
       y: clampToUnitRange(input.direction.y),
       z: clampToUnitRange(input.direction.z)
     }),
+    ownerPlayerId: normalizeOptionalIdentifier(
+      input.ownerPlayerId,
+      "Metaverse combat projectile ownerPlayerId"
+    ) as MetaversePlayerId | null,
     position: createVector3Snapshot(input.position),
     projectileId: normalizeIdentifier(
       input.projectileId,
       "Metaverse combat projectileId"
     ),
     resolution: normalizeProjectileResolution(input.resolution),
+    resolvedAtTimeMs:
+      input.resolvedAtTimeMs === null || input.resolvedAtTimeMs === undefined
+        ? null
+        : createMilliseconds(
+            normalizeFiniteNonNegativeNumber(input.resolvedAtTimeMs)
+          ),
+    sourceActionSequence: normalizeFiniteNonNegativeInteger(
+      input.sourceActionSequence
+    ),
+    spawnedAtTimeMs: createMilliseconds(
+      normalizeFiniteNonNegativeNumber(input.spawnedAtTimeMs)
+    ),
+    velocityMetersPerSecond: normalizeFiniteNonNegativeNumber(
+      input.velocityMetersPerSecond
+    ),
     weaponId: normalizeIdentifier(input.weaponId, "Metaverse combat weaponId")
   });
 }

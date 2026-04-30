@@ -177,6 +177,28 @@ function resolveLocalPredictedJumpActionSequence({
   );
 }
 
+function shouldDeferAuthoritativePoseForUnprocessedLocalTraversalIntent({
+  authoritativePlayerSnapshot,
+  localIssuedTraversalIntentSnapshot
+}: {
+  readonly authoritativePlayerSnapshot: AuthoritativeLocalPlayerPoseSnapshot;
+  readonly localIssuedTraversalIntentSnapshot: MetaverseIssuedTraversalIntentSnapshot | null;
+}): boolean {
+  const localIssuedTraversalSequence = normalizePositiveInteger(
+    localIssuedTraversalIntentSnapshot?.sequence ?? 0
+  );
+
+  if (localIssuedTraversalSequence <= 0) {
+    return false;
+  }
+
+  return (
+    normalizePositiveInteger(
+      authoritativePlayerSnapshot.lastProcessedTraversalSequence
+    ) < localIssuedTraversalSequence
+  );
+}
+
 function shouldForceRejectedLocalJumpCorrection({
   authoritativePlayerSnapshot,
   localGroundedBodySnapshot,
@@ -491,6 +513,18 @@ export class MetaverseLocalAuthorityReconciliationState {
     ) {
       this.#pendingIntentionalDiscontinuityCause =
         forceSnapIntentionalDiscontinuityCause;
+    }
+
+    if (
+      !shouldForceCorrection &&
+      shouldDeferAuthoritativePoseForUnprocessedLocalTraversalIntent({
+        authoritativePlayerSnapshot,
+        localIssuedTraversalIntentSnapshot
+      })
+    ) {
+      this.#pendingIntentionalDiscontinuityCause = "none";
+      this.#localAuthorityPoseConvergenceActive = false;
+      return false;
     }
 
     if (!shouldForceCorrection && !convergenceDecision.shouldConvergePose) {

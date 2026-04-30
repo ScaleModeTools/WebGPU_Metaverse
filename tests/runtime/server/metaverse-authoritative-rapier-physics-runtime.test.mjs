@@ -90,6 +90,11 @@ test("MetaverseAuthoritativeRapierPhysicsRuntime resolves finite ray hits from t
     y: 0.5999999046325684,
     z: 0
   });
+  assert.deepEqual(hit?.normal, {
+    x: 0,
+    y: 1,
+    z: 0
+  });
 });
 
 test("private-build ground shots resolve to the floor hit point instead of world origin", () => {

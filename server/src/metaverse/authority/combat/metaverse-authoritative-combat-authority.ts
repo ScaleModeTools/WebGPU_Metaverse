@@ -20,6 +20,7 @@ import {
   type MetaverseCombatFeedEventSnapshotInput,
   type MetaverseCombatHitZoneId,
   type MetaverseCombatHurtRegionId,
+  type MetaverseCombatImpactSurfaceSnapshotInput,
   type MetaverseCombatMatchSnapshot,
   type MetaverseCombatPlayerWeaponSnapshotInput,
   type MetaverseCombatProjectileSnapshot,
@@ -150,6 +151,7 @@ interface MutableMetaverseCombatProjectileRuntimeState {
 interface MetaverseCombatRaycastHitSnapshot {
   readonly collider: RapierColliderHandle;
   readonly distanceMeters: number;
+  readonly normal: PhysicsVector3Snapshot | null;
   readonly point: PhysicsVector3Snapshot;
 }
 
@@ -198,6 +200,9 @@ interface MetaverseAuthoritativeCombatAuthorityDependencies<
   readonly playerTraversalColliderHandles: ReadonlySet<RapierColliderHandle>;
   readonly playersById: ReadonlyMap<MetaversePlayerId, PlayerRuntime>;
   readonly readCurrentTick?: () => number;
+  readonly readWorldImpactSurface?: (
+    collider: RapierColliderHandle
+  ) => MetaverseCombatImpactSurfaceSnapshotInput | null;
   readonly readTickIntervalMs: () => number;
   readonly resolveRespawnPose: (
     playerId: MetaversePlayerId,
@@ -275,6 +280,12 @@ function normalizeDirection(
     direction.y / length,
     direction.z / length
   );
+}
+
+function createImpactNormalFromIncomingDirection(
+  direction: PhysicsVector3Snapshot
+): PhysicsVector3Snapshot {
+  return createPhysicsVector3Snapshot(-direction.x, -direction.y, -direction.z);
 }
 
 function createFinitePhysicsVector3Snapshot(
@@ -1507,7 +1518,8 @@ export class MetaverseAuthoritativeCombatAuthority<
       eventKind: "projectile-spawned",
       launchDirectionWorld: input.direction,
       projectileId,
-      semanticMuzzleWorld: input.origin
+      semanticMuzzleWorld: input.origin,
+      timeMs: input.issuedAtTimeMs
     });
 
     const fastForwardSeconds = Math.max(
@@ -1612,6 +1624,7 @@ export class MetaverseAuthoritativeCombatAuthority<
       actionSequence: input.actionSequence,
       rayForwardWorld: input.direction,
       rayOriginWorld: input.origin,
+      timeMs: input.issuedAtTimeMs,
       weaponId: input.weaponId
     };
 
@@ -1623,7 +1636,9 @@ export class MetaverseAuthoritativeCombatAuthority<
       this.#storeHitscanShotResolution({
         combatState: input.combatState,
         hitKind: "world",
+        hitNormalWorld: worldHit.normal,
         hitPointWorld: worldHit.point,
+        hitSurface: this.#readWorldImpactSurface(worldHit.collider),
         regionId: null,
         semanticMuzzleWorld: input.semanticMuzzleWorld,
         shotId: input.shotId,
@@ -1639,7 +1654,9 @@ export class MetaverseAuthoritativeCombatAuthority<
       this.#storeHitscanShotResolution({
         combatState: input.combatState,
         hitKind: "miss",
+        hitNormalWorld: null,
         hitPointWorld: null,
+        hitSurface: null,
         regionId: null,
         semanticMuzzleWorld: input.semanticMuzzleWorld,
         shotId: input.shotId,
@@ -1659,7 +1676,9 @@ export class MetaverseAuthoritativeCombatAuthority<
       this.#storeHitscanShotResolution({
         combatState: input.combatState,
         hitKind: "world",
+        hitNormalWorld: lineOfSightBlocker.normal,
         hitPointWorld: lineOfSightBlocker.point,
+        hitSurface: this.#readWorldImpactSurface(lineOfSightBlocker.collider),
         regionId: null,
         semanticMuzzleWorld: input.semanticMuzzleWorld,
         shotId: input.shotId,
@@ -1673,7 +1692,9 @@ export class MetaverseAuthoritativeCombatAuthority<
     this.#storeHitscanShotResolution({
       combatState: input.combatState,
       hitKind: "player",
+      hitNormalWorld: createImpactNormalFromIncomingDirection(input.direction),
       hitPointWorld: closestPlayerHit.point,
+      hitSurface: null,
       regionId: closestPlayerHit.regionId,
       semanticMuzzleWorld: input.semanticMuzzleWorld,
       shotId: input.shotId,
@@ -1724,6 +1745,12 @@ export class MetaverseAuthoritativeCombatAuthority<
     return worldHit !== null && worldHit.distanceMeters + 0.0001 < distanceMeters
       ? worldHit
       : null;
+  }
+
+  #readWorldImpactSurface(
+    collider: RapierColliderHandle
+  ): MetaverseCombatImpactSurfaceSnapshotInput | null {
+    return this.#dependencies.readWorldImpactSurface?.(collider) ?? null;
   }
 
   #readSplashLineOfSightBlocker(
@@ -2151,7 +2178,9 @@ export class MetaverseAuthoritativeCombatAuthority<
         "hit-world",
         null,
         null,
-        nowMs
+        nowMs,
+        worldHit.normal,
+        this.#readWorldImpactSurface(worldHit.collider)
       );
       this.#applyProjectileSplashDamage(
         projectileRuntime,
@@ -2385,7 +2414,9 @@ export class MetaverseAuthoritativeCombatAuthority<
       "hit-player",
       targetPlayerId,
       hitZone,
-      nowMs
+      nowMs,
+      createImpactNormalFromIncomingDirection(projectileRuntime.direction),
+      null
     );
 
     if (
@@ -2727,9 +2758,14 @@ export class MetaverseAuthoritativeCombatAuthority<
   ): MetaverseCombatProjectileSnapshotInput {
     return {
       direction: projectileRuntime.direction,
+      ownerPlayerId: projectileRuntime.ownerPlayerId,
       position: createProjectilePositionSnapshot(projectileRuntime),
       projectileId: projectileRuntime.projectileId,
       resolution: projectileRuntime.resolution,
+      resolvedAtTimeMs: projectileRuntime.resolvedAtTimeMs,
+      sourceActionSequence: projectileRuntime.sourceActionSequence,
+      spawnedAtTimeMs: projectileRuntime.spawnedAtTimeMs,
+      velocityMetersPerSecond: projectileRuntime.velocityMetersPerSecond,
       weaponId: projectileRuntime.weaponId
     };
   }
@@ -2909,7 +2945,9 @@ export class MetaverseAuthoritativeCombatAuthority<
     resolution: MetaverseCombatProjectileResolutionId,
     resolvedPlayerId: MetaversePlayerId | null,
     resolvedHitZone: MetaverseCombatHitZoneId | null,
-    nowMs: number
+    nowMs: number,
+    impactNormalWorld: PhysicsVector3Snapshot | null = null,
+    impactSurface: MetaverseCombatImpactSurfaceSnapshotInput | null = null
   ): void {
     if (projectileRuntime.resolution !== "active") {
       return;
@@ -2938,12 +2976,17 @@ export class MetaverseAuthoritativeCombatAuthority<
       playerId: projectileRuntime.ownerPlayerId,
       presentationDeliveryModel: projectileRuntime.presentationDeliveryModel,
       projectile: {
+        hitZone: resolvedHitZone,
+        impactNormalWorld,
         impactPointWorld,
-        resolutionKind: resolution
+        impactSurface,
+        resolutionKind: resolution,
+        targetPlayerId: resolvedPlayerId
       },
       projectileId: projectileRuntime.projectileId,
       semanticMuzzleWorld: projectileRuntime.semanticMuzzleWorld,
       shotId: projectileRuntime.projectileId,
+      timeMs: nowMs,
       weaponId: projectileRuntime.weaponId,
       weaponInstanceId: activeWeaponSlot?.weaponInstanceId ?? null
     });
@@ -3312,13 +3355,16 @@ export class MetaverseAuthoritativeCombatAuthority<
     readonly combatState: MutableMetaverseCombatPlayerRuntimeState;
     readonly finalReason: MetaverseCombatShotResolutionFinalReasonId;
     readonly hitKind: "miss" | "player" | "world";
+    readonly hitNormalWorld: PhysicsVector3Snapshot | null;
     readonly hitPointWorld: PhysicsVector3Snapshot | null;
+    readonly hitSurface: MetaverseCombatImpactSurfaceSnapshotInput | null;
     readonly rayForwardWorld: PhysicsVector3Snapshot;
     readonly rayOriginWorld: PhysicsVector3Snapshot;
     readonly regionId: MetaverseCombatHurtRegionId | null;
     readonly semanticMuzzleWorld: PhysicsVector3Snapshot;
     readonly shotId: string;
     readonly targetPlayerId: MetaversePlayerId | null;
+    readonly timeMs: number;
     readonly weaponId: string;
   }): void {
     const weaponProfile = readMetaverseCombatWeaponProfile(input.weaponId);
@@ -3344,7 +3390,9 @@ export class MetaverseAuthoritativeCombatAuthority<
       hitscan: {
         finalReason: input.finalReason,
         hitKind: input.hitKind,
+        hitNormalWorld: input.hitNormalWorld,
         hitPointWorld: input.hitPointWorld,
+        hitSurface: input.hitSurface,
         regionId: input.regionId,
         targetPlayerId: input.targetPlayerId
       },
@@ -3352,6 +3400,7 @@ export class MetaverseAuthoritativeCombatAuthority<
       presentationDeliveryModel: weaponProfile.presentationDeliveryModel,
       semanticMuzzleWorld: input.semanticMuzzleWorld,
       shotId: input.shotId,
+      timeMs: input.timeMs,
       weaponId: input.weaponId,
       weaponInstanceId: activeWeaponSlot?.weaponInstanceId ?? null
     });

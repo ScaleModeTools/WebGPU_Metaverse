@@ -15,6 +15,12 @@ import type {
   MetaverseCombatPresentationEvent,
   MetaverseRenderedWeaponMuzzleResolver
 } from "../types/metaverse-runtime";
+import {
+  readMetaverseCombatHitscanWorldImpactFx,
+  readMetaverseCombatProjectileImpactPresentationEffect,
+  readMetaverseCombatShotAudioCueId,
+  readMetaverseCombatShotFx
+} from "../config/metaverse-combat-presentation-effects";
 import { MetaverseCombatHapticsRuntime } from "./metaverse-combat-haptics-runtime";
 
 interface MetaverseCombatFeedbackRuntimeDependencies {
@@ -50,6 +56,7 @@ interface MetaverseQueuedCombatVisualIntent {
     readonly y: number;
     readonly z: number;
   } | null;
+  readonly authoritativeTimeMs: number | null;
   readonly endWorld: {
     readonly x: number;
     readonly y: number;
@@ -61,16 +68,16 @@ interface MetaverseQueuedCombatVisualIntent {
     readonly z: number;
   } | null;
   fallbackWaitCount: number;
-  readonly firstProjectileSnapshotWorld: {
-    readonly x: number;
-    readonly y: number;
-    readonly z: number;
-  } | null;
   readonly kind: MetaverseQueuedCombatVisualKind;
   readonly playerId: MetaversePlayerId;
   readonly projectileId: string | null;
   readonly shotId: string | null;
   readonly hitscanHitKind: "miss" | "player" | "world" | null;
+  readonly impactNormalWorld: {
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+  } | null;
   readonly rayOriginWorld: {
     readonly x: number;
     readonly y: number;
@@ -82,11 +89,6 @@ interface MetaverseQueuedCombatVisualIntent {
     readonly z: number;
   } | null;
   readonly sequence: number;
-  readonly serverOriginWorld: {
-    readonly x: number;
-    readonly y: number;
-    readonly z: number;
-  } | null;
   readonly source: NonNullable<MetaverseCombatPresentationEvent["source"]>;
   readonly visualKey: string;
   readonly weaponId: string;
@@ -180,12 +182,6 @@ function createDamageSourceDirectionWorld(
     y: 0,
     z: deltaZ / horizontalDistance
   });
-}
-
-function resolveShotAudioCueId(weaponId: string) {
-  return weaponId === "metaverse-rocket-launcher-v1"
-    ? "metaverse-rocket-launch"
-    : "metaverse-pistol-shot";
 }
 
 function createCombatVisualKey(input: {
@@ -440,23 +436,6 @@ function readPlayerById(
   );
 }
 
-function readProjectilePositionById(
-  worldSnapshot: MetaverseRealtimeWorldSnapshot,
-  projectileId: string | null
-): { readonly x: number; readonly y: number; readonly z: number } | null {
-  if (projectileId === null) {
-    return null;
-  }
-
-  return (
-    worldSnapshot.projectiles.find(
-      (projectileSnapshot) =>
-        projectileSnapshot.projectileId === projectileId &&
-        projectileSnapshot.resolution === "active"
-    )?.position ?? null
-  );
-}
-
 export class MetaverseCombatFeedbackRuntime {
   readonly #hapticsRuntime = new MetaverseCombatHapticsRuntime();
   readonly #playAudioCue: MetaverseCombatAudioCuePlayer | null;
@@ -474,8 +453,6 @@ export class MetaverseCombatFeedbackRuntime {
     number,
     MetaverseCombatEventSnapshot
   >();
-  readonly #projectileImpactVisualIdOrder: string[] = [];
-  readonly #projectileImpactVisualIds = new Set<string>();
   readonly #queuedVisualIntentByKey =
     new Map<string, MetaverseQueuedCombatVisualIntent>();
   readonly #queuedVisualIntentKeys: string[] = [];
@@ -529,8 +506,6 @@ export class MetaverseCombatFeedbackRuntime {
     this.#queuedVisualIntentByKey.clear();
     this.#queuedVisualIntentKeys.length = 0;
     this.#presentationVisualKeys.clear();
-    this.#projectileImpactVisualIdOrder.length = 0;
-    this.#projectileImpactVisualIds.clear();
   }
 
   registerPendingLocalShot(input: {
@@ -762,15 +737,19 @@ export class MetaverseCombatFeedbackRuntime {
           visualIntent.hitscanHitKind === "world"
             ? readFiniteVector3(visualIntent.endWorld)
             : null;
+        const worldImpactShotFx = readMetaverseCombatHitscanWorldImpactFx(
+          visualIntent.weaponId
+        );
 
         if (
           authoritativeWorldImpactPoint !== null &&
+          worldImpactShotFx !== null &&
           endpointResolution.finiteEndpointPolicy !==
             "suppressed-invalid-endpoint"
         ) {
           const impactVisualKey = createCombatVisualKey({
             actionSequence: visualIntent.actionSequence,
-            eventKind: "pistol-world-impact",
+            eventKind: worldImpactShotFx,
             playerId: visualIntent.playerId,
             shotId: visualIntent.shotId,
             source: visualIntent.source,
@@ -780,11 +759,13 @@ export class MetaverseCombatFeedbackRuntime {
           if (this.#consumePresentationVisualKey(impactVisualKey, nowMs)) {
             this.#triggerPresentationEvent({
               actionSequence: visualIntent.actionSequence,
+              authoritativeTimeMs: visualIntent.authoritativeTimeMs,
+              impactNormalWorld: visualIntent.impactNormalWorld,
               kind: "shot",
               originWorld: authoritativeWorldImpactPoint,
               playerId: visualIntent.playerId,
               sequence: visualIntent.sequence,
-              shotFx: "pistol-world-impact",
+              shotFx: worldImpactShotFx,
               source: visualIntent.source,
               startedAtMs: nowMs,
               visualKey: impactVisualKey,
@@ -794,17 +775,24 @@ export class MetaverseCombatFeedbackRuntime {
         }
 
         if (finiteEndpointPolicy !== "suppressed-invalid-endpoint") {
-          this.#playAudioCue?.(
-            resolveShotAudioCueId(visualIntent.weaponId),
-            createSpatialAudioOptions(
-              visualStartWorld,
-              input.cameraSnapshot,
-              metaverseCombatShotSpatialProfile
-            )
+          const shotAudioCueId = readMetaverseCombatShotAudioCueId(
+            visualIntent.weaponId
           );
+
+          if (shotAudioCueId !== null) {
+            this.#playAudioCue?.(
+              shotAudioCueId,
+              createSpatialAudioOptions(
+                visualStartWorld,
+                input.cameraSnapshot,
+                metaverseCombatShotSpatialProfile
+              )
+            );
+          }
 
           this.#triggerPresentationEvent({
             actionSequence: visualIntent.actionSequence,
+            authoritativeTimeMs: visualIntent.authoritativeTimeMs,
             directionWorld: visualIntent.directionWorld,
             endWorld: endpointResolution.visualEndWorld,
             kind: "shot",
@@ -854,18 +842,25 @@ export class MetaverseCombatFeedbackRuntime {
       }
 
       if (visualIntent.kind === "rocket-muzzle") {
-        this.#playAudioCue?.(
-          "metaverse-rocket-launch",
-          createSpatialAudioOptions(
-            visualStartWorld,
-            input.cameraSnapshot,
-            metaverseCombatShotSpatialProfile
-          )
+        const shotAudioCueId = readMetaverseCombatShotAudioCueId(
+          visualIntent.weaponId
         );
+
+        if (shotAudioCueId !== null) {
+          this.#playAudioCue?.(
+            shotAudioCueId,
+            createSpatialAudioOptions(
+              visualStartWorld,
+              input.cameraSnapshot,
+              metaverseCombatShotSpatialProfile
+            )
+          );
+        }
       }
 
       this.#triggerPresentationEvent({
         actionSequence: visualIntent.actionSequence,
+        authoritativeTimeMs: visualIntent.authoritativeTimeMs,
         directionWorld: visualIntent.directionWorld,
         endWorld: visualIntent.endWorld,
         kind: "shot",
@@ -929,80 +924,6 @@ export class MetaverseCombatFeedbackRuntime {
     );
 
     if (this.#lastCombatEventSequence === null) {
-      const localPlayerId = this.#readLocalPlayerId();
-      const activeProjectileIds = new Set(
-        worldSnapshot.projectiles
-          .filter((projectileSnapshot) => projectileSnapshot.resolution === "active")
-          .map((projectileSnapshot) => projectileSnapshot.projectileId)
-      );
-      const pendingLocalCombatEvents =
-        localPlayerId === null
-          ? []
-          : worldSnapshot.combatEvents.filter(
-              (eventSnapshot) =>
-                eventSnapshot.playerId === localPlayerId &&
-                this.#localPredictedShotOriginByActionSequence.get(
-                  eventSnapshot.actionSequence
-                )?.weaponId === eventSnapshot.weaponId
-            );
-      const activeProjectileSpawnEvents = worldSnapshot.combatEvents.filter(
-        (eventSnapshot) =>
-          eventSnapshot.eventKind === "projectile-spawned" &&
-          eventSnapshot.projectileId !== null &&
-          activeProjectileIds.has(eventSnapshot.projectileId)
-      );
-      const resolvedProjectileImpactIds = new Set(
-        worldSnapshot.projectiles
-          .filter(
-            (projectileSnapshot) =>
-              projectileSnapshot.resolution === "hit-player" ||
-              projectileSnapshot.resolution === "hit-world"
-          )
-          .map((projectileSnapshot) => projectileSnapshot.projectileId)
-      );
-      const resolvedProjectileImpactEvents = worldSnapshot.combatEvents.filter(
-        (eventSnapshot) =>
-          eventSnapshot.eventKind === "projectile-resolved" &&
-          eventSnapshot.projectileId !== null &&
-          resolvedProjectileImpactIds.has(eventSnapshot.projectileId) &&
-          eventSnapshot.projectile !== null &&
-          (eventSnapshot.projectile.resolutionKind === "hit-player" ||
-            eventSnapshot.projectile.resolutionKind === "hit-world")
-      );
-      const initialCombatEventsBySequence = new Map<
-        number,
-        MetaverseCombatEventSnapshot
-      >();
-
-      for (const eventSnapshot of [
-        ...pendingLocalCombatEvents,
-        ...activeProjectileSpawnEvents,
-        ...resolvedProjectileImpactEvents
-      ]) {
-        initialCombatEventsBySequence.set(
-          eventSnapshot.eventSequence,
-          eventSnapshot
-        );
-      }
-
-      for (const eventSnapshot of [...initialCombatEventsBySequence.values()].sort(
-        (leftEvent, rightEvent) =>
-          leftEvent.eventSequence - rightEvent.eventSequence
-      )) {
-        const processed = this.#triggerCombatEvent(
-          eventSnapshot,
-          worldSnapshot,
-          cameraSnapshot
-        );
-
-        if (!processed) {
-          this.#deferredCombatEventsBySequence.set(
-            eventSnapshot.eventSequence,
-            eventSnapshot
-          );
-        }
-      }
-
       this.#lastCombatEventSequence = latestCombatEventSequence ?? 0;
       return;
     }
@@ -1112,10 +1033,19 @@ export class MetaverseCombatFeedbackRuntime {
     const rayOrigin = readFiniteVector3(eventSnapshot.cameraRayOriginWorld);
 
     const hitPointWorld = readFiniteVector3(eventSnapshot.hitscan.hitPointWorld);
+    const hitNormalWorld = readFiniteVector3(eventSnapshot.hitscan.hitNormalWorld);
     const tracerEnd =
       eventSnapshot.hitscan.hitKind === "miss"
         ? readFiniteVector3(eventSnapshot.aimTargetWorld)
         : hitPointWorld;
+    const shotFx = readMetaverseCombatShotFx({
+      presentationDeliveryModel: eventSnapshot.presentationDeliveryModel,
+      weaponId: eventSnapshot.weaponId
+    });
+
+    if (shotFx !== "pistol-tracer") {
+      return true;
+    }
 
     const visualKey = createCombatVisualKey({
       actionSequence: eventSnapshot.actionSequence,
@@ -1129,19 +1059,19 @@ export class MetaverseCombatFeedbackRuntime {
     this.#queueVisualIntent({
       actionSequence: eventSnapshot.actionSequence,
       activeSlotId: eventSnapshot.activeSlotId ?? null,
+      authoritativeTimeMs: Number(eventSnapshot.timeMs),
       directionWorld: tracerDirection ?? authoritativeRayDirection,
       endWorld: tracerEnd,
       eventCameraRayForwardWorld: authoritativeRayDirection ?? tracerDirection,
       fallbackWaitCount: 0,
-      firstProjectileSnapshotWorld: null,
       hitscanHitKind: eventSnapshot.hitscan.hitKind,
-      kind: "pistol-tracer",
+      impactNormalWorld: hitNormalWorld,
+      kind: shotFx,
       playerId: eventSnapshot.playerId,
       projectileId: null,
       rayOriginWorld: rayOrigin,
       semanticOriginWorld: semanticTracerOrigin,
       sequence: eventSnapshot.eventSequence,
-      serverOriginWorld: semanticTracerOrigin,
       shotId: eventSnapshot.shotId,
       source: "authoritative-shot-resolution",
       visualKey,
@@ -1154,7 +1084,7 @@ export class MetaverseCombatFeedbackRuntime {
 
   #triggerProjectileSpawnedEvent(
     eventSnapshot: MetaverseCombatEventSnapshot,
-    worldSnapshot: MetaverseRealtimeWorldSnapshot
+    _worldSnapshot: MetaverseRealtimeWorldSnapshot
   ): boolean {
     if (
       eventSnapshot.presentationDeliveryModel !== "authoritative-projectile" ||
@@ -1179,6 +1109,14 @@ export class MetaverseCombatFeedbackRuntime {
       localPredictedShotOrigin?.directionWorld ??
       null;
     const rayOrigin = readFiniteVector3(eventSnapshot.cameraRayOriginWorld);
+    const shotFx = readMetaverseCombatShotFx({
+      presentationDeliveryModel: eventSnapshot.presentationDeliveryModel,
+      weaponId: eventSnapshot.weaponId
+    });
+
+    if (shotFx !== "rocket-muzzle") {
+      return true;
+    }
 
     const visualKey = createCombatVisualKey({
       actionSequence: eventSnapshot.actionSequence,
@@ -1193,24 +1131,21 @@ export class MetaverseCombatFeedbackRuntime {
     this.#queueVisualIntent({
       actionSequence: eventSnapshot.actionSequence,
       activeSlotId: eventSnapshot.activeSlotId ?? null,
+      authoritativeTimeMs: Number(eventSnapshot.timeMs),
       directionWorld: launchDirection,
       endWorld: readFiniteVector3(eventSnapshot.aimTargetWorld),
       eventCameraRayForwardWorld: readFiniteVector3(
         eventSnapshot.cameraRayForwardWorld
       ),
       fallbackWaitCount: 0,
-      firstProjectileSnapshotWorld: readProjectilePositionById(
-        worldSnapshot,
-        eventSnapshot.projectileId
-      ),
       hitscanHitKind: null,
-      kind: "rocket-muzzle",
+      impactNormalWorld: null,
+      kind: shotFx,
       playerId: eventSnapshot.playerId,
       projectileId: eventSnapshot.projectileId,
       rayOriginWorld: rayOrigin,
       semanticOriginWorld: serverLaunchOrigin,
       sequence: eventSnapshot.eventSequence,
-      serverOriginWorld: serverLaunchOrigin,
       shotId: eventSnapshot.shotId,
       source: "authoritative-projectile",
       visualKey,
@@ -1234,15 +1169,36 @@ export class MetaverseCombatFeedbackRuntime {
       return;
     }
 
-    if (this.#projectileImpactVisualIds.has(eventSnapshot.projectileId)) {
-      return;
-    }
-
     const impactPointWorld = readFiniteVector3(
       eventSnapshot.projectile.impactPointWorld
     );
 
     if (impactPointWorld === null) {
+      return;
+    }
+
+    const launchVisualKey = createCombatVisualKey({
+      actionSequence: eventSnapshot.actionSequence,
+      eventKind: "rocket-muzzle",
+      playerId: eventSnapshot.playerId,
+      projectileId: eventSnapshot.projectileId,
+      shotId: eventSnapshot.shotId,
+      source: "authoritative-projectile",
+      weaponId: eventSnapshot.weaponId
+    });
+
+    this.#removeQueuedVisualIntent(launchVisualKey);
+    this.#localPredictedShotOriginByActionSequence.delete(
+      eventSnapshot.actionSequence
+    );
+
+    const impactPresentationEffect =
+      readMetaverseCombatProjectileImpactPresentationEffect({
+        resolutionKind: eventSnapshot.projectile.resolutionKind,
+        weaponId: eventSnapshot.weaponId
+      });
+
+    if (impactPresentationEffect === null) {
       return;
     }
 
@@ -1261,42 +1217,24 @@ export class MetaverseCombatFeedbackRuntime {
       return;
     }
 
-    this.#projectileImpactVisualIds.add(eventSnapshot.projectileId);
-    this.#projectileImpactVisualIdOrder.push(eventSnapshot.projectileId);
-
-    while (
-      this.#projectileImpactVisualIdOrder.length >
-      metaverseCombatRecentVisualKeyMaxEntries
-    ) {
-      const retiredProjectileId = this.#projectileImpactVisualIdOrder.shift();
-
-      if (retiredProjectileId !== undefined) {
-        this.#projectileImpactVisualIds.delete(retiredProjectileId);
-      }
-    }
-
-    if (eventSnapshot.weaponId === "metaverse-rocket-launcher-v1") {
-      this.#playAudioCue?.(
-        "metaverse-rocket-explosion",
-        createSpatialAudioOptions(
-          impactPointWorld,
-          cameraSnapshot,
-          metaverseCombatHitSpatialProfile
-        )
-      );
-    } else if (eventSnapshot.projectile.resolutionKind === "hit-world") {
-      this.#playAudioCue?.(
-        "metaverse-world-impact",
-        createSpatialAudioOptions(
-          impactPointWorld,
-          cameraSnapshot,
-          metaverseCombatHitSpatialProfile
-        )
-      );
-    }
+    this.#playAudioCue?.(
+      impactPresentationEffect.audioCueId,
+      createSpatialAudioOptions(
+        impactPointWorld,
+        cameraSnapshot,
+        metaverseCombatHitSpatialProfile
+      )
+    );
 
     this.#triggerPresentationEvent({
       actionSequence: eventSnapshot.actionSequence,
+      authoritativeTimeMs: Number(eventSnapshot.timeMs),
+      hitZone: eventSnapshot.projectile.hitZone,
+      impactFx: impactPresentationEffect.impactFx,
+      impactNormalWorld: readFiniteVector3(
+        eventSnapshot.projectile.impactNormalWorld
+      ),
+      impactSurface: eventSnapshot.projectile.impactSurface,
       kind: "projectile-impact",
       originWorld: impactPointWorld,
       playerId: eventSnapshot.playerId,
@@ -1304,6 +1242,7 @@ export class MetaverseCombatFeedbackRuntime {
       sequence: eventSnapshot.eventSequence,
       source: "authoritative-projectile-resolution",
       startedAtMs: nowMs,
+      targetPlayerId: eventSnapshot.projectile.targetPlayerId,
       visualKey,
       weaponId: eventSnapshot.weaponId
     });

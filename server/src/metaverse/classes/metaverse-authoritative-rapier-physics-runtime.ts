@@ -81,6 +81,31 @@ function readRayHitDistanceMeters(input: {
     : null;
 }
 
+function readRayHitNormal(input: { readonly normal?: RapierVectorLike }): PhysicsVector3Snapshot | null {
+  const normal = input.normal;
+
+  if (
+    normal === undefined ||
+    !Number.isFinite(normal.x) ||
+    !Number.isFinite(normal.y) ||
+    !Number.isFinite(normal.z)
+  ) {
+    return null;
+  }
+
+  const length = Math.hypot(normal.x, normal.y, normal.z);
+
+  if (length <= 0.000001) {
+    return null;
+  }
+
+  return Object.freeze({
+    x: normal.x / length,
+    y: normal.y / length,
+    z: normal.z / length
+  });
+}
+
 function sanitizeQuaternion(
   rotation: PhysicsQuaternionSnapshot
 ): PhysicsQuaternionSnapshot {
@@ -301,6 +326,7 @@ export class MetaverseAuthoritativeRapierPhysicsRuntime {
   ): {
     readonly collider: RapierColliderHandle;
     readonly distanceMeters: number;
+    readonly normal: PhysicsVector3Snapshot | null;
     readonly point: PhysicsVector3Snapshot;
   } | null {
     const normalizedMaxDistance =
@@ -316,7 +342,7 @@ export class MetaverseAuthoritativeRapierPhysicsRuntime {
       this.createVector3(origin.x, origin.y, origin.z),
       this.createVector3(direction.x, direction.y, direction.z)
     );
-    const rayHit = this.#world.castRay(
+    const rayHit = this.#world.castRayAndGetNormal(
       ray,
       normalizedMaxDistance,
       true,
@@ -332,6 +358,7 @@ export class MetaverseAuthoritativeRapierPhysicsRuntime {
     }
 
     const distanceMeters = readRayHitDistanceMeters(rayHit);
+    const normal = readRayHitNormal(rayHit);
 
     if (distanceMeters === null) {
       return null;
@@ -354,6 +381,7 @@ export class MetaverseAuthoritativeRapierPhysicsRuntime {
     return Object.freeze({
       collider: rayHit.collider,
       distanceMeters,
+      normal,
       point
     });
   }

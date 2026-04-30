@@ -37,6 +37,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import { StableInlineText } from "@/components/text-stability";
 import { createMetaverseRuntimeConfig } from "../config/metaverse-runtime";
 import {
   createMetaverseLocalPlayerIdentity,
@@ -725,14 +726,16 @@ export function MetaverseStageScreen({
                   <p className="type-game-heading truncate text-game-foreground">
                     {weaponLabel}
                   </p>
-                  <div className="mt-1 flex min-w-0 items-center justify-end gap-3">
-                    <span className="type-game-value min-w-[3ch] text-right text-game-foreground tabular-nums">
-                      {combatSnapshot.ammoInMagazine}
-                    </span>
+                  <div className="mt-1 flex items-center justify-end gap-2">
+                    <StableInlineText
+                      className="type-game-value text-game-foreground"
+                      text={`${combatSnapshot.ammoInMagazine}`}
+                    />
                     <span className="h-8 w-px shrink-0 bg-white/90" />
-                    <span className="type-game-value min-w-[4ch] text-right text-game-foreground tabular-nums">
-                      {combatSnapshot.ammoInReserve}
-                    </span>
+                    <StableInlineText
+                      className="type-game-value text-game-foreground"
+                      text={`${combatSnapshot.ammoInReserve}`}
+                    />
                   </div>
                 </div>
               ) : null}

@@ -8,6 +8,7 @@ import {
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 import {
   createMetaverseWorldPlacedSurfaceTriMeshSupportSnapshot,
+  type MetaverseWorldSurfaceTraversalAffordanceId,
   type MetaverseWorldSurfacePolicyConfig
 } from "@webgpu-metaverse/shared/metaverse/world";
 import type {
@@ -410,6 +411,23 @@ export class MetaverseAuthoritativeWorldSurfaceState<
 
   shouldConsiderTraversalCollider(collider: RapierColliderHandle): boolean {
     return !this.#dependencies.vehicleDriveColliderHandles.has(collider);
+  }
+
+  readCombatImpactSurface(collider: RapierColliderHandle): {
+    readonly ownerEnvironmentAssetId: string | null;
+    readonly traversalAffordance: MetaverseWorldSurfaceTraversalAffordanceId | null;
+  } | null {
+    const colliderMetadata =
+      this.#surfaceColliderMetadataByHandle.get(collider) ?? null;
+
+    if (colliderMetadata === null) {
+      return null;
+    }
+
+    return Object.freeze({
+      ownerEnvironmentAssetId: colliderMetadata.ownerEnvironmentAssetId,
+      traversalAffordance: colliderMetadata.traversalAffordance
+    });
   }
 
   syncUnmountedPlayerToAuthoritativeSurface(

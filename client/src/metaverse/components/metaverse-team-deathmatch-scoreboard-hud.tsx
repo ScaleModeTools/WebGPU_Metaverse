@@ -67,21 +67,8 @@ function resolveTeamPlayerRowClassName(
   );
 }
 
-function resolveScoreLine(
-  teams: readonly ScoreboardTeamSnapshot[]
-): string {
-  const blueTeam = teams.find((team) => team.teamId === "blue") ?? null;
-  const redTeam = teams.find((team) => team.teamId === "red") ?? null;
-
-  return `${formatTeamLabel("blue")} ${blueTeam?.score ?? 0} - ${redTeam?.score ?? 0} ${formatTeamLabel("red")}`;
-}
-
-function renderPlayerStatus(player: ScoreboardPlayerSnapshot): string {
-  if (player.alive) {
-    return "Up";
-  }
-
-  return "Down";
+function resolvePlayerScore(player: ScoreboardPlayerSnapshot): number {
+  return player.kills;
 }
 
 export function MetaverseTeamDeathmatchScoreboardHud({
@@ -94,36 +81,28 @@ export function MetaverseTeamDeathmatchScoreboardHud({
   }
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-center p-[var(--metaverse-hud-edge)]">
+    <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center p-[var(--metaverse-hud-edge)]">
       <div
         className="surface-game-overlay pointer-events-none w-[min(58rem,calc(100vw-2rem))] rounded-[var(--metaverse-hud-panel-radius)] p-[var(--metaverse-hud-panel-padding)] text-game-foreground shadow-[0_24px_72px_rgb(2_6_23_/_0.38)] [text-shadow:var(--game-text-shadow)]"
         style={metaverseHardHudTextShadowStyle}
       >
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="type-game-caption text-game-foreground">
-              Team Deathmatch
-            </p>
-            <p className="type-game-heading mt-1">{resolveScoreLine(scoreboardSnapshot.teams)}</p>
-          </div>
-          <p className="type-game-body text-game-foreground">
-            {scoreboardSnapshot.scoreLimit === null
-              ? "No limit"
-              : `First to ${scoreboardSnapshot.scoreLimit}`}
-          </p>
-        </div>
-
         <Table className="text-game-foreground">
           <TableHeader>
             <TableRow className="border-white/10 hover:bg-transparent">
-              <TableHead className="w-12 text-game-foreground">Avatar</TableHead>
-              <TableHead className="text-game-foreground">Player</TableHead>
+              <TableHead
+                aria-label="Avatar"
+                className="w-12 text-game-foreground"
+              />
+              <TableHead
+                aria-label="Player"
+                className="text-game-foreground"
+              />
               <TableHead className="text-right text-game-foreground">K</TableHead>
               <TableHead className="text-right text-game-foreground">D</TableHead>
               <TableHead className="text-right text-game-foreground">A</TableHead>
               <TableHead className="text-right text-game-foreground">HS</TableHead>
               <TableHead className="text-right text-game-foreground">Acc</TableHead>
-              <TableHead className="text-right text-game-foreground">State</TableHead>
+              <TableHead className="text-right text-game-foreground">Score</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -135,12 +114,7 @@ export function MetaverseTeamDeathmatchScoreboardHud({
                   <TableCell className="py-2 font-semibold" colSpan={8}>
                     <div className="flex items-center justify-between gap-4">
                       <span>{formatTeamLabel(team.teamId)}</span>
-                      <span className="tabular-nums">
-                        {team.score}
-                        {scoreboardSnapshot.scoreLimit === null
-                          ? ""
-                          : ` / ${scoreboardSnapshot.scoreLimit}`}
-                      </span>
+                      <span className="tabular-nums">{team.score}</span>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -176,8 +150,8 @@ export function MetaverseTeamDeathmatchScoreboardHud({
                     <TableCell className="text-right tabular-nums">
                       {formatAccuracyLabel(player.accuracyRatio)}
                     </TableCell>
-                    <TableCell className="text-right">
-                      {renderPlayerStatus(player)}
+                    <TableCell className="text-right tabular-nums">
+                      {resolvePlayerScore(player)}
                     </TableCell>
                   </TableRow>
                 ))}

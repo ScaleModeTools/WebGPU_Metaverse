@@ -784,6 +784,8 @@ export class MetaverseAuthoritativeWorldRuntime
       playerTraversalColliderHandles: this.#playerTraversalColliderHandles,
       playersById: this.#playersById,
       readCurrentTick: () => this.#tickState.currentTick,
+      readWorldImpactSurface: (collider) =>
+        this.#surfaceState.readCombatImpactSurface(collider),
       readTickIntervalMs: () => Number(this.#config.tickIntervalMs),
       resolveRespawnPose: (playerId, teamId) =>
         this.#resolveRespawnPose(playerId, teamId, bundleInputs),

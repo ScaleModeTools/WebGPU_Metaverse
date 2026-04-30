@@ -2674,6 +2674,7 @@ test("MetaverseAuthoritativeCombatAuthority resolves short positive rocket world
           ? {
               collider: 101,
               distanceMeters: 0.03,
+              normal: Object.freeze({ x: 0, y: 1, z: 0 }),
               point: {
                 x: origin.x + direction.x * 0.03,
                 y: origin.y + direction.y * 0.03,
@@ -2700,6 +2701,13 @@ test("MetaverseAuthoritativeCombatAuthority resolves short positive rocket world
         createPlayerRuntimeState(bluePlayerId, "red", blueRootPosition)
       ]
     ]),
+    readWorldImpactSurface(collider) {
+      assert.equal(collider, 101);
+      return Object.freeze({
+        ownerEnvironmentAssetId: "test-world-floor",
+        traversalAffordance: "support"
+      });
+    },
     readTickIntervalMs: () => 33,
     resolveRespawnPose() {
       return {
@@ -2736,6 +2744,23 @@ test("MetaverseAuthoritativeCombatAuthority resolves short positive rocket world
     combatAuthority.readCombatEventSnapshots().at(-1)?.projectile?.resolutionKind,
     "hit-world"
   );
+  assert.deepEqual(
+    combatAuthority.readCombatEventSnapshots().at(-1)?.projectile
+      ?.impactNormalWorld,
+    {
+      x: 0,
+      y: 1,
+      z: 0
+    }
+  );
+  assert.deepEqual(
+    combatAuthority.readCombatEventSnapshots().at(-1)?.projectile?.impactSurface,
+    {
+      ownerEnvironmentAssetId: "test-world-floor",
+      traversalAffordance: "support"
+    }
+  );
+  assert.equal(combatAuthority.readCombatEventSnapshots().at(-1)?.timeMs, 1_250);
 });
 
 test("MetaverseAuthoritativeCombatAuthority treats duplicate fire action sequences as gameplay-idempotent", () => {

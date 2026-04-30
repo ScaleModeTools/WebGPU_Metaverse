@@ -165,12 +165,15 @@ function createHitscanResolvedEvent({
   eventSequence,
   finalReason = "hit-player",
   hitKind = "player",
+  hitNormalWorld = null,
   hitPointWorld = Object.freeze({ x: 0, y: 1.62, z: -8 }),
+  hitSurface = null,
   playerId,
   rayForwardWorld = Object.freeze({ x: 0, y: 0, z: -1 }),
   rayOriginWorld = Object.freeze({ x: 0, y: 1.62, z: 0 }),
   semanticMuzzleWorld = Object.freeze({ x: 0.18, y: 1.42, z: -0.55 }),
-  targetPlayerId,
+  targetPlayerId = null,
+  timeMs = eventSequence * 50,
   weaponId: eventWeaponId = weaponId
 }) {
   return Object.freeze({
@@ -187,7 +190,9 @@ function createHitscanResolvedEvent({
     hitscan: Object.freeze({
       finalReason,
       hitKind,
+      hitNormalWorld,
       hitPointWorld,
+      hitSurface,
       regionId: "upper_torso",
       targetPlayerId
     }),
@@ -195,6 +200,7 @@ function createHitscanResolvedEvent({
     presentationDeliveryModel: "hitscan-tracer",
     semanticMuzzleWorld,
     shotId: `${playerId}:${actionSequence}`,
+    timeMs,
     weaponId: eventWeaponId
   });
 }
@@ -207,6 +213,7 @@ function createProjectileSpawnedEvent({
   playerId,
   projectileId = `${playerId}:${actionSequence}`,
   semanticMuzzleWorld = Object.freeze({ x: 0.1, y: 1.34, z: -0.95 }),
+  timeMs = eventSequence * 50,
   weaponId: eventWeaponId = "metaverse-rocket-launcher-v1"
 }) {
   return Object.freeze({
@@ -222,6 +229,7 @@ function createProjectileSpawnedEvent({
     projectileId,
     semanticMuzzleWorld,
     shotId: `${playerId}:${actionSequence}`,
+    timeMs,
     weaponId: eventWeaponId
   });
 }
@@ -229,10 +237,15 @@ function createProjectileSpawnedEvent({
 function createProjectileResolvedEvent({
   actionSequence,
   eventSequence,
+  hitZone = null,
+  impactNormalWorld = null,
   impactPointWorld = Object.freeze({ x: 0, y: 1.2, z: -4 }),
+  impactSurface = null,
   playerId,
   projectileId = `${playerId}:${actionSequence}`,
   resolutionKind = "hit-world",
+  targetPlayerId = null,
+  timeMs = eventSequence * 50,
   weaponId: eventWeaponId = "metaverse-rocket-launcher-v1"
 }) {
   return Object.freeze({
@@ -242,11 +255,16 @@ function createProjectileResolvedEvent({
     playerId,
     presentationDeliveryModel: "authoritative-projectile",
     projectile: Object.freeze({
+      hitZone,
+      impactNormalWorld,
       impactPointWorld,
+      impactSurface,
+      targetPlayerId,
       resolutionKind
     }),
     projectileId,
     shotId: `${playerId}:${actionSequence}`,
+    timeMs,
     weaponId: eventWeaponId
   });
 }
@@ -505,9 +523,17 @@ test("MetaverseCombatFeedbackRuntime emits rocket launch and explosion cues from
         createProjectileResolvedEvent({
           actionSequence: 12,
           eventSequence: 2,
+          hitZone: "body",
+          impactNormalWorld: Object.freeze({ x: 0, y: 1, z: 0 }),
           impactPointWorld: Object.freeze({ x: 0, y: 1.44, z: -5 }),
+          impactSurface: Object.freeze({
+            ownerEnvironmentAssetId: "arena-floor",
+            traversalAffordance: "support"
+          }),
           playerId: localPlayerId,
-          projectileId: `${localPlayerId}:12`
+          projectileId: `${localPlayerId}:12`,
+          targetPlayerId: remotePlayerId,
+          timeMs: 1_280
         })
       ],
       localPlayerId,
@@ -551,9 +577,101 @@ test("MetaverseCombatFeedbackRuntime emits rocket launch and explosion cues from
     z: 0
   });
   assert.match(presentationEvents[0]?.visualKey ?? "", /authoritative-projectile/);
+  assert.equal(presentationEvents[1]?.impactFx, "rocket-explosion");
+  assert.equal(presentationEvents[1]?.authoritativeTimeMs, 1_280);
+  assert.equal(presentationEvents[1]?.hitZone, "body");
+  assert.deepEqual(presentationEvents[1]?.impactNormalWorld, {
+    x: 0,
+    y: 1,
+    z: 0
+  });
+  assert.deepEqual(presentationEvents[1]?.impactSurface, {
+    ownerEnvironmentAssetId: "arena-floor",
+    traversalAffordance: "support"
+  });
+  assert.equal(presentationEvents[1]?.targetPlayerId, remotePlayerId);
 });
 
-test("MetaverseCombatFeedbackRuntime consumes pending local pistol events in the first authoritative snapshot", async () => {
+test("MetaverseCombatFeedbackRuntime keeps unmapped weapon presentation silent", async () => {
+  const { MetaverseCombatFeedbackRuntime } = await clientLoader.load(
+    "/src/metaverse/classes/metaverse-combat-feedback-runtime.ts"
+  );
+  const localPlayerId = createMetaversePlayerId("combat-feedback-unmapped-local");
+  const remotePlayerId = createMetaversePlayerId("combat-feedback-unmapped-remote");
+  const localUsername = createUsername("Unmapped Feedback Local");
+  const remoteUsername = createUsername("Unmapped Feedback Remote");
+
+  assert.notEqual(localPlayerId, null);
+  assert.notEqual(remotePlayerId, null);
+  assert.notEqual(localUsername, null);
+  assert.notEqual(remoteUsername, null);
+
+  const audioCalls = [];
+  const presentationEvents = [];
+  const runtime = new MetaverseCombatFeedbackRuntime({
+    playAudioCue(cueId, options) {
+      audioCalls.push({
+        cueId,
+        options
+      });
+    },
+    readLocalPlayerId: () => localPlayerId,
+    triggerPresentationEvent(event) {
+      presentationEvents.push(event);
+    }
+  });
+  const cameraSnapshot = createCameraSnapshot();
+  const unmappedWeaponId = "metaverse-unmapped-test-weapon";
+
+  runtime.syncAuthoritativeWorld(
+    createWorldSnapshot({
+      localPlayerId,
+      localUsername,
+      remotePlayerId,
+      remoteUsername,
+      snapshotSequence: 1
+    }),
+    cameraSnapshot
+  );
+  runtime.syncAuthoritativeWorld(
+    createWorldSnapshot({
+      combatEvents: [
+        createHitscanResolvedEvent({
+          actionSequence: 1,
+          eventSequence: 1,
+          hitKind: "world",
+          hitPointWorld: Object.freeze({ x: 0, y: 1, z: -4 }),
+          playerId: remotePlayerId,
+          weaponId: unmappedWeaponId
+        }),
+        createProjectileSpawnedEvent({
+          actionSequence: 2,
+          eventSequence: 2,
+          playerId: remotePlayerId,
+          weaponId: unmappedWeaponId
+        }),
+        createProjectileResolvedEvent({
+          actionSequence: 2,
+          eventSequence: 3,
+          playerId: remotePlayerId,
+          weaponId: unmappedWeaponId
+        })
+      ],
+      localPlayerId,
+      localUsername,
+      remotePlayerId,
+      remoteUsername,
+      snapshotSequence: 2
+    }),
+    cameraSnapshot
+  );
+  drainQueuedVisualIntents(runtime, cameraSnapshot, new Map());
+
+  assert.deepEqual(audioCalls, []);
+  assert.deepEqual(presentationEvents, []);
+});
+
+test("MetaverseCombatFeedbackRuntime bootstraps past pending local pistol events without replaying one-shot FX", async () => {
   const { MetaverseCombatFeedbackRuntime } = await clientLoader.load(
     "/src/metaverse/classes/metaverse-combat-feedback-runtime.ts"
   );
@@ -603,22 +721,16 @@ test("MetaverseCombatFeedbackRuntime consumes pending local pistol events in the
     }),
     createCameraSnapshot()
   );
-  drainQueuedVisualIntents(
-    runtime,
-    createCameraSnapshot(),
-    new Map([[localPlayerId, drainTimeOrigin]])
-  );
+  drainQueuedVisualIntents(runtime, createCameraSnapshot(), new Map([[localPlayerId, drainTimeOrigin]]));
 
   const tracerEvents = presentationEvents.filter(
     (event) => event.kind === "shot" && event.shotFx === "pistol-tracer"
   );
 
-  assert.equal(tracerEvents.length, 1);
-  assert.deepEqual(tracerEvents[0]?.originWorld, predictedOrigin);
-  assert.deepEqual(tracerEvents[0]?.endWorld, hitPointWorld);
+  assert.equal(tracerEvents.length, 0);
 });
 
-test("MetaverseCombatFeedbackRuntime consumes pending local rocket spawn events in the first authoritative snapshot", async () => {
+test("MetaverseCombatFeedbackRuntime bootstraps past pending local rocket spawn events without replaying one-shot FX", async () => {
   const { MetaverseCombatFeedbackRuntime } = await clientLoader.load(
     "/src/metaverse/classes/metaverse-combat-feedback-runtime.ts"
   );
@@ -649,7 +761,7 @@ test("MetaverseCombatFeedbackRuntime consumes pending local rocket spawn events 
   const renderedMuzzle = Object.freeze({ x: 0.22, y: 1.48, z: -0.12 });
   const drainTimeMuzzle = Object.freeze({ x: 1.1, y: 1.9, z: -0.45 });
   const launchAimTarget = Object.freeze({ x: 0.22, y: 0.05, z: -0.75 });
-  const firstProjectileSnapshotWorld = Object.freeze({
+  const activeProjectilePosition = Object.freeze({
     x: 0.22,
     y: 1.48,
     z: -2
@@ -681,7 +793,7 @@ test("MetaverseCombatFeedbackRuntime consumes pending local rocket spawn events 
           direction: Object.freeze({ x: 0, y: 0, z: -1 }),
           expiresAtTimeMs: 7_000,
           ownerPlayerId: localPlayerId,
-          position: firstProjectileSnapshotWorld,
+          position: activeProjectilePosition,
           projectileId,
           resolution: "active",
           resolvedAtTimeMs: null,
@@ -711,15 +823,12 @@ test("MetaverseCombatFeedbackRuntime consumes pending local rocket spawn events 
 
   assert.deepEqual(
     audioCalls.map((audioCall) => audioCall.cueId),
-    ["metaverse-rocket-launch"]
+    []
   );
-  assert.equal(launchEvents.length, 1);
-  assert.equal(launchEvents[0]?.projectileId, projectileId);
-  assert.deepEqual(launchEvents[0]?.originWorld, renderedMuzzle);
-  assert.deepEqual(launchEvents[0]?.endWorld, launchAimTarget);
+  assert.equal(launchEvents.length, 0);
 });
 
-test("MetaverseCombatFeedbackRuntime consumes active rocket spawn events in the first authoritative snapshot", async () => {
+test("MetaverseCombatFeedbackRuntime bootstraps past active rocket spawn events without replaying one-shot FX", async () => {
   const { MetaverseCombatFeedbackRuntime } = await clientLoader.load(
     "/src/metaverse/classes/metaverse-combat-feedback-runtime.ts"
   );
@@ -787,9 +896,7 @@ test("MetaverseCombatFeedbackRuntime consumes active rocket spawn events in the 
     (event) => event.kind === "shot" && event.shotFx === "rocket-muzzle"
   );
 
-  assert.equal(launchEvents.length, 1);
-  assert.equal(launchEvents[0]?.projectileId, projectileId);
-  assert.equal(launchEvents[0]?.source, "authoritative-projectile");
+  assert.equal(launchEvents.length, 0);
 });
 
 test("MetaverseCombatFeedbackRuntime keeps expired rocket resolutions silent", async () => {
@@ -856,7 +963,7 @@ test("MetaverseCombatFeedbackRuntime keeps expired rocket resolutions silent", a
   assert.deepEqual(presentationEvents, []);
 });
 
-test("MetaverseCombatFeedbackRuntime plays fresh initial rocket ground impact events", async () => {
+test("MetaverseCombatFeedbackRuntime bootstraps retained rocket ground impacts without replaying one-shot FX", async () => {
   const { MetaverseCombatFeedbackRuntime } = await clientLoader.load(
     "/src/metaverse/classes/metaverse-combat-feedback-runtime.ts"
   );
@@ -931,10 +1038,9 @@ test("MetaverseCombatFeedbackRuntime plays fresh initial rocket ground impact ev
 
   assert.deepEqual(
     audioCalls.map((audioCall) => audioCall.cueId),
-    ["metaverse-rocket-explosion"]
+    []
   );
-  assert.equal(impactEvents.length, 1);
-  assert.deepEqual(impactEvents[0]?.originWorld, impactPointWorld);
+  assert.equal(impactEvents.length, 0);
 });
 
 test("MetaverseCombatFeedbackRuntime emits one impact visual per projectile id", async () => {

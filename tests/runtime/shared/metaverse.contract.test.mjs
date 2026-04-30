@@ -1256,14 +1256,14 @@ test("metaverse realtime world contracts keep combat action receipts observer-lo
     worldSnapshot.observerPlayer?.recentPlayerActionReceipts[0]?.sourceProjectileId,
     "projectile-3"
   );
-  assert.equal("ownerPlayerId" in worldSnapshot.projectiles[0], false);
+  assert.equal(worldSnapshot.projectiles[0]?.ownerPlayerId, playerId);
   assert.equal("expiresAtTimeMs" in worldSnapshot.projectiles[0], false);
-  assert.equal("resolvedAtTimeMs" in worldSnapshot.projectiles[0], false);
+  assert.equal(worldSnapshot.projectiles[0]?.resolvedAtTimeMs, null);
   assert.equal("resolvedHitZone" in worldSnapshot.projectiles[0], false);
   assert.equal("resolvedPlayerId" in worldSnapshot.projectiles[0], false);
-  assert.equal("sourceActionSequence" in worldSnapshot.projectiles[0], false);
-  assert.equal("spawnedAtTimeMs" in worldSnapshot.projectiles[0], false);
-  assert.equal("velocityMetersPerSecond" in worldSnapshot.projectiles[0], false);
+  assert.equal(worldSnapshot.projectiles[0]?.sourceActionSequence, 3);
+  assert.equal(worldSnapshot.projectiles[0]?.spawnedAtTimeMs, 1_240.2);
+  assert.equal(worldSnapshot.projectiles[0]?.velocityMetersPerSecond, 900);
   assert.equal(worldSnapshot.combatEvents[0]?.eventSequence, 7);
   assert.equal(worldSnapshot.combatEvents[0]?.shotId, `${playerId}:3`);
   assert.equal("serverTick" in worldSnapshot.combatEvents[0], false);

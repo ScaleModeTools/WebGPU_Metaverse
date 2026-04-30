@@ -210,7 +210,7 @@ test("MetaverseSceneCombatFxState ignores unspecified shot FX", async () => {
 });
 
 test("MetaverseSceneCombatFxState renders pistol world impacts without explosion slots", async () => {
-  const [{ Scene }, { MetaverseSceneCombatFxState }] = await Promise.all([
+  const [{ Scene, Vector3 }, { MetaverseSceneCombatFxState }] = await Promise.all([
     import("three/webgpu"),
     clientLoader.load(
       "/src/metaverse/render/combat/metaverse-scene-combat-fx-state.ts"
@@ -224,6 +224,7 @@ test("MetaverseSceneCombatFxState renders pistol world impacts without explosion
   combatFxState.triggerCombatPresentationEvent(
     Object.freeze({
       actionSequence: 18,
+      impactNormalWorld: Object.freeze({ x: 1, y: 0, z: 0 }),
       kind: "shot",
       originWorld: Object.freeze({ x: 0, y: 1.62, z: -1.2 }),
       playerId: "local-player",
@@ -237,26 +238,33 @@ test("MetaverseSceneCombatFxState renders pistol world impacts without explosion
   );
 
   assert.equal(
-    countSceneChildrenByName(scene, "metaverse_combat_fx/pistol_world_impact"),
+    countSceneChildrenByName(scene, "metaverse_combat_fx/world_impact"),
     1
   );
   const impact = findObjectByName(
     scene,
-    "metaverse_combat_fx/pistol_world_impact"
+    "metaverse_combat_fx/world_impact"
   );
   const impactCore = findObjectByName(
     scene,
-    "metaverse_combat_fx/pistol_world_impact/core"
+    "metaverse_combat_fx/world_impact/core"
   );
   const impactDust = findObjectByName(
     scene,
-    "metaverse_combat_fx/pistol_world_impact/dust"
+    "metaverse_combat_fx/world_impact/dust"
   );
 
   assert.notEqual(impact, null);
   assert.notEqual(impactCore, null);
   assert.notEqual(impactDust, null);
-  assert.equal(impact.position.y > 1.62, true);
+  assert.ok(Math.abs(impact.position.x - 0.035) < 0.000001);
+  assert.ok(Math.abs(impact.position.y - 1.62) < 0.000001);
+  assert.ok(
+    new Vector3(0, 1, 0)
+      .applyQuaternion(impact.quaternion)
+      .normalize()
+      .distanceTo(new Vector3(1, 0, 0)) < 0.000001
+  );
   assert.equal(impactCore.material.depthTest, false);
   assert.equal(impactDust.material.depthTest, false);
   assert.equal(
@@ -352,6 +360,7 @@ test("MetaverseSceneCombatFxState updates one rocket visual and emits event-owne
   );
   combatFxState.triggerCombatPresentationEvent({
     actionSequence: 8,
+    impactFx: "rocket-explosion",
     kind: "projectile-impact",
     originWorld: Object.freeze({ x: 0, y: 1.4, z: -5 }),
     playerId: "rocket-owner",
@@ -364,6 +373,7 @@ test("MetaverseSceneCombatFxState updates one rocket visual and emits event-owne
   });
   combatFxState.triggerCombatPresentationEvent({
     actionSequence: 8,
+    impactFx: "rocket-explosion",
     kind: "projectile-impact",
     originWorld: Object.freeze({ x: 0, y: 1.4, z: -5 }),
     playerId: "rocket-owner",
@@ -511,7 +521,7 @@ test("MetaverseSceneCombatFxState removes expired rockets without explosion slot
   );
 });
 
-test("MetaverseSceneCombatFxState self-heals active rockets from projectile snapshots without launch events", async () => {
+test("MetaverseSceneCombatFxState renders active rocket snapshots without launch events", async () => {
   const [{ Scene }, { MetaverseSceneCombatFxState }] = await Promise.all([
     import("three/webgpu"),
     clientLoader.load(

@@ -1,4 +1,7 @@
-import type { MetaverseCombatHitZoneId } from "@webgpu-metaverse/shared";
+import type {
+  MetaverseCombatHitZoneId,
+  MetaverseCombatImpactSurfaceSnapshot
+} from "@webgpu-metaverse/shared";
 
 import type { AudioCuePlaybackOptions } from "../../audio";
 import type { MetaverseCombatAudioCueId } from "../audio";
@@ -22,6 +25,10 @@ export type MetaverseCombatPresentationShotFx =
   | "pistol-world-impact"
   | "pistol-tracer"
   | "rocket-muzzle";
+
+export type MetaverseCombatPresentationImpactFx =
+  | "rocket-explosion"
+  | "world-impact";
 
 export interface MetaverseRenderedWeaponMuzzleQuery {
   readonly playerId: string;
@@ -53,8 +60,9 @@ export type MetaverseRenderedWeaponMuzzleResolver = (
   query: MetaverseRenderedWeaponMuzzleQuery
 ) => MetaverseRenderedWeaponMuzzleFrame | null;
 
-export interface MetaverseCombatPresentationEvent {
+interface MetaverseCombatPresentationEventBase {
   readonly actionSequence?: number | null;
+  readonly authoritativeTimeMs?: number | null;
   readonly damageAmount?: number | null;
   readonly damageSourceDirectionWorld?: {
     readonly x: number;
@@ -71,8 +79,14 @@ export interface MetaverseCombatPresentationEvent {
     readonly y: number;
     readonly z: number;
   } | null;
-  readonly kind: MetaverseCombatPresentationEventKind;
   readonly hitZone?: MetaverseCombatHitZoneId | null;
+  readonly impactNormalWorld?: {
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+  } | null;
+  readonly impactSurface?: MetaverseCombatImpactSurfaceSnapshot | null;
+  readonly kind: MetaverseCombatPresentationEventKind;
   readonly originWorld?: {
     readonly x: number;
     readonly y: number;
@@ -81,12 +95,44 @@ export interface MetaverseCombatPresentationEvent {
   readonly playerId: string;
   readonly projectileId?: string | null;
   readonly sequence: number;
-  readonly shotFx?: MetaverseCombatPresentationShotFx | null;
   readonly source?: MetaverseCombatPresentationEventSource | null;
   readonly startedAtMs: number;
-  readonly visualKey?: string | null;
+  readonly targetPlayerId?: string | null;
   readonly weaponId: string | null;
 }
+
+export interface MetaverseCombatPresentationShotEvent
+  extends MetaverseCombatPresentationEventBase {
+  readonly kind: "shot";
+  readonly shotFx: MetaverseCombatPresentationShotFx;
+  readonly visualKey: string;
+}
+
+export interface MetaverseCombatPresentationProjectileImpactEvent
+  extends MetaverseCombatPresentationEventBase {
+  readonly impactFx: MetaverseCombatPresentationImpactFx;
+  readonly kind: "projectile-impact";
+  readonly projectileId: string;
+  readonly visualKey: string;
+}
+
+export interface MetaverseCombatPresentationHitEvent
+  extends MetaverseCombatPresentationEventBase {
+  readonly kind: "hit";
+  readonly visualKey?: string | null;
+}
+
+export interface MetaverseCombatPresentationDeathEvent
+  extends MetaverseCombatPresentationEventBase {
+  readonly kind: "death";
+  readonly visualKey?: string | null;
+}
+
+export type MetaverseCombatPresentationEvent =
+  | MetaverseCombatPresentationDeathEvent
+  | MetaverseCombatPresentationHitEvent
+  | MetaverseCombatPresentationProjectileImpactEvent
+  | MetaverseCombatPresentationShotEvent;
 
 export type MetaverseCombatAudioCuePlayer = (
   cueId: MetaverseCombatAudioCueId,

@@ -80,11 +80,18 @@ export interface AdvanceUnmountedTraversalResult {
 export interface PredictedLocalReconciliationSampleMatch {
   readonly sample: PredictedLocalReconciliationSample;
   readonly selectionReason:
+    | "authoritative-tick-cursor"
     | "exact-traversal-sample-id"
     | "latest-at-or-before-authoritative-time"
     | "earliest-after-authoritative-time"
     | "latest-matching-sample";
   readonly timeDeltaMs: number | null;
+}
+
+export interface PredictedLocalReconciliationSampleCursor {
+  readonly authoritativeTick: number;
+  readonly localPredictionTick: number;
+  readonly traversalSequence: number;
 }
 
 interface PendingTraversalInputSegment {
@@ -231,6 +238,91 @@ export function resolvePredictedLocalReconciliationSampleFromMatchingHistory(
       });
 }
 
+function normalizeAuthoritativeTick(rawValue: number | null): number | null {
+  if (rawValue === null || !Number.isFinite(rawValue) || rawValue < 0) {
+    return null;
+  }
+
+  return Math.floor(rawValue);
+}
+
+export function resolvePredictedLocalReconciliationSampleFromAuthoritativeTickCursor(
+  matchingSamplesNewestToOldest: readonly PredictedLocalReconciliationSample[],
+  {
+    authoritativeSnapshotAgeMs,
+    authoritativeTick,
+    lastProcessedTraversalSequence,
+    previousCursor,
+    receivedAtWallClockMs
+  }: {
+    readonly authoritativeSnapshotAgeMs: number | null;
+    readonly authoritativeTick: number | null;
+    readonly lastProcessedTraversalSequence: number;
+    readonly previousCursor: PredictedLocalReconciliationSampleCursor | null;
+    readonly receivedAtWallClockMs: number | null;
+  }
+): PredictedLocalReconciliationSampleMatch | null {
+  const normalizedAuthoritativeTick =
+    normalizeAuthoritativeTick(authoritativeTick);
+
+  if (normalizedAuthoritativeTick === null) {
+    return resolvePredictedLocalReconciliationSampleFromMatchingHistory(
+      matchingSamplesNewestToOldest,
+      {
+        authoritativeSnapshotAgeMs,
+        authoritativeTraversalSampleId:
+          lastProcessedTraversalSequence > 0
+            ? lastProcessedTraversalSequence
+            : null,
+        receivedAtWallClockMs
+      }
+    );
+  }
+
+  const previousSequenceCursor =
+    previousCursor !== null &&
+    previousCursor.traversalSequence === lastProcessedTraversalSequence &&
+    normalizedAuthoritativeTick >= previousCursor.authoritativeTick
+      ? previousCursor
+      : null;
+  const targetLocalPredictionTick =
+    previousSequenceCursor === null
+      ? null
+      : previousSequenceCursor.localPredictionTick +
+        (normalizedAuthoritativeTick - previousSequenceCursor.authoritativeTick);
+  let selectedSample: PredictedLocalReconciliationSample | null = null;
+
+  for (
+    let sampleIndex = matchingSamplesNewestToOldest.length - 1;
+    sampleIndex >= 0;
+    sampleIndex -= 1
+  ) {
+    const sample = matchingSamplesNewestToOldest[sampleIndex];
+
+    if (sample === undefined) {
+      continue;
+    }
+
+    if (
+      targetLocalPredictionTick === null ||
+      sample.localPredictionTick >= targetLocalPredictionTick
+    ) {
+      selectedSample = sample;
+      break;
+    }
+  }
+
+  selectedSample = selectedSample ?? matchingSamplesNewestToOldest[0] ?? null;
+
+  return selectedSample === null
+    ? null
+    : Object.freeze({
+        sample: selectedSample,
+        selectionReason: "authoritative-tick-cursor",
+        timeDeltaMs: null
+      });
+}
+
 export class MetaverseUnmountedTraversalMotionState {
   readonly #dependencies: MetaverseUnmountedTraversalMotionStateDependencies;
 
@@ -239,6 +331,9 @@ export class MetaverseUnmountedTraversalMotionState {
   readonly #predictedReconciliationSamples:
     PredictedLocalReconciliationSample[] = [];
   #predictedReconciliationSampleWriteIndex = 0;
+  #predictedReconciliationSampleCursor:
+    | PredictedLocalReconciliationSampleCursor
+    | null = null;
   readonly #pendingGroundedTraversalInputSegments:
     PendingTraversalInputSegment[] = [];
   #swimLocomotionAccumulatorSeconds = 0;
@@ -274,6 +369,7 @@ export class MetaverseUnmountedTraversalMotionState {
     this.#predictedReconciliationSampleCount = 0;
     this.#predictedReconciliationSamples.length = 0;
     this.#predictedReconciliationSampleWriteIndex = 0;
+    this.#predictedReconciliationSampleCursor = null;
     this.#pendingGroundedTraversalInputSegments.length = 0;
     this.#swimLocomotionAccumulatorSeconds = 0;
     this.#traversalCameraPitchRadians =
@@ -399,10 +495,12 @@ export class MetaverseUnmountedTraversalMotionState {
 
   readPredictedLocalReconciliationSampleMatch({
     authoritativeSnapshotAgeMs,
+    authoritativeTick,
     lastProcessedTraversalSequence,
     receivedAtWallClockMs
   }: {
     readonly authoritativeSnapshotAgeMs: number | null;
+    readonly authoritativeTick: number | null;
     readonly lastProcessedTraversalSequence: number;
     readonly receivedAtWallClockMs: number | null;
   }): PredictedLocalReconciliationSampleMatch | null {
@@ -432,17 +530,30 @@ export class MetaverseUnmountedTraversalMotionState {
       matchingSamplesNewestToOldest.push(sample);
     }
 
-    return resolvePredictedLocalReconciliationSampleFromMatchingHistory(
-      matchingSamplesNewestToOldest,
-      {
-        authoritativeSnapshotAgeMs,
-        authoritativeTraversalSampleId:
-          lastProcessedTraversalSequence > 0
-            ? lastProcessedTraversalSequence
-            : null,
-        receivedAtWallClockMs
-      }
-    );
+    const matchedSample =
+      resolvePredictedLocalReconciliationSampleFromAuthoritativeTickCursor(
+        matchingSamplesNewestToOldest,
+        {
+          authoritativeSnapshotAgeMs,
+          authoritativeTick,
+          lastProcessedTraversalSequence,
+          previousCursor: this.#predictedReconciliationSampleCursor,
+          receivedAtWallClockMs
+        }
+      );
+
+    const normalizedAuthoritativeTick =
+      normalizeAuthoritativeTick(authoritativeTick);
+
+    if (matchedSample !== null && normalizedAuthoritativeTick !== null) {
+      this.#predictedReconciliationSampleCursor = Object.freeze({
+        authoritativeTick: normalizedAuthoritativeTick,
+        localPredictionTick: matchedSample.sample.localPredictionTick,
+        traversalSequence: lastProcessedTraversalSequence
+      });
+    }
+
+    return matchedSample;
   }
 
   applyAuthoritativeUnmountedPose({

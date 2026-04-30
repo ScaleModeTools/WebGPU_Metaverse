@@ -114,6 +114,7 @@ export interface MetaverseTelemetrySnapshot {
           | boolean
           | null;
         readonly convergenceEpisodeStartHistoricalLocalSampleSelectionReason:
+          | "authoritative-tick-cursor"
           | "exact-traversal-sample-id"
           | "latest-at-or-before-authoritative-time"
           | "earliest-after-authoritative-time"

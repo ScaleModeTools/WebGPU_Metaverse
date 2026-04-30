@@ -27,6 +27,7 @@ interface ActiveProjectileVisual {
   readonly birthOrigin: Vector3;
   readonly birthTarget: Vector3;
   readonly body: Mesh;
+  createdAtMs: number;
   readonly group: Group;
   readonly trail: Mesh;
   birthStartedAtMs: number | null;
@@ -67,7 +68,7 @@ interface TransientRocketLaunchFxVisual {
 
 const rocketWeaponId = "metaverse-rocket-launcher-v1";
 const metaverseCombatFxVisualKeyTtlMs = 5_000;
-const rocketProjectileSnapshotSelfHealBridgeWindowMs = 180;
+const rocketProjectileLaunchBridgeWindowMs = 180;
 const rocketProjectileVisualBirthDurationMs = 80;
 const rocketLaunchTransientDurationMs = 120;
 const rocketLaunchTransientMaxDistanceMeters = 5.8;
@@ -156,6 +157,7 @@ function createRocketProjectileVisual(): ActiveProjectileVisual {
     birthStartedAtMs: null,
     birthTarget: new Vector3(),
     body,
+    createdAtMs: 0,
     group,
     trail
   };
@@ -165,11 +167,6 @@ export class MetaverseSceneCombatFxState {
   readonly #activeProjectilesById = new Map<string, ActiveProjectileVisual>();
   readonly #consumedVisualKeys = new Map<string, number>();
   readonly #launchBridgeOriginsByProjectileId = new Map<string, Vector3>();
-  readonly #projectileSnapshotSelfHealBridgeExpiresAtById = new Map<
-    string,
-    number
-  >();
-  readonly #projectileImpactVisualIds = new Set<string>();
   readonly #rocketLaunchVisualIds = new Set<string>();
   readonly #scene: Scene;
   readonly #transientFx: (
@@ -194,19 +191,16 @@ export class MetaverseSceneCombatFxState {
     this.#activeProjectilesById.clear();
     this.#consumedVisualKeys.clear();
     this.#launchBridgeOriginsByProjectileId.clear();
-    this.#projectileSnapshotSelfHealBridgeExpiresAtById.clear();
-    this.#projectileImpactVisualIds.clear();
     this.#rocketLaunchVisualIds.clear();
     this.#transientFx.length = 0;
   }
 
   triggerCombatPresentationEvent(event: MetaverseCombatPresentationEvent): void {
     if (event.kind === "projectile-impact") {
-      if (
-        event.projectileId !== null &&
-        event.projectileId !== undefined &&
-        this.#projectileImpactVisualIds.has(event.projectileId)
-      ) {
+      const origin = readFiniteVector(event.originWorld);
+      const impactFx = event.impactFx ?? null;
+
+      if (origin === null || impactFx === null) {
         return;
       }
 
@@ -218,14 +212,14 @@ export class MetaverseSceneCombatFxState {
         return;
       }
 
-      const origin = readFiniteVector(event.originWorld);
-
-      if (origin !== null) {
-        if (event.projectileId !== null && event.projectileId !== undefined) {
-          this.#projectileImpactVisualIds.add(event.projectileId);
-        }
-
+      if (impactFx === "rocket-explosion") {
         this.#spawnExplosion(origin, event.startedAtMs);
+      } else if (impactFx === "world-impact") {
+        this.#spawnWorldImpact(
+          origin,
+          readFiniteVector(event.impactNormalWorld),
+          event.startedAtMs
+        );
       }
 
       return;
@@ -262,12 +256,12 @@ export class MetaverseSceneCombatFxState {
         }
 
         this.#rocketLaunchVisualIds.add(event.projectileId);
-        const bridgeExpiresAtMs =
-          this.#projectileSnapshotSelfHealBridgeExpiresAtById.get(
-            event.projectileId
-          ) ?? null;
+        const activeProjectileVisual =
+          this.#activeProjectilesById.get(event.projectileId) ?? null;
         const launchBridgeAllowed =
-          bridgeExpiresAtMs === null || event.startedAtMs <= bridgeExpiresAtMs;
+          activeProjectileVisual === null ||
+          event.startedAtMs - activeProjectileVisual.createdAtMs <=
+            rocketProjectileLaunchBridgeWindowMs;
 
         if (launchBridgeAllowed) {
           this.#launchBridgeOriginsByProjectileId.set(
@@ -275,9 +269,6 @@ export class MetaverseSceneCombatFxState {
             origin.clone()
           );
         }
-
-        const activeProjectileVisual =
-          this.#activeProjectilesById.get(event.projectileId) ?? null;
 
         if (activeProjectileVisual !== null && launchBridgeAllowed) {
           activeProjectileVisual.birthStartedAtMs = event.startedAtMs;
@@ -316,7 +307,11 @@ export class MetaverseSceneCombatFxState {
     }
 
     if (shotFx === "pistol-world-impact") {
-      this.#spawnPistolWorldImpact(origin, event.startedAtMs);
+      this.#spawnWorldImpact(
+        origin,
+        readFiniteVector(event.impactNormalWorld),
+        event.startedAtMs
+      );
       return;
     }
 
@@ -395,18 +390,10 @@ export class MetaverseSceneCombatFxState {
     let projectileVisual =
       this.#activeProjectilesById.get(projectile.projectileId) ?? null;
 
-      if (projectileVisual === null) {
-        projectileVisual = createRocketProjectileVisual();
+    if (projectileVisual === null) {
+      projectileVisual = createRocketProjectileVisual();
+      projectileVisual.createdAtMs = nowMs;
       this.#activeProjectilesById.set(projectile.projectileId, projectileVisual);
-      const createdFrom = this.#rocketLaunchVisualIds.has(projectile.projectileId)
-        ? "launch-event"
-        : "snapshot-self-heal";
-      if (createdFrom === "snapshot-self-heal") {
-        this.#projectileSnapshotSelfHealBridgeExpiresAtById.set(
-          projectile.projectileId,
-          nowMs + rocketProjectileSnapshotSelfHealBridgeWindowMs
-        );
-      }
       this.#scene.add(projectileVisual.group);
       this.#removeRocketLaunchProjectile(projectile.projectileId);
     }
@@ -426,12 +413,8 @@ export class MetaverseSceneCombatFxState {
       const launchOrigin =
         this.#launchBridgeOriginsByProjectileId.get(projectile.projectileId) ??
         null;
-      const bridgeExpiresAtMs =
-        this.#projectileSnapshotSelfHealBridgeExpiresAtById.get(
-          projectile.projectileId
-        ) ?? null;
-      const bridgeWindowExpired =
-        bridgeExpiresAtMs !== null && nowMs > bridgeExpiresAtMs;
+      const launchBridgeExpired =
+        nowMs - projectileVisual.createdAtMs > rocketProjectileLaunchBridgeWindowMs;
 
       if (
         launchOrigin !== null &&
@@ -441,7 +424,7 @@ export class MetaverseSceneCombatFxState {
         projectileVisual.birthOrigin.copy(launchOrigin);
         projectileVisual.birthTarget.copy(position);
         projectileVisual.birthBridgeConsumed = true;
-      } else if (launchOrigin !== null || bridgeWindowExpired) {
+      } else if (launchOrigin !== null || launchBridgeExpired) {
         projectileVisual.birthBridgeConsumed = true;
       }
     }
@@ -488,7 +471,6 @@ export class MetaverseSceneCombatFxState {
 
     this.#activeProjectilesById.delete(projectileId);
     this.#launchBridgeOriginsByProjectileId.delete(projectileId);
-    this.#projectileSnapshotSelfHealBridgeExpiresAtById.delete(projectileId);
     this.#scene.remove(projectileVisual.group);
   }
 
@@ -542,7 +524,11 @@ export class MetaverseSceneCombatFxState {
     });
   }
 
-  #spawnPistolWorldImpact(position: Vector3, nowMs: number): void {
+  #spawnWorldImpact(
+    position: Vector3,
+    normalInput: Vector3 | null,
+    nowMs: number
+  ): void {
     const group = new Group();
     const core = new Mesh(
       new SphereGeometry(0.055, 8, 5),
@@ -553,12 +539,17 @@ export class MetaverseSceneCombatFxState {
       createBasicMaterial([0.78, 0.58, 0.34], { depthTest: false })
     );
 
-    group.name = "metaverse_combat_fx/pistol_world_impact";
-    core.name = "metaverse_combat_fx/pistol_world_impact/core";
-    dust.name = "metaverse_combat_fx/pistol_world_impact/dust";
+    group.name = "metaverse_combat_fx/world_impact";
+    core.name = "metaverse_combat_fx/world_impact/core";
+    dust.name = "metaverse_combat_fx/world_impact/dust";
+    const normal =
+      normalInput === null || normalInput.lengthSq() <= 0.000001
+        ? yAxis
+        : normalInput.normalize();
+    group.quaternion.setFromUnitVectors(yAxis, normal);
     group.position
       .copy(position)
-      .addScaledVector(yAxis, pistolWorldImpactSurfaceLiftMeters);
+      .addScaledVector(normal, pistolWorldImpactSurfaceLiftMeters);
     group.add(dust, core);
     this.#scene.add(group);
     this.#transientFx.push({

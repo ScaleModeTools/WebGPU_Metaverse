@@ -18,7 +18,8 @@ export async function createClientBenchmarkModuleLoader() {
     root: clientRoot,
     server: {
       hmr: false,
-      middlewareMode: true
+      middlewareMode: true,
+      ws: false
     }
   });
 

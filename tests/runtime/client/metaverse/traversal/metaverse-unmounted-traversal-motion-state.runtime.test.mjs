@@ -245,3 +245,138 @@ test("resolvePredictedLocalReconciliationSampleFromMatchingHistory falls forward
   );
   assert.equal(matchedSample.timeDeltaMs, 30);
 });
+
+test("resolvePredictedLocalReconciliationSampleFromAuthoritativeTickCursor binds the first repeated sequence ack to the oldest local sample", async () => {
+  const {
+    resolvePredictedLocalReconciliationSampleFromAuthoritativeTickCursor
+  } = await clientLoader.load(
+    "/src/metaverse/traversal/classes/metaverse-unmounted-traversal-motion-state.ts"
+  );
+  const oldestSample = createPredictedLocalReconciliationSample({
+    localPredictionTick: 101,
+    localWallClockMs: 1_000,
+    positionX: 1,
+    traversalSequence: 31
+  });
+  const middleSample = createPredictedLocalReconciliationSample({
+    localPredictionTick: 102,
+    localWallClockMs: 1_033,
+    positionX: 2,
+    traversalSequence: 31
+  });
+  const newestSample = createPredictedLocalReconciliationSample({
+    localPredictionTick: 103,
+    localWallClockMs: 1_066,
+    positionX: 3,
+    traversalSequence: 31
+  });
+
+  const matchedSample =
+    resolvePredictedLocalReconciliationSampleFromAuthoritativeTickCursor(
+      [newestSample, middleSample, oldestSample],
+      {
+        authoritativeSnapshotAgeMs: 0,
+        authoritativeTick: 50,
+        lastProcessedTraversalSequence: 31,
+        previousCursor: null,
+        receivedAtWallClockMs: 1_066
+      }
+    );
+
+  assert.notEqual(matchedSample, null);
+  assert.equal(matchedSample.sample, oldestSample);
+  assert.equal(matchedSample.selectionReason, "authoritative-tick-cursor");
+  assert.equal(matchedSample.timeDeltaMs, null);
+});
+
+test("resolvePredictedLocalReconciliationSampleFromAuthoritativeTickCursor advances through repeated sequence samples by authoritative tick", async () => {
+  const {
+    resolvePredictedLocalReconciliationSampleFromAuthoritativeTickCursor
+  } = await clientLoader.load(
+    "/src/metaverse/traversal/classes/metaverse-unmounted-traversal-motion-state.ts"
+  );
+  const firstSample = createPredictedLocalReconciliationSample({
+    localPredictionTick: 101,
+    localWallClockMs: 1_000,
+    positionX: 1,
+    traversalSequence: 32
+  });
+  const skippedSample = createPredictedLocalReconciliationSample({
+    localPredictionTick: 102,
+    localWallClockMs: 1_033,
+    positionX: 2,
+    traversalSequence: 32
+  });
+  const expectedSample = createPredictedLocalReconciliationSample({
+    localPredictionTick: 103,
+    localWallClockMs: 1_066,
+    positionX: 3,
+    traversalSequence: 32
+  });
+  const newestSample = createPredictedLocalReconciliationSample({
+    localPredictionTick: 104,
+    localWallClockMs: 1_099,
+    positionX: 4,
+    traversalSequence: 32
+  });
+
+  const matchedSample =
+    resolvePredictedLocalReconciliationSampleFromAuthoritativeTickCursor(
+      [newestSample, expectedSample, skippedSample, firstSample],
+      {
+        authoritativeSnapshotAgeMs: 0,
+        authoritativeTick: 52,
+        lastProcessedTraversalSequence: 32,
+        previousCursor: {
+          authoritativeTick: 50,
+          localPredictionTick: 101,
+          traversalSequence: 32
+        },
+        receivedAtWallClockMs: 1_099
+      }
+    );
+
+  assert.notEqual(matchedSample, null);
+  assert.equal(matchedSample.sample, expectedSample);
+  assert.equal(matchedSample.selectionReason, "authoritative-tick-cursor");
+});
+
+test("resolvePredictedLocalReconciliationSampleFromAuthoritativeTickCursor resets to oldest sample on a new traversal sequence", async () => {
+  const {
+    resolvePredictedLocalReconciliationSampleFromAuthoritativeTickCursor
+  } = await clientLoader.load(
+    "/src/metaverse/traversal/classes/metaverse-unmounted-traversal-motion-state.ts"
+  );
+  const oldestSample = createPredictedLocalReconciliationSample({
+    localPredictionTick: 201,
+    localWallClockMs: 2_000,
+    positionX: 1,
+    traversalSequence: 34
+  });
+  const newestSample = createPredictedLocalReconciliationSample({
+    localPredictionTick: 202,
+    localWallClockMs: 2_033,
+    positionX: 2,
+    traversalSequence: 34
+  });
+
+  const matchedSample =
+    resolvePredictedLocalReconciliationSampleFromAuthoritativeTickCursor(
+      [newestSample, oldestSample],
+      {
+        authoritativeSnapshotAgeMs: 0,
+        authoritativeTick: 60,
+        lastProcessedTraversalSequence: 34,
+        previousCursor: {
+          authoritativeTick: 59,
+          localPredictionTick: 109,
+          traversalSequence: 33
+        },
+        receivedAtWallClockMs: 2_033
+      }
+    );
+
+  assert.notEqual(matchedSample, null);
+  assert.equal(matchedSample.sample, oldestSample);
+  assert.equal(matchedSample.selectionReason, "authoritative-tick-cursor");
+});

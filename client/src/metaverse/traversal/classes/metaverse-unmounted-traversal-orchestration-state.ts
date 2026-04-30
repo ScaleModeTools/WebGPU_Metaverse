@@ -471,6 +471,7 @@ export class MetaverseUnmountedTraversalOrchestrationState {
             .readPredictedLocalReconciliationSampleMatch({
               authoritativeSnapshotAgeMs:
                 authoritativeSample.authoritativeSnapshotAgeMs,
+              authoritativeTick: authoritativeSample.authoritativeTick,
               lastProcessedTraversalSequence:
                 authoritativeSample.lastProcessedTraversalSequence,
               receivedAtWallClockMs: authoritativeSample.receivedAtWallClockMs
