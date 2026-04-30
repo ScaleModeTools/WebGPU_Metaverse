@@ -138,9 +138,9 @@ export const metaverseWorldCadenceConfig = Object.freeze({
   defaultPollIntervalMs:
     metaverseRealtimeWorldCadenceConfig.authoritativeTickIntervalMs,
   localAuthoritativeFreshnessMaxAgeMs: 66,
-  maxBufferedSnapshots: 6,
-  remoteCharacterRootInterpolationDelayMs: 66,
-  remoteCharacterRootMaxExtrapolationMs: 66,
+  maxBufferedSnapshots: 10,
+  remoteCharacterRootInterpolationDelayMs: 99,
+  remoteCharacterRootMaxExtrapolationMs: 0,
   maxExtrapolationMs: 66,
   remoteInterpolationDelayMs: 66
 });

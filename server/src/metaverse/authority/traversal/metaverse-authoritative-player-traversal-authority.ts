@@ -1,7 +1,5 @@
 import {
   createMetaverseTraversalFacingSnapshot,
-  metaverseTraversalActionBufferSeconds,
-  queueMetaverseUnmountedTraversalAction,
   type MetaverseUnmountedTraversalStateSnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 import {
@@ -171,26 +169,51 @@ function shouldRejectTraversalIntentAfterBaseline(
   );
 }
 
-function resolveNextTraversalIntentActivationAtMs(
+function resolveTraversalIntentActivationTimeline(
   nowMs: number,
   lastAdvancedAtMs: number | null,
-  tickIntervalMs: number
-): number {
-  const normalizedTickIntervalMs = Math.max(1, Math.floor(tickIntervalMs));
-  const normalizedLastAdvancedAtMs = Math.max(0, lastAdvancedAtMs ?? 0);
+  tickIntervalMs: number,
+  sampleCount: number
+): readonly number[] {
+  const normalizedSampleCount =
+    Number.isFinite(sampleCount) && sampleCount > 0
+      ? Math.floor(sampleCount)
+      : 0;
 
-  if (nowMs <= normalizedLastAdvancedAtMs) {
-    return normalizedLastAdvancedAtMs;
+  if (normalizedSampleCount <= 0) {
+    return Object.freeze([]);
   }
 
-  const elapsedSinceLastAdvanceMs = nowMs - normalizedLastAdvancedAtMs;
-  const elapsedTickCount = Math.ceil(
-    elapsedSinceLastAdvanceMs / normalizedTickIntervalMs
-  );
+  const normalizedNowMs = Math.max(0, nowMs);
 
-  return (
-    normalizedLastAdvancedAtMs + elapsedTickCount * normalizedTickIntervalMs
+  if (normalizedSampleCount === 1) {
+    return Object.freeze([normalizedNowMs]);
+  }
+
+  const normalizedTickIntervalMs = Math.max(1, Math.floor(tickIntervalMs));
+  const boundedLastAdvancedAtMs = Math.min(
+    normalizedNowMs,
+    Math.max(0, lastAdvancedAtMs ?? normalizedNowMs)
   );
+  const replayStartAtMs = Math.max(
+    0,
+    boundedLastAdvancedAtMs,
+    normalizedNowMs -
+      normalizedTickIntervalMs * (normalizedSampleCount - 1)
+  );
+  const replayDurationMs = Math.max(0, normalizedNowMs - replayStartAtMs);
+  const replayStepMs = replayDurationMs / (normalizedSampleCount - 1);
+  const activationTimeline: number[] = [];
+
+  for (let sampleIndex = 0; sampleIndex < normalizedSampleCount; sampleIndex += 1) {
+    activationTimeline.push(
+      sampleIndex === normalizedSampleCount - 1
+        ? normalizedNowMs
+        : replayStartAtMs + replayStepMs * sampleIndex
+    );
+  }
+
+  return Object.freeze(activationTimeline);
 }
 
 export class MetaverseAuthoritativePlayerTraversalAuthority<
@@ -250,21 +273,10 @@ export class MetaverseAuthoritativePlayerTraversalAuthority<
     const nextTraversalIntentTimeline = [
       ...(existingTraversalIntent?.pendingIntentTimeline ?? [])
     ];
-    const firstQueuedActivationAtMs = resolveNextTraversalIntentActivationAtMs(
-      nowMs,
-      this.#dependencies.readLastAdvancedAtMs(),
-      tickIntervalMs
-    );
     let latestComparableIntent =
       nextTraversalIntentTimeline[nextTraversalIntentTimeline.length - 1]?.intent ??
       existingCurrentIntent;
-    let nextEffectiveAtMs = Math.max(
-      firstQueuedActivationAtMs,
-      (nextTraversalIntentTimeline[nextTraversalIntentTimeline.length - 1]
-        ?.effectiveAtMs ?? firstQueuedActivationAtMs - tickIntervalMs) +
-        tickIntervalMs
-    );
-    let acceptedTraversalIntent = false;
+    const acceptedTraversalIntents: MetaversePlayerTraversalIntentSnapshot[] = [];
 
     for (const intentSample of [
       ...(normalizedCommand.pendingIntentSamples ?? []),
@@ -294,37 +306,44 @@ export class MetaverseAuthoritativePlayerTraversalAuthority<
         continue;
       }
 
-      nextTraversalIntentTimeline.push(
-        Object.freeze({
-          effectiveAtMs: nextEffectiveAtMs,
-          intent: nextTraversalIntent
-        })
-      );
-
-      if (
-        nextEffectiveAtMs <= nowMs &&
-        nextTraversalIntent.actionIntent.kind !== "none" &&
-        nextTraversalIntent.actionIntent.pressed
-      ) {
-        playerRuntime.unmountedTraversalState =
-          queueMetaverseUnmountedTraversalAction(
-            playerRuntime.unmountedTraversalState,
-            {
-              actionIntent: nextTraversalIntent.actionIntent,
-              bufferSeconds: metaverseTraversalActionBufferSeconds
-            }
-          );
-      }
-
+      acceptedTraversalIntents.push(nextTraversalIntent);
       latestComparableIntent = nextTraversalIntent;
-      acceptedTraversalIntent = true;
-      nextEffectiveAtMs += tickIntervalMs;
     }
 
-    if (!acceptedTraversalIntent) {
+    if (acceptedTraversalIntents.length <= 0) {
       playerRuntime.lastSeenAtMs = nowMs;
       this.#dependencies.syncPlayerTraversalAuthorityState(playerRuntime);
       return;
+    }
+
+    const activationTimeline = resolveTraversalIntentActivationTimeline(
+      nowMs,
+      this.#dependencies.readLastAdvancedAtMs(),
+      tickIntervalMs,
+      acceptedTraversalIntents.length
+    );
+
+    for (
+      let intentIndex = 0;
+      intentIndex < acceptedTraversalIntents.length;
+      intentIndex += 1
+    ) {
+      const acceptedTraversalIntent = acceptedTraversalIntents[intentIndex];
+      const effectiveAtMs = activationTimeline[intentIndex];
+
+      if (
+        acceptedTraversalIntent === undefined ||
+        effectiveAtMs === undefined
+      ) {
+        continue;
+      }
+
+      nextTraversalIntentTimeline.push(
+        Object.freeze({
+          effectiveAtMs,
+          intent: acceptedTraversalIntent
+        })
+      );
     }
 
     this.#dependencies.playerTraversalIntentsByPlayerId.set(

@@ -9,6 +9,9 @@ import type {
 import {
   shouldTreatMetaversePlayerPoseAsTraversalBlocker
 } from "@webgpu-metaverse/shared/metaverse/presence";
+import {
+  readMetaverseRealtimePlayerActiveBodyKinematicSnapshot
+} from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import type {
   MetaverseRemoteEnvironmentBodyPresentationSnapshot,
@@ -39,6 +42,48 @@ const emptyRealtimeVehicleSnapshots: readonly MetaverseRealtimeVehicleSnapshot[]
   Object.freeze([]);
 const emptyRealtimeEnvironmentBodySnapshots:
   readonly MetaverseRealtimeEnvironmentBodySnapshot[] = Object.freeze([]);
+
+function lerp(from: number, to: number, alpha: number): number {
+  return from + (to - from) * alpha;
+}
+
+function createRemotePlayerBodyBlockerPosition(
+  basePlayer: MetaverseRealtimePlayerSnapshot,
+  nextPlayer: MetaverseRealtimePlayerSnapshot | null,
+  alpha: number
+): Readonly<{ x: number; y: number; z: number }> {
+  const baseActiveBodySnapshot =
+    readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(basePlayer);
+
+  if (nextPlayer === null) {
+    return Object.freeze({
+      x: baseActiveBodySnapshot.position.x,
+      y: baseActiveBodySnapshot.position.y,
+      z: baseActiveBodySnapshot.position.z
+    });
+  }
+
+  const nextActiveBodySnapshot =
+    readMetaverseRealtimePlayerActiveBodyKinematicSnapshot(nextPlayer);
+
+  return Object.freeze({
+    x: lerp(
+      baseActiveBodySnapshot.position.x,
+      nextActiveBodySnapshot.position.x,
+      alpha
+    ),
+    y: lerp(
+      baseActiveBodySnapshot.position.y,
+      nextActiveBodySnapshot.position.y,
+      alpha
+    ),
+    z: lerp(
+      baseActiveBodySnapshot.position.z,
+      nextActiveBodySnapshot.position.z,
+      alpha
+    )
+  });
+}
 
 export class MetaverseRemoteWorldPresentationState {
   readonly #nextEnvironmentBodySnapshotsByEnvironmentAssetId = new Map<
@@ -222,11 +267,11 @@ export class MetaverseRemoteWorldPresentationState {
             capsuleRadiusMeters:
               this.#presentationConfig.groundedBody.capsuleRadiusMeters,
             playerId: sampledDiscretePlayer.playerId,
-            position: Object.freeze({
-              x: remoteCharacterPresentationSnapshot.presentation.position.x,
-              y: remoteCharacterPresentationSnapshot.presentation.position.y,
-              z: remoteCharacterPresentationSnapshot.presentation.position.z
-            })
+            position: createRemotePlayerBodyBlockerPosition(
+              remoteCharacterRootBasePlayer,
+              remoteCharacterRootNextPlayer,
+              remoteCharacterRootAlpha
+            )
           })
         );
       }

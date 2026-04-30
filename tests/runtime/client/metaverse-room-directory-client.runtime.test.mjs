@@ -3,6 +3,7 @@ import test, { after, before } from "node:test";
 
 import {
   createMetaverseJoinRoomRequest,
+  createMetaverseNextMatchRequest,
   createMetaversePlayerId,
   createMetaverseQuickJoinRoomRequest,
   createMetaverseRoomAssignmentSnapshot,
@@ -98,7 +99,7 @@ test("MetaverseRoomDirectoryClient fetches typed metaverse room summaries with m
   assert.equal(fetchedSnapshot.rooms[0]?.blueTeamPlayerCount, 1);
 });
 
-test("MetaverseRoomDirectoryClient posts quick-join and explicit room-join requests", async () => {
+test("MetaverseRoomDirectoryClient posts quick-join, explicit room-join, and next-match requests", async () => {
   const { MetaverseRoomDirectoryClient } = await clientLoader.load(
     "/src/network/index.ts"
   );
@@ -179,6 +180,12 @@ test("MetaverseRoomDirectoryClient posts quick-join and explicit room-join reque
       playerId: teamDeathmatchPlayerId
     })
   );
+  const resolvedNextMatchAssignment = await directoryClient.requestNextMatch(
+    roomId,
+    createMetaverseNextMatchRequest({
+      playerId: teamDeathmatchPlayerId
+    })
+  );
 
   assert.equal(requests[0]?.url, "http://127.0.0.1:3210/metaverse/rooms/quick-join");
   assert.equal(requests[0]?.method, "POST");
@@ -196,7 +203,16 @@ test("MetaverseRoomDirectoryClient posts quick-join and explicit room-join reque
     launchVariationId: null,
     playerId: teamDeathmatchPlayerId
   });
+  assert.equal(
+    requests[2]?.url,
+    "http://127.0.0.1:3210/metaverse/rooms/tdm-hangar/next-match"
+  );
+  assert.equal(requests[2]?.method, "POST");
+  assert.deepEqual(JSON.parse(String(requests[2]?.body)), {
+    playerId: teamDeathmatchPlayerId
+  });
   assert.equal(resolvedQuickJoinAssignment.roomId, "free-roam-staging-ground-a1");
   assert.equal(resolvedJoinAssignment.roomId, "tdm-hangar");
   assert.equal(resolvedJoinAssignment.connectedPlayerCount, 2);
+  assert.equal(resolvedNextMatchAssignment.roomId, "tdm-hangar");
 });

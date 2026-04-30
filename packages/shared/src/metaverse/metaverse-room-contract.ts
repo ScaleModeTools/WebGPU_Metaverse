@@ -113,6 +113,14 @@ export interface MetaverseJoinRoomRequestInput {
   readonly playerId: MetaversePlayerId;
 }
 
+export interface MetaverseNextMatchRequest {
+  readonly playerId: MetaversePlayerId;
+}
+
+export interface MetaverseNextMatchRequestInput {
+  readonly playerId: MetaversePlayerId;
+}
+
 function normalizeTrimmedString(rawValue: string): string {
   return rawValue.trim();
 }
@@ -277,6 +285,14 @@ export function createMetaverseJoinRoomRequest(
   return Object.freeze({
     bundleId: normalizeOptionalIdentifier(input.bundleId),
     launchVariationId: normalizeOptionalIdentifier(input.launchVariationId),
+    playerId: input.playerId
+  });
+}
+
+export function createMetaverseNextMatchRequest(
+  input: MetaverseNextMatchRequestInput
+): MetaverseNextMatchRequest {
+  return Object.freeze({
     playerId: input.playerId
   });
 }

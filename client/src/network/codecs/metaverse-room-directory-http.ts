@@ -1,6 +1,7 @@
 import type {
   MetaverseJoinRoomRequest,
   MetaverseMatchModeId,
+  MetaverseNextMatchRequest,
   MetaverseQuickJoinRoomRequest,
   MetaverseRoomAssignmentSnapshot,
   MetaverseRoomAssignmentSnapshotInput,
@@ -46,6 +47,17 @@ export function resolveMetaverseRoomJoinUrl(
   return new URL(`${roomCollectionPath}/${roomId}/join`, serverOrigin).toString();
 }
 
+export function resolveMetaverseRoomNextMatchUrl(
+  serverOrigin: string,
+  roomCollectionPath: string,
+  roomId: MetaverseRoomId
+): string {
+  return new URL(
+    `${roomCollectionPath}/${roomId}/next-match`,
+    serverOrigin
+  ).toString();
+}
+
 export function serializeMetaverseQuickJoinRoomRequest(
   request: MetaverseQuickJoinRoomRequest
 ): string {
@@ -54,6 +66,12 @@ export function serializeMetaverseQuickJoinRoomRequest(
 
 export function serializeMetaverseJoinRoomRequest(
   request: MetaverseJoinRoomRequest
+): string {
+  return JSON.stringify(request);
+}
+
+export function serializeMetaverseNextMatchRequest(
+  request: MetaverseNextMatchRequest
 ): string {
   return JSON.stringify(request);
 }

@@ -240,7 +240,7 @@ test("MetaverseAuthoritativeWorldRuntime does not backfill a mid-tick traversal 
   );
 });
 
-test("MetaverseAuthoritativeWorldRuntime schedules bundled traversal samples across authoritative ticks", () => {
+test("MetaverseAuthoritativeWorldRuntime catches bundled traversal samples up inside the open authoritative tick", () => {
   const runtime = createAuthoritativeRuntime();
   const playerId = requireValue(
     createMetaversePlayerId("bundled-traversal-samples-pilot"),
@@ -331,17 +331,10 @@ test("MetaverseAuthoritativeWorldRuntime schedules bundled traversal samples acr
   const firstTickActiveBodySnapshot =
     readPrimaryPlayerActiveBodySnapshot(firstTickSnapshot);
 
-  assert.equal(firstTickSnapshot.observerPlayer?.lastProcessedTraversalSequence, 1);
-  assert.equal(
-    firstTickSnapshot.observerPlayer?.lastProcessedTraversalSequence,
-    1
-  );
+  assert.equal(firstTickSnapshot.observerPlayer?.lastProcessedTraversalSequence, 3);
   assert.ok(
-    Math.abs(firstTickActiveBodySnapshot.position.x - preTickActiveBodySnapshot.position.x) <
-      0.001 &&
-      Math.abs(firstTickActiveBodySnapshot.position.z - preTickActiveBodySnapshot.position.z) <
-        0.001,
-    `expected bundled traversal samples to wait for the next authoritative tick, received ${JSON.stringify(firstTickActiveBodySnapshot)}`
+    firstTickActiveBodySnapshot.linearVelocity.x > 0,
+    `expected the latest bundled traversal sample to be active inside the open authoritative tick, received ${JSON.stringify(firstTickActiveBodySnapshot)}`
   );
 
   runtime.advanceToTime(200);
@@ -350,32 +343,123 @@ test("MetaverseAuthoritativeWorldRuntime schedules bundled traversal samples acr
   const secondTickActiveBodySnapshot =
     readPrimaryPlayerActiveBodySnapshot(secondTickSnapshot);
 
-  assert.equal(secondTickSnapshot.observerPlayer?.lastProcessedTraversalSequence, 1);
-  assert.ok(
-    secondTickActiveBodySnapshot.position.z <
-      preTickActiveBodySnapshot.position.z - 0.02,
-    `expected the first bundled traversal sample to move forward on the next authoritative tick, received ${JSON.stringify(secondTickActiveBodySnapshot)}`
-  );
-
-  runtime.advanceToTime(400);
-
-  const finalTickSnapshot = runtime.readWorldSnapshot(400, playerId);
-  const finalTickActiveBodySnapshot =
-    readPrimaryPlayerActiveBodySnapshot(finalTickSnapshot);
-
-  assert.equal(finalTickSnapshot.observerPlayer?.lastProcessedTraversalSequence, 3);
   assert.equal(
-    finalTickSnapshot.observerPlayer?.lastProcessedTraversalSequence,
+    secondTickSnapshot.observerPlayer?.lastProcessedTraversalSequence,
     3
   );
   assert.ok(
-    finalTickActiveBodySnapshot.position.x >
+    secondTickActiveBodySnapshot.position.x >
       preTickActiveBodySnapshot.position.x + 0.02,
-    `expected the latest bundled traversal sample to preserve later strafe movement, received ${JSON.stringify(finalTickActiveBodySnapshot)}`
+    `expected bundled traversal to continue from the latest sample without replay backlog, received ${JSON.stringify(secondTickActiveBodySnapshot)}`
   );
 });
 
-test("MetaverseAuthoritativeWorldRuntime quantizes bundled traversal samples to the same next tick boundary within a server tick", () => {
+test("MetaverseAuthoritativeWorldRuntime does not backlog rapid boosted diagonal traversal switches", () => {
+  const runtime = createAuthoritativeRuntime();
+  const playerId = requireValue(
+    createMetaversePlayerId("boosted-diagonal-switch-pilot"),
+    "playerId"
+  );
+  const username = requireValue(
+    createUsername("Boosted Diagonal Switch Pilot"),
+    "username"
+  );
+
+  joinSurfacePlayer(runtime, playerId, username, {
+    yawRadians: 0
+  });
+
+  runtime.acceptWorldCommand(
+    createMetaverseSyncPlayerTraversalIntentCommand({
+      intent: {
+        actionIntent: {
+          kind: "none",
+          pressed: false
+        },
+        bodyControl: {
+          boost: true,
+          moveAxis: 1,
+          strafeAxis: 1,
+          turnAxis: 0
+        },
+        facing: {
+          pitchRadians: 0,
+          yawRadians: 0
+        },
+        locomotionMode: "grounded",
+        sequence: 4
+      },
+      pendingIntentSamples: [
+        {
+          actionIntent: {
+            kind: "none",
+            pressed: false
+          },
+          bodyControl: {
+            boost: true,
+            moveAxis: 1,
+            strafeAxis: 1,
+            turnAxis: 0
+          },
+          facing: {
+            pitchRadians: 0,
+            yawRadians: 0
+          },
+          locomotionMode: "grounded",
+          sequence: 2
+        },
+        {
+          actionIntent: {
+            kind: "none",
+            pressed: false
+          },
+          bodyControl: {
+            boost: true,
+            moveAxis: 1,
+            strafeAxis: -1,
+            turnAxis: 0
+          },
+          facing: {
+            pitchRadians: 0,
+            yawRadians: 0
+          },
+          locomotionMode: "grounded",
+          sequence: 3
+        }
+      ],
+      playerId
+    }),
+    90
+  );
+
+  runtime.advanceToTime(100);
+
+  const firstTickSnapshot = runtime.readWorldSnapshot(100, playerId);
+
+  assert.equal(
+    firstTickSnapshot.observerPlayer?.lastProcessedTraversalSequence,
+    4
+  );
+  assert.deepEqual(firstTickSnapshot.players[0]?.presentationIntent, {
+    moveAxis: 1,
+    strafeAxis: 1
+  });
+
+  runtime.advanceToTime(200);
+
+  const secondTickSnapshot = runtime.readWorldSnapshot(200, playerId);
+
+  assert.equal(
+    secondTickSnapshot.observerPlayer?.lastProcessedTraversalSequence,
+    4
+  );
+  assert.deepEqual(secondTickSnapshot.players[0]?.presentationIntent, {
+    moveAxis: 1,
+    strafeAxis: 1
+  });
+});
+
+test("MetaverseAuthoritativeWorldRuntime preserves mid-tick receipt timing for bundled traversal samples", () => {
   const earlierReceiveRuntime = createAuthoritativeRuntime();
   const laterReceiveRuntime = createAuthoritativeRuntime();
   const playerId = requireValue(
@@ -458,13 +542,8 @@ test("MetaverseAuthoritativeWorldRuntime quantizes bundled traversal samples to 
   );
 
   assert.ok(
-    Math.abs(
-      laterReceiveSnapshot.linearVelocity.z -
-        earlierReceiveSnapshot.linearVelocity.z
-    ) < 0.001 &&
-      Math.abs(laterReceiveSnapshot.position.z - earlierReceiveSnapshot.position.z) <
-        0.001,
-    `expected bundled traversal samples accepted within the same authoritative tick to quantize to the same next boundary, earlier=${JSON.stringify(earlierReceiveSnapshot)} later=${JSON.stringify(laterReceiveSnapshot)}`
+    laterReceiveSnapshot.position.z < earlierReceiveSnapshot.position.z - 0.02,
+    `expected later receipt to preserve more forward travel before the stop sample, earlier=${JSON.stringify(earlierReceiveSnapshot)} later=${JSON.stringify(laterReceiveSnapshot)}`
   );
 });
 

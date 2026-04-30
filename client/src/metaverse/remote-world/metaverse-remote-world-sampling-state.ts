@@ -137,6 +137,8 @@ export class MetaverseRemoteWorldSamplingState {
         (worldClient?.worldSnapshotBuffer.length ?? 0) - 1
       ] ?? null;
     const localWallClockMs = this.#readWallClockMs();
+    const latestAcceptedSnapshotReceivedAtMs =
+      worldClient?.latestAcceptedSnapshotReceivedAtMs ?? null;
 
     if (latestSnapshot !== null) {
       this.#authoritativeServerClock.observeServerTime(
@@ -145,15 +147,11 @@ export class MetaverseRemoteWorldSamplingState {
       );
     }
 
-    const latestSimulationAgeMs =
-      latestSnapshot === null
-        ? null
-        : Math.max(
-            0,
-            this.#authoritativeServerClock.readEstimatedServerTimeMs(
-              localWallClockMs
-            ) - Number(latestSnapshot.tick.simulationTimeMs)
-          );
+    const latestSimulationAgeMs = this.#resolveLatestSimulationAgeMs(
+      latestSnapshot,
+      latestAcceptedSnapshotReceivedAtMs,
+      localWallClockMs
+    );
 
     return Object.freeze({
       bufferDepth: worldClient?.worldSnapshotBuffer.length ?? 0,
@@ -203,7 +201,7 @@ export class MetaverseRemoteWorldSamplingState {
         ? null
         : resolveMetaverseRemoteWorldSampledFrame(
             worldClient.worldSnapshotBuffer,
-            this.#resolveTargetServerTimeMs(worldClient.worldSnapshotBuffer),
+            this.#resolveTargetServerTimeMs(worldClient),
             this.#maxExtrapolationMs
           );
     const remoteCharacterRootFrame =
@@ -212,7 +210,7 @@ export class MetaverseRemoteWorldSamplingState {
         : resolveMetaverseRemoteWorldSampledFrame(
             worldClient.worldSnapshotBuffer,
             this.#resolveTargetServerTimeMs(
-              worldClient.worldSnapshotBuffer,
+              worldClient,
               this.#remoteCharacterRootInterpolationDelayMs
             ),
             this.#remoteCharacterRootMaxExtrapolationMs
@@ -244,9 +242,10 @@ export class MetaverseRemoteWorldSamplingState {
   }
 
   #resolveTargetServerTimeMs(
-    worldSnapshotBuffer: readonly MetaverseRealtimeWorldSnapshot[],
+    worldClient: MetaverseWorldClientRuntime,
     interpolationDelayMs = this.#interpolationDelayMs
   ): number {
+    const worldSnapshotBuffer = worldClient.worldSnapshotBuffer;
     const latestSnapshot =
       worldSnapshotBuffer[worldSnapshotBuffer.length - 1] ?? null;
     const localWallClockMs = this.#readWallClockMs();
@@ -260,9 +259,50 @@ export class MetaverseRemoteWorldSamplingState {
       localWallClockMs
     );
 
+    const latestAcceptedSnapshotReceivedAtMs =
+      worldClient.latestAcceptedSnapshotReceivedAtMs;
+
+    if (
+      Number.isFinite(localWallClockMs) &&
+      latestAcceptedSnapshotReceivedAtMs !== null &&
+      Number.isFinite(latestAcceptedSnapshotReceivedAtMs)
+    ) {
+      return Math.max(
+        0,
+        Number(latestSnapshot.tick.simulationTimeMs) +
+          Math.max(0, localWallClockMs - latestAcceptedSnapshotReceivedAtMs) -
+          Math.max(0, interpolationDelayMs)
+      );
+    }
+
     return this.#authoritativeServerClock.readTargetServerTimeMs(
       localWallClockMs,
       interpolationDelayMs
+    );
+  }
+
+  #resolveLatestSimulationAgeMs(
+    latestSnapshot: MetaverseRealtimeWorldSnapshot | null,
+    latestAcceptedSnapshotReceivedAtMs: number | null,
+    localWallClockMs: number
+  ): number | null {
+    if (latestSnapshot === null) {
+      return null;
+    }
+
+    if (
+      Number.isFinite(localWallClockMs) &&
+      latestAcceptedSnapshotReceivedAtMs !== null &&
+      Number.isFinite(latestAcceptedSnapshotReceivedAtMs)
+    ) {
+      return Math.max(0, localWallClockMs - latestAcceptedSnapshotReceivedAtMs);
+    }
+
+    return Math.max(
+      0,
+      this.#authoritativeServerClock.readEstimatedServerTimeMs(
+        localWallClockMs
+      ) - Number(latestSnapshot.tick.simulationTimeMs)
     );
   }
 

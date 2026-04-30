@@ -5,11 +5,7 @@ import {
   readMetaverseRealtimePlayerActiveBodyKinematicSnapshot
 } from "@webgpu-metaverse/shared/metaverse/realtime";
 import {
-  hasMetaverseTraversalAuthorityConsumedAction,
   hasMetaverseTraversalAuthorityRejectedAction,
-  isMetaverseTraversalAuthorityActionPendingOrActive,
-  isMetaverseTraversalAuthorityGroundedLocomotion,
-  readMetaverseTraversalAuthorityLatestActionSequence,
   type MetaverseTraversalAuthoritySnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 
@@ -238,45 +234,7 @@ function shouldForceRejectedLocalJumpCorrection({
     return true;
   }
 
-  if (localIssuedTraversalIntentSnapshot === null) {
-    return false;
-  }
-
-  const authoritativeProcessedIssuedInput =
-    authoritativePlayerSnapshot.lastProcessedTraversalSequence >=
-    localIssuedTraversalIntentSnapshot.sequence;
-
-  if (!authoritativeProcessedIssuedInput) {
-    return false;
-  }
-
-  if (
-    readMetaverseTraversalAuthorityLatestActionSequence(
-      authoritativePlayerSnapshot.traversalAuthority,
-      "jump"
-    ) < issuedJumpActionSequence
-  ) {
-    return false;
-  }
-
-  if (
-    hasMetaverseTraversalAuthorityConsumedAction(
-      authoritativePlayerSnapshot.traversalAuthority,
-      "jump",
-      issuedJumpActionSequence
-    ) ||
-    isMetaverseTraversalAuthorityActionPendingOrActive(
-      authoritativePlayerSnapshot.traversalAuthority,
-      "jump",
-      issuedJumpActionSequence
-    )
-  ) {
-    return false;
-  }
-
-  return (
-    authoritativePlayerSnapshot.traversalAuthority.currentActionKind === "none"
-  );
+  return false;
 }
 
 export class MetaverseLocalAuthorityReconciliationState {
@@ -440,29 +398,19 @@ export class MetaverseLocalAuthorityReconciliationState {
       authoritativeActiveBodySnapshot.position.y - localTraversalPose.position.y
     );
     const authoritativeGrounded =
-      isMetaverseTraversalAuthorityGroundedLocomotion({
-        locomotionMode:
-          authoritativePlayerSnapshot.locomotionMode === "swim"
-            ? "swim"
-            : "grounded",
-        mounted:
-          authoritativePlayerSnapshot.mountedOccupancy !== null &&
-          !keepMountedOccupancyFreeRoam,
-        traversalAuthority: authoritativePlayerSnapshot.traversalAuthority
-      });
+      authoritativePlayerSnapshot.locomotionMode === "grounded" &&
+      authoritativePlayerSnapshot.groundedBody.grounded;
     const divergenceDiagnostics = resolveLocalAuthorityPoseDivergenceDiagnostics({
       authoritativeGroundedBody:
         authoritativePlayerSnapshot.locomotionMode === "grounded"
           ? authoritativePlayerSnapshot.groundedBody
           : null,
-      authoritativeLinearVelocity: authoritativeActiveBodySnapshot.linearVelocity,
       authoritativeLocomotionMode: authoritativePlayerSnapshot.locomotionMode,
       authoritativeSwimBody:
         authoritativePlayerSnapshot.locomotionMode === "swim"
           ? authoritativePlayerSnapshot.swimBody
           : null,
       localGroundedBody: localGroundedBodySnapshot,
-      localLinearVelocity: localTraversalPose.linearVelocity,
       localLocomotionMode: localTraversalPose.locomotionMode,
       localSwimBody: localSwimBodySnapshot
     });

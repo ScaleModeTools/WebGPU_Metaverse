@@ -91,6 +91,10 @@ interface MetaversePlayerWorldRuntimeState
     MetaverseMountedOccupancyRuntimeState
   > {}
 
+interface MutableMetaversePlayerTeamRuntimeState {
+  teamId: MetaversePlayerTeamId;
+}
+
 type MetaverseMountedOccupancyRuntimeState =
   MetaverseAuthoritativeMountedOccupancyRuntimeState;
 type MetaverseVehicleSeatRuntimeState =
@@ -175,6 +179,32 @@ function normalizeNowMs(nowMs: number): number {
   }
 
   return Math.max(0, nowMs);
+}
+
+function resolveNextMatchShuffleSeed(
+  nowMs: number,
+  playerIds: readonly MetaversePlayerId[]
+): number {
+  let seed = Math.max(1, Math.trunc(nowMs)) >>> 0;
+
+  for (const playerId of playerIds) {
+    for (let index = 0; index < playerId.length; index += 1) {
+      seed = Math.imul(seed ^ playerId.charCodeAt(index), 2654435761) >>> 0;
+    }
+  }
+
+  return seed === 0 ? 1 : seed;
+}
+
+function advanceNextMatchShuffleSeed(seed: number): number {
+  return (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+}
+
+function writePlayerTeamId(
+  playerRuntime: MetaversePlayerWorldRuntimeState,
+  teamId: MetaversePlayerTeamId
+): void {
+  (playerRuntime as MutableMetaversePlayerTeamRuntimeState).teamId = teamId;
 }
 
 function resolvePlayerActiveTraversalAction(
@@ -1012,6 +1042,52 @@ export class MetaverseAuthoritativeWorldRuntime
     nowMs: number
   ): MetaverseRealtimeWorldEvent {
     return this.#commandIntake.acceptWorldCommand(command, nowMs);
+  }
+
+  requestNextTeamDeathmatch(nowMs: number): boolean {
+    const normalizedNowMs = normalizeNowMs(nowMs);
+
+    this.#combatAuthority.syncCombatState(normalizedNowMs);
+
+    if (this.#combatAuthority.readCombatMatchSnapshot().phase !== "completed") {
+      return false;
+    }
+
+    this.#shuffleTeamDeathmatchTeams(normalizedNowMs);
+
+    return this.#combatAuthority.requestNextTeamDeathmatch(normalizedNowMs);
+  }
+
+  #shuffleTeamDeathmatchTeams(nowMs: number): void {
+    const players = [...this.#playersById.values()].sort((leftPlayer, rightPlayer) =>
+      leftPlayer.playerId.localeCompare(rightPlayer.playerId)
+    );
+
+    if (players.length < 2) {
+      return;
+    }
+
+    const playerIds = players.map((playerRuntime) => playerRuntime.playerId);
+    let seed = resolveNextMatchShuffleSeed(nowMs, playerIds);
+
+    for (let index = players.length - 1; index > 0; index -= 1) {
+      seed = advanceNextMatchShuffleSeed(seed);
+      const swapIndex = seed % (index + 1);
+      const playerRuntime = players[index];
+
+      players[index] = players[swapIndex]!;
+      players[swapIndex] = playerRuntime!;
+    }
+
+    for (let index = 0; index < players.length; index += 1) {
+      const playerRuntime = players[index];
+
+      if (playerRuntime === undefined) {
+        continue;
+      }
+
+      writePlayerTeamId(playerRuntime, index % 2 === 0 ? "red" : "blue");
+    }
   }
 
   #createOccupiedPlayerSpawnSnapshots(): readonly {

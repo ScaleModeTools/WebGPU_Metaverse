@@ -432,6 +432,33 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
     );
   }
 
+  #activateTraversalIntentTimelineEntry(
+    playerRuntime: PlayerRuntime,
+    traversalIntentRuntime: MetaverseAuthoritativePlayerTraversalIntentRuntimeState,
+    currentIntent: MetaversePlayerTraversalIntentSnapshot,
+    nextTimelineEntry: MetaverseAuthoritativePlayerTraversalIntentRuntimeState["pendingIntentTimeline"][number]
+  ): MetaversePlayerTraversalIntentSnapshot {
+    const nextIntent = nextTimelineEntry.intent;
+
+    traversalIntentRuntime.pendingIntentTimeline.shift();
+    playerRuntime.lookPitchRadians = nextIntent.facing.pitchRadians;
+    playerRuntime.lookYawRadians = nextIntent.facing.yawRadians;
+    playerRuntime.unmountedTraversalState =
+      queueMetaverseUnmountedTraversalAction(
+        playerRuntime.unmountedTraversalState,
+        {
+          actionIntent: nextIntent.actionIntent,
+          bufferSeconds: metaverseTraversalActionBufferSeconds
+        }
+      );
+
+    if (nextIntent === currentIntent) {
+      return currentIntent;
+    }
+
+    return nextIntent;
+  }
+
   #consumeTraversalIntentSegments(
     playerRuntime: PlayerRuntime,
     traversalIntentRuntime: MetaverseAuthoritativePlayerTraversalIntentRuntimeState | null,
@@ -459,34 +486,82 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
     }
 
     let currentIntent = traversalIntentRuntime.currentIntent;
-    const nextTimelineEntry = traversalIntentRuntime.pendingIntentTimeline[0];
+    const traversalIntentSegments:
+      MetaverseAuthoritativePlayerTraversalIntentSegmentRuntimeState[] = [];
+    let segmentStartedAtMs = clampedTickStartedAtMs;
 
-    if (
-      nextTimelineEntry !== undefined &&
-      nextTimelineEntry.effectiveAtMs <= clampedTickStartedAtMs
-    ) {
-      currentIntent = nextTimelineEntry.intent;
-      traversalIntentRuntime.pendingIntentTimeline.shift();
-      playerRuntime.lookPitchRadians = currentIntent.facing.pitchRadians;
-      playerRuntime.lookYawRadians = currentIntent.facing.yawRadians;
-      playerRuntime.unmountedTraversalState =
-        queueMetaverseUnmountedTraversalAction(
-          playerRuntime.unmountedTraversalState,
-          {
-            actionIntent: currentIntent.actionIntent,
-            bufferSeconds: metaverseTraversalActionBufferSeconds
-          }
-        );
+    while (true) {
+      const nextTimelineEntry =
+        traversalIntentRuntime.pendingIntentTimeline[0];
+
+      if (
+        nextTimelineEntry === undefined ||
+        nextTimelineEntry.effectiveAtMs > clampedTickStartedAtMs
+      ) {
+        break;
+      }
+
+      currentIntent = this.#activateTraversalIntentTimelineEntry(
+        playerRuntime,
+        traversalIntentRuntime,
+        currentIntent,
+        nextTimelineEntry
+      );
     }
 
     traversalIntentRuntime.currentIntent = currentIntent;
 
+    while (true) {
+      const nextTimelineEntry =
+        traversalIntentRuntime.pendingIntentTimeline[0];
+
+      if (
+        nextTimelineEntry === undefined ||
+        nextTimelineEntry.effectiveAtMs >= tickEndedAtMs
+      ) {
+        break;
+      }
+
+      const segmentEndedAtMs = Math.max(
+        segmentStartedAtMs,
+        nextTimelineEntry.effectiveAtMs
+      );
+      const segmentDeltaMs = segmentEndedAtMs - segmentStartedAtMs;
+
+      if (segmentDeltaMs > 0) {
+        traversalIntentSegments.push(
+          Object.freeze({
+            deltaSeconds: segmentDeltaMs / 1_000,
+            nowMs: segmentEndedAtMs,
+            traversalIntent: currentIntent
+          })
+        );
+      }
+
+      currentIntent = this.#activateTraversalIntentTimelineEntry(
+        playerRuntime,
+        traversalIntentRuntime,
+        currentIntent,
+        nextTimelineEntry
+      );
+      traversalIntentRuntime.currentIntent = currentIntent;
+      segmentStartedAtMs = segmentEndedAtMs;
+    }
+
+    const remainingDeltaMs = tickEndedAtMs - segmentStartedAtMs;
+
+    if (remainingDeltaMs > 0) {
+      traversalIntentSegments.push(
+        Object.freeze({
+          deltaSeconds: remainingDeltaMs / 1_000,
+          nowMs: tickEndedAtMs,
+          traversalIntent: currentIntent
+        })
+      );
+    }
+
     return Object.freeze([
-      Object.freeze({
-        deltaSeconds: (tickEndedAtMs - clampedTickStartedAtMs) / 1_000,
-        nowMs: tickEndedAtMs,
-        traversalIntent: currentIntent
-      })
+      ...traversalIntentSegments
     ]);
   }
 }

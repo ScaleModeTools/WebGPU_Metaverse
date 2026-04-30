@@ -4,6 +4,7 @@ import {
   createMetaverseRoomSessionId,
   type MetaverseJoinRoomRequest,
   type MetaverseMatchModeId,
+  type MetaverseNextMatchRequest,
   type MetaversePlayerId,
   type MetaversePresenceCommand,
   type MetaversePresenceRosterEvent,
@@ -320,6 +321,31 @@ export class MetaverseRoomDirectory implements MetaverseRoomDirectoryOwner {
     );
 
     return this.#bindPlayerToRoom(createdRoom.roomId, request.playerId, nowMs);
+  }
+
+  requestNextMatch(
+    roomId: MetaverseRoomId,
+    request: MetaverseNextMatchRequest,
+    nowMs: number
+  ): MetaverseRoomAssignmentSnapshot {
+    this.#pruneStaleBindings(nowMs);
+    this.#assertPlayerBoundToRoom(request.playerId, roomId, nowMs);
+
+    const roomRuntime = this.#readRoomRuntime(roomId);
+
+    if (roomRuntime.matchMode !== "team-deathmatch") {
+      throw new Error(`Unknown metaverse room: ${roomId}`);
+    }
+
+    if (!roomRuntime.requestNextMatch(nowMs)) {
+      throw new Error(`Metaverse room ${roomId} is not ready for the next match.`);
+    }
+
+    this.#refreshRoomLeader(roomId, nowMs);
+
+    return roomRuntime.readAssignmentSnapshot(
+      this.#countRoomBindings(roomId, nowMs)
+    );
   }
 
   readPresenceRosterSnapshot(

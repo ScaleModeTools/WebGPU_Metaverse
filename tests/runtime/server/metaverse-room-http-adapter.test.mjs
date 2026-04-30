@@ -133,4 +133,20 @@ test("MetaverseRoomHttpAdapter creates and rejoins explicit team deathmatch room
   assert.equal(secondJoinResult.response.json.roomId, roomId);
   assert.equal(secondJoinResult.response.json.connectedPlayerCount, 2);
   assert.equal(secondJoinResult.response.json.leaderPlayerId, "tdm-leader");
+
+  const earlyNextMatchResult = await dispatchJsonRequest(adapter, {
+    body: {
+      playerId: "tdm-wing"
+    },
+    method: "POST",
+    nowMs: 20,
+    pathname: `/metaverse/rooms/${roomId}/next-match`
+  });
+
+  assert.equal(earlyNextMatchResult.handled, true);
+  assert.equal(earlyNextMatchResult.response.statusCode, 409);
+  assert.match(
+    earlyNextMatchResult.response.json.error,
+    /not ready for the next match/
+  );
 });

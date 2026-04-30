@@ -1,6 +1,7 @@
 import type {
   MetaverseJoinRoomRequest,
   MetaverseMatchModeId,
+  MetaverseNextMatchRequest,
   MetaverseQuickJoinRoomRequest,
   MetaverseRoomAssignmentSnapshot,
   MetaverseRoomDirectorySnapshot,
@@ -13,8 +14,10 @@ import {
   parseMetaverseRoomErrorMessage,
   resolveMetaverseRoomDirectoryUrl,
   resolveMetaverseRoomJoinUrl,
+  resolveMetaverseRoomNextMatchUrl,
   resolveMetaverseRoomQuickJoinUrl,
   serializeMetaverseJoinRoomRequest,
+  serializeMetaverseNextMatchRequest,
   serializeMetaverseQuickJoinRoomRequest
 } from "../codecs/metaverse-room-directory-http";
 import type {
@@ -133,6 +136,35 @@ export class MetaverseRoomDirectoryClient
     if (!response.ok) {
       throw new Error(
         parseMetaverseRoomErrorMessage(payload, "Metaverse room join failed.")
+      );
+    }
+
+    return parseMetaverseRoomAssignmentSnapshot(payload);
+  }
+
+  async requestNextMatch(
+    roomId: MetaverseRoomId,
+    request: MetaverseNextMatchRequest
+  ): Promise<MetaverseRoomAssignmentSnapshot> {
+    const response = await this.#fetch(
+      resolveMetaverseRoomNextMatchUrl(
+        this.#config.serverOrigin,
+        this.#config.roomCollectionPath,
+        roomId
+      ),
+      {
+        body: serializeMetaverseNextMatchRequest(request),
+        headers: {
+          "content-type": "application/json"
+        },
+        method: "POST"
+      }
+    );
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        parseMetaverseRoomErrorMessage(payload, "Metaverse next match failed.")
       );
     }
 

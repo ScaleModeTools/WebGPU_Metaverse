@@ -71,6 +71,7 @@ export function createRealtimeWorldSnapshot({
   includeEnvironmentBody = false,
   includeRemotePlayer = true,
   includeVehicle = true,
+  emittedAtServerTimeMs,
   localAnimationVocabulary = "idle",
   localCombat = undefined,
   localJumpAuthorityState,
@@ -116,6 +117,7 @@ export function createRealtimeWorldSnapshot({
   remotePlayerZ = 18,
   remoteUsername,
   serverTimeMs,
+  simulationTimeMs,
   snapshotSequence,
   tickIntervalMs = 50,
   vehicleLinearVelocity = {
@@ -340,7 +342,17 @@ export function createRealtimeWorldSnapshot({
     snapshotSequence,
     tick: {
       currentTick,
+      ...(emittedAtServerTimeMs === undefined
+        ? {}
+        : {
+            emittedAtServerTimeMs
+          }),
       serverTimeMs,
+      ...(simulationTimeMs === undefined
+        ? {}
+        : {
+            simulationTimeMs
+          }),
       tickIntervalMs
     },
     environmentBodies: includeEnvironmentBody

@@ -1,9 +1,26 @@
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { connect } from "node:net";
 import { fileURLToPath, URL } from "node:url";
 
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, type ProxyOptions } from "vite";
 import wasm from "vite-plugin-wasm";
+
+const localdevHttpServerHost = "127.0.0.1";
+const localdevHttpServerPort = 3210;
+const localdevHttpServerTarget =
+  `http://${localdevHttpServerHost}:${localdevHttpServerPort}` as const;
+const localdevHttpServerProbeTimeoutMs = 150;
+const localdevHttpServerProbeFreshnessMs = 750;
+const localdevUnavailableResponseBody = JSON.stringify({
+  error:
+    `WebGPU Metaverse dev server is not listening on ${localdevHttpServerTarget} yet. Wait for the managed server watcher to finish starting or restarting.`
+});
+
+let localdevHttpServerProbePromise: Promise<boolean> | null = null;
+let localdevHttpServerProbeCheckedAtMs = 0;
+let localdevHttpServerProbeAvailable = false;
 
 const strudelBrowserEntrypoint = fileURLToPath(
   new URL("../node_modules/@strudel/web/web.mjs", import.meta.url)
@@ -25,6 +42,93 @@ const clientOptimizeDepEntries = [
   "src/engine-tool/routes/map-editor-stage-screen.tsx",
   "src/experiences/duck-hunt/components/duck-hunt-gameplay-stage-screen.tsx"
 ];
+
+function probeLocaldevHttpServer(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = connect({
+      host: localdevHttpServerHost,
+      port: localdevHttpServerPort
+    });
+    let settled = false;
+
+    const settle = (available: boolean) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      socket.off("connect", handleConnect);
+      socket.off("error", handleUnavailable);
+      socket.off("timeout", handleUnavailable);
+      socket.destroy();
+      resolve(available);
+    };
+    const handleConnect = () => settle(true);
+    const handleUnavailable = () => settle(false);
+
+    socket.setTimeout(localdevHttpServerProbeTimeoutMs);
+    socket.once("connect", handleConnect);
+    socket.once("error", handleUnavailable);
+    socket.once("timeout", handleUnavailable);
+  });
+}
+
+async function isLocaldevHttpServerAvailable(): Promise<boolean> {
+  const nowMs = Date.now();
+
+  if (
+    nowMs - localdevHttpServerProbeCheckedAtMs <
+    localdevHttpServerProbeFreshnessMs
+  ) {
+    return localdevHttpServerProbeAvailable;
+  }
+
+  if (localdevHttpServerProbePromise !== null) {
+    return localdevHttpServerProbePromise;
+  }
+
+  const probePromise = probeLocaldevHttpServer()
+    .then((available) => {
+      localdevHttpServerProbeAvailable = available;
+      localdevHttpServerProbeCheckedAtMs = Date.now();
+
+      return available;
+    })
+    .finally(() => {
+      if (localdevHttpServerProbePromise === probePromise) {
+        localdevHttpServerProbePromise = null;
+      }
+    });
+
+  localdevHttpServerProbePromise = probePromise;
+
+  return probePromise;
+}
+
+function writeLocaldevUnavailableResponse(response: ServerResponse): void {
+  if (response.headersSent || response.writableEnded) {
+    return;
+  }
+
+  response.writeHead(503, {
+    "cache-control": "no-store, max-age=0",
+    "content-type": "application/json"
+  });
+  response.end(localdevUnavailableResponseBody);
+}
+
+const bypassUnavailableLocaldevServer: ProxyOptions["bypass"] = async (
+  request: IncomingMessage,
+  response: ServerResponse | undefined
+) => {
+  if (response === undefined || await isLocaldevHttpServerAvailable()) {
+    return undefined;
+  }
+
+  writeLocaldevUnavailableResponse(response);
+
+  return request.url ?? "/";
+};
 
 export default defineConfig({
   build: {
@@ -73,12 +177,14 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "^/experiences(?:/|$)": {
+        bypass: bypassUnavailableLocaldevServer,
         changeOrigin: true,
-        target: "http://127.0.0.1:3210"
+        target: localdevHttpServerTarget
       },
       "^/metaverse(?:/|$)": {
+        bypass: bypassUnavailableLocaldevServer,
         changeOrigin: true,
-        target: "http://127.0.0.1:3210"
+        target: localdevHttpServerTarget
       }
     }
   },

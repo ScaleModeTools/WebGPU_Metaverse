@@ -41,7 +41,7 @@ wait_for_dev_server_pid() {
   return 1
 }
 
-npm run dev:server &
+./tools/dev-server &
 server_launcher_pid="$!"
 pids+=("$server_launcher_pid")
 
@@ -50,7 +50,7 @@ if ! wait_for_dev_server_pid "$server_launcher_pid"; then
   exit 1
 fi
 
-npm run dev:client &
+./tools/dev-client &
 pids+=($!)
 
 wait -n "${pids[@]}"

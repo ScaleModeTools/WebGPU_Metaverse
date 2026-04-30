@@ -8,11 +8,12 @@ import {
   type CSSProperties,
 } from "react";
 
-import type {
-  ExperienceId,
-  GameplayInputModeId,
-  MetaverseMatchModeId,
-  MetaverseRoomAssignmentSnapshot
+import {
+  createMetaverseNextMatchRequest,
+  type ExperienceId,
+  type GameplayInputModeId,
+  type MetaverseMatchModeId,
+  type MetaverseRoomAssignmentSnapshot
 } from "@webgpu-metaverse/shared";
 
 import { metaverseActiveFullBodyCharacterAssetId } from "@/assets/config/character-model-manifest";
@@ -39,6 +40,7 @@ import {
 } from "@/components/ui/dialog";
 import { StableInlineText } from "@/components/text-stability";
 import { createMetaverseRuntimeConfig } from "../config/metaverse-runtime";
+import { createMetaverseRoomDirectoryClient } from "../config/metaverse-room-network";
 import {
   createMetaverseLocalPlayerIdentity,
   createMetaverseTeamDeathmatchLocalPlayerIdentity,
@@ -50,7 +52,10 @@ import { registerMetaverseWorldBundleOnServer } from "../world/map-bundles";
 import { MetaverseDamageDirectionOverlay } from "./metaverse-damage-direction-overlay";
 import { MetaverseInteractionFeedHud } from "./metaverse-interaction-feed-hud";
 import { MetaversePlayerRadarHud } from "./metaverse-player-radar-hud";
-import { MetaverseTeamDeathmatchScoreboardHud } from "./metaverse-team-deathmatch-scoreboard-hud";
+import {
+  MetaverseTeamDeathmatchPostGameOverlay,
+  MetaverseTeamDeathmatchScoreboardHud
+} from "./metaverse-team-deathmatch-scoreboard-hud";
 import { MetaverseWeaponReticleOverlay } from "./metaverse-weapon-reticle-overlay";
 import type { AudioCuePlaybackOptions } from "../../audio";
 import type { MetaverseCombatAudioCueId } from "../audio";
@@ -289,6 +294,8 @@ export function MetaverseStageScreen({
     height: 720,
     width: 1280
   });
+  const [nextMatchError, setNextMatchError] = useState<string | null>(null);
+  const [nextMatchPending, setNextMatchPending] = useState(false);
   const [isPauseMenuOpen, setPauseMenuOpen] = useState(false);
   const [isScoreboardKeyboardOpen, setScoreboardKeyboardOpen] = useState(false);
   const [isScoreboardGamepadHeld, setScoreboardGamepadHeld] = useState(false);
@@ -338,6 +345,36 @@ export function MetaverseStageScreen({
     setPauseMenuOpen(false);
     onSetupRequest();
   }, [onSetupRequest]);
+  const handleRequestNextMatch = useCallback(() => {
+    if (nextMatchPending) {
+      return;
+    }
+
+    setNextMatchError(null);
+    setNextMatchPending(true);
+
+    const roomDirectoryClient = createMetaverseRoomDirectoryClient();
+
+    void roomDirectoryClient
+      .requestNextMatch(
+        roomAssignment.roomId,
+        createMetaverseNextMatchRequest({
+          playerId: localPlayerIdentity.playerId
+        })
+      )
+      .catch((error) => {
+        setNextMatchError(
+          error instanceof Error ? error.message : "Next match failed."
+        );
+      })
+      .finally(() => {
+        setNextMatchPending(false);
+      });
+  }, [
+    localPlayerIdentity.playerId,
+    nextMatchPending,
+    roomAssignment.roomId
+  ]);
 
   useEffect(() => {
     const { getGamepads } = globalThis.navigator;
@@ -356,6 +393,8 @@ export function MetaverseStageScreen({
 
     const pollPauseStart = () => {
       const gamepads = getGamepads.call(globalThis.navigator);
+      const isPostGameReportOpen =
+        hudSnapshotRef.current.combat.scoreboard.phase === "completed";
       const nextIsStartPressed = gamepads.some(
         (gamepad) => gamepad !== null && gamepad.buttons[9]?.pressed === true
       );
@@ -363,11 +402,12 @@ export function MetaverseStageScreen({
         matchMode === "team-deathmatch" &&
         !isPauseMenuOpen &&
         !isQuitConfirmOpen &&
+        !isPostGameReportOpen &&
         gamepads.some(
           (gamepad) => gamepad !== null && gamepad.buttons[8]?.pressed === true
         );
 
-      if (nextIsStartPressed && !isStartPressed) {
+      if (nextIsStartPressed && !isStartPressed && !isPostGameReportOpen) {
         togglePauseMenu();
       }
 
@@ -398,7 +438,8 @@ export function MetaverseStageScreen({
         event.repeat ||
         matchMode !== "team-deathmatch" ||
         isPauseMenuOpen ||
-        isQuitConfirmOpen
+        isQuitConfirmOpen ||
+        hudSnapshotRef.current.combat.scoreboard.phase === "completed"
       ) {
         return;
       }
@@ -420,7 +461,12 @@ export function MetaverseStageScreen({
 
   useEffect(() => {
     const handleMountedInteractionKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat || isPauseMenuOpen || isQuitConfirmOpen) {
+      if (
+        event.repeat ||
+        isPauseMenuOpen ||
+        isQuitConfirmOpen ||
+        hudSnapshotRef.current.combat.scoreboard.phase === "completed"
+      ) {
         return;
       }
 
@@ -503,7 +549,12 @@ export function MetaverseStageScreen({
       const isPauseKey =
         event.key === "Backspace" || event.key.toLowerCase() === "p";
 
-      if (!isPauseKey || event.repeat || isQuitConfirmOpen) {
+      if (
+        !isPauseKey ||
+        event.repeat ||
+        isQuitConfirmOpen ||
+        hudSnapshotRef.current.combat.scoreboard.phase === "completed"
+      ) {
         return;
       }
 
@@ -628,6 +679,10 @@ export function MetaverseStageScreen({
     ]
   );
   const combatSnapshot = hudSnapshot.combat;
+  const isPostGameReportOpen =
+    matchMode === "team-deathmatch" &&
+    combatSnapshot.scoreboard.available &&
+    combatSnapshot.scoreboard.phase === "completed";
   const localTeamId = hudSnapshot.presence.localTeamId;
   const teamHudTone = resolveTeamHudTone(localTeamId);
   const localIsBlue = localTeamId === "blue";
@@ -649,6 +704,7 @@ export function MetaverseStageScreen({
     isTeamDeathmatchHudMode && combatSnapshot.available;
   const isScoreboardOpen =
     isTeamDeathmatchHudMode &&
+    !isPostGameReportOpen &&
     !isPauseMenuOpen &&
     (isScoreboardKeyboardOpen || isScoreboardGamepadHeld);
   const healthRatio = combatSnapshot.available
@@ -658,6 +714,19 @@ export function MetaverseStageScreen({
     weaponHudSnapshot.visible && weaponHudSnapshot.weaponLabel !== null
       ? weaponHudSnapshot.weaponLabel
       : combatSnapshot.weaponId ?? "Weapon";
+
+  useEffect(() => {
+    if (!isPostGameReportOpen) {
+      setNextMatchError(null);
+      setNextMatchPending(false);
+      return;
+    }
+
+    setPauseMenuOpen(false);
+    setQuitConfirmOpen(false);
+    setScoreboardKeyboardOpen(false);
+    setScoreboardGamepadHeld(false);
+  }, [isPostGameReportOpen]);
 
   return (
     <ImmersiveStageFrame className="bg-game-stage">
@@ -688,6 +757,16 @@ export function MetaverseStageScreen({
 
         {isScoreboardOpen ? (
           <MetaverseTeamDeathmatchScoreboardHud combatSnapshot={combatSnapshot} />
+        ) : null}
+
+        {isPostGameReportOpen ? (
+          <MetaverseTeamDeathmatchPostGameOverlay
+            combatSnapshot={combatSnapshot}
+            nextMatchError={nextMatchError}
+            nextMatchPending={nextMatchPending}
+            onMainMenu={handleQuitToMenu}
+            onNextMatch={handleRequestNextMatch}
+          />
         ) : null}
 
         {showTeamDeathmatchCombatHud ? (

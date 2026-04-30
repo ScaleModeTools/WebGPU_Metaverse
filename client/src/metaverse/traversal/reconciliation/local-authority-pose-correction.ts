@@ -26,8 +26,6 @@ type CorrectionSwimBodySnapshot =
 type CorrectionLinearVelocitySnapshot =
   MetaverseRealtimePlayerSnapshot["groundedBody"]["linearVelocity"];
 
-const localAuthorityPlanarVelocityDivergenceToleranceUnitsPerSecond = 1.5;
-const localAuthorityVerticalVelocityDivergenceToleranceUnitsPerSecond = 1;
 const localAuthorityDriveAxisDivergenceTolerance = 0.2;
 const localAuthorityDriveSpeedDivergenceToleranceUnitsPerSecond = 1;
 
@@ -56,11 +54,9 @@ export interface CorrectionTargetPoseSnapshot {
 
 export interface ResolveLocalAuthorityPoseDivergenceDiagnosticsInput {
   readonly authoritativeGroundedBody: CorrectionGroundedBodySnapshot | null;
-  readonly authoritativeLinearVelocity: CorrectionLinearVelocitySnapshot;
   readonly authoritativeLocomotionMode: CorrectionTargetPoseSnapshot["locomotionMode"];
   readonly authoritativeSwimBody: CorrectionSwimBodySnapshot | null;
   readonly localGroundedBody: CorrectionGroundedBodySnapshot | null;
-  readonly localLinearVelocity: CorrectionLinearVelocitySnapshot;
   readonly localLocomotionMode: LocalTraversalPoseSnapshot["locomotionMode"];
   readonly localSwimBody: CorrectionSwimBodySnapshot | null;
 }
@@ -69,8 +65,6 @@ export interface LocalAuthorityPoseDivergenceDiagnostics {
   readonly bodyStateDivergence: boolean;
   readonly groundedBodyStateDivergence: boolean;
   readonly locomotionMismatch: boolean;
-  readonly planarVelocityDivergence: boolean;
-  readonly verticalVelocityDivergence: boolean;
 }
 
 export interface ResolveLocalAuthorityPoseConvergenceDecisionInput {
@@ -241,16 +235,16 @@ export function resolveLocalAuthorityPoseCorrectionReason({
   grossPositionDivergence,
   grossYawDivergence
 }: LocalAuthorityPoseCorrectionReasonFlags): LocalAuthorityPoseCorrectionReason {
-  if (bodyStateDivergence) {
-    return "gross-body-divergence";
-  }
-
   if (grossPositionDivergence) {
     return "gross-position-divergence";
   }
 
   if (grossYawDivergence) {
     return "gross-yaw-divergence";
+  }
+
+  if (bodyStateDivergence) {
+    return "gross-body-divergence";
   }
 
   return "none";
@@ -269,6 +263,7 @@ function resolveGroundedBodyStateDivergence(
   }
 
   return (
+    authoritativeGroundedBody.grounded !== localGroundedBody.grounded ||
     authoritativeGroundedBody.contact.supportingContactDetected !==
       localGroundedBody.contact.supportingContactDetected ||
     authoritativeGroundedBody.contact.blockedVerticalMovement !==
@@ -332,24 +327,14 @@ function resolveSwimBodyStateDivergence(
 
 export function resolveLocalAuthorityPoseDivergenceDiagnostics({
   authoritativeGroundedBody,
-  authoritativeLinearVelocity,
   authoritativeLocomotionMode,
   authoritativeSwimBody,
   localGroundedBody,
-  localLinearVelocity,
   localLocomotionMode,
   localSwimBody
 }: ResolveLocalAuthorityPoseDivergenceDiagnosticsInput): LocalAuthorityPoseDivergenceDiagnostics {
   const locomotionMismatch =
     authoritativeLocomotionMode !== localLocomotionMode;
-  const planarVelocityDivergence =
-    Math.hypot(
-      authoritativeLinearVelocity.x - localLinearVelocity.x,
-      authoritativeLinearVelocity.z - localLinearVelocity.z
-    ) >= localAuthorityPlanarVelocityDivergenceToleranceUnitsPerSecond;
-  const verticalVelocityDivergence =
-    Math.abs(authoritativeLinearVelocity.y - localLinearVelocity.y) >=
-    localAuthorityVerticalVelocityDivergenceToleranceUnitsPerSecond;
   const groundedBodyStateDivergence = resolveGroundedBodyStateDivergence(
     authoritativeGroundedBody,
     localGroundedBody
@@ -366,9 +351,7 @@ export function resolveLocalAuthorityPoseDivergenceDiagnostics({
   return Object.freeze({
     bodyStateDivergence,
     groundedBodyStateDivergence,
-    locomotionMismatch,
-    planarVelocityDivergence,
-    verticalVelocityDivergence
+    locomotionMismatch
   });
 }
 

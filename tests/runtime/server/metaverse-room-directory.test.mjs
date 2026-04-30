@@ -183,3 +183,85 @@ test("MetaverseRoomDirectory transfers TDM leadership and rotates the room sessi
   assert.equal(leaderAssignment.bundleId, "private-build");
   assert.equal(recreatedAssignment.leaderPlayerId, replacementPlayerId);
 });
+
+test("MetaverseRoomDirectory advances completed TDM rooms into the next match in place", () => {
+  const roomDirectory = new MetaverseRoomDirectory({
+    playerBindingTimeoutMs: 1_000_000,
+    runtimeConfig: {
+      playerInactivityTimeoutMs: 1_000_000
+    }
+  });
+  const roomId = requireValue(createMetaverseRoomId("tdm-loop"), "roomId");
+  const firstPlayerId = requireValue(
+    createMetaversePlayerId("tdm-loop-first"),
+    "firstPlayerId"
+  );
+  const secondPlayerId = requireValue(
+    createMetaversePlayerId("tdm-loop-second"),
+    "secondPlayerId"
+  );
+
+  const firstAssignment = roomDirectory.joinRoom(
+    roomId,
+    {
+      bundleId: null,
+      launchVariationId: null,
+      playerId: firstPlayerId
+    },
+    0
+  );
+
+  roomDirectory.joinRoom(
+    roomId,
+    {
+      bundleId: null,
+      launchVariationId: null,
+      playerId: secondPlayerId
+    },
+    1
+  );
+  roomDirectory.acceptPresenceCommand(
+    roomId,
+    createGroundedJoinPresenceCommand(
+      firstPlayerId,
+      requireValue(createUsername("first"), "firstUsername")
+    ),
+    2
+  );
+  roomDirectory.acceptPresenceCommand(
+    roomId,
+    createGroundedJoinPresenceCommand(
+      secondPlayerId,
+      requireValue(createUsername("second"), "secondUsername")
+    ),
+    3
+  );
+  roomDirectory.advanceToTime(600_010);
+
+  const completedRoom = roomDirectory.listRoomDirectorySnapshot(
+    600_010,
+    "team-deathmatch"
+  ).rooms[0];
+
+  assert.equal(completedRoom?.phase, "completed");
+
+  const nextAssignment = roomDirectory.requestNextMatch(
+    roomId,
+    {
+      playerId: firstPlayerId
+    },
+    600_020
+  );
+  const nextRoom = roomDirectory.listRoomDirectorySnapshot(
+    600_020,
+    "team-deathmatch"
+  ).rooms[0];
+
+  assert.equal(nextAssignment.roomId, roomId);
+  assert.equal(nextAssignment.roomSessionId, firstAssignment.roomSessionId);
+  assert.equal(nextAssignment.connectedPlayerCount, 2);
+  assert.equal(nextRoom?.phase, "active");
+  assert.equal(nextRoom?.redTeamScore, 0);
+  assert.equal(nextRoom?.blueTeamScore, 0);
+  assert.equal(nextRoom?.redTeamPlayerCount + nextRoom?.blueTeamPlayerCount, 2);
+});

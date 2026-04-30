@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
+import { createMetaverseSurfaceDriveBodyRuntimeSnapshot } from "@webgpu-metaverse/shared";
 import { readMetaverseTraversalAuthorityLatestActionSequence } from "@webgpu-metaverse/shared/metaverse/traversal";
 
 import {
@@ -827,6 +828,52 @@ test("MetaverseTraversalRuntime ignores pure authoritative ground-state flicker 
   }
 });
 
+test("MetaverseTraversalRuntime keeps gross flat-ground correction grounded when action phase is stale airborne", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createFlatGroundedTraversalHarness();
+
+  try {
+    traversalRuntime.boot();
+    assert.equal(traversalRuntime.locomotionMode, "grounded");
+
+    const groundedSnapshot = groundedBodyRuntime.snapshot;
+    const authoritativeFlatGroundPosition = freezeVector3(
+      groundedSnapshot.position.x + 2,
+      groundedSnapshot.position.y,
+      groundedSnapshot.position.z
+    );
+
+    syncAuthoritativeLocalPlayerPose(traversalRuntime, {
+      jumpAuthorityState: "falling",
+      lastAcceptedJumpActionSequence: 0,
+      lastProcessedJumpActionSequence: 0,
+      linearVelocity: freezeVector3(0, 0, 0),
+      locomotionMode: "grounded",
+      mountedOccupancy: null,
+      position: authoritativeFlatGroundPosition,
+      yawRadians: groundedSnapshot.yawRadians
+    });
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
+    assert.equal(
+      traversalRuntime.lastLocalAuthorityPoseCorrectionReason,
+      "gross-position-divergence"
+    );
+    assert.equal(groundedBodyRuntime.snapshot.grounded, true);
+    assert.ok(
+      Math.abs(
+        groundedBodyRuntime.snapshot.position.y - groundedSnapshot.position.y
+      ) < 0.0001
+    );
+    assert.equal(
+      traversalRuntime.characterPresentationSnapshot?.animationVocabulary,
+      "idle"
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
 test("MetaverseTraversalRuntime keeps an accepted local jump arc through later zero-distance grounded flicker", async () => {
   const { groundedBodyRuntime, traversalRuntime } =
     await createFlatGroundedTraversalHarness();
@@ -1462,7 +1509,93 @@ test("MetaverseTraversalRuntime preserves the current local velocity when an ack
   }
 });
 
-test("MetaverseTraversalRuntime records body-state mismatch when gross grounded divergence includes body-state mismatch", async () => {
+test("MetaverseTraversalRuntime rebases cross-locomotion ack corrections instead of applying residual error across body owners", async () => {
+  const { groundedBodyRuntime, traversalRuntime } =
+    await createFlatGroundedTraversalHarness();
+
+  try {
+    traversalRuntime.boot();
+    traversalRuntime.advance(idleInput, groundedFixedStepSeconds);
+
+    const matchedGroundedSnapshot = groundedBodyRuntime.snapshot;
+    const currentSwimPosition = freezeVector3(
+      matchedGroundedSnapshot.position.x + 10,
+      0,
+      matchedGroundedSnapshot.position.z
+    );
+    const currentSwimBody = createMetaverseSurfaceDriveBodyRuntimeSnapshot({
+      linearVelocity: freezeVector3(0, 0, 0),
+      position: currentSwimPosition,
+      yawRadians: matchedGroundedSnapshot.yawRadians
+    });
+
+    traversalRuntime.syncAuthoritativeLocalPlayerPose(
+      Object.freeze({
+        groundedBody: matchedGroundedSnapshot,
+        lastProcessedTraversalSequence: 0,
+        linearVelocity: currentSwimBody.linearVelocity,
+        locomotionMode: "swim",
+        mountedOccupancy: null,
+        position: currentSwimPosition,
+        swimBody: currentSwimBody,
+        traversalAuthority: traversalRuntime.localTraversalAuthoritySnapshot,
+        yawRadians: matchedGroundedSnapshot.yawRadians
+      }),
+      Object.freeze({
+        forceSnap: true
+      })
+    );
+
+    assert.equal(traversalRuntime.locomotionMode, "swim");
+    const preAckPosition =
+      traversalRuntime.localTraversalPoseSnapshot.position;
+    const authoritativeSwimPosition = freezeVector3(
+      matchedGroundedSnapshot.position.x + 2,
+      0,
+      matchedGroundedSnapshot.position.z
+    );
+    const authoritativeSwimBody =
+      createMetaverseSurfaceDriveBodyRuntimeSnapshot({
+        linearVelocity: freezeVector3(0, 0, 0),
+        position: authoritativeSwimPosition,
+        yawRadians: matchedGroundedSnapshot.yawRadians
+      });
+
+    traversalRuntime.syncAuthoritativeLocalPlayerPose(
+      Object.freeze({
+        authoritativeSnapshotAgeMs: 0,
+        authoritativeTick: null,
+        lastProcessedTraversalSequence: 0,
+        pose: Object.freeze({
+          groundedBody: matchedGroundedSnapshot,
+          lastProcessedTraversalSequence: 0,
+          linearVelocity: authoritativeSwimBody.linearVelocity,
+          locomotionMode: "swim",
+          mountedOccupancy: null,
+          position: authoritativeSwimPosition,
+          swimBody: authoritativeSwimBody,
+          traversalAuthority: traversalRuntime.localTraversalAuthoritySnapshot,
+          yawRadians: matchedGroundedSnapshot.yawRadians
+        }),
+        receivedAtWallClockMs: 0,
+        snapshotSequence: 2
+      })
+    );
+
+    const postAckPosition =
+      traversalRuntime.localTraversalPoseSnapshot.position;
+
+    assert.equal(traversalRuntime.localReconciliationCorrectionCount, 2);
+    assert.ok(
+      postAckPosition.x < preAckPosition.x,
+      `expected cross-owner ack to rebase toward raw swim authority instead of applying a grounded residual, pre=${JSON.stringify(preAckPosition)} post=${JSON.stringify(postAckPosition)}`
+    );
+  } finally {
+    groundedBodyRuntime.dispose();
+  }
+});
+
+test("MetaverseTraversalRuntime prefers gross pose correction reason while recording body-state mismatch", async () => {
   const { groundedBodyRuntime, traversalRuntime } =
     await createFlatGroundedTraversalHarness();
 
@@ -1501,7 +1634,12 @@ test("MetaverseTraversalRuntime records body-state mismatch when gross grounded 
     assert.equal(traversalRuntime.localReconciliationCorrectionCount, 1);
     assert.equal(
       traversalRuntime.lastLocalAuthorityPoseCorrectionReason,
-      "gross-body-divergence"
+      "gross-position-divergence"
+    );
+    assert.equal(
+      traversalRuntime.lastLocalAuthorityPoseCorrectionDetail
+        .bodyStateDivergence,
+      true
     );
     assert.ok(
       Math.abs(

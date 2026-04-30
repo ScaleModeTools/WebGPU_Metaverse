@@ -1,5 +1,6 @@
 import type {
   MetaverseJoinRoomRequest,
+  MetaverseNextMatchRequest,
   MetaverseQuickJoinRoomRequest,
   MetaverseRoomAssignmentSnapshot,
   MetaverseRoomDirectorySnapshot,
@@ -32,6 +33,11 @@ export interface MetaverseRoomDirectoryOwner {
   joinRoom(
     roomId: MetaverseRoomId,
     request: MetaverseJoinRoomRequest,
+    nowMs: number
+  ): MetaverseRoomAssignmentSnapshot;
+  requestNextMatch(
+    roomId: MetaverseRoomId,
+    request: MetaverseNextMatchRequest,
     nowMs: number
   ): MetaverseRoomAssignmentSnapshot;
   readPresenceRosterSnapshot(

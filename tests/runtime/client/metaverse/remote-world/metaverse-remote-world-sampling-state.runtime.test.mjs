@@ -117,6 +117,110 @@ test("MetaverseRemoteWorldSamplingState samples buffered snapshots against targe
   );
 });
 
+test("MetaverseRemoteWorldSamplingState anchors remote interpolation to the received simulation timeline", async () => {
+  const [
+    { AuthoritativeServerClock },
+    { MetaverseRemoteWorldSamplingState }
+  ] = await Promise.all([
+    clientLoader.load("/src/network/classes/authoritative-server-clock.ts"),
+    clientLoader.load(
+      "/src/metaverse/remote-world/metaverse-remote-world-sampling-state.ts"
+    )
+  ]);
+  const localPlayerId = createMetaversePlayerId("harbor-pilot-1");
+  const remotePlayerId = createMetaversePlayerId("remote-sailor-2");
+  const localUsername = createUsername("Harbor Pilot");
+  const remoteUsername = createUsername("Remote Sailor");
+  const sampledInputs = [];
+  const fakeWorldClient = new FakeMetaverseWorldClient([
+    createRealtimeWorldSnapshot({
+      currentTick: 10,
+      emittedAtServerTimeMs: 1_060,
+      includeVehicle: false,
+      localPlayerId,
+      localUsername,
+      remotePlayerId,
+      remotePlayerX: 8,
+      remoteUsername,
+      serverTimeMs: 1_060,
+      simulationTimeMs: 1_000,
+      snapshotSequence: 1,
+      tickIntervalMs: 33,
+      vehicleSeatOccupantPlayerId: null,
+      yawRadians: 0
+    }),
+    createRealtimeWorldSnapshot({
+      currentTick: 11,
+      emittedAtServerTimeMs: 1_093,
+      includeVehicle: false,
+      localPlayerId,
+      localUsername,
+      remotePlayerId,
+      remotePlayerX: 11,
+      remoteUsername,
+      serverTimeMs: 1_093,
+      simulationTimeMs: 1_033,
+      snapshotSequence: 2,
+      tickIntervalMs: 33,
+      vehicleSeatOccupantPlayerId: null,
+      yawRadians: 0.2
+    })
+  ]);
+
+  fakeWorldClient.latestAcceptedSnapshotReceivedAtMs = 1_170;
+
+  const samplingState = new MetaverseRemoteWorldSamplingState({
+    authoritativeServerClock: new AuthoritativeServerClock({
+      clockOffsetCorrectionAlpha: 1,
+      clockOffsetMaxStepMs: 1_000
+    }),
+    interpolationDelayMs: 50,
+    localPlayerIdentity: {
+      characterId: "mesh2motion-humanoid-v1",
+      playerId: localPlayerId,
+      username: localUsername
+    },
+    maxExtrapolationMs: 120,
+    presentationState: {
+      clear() {
+        sampledInputs.push("clear");
+      },
+      syncAuthoritativeSample(input) {
+        sampledInputs.push(input);
+        return input.sampledFrame.extrapolationSeconds * 1000;
+      }
+    },
+    readWallClockMs: () => 1_203,
+    readWorldClient: () => fakeWorldClient,
+    remoteCharacterRootInterpolationDelayMs: 50,
+    remoteCharacterRootMaxExtrapolationMs: 0
+  });
+
+  samplingState.sampleRemoteWorld();
+
+  assert.equal(sampledInputs.length, 1);
+  assert.equal(sampledInputs[0].sampledFrame.baseSnapshot.snapshotSequence, 1);
+  assert.equal(sampledInputs[0].sampledFrame.nextSnapshot?.snapshotSequence, 2);
+  assert.equal(sampledInputs[0].sampledFrame.extrapolationSeconds, 0);
+  assert.ok(
+    Math.abs(sampledInputs[0].sampledFrame.alpha - 16 / 33) < 0.000001
+  );
+  assert.equal(
+    sampledInputs[0].remoteCharacterRootFrame.baseSnapshot.snapshotSequence,
+    1
+  );
+  assert.equal(
+    sampledInputs[0].remoteCharacterRootFrame.nextSnapshot?.snapshotSequence,
+    2
+  );
+  assert.equal(
+    sampledInputs[0].remoteCharacterRootFrame.extrapolationSeconds,
+    0
+  );
+  assert.equal(samplingState.samplingTelemetrySnapshot.currentExtrapolationMs, 0);
+  assert.equal(samplingState.samplingTelemetrySnapshot.latestSimulationAgeMs, 33);
+});
+
 test("MetaverseRemoteWorldSamplingState tracks extrapolation and datagram telemetry without hiding the world-client truth", async () => {
   const [
     { AuthoritativeServerClock },

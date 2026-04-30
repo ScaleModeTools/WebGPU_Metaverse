@@ -445,6 +445,19 @@ test("MetaverseRemoteWorldPresentationState extrapolates remote airborne roots b
   assert.notEqual(remotePresentation, null);
   assert.ok((remotePresentation?.position.x ?? 0) > 8);
   assert.ok((remotePresentation?.position.y ?? 0) > 0.7);
+  assert.equal(presentationState.remotePlayerBodyBlockers.length, 1);
+  assert.equal(
+    presentationState.remotePlayerBodyBlockers[0]?.position.x,
+    8
+  );
+  assert.equal(
+    presentationState.remotePlayerBodyBlockers[0]?.position.y,
+    0.7
+  );
+  assert.equal(
+    presentationState.remotePlayerBodyBlockers[0]?.position.z,
+    18
+  );
 });
 
 test("MetaverseRemoteWorldPresentationState derives remote grounded walk pose from authoritative presentation intent", async () => {

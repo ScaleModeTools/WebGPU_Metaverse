@@ -1,6 +1,7 @@
 import type {
   MetaverseJoinRoomRequest,
   MetaverseMatchModeId,
+  MetaverseNextMatchRequest,
   MetaverseQuickJoinRoomRequest,
   MetaverseRoomAssignmentSnapshot,
   MetaverseRoomDirectorySnapshot,
@@ -22,5 +23,9 @@ export interface MetaverseRoomDirectoryClientRuntime {
   ): Promise<MetaverseRoomAssignmentSnapshot>;
   quickJoinRoom(
     request: MetaverseQuickJoinRoomRequest
+  ): Promise<MetaverseRoomAssignmentSnapshot>;
+  requestNextMatch(
+    roomId: MetaverseRoomId,
+    request: MetaverseNextMatchRequest
   ): Promise<MetaverseRoomAssignmentSnapshot>;
 }

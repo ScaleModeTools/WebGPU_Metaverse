@@ -144,6 +144,14 @@ export class MetaverseRoomRuntime {
     return this.#runtime.acceptWorldCommand(command, nowMs);
   }
 
+  requestNextMatch(nowMs: number): boolean {
+    if (this.#matchMode !== "team-deathmatch") {
+      return false;
+    }
+
+    return this.#runtime.requestNextTeamDeathmatch(nowMs);
+  }
+
   forceRemovePlayer(playerId: MetaversePlayerId, nowMs: number): void {
     try {
       this.#runtime.acceptPresenceCommand(

@@ -5,12 +5,14 @@ import type {
 
 import {
   createMetaverseJoinRoomRequest,
+  createMetaverseNextMatchRequest,
   createMetaversePlayerId,
   createMetaverseRoomId,
   createMetaverseQuickJoinRoomRequest,
   metaverseMatchModeIds,
   type MetaverseJoinRoomRequest,
   type MetaverseMatchModeId,
+  type MetaverseNextMatchRequest,
   type MetaverseQuickJoinRoomRequest
 } from "@webgpu-metaverse/shared";
 
@@ -160,6 +162,18 @@ function parseJoinRoomRequest(body: unknown): MetaverseJoinRoomRequest {
   });
 }
 
+function parseNextMatchRequest(body: unknown): MetaverseNextMatchRequest {
+  if (!isRecord(body)) {
+    throw new Error("Expected a JSON object body.");
+  }
+
+  return createMetaverseNextMatchRequest({
+    playerId: resolveMetaversePlayerId(
+      readStringField(body.playerId, "playerId")
+    )
+  });
+}
+
 function isMetaverseRoomDirectoryPath(pathname: string): boolean {
   const segments = pathname.split("/").filter((segment) => segment.length > 0);
 
@@ -192,6 +206,21 @@ function resolveJoinedRoomId(pathname: string) {
   return resolveMetaverseRoomId(segments[2] ?? "");
 }
 
+function resolveNextMatchRoomId(pathname: string) {
+  const segments = pathname.split("/").filter((segment) => segment.length > 0);
+
+  if (
+    segments.length !== 4 ||
+    segments[0] !== "metaverse" ||
+    segments[1] !== "rooms" ||
+    segments[3] !== "next-match"
+  ) {
+    return null;
+  }
+
+  return resolveMetaverseRoomId(segments[2] ?? "");
+}
+
 function isUnknownRoomError(error: unknown): error is Error {
   return error instanceof Error && error.message.startsWith("Unknown metaverse room:");
 }
@@ -200,6 +229,7 @@ function isRoomConflictError(error: unknown): error is Error {
   return (
     error instanceof Error &&
     (error.message.includes(" is full.") ||
+      error.message.includes(" is not ready for the next match.") ||
       error.message.startsWith("Metaverse player "))
   );
 }
@@ -291,6 +321,40 @@ export class MetaverseRoomHttpAdapter {
             error instanceof Error
               ? error.message
               : "Metaverse room join failed."
+        });
+      }
+
+      return true;
+    }
+
+    const nextMatchRoomId = resolveNextMatchRoomId(requestUrl.pathname);
+
+    if (request.method === "POST" && nextMatchRoomId !== null) {
+      try {
+        const requestBody = parseNextMatchRequest(await readJsonBody(request));
+
+        writeJson(
+          response,
+          200,
+          this.#roomDirectory.requestNextMatch(
+            nextMatchRoomId,
+            requestBody,
+            nowMs
+          )
+        );
+      } catch (error) {
+        if (isUnknownRoomError(error) || isRoomConflictError(error)) {
+          writeJson(response, 409, {
+            error: error.message
+          });
+          return true;
+        }
+
+        writeJson(response, 400, {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Metaverse next match failed."
         });
       }
 

@@ -202,6 +202,19 @@ function createAckResidualApplicationSnapshot(
   });
 }
 
+function shouldApplyAckResidualApplicationSnapshot(
+  authoritativePlayerSnapshot: AuthoritativeLocalPlayerPoseSnapshot,
+  matchedLocalSample: PredictedLocalReconciliationSample,
+  currentLocalTraversalPose: LocalTraversalPoseSnapshot
+): boolean {
+  return (
+    authoritativePlayerSnapshot.locomotionMode ===
+      matchedLocalSample.pose.locomotionMode &&
+    authoritativePlayerSnapshot.locomotionMode ===
+      currentLocalTraversalPose.locomotionMode
+  );
+}
+
 interface MetaverseUnmountedTraversalOrchestrationStateDependencies {
   readonly characterPresentationState: MetaverseTraversalCharacterPresentationState;
   readonly config: MetaverseRuntimeConfig;
@@ -500,7 +513,12 @@ export class MetaverseUnmountedTraversalOrchestrationState {
     const historicalLocalSampleMatched =
       authoritativeSample === null ? null : matchedPredictedLocalSample !== null;
     const authoritativePlayerApplicationSnapshot =
-      matchedPredictedLocalSample === null
+      matchedPredictedLocalSample === null ||
+      !shouldApplyAckResidualApplicationSnapshot(
+        authoritativePlayerSnapshot,
+        matchedPredictedLocalSample,
+        currentLocalTraversalPose
+      )
         ? authoritativePlayerSnapshot
         : createAckResidualApplicationSnapshot(
             authoritativePlayerSnapshot,

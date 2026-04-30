@@ -1848,6 +1848,29 @@ export class MetaverseAuthoritativeCombatAuthority<
     }
   }
 
+  requestNextTeamDeathmatch(nowMs: number): boolean {
+    const normalizedNowMs = normalizeNowMs(nowMs);
+
+    this.syncCombatState(normalizedNowMs);
+
+    if (
+      this.#matchMode !== "team-deathmatch" ||
+      this.#matchState.phase !== "completed"
+    ) {
+      return false;
+    }
+
+    if (this.#dependencies.playersById.size < 2) {
+      this.#resetMatchToWaitingForPlayers(normalizedNowMs);
+      this.#dependencies.incrementSnapshotSequence();
+      return true;
+    }
+
+    this.#startMatch(normalizedNowMs);
+    this.#dependencies.incrementSnapshotSequence();
+    return true;
+  }
+
   readCombatFeedSnapshots(): readonly ReturnType<
     typeof createMetaverseCombatFeedEventSnapshot
   >[] {
@@ -3054,6 +3077,36 @@ export class MetaverseAuthoritativeCombatAuthority<
     this.#matchState.completedAtTimeMs = null;
     this.#matchState.phase = "active";
     this.#matchState.startedAtTimeMs = nowMs;
+    this.#matchState.teamScoresByTeamId.set("red", 0);
+    this.#matchState.teamScoresByTeamId.set("blue", 0);
+    this.#matchState.timeRemainingMs = this.#matchState.timeLimitMs;
+    this.#matchState.winnerTeamId = null;
+    this.#combatEvents.length = 0;
+    this.#combatEventSequence = 0;
+    this.#feedEvents.length = 0;
+    this.#feedSequence = 0;
+    this.#hurtVolumeHistoryByPlayerId.clear();
+    this.#projectilesById.clear();
+
+    for (const playerRuntime of this.#dependencies.playersById.values()) {
+      const combatState = this.#ensurePlayerCombatState(playerRuntime);
+
+      combatState.assists = 0;
+      combatState.deaths = 0;
+      combatState.headshotKills = 0;
+      combatState.kills = 0;
+      combatState.highestProcessedPlayerActionSequence = 0;
+      combatState.playerActionReceiptSequenceOrder.length = 0;
+      combatState.recentPlayerActionReceiptsBySequence.clear();
+      combatState.damageLedgerByAttackerId.clear();
+      this.#respawnPlayer(playerRuntime, combatState, nowMs);
+    }
+  }
+
+  #resetMatchToWaitingForPlayers(nowMs: number): void {
+    this.#matchState.completedAtTimeMs = null;
+    this.#matchState.phase = "waiting-for-players";
+    this.#matchState.startedAtTimeMs = null;
     this.#matchState.teamScoresByTeamId.set("red", 0);
     this.#matchState.teamScoresByTeamId.set("blue", 0);
     this.#matchState.timeRemainingMs = this.#matchState.timeLimitMs;
