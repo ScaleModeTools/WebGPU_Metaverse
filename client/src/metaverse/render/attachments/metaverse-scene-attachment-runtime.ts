@@ -400,6 +400,8 @@ export function syncAttachmentProofRuntimeMount<
       weaponState.activeSlotId === undefined ||
       weaponState.activeSlotId === attachmentSlot.slotId);
 
+  attachmentRuntime.presentationGroup.visible = true;
+
   if (attachmentSlot === null) {
     if (attachmentRuntime.attachmentRoot.parent === null) {
       applyAttachmentMountRuntime(

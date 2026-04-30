@@ -21,7 +21,10 @@ import type {
   MetaverseCharacterPresentationSnapshot,
   MetaverseRuntimeConfig
 } from "../../types/metaverse-runtime";
-import type { HeldObjectPoseProfileId } from "@/assets/types/held-object-authoring-manifest";
+import type {
+  HeldObjectAdsPolicyId,
+  HeldObjectPoseProfileId
+} from "@/assets/types/held-object-authoring-manifest";
 
 interface LocalCharacterPresentationRuntimeLike
   extends MetaverseCharacterAnimationRuntimeLike {
@@ -32,9 +35,38 @@ interface LocalCharacterPresentationRuntimeLike
 
 interface LocalHeldObjectAttachmentRuntimeLike
   extends MetaverseAttachmentAnimationRuntimeLike {
+  readonly presentationGroup: {
+    visible: boolean;
+  };
   readonly holdProfile: {
+    readonly adsPolicy: HeldObjectAdsPolicyId;
     readonly poseProfileId: HeldObjectPoseProfileId;
   };
+}
+
+export function shouldUseScopedAdsAttachmentPresentation(
+  attachmentRuntime: Pick<LocalHeldObjectAttachmentRuntimeLike, "holdProfile">,
+  weaponState: Pick<MetaverseRealtimePlayerWeaponStateSnapshot, "aimMode"> | null
+): boolean {
+  if (weaponState?.aimMode !== "ads") {
+    return false;
+  }
+
+  return (
+    attachmentRuntime.holdProfile.adsPolicy === "optic_anchor" ||
+    attachmentRuntime.holdProfile.adsPolicy === "shouldered_heavy"
+  );
+}
+
+export function syncLocalScopedAdsAttachmentPresentation(
+  attachmentRuntime: Pick<
+    LocalHeldObjectAttachmentRuntimeLike,
+    "holdProfile" | "presentationGroup"
+  >,
+  weaponState: Pick<MetaverseRealtimePlayerWeaponStateSnapshot, "aimMode"> | null
+): void {
+  attachmentRuntime.presentationGroup.visible =
+    !shouldUseScopedAdsAttachmentPresentation(attachmentRuntime, weaponState);
 }
 
 export function advanceLocalCharacterAnimation<
@@ -198,6 +230,7 @@ export function syncLocalCharacterPresentation<
       weaponState,
       bodyPresentation
     );
+    syncLocalScopedAdsAttachmentPresentation(attachmentRuntime, weaponState);
   }
 
   return presentedCameraSnapshot;

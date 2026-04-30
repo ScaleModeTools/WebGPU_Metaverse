@@ -713,14 +713,14 @@ test("held-object solver profiles drive grip assignment and finger pose policy",
   assert.equal(battleRifleProfile.primaryHand, "right");
   assert.equal(battleRifleProfile.offhandPolicy, "required_support_grip");
   assert.equal(battleRifleProfile.fingerPose.primary, "long_gun_trigger_grip");
-  assert.equal(battleRifleProfile.fingerPose.secondary, "foregrip_support");
+  assert.equal(battleRifleProfile.fingerPose.secondary, "relaxed_open");
   assert.equal(
     battleRifleProfile.contactBindings.primary.contactFrameId,
     "primary_trigger_grip"
   );
   assert.equal(
     battleRifleProfile.contactBindings.secondary?.contactFrameId,
-    "support_handle_grip"
+    "barrel_cradle"
   );
   assert.equal(battleRifleProfile.contactBindings.secondary?.strength, "hard");
   assert.equal(battleRifleProfile.adsCalibration.adsAnchorPositionalWeight, 0.4);
@@ -842,6 +842,47 @@ test("shipped metaverse attachment hold profiles have configured held-object sol
       attachmentProofConfig.holdProfile.offhandPolicy
     );
   }
+});
+
+test("local scoped ADS hides only optic and shouldered held weapon meshes", async () => {
+  const { syncLocalScopedAdsAttachmentPresentation } = await clientLoader.load(
+    "/src/metaverse/render/characters/metaverse-scene-local-character-presentation.ts"
+  );
+  const createAttachmentRuntime = (holdProfile) => ({
+    holdProfile,
+    presentationGroup: {
+      visible: true
+    }
+  });
+  const pistolAttachment = createAttachmentRuntime(
+    createTestServicePistolHoldProfile()
+  );
+  const battleRifleAttachment = createAttachmentRuntime(
+    createTestBattleRifleHoldProfile()
+  );
+  const rocketAttachment = createAttachmentRuntime(
+    createTestRocketLauncherHoldProfile()
+  );
+
+  syncLocalScopedAdsAttachmentPresentation(pistolAttachment, {
+    aimMode: "ads"
+  });
+  syncLocalScopedAdsAttachmentPresentation(battleRifleAttachment, {
+    aimMode: "ads"
+  });
+  syncLocalScopedAdsAttachmentPresentation(rocketAttachment, {
+    aimMode: "ads"
+  });
+
+  assert.equal(pistolAttachment.presentationGroup.visible, true);
+  assert.equal(battleRifleAttachment.presentationGroup.visible, false);
+  assert.equal(rocketAttachment.presentationGroup.visible, false);
+
+  syncLocalScopedAdsAttachmentPresentation(battleRifleAttachment, {
+    aimMode: "hip-fire"
+  });
+
+  assert.equal(battleRifleAttachment.presentationGroup.visible, true);
 });
 
 test("held weapon presentation stays inactive without an active weapon state", async () => {
@@ -1548,7 +1589,17 @@ test("createMetaverseScene keeps traversal as the held-object IK base locally an
     .getWorldPosition(new Vector3())
     .sub(traversalCameraPosition)
     .dot(normalizedLookDirection);
-  const shoulderAnchoredGripPosition = clavicleRBone
+  const targetGripAcross = normalizedLookDirection
+    .clone()
+    .cross(targetGripUp)
+    .normalize();
+  const hipFireGripPosition = clavicleRBone
+    .getWorldPosition(new Vector3())
+    .clone()
+    .addScaledVector(normalizedLookDirection, 0.34)
+    .addScaledVector(targetGripAcross, 0.2)
+    .addScaledVector(targetGripUp, 0);
+  const centeredShoulderGripPosition = clavicleRBone
     .getWorldPosition(new Vector3())
     .clone()
     .addScaledVector(normalizedLookDirection, 0.42);
@@ -1587,8 +1638,11 @@ test("createMetaverseScene keeps traversal as the held-object IK base locally an
   assert.ok(
     rightPrimaryTriggerContactFrameNode
       .getWorldPosition(new Vector3())
-      .distanceTo(shoulderAnchoredGripPosition) < 0.08,
-    `Expected primary trigger contact frame ${rightPrimaryTriggerContactFrameNode.getWorldPosition(new Vector3()).toArray()} to stay near the right-shoulder hold ${shoulderAnchoredGripPosition.toArray()}.`
+      .distanceTo(hipFireGripPosition) <
+      rightPrimaryTriggerContactFrameNode
+        .getWorldPosition(new Vector3())
+        .distanceTo(centeredShoulderGripPosition),
+    `Expected primary trigger contact frame ${rightPrimaryTriggerContactFrameNode.getWorldPosition(new Vector3()).toArray()} to stay near the lowered hip-fire hold ${hipFireGripPosition.toArray()}.`
   );
   assert.ok(
     adsCameraAnchorWorldPosition.distanceTo(traversalCameraPosition) > 0.08,

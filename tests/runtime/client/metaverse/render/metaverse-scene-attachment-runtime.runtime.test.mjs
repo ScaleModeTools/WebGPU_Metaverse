@@ -148,6 +148,7 @@ test("syncAttachmentProofRuntimeMount hides weapon attachments until weapon stat
   assert.equal(attachmentRuntime.activeMountKind, "held");
   assert.equal(attachmentRoot.parent, heldSocket);
   assert.equal(attachmentRoot.visible, true);
+  presentationGroup.visible = false;
 
   syncAttachmentProofRuntimeMount(
     attachmentRuntime,
@@ -165,6 +166,7 @@ test("syncAttachmentProofRuntimeMount hides weapon attachments until weapon stat
   assert.equal(attachmentRuntime.activeMountKind, "mounted-holster");
   assert.equal(attachmentRoot.parent, holsterSocket);
   assert.equal(attachmentRoot.visible, true);
+  assert.equal(presentationGroup.visible, true);
 
   syncAttachmentProofRuntimeMount(
     attachmentRuntime,

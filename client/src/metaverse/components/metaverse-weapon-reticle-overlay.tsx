@@ -97,25 +97,29 @@ export function MetaverseWeaponReticleOverlay({
   const reticleStyleVariables = {
     "--weapon-reticle-color": resolveReticleColor(weaponHudSnapshot.reticleColor),
     "--weapon-reticle-duration": `${weaponHudSnapshot.adsTransitionMs}ms`,
-    "--weapon-reticle-scale": `${reticleStyle.hipScale}`,
+    "--weapon-reticle-scale": `${
+      weaponHudSnapshot.aimMode === "ads"
+        ? reticleStyle.adsScale
+        : reticleStyle.hipScale
+    }`,
     "--weapon-reticle-size": `${reticleStyle.sizePx}px`
   } as CSSProperties;
-  const showScopeShade = reticleStyle.shape === "scope";
+  const showScopeShade =
+    reticleStyle.scopedAdsOverlay && weaponHudSnapshot.aimMode === "ads";
 
   return (
     <div className="pointer-events-none absolute inset-0 z-20">
       {showScopeShade ? (
         <div
-          className={[
-            "absolute inset-0 transition-opacity ease-out",
-            weaponHudSnapshot.aimMode === "ads" ? "opacity-100" : "opacity-0"
-          ].join(" ")}
+          className="absolute inset-0 opacity-100 transition-opacity ease-out"
           style={{
             background:
-              "radial-gradient(circle at center, transparent 0 12%, rgb(2 6 23 / 0.18) 22%, rgb(2 6 23 / 0.72) 100%)",
+              "radial-gradient(circle at center, transparent 0 30%, rgb(2 6 23 / 0.42) 33%, rgb(2 6 23 / 0.92) 100%)",
             transitionDuration: `${weaponHudSnapshot.adsTransitionMs}ms`
           }}
-        />
+        >
+          <div className="absolute left-1/2 top-1/2 aspect-square w-[min(72vh,72vw)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/35 shadow-[0_0_0_9999px_rgb(2_6_23_/_0.18),inset_0_0_48px_rgb(15_23_42_/_0.42)]" />
+        </div>
       ) : null}
 
       <div className="absolute inset-0 flex items-center justify-center" style={reticleStyleVariables}>

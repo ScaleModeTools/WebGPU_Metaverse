@@ -849,6 +849,7 @@ test("attachment manifests keep explicit attachment socket ownership for held an
 test("weapon archetypes carry canonical held-object authoring profiles", async () => {
   const [
     {
+      metaverseBattleRifleWeaponAssetId,
       metaverseRocketLauncherWeaponAssetId,
       metaverseServicePistolV2WeaponAssetId,
       weaponArchetypeManifest,
@@ -860,10 +861,13 @@ test("weapon archetypes carry canonical held-object authoring profiles", async (
   ]);
   const pistol =
     weaponArchetypeManifest.byId[metaverseServicePistolV2WeaponAssetId];
+  const battleRifle =
+    weaponArchetypeManifest.byId[metaverseBattleRifleWeaponAssetId];
   const rocketLauncher =
     weaponArchetypeManifest.byId[metaverseRocketLauncherWeaponAssetId];
 
   assert.ok(pistol);
+  assert.ok(battleRifle);
   assert.ok(rocketLauncher);
   assert.equal(pistol.holdProfile.family, "sidearm");
   assert.equal(
@@ -894,6 +898,43 @@ test("weapon archetypes carry canonical held-object authoring profiles", async (
   assert.equal(
     pistolSocketNodeByRole.get("projectile.muzzle"),
     "metaverse_service_pistol_muzzle_socket",
+  );
+
+  assert.equal(battleRifle.holdProfile.family, "long_gun");
+  assert.equal(
+    battleRifle.holdProfile.poseProfileId,
+    "long_gun.two_hand_shoulder",
+  );
+  assert.equal(battleRifle.holdProfile.primaryHandDefault, "right");
+  assert.deepEqual(battleRifle.holdProfile.allowedHands, ["right"]);
+  assert.equal(
+    battleRifle.holdProfile.offhandPolicy,
+    "required_support_grip",
+  );
+  assert.equal(battleRifle.holdProfile.adsPolicy, "optic_anchor");
+  assert.equal(
+    battleRifle.weaponAimProfile.poseProfileId,
+    battleRifle.holdProfile.poseProfileId,
+  );
+
+  const battleRifleSocketNodeByRole = new Map(
+    battleRifle.holdProfile.sockets.map((socket) => [
+      socket.role,
+      socket.nodeName,
+    ]),
+  );
+
+  assert.equal(
+    battleRifleSocketNodeByRole.get("grip.secondary"),
+    "metaverse_battle_rifle_grip_module_socket",
+  );
+  assert.equal(
+    battleRifleSocketNodeByRole.get("module.underbarrel_grip"),
+    "metaverse_battle_rifle_grip_module_socket",
+  );
+  assert.equal(
+    battleRifleSocketNodeByRole.get("camera.ads_anchor"),
+    "metaverse_battle_rifle_ads_camera_anchor",
   );
 
   assert.equal(rocketLauncher.holdProfile.family, "shoulder_heavy");

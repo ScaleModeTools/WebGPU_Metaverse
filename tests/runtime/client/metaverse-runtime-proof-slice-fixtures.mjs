@@ -259,8 +259,12 @@ export function createTestBattleRifleHoldProfile(overrides = {}) {
         role: "trigger.index"
       },
       {
-        nodeName: "metaverse_battle_rifle_support_grip_marker",
+        nodeName: "metaverse_battle_rifle_grip_module_socket",
         role: "grip.secondary"
+      },
+      {
+        nodeName: "metaverse_battle_rifle_grip_module_socket",
+        role: "module.underbarrel_grip"
       },
       {
         nodeName: "metaverse_battle_rifle_ads_camera_anchor",

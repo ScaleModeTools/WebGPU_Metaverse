@@ -180,7 +180,9 @@ const heldWeaponElbowPoleAcrossBias = 0.42;
 const heldWeaponElbowPoleBiasWeight = 0.92;
 const heldWeaponElbowPoleDownBias = 0.7;
 const heldWeaponElbowPolePreferenceWeight = 1.4;
-const heldWeaponChestForwardMeters = 0.42;
+const heldWeaponChestForwardMeters = 0.34;
+const heldWeaponHipFireAcrossMeters = 0.2;
+const heldWeaponHipFireDownMeters = 0;
 const heldWeaponLeftArmReachSlackMeters = 0.001;
 const heldWeaponRightArmReachSlackMeters = 0.045;
 const heldWeaponSupportPalmHintLeftArmReachSlackMeters = 0.005;
@@ -1221,6 +1223,37 @@ function resolveHipFireGripTargetWorldPosition(
     lookDirection,
     heldWeaponChestForwardMeters
   );
+  heldWeaponGripUpDirectionScratch.set(0, 1, 0);
+  heldWeaponGripUpDirectionScratch.addScaledVector(
+    lookDirection,
+    -heldWeaponGripUpDirectionScratch.dot(lookDirection)
+  );
+
+  if (heldWeaponGripUpDirectionScratch.lengthSq() <= heldWeaponSolveDirectionEpsilon) {
+    heldWeaponGripUpDirectionScratch.set(0, 0, 1);
+    heldWeaponGripUpDirectionScratch.addScaledVector(
+      lookDirection,
+      -heldWeaponGripUpDirectionScratch.dot(lookDirection)
+    );
+  }
+
+  if (heldWeaponGripUpDirectionScratch.lengthSq() <= heldWeaponSolveDirectionEpsilon) {
+    return;
+  }
+
+  heldWeaponGripUpDirectionScratch.normalize();
+  heldWeaponGripAcrossDirectionScratch
+    .copy(lookDirection)
+    .cross(heldWeaponGripUpDirectionScratch);
+
+  if (heldWeaponGripAcrossDirectionScratch.lengthSq() <= heldWeaponSolveDirectionEpsilon) {
+    return;
+  }
+
+  heldWeaponGripAcrossDirectionScratch.normalize();
+  outputGripWorldPosition
+    .addScaledVector(heldWeaponGripAcrossDirectionScratch, heldWeaponHipFireAcrossMeters)
+    .addScaledVector(heldWeaponGripUpDirectionScratch, -heldWeaponHipFireDownMeters);
 }
 
 function resolveCameraWorldPositionWithHeadClearance(

@@ -499,7 +499,7 @@ export const weaponArchetypeManifest = defineWeaponArchetypeManifest([
         ),
         createHeldObjectSocket(
           "grip.secondary",
-          "metaverse_battle_rifle_support_grip_marker",
+          "metaverse_battle_rifle_grip_module_socket",
         ),
         createHeldObjectSocket(
           "module.underbarrel_grip",

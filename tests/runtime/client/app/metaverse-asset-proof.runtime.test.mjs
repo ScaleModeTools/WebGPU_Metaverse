@@ -108,6 +108,12 @@ test("metaverse asset proof resolves a socket-compatible attachment config from 
       (socket) => socket.role === "grip.secondary",
     ),
   );
+  assert.equal(
+    battleRifleProofConfig.holdProfile.sockets.find(
+      (socket) => socket.role === "grip.secondary",
+    )?.nodeName,
+    "metaverse_battle_rifle_grip_module_socket",
+  );
   assert.ok(
     battleRifleProofConfig.holdProfile.sockets.some(
       (socket) => socket.role === "projectile.muzzle",

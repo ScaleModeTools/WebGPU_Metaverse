@@ -193,14 +193,14 @@ const metaverseHeldObjectSolverProfiles = Object.freeze([
         weaponSocketRole: "grip.primary"
       }),
       secondary: Object.freeze({
-        contactFrameId: "support_handle_grip",
+        contactFrameId: "barrel_cradle",
         strength: "hard",
         weaponSocketRole: "grip.secondary"
       })
     }),
     fingerPose: Object.freeze({
       primary: "long_gun_trigger_grip",
-      secondary: "foregrip_support"
+      secondary: "relaxed_open"
     }),
     limits: Object.freeze({
       maxHeadPitchDeg: 0,
