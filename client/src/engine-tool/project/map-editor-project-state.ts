@@ -3169,8 +3169,7 @@ function resolveInitialSelectedLaunchVariationId(
   if (hasTeamDeathmatchResourceSpawns) {
     const teamDeathmatchLaunchVariation = launchVariationDrafts.find(
       (launchVariationDraft) =>
-        launchVariationDraft.matchMode === "team-deathmatch" &&
-        launchVariationDraft.weaponLayoutId !== null
+        launchVariationDraft.matchMode === "team-deathmatch"
     );
 
     if (teamDeathmatchLaunchVariation !== undefined) {
@@ -4032,7 +4031,7 @@ export function addMapEditorLaunchVariationDraft(
     description: "",
     experienceId: null,
     gameplayVariationId: null,
-    label: "New Variation",
+    label: "New Setup",
     matchMode: "free-roam",
     variationId: createMapEditorLaunchVariationId(project),
     vehicleLayoutId: null,

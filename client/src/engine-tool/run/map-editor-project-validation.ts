@@ -276,10 +276,6 @@ export function validateMapEditorProject(
     }
   }
 
-  if (project.launchVariationDrafts.length === 0) {
-    errors.push("The map needs at least one saved launch variation.");
-  }
-
   if (
     project.selectedLaunchVariationId !== null &&
     !project.launchVariationDrafts.some(

@@ -1,4 +1,5 @@
 export { MetaverseStageScreen } from "./components/metaverse-stage-screen";
+export { MetaverseLaunchCinematicCanvas } from "./components/metaverse-launch-cinematic-canvas";
 export { WebGpuMetaverseCapabilityProbe } from "./classes/webgpu-metaverse-capability-probe";
 export { WebGpuMetaverseRuntime } from "./classes/webgpu-metaverse-runtime";
 export {

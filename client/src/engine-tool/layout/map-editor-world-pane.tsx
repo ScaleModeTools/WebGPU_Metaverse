@@ -120,7 +120,7 @@ export function MapEditorWorldPane({
             World
           </p>
           <h2 className="truncate font-heading text-lg font-semibold">
-            Bundle, Profiles, Variations
+            Bundle, Profiles, Launch
           </h2>
         </div>
       </div>
@@ -207,7 +207,7 @@ export function MapEditorWorldPane({
             onOpenChange={onSectionOpenChange}
             open={readSectionOpen("world-pane:variations", true)}
             sectionId="world-pane:variations"
-            title="Launch Variations"
+            title="Launch Setups"
           >
             <MapEditorLaunchVariationsPanel
               launchVariationDrafts={project.launchVariationDrafts}

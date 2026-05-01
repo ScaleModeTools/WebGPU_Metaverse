@@ -54,6 +54,7 @@ import { MetaverseInteractionFeedHud } from "./metaverse-interaction-feed-hud";
 import { MetaversePlayerRadarHud } from "./metaverse-player-radar-hud";
 import {
   MetaverseTeamDeathmatchPostGameOverlay,
+  MetaverseTeamDeathmatchRespawnCountdownHud,
   MetaverseTeamDeathmatchScoreboardHud
 } from "./metaverse-team-deathmatch-scoreboard-hud";
 import { MetaverseWeaponReticleOverlay } from "./metaverse-weapon-reticle-overlay";
@@ -174,6 +175,14 @@ function resolveTeamHudTone(
       });
   }
 }
+
+const teamDeathmatchHudPrimaryTextClassName = "!text-game-foreground";
+const teamDeathmatchScoreTrackClassName =
+  "h-2.5 w-28 overflow-hidden bg-[rgb(2_6_23_/_0.46)] ring-1 ring-white/15 shadow-[inset_0_0_14px_rgb(148_163_184_/_0.12),0_0_16px_rgb(2_6_23_/_0.24)]";
+const blueTeamDeathmatchScoreFillClassName =
+  "h-full bg-[linear-gradient(90deg,rgb(125_211_252),rgb(56_189_248))] shadow-[0_0_14px_rgb(125_211_252_/_0.55)] transition-[width] duration-150 ease-out";
+const redTeamDeathmatchScoreFillClassName =
+  "h-full bg-[linear-gradient(90deg,rgb(253_164_175),rgb(251_113_133))] shadow-[0_0_14px_rgb(253_164_175_/_0.55)] transition-[width] duration-150 ease-out";
 
 function formatMatchTimeLabel(timeRemainingMs: number | null): string {
   if (timeRemainingMs === null) {
@@ -300,6 +309,8 @@ export function MetaverseStageScreen({
   const [isScoreboardKeyboardOpen, setScoreboardKeyboardOpen] = useState(false);
   const [isScoreboardGamepadHeld, setScoreboardGamepadHeld] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [sceneTransitionMatteVisible, setSceneTransitionMatteVisible] =
+    useState(true);
   const subscribeUiUpdates = useCallback(
     (notifyReact: () => void) => metaverseRuntime.subscribeUiUpdates(notifyReact),
     [metaverseRuntime]
@@ -663,6 +674,18 @@ export function MetaverseStageScreen({
     };
   }, [metaverseRuntime]);
 
+  useEffect(() => {
+    setSceneTransitionMatteVisible(true);
+
+    const matteTimeout = globalThis.setTimeout(() => {
+      setSceneTransitionMatteVisible(false);
+    }, 360);
+
+    return () => {
+      globalThis.clearTimeout(matteTimeout);
+    };
+  }, [bundleId, roomAssignment.roomSessionId]);
+
   const hudStyle = useMemo(
     () =>
       createMetaverseHudStyle(
@@ -706,6 +729,12 @@ export function MetaverseStageScreen({
     runtimeError === null;
   const showTeamDeathmatchCombatHud =
     isTeamDeathmatchHudMode && combatSnapshot.available && showPlayerHud;
+  const showTeamDeathmatchRespawnCountdown =
+    isTeamDeathmatchHudMode &&
+    combatSnapshot.available &&
+    hudSnapshot.boot.phase === "ready" &&
+    runtimeError === null &&
+    !isPostGameReportOpen;
   const isScoreboardOpen =
     isTeamDeathmatchHudMode &&
     showPlayerHud &&
@@ -735,12 +764,22 @@ export function MetaverseStageScreen({
 
   return (
     <ImmersiveStageFrame className="bg-game-stage">
-      <div className="relative flex h-full w-full">
+      <div className="relative flex h-full w-full" style={hudStyle}>
         <canvas
           aria-hidden="true"
           className="h-full w-full touch-none"
           ref={canvasRef}
         />
+
+        {runtimeError === null ? (
+          <div
+            aria-hidden="true"
+            className={[
+              "pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_64%_40%,rgb(245_164_92_/_0.72),transparent_30%),linear-gradient(180deg,rgb(64_104_143),rgb(221_143_84)_48%,rgb(29_64_38)_100%)] transition-opacity duration-700 ease-out",
+              sceneTransitionMatteVisible ? "opacity-100" : "opacity-0"
+            ].join(" ")}
+          />
+        ) : null}
 
         <MetaverseWeaponReticleOverlay
           hidden={
@@ -760,6 +799,12 @@ export function MetaverseStageScreen({
 
         {isScoreboardOpen ? (
           <MetaverseTeamDeathmatchScoreboardHud combatSnapshot={combatSnapshot} />
+        ) : null}
+
+        {showTeamDeathmatchRespawnCountdown ? (
+          <MetaverseTeamDeathmatchRespawnCountdownHud
+            combatSnapshot={combatSnapshot}
+          />
         ) : null}
 
         {isPostGameReportOpen ? (
@@ -807,17 +852,28 @@ export function MetaverseStageScreen({
 
               {isTeamDeathmatchHudMode && showPlayerHud ? (
                 <div className="pointer-events-none ml-auto max-w-[min(14rem,100%)] shrink-0 text-right text-game-foreground [text-shadow:var(--metaverse-hud-text-shadow)]">
-                  <p className="type-game-heading truncate text-game-foreground">
+                  <p
+                    className={[
+                      "type-game-heading truncate",
+                      teamDeathmatchHudPrimaryTextClassName
+                    ].join(" ")}
+                  >
                     {weaponLabel}
                   </p>
                   <div className="mt-1 flex items-center justify-end gap-2">
                     <StableInlineText
-                      className="type-game-value text-game-foreground"
+                      className={[
+                        "type-game-value",
+                        teamDeathmatchHudPrimaryTextClassName
+                      ].join(" ")}
                       text={`${combatSnapshot.ammoInMagazine}`}
                     />
-                    <span className="h-8 w-px shrink-0 bg-white/90" />
+                    <span className="h-8 w-px shrink-0 bg-game-foreground/90" />
                     <StableInlineText
-                      className="type-game-value text-game-foreground"
+                      className={[
+                        "type-game-value",
+                        teamDeathmatchHudPrimaryTextClassName
+                      ].join(" ")}
                       text={`${combatSnapshot.ammoInReserve}`}
                     />
                   </div>
@@ -833,44 +889,56 @@ export function MetaverseStageScreen({
                   ) : null}
                 </div>
 
-	                {showTeamDeathmatchCombatHud ? (
-	                  <div className="pointer-events-none ml-auto max-w-[16rem] text-right text-game-foreground [text-shadow:var(--metaverse-hud-text-shadow)]">
-	                    <div className="flex flex-col items-end gap-1">
-	                      <p className="type-game-heading">Team Deathmatch</p>
-	                      <p className="type-game-body text-game-foreground">
-	                        {formatMatchTimeLabel(combatSnapshot.timeRemainingMs)}
-	                      </p>
-	                    </div>
+                {showTeamDeathmatchCombatHud ? (
+                  <div className="pointer-events-none ml-auto max-w-[16rem] text-right text-game-foreground [text-shadow:var(--metaverse-hud-text-shadow)]">
+                    <div className="flex flex-col items-end gap-1">
+                      <p
+                        className={[
+                          "type-game-heading",
+                          teamDeathmatchHudPrimaryTextClassName
+                        ].join(" ")}
+                      >
+                        Team Deathmatch
+                      </p>
+                      <p
+                        className={[
+                          "type-game-body",
+                          teamDeathmatchHudPrimaryTextClassName
+                        ].join(" ")}
+                      >
+                        {formatMatchTimeLabel(combatSnapshot.timeRemainingMs)}
+                      </p>
+                    </div>
 
-	                    <div className="mt-3 flex flex-col items-end gap-2">
-	                      <div className="flex w-full items-center justify-end gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-game-foreground">
-	                        <span className="size-2.5 shrink-0 bg-sky-300" />
-	                        <span className="w-8 tabular-nums text-game-foreground">
-	                          {blueTeamScore}
-	                        </span>
-	                        <div className="h-2 w-28 overflow-hidden rounded-full">
-	                          <div
-	                            className="h-full bg-sky-300 transition-[width] duration-150 ease-out"
-	                            style={{ width: blueScorePercent }}
-	                          />
-	                        </div>
-	                      </div>
+                    <div className="mt-3 flex flex-col items-end gap-2">
+                      <div className="flex w-full items-center justify-end gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-game-foreground">
+                        <span className="size-2.5 shrink-0 bg-sky-300" />
+                        <span className="w-8 tabular-nums text-game-foreground">
+                          {blueTeamScore}
+                        </span>
+                        <div className={teamDeathmatchScoreTrackClassName}>
+                          <div
+                            className={blueTeamDeathmatchScoreFillClassName}
+                            style={{ width: blueScorePercent }}
+                          />
+                        </div>
+                      </div>
 
-	                      <div className="flex w-full items-center justify-end gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-game-foreground">
-	                        <span className="size-2.5 shrink-0 bg-rose-300" />
-	                        <span className="w-8 tabular-nums text-game-foreground">
-	                          {redTeamScore}
-	                        </span>
-	                        <div className="h-2 w-28 overflow-hidden rounded-full">
-	                          <div
-	                            className="h-full bg-rose-300 transition-[width] duration-150 ease-out"
-	                            style={{ width: redScorePercent }}
-	                          />
-	                        </div>
-	                      </div>
-	                    </div>
-	                  </div>
-	                ) : null}
+                      <div className="flex w-full items-center justify-end gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-game-foreground">
+                        <span className="size-2.5 shrink-0 bg-rose-300" />
+                        <span className="w-8 tabular-nums text-game-foreground">
+                          {redTeamScore}
+                        </span>
+                        <div className={teamDeathmatchScoreTrackClassName}>
+                          <div
+                            className={redTeamDeathmatchScoreFillClassName}
+                            style={{ width: redScorePercent }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>

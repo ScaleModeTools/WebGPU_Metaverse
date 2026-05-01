@@ -171,7 +171,7 @@ test("MetaverseMovementAudioRuntime emits animation-marked local and spatial rem
   assert.equal(audioCalls[2].options.spatial.position.x, 6.55);
   assert.equal(audioCalls[2].options.spatial.position.y, 0.96);
   assert.equal(audioCalls[2].options.spatial.position.z, -4);
-  assert.equal(audioCalls[2].options.spatial.maxDistanceMeters, 42);
-  assert.equal(audioCalls[2].options.spatial.refDistanceMeters, 3.8);
-  assert.equal(audioCalls[2].options.spatial.rolloffFactor, 0.82);
+  assert.equal(audioCalls[2].options.spatial.maxDistanceMeters, 72);
+  assert.equal(audioCalls[2].options.spatial.refDistanceMeters, 7.5);
+  assert.equal(audioCalls[2].options.spatial.rolloffFactor, 0.58);
 });

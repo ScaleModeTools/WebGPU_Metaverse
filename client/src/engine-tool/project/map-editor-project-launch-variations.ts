@@ -16,18 +16,34 @@ export interface MapEditorLaunchVariationDraftSnapshot {
   readonly weaponLayoutId: string | null;
 }
 
+export function createMapEditorSceneDefaultLaunchVariationDraft(
+  bundleId: string
+): MapEditorLaunchVariationDraftSnapshot {
+  return freezeLaunchVariationDraft({
+    description: "",
+    experienceId: null,
+    gameplayVariationId: null,
+    label: "Scene Default",
+    matchMode: "free-roam",
+    variationId: `${bundleId}:scene-default`,
+    vehicleLayoutId: null,
+    weaponLayoutId: null
+  });
+}
+
 export function freezeLaunchVariationDraft(
   draft: MapEditorLaunchVariationDraftSnapshot
 ): MapEditorLaunchVariationDraftSnapshot {
+  // The editor launches authored scene resources until per-map layout authoring exists.
   return Object.freeze({
     description: draft.description,
     experienceId: draft.experienceId,
-    gameplayVariationId: draft.gameplayVariationId,
+    gameplayVariationId: null,
     label: draft.label,
     matchMode: draft.matchMode,
     variationId: draft.variationId,
-    vehicleLayoutId: draft.vehicleLayoutId,
-    weaponLayoutId: draft.weaponLayoutId
+    vehicleLayoutId: null,
+    weaponLayoutId: null
   });
 }
 
@@ -46,6 +62,21 @@ export function createLaunchVariationDrafts(
         vehicleLayoutId: launchVariation.vehicleLayoutId,
         weaponLayoutId: launchVariation.weaponLayoutId
       })
+    )
+  );
+}
+
+export function resolveMapEditorLaunchVariationDraftsForExport(
+  bundleId: string,
+  launchVariationDrafts: readonly MapEditorLaunchVariationDraftSnapshot[]
+): readonly MapEditorLaunchVariationDraftSnapshot[] {
+  if (launchVariationDrafts.length === 0) {
+    return Object.freeze([createMapEditorSceneDefaultLaunchVariationDraft(bundleId)]);
+  }
+
+  return Object.freeze(
+    launchVariationDrafts.map((launchVariationDraft) =>
+      freezeLaunchVariationDraft(launchVariationDraft)
     )
   );
 }

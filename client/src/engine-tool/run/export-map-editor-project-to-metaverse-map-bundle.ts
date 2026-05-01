@@ -14,6 +14,9 @@ import {
   type MapEditorProjectSnapshot
 } from "@/engine-tool/project/map-editor-project-state";
 import {
+  resolveMapEditorLaunchVariationDraftsForExport
+} from "@/engine-tool/project/map-editor-project-launch-variations";
+import {
   resolveMapEditorWaterRegionCenter,
   resolveMapEditorWaterRegionSize
 } from "@/engine-tool/project/map-editor-project-scene-drafts";
@@ -128,8 +131,13 @@ function resolveResourceSpawns(
 function resolveLaunchVariations(
   project: MapEditorProjectSnapshot
 ): readonly MetaverseMapBundleLaunchVariationSnapshot[] {
+  const launchVariationDrafts = resolveMapEditorLaunchVariationDraftsForExport(
+    project.bundleId,
+    project.launchVariationDrafts
+  );
+
   return Object.freeze(
-    project.launchVariationDrafts.map((launchVariationDraft) =>
+    launchVariationDrafts.map((launchVariationDraft) =>
       Object.freeze({
         description: launchVariationDraft.description,
         experienceId: launchVariationDraft.experienceId,

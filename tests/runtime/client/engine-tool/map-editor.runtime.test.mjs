@@ -1787,15 +1787,9 @@ test("map editor project flattens authored placements and updates selected place
   );
   assert.notEqual(updatedLaunchVariation, null);
   assert.equal(updatedLaunchVariation.label, "Team Slayer On Gladiation");
-  assert.equal(updatedLaunchVariation.gameplayVariationId, "team-slayer");
-  assert.equal(
-    updatedLaunchVariation.weaponLayoutId,
-    "gladiation-rifle-starts"
-  );
-  assert.equal(
-    updatedLaunchVariation.vehicleLayoutId,
-    "gladiation-heavy-vehicles"
-  );
+  assert.equal(updatedLaunchVariation.gameplayVariationId, null);
+  assert.equal(updatedLaunchVariation.weaponLayoutId, null);
+  assert.equal(updatedLaunchVariation.vehicleLayoutId, null);
   assert.equal(
     removeMapEditorPlacement(updatedProject, updatedProject.selectedPlacementId)
       .placementDrafts.length,
@@ -2224,11 +2218,56 @@ test("private-build TDM loads and previews the weapon resource layout", async ()
 
   assert.equal(previewResult.validation.valid, true);
   assert.equal(previewResult.launchSelection?.matchMode, "team-deathmatch");
-  assert.equal(
-    previewResult.launchSelection?.weaponLayoutId,
-    "metaverse-tdm-pistol-rocket-layout"
-  );
+  assert.equal(previewResult.launchSelection?.weaponLayoutId, null);
   assert.equal(previewBundle.bundle.resourceSpawns.length, 12);
+});
+
+test("map editor Validate + Run uses a scene default launch setup when none is saved", async () => {
+  const { createMapEditorProject } = await clientLoader.load(
+    "/src/engine-tool/project/map-editor-project-state.ts"
+  );
+  const { validateAndRegisterMapEditorPreviewBundle } = await clientLoader.load(
+    "/src/engine-tool/run/map-editor-run-preview.ts"
+  );
+  const { loadMetaverseMapBundle } = await clientLoader.load(
+    "/src/metaverse/world/map-bundles/load-metaverse-map-bundle.ts"
+  );
+  const project = createMapEditorProject(loadMetaverseMapBundle("staging-ground"));
+  const projectWithoutSavedLaunchSetups = Object.freeze({
+    ...project,
+    launchVariationDrafts: Object.freeze([]),
+    selectedLaunchVariationId: null
+  });
+  const previewResult = await validateAndRegisterMapEditorPreviewBundle(
+    projectWithoutSavedLaunchSetups,
+    {
+      async fetch() {
+        return {
+          async json() {
+            return {
+              status: "registered"
+            };
+          },
+          ok: true
+        };
+      }
+    }
+  );
+  const previewBundle = loadMetaverseMapBundle(
+    previewResult.launchSelection?.bundleId ?? ""
+  );
+
+  assert.equal(previewResult.validation.valid, true);
+  assert.equal(previewResult.launchSelection?.variationId, "staging-ground:scene-default");
+  assert.equal(previewResult.launchSelection?.variationLabel, "Scene Default");
+  assert.equal(previewResult.launchSelection?.matchMode, "free-roam");
+  assert.equal(previewResult.launchSelection?.weaponLayoutId, null);
+  assert.equal(previewResult.launchSelection?.vehicleLayoutId, null);
+  assert.equal(previewBundle.bundle.launchVariations.length, 1);
+  assert.equal(
+    previewBundle.bundle.launchVariations[0]?.variationId,
+    "staging-ground:scene-default"
+  );
 });
 
 test("map editor procedural build helpers export grid-canonical structures, gameplay volumes, and lights", async () => {

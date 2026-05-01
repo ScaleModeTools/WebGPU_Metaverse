@@ -249,7 +249,7 @@ export function MapEditorInspectorPane({
             <Collapsible defaultOpen>
               <CollapsibleTrigger asChild>
                 <Button className="w-full justify-between" type="button" variant="ghost">
-                  Launch Variations
+                  Launch Setups
                   <ChevronDownIcon data-icon="inline-end" />
                 </Button>
               </CollapsibleTrigger>

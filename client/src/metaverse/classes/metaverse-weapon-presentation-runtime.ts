@@ -47,6 +47,12 @@ export interface MetaverseWeaponSlotSwitchIntentSnapshot {
   readonly requestedActiveSlotId: MetaverseWeaponSlotId;
 }
 
+interface MetaverseWeaponCameraFieldOfViewTransition {
+  readonly rangeDegrees: number;
+  readonly targetFieldOfViewDegrees: number;
+  readonly transitionSeconds: number;
+}
+
 interface MetaverseWeaponPresentationRuntimeDependencies {
   readonly attachmentProofConfig?: MetaverseAttachmentProofConfig | null;
   readonly attachmentProofConfigs?:
@@ -80,16 +86,14 @@ const hiddenWeaponHudSnapshot = Object.freeze({
   weaponLabel: null
 } satisfies MetaverseWeaponHudSnapshot);
 
+const cameraFieldOfViewEpsilonDegrees = 0.0001;
+
 function clamp(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) {
     return min;
   }
 
   return Math.min(max, Math.max(min, value));
-}
-
-function lerp(start: number, end: number, alpha: number): number {
-  return start + (end - start) * alpha;
 }
 
 function moveToward(current: number, target: number, step: number): number {
@@ -121,6 +125,48 @@ function resolveAdsFieldOfViewDegrees(
   }
 
   return Math.min(baseFieldOfViewDegrees, adsFieldOfViewDegrees);
+}
+
+function createCameraFieldOfViewTransition(input: {
+  readonly baseFieldOfViewDegrees: number;
+  readonly currentFieldOfViewDegrees: number;
+  readonly referenceFieldOfViewDegrees: number;
+  readonly targetFieldOfViewDegrees: number;
+  readonly transitionSeconds: number;
+}): MetaverseWeaponCameraFieldOfViewTransition {
+  return Object.freeze({
+    rangeDegrees: Math.max(
+      Math.abs(input.baseFieldOfViewDegrees - input.referenceFieldOfViewDegrees),
+      Math.abs(input.currentFieldOfViewDegrees - input.targetFieldOfViewDegrees)
+    ),
+    targetFieldOfViewDegrees: input.targetFieldOfViewDegrees,
+    transitionSeconds: input.transitionSeconds
+  });
+}
+
+function advanceCameraFieldOfViewDegrees(
+  currentFieldOfViewDegrees: number,
+  transition: MetaverseWeaponCameraFieldOfViewTransition,
+  deltaSeconds: number
+): number {
+  if (
+    Math.abs(
+      currentFieldOfViewDegrees - transition.targetFieldOfViewDegrees
+    ) <= cameraFieldOfViewEpsilonDegrees
+  ) {
+    return transition.targetFieldOfViewDegrees;
+  }
+
+  if (transition.transitionSeconds <= 0 || transition.rangeDegrees <= 0) {
+    return transition.targetFieldOfViewDegrees;
+  }
+
+  return moveToward(
+    currentFieldOfViewDegrees,
+    transition.targetFieldOfViewDegrees,
+    transition.rangeDegrees *
+      clamp(deltaSeconds / transition.transitionSeconds, 0, 1)
+  );
 }
 
 function createWeaponHudSnapshot(
@@ -366,6 +412,8 @@ export class MetaverseWeaponPresentationRuntime {
   #adsLatched = false;
   #adsBlend = 0;
   #cameraFieldOfViewDegrees: number;
+  #cameraFieldOfViewTransitionOverride: MetaverseWeaponCameraFieldOfViewTransition | null =
+    null;
   #combatPresentationSuppressed = false;
   #firePressedThisFrame = false;
   #fireTriggerHeld = false;
@@ -502,7 +550,8 @@ export class MetaverseWeaponPresentationRuntime {
       return;
     }
 
-    const previousWeaponId = this.#activeWeapon?.weaponId ?? null;
+    const previousWeapon = this.#activeWeapon;
+    const previousWeaponId = previousWeapon?.weaponId ?? null;
 
     this.#weaponSlots = nextSlots;
     this.#activeSlotId = nextActiveSlotId;
@@ -511,7 +560,7 @@ export class MetaverseWeaponPresentationRuntime {
     if (previousWeaponId !== this.#activeWeapon?.weaponId) {
       this.#adsLatched = false;
       this.#adsBlend = 0;
-      this.#cameraFieldOfViewDegrees = this.#baseFieldOfViewDegrees;
+      this.#beginWeaponSwitchCameraZoomOut(previousWeapon);
     }
   }
 
@@ -527,6 +576,7 @@ export class MetaverseWeaponPresentationRuntime {
     this.#adsLatched = false;
     this.#adsBlend = 0;
     this.#cameraFieldOfViewDegrees = this.#baseFieldOfViewDegrees;
+    this.#cameraFieldOfViewTransitionOverride = null;
     this.#firePressedThisFrame = false;
     this.#fireTriggerHeld = false;
     this.#pendingSlotSwitchIntent = null;
@@ -595,18 +645,102 @@ export class MetaverseWeaponPresentationRuntime {
       targetAimMode === "ads" ? 1 : 0,
       transitionStep
     );
-    this.#cameraFieldOfViewDegrees =
+    this.#advanceCameraFieldOfView(
+      equippedWeapon,
+      targetAimMode,
+      deltaSeconds
+    );
+    this.#syncPublishedState(visible, targetAimMode);
+  }
+
+  #advanceCameraFieldOfView(
+    equippedWeapon: ResolvedMetaverseWeaponPresentation | null,
+    targetAimMode: MetaverseRealtimePlayerWeaponAimModeId,
+    deltaSeconds: number
+  ): void {
+    const cameraTransitionOverride =
+      this.#cameraFieldOfViewTransitionOverride;
+    const cameraTransition =
+      targetAimMode === "ads" || cameraTransitionOverride === null
+        ? this.#createActiveWeaponCameraFieldOfViewTransition(
+            equippedWeapon,
+            targetAimMode
+          )
+        : cameraTransitionOverride;
+
+    if (targetAimMode === "ads") {
+      this.#cameraFieldOfViewTransitionOverride = null;
+    }
+
+    this.#cameraFieldOfViewDegrees = advanceCameraFieldOfViewDegrees(
+      this.#cameraFieldOfViewDegrees,
+      cameraTransition,
+      deltaSeconds
+    );
+
+    if (
+      cameraTransitionOverride !== null &&
+      cameraTransition === cameraTransitionOverride &&
+      Math.abs(
+        this.#cameraFieldOfViewDegrees -
+          cameraTransitionOverride.targetFieldOfViewDegrees
+      ) <= cameraFieldOfViewEpsilonDegrees
+    ) {
+      this.#cameraFieldOfViewTransitionOverride = null;
+    }
+  }
+
+  #createActiveWeaponCameraFieldOfViewTransition(
+    equippedWeapon: ResolvedMetaverseWeaponPresentation | null,
+    targetAimMode: MetaverseRealtimePlayerWeaponAimModeId
+  ): MetaverseWeaponCameraFieldOfViewTransition {
+    const adsFieldOfViewDegrees =
       equippedWeapon === null
         ? this.#baseFieldOfViewDegrees
-        : lerp(
+        : resolveAdsFieldOfViewDegrees(
             this.#baseFieldOfViewDegrees,
-            resolveAdsFieldOfViewDegrees(
-              this.#baseFieldOfViewDegrees,
-              equippedWeapon.loadout.aimProfile.adsFovDegrees
-            ),
-            this.#adsBlend
+            equippedWeapon.loadout.aimProfile.adsFovDegrees
           );
-    this.#syncPublishedState(visible, targetAimMode);
+
+    return createCameraFieldOfViewTransition({
+      baseFieldOfViewDegrees: this.#baseFieldOfViewDegrees,
+      currentFieldOfViewDegrees: this.#cameraFieldOfViewDegrees,
+      referenceFieldOfViewDegrees: adsFieldOfViewDegrees,
+      targetFieldOfViewDegrees:
+        equippedWeapon !== null && targetAimMode === "ads"
+          ? adsFieldOfViewDegrees
+          : this.#baseFieldOfViewDegrees,
+      transitionSeconds:
+        equippedWeapon?.loadout.stats.handling.adsTransitionSeconds ?? 0
+    });
+  }
+
+  #beginWeaponSwitchCameraZoomOut(
+    outgoingWeapon: ResolvedMetaverseWeaponPresentation | null
+  ): void {
+    if (
+      outgoingWeapon === null ||
+      Math.abs(this.#cameraFieldOfViewDegrees - this.#baseFieldOfViewDegrees) <=
+        cameraFieldOfViewEpsilonDegrees
+    ) {
+      this.#cameraFieldOfViewTransitionOverride = null;
+      return;
+    }
+
+    const outgoingAdsFieldOfViewDegrees = resolveAdsFieldOfViewDegrees(
+      this.#baseFieldOfViewDegrees,
+      outgoingWeapon.loadout.aimProfile.adsFovDegrees
+    );
+
+    this.#cameraFieldOfViewTransitionOverride =
+      createCameraFieldOfViewTransition({
+        baseFieldOfViewDegrees: this.#baseFieldOfViewDegrees,
+        currentFieldOfViewDegrees: this.#cameraFieldOfViewDegrees,
+        referenceFieldOfViewDegrees: outgoingAdsFieldOfViewDegrees,
+        targetFieldOfViewDegrees: this.#baseFieldOfViewDegrees,
+        transitionSeconds:
+          outgoingWeapon.loadout.stats.handling.adsTransitionSeconds
+      });
   }
 
   #toggleActiveWeaponSlot(): void {
@@ -625,6 +759,8 @@ export class MetaverseWeaponPresentationRuntime {
       return;
     }
 
+    const previousWeapon = this.#activeWeapon;
+
     this.#activeSlotId = nextSlot.slotId;
     this.#pendingSlotSwitchIntent = Object.freeze({
       intendedWeaponId: nextSlot.weapon.weaponId,
@@ -633,7 +769,7 @@ export class MetaverseWeaponPresentationRuntime {
     });
     this.#adsLatched = false;
     this.#adsBlend = 0;
-    this.#cameraFieldOfViewDegrees = this.#baseFieldOfViewDegrees;
+    this.#beginWeaponSwitchCameraZoomOut(previousWeapon);
   }
 
   #createHudSnapshot(

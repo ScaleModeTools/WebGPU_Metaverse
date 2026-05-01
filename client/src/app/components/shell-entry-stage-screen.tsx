@@ -20,6 +20,8 @@ import {
 } from "../../metaverse/config/metaverse-room-network";
 import type { WebGpuMetaverseCapabilitySnapshot } from "../../metaverse/types/webgpu-capability";
 import type { MetaverseEntryStepId } from "../../navigation";
+import { MetaverseLaunchCinematicCanvas } from "../../metaverse";
+import { metaverseShellLaunchDevAccessConfig } from "../config/metaverse-shell-launch-dev-access";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { XIcon } from "lucide-react";
@@ -160,7 +162,9 @@ export function ShellEntryStageScreen({
     hasConfirmedProfile &&
     inputMode === "camera-thumb-trigger" &&
     nextMetaverseStep === "metaverse";
-  const showToolLauncher = import.meta.env.DEV;
+  const showLaunchDevButtons =
+    import.meta.env.DEV &&
+    !metaverseShellLaunchDevAccessConfig.hideEntryScreenButtons;
   const selectedTeamDeathmatchRoom =
     teamDeathmatchRoomEntries.find(isJoinableTeamDeathmatchRoom) ?? null;
 
@@ -255,22 +259,32 @@ export function ShellEntryStageScreen({
   }
 
   return (
-    <section className="relative overflow-x-hidden bg-game-stage text-game-foreground">
-      <div className="relative mx-auto flex min-h-dvh w-full max-w-5xl items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
-        <div className="flex w-full max-w-3xl flex-col items-center gap-8">
-          <div className="flex w-full flex-col items-center gap-5 text-center">
+    <section className="relative min-h-dvh overflow-hidden bg-game-stage text-game-foreground">
+      <MetaverseLaunchCinematicCanvas
+        capabilityStatus={capabilityStatus}
+        launchPending={metaverseLaunchPending}
+      />
+      <div className="relative z-10 min-h-dvh w-full">
+        <div
+          className={`absolute bottom-28 left-4 flex w-[calc(100%-2rem)] max-w-5xl flex-col gap-5 transition-all duration-500 ease-out sm:left-7 sm:w-[calc(100%-3.5rem)] lg:left-12 lg:w-[calc(100%-6rem)] ${
+            metaverseLaunchPending
+              ? "translate-y-3 opacity-0"
+              : "translate-y-0 opacity-100"
+          }`}
+        >
+          <div className="flex w-full flex-col items-start gap-3 text-left">
             <button
               aria-label={resolveLaunchActionLabel(
                 "free-roam",
                 capabilityStatus,
                 nextMetaverseStep
               )}
-              className="group w-full rounded-lg px-3 py-2 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-55"
+              className="group w-full rounded-lg px-0 py-1 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-55"
               disabled={!canLaunchFreeRoam}
               onClick={() => handleLaunchRequest("free-roam")}
               type="button"
             >
-              <span className="font-heading text-5xl font-semibold leading-none text-game-foreground transition-colors group-hover:text-primary sm:text-6xl">
+              <span className="block font-heading text-4xl font-semibold leading-none text-game-foreground transition-colors [text-shadow:0_3px_18px_rgb(0_0_0_/_0.75)] group-hover:text-primary sm:text-6xl lg:text-7xl">
                 Metaverse
               </span>
             </button>
@@ -280,12 +294,12 @@ export function ShellEntryStageScreen({
                 capabilityStatus,
                 nextMetaverseStep
               )}
-              className="group w-full rounded-lg px-3 py-2 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-55"
+              className="group w-full rounded-lg px-0 py-1 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-55"
               disabled={!canLaunchTeamDeathmatch}
               onClick={() => handleLaunchRequest("team-deathmatch")}
               type="button"
             >
-              <span className="font-heading text-5xl font-semibold leading-none text-game-foreground transition-colors group-hover:text-primary sm:text-6xl">
+              <span className="block whitespace-nowrap font-heading text-4xl font-semibold leading-none text-game-foreground transition-colors [text-shadow:0_3px_18px_rgb(0_0_0_/_0.75)] group-hover:text-primary sm:text-6xl lg:text-7xl">
                 Team Deathmatch
               </span>
             </button>
@@ -304,38 +318,7 @@ export function ShellEntryStageScreen({
           ) : null}
 
           <div className="flex w-full max-w-sm flex-col gap-3">
-            <form className="flex flex-col gap-2" onSubmit={onSubmit}>
-              <div className="flex items-center gap-2">
-                <Input
-                  aria-invalid={loginError !== null}
-                  aria-label="Player name"
-                  autoComplete="nickname"
-                  className="h-11 flex-1"
-                  id="login-username"
-                  onChange={(event) => setUsernameDraft(event.target.value)}
-                  placeholder="Unknown"
-                  value={usernameDraft}
-                />
-                {hasStoredProfile || hasConfirmedProfile ? (
-                  <Button
-                    aria-label="Clear local profile"
-                    onClick={onClearProfile}
-                    size="icon"
-                    type="button"
-                    variant="outline"
-                  >
-                    <XIcon />
-                  </Button>
-                ) : null}
-              </div>
-              {loginError !== null ? (
-                <div className="surface-game-danger rounded-xl px-3 py-2 text-sm leading-6">
-                  {loginError}
-                </div>
-              ) : null}
-            </form>
-
-            {showToolLauncher ? (
+            {showLaunchDevButtons ? (
               <div className="flex flex-col gap-2">
                 <EngineToolLauncher
                   className="w-full"
@@ -361,6 +344,44 @@ export function ShellEntryStageScreen({
             ) : null}
           </div>
         </div>
+
+        <form
+          className={`absolute bottom-7 left-1/2 flex w-[min(24rem,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-2 transition-all duration-500 ease-out ${
+            metaverseLaunchPending
+              ? "translate-y-3 opacity-0"
+              : "translate-y-0 opacity-100"
+          }`}
+          onSubmit={onSubmit}
+        >
+          <div className="flex items-center gap-2">
+            <Input
+              aria-invalid={loginError !== null}
+              aria-label="Player name"
+              autoComplete="nickname"
+              className="h-11 flex-1"
+              id="login-username"
+              onChange={(event) => setUsernameDraft(event.target.value)}
+              placeholder="Unknown"
+              value={usernameDraft}
+            />
+            {hasStoredProfile || hasConfirmedProfile ? (
+              <Button
+                aria-label="Clear local profile"
+                onClick={onClearProfile}
+                size="icon"
+                type="button"
+                variant="outline"
+              >
+                <XIcon />
+              </Button>
+            ) : null}
+          </div>
+          {loginError !== null ? (
+            <div className="surface-game-danger rounded-xl px-3 py-2 text-sm leading-6">
+              {loginError}
+            </div>
+          ) : null}
+        </form>
       </div>
     </section>
   );

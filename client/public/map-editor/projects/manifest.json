@@ -3,9 +3,20 @@
     {
       "bundleId": "private-build",
       "label": "Private",
+      "mapEditorProjectSettings": null,
       "path": "/map-editor/projects/private-build.json",
       "sourceBundleId": "staging-ground",
       "updatedAt": "2026-04-26T00:42:07.197Z"
+    },
+    {
+      "bundleId": "vibjamprototype",
+      "label": "VibeJam",
+      "mapEditorProjectSettings": {
+        "helperGridSizeMeters": 480
+      },
+      "path": "/map-editor/projects/vibjamprototype.json",
+      "sourceBundleId": "blank-template",
+      "updatedAt": "2026-04-30T23:53:50.494Z"
     }
   ],
   "version": 1

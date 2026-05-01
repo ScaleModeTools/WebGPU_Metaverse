@@ -415,7 +415,7 @@ export const metaverseCombatAudioContentCatalog = {
           destination,
           now,
           0.044,
-          0.23,
+          0.36,
           460,
           "lowpass"
         );
@@ -426,7 +426,7 @@ export const metaverseCombatAudioContentCatalog = {
           74,
           0.058,
           "triangle",
-          0.14,
+          0.23,
           42
         );
         scheduleNoiseBurst(
@@ -434,7 +434,7 @@ export const metaverseCombatAudioContentCatalog = {
           destination,
           now + 0.017,
           0.04,
-          0.11,
+          0.18,
           900,
           "bandpass"
         );
@@ -456,7 +456,7 @@ export const metaverseCombatAudioContentCatalog = {
           destination,
           now,
           0.042,
-          0.215,
+          0.34,
           520,
           "lowpass"
         );
@@ -467,7 +467,7 @@ export const metaverseCombatAudioContentCatalog = {
           84,
           0.054,
           "triangle",
-          0.13,
+          0.215,
           48
         );
         scheduleNoiseBurst(
@@ -475,7 +475,7 @@ export const metaverseCombatAudioContentCatalog = {
           destination,
           now + 0.018,
           0.038,
-          0.105,
+          0.17,
           1060,
           "bandpass"
         );

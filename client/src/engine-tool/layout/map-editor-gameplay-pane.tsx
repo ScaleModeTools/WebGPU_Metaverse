@@ -147,7 +147,7 @@ export function MapEditorGameplayPane({
             onOpenChange={onSectionOpenChange}
             open={readSectionOpen("gameplay-pane:variations", true)}
             sectionId="gameplay-pane:variations"
-            title="Launch Variations"
+            title="Launch Setups"
           >
             <MapEditorLaunchVariationsPanel
               launchVariationDrafts={project.launchVariationDrafts}

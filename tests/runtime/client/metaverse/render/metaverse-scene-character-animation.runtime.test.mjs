@@ -695,6 +695,10 @@ test("createHeldWeaponPoseRuntime captures sampled TRS for held-object arms and 
     characterScene,
     "grip_r_socket"
   );
+  const leftPalmSocketNode = findMetaverseSceneSocketNode(
+    characterScene,
+    "palm_l_socket"
+  );
   const leftSupportSocketNode = findMetaverseSceneSocketNode(
     characterScene,
     "support_l_socket"
@@ -741,6 +745,11 @@ test("createHeldWeaponPoseRuntime captures sampled TRS for held-object arms and 
       heldWeaponPoseRuntime.contactFrameRuntimeByHand.right.support_palm.node.quaternion
     ) > 0.08,
     "Expected support palm contact calibration to use hand-specific orientation instead of sharing the same left/right frame."
+  );
+  assert.ok(
+    heldWeaponPoseRuntime.contactFrameRuntimeByHand.left.support_palm.node.position.z <
+      leftPalmSocketNode.position.z,
+    "Expected left support palm contact calibration to sit on the palmar side of the palm socket instead of the dorsal side."
   );
   const sampledDrivenBoneByName = new Map(
     heldWeaponPoseRuntime.drivenBones.map((drivenBone) => [
@@ -1714,6 +1723,8 @@ test("createMetaverseScene keeps traversal as the held-object IK base locally an
   const rightIndexTipNode = sceneRuntime.scene.getObjectByName("index_03_r");
   const rightThumbBaseNode = sceneRuntime.scene.getObjectByName("thumb_01_r");
   const rightMiddleBaseNode = sceneRuntime.scene.getObjectByName("middle_01_r");
+  const rightMiddleMiddleNode = sceneRuntime.scene.getObjectByName("middle_02_r");
+  const rightMiddleTipNode = sceneRuntime.scene.getObjectByName("middle_03_r");
   const rightRingBaseNode = sceneRuntime.scene.getObjectByName("ring_01_r");
   const rightPinkyBaseNode = sceneRuntime.scene.getObjectByName("pinky_01_r");
   const leftPinkyBaseNode = sceneRuntime.scene.getObjectByName("pinky_01_l");
@@ -1740,6 +1751,8 @@ test("createMetaverseScene keeps traversal as the held-object IK base locally an
   assert.ok(rightIndexTipNode);
   assert.ok(rightThumbBaseNode);
   assert.ok(rightMiddleBaseNode);
+  assert.ok(rightMiddleMiddleNode);
+  assert.ok(rightMiddleTipNode);
   assert.ok(rightRingBaseNode);
   assert.ok(rightPinkyBaseNode);
   assert.ok(leftPinkyBaseNode);
@@ -1766,6 +1779,9 @@ test("createMetaverseScene keeps traversal as the held-object IK base locally an
       rightPrimaryTriggerContactFrameNode.getWorldQuaternion(new Quaternion())
     )
     .normalize();
+  const leftPalmSupportNormal = new Vector3(0, 0, 1)
+    .applyQuaternion(leftPalmSocketNode.getWorldQuaternion(new Quaternion()))
+    .normalize();
   const initialLeftSupportContactLocalPosition = attachmentRoot.worldToLocal(
     leftSupportPalmContactFrameNode.getWorldPosition(new Vector3())
   );
@@ -1785,6 +1801,12 @@ test("createMetaverseScene keeps traversal as the held-object IK base locally an
     new Vector3()
   );
   const rightIndexTipWorldPosition = rightIndexTipNode.getWorldPosition(new Vector3());
+  const rightMiddleBaseHandLocalPosition = handRBone.worldToLocal(
+    rightMiddleBaseNode.getWorldPosition(new Vector3())
+  );
+  const rightMiddleTipHandLocalPosition = handRBone.worldToLocal(
+    rightMiddleTipNode.getWorldPosition(new Vector3())
+  );
   const rightTriggerContactWorldPosition = (() => {
     const baseSegmentClosestPoint = resolveClosestPointOnSegment(
       rightIndexBaseWorldPosition,
@@ -1890,6 +1912,21 @@ test("createMetaverseScene keeps traversal as the held-object IK base locally an
       .getWorldPosition(new Vector3())
       .distanceTo(supportMarkerWorldPosition) < 0.12,
     `Expected left support palm contact frame ${leftSupportPalmContactFrameNode.getWorldPosition(new Vector3()).toArray()} to use the authored support marker ${supportMarkerWorldPosition.toArray()} as a soft support hint.`
+  );
+  assert.ok(
+    leftSupportPalmContactFrameNode
+      .getWorldQuaternion(new Quaternion())
+      .angleTo(supportMarkerNode.getWorldQuaternion(new Quaternion())) < 0.04,
+    "Expected the support palm contact frame to match the pistol support marker orientation instead of blending back toward the dorsal-side animation pose."
+  );
+  assert.ok(
+    leftPalmSupportNormal.dot(targetGripUp) > 0.18,
+    `Expected the sidearm support palm normal ${leftPalmSupportNormal.toArray()} to face upward with the pistol instead of rolling palm-down against ${targetGripUp.toArray()}.`
+  );
+  assert.ok(
+    rightMiddleTipHandLocalPosition.y <
+      rightMiddleBaseHandLocalPosition.y - 0.012,
+    `Expected authored right trigger-grip finger pose to curl the middle finger inward/down from ${rightMiddleBaseHandLocalPosition.toArray()} to ${rightMiddleTipHandLocalPosition.toArray()}, not mirror outward.`
   );
   assert.ok(
     triggerMarkerWorldPosition.distanceTo(
@@ -2237,16 +2274,6 @@ test("createMetaverseScene keeps traversal as the held-object IK base locally an
   const adsDownSupportMarkerLocalPosition = attachmentRoot.worldToLocal(
     supportMarkerNode.getWorldPosition(new Vector3())
   );
-  const supportPalmSideWorldDirection = new Vector3(0, 0, 1)
-    .applyQuaternion(
-      leftSupportPalmContactFrameNode.getWorldQuaternion(new Quaternion())
-    )
-    .normalize();
-  const supportPalmToPistolWorldDirection = supportMarkerNode
-    .getWorldPosition(new Vector3())
-    .sub(leftSupportPalmContactFrameNode.getWorldPosition(new Vector3()))
-    .normalize();
-
   assert.ok(
     adsDownLeftSupportContactLocalPosition.distanceTo(
       adsDownSupportMarkerLocalPosition
@@ -2259,8 +2286,10 @@ test("createMetaverseScene keeps traversal as the held-object IK base locally an
     `Expected secondary support contact local Y ${adsDownLeftSupportContactLocalPosition.y.toFixed(4)} to stay on the mag floorplate below or level with primary trigger contact local Y ${adsDownPrimaryTriggerContactLocalPosition.y.toFixed(4)}.`
   );
   assert.ok(
-    supportPalmSideWorldDirection.dot(supportPalmToPistolWorldDirection) > 0.12,
-    `Expected left support palm side to face the pistol support marker, but dot was ${supportPalmSideWorldDirection.dot(supportPalmToPistolWorldDirection).toFixed(4)}.`
+    leftSupportPalmContactFrameNode
+      .getWorldQuaternion(new Quaternion())
+      .angleTo(supportMarkerNode.getWorldQuaternion(new Quaternion())) < 0.08,
+    "Expected steep down ADS support palm orientation to stay aligned with the pistol support marker instead of rolling back onto the dorsal side."
   );
   assert.ok(
     adsDownPrimaryContactCameraForwardDistance > 0,

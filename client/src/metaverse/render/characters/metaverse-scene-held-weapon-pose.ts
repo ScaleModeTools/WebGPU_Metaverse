@@ -144,6 +144,20 @@ interface HeldWeaponContactFrameDescriptor {
   readonly wristLimitRadians: number;
 }
 
+interface HeldWeaponFingerChainPoseDescriptor {
+  readonly baseLocalRotationRadians: readonly [number, number, number];
+  readonly middleLocalRotationRadians: readonly [number, number, number];
+  readonly tipLocalRotationRadians: readonly [number, number, number];
+}
+
+type HeldWeaponFingerPoseHandDescriptor = Readonly<
+  Record<keyof HeldWeaponFingerChainsRuntime, HeldWeaponFingerChainPoseDescriptor>
+>;
+
+type HeldWeaponFingerPoseDescriptorByHand = Readonly<
+  Record<MetaverseHeldObjectSolverHandId, HeldWeaponFingerPoseHandDescriptor>
+>;
+
 export interface MetaverseHeldWeaponPoseRuntimeNodeResolvers {
   readonly findBoneNode: (
     characterScene: Group,
@@ -166,39 +180,64 @@ const heldWeaponHipFireDownMeters = 0;
 const heldWeaponLeftArmReachSlackMeters = 0.001;
 const heldWeaponRightArmReachSlackMeters = 0.045;
 const heldWeaponSupportPalmHintLeftArmReachSlackMeters = 0.005;
-const heldWeaponSupportPalmHintRotationInfluence = 0.48;
+const heldWeaponSupportPalmHintRotationInfluence = 1;
 const heldWeaponSecondaryGripRefinementPassCount = 3;
 const heldWeaponGripFingerContactLocalOffsetMeters = 0.014;
 const heldWeaponRightTriggerContactLocalExtensionScale = 0.36;
 export const heldWeaponSolveDirectionEpsilon = 0.000001;
-const heldWeaponFingerCurlAxis = new Vector3(0, 0, 1);
 const heldWeaponContactFrameDescriptors = Object.freeze({
   primary_trigger_grip: Object.freeze({
     baseSocket: "grip",
+    handOverrides: Object.freeze({
+      right: Object.freeze({
+        localPositionOffset: [-0.012, -0.01, 0.006] as const,
+        localRotationOffsetRadians: [0, 0, 0] as const
+      })
+    }),
     localPositionOffset: [-0.012, -0.01, 0.006] as const,
-    localRotationOffsetRadians: [0.08, 0, -0.1] as const,
+    localRotationOffsetRadians: [0, 0, 0] as const,
     wristLimitRadians: 0.95
   }),
   heavy_trigger_grip: Object.freeze({
     baseSocket: "grip",
+    handOverrides: Object.freeze({
+      right: Object.freeze({
+        localPositionOffset: [-0.018, -0.014, 0.006] as const,
+        localRotationOffsetRadians: [0.1, 0, -0.08] as const
+      })
+    }),
     localPositionOffset: [-0.018, -0.014, 0.006] as const,
-    localRotationOffsetRadians: [0.1, 0, -0.08] as const,
+    localRotationOffsetRadians: [0.1, 0, 0.08] as const,
     wristLimitRadians: 0.9
   }),
   support_palm: Object.freeze({
     baseSocket: "palm",
     handOverrides: Object.freeze({
       left: Object.freeze({
-        localPositionOffset: [0.01, -0.004, 0.014] as const,
-        localRotationOffsetRadians: [-0.12, -0.08, -0.22] as const
+        localPositionOffset: [0.01, -0.004, -0.014] as const,
+        localRotationOffsetRadians: [Math.PI / 2, 0, 0] as const
+      }),
+      right: Object.freeze({
+        localPositionOffset: [0.01, -0.004, -0.014] as const,
+        localRotationOffsetRadians: [-Math.PI / 2, 0, 0] as const
       })
     }),
-    localPositionOffset: [0.01, -0.004, 0.014] as const,
-    localRotationOffsetRadians: [-0.12, 0.08, 0.22] as const,
+    localPositionOffset: [0.01, -0.004, -0.014] as const,
+    localRotationOffsetRadians: [Math.PI / 2, 0, 0] as const,
     wristLimitRadians: 0.7
   }),
   support_handle_grip: Object.freeze({
     baseSocket: "support",
+    handOverrides: Object.freeze({
+      left: Object.freeze({
+        localPositionOffset: [-0.006, -0.016, 0] as const,
+        localRotationOffsetRadians: [0.06, 0, -0.08] as const
+      }),
+      right: Object.freeze({
+        localPositionOffset: [-0.006, -0.016, 0] as const,
+        localRotationOffsetRadians: [0.06, 0, 0.08] as const
+      })
+    }),
     localPositionOffset: [-0.006, -0.016, 0] as const,
     localRotationOffsetRadians: [0.06, 0, 0.08] as const,
     wristLimitRadians: 0.85
@@ -223,6 +262,103 @@ const heldWeaponContactFrameDescriptors = Object.freeze({
   })
 } as const satisfies Readonly<
   Record<MetaverseLocalHeldObjectContactFrameId, HeldWeaponContactFrameDescriptor>
+>);
+
+function createFingerChainPose(
+  baseCurlRadians: number,
+  middleCurlRadians: number,
+  tipCurlRadians: number,
+  handId: MetaverseHeldObjectSolverHandId
+): HeldWeaponFingerChainPoseDescriptor {
+  const curlSign = handId === "right" ? -1 : 1;
+
+  return Object.freeze({
+    baseLocalRotationRadians: [0, 0, baseCurlRadians * curlSign],
+    middleLocalRotationRadians: [0, 0, middleCurlRadians * curlSign],
+    tipLocalRotationRadians: [0, 0, tipCurlRadians * curlSign]
+  } as const satisfies HeldWeaponFingerChainPoseDescriptor);
+}
+
+function createFingerPoseHandDescriptor(
+  handId: MetaverseHeldObjectSolverHandId,
+  input: {
+    readonly index: readonly [number, number, number];
+    readonly middle: readonly [number, number, number];
+    readonly pinky: readonly [number, number, number];
+    readonly ring: readonly [number, number, number];
+    readonly thumb: readonly [number, number, number];
+  }
+): HeldWeaponFingerPoseHandDescriptor {
+  return Object.freeze({
+    index: createFingerChainPose(input.index[0], input.index[1], input.index[2], handId),
+    middle: createFingerChainPose(input.middle[0], input.middle[1], input.middle[2], handId),
+    pinky: createFingerChainPose(input.pinky[0], input.pinky[1], input.pinky[2], handId),
+    ring: createFingerChainPose(input.ring[0], input.ring[1], input.ring[2], handId),
+    thumb: createFingerChainPose(input.thumb[0], input.thumb[1], input.thumb[2], handId)
+  } as const satisfies HeldWeaponFingerPoseHandDescriptor);
+}
+
+function createMirroredFingerPoseDescriptor(
+  input: Parameters<typeof createFingerPoseHandDescriptor>[1]
+): HeldWeaponFingerPoseDescriptorByHand {
+  return Object.freeze({
+    left: createFingerPoseHandDescriptor("left", input),
+    right: createFingerPoseHandDescriptor("right", input)
+  } as const satisfies HeldWeaponFingerPoseDescriptorByHand);
+}
+
+const heldWeaponFingerPoseDescriptors = Object.freeze({
+  relaxed_open: createMirroredFingerPoseDescriptor({
+    thumb: [0, 0, 0],
+    index: [0, 0, 0],
+    middle: [0, 0, 0],
+    ring: [0, 0, 0],
+    pinky: [0, 0, 0]
+  }),
+  pistol_grip_trigger_index: createMirroredFingerPoseDescriptor({
+    thumb: [0.32, 0.24, 0.14],
+    index: [0.12, 0.06, 0.03],
+    middle: [0.58, 0.46, 0.32],
+    ring: [0.62, 0.5, 0.36],
+    pinky: [0.66, 0.52, 0.38]
+  }),
+  support_palm_optional: createMirroredFingerPoseDescriptor({
+    thumb: [0.1, 0.06, 0.04],
+    index: [0.12, 0.08, 0.06],
+    middle: [0.14, 0.1, 0.06],
+    ring: [0.12, 0.08, 0.06],
+    pinky: [0.1, 0.08, 0.04]
+  }),
+  long_gun_trigger_grip: createMirroredFingerPoseDescriptor({
+    thumb: [0.26, 0.2, 0.12],
+    index: [0.1, 0.06, 0.03],
+    middle: [0.54, 0.42, 0.3],
+    ring: [0.56, 0.44, 0.32],
+    pinky: [0.58, 0.46, 0.34]
+  }),
+  foregrip_support: createMirroredFingerPoseDescriptor({
+    thumb: [0.22, 0.18, 0.1],
+    index: [0.42, 0.34, 0.24],
+    middle: [0.46, 0.38, 0.26],
+    ring: [0.46, 0.38, 0.26],
+    pinky: [0.42, 0.34, 0.24]
+  }),
+  heavy_trigger_grip: createMirroredFingerPoseDescriptor({
+    thumb: [0.24, 0.18, 0.1],
+    index: [0.1, 0.06, 0.03],
+    middle: [0.48, 0.38, 0.26],
+    ring: [0.5, 0.4, 0.28],
+    pinky: [0.52, 0.42, 0.3]
+  }),
+  support_handle_grip: createMirroredFingerPoseDescriptor({
+    thumb: [0.28, 0.22, 0.12],
+    index: [0.5, 0.4, 0.28],
+    middle: [0.54, 0.44, 0.3],
+    ring: [0.54, 0.44, 0.3],
+    pinky: [0.5, 0.4, 0.28]
+  })
+} as const satisfies Readonly<
+  Record<MetaverseHeldObjectFingerPoseId, HeldWeaponFingerPoseDescriptorByHand>
 >);
 const heldWeaponClampedHandTargetWorldPositionScratch = new Vector3();
 const heldWeaponCameraWorldPositionScratch = new Vector3();
@@ -934,8 +1070,8 @@ function alignBoneTowardEffectorWorldQuaternion(
     return;
   }
 
-  bone.updateMatrixWorld(true);
-  effectorNode.updateMatrixWorld(true);
+  bone.updateWorldMatrix(true, true);
+  effectorNode.updateWorldMatrix(true, false);
   resolveHandBoneTargetWorldQuaternion(
     bone,
     effectorNode,
@@ -949,7 +1085,7 @@ function alignBoneTowardEffectorWorldQuaternion(
     .copy(heldWeaponParentWorldQuaternionInverseScratch)
     .multiply(heldWeaponHandTargetWorldQuaternionScratch)
     .normalize();
-  bone.updateMatrixWorld(true);
+  bone.updateWorldMatrix(true, true);
 }
 
 function alignBoneTowardWorldPoint(
@@ -1453,10 +1589,13 @@ function alignOffHandBoneTowardHeldWeaponTarget(
       offHandEffectorNode,
       offHandTargetWorldQuaternion
     );
+    heldWeaponSolveInfluenceQuaternionScratch.copy(
+      heldWeaponPoseRuntime.leftHandBone.quaternion
+    );
     heldWeaponPoseRuntime.leftHandBone.quaternion
       .slerpQuaternions(
         heldWeaponSupportPalmPreAlignLocalQuaternionScratch,
-        heldWeaponPoseRuntime.leftHandBone.quaternion,
+        heldWeaponSolveInfluenceQuaternionScratch,
         heldWeaponSupportPalmHintRotationInfluence
       )
       .normalize();
@@ -1899,13 +2038,13 @@ function syncFingerChainContactPose(
   );
 }
 
-function applyFingerBoneCurl(
+function applyFingerBoneAuthoredLocalRotation(
   heldWeaponPoseRuntime: Pick<
     HumanoidV2HeldWeaponPoseRuntime,
     "drivenBoneRuntimeByBone"
   >,
   bone: Bone,
-  curlRadians: number
+  localRotationRadians: readonly [number, number, number]
 ): void {
   const drivenBone = heldWeaponPoseRuntime.drivenBoneRuntimeByBone.get(bone);
 
@@ -1916,47 +2055,42 @@ function applyFingerBoneCurl(
   }
 
   bone.quaternion.copy(drivenBone.rigNeutralLocalQuaternion);
-
-  if (Math.abs(curlRadians) <= heldWeaponSolveDirectionEpsilon) {
-    normalizeBoneLocalQuaternion(bone);
-    bone.updateMatrixWorld(true);
-    return;
-  }
-
   bone.quaternion.multiply(
-    heldWeaponFingerCurlQuaternionScratch.setFromAxisAngle(
-      heldWeaponFingerCurlAxis,
-      curlRadians
+    heldWeaponFingerCurlQuaternionScratch.setFromEuler(
+      heldWeaponContactFrameOffsetEulerScratch.set(
+        localRotationRadians[0],
+        localRotationRadians[1],
+        localRotationRadians[2],
+        "XYZ"
+      )
     )
   );
   normalizeBoneLocalQuaternion(bone);
   bone.updateMatrixWorld(true);
 }
 
-function applyFingerChainCurlPose(
+function applyFingerChainAuthoredPose(
   heldWeaponPoseRuntime: Pick<
     HumanoidV2HeldWeaponPoseRuntime,
     "drivenBoneRuntimeByBone"
   >,
   fingerChain: HeldWeaponFingerChainRuntime,
-  baseCurlRadians: number,
-  middleCurlRadians: number,
-  tipCurlRadians: number
+  fingerPose: HeldWeaponFingerChainPoseDescriptor
 ): void {
-  applyFingerBoneCurl(
+  applyFingerBoneAuthoredLocalRotation(
     heldWeaponPoseRuntime,
     fingerChain.baseBone,
-    baseCurlRadians
+    fingerPose.baseLocalRotationRadians
   );
-  applyFingerBoneCurl(
+  applyFingerBoneAuthoredLocalRotation(
     heldWeaponPoseRuntime,
     fingerChain.middleBone,
-    middleCurlRadians
+    fingerPose.middleLocalRotationRadians
   );
-  applyFingerBoneCurl(
+  applyFingerBoneAuthoredLocalRotation(
     heldWeaponPoseRuntime,
     fingerChain.tipBone,
-    tipCurlRadians
+    fingerPose.tipLocalRotationRadians
   );
 }
 
@@ -1966,243 +2100,36 @@ function applyHeldObjectFingerPose(
     "drivenBoneRuntimeByBone"
   >,
   fingerChains: HeldWeaponFingerChainsRuntime,
+  handId: MetaverseHeldObjectSolverHandId,
   fingerPoseId: MetaverseHeldObjectFingerPoseId
 ): void {
-  switch (fingerPoseId) {
-    case "relaxed_open":
-      for (const fingerChain of Object.values(fingerChains)) {
-        applyFingerChainCurlPose(
-          heldWeaponPoseRuntime,
-          fingerChain,
-          0,
-          0,
-          0
-        );
-      }
-      return;
-    case "pistol_grip_trigger_index":
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.thumb,
-        0.32,
-        0.24,
-        0.14
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.index,
-        0.12,
-        0.06,
-        0.03
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.middle,
-        0.58,
-        0.46,
-        0.32
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.ring,
-        0.62,
-        0.5,
-        0.36
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.pinky,
-        0.66,
-        0.52,
-        0.38
-      );
-      return;
-    case "support_palm_optional":
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.thumb,
-        0.1,
-        0.06,
-        0.04
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.index,
-        0.12,
-        0.08,
-        0.06
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.middle,
-        0.14,
-        0.1,
-        0.06
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.ring,
-        0.12,
-        0.08,
-        0.06
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.pinky,
-        0.1,
-        0.08,
-        0.04
-      );
-      return;
-    case "long_gun_trigger_grip":
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.thumb,
-        0.26,
-        0.2,
-        0.12
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.index,
-        0.1,
-        0.06,
-        0.03
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.middle,
-        0.54,
-        0.42,
-        0.3
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.ring,
-        0.56,
-        0.44,
-        0.32
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.pinky,
-        0.58,
-        0.46,
-        0.34
-      );
-      return;
-    case "foregrip_support":
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.thumb,
-        0.22,
-        0.18,
-        0.1
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.index,
-        0.42,
-        0.34,
-        0.24
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.middle,
-        0.46,
-        0.38,
-        0.26
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.ring,
-        0.46,
-        0.38,
-        0.26
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.pinky,
-        0.42,
-        0.34,
-        0.24
-      );
-      return;
-    case "heavy_trigger_grip":
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.thumb,
-        0.24,
-        0.18,
-        0.1
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.index,
-        0.1,
-        0.06,
-        0.03
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.middle,
-        0.48,
-        0.38,
-        0.26
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.ring,
-        0.5,
-        0.4,
-        0.28
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.pinky,
-        0.52,
-        0.42,
-        0.3
-      );
-      return;
-    case "support_handle_grip":
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.thumb,
-        0.28,
-        0.22,
-        0.12
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.index,
-        0.5,
-        0.4,
-        0.28
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.middle,
-        0.54,
-        0.44,
-        0.3
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.ring,
-        0.54,
-        0.44,
-        0.3
-      );
-      applyFingerChainCurlPose(
-        heldWeaponPoseRuntime,
-        fingerChains.pinky,
-        0.5,
-        0.4,
-        0.28
-      );
-      return;
-  }
+  const fingerPose = heldWeaponFingerPoseDescriptors[fingerPoseId][handId];
+
+  applyFingerChainAuthoredPose(
+    heldWeaponPoseRuntime,
+    fingerChains.thumb,
+    fingerPose.thumb
+  );
+  applyFingerChainAuthoredPose(
+    heldWeaponPoseRuntime,
+    fingerChains.index,
+    fingerPose.index
+  );
+  applyFingerChainAuthoredPose(
+    heldWeaponPoseRuntime,
+    fingerChains.middle,
+    fingerPose.middle
+  );
+  applyFingerChainAuthoredPose(
+    heldWeaponPoseRuntime,
+    fingerChains.ring,
+    fingerPose.ring
+  );
+  applyFingerChainAuthoredPose(
+    heldWeaponPoseRuntime,
+    fingerChains.pinky,
+    fingerPose.pinky
+  );
 }
 
 function syncRightTriggerFingerPose(
@@ -2611,6 +2538,7 @@ export function syncHumanoidV2HeldWeaponPose<
   applyHeldObjectFingerPose(
     heldWeaponPoseRuntime,
     heldWeaponPoseRuntime.fingerChainsByHand[gripAssignment.primaryHand],
+    gripAssignment.primaryHand,
     solverProfile.fingerPose.primary
   );
   characterProofRuntime.anchorGroup.updateMatrixWorld(true);
@@ -2717,6 +2645,7 @@ export function syncHumanoidV2HeldWeaponPose<
     applyHeldObjectFingerPose(
       heldWeaponPoseRuntime,
       heldWeaponPoseRuntime.fingerChainsByHand[gripAssignment.secondaryHand],
+      gripAssignment.secondaryHand,
       solverProfile.fingerPose.secondary
     );
     characterProofRuntime.anchorGroup.updateMatrixWorld(true);

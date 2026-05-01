@@ -266,7 +266,7 @@ test("MetaverseWeaponPresentationRuntime equips rocket launcher from plural atta
   assert.equal(runtime.weaponState?.slots.length, 2);
 });
 
-test("MetaverseWeaponPresentationRuntime toggles pistol and rocket slots and resets ADS", async () => {
+test("MetaverseWeaponPresentationRuntime toggles pistol and rocket slots while smoothing ADS zoom out", async () => {
   const [
     { MetaverseWeaponPresentationRuntime },
     { metaverseAttachmentProofConfigs }
@@ -291,8 +291,10 @@ test("MetaverseWeaponPresentationRuntime toggles pistol and rocket slots and res
 
   assert.equal(runtime.hudSnapshot.weaponId, "metaverse-service-pistol-v2");
   assert.equal(runtime.hudSnapshot.aimMode, "ads");
+  assert.ok(runtime.cameraFieldOfViewDegrees < 70);
   assert.equal(runtime.weaponState?.activeSlotId, "primary");
   assert.equal(runtime.weaponState?.slots.length, 2);
+  const pistolAdsFieldOfViewDegrees = runtime.cameraFieldOfViewDegrees;
 
   runtime.advance({
     deltaSeconds: 0.016,
@@ -306,9 +308,23 @@ test("MetaverseWeaponPresentationRuntime toggles pistol and rocket slots and res
 
   assert.equal(runtime.hudSnapshot.weaponId, "metaverse-rocket-launcher-v1");
   assert.equal(runtime.hudSnapshot.aimMode, "hip-fire");
-  assert.equal(runtime.cameraFieldOfViewDegrees, 70);
+  assert.equal(runtime.adsBlend, 0);
+  assert.ok(runtime.cameraFieldOfViewDegrees > pistolAdsFieldOfViewDegrees);
+  assert.ok(runtime.cameraFieldOfViewDegrees < 70);
   assert.equal(runtime.firePressedThisFrame, true);
   assert.equal(runtime.weaponState?.activeSlotId, "secondary");
+
+  runtime.advance({
+    deltaSeconds: 10,
+    flightInput: Object.freeze({
+      primaryAction: false,
+      secondaryAction: false,
+      weaponSwitchPressedCount: 0
+    }),
+    mountedEnvironment: null
+  });
+
+  assert.equal(runtime.cameraFieldOfViewDegrees, 70);
 
   runtime.advance({
     deltaSeconds: 0.016,

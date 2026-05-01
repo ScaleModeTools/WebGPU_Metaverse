@@ -12,9 +12,9 @@ const metaverseMovementAudioListenerUp = Object.freeze({
   z: 0
 });
 const metaverseMovementRemoteFootstepSpatialProfile = Object.freeze({
-  maxDistanceMeters: 42,
-  refDistanceMeters: 3.8,
-  rolloffFactor: 0.82
+  maxDistanceMeters: 72,
+  refDistanceMeters: 7.5,
+  rolloffFactor: 0.58
 });
 const metaverseMovementWalkCycleSeconds = 1.666667;
 const metaverseMovementWalkBasePlaybackRate = 1.1;

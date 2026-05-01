@@ -1,6 +1,7 @@
 import { Fragment, type CSSProperties } from "react";
 import { HomeIcon, RotateCcwIcon } from "lucide-react";
 
+import { StableInlineText } from "@/components/text-stability";
 import {
   Table,
   TableBody,
@@ -15,6 +16,10 @@ import type { MetaverseHudSnapshot } from "../types/metaverse-runtime";
 import { resolveMetaverseRespawnVisibleCountdownSecond } from "../config/metaverse-respawn-presentation";
 
 interface MetaverseTeamDeathmatchScoreboardHudProps {
+  readonly combatSnapshot: MetaverseHudSnapshot["combat"];
+}
+
+interface MetaverseTeamDeathmatchRespawnCountdownHudProps {
   readonly combatSnapshot: MetaverseHudSnapshot["combat"];
 }
 
@@ -199,15 +204,47 @@ function MetaverseTeamDeathmatchScoreboardTable({
   );
 }
 
+export function MetaverseTeamDeathmatchRespawnCountdownHud({
+  combatSnapshot
+}: MetaverseTeamDeathmatchRespawnCountdownHudProps) {
+  const respawnCountdownSecond =
+    combatSnapshot.available &&
+    !combatSnapshot.alive &&
+    combatSnapshot.matchPhase !== "completed"
+      ? resolveMetaverseRespawnVisibleCountdownSecond(
+          combatSnapshot.respawnRemainingMs
+        )
+      : null;
+
+  if (respawnCountdownSecond === null) {
+    return null;
+  }
+
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-1/2 z-[21] flex -translate-y-1/2 justify-center px-[var(--metaverse-hud-edge)]">
+      <div
+        aria-live="polite"
+        className="surface-game-overlay flex min-w-[min(16rem,calc(100vw-2rem))] flex-col items-center rounded-[var(--metaverse-hud-panel-radius)] px-5 py-4 text-center text-game-foreground shadow-[0_16px_48px_rgb(2_6_23_/_0.36)] [text-shadow:var(--game-text-shadow)]"
+        role="status"
+        style={metaverseHardHudTextShadowStyle}
+      >
+        <span className="type-game-banner text-game-foreground">
+          Respawning in
+        </span>
+        <StableInlineText
+          className="type-game-value mt-1 text-game-foreground"
+          reserveTexts={["1", "2", "3"]}
+          text={`${respawnCountdownSecond}`}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function MetaverseTeamDeathmatchScoreboardHud({
   combatSnapshot
 }: MetaverseTeamDeathmatchScoreboardHudProps) {
   const scoreboardSnapshot = combatSnapshot.scoreboard;
-  const respawnCountdownSecond = combatSnapshot.alive
-    ? null
-    : resolveMetaverseRespawnVisibleCountdownSecond(
-        combatSnapshot.respawnRemainingMs
-      );
 
   if (!scoreboardSnapshot.available) {
     return null;
@@ -224,14 +261,6 @@ export function MetaverseTeamDeathmatchScoreboardHud({
             scoreboardSnapshot={scoreboardSnapshot}
           />
         </div>
-        {respawnCountdownSecond === null ? null : (
-          <div
-            aria-live="polite"
-            className="surface-game-overlay min-w-[12rem] rounded-[var(--metaverse-hud-inset-radius)] px-4 py-2 text-center text-sm font-semibold uppercase text-game-foreground shadow-[0_12px_36px_rgb(2_6_23_/_0.32)] [text-shadow:var(--game-text-shadow)]"
-          >
-            Respawning in {respawnCountdownSecond}...
-          </div>
-        )}
       </div>
     </div>
   );
