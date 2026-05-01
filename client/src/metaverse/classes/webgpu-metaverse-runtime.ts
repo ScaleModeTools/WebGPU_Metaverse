@@ -232,10 +232,6 @@ export class WebGpuMetaverseRuntime {
             environmentAsset.traversalAffordance === "mount" &&
             environmentAsset.seats !== null
         ) ?? null,
-      resolveGroundedTraversalFilterPredicate: (excludedColliders = []) =>
-        environmentPhysicsRuntime.resolveGroundedTraversalFilterPredicate(
-          excludedColliders
-        ),
       readGroundedTraversalPlayerBlockers: () =>
         environmentPhysicsRuntime.readGroundedTraversalPlayerBlockers(),
       resolveWaterborneTraversalFilterPredicate: (

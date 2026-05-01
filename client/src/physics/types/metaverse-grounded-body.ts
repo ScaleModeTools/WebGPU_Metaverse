@@ -1,7 +1,6 @@
 import type {
   MetaverseGroundedBodyConfigSnapshot,
-  MetaverseGroundedBodyRuntimeSnapshot,
-  MetaverseGroundedBodyStepIntentSnapshot
+  MetaverseGroundedBodyRuntimeSnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 
 export interface PhysicsVector3Snapshot {
@@ -16,9 +15,6 @@ export interface PhysicsQuaternionSnapshot {
   readonly z: number;
   readonly w: number;
 }
-
-export type MetaverseGroundedBodyIntentSnapshot =
-  MetaverseGroundedBodyStepIntentSnapshot;
 
 export interface MetaverseGroundedBodySnapshot
   extends MetaverseGroundedBodyRuntimeSnapshot {

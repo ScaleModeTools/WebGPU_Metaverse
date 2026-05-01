@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
 import {
+  advanceMetaverseDeterministicUnmountedGroundedBodyStep,
   metaverseBuilderFloorTileEnvironmentAssetId,
   metaverseBuilderStepTileEnvironmentAssetId,
   metaverseBuilderWallTileEnvironmentAssetId,
   metaverseGroundedBodyTraversalCoreConfig,
+  metaverseGroundedSurfacePolicyConfig,
   metaverseHubDiveBoatEnvironmentAssetId,
   metaverseHubPushableCrateEnvironmentAssetId,
   metaverseHubSkiffEnvironmentAssetId,
@@ -126,16 +128,23 @@ function resolveMovingSkiffDynamicPose(elapsedSeconds) {
 }
 
 test("MetaverseTraversalRuntime keeps sustained grounded planar movement reconciliation-free against fixed-tick authority on flat support", async () => {
+  const flatSurfaceColliderSnapshots = [
+    Object.freeze({
+      halfExtents: freezeVector3(4, 0.2, 20),
+      ownerEnvironmentAssetId: null,
+      rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+      rotationYRadians: 0,
+      translation: freezeVector3(0, -0.1, 24),
+      traversalAffordance: "support"
+    })
+  ];
   const localHarness = await fixtureContext.createTraversalHarness({
-    surfaceColliderSnapshots: [
-      Object.freeze({
-        halfExtents: freezeVector3(4, 0.2, 20),
-        rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
-        translation: freezeVector3(0, -0.1, 24)
-      })
-    ]
+    surfaceColliderSnapshots: flatSurfaceColliderSnapshots
   });
-  const authoritativeHarness = await fixtureContext.createAuthoritativeGroundedSimulationHarness();
+  const authoritativeHarness =
+    await fixtureContext.createAuthoritativeGroundedSimulationHarness({
+      surfaceColliderSnapshots: flatSurfaceColliderSnapshots
+    });
   const moveForwardInput = Object.freeze({
     boost: false,
     jump: false,
@@ -172,21 +181,41 @@ test("MetaverseTraversalRuntime keeps sustained grounded planar movement reconci
         const previousAuthoritativeSnapshot =
           authoritativeHarness.groundedBodyRuntime.snapshot;
 
-        authoritativeHarness.physicsRuntime.stepSimulation(groundedFixedStepSeconds);
-
-        const nextAuthoritativeSnapshot =
-          authoritativeHarness.groundedBodyRuntime.advance(
-            Object.freeze({
+        const deterministicAuthoritativeSnapshot =
+          advanceMetaverseDeterministicUnmountedGroundedBodyStep({
+            autostepHeightMeters: null,
+            bodyIntent: Object.freeze({
               boost: false,
               jump: false,
               moveAxis: 1,
               strafeAxis: 0,
               turnAxis: 0
             }),
-            groundedFixedStepSeconds,
-            undefined,
-            0
-          );
+            currentGroundedBodySnapshot: previousAuthoritativeSnapshot,
+            deltaSeconds: groundedFixedStepSeconds,
+            groundedBodyConfig: Object.freeze({
+              ...metaverseGroundedBodyTraversalCoreConfig,
+              spawnPosition: metaverseWorldGroundedSpawnPosition,
+              worldRadius: 110
+            }),
+            preferredLookYawRadians: 0,
+            surfaceColliderSnapshots: flatSurfaceColliderSnapshots,
+            surfacePolicyConfig: metaverseGroundedSurfacePolicyConfig
+          });
+
+        authoritativeHarness.groundedBodyRuntime.syncAuthoritativeState({
+          contact: deterministicAuthoritativeSnapshot.contact,
+          driveTarget: deterministicAuthoritativeSnapshot.driveTarget,
+          grounded: deterministicAuthoritativeSnapshot.grounded,
+          interaction: deterministicAuthoritativeSnapshot.interaction,
+          jumpBody: deterministicAuthoritativeSnapshot.jumpBody,
+          linearVelocity: deterministicAuthoritativeSnapshot.linearVelocity,
+          position: deterministicAuthoritativeSnapshot.position,
+          yawRadians: deterministicAuthoritativeSnapshot.yawRadians
+        });
+
+        const nextAuthoritativeSnapshot =
+          authoritativeHarness.groundedBodyRuntime.snapshot;
 
         latestAuthoritativeSnapshot = Object.freeze({
           jumpAuthorityState: nextAuthoritativeSnapshot.grounded

@@ -23,7 +23,8 @@ import {
 import {
   createMetaverseGroundedJumpBodySnapshot,
   resolveMetaverseGroundedJumpContinuationSnapshot,
-  resolveMetaverseGroundedJumpSynchronizedState
+  resolveMetaverseGroundedJumpSynchronizedState,
+  type MetaverseGroundedJumpBodySnapshot
 } from "./metaverse-grounded-jump-physics.js";
 
 export interface MetaverseGroundedTraversalBodyIntentSnapshot
@@ -90,66 +91,27 @@ export interface MetaverseGroundedBodyPreparedStepSnapshot {
   readonly yawRadians: number;
 }
 
-export interface MetaverseGroundedBodyControllerResultSnapshot {
-  readonly colliderCenterPosition: MetaverseWorldSurfaceVector3Snapshot;
-  readonly computedGrounded: boolean;
-  readonly computedMovementDelta: MetaverseWorldSurfaceVector3Snapshot;
-  readonly standingOffsetMeters: number;
-  readonly supportNormal?: MetaverseWorldSurfaceVector3Snapshot | null;
-}
-
 export interface MetaverseGroundedBodyResolvedStepSnapshot {
   readonly planarSpeedUnitsPerSecond: number;
   readonly state: MetaverseGroundedBodyStepStateSnapshot;
 }
 
 export interface SyncMetaverseGroundedBodyStepStateInput {
+  readonly contact?: MetaverseGroundedBodyContactSnapshot | null;
   readonly driveTarget?: MetaverseSurfaceTraversalDriveTargetSnapshot | null;
   readonly grounded: boolean;
   readonly interaction?: MetaverseGroundedBodyInteractionSnapshot | null;
+  readonly jumpBody?: MetaverseGroundedJumpBodySnapshot | null;
   readonly linearVelocity: MetaverseWorldSurfaceVector3Snapshot;
   readonly position: MetaverseWorldSurfaceVector3Snapshot;
+  readonly supportNormal?: MetaverseWorldSurfaceVector3Snapshot | null;
   readonly yawRadians: number;
 }
 
-const groundedBodyContactDeltaToleranceMeters = 0.01;
-const groundedBodyAirborneVerticalMovementToleranceMeters = 0.0001;
 const groundedBodyMinimumJumpNormalY = 0.001;
 
 const metaverseGroundedBodyDefaultSupportNormal =
   createMetaverseSurfaceTraversalVector3Snapshot(0, 1, 0);
-
-function hasGroundedBodyMovementDeltaDivergence(
-  desiredDelta: number,
-  appliedDelta: number
-): boolean {
-  return (
-    Math.abs(toFiniteNumber(desiredDelta, 0) - toFiniteNumber(appliedDelta, 0)) >
-    groundedBodyContactDeltaToleranceMeters
-  );
-}
-
-function hasGroundedBodyVerticalMovementDivergence(
-  desiredDelta: number,
-  appliedDelta: number,
-  supportingContactDetected: boolean
-): boolean {
-  const sanitizedDesiredDelta = toFiniteNumber(desiredDelta, 0);
-  const sanitizedAppliedDelta = toFiniteNumber(appliedDelta, 0);
-
-  if (
-    supportingContactDetected &&
-    sanitizedDesiredDelta <= 0 &&
-    sanitizedAppliedDelta >= 0
-  ) {
-    return false;
-  }
-
-  return hasGroundedBodyMovementDeltaDivergence(
-    sanitizedDesiredDelta,
-    sanitizedAppliedDelta
-  );
-}
 
 function normalizeGroundedBodySupportNormal(
   normal: MetaverseWorldSurfaceVector3Snapshot | null | undefined
@@ -215,35 +177,6 @@ export function createMetaverseGroundedBodyInteractionSnapshot(
 ): MetaverseGroundedBodyInteractionSnapshot {
   return Object.freeze({
     applyImpulsesToDynamicBodies: input.applyImpulsesToDynamicBodies === true
-  });
-}
-
-export function resolveMetaverseGroundedBodyControllerContactSnapshot(
-  preparedStepSnapshot: MetaverseGroundedBodyPreparedStepSnapshot,
-  controllerResultSnapshot: MetaverseGroundedBodyControllerResultSnapshot
-): MetaverseGroundedBodyContactSnapshot {
-  const supportingContactDetected =
-    controllerResultSnapshot.computedGrounded === true;
-
-  return createMetaverseGroundedBodyContactSnapshot({
-    appliedMovementDelta: controllerResultSnapshot.computedMovementDelta,
-    blockedPlanarMovement:
-      hasGroundedBodyMovementDeltaDivergence(
-        preparedStepSnapshot.desiredMovementDelta.x,
-        controllerResultSnapshot.computedMovementDelta.x
-      ) ||
-      hasGroundedBodyMovementDeltaDivergence(
-        preparedStepSnapshot.desiredMovementDelta.z,
-        controllerResultSnapshot.computedMovementDelta.z
-      ),
-    blockedVerticalMovement:
-      hasGroundedBodyVerticalMovementDivergence(
-        preparedStepSnapshot.desiredMovementDelta.y,
-        controllerResultSnapshot.computedMovementDelta.y,
-        supportingContactDetected
-      ),
-    desiredMovementDelta: preparedStepSnapshot.desiredMovementDelta,
-    supportingContactDetected
   });
 }
 
@@ -471,54 +404,6 @@ export function resolveMetaverseGroundedBodyStep(
   });
 }
 
-export function resolveMetaverseGroundedBodyControllerStep(
-  stateSnapshot: MetaverseGroundedBodyStepStateSnapshot,
-  preparedStepSnapshot: MetaverseGroundedBodyPreparedStepSnapshot,
-  controllerResultSnapshot: MetaverseGroundedBodyControllerResultSnapshot,
-  config: MetaverseGroundedBodyStepConfig,
-  deltaSeconds: number
-): MetaverseGroundedBodyResolvedStepSnapshot {
-  const standingOffsetMeters = Math.max(
-    0,
-    toFiniteNumber(controllerResultSnapshot.standingOffsetMeters, 0)
-  );
-  const upwardAirborneMovement =
-    preparedStepSnapshot.verticalSpeedUnitsPerSecond > 0 &&
-    controllerResultSnapshot.computedMovementDelta.y >
-      groundedBodyAirborneVerticalMovementToleranceMeters;
-  const normalizedControllerResultSnapshot = upwardAirborneMovement
-    ? Object.freeze({
-        ...controllerResultSnapshot,
-        computedGrounded: false
-      })
-    : controllerResultSnapshot;
-  const contactSnapshot = resolveMetaverseGroundedBodyControllerContactSnapshot(
-    preparedStepSnapshot,
-    normalizedControllerResultSnapshot
-  );
-
-  return resolveMetaverseGroundedBodyStep(
-    stateSnapshot,
-    preparedStepSnapshot,
-    createMetaverseSurfaceTraversalVector3Snapshot(
-      normalizedControllerResultSnapshot.colliderCenterPosition.x +
-        normalizedControllerResultSnapshot.computedMovementDelta.x,
-      normalizedControllerResultSnapshot.colliderCenterPosition.y +
-        normalizedControllerResultSnapshot.computedMovementDelta.y -
-        standingOffsetMeters,
-      normalizedControllerResultSnapshot.colliderCenterPosition.z +
-        normalizedControllerResultSnapshot.computedMovementDelta.z
-    ),
-    normalizedControllerResultSnapshot.computedGrounded === true,
-    config,
-    deltaSeconds,
-    contactSnapshot,
-    normalizedControllerResultSnapshot.computedGrounded === true
-      ? normalizedControllerResultSnapshot.supportNormal ?? null
-      : null
-  );
-}
-
 export function syncMetaverseGroundedBodyStepState(
   currentStateSnapshot: MetaverseGroundedBodyStepStateSnapshot,
   syncInput: SyncMetaverseGroundedBodyStepStateInput,
@@ -531,17 +416,21 @@ export function syncMetaverseGroundedBodyStepState(
       syncInput.grounded === true
     );
   const synchronizedJumpState =
-    resolveMetaverseGroundedJumpSynchronizedState({
-      config,
-      currentJumpSnapSuppressionActive:
-        currentStateSnapshot.jumpSnapSuppressionActive,
-      grounded: syncInput.grounded === true
-    });
+    syncInput.jumpBody === null || syncInput.jumpBody === undefined
+      ? resolveMetaverseGroundedJumpSynchronizedState({
+          config,
+          currentJumpSnapSuppressionActive:
+            currentStateSnapshot.jumpSnapSuppressionActive,
+          grounded: syncInput.grounded === true
+        })
+      : syncInput.jumpBody;
 
   return createMetaverseGroundedBodyStepStateSnapshot({
-    contact: createMetaverseGroundedBodyContactSnapshot({
-      supportingContactDetected: syncInput.grounded === true
-    }),
+    contact:
+      syncInput.contact ??
+      createMetaverseGroundedBodyContactSnapshot({
+        supportingContactDetected: syncInput.grounded === true
+      }),
     driveTarget: createMetaverseSurfaceTraversalDriveTargetSnapshot(
       syncInput.driveTarget ?? currentStateSnapshot.driveTarget
     ),
@@ -558,9 +447,11 @@ export function syncMetaverseGroundedBodyStepState(
     position: syncInput.position,
     strafeSpeedUnitsPerSecond:
       directionalSpeedSnapshot.strafeSpeedUnitsPerSecond,
-    supportNormal: currentStateSnapshot.supportNormal,
+    supportNormal: syncInput.supportNormal ?? currentStateSnapshot.supportNormal,
     verticalSpeedUnitsPerSecond:
-      directionalSpeedSnapshot.verticalSpeedUnitsPerSecond,
+      syncInput.jumpBody === null || syncInput.jumpBody === undefined
+        ? directionalSpeedSnapshot.verticalSpeedUnitsPerSecond
+        : syncInput.jumpBody.verticalSpeedUnitsPerSecond,
     yawRadians: syncInput.yawRadians
   });
 }

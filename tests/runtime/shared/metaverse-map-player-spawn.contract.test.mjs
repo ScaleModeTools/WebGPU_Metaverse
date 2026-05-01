@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  parseMetaverseMapBundleSnapshot,
   resolveMetaverseMapPlayerSpawnNode,
   resolveMetaverseMapPlayerSpawnSupportPosition
 } from "@webgpu-metaverse/shared/metaverse/world";
@@ -197,4 +199,29 @@ test("shared spawn support resolver keeps a basement spawn on its local floor in
 
   assert.equal(basementSpawnPosition.y, 0);
   assert.equal(upperSpawnPosition.y, 3);
+});
+
+test("shared spawn support resolver keeps every Highlands spawn on authored terrain support", () => {
+  const highlandsProjectUrl = new URL(
+    "../../../client/public/map-editor/projects/the-highlands.json",
+    import.meta.url
+  );
+  const highlandsBundle = parseMetaverseMapBundleSnapshot(
+    JSON.parse(readFileSync(highlandsProjectUrl, "utf8"))
+  );
+
+  assert.equal(highlandsBundle.mapId, "the-highlands");
+  assert.equal(highlandsBundle.playerSpawnNodes.length, 8);
+
+  for (const spawnNode of highlandsBundle.playerSpawnNodes) {
+    const supportedPosition = resolveMetaverseMapPlayerSpawnSupportPosition({
+      compiledWorld: highlandsBundle.compiledWorld,
+      spawnPosition: spawnNode.position
+    });
+
+    assert.ok(
+      Math.abs(supportedPosition.y - spawnNode.position.y) < 0.05,
+      `${spawnNode.spawnId} should resolve to authored support near y=${spawnNode.position.y}, received y=${supportedPosition.y}`
+    );
+  }
 });

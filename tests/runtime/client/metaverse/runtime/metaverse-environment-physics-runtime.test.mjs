@@ -24,7 +24,7 @@ after(async () => {
   await clientLoader?.close();
 });
 
-test("WebGpuMetaverseRuntime boots pushable rigid bodies and enables dynamic-body impulses only for that slice", async () => {
+test("WebGpuMetaverseRuntime boots pushable rigid bodies without restoring grounded controller fallback", async () => {
   const [{ WebGpuMetaverseRuntime }, { RapierPhysicsRuntime }] = await Promise.all([
     clientLoader.load("/src/metaverse/classes/webgpu-metaverse-runtime.ts"),
     clientLoader.load("/src/physics/index.ts")
@@ -67,12 +67,7 @@ test("WebGpuMetaverseRuntime boots pushable rigid bodies and enables dynamic-bod
     });
 
     assert.equal(world.rigidBodies.length, 1);
-    assert.equal(
-      world.characterControllers.some(
-        (controller) => controller.applyImpulsesToDynamicBodies === true
-      ),
-      true
-    );
+    assert.equal(world.characterControllers.length, 0);
     assert.equal(runtime.hudSnapshot.mountedInteraction.focusedMountable, null);
 
     runtime.dispose();
@@ -841,12 +836,6 @@ test("MetaverseEnvironmentPhysicsRuntime keeps sampled remote player blockers ph
 
   assert.ok(remoteBlockerCollider);
   assert.equal(remoteBlockerCollider.shape, "capsule");
-  assert.equal(
-    environmentPhysicsRuntime.resolveGroundedTraversalFilterPredicate()(
-      remoteBlockerCollider
-    ),
-    false
-  );
   assert.equal(
     environmentPhysicsRuntime.resolveWaterborneTraversalFilterPredicate()(
       remoteBlockerCollider

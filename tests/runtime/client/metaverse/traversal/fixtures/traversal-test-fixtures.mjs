@@ -651,11 +651,6 @@ export async function createTraversalFixtureContext() {
       readMountableEnvironmentConfig(environmentAssetId) {
         return mountableEnvironmentConfigById.get(environmentAssetId) ?? null;
       },
-      resolveGroundedTraversalFilterPredicate(excludedColliders = []) {
-        const excludedColliderSet = new Set(excludedColliders);
-
-        return (collider) => !excludedColliderSet.has(collider);
-      },
       readGroundedTraversalPlayerBlockers:
         options.readGroundedTraversalPlayerBlockers,
       resolveWaterborneTraversalFilterPredicate(

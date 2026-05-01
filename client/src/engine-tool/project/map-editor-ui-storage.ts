@@ -371,6 +371,11 @@ function readBuilderToolState(value: unknown): MapEditorBuilderToolStateSnapshot
         ? Math.max(0.001, value.terrainGenerationFrequency)
         : defaultMapEditorBuilderToolState.terrainGenerationFrequency,
     terrainGenerationMaxElevationMeters,
+    terrainGenerationMaxSlopeDegrees:
+      typeof value.terrainGenerationMaxSlopeDegrees === "number" &&
+      Number.isFinite(value.terrainGenerationMaxSlopeDegrees)
+        ? Math.max(1, Math.min(89, value.terrainGenerationMaxSlopeDegrees))
+        : defaultMapEditorBuilderToolState.terrainGenerationMaxSlopeDegrees,
     terrainGenerationMinElevationMeters,
     terrainGenerationOctaves:
       readPositiveInteger(

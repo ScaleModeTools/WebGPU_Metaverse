@@ -101,9 +101,6 @@ export interface MetaverseTraversalRuntimeDependencies {
     MetaverseEnvironmentAssetProofConfig,
     "collider" | "entries" | "environmentAssetId" | "label" | "seats"
   > | null;
-  readonly resolveGroundedTraversalFilterPredicate: (
-    excludedColliders?: readonly RapierColliderHandle[]
-  ) => RapierQueryFilterPredicate;
   readonly readGroundedTraversalPlayerBlockers?: (() =>
     readonly MetaverseTraversalPlayerBodyBlockerSnapshot[]) | undefined;
   readonly resolveWaterborneTraversalFilterPredicate: (

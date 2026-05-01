@@ -9,7 +9,6 @@ export type {
 export type {
   MetaverseGroundedBodyConfig,
   MetaverseGroundedBodyInteractionSyncSnapshot,
-  MetaverseGroundedBodyIntentSnapshot,
   MetaverseGroundedBodySnapshot,
   PhysicsQuaternionSnapshot,
   PhysicsVector3Snapshot,

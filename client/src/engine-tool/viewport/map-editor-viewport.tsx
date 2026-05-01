@@ -813,79 +813,54 @@ function addTerrainBrushPreview(
     readonly z: number;
   }[] = [];
 
-  if (terrainPatch !== null) {
-    const halfCellCountX = (terrainPatch.sampleCountX - 1) * 0.5;
-    const halfCellCountZ = (terrainPatch.sampleCountZ - 1) * 0.5;
-    const targetCellX = Math.round(
-      (position.x - terrainPatch.origin.x) / terrainPatch.sampleSpacingMeters +
-        halfCellCountX
-    );
-    const targetCellZ = Math.round(
-      (position.z - terrainPatch.origin.z) / terrainPatch.sampleSpacingMeters +
-        halfCellCountZ
-    );
-    const brushOffset = Math.floor(normalizedBrushSizeCells * 0.5);
-    const minCellX = targetCellX - brushOffset;
-    const minCellZ = targetCellZ - brushOffset;
-    const maxCellX = minCellX + normalizedBrushSizeCells - 1;
-    const maxCellZ = minCellZ + normalizedBrushSizeCells - 1;
+  if (terrainPatch === null) {
+    return;
+  }
 
-    for (let cellZ = minCellZ; cellZ <= maxCellZ; cellZ += 1) {
-      if (cellZ < 0 || cellZ >= terrainPatch.sampleCountZ) {
+  const halfCellCountX = (terrainPatch.sampleCountX - 1) * 0.5;
+  const halfCellCountZ = (terrainPatch.sampleCountZ - 1) * 0.5;
+  const targetCellX = Math.round(
+    (position.x - terrainPatch.origin.x) / terrainPatch.sampleSpacingMeters +
+      halfCellCountX
+  );
+  const targetCellZ = Math.round(
+    (position.z - terrainPatch.origin.z) / terrainPatch.sampleSpacingMeters +
+      halfCellCountZ
+  );
+  const brushOffset = Math.floor(normalizedBrushSizeCells * 0.5);
+  const minCellX = targetCellX - brushOffset;
+  const minCellZ = targetCellZ - brushOffset;
+  const maxCellX = minCellX + normalizedBrushSizeCells - 1;
+  const maxCellZ = minCellZ + normalizedBrushSizeCells - 1;
+
+  for (let cellZ = minCellZ; cellZ <= maxCellZ; cellZ += 1) {
+    if (cellZ < 0 || cellZ >= terrainPatch.sampleCountZ) {
+      continue;
+    }
+
+    for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
+      if (cellX < 0 || cellX >= terrainPatch.sampleCountX) {
         continue;
       }
 
-      for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
-        if (cellX < 0 || cellX >= terrainPatch.sampleCountX) {
-          continue;
-        }
+      const cellPosition = resolveMapEditorTerrainCellPosition(
+        terrainPatch,
+        cellX,
+        cellZ
+      );
 
-        const cellPosition = resolveMapEditorTerrainCellPosition(
-          terrainPatch,
-          cellX,
-          cellZ
-        );
-
-        previewCells.push(
-          Object.freeze({
-            cellDistance: Math.max(
-              Math.abs(cellX - targetCellX),
-              Math.abs(cellZ - targetCellZ)
-            ),
-            height: resolveTerrainHeightAtPosition(terrainPatchDrafts, cellPosition),
-            sizeMeters: terrainPatch.sampleSpacingMeters,
-            x: cellPosition.x,
-            z: cellPosition.z
-          })
-        );
-      }
-    }
-  } else {
-    const brushOffset = Math.floor(normalizedBrushSizeCells * 0.5);
-    const minCellX = position.x - brushOffset * mapEditorBuildGridUnitMeters;
-    const minCellZ = position.z - brushOffset * mapEditorBuildGridUnitMeters;
-
-    for (let offsetZ = 0; offsetZ < normalizedBrushSizeCells; offsetZ += 1) {
-      for (let offsetX = 0; offsetX < normalizedBrushSizeCells; offsetX += 1) {
-        const cellPosition = Object.freeze({
-          x: minCellX + offsetX * mapEditorBuildGridUnitMeters,
-          y: 0,
-          z: minCellZ + offsetZ * mapEditorBuildGridUnitMeters
-        });
-
-        previewCells.push(
-          Object.freeze({
-            cellDistance: Math.max(
-              Math.abs(offsetX - brushOffset),
-              Math.abs(offsetZ - brushOffset)
-            ),
-            height: resolveTerrainHeightAtPosition(terrainPatchDrafts, cellPosition),
-            sizeMeters: mapEditorBuildGridUnitMeters,
-            x: cellPosition.x,
-            z: cellPosition.z
-          })
-        );
-      }
+      previewCells.push(
+        Object.freeze({
+          cellDistance: Math.max(
+            Math.abs(cellX - targetCellX),
+            Math.abs(cellZ - targetCellZ)
+          ),
+          height: resolveTerrainHeightAtPosition(terrainPatchDrafts, cellPosition),
+          sizeMeters: terrainPatch.sampleSpacingMeters,
+          x: cellPosition.x,
+          z: cellPosition.z
+        })
+      );
     }
   }
 
@@ -3168,6 +3143,26 @@ export function MapEditorViewport({
         ? null
         : resolveSnappedGroundPosition(placementPoint);
     };
+    const readSelectedTerrainPatchId = (): string | null =>
+      selectedEntityRefRef.current?.kind === "terrain-patch"
+        ? selectedEntityRefRef.current.id
+        : null;
+    const readSelectedTerrainPatchAtPosition = (position: {
+      readonly x: number;
+      readonly y: number;
+      readonly z: number;
+    }): MapEditorTerrainPatchDraftSnapshot | null => {
+      const selectedTerrainPatchId = readSelectedTerrainPatchId();
+      const terrainPatch = findTerrainPatchAtPosition(
+        terrainPatchDraftsRef.current,
+        position
+      );
+
+      return terrainPatch !== null &&
+        terrainPatch.terrainPatchId === selectedTerrainPatchId
+        ? terrainPatch
+        : null;
+    };
     const readBuildPlacementPosition = (
       clientX: number,
       clientY: number
@@ -3405,30 +3400,37 @@ export function MapEditorViewport({
           );
           return;
         case "terrain":
-          if (
-            pendingTerrainPatchAnchorRef.current !== null ||
-            findTerrainPatchAtPosition(
-              terrainPatchDraftsRef.current,
-              nextGroundPosition
-            ) === null
-          ) {
-            addTerrainPatchPreview(
-              builderPreviewGroup,
-              pendingTerrainPatchAnchorRef.current ?? nextGroundPosition,
-              nextGroundPosition,
-              resolveMetaverseSceneSemanticPreviewColorHex(
-                builderToolStateRef.current.terrainMaterialId
-              )
-            );
+          if (readSelectedTerrainPatchId() !== null) {
+            if (readSelectedTerrainPatchAtPosition(nextGroundPosition) !== null) {
+              addTerrainBrushPreview(
+                builderPreviewGroup,
+                terrainPatchDraftsRef.current,
+                nextGroundPosition,
+                builderToolStateRef.current.terrainBrushSizeCells,
+                builderToolStateRef.current.terrainSmoothEdges,
+                resolveMetaverseSceneSemanticPreviewColorHex(
+                  builderToolStateRef.current.terrainMaterialId
+                )
+              );
+            }
+
             return;
           }
 
-          addTerrainBrushPreview(
+          if (
+            pendingTerrainPatchAnchorRef.current === null &&
+            findTerrainPatchAtPosition(
+              terrainPatchDraftsRef.current,
+              nextGroundPosition
+            ) !== null
+          ) {
+            return;
+          }
+
+          addTerrainPatchPreview(
             builderPreviewGroup,
-            terrainPatchDraftsRef.current,
+            pendingTerrainPatchAnchorRef.current ?? nextGroundPosition,
             nextGroundPosition,
-            builderToolStateRef.current.terrainBrushSizeCells,
-            builderToolStateRef.current.terrainSmoothEdges,
             resolveMetaverseSceneSemanticPreviewColorHex(
               builderToolStateRef.current.terrainMaterialId
             )
@@ -3640,29 +3642,29 @@ export function MapEditorViewport({
       }
 
       if (viewportToolModeRef.current === "terrain") {
-        const terrainBrushPosition = readGroundPlacementPosition(
+        const terrainPatchPosition = readGroundPlacementPosition(
           event.clientX,
           event.clientY
         );
 
-        if (terrainBrushPosition !== null) {
-          if (
+        if (terrainPatchPosition !== null) {
+          if (readSelectedTerrainPatchId() !== null) {
+            if (readSelectedTerrainPatchAtPosition(terrainPatchPosition) !== null) {
+              terrainBrushDragActiveRef.current = true;
+              terrainBrushLastStrokeKeyRef.current = readTerrainBrushStrokeKey(
+                terrainPatchDraftsRef.current,
+                terrainPatchPosition
+              );
+
+              handleApplyTerrainBrush(terrainPatchPosition);
+            }
+          } else if (
             findTerrainPatchAtPosition(
               terrainPatchDraftsRef.current,
-              terrainBrushPosition
+              terrainPatchPosition
             ) === null
           ) {
-            pendingTerrainPatchAnchorRef.current = terrainBrushPosition;
-            terrainBrushDragActiveRef.current = false;
-            terrainBrushLastStrokeKeyRef.current = null;
-          } else {
-            terrainBrushDragActiveRef.current = true;
-            terrainBrushLastStrokeKeyRef.current = readTerrainBrushStrokeKey(
-              terrainPatchDraftsRef.current,
-              terrainBrushPosition
-            );
-
-            handleApplyTerrainBrush(terrainBrushPosition);
+            pendingTerrainPatchAnchorRef.current = terrainPatchPosition;
           }
         }
       }
@@ -3732,6 +3734,7 @@ export function MapEditorViewport({
 
       if (viewportToolModeRef.current === "terrain") {
         const pendingTerrainPatchAnchor = pendingTerrainPatchAnchorRef.current;
+        const terrainBrushWasActive = terrainBrushDragActiveRef.current;
 
         pendingTerrainPatchAnchorRef.current = null;
 
@@ -3754,9 +3757,11 @@ export function MapEditorViewport({
           return;
         }
 
-        stopBuildPointerInteraction();
-        syncBuilderPreview(event.clientX, event.clientY, event.ctrlKey);
-        return;
+        if (terrainBrushWasActive) {
+          stopBuildPointerInteraction();
+          syncBuilderPreview(event.clientX, event.clientY, event.ctrlKey);
+          return;
+        }
       }
 
       if (
@@ -4124,7 +4129,10 @@ export function MapEditorViewport({
           event.clientY
         );
 
-        if (terrainBrushPosition !== null) {
+        if (
+          terrainBrushPosition !== null &&
+          readSelectedTerrainPatchAtPosition(terrainBrushPosition) !== null
+        ) {
           const nextStrokeKey = readTerrainBrushStrokeKey(
             terrainPatchDraftsRef.current,
             terrainBrushPosition
@@ -4741,7 +4749,9 @@ export function MapEditorViewport({
           : viewportToolMode === "portal"
             ? "Portal tool: click the scene to place a portal on the clicked support."
           : viewportToolMode === "terrain"
-            ? "Terrain tool: drag empty ground to draw a patch, or paint an existing patch."
+            ? selectedEntityRef?.kind === "terrain-patch"
+              ? "Terrain tool: drag over the selected patch to shape or smooth it."
+              : "Terrain tool: drag empty ground to draw a patch."
           : viewportToolMode === "vertex"
             ? "Vertex tool: click a terrain sample, then drag the height handle."
             : viewportToolMode === "wall"

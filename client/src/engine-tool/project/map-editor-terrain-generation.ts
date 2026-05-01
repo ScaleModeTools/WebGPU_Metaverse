@@ -1,5 +1,6 @@
-import type {
-  MetaverseMapBundleSemanticMaterialId
+import {
+  metaverseWorldSurfaceDefaultMaxWalkableSlopeAngleRadians,
+  type MetaverseMapBundleSemanticMaterialId
 } from "@webgpu-metaverse/shared/metaverse/world";
 
 import type {
@@ -19,12 +20,20 @@ export interface MapEditorTerrainGenerationConfigSnapshot {
   readonly materialBands:
     readonly MapEditorTerrainMaterialBandSnapshot[];
   readonly maxElevationMeters: number;
+  readonly maxSlopeDegrees: number;
   readonly minElevationMeters: number;
   readonly octaves: number;
   readonly seed: number;
   readonly warpFrequency: number;
   readonly warpStrengthMeters: number;
 }
+
+const defaultMapEditorTerrainGenerationMaxSlopeDegrees =
+  Math.round(
+    (metaverseWorldSurfaceDefaultMaxWalkableSlopeAngleRadians * 180) /
+      Math.PI *
+      10
+  ) / 10;
 
 export const defaultMapEditorTerrainGenerationConfig =
   Object.freeze<MapEditorTerrainGenerationConfigSnapshot>({
@@ -51,6 +60,12 @@ export const defaultMapEditorTerrainGenerationConfig =
       }),
       Object.freeze({
         edgeFadeMeters: 1.4,
+        materialId: "terrain-cliff",
+        maxHeightMeters: Number.POSITIVE_INFINITY,
+        minHeightMeters: Number.NEGATIVE_INFINITY
+      }),
+      Object.freeze({
+        edgeFadeMeters: 1.4,
         materialId: "terrain-rock",
         maxHeightMeters: 7.2,
         minHeightMeters: 2.6
@@ -63,6 +78,7 @@ export const defaultMapEditorTerrainGenerationConfig =
       })
     ]),
     maxElevationMeters: 8,
+    maxSlopeDegrees: defaultMapEditorTerrainGenerationMaxSlopeDegrees,
     minElevationMeters: -8,
     octaves: 5,
     seed: 1337,
@@ -76,6 +92,10 @@ function clamp(value: number, min: number, max: number): number {
 
 function fade(value: number): number {
   return value * value * value * (value * (value * 6 - 15) + 10);
+}
+
+function roundHeightMeters(heightMeters: number): number {
+  return Math.round(heightMeters * 100) / 100;
 }
 
 function hashGridNoise(x: number, z: number, seed: number): number {
@@ -199,9 +219,13 @@ function createGeneratedMaterialLayers(
           band.materialId === "terrain-cliff"
             ? slopeWeight
             : 0;
+        const baseBandWeight =
+          band.materialId === "terrain-cliff"
+            ? 0
+            : resolveBandWeight(heightMeters, band);
         const bandWeight = Math.max(
           materialWeights[sampleIndex] ?? 0,
-          resolveBandWeight(heightMeters, band) + slopeBoost
+          baseBandWeight + slopeBoost
         );
 
         materialWeights[sampleIndex] = bandWeight;
@@ -231,6 +255,126 @@ function createGeneratedMaterialLayers(
   );
 }
 
+function resolveRoundedTerrainWorldHeightMeters(
+  normalizedHeight: number,
+  minElevationMeters: number,
+  groundElevationMeters: number,
+  maxElevationMeters: number
+): number {
+  const elevationRangeMeters = maxElevationMeters - minElevationMeters;
+
+  if (elevationRangeMeters <= 0.001) {
+    return minElevationMeters;
+  }
+
+  const clampedGroundElevationMeters = clamp(
+    groundElevationMeters,
+    minElevationMeters,
+    maxElevationMeters
+  );
+  const groundAlpha =
+    (clampedGroundElevationMeters - minElevationMeters) /
+    elevationRangeMeters;
+  const lowerAlpha = Math.max(0, groundAlpha);
+  const upperAlpha = Math.max(0, 1 - groundAlpha);
+  const plateauHalfWidth = Math.min(
+    0.16,
+    Math.max(0, lowerAlpha * 0.68),
+    Math.max(0, upperAlpha * 0.68)
+  );
+
+  if (normalizedHeight < groundAlpha - plateauHalfWidth) {
+    const lowerT = clamp(
+      (groundAlpha - plateauHalfWidth - normalizedHeight) /
+        Math.max(0.001, lowerAlpha - plateauHalfWidth),
+      0,
+      1
+    );
+
+    return (
+      clampedGroundElevationMeters -
+      (clampedGroundElevationMeters - minElevationMeters) * fade(lowerT)
+    );
+  }
+
+  if (normalizedHeight > groundAlpha + plateauHalfWidth) {
+    const upperT = clamp(
+      (normalizedHeight - groundAlpha - plateauHalfWidth) /
+        Math.max(0.001, upperAlpha - plateauHalfWidth),
+      0,
+      1
+    );
+
+    return (
+      clampedGroundElevationMeters +
+      (maxElevationMeters - clampedGroundElevationMeters) * fade(upperT)
+    );
+  }
+
+  const plateauT =
+    plateauHalfWidth <= 0
+      ? 0
+      : (normalizedHeight - groundAlpha) / plateauHalfWidth;
+
+  return clampedGroundElevationMeters + plateauT * elevationRangeMeters * 0.015;
+}
+
+function limitTerrainSlopeHeightSamples(
+  heightSamples: readonly number[],
+  sampleCountX: number,
+  sampleCountZ: number,
+  sampleSpacingMeters: number,
+  maxSlopeDegrees: number
+): readonly number[] {
+  const normalizedMaxSlopeDegrees = clamp(maxSlopeDegrees, 1, 89);
+  const maxAdjacentRiseMeters =
+    Math.tan(normalizedMaxSlopeDegrees * (Math.PI / 180)) *
+    Math.max(0.001, sampleSpacingMeters);
+  const nextHeightSamples = [...heightSamples];
+  const maxPassCount = Math.max(sampleCountX, sampleCountZ) * 2;
+
+  for (let passIndex = 0; passIndex < maxPassCount; passIndex += 1) {
+    let didChange = false;
+
+    for (let sampleZ = 0; sampleZ < sampleCountZ; sampleZ += 1) {
+      for (let sampleX = 0; sampleX < sampleCountX; sampleX += 1) {
+        const sampleIndex = sampleZ * sampleCountX + sampleX;
+        const neighborIndices = [
+          sampleX + 1 < sampleCountX ? sampleIndex + 1 : -1,
+          sampleZ + 1 < sampleCountZ ? sampleIndex + sampleCountX : -1
+        ];
+
+        for (const neighborIndex of neighborIndices) {
+          if (neighborIndex < 0) {
+            continue;
+          }
+
+          const currentHeight = nextHeightSamples[sampleIndex] ?? 0;
+          const neighborHeight = nextHeightSamples[neighborIndex] ?? 0;
+
+          if (currentHeight > neighborHeight + maxAdjacentRiseMeters) {
+            nextHeightSamples[sampleIndex] = roundHeightMeters(
+              neighborHeight + maxAdjacentRiseMeters
+            );
+            didChange = true;
+          } else if (neighborHeight > currentHeight + maxAdjacentRiseMeters) {
+            nextHeightSamples[neighborIndex] = roundHeightMeters(
+              currentHeight + maxAdjacentRiseMeters
+            );
+            didChange = true;
+          }
+        }
+      }
+    }
+
+    if (!didChange) {
+      break;
+    }
+  }
+
+  return Object.freeze(nextHeightSamples.map(roundHeightMeters));
+}
+
 export function bakeMapEditorProceduralTerrainPatch(
   draft: MapEditorTerrainPatchDraftSnapshot,
   config: MapEditorTerrainGenerationConfigSnapshot
@@ -247,6 +391,7 @@ export function bakeMapEditorProceduralTerrainPatch(
     config.minElevationMeters,
     config.maxElevationMeters
   );
+  const maxSlopeDegrees = clamp(config.maxSlopeDegrees, 1, 89);
   const warpStrengthMeters = Math.max(0, config.warpStrengthMeters);
   const halfX = (draft.sampleCountX - 1) * 0.5;
   const halfZ = (draft.sampleCountZ - 1) * 0.5;
@@ -274,19 +419,33 @@ export function bakeMapEditorProceduralTerrainPatch(
       const shapedNoise =
         Math.sign(terrainNoise) * Math.pow(Math.abs(terrainNoise), 1.45);
       const normalizedHeight = (shapedNoise + 1) * 0.5;
-      const worldHeightMeters =
-        minElevationMeters +
-        normalizedHeight * (maxElevationMeters - minElevationMeters);
+      const worldHeightMeters = resolveRoundedTerrainWorldHeightMeters(
+        normalizedHeight,
+        minElevationMeters,
+        groundElevationMeters,
+        maxElevationMeters
+      );
       const localHeightMeters = worldHeightMeters - groundElevationMeters;
 
-      return Math.round(localHeightMeters * 100) / 100;
+      return roundHeightMeters(localHeightMeters);
     }
+  );
+  const slopeLimitedHeights = limitTerrainSlopeHeightSamples(
+    heights,
+    draft.sampleCountX,
+    draft.sampleCountZ,
+    draft.sampleSpacingMeters,
+    maxSlopeDegrees
   );
 
   return Object.freeze({
     ...draft,
-    heightSamples: Object.freeze(heights),
-    materialLayers: createGeneratedMaterialLayers(draft, config, heights),
+    heightSamples: slopeLimitedHeights,
+    materialLayers: createGeneratedMaterialLayers(
+      draft,
+      config,
+      slopeLimitedHeights
+    ),
     origin: Object.freeze({
       ...draft.origin,
       y: groundElevationMeters

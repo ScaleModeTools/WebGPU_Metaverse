@@ -1,10 +1,6 @@
 import assert from "node:assert/strict";
 import test, { after, before } from "node:test";
 
-import {
-  metaverseRealtimeWorldCadenceConfig
-} from "@webgpu-metaverse/shared";
-
 import { createFakePhysicsRuntime } from "../../fake-rapier-runtime.mjs";
 import { createClientModuleLoader } from "../../load-client-module.mjs";
 
@@ -22,10 +18,7 @@ after(async () => {
   await clientLoader?.close();
 });
 
-test("MetaverseUnmountedSurfaceLocomotionState settles grounded locomotion entry on the authoritative fixed step cadence", async () => {
-  const authoritativeFixedStepSeconds =
-    Number(metaverseRealtimeWorldCadenceConfig.authoritativeTickIntervalMs) /
-    1_000;
+test("MetaverseUnmountedSurfaceLocomotionState grounds entry directly at exported support height", async () => {
   const [
     { MetaverseUnmountedSurfaceLocomotionState },
     { metaverseRuntimeConfig }
@@ -36,8 +29,7 @@ test("MetaverseUnmountedSurfaceLocomotionState settles grounded locomotion entry
     clientLoader.load("/src/metaverse/config/metaverse-runtime.ts")
   ]);
   const stepSimulationCalls = [];
-  const advanceCalls = [];
-  const autostepCalls = [];
+  const syncCalls = [];
   let groundedBodySnapshot = Object.freeze({
     capsuleHalfHeightMeters:
       metaverseRuntimeConfig.groundedBody.capsuleHalfHeightMeters,
@@ -58,33 +50,20 @@ test("MetaverseUnmountedSurfaceLocomotionState settles grounded locomotion entry
     get snapshot() {
       return groundedBodySnapshot;
     },
-    advance(_intentSnapshot, deltaSeconds) {
-      advanceCalls.push(deltaSeconds);
-
-      return groundedBodySnapshot;
-    },
-    setAutostepEnabled(enabled, maxHeightMeters) {
-      autostepCalls.push(
-        Object.freeze({
-          enabled,
-          maxHeightMeters
-        })
-      );
-    },
-    teleport(position, yawRadians) {
+    syncAuthoritativeState(snapshot) {
+      syncCalls.push(snapshot);
       groundedBodySnapshot = Object.freeze({
         ...groundedBodySnapshot,
-        position,
-        yawRadians
+        grounded: snapshot.grounded,
+        linearVelocity: snapshot.linearVelocity,
+        position: snapshot.position,
+        yawRadians: snapshot.yawRadians
       });
     }
   };
   const surfaceLocomotionState = new MetaverseUnmountedSurfaceLocomotionState({
     config: metaverseRuntimeConfig,
     dependencies: {
-      resolveGroundedTraversalFilterPredicate() {
-        return () => true;
-      },
       resolveWaterborneTraversalFilterPredicate() {
         return () => true;
       },
@@ -109,14 +88,14 @@ test("MetaverseUnmountedSurfaceLocomotionState settles grounded locomotion entry
   });
 
   assert.notEqual(cameraSnapshot, null);
-  assert.deepEqual(stepSimulationCalls, [authoritativeFixedStepSeconds]);
-  assert.deepEqual(advanceCalls, [authoritativeFixedStepSeconds]);
-  assert.deepEqual(autostepCalls, [
-    Object.freeze({
-      enabled: false,
-      maxHeightMeters: undefined
-    })
-  ]);
+  assert.deepEqual(stepSimulationCalls, []);
+  assert.equal(syncCalls.length, 1);
+  assert.deepEqual(syncCalls[0], {
+    grounded: true,
+    linearVelocity: freezeVector3(0, 0, 0),
+    position: freezeVector3(2, 0.4, 18),
+    yawRadians: 0.35
+  });
 });
 
 test("MetaverseUnmountedSurfaceLocomotionState preserves planar carry velocity when entering swim locomotion", async () => {
@@ -138,9 +117,6 @@ test("MetaverseUnmountedSurfaceLocomotionState preserves planar carry velocity w
   const surfaceLocomotionState = new MetaverseUnmountedSurfaceLocomotionState({
     config: metaverseRuntimeConfig,
     dependencies: {
-      resolveGroundedTraversalFilterPredicate() {
-        return () => true;
-      },
       resolveWaterborneTraversalFilterPredicate() {
         return () => true;
       },
@@ -148,7 +124,7 @@ test("MetaverseUnmountedSurfaceLocomotionState preserves planar carry velocity w
     },
     groundedBodyRuntime: {
       colliderHandle: null,
-      setAutostepEnabled() {}
+      isInitialized: true
     },
     physicsRuntime,
     readMountedVehicleColliderHandle: () => null
@@ -206,9 +182,6 @@ test("MetaverseUnmountedSurfaceLocomotionState preserves planar carry velocity w
     const surfaceLocomotionState = new MetaverseUnmountedSurfaceLocomotionState({
       config: metaverseRuntimeConfig,
       dependencies: {
-        resolveGroundedTraversalFilterPredicate() {
-          return () => true;
-        },
         resolveWaterborneTraversalFilterPredicate() {
           return () => true;
         },
@@ -278,9 +251,6 @@ test("MetaverseUnmountedSurfaceLocomotionState routes grounded-body automatic su
     const surfaceLocomotionState = new MetaverseUnmountedSurfaceLocomotionState({
       config: metaverseRuntimeConfig,
       dependencies: {
-        resolveGroundedTraversalFilterPredicate() {
-          return () => true;
-        },
         resolveWaterborneTraversalFilterPredicate() {
           return () => true;
         },

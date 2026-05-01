@@ -864,24 +864,8 @@ export class MetaverseAuthoritativeWorldRuntime
             excludedOwnerEnvironmentAssetId,
             excludedColliders
           ),
-        createGroundedTraversalColliderPredicate: (
-          playerRuntime,
-          excludedColliders
-        ) =>
-          this.#createPlayerGroundedTraversalColliderPredicate(
-            playerRuntime,
-            excludedColliders
-          ),
         groundedBodyConfig,
-        groundedBodyRuntimeConfig: {
-          controllerOffsetMeters:
-            groundedBodyRuntimeConfig.controllerOffsetMeters,
-          maxTurnSpeedRadiansPerSecond:
-            groundedBodyRuntimeConfig.maxTurnSpeedRadiansPerSecond,
-          snapToGroundDistanceMeters:
-            groundedBodyRuntimeConfig.snapToGroundDistanceMeters,
-          stepHeightMeters: groundedBodyConfig.stepHeightMeters
-        },
+        groundedBodyRuntimeConfig,
         playerStateSync: this.#playerStateSync,
         playerTraversalIntentsByPlayerId: this.#playerTraversalIntentsByPlayerId,
         playersById: this.#playersById,
@@ -1210,33 +1194,6 @@ export class MetaverseAuthoritativeWorldRuntime
       position: spawnPosition,
       yawRadians: selectedSpawnNode.yawRadians
     });
-  }
-
-  #createPlayerGroundedTraversalColliderPredicate(
-    playerRuntime: MetaversePlayerWorldRuntimeState,
-    excludedColliders: readonly RapierColliderHandle[] = Object.freeze([])
-  ): RapierQueryFilterPredicate {
-    const excludedColliderSet = new Set<RapierColliderHandle>([
-      playerRuntime.groundedBodyRuntime.colliderHandle,
-      playerRuntime.swimBodyRuntime.colliderHandle,
-      ...this.#vehicleDriveColliderHandles,
-      ...excludedColliders
-    ]);
-
-    return (collider) => {
-      if (excludedColliderSet.has(collider)) {
-        return false;
-      }
-
-      const ownerPlayerId =
-        this.#playerTraversalColliderOwnerByHandle.get(collider);
-
-      if (ownerPlayerId === undefined) {
-        return true;
-      }
-
-      return false;
-    };
   }
 
   #resolveGroundedTraversalPlayerBlockers(

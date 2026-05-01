@@ -413,19 +413,6 @@ export class MetaverseEnvironmentPhysicsRuntime {
     );
   }
 
-  resolveGroundedTraversalFilterPredicate(
-    excludedColliders: readonly RapierColliderHandle[] = emptyColliderHandleList
-  ): RapierQueryFilterPredicate {
-    const excludedColliderSet = new Set(excludedColliders);
-    const remoteCharacterBlockerColliderSet = new Set(
-      this.#remoteCharacterBlockerCollidersByPlayerId.values()
-    );
-
-    return (collider) =>
-      !excludedColliderSet.has(collider) &&
-      !remoteCharacterBlockerColliderSet.has(collider);
-  }
-
   readGroundedTraversalPlayerBlockers():
     readonly MetaverseTraversalPlayerBodyBlockerSnapshot[] {
     return Object.freeze([

@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  advanceMetaverseDeterministicUnmountedGroundedBodyStep,
+  createMetaverseGroundedBodyRuntimeSnapshot,
   createMetaverseGroundedBodyStepStateSnapshot,
   prepareMetaverseGroundedBodyStep,
-  resolveMetaverseGroundedBodyControllerContactSnapshot,
-  resolveMetaverseGroundedBodyControllerStep,
   resolveMetaverseGroundedBodyStep,
   syncMetaverseGroundedBodyStepState
 } from "@webgpu-metaverse/shared";
@@ -25,12 +25,48 @@ const groundedBodyStepConfig = Object.freeze({
   maxTurnSpeedRadiansPerSecond: 3.6,
   worldRadius: 110
 });
+const deterministicGroundedBodyConfig = Object.freeze({
+  ...groundedBodyStepConfig,
+  capsuleHalfHeightMeters: 0.48,
+  capsuleRadiusMeters: 0.34,
+  controllerOffsetMeters: 0.02,
+  maxSlopeClimbAngleRadians: Math.PI * 0.26,
+  minSlopeSlideAngleRadians: Math.PI * 0.34,
+  snapToGroundDistanceMeters: 0.22,
+  spawnPosition: Object.freeze({ x: 0, y: 0.6, z: 0 }),
+  stepHeightMeters: 0.28,
+  stepWidthMeters: 0.24
+});
+const surfacePolicyConfig = Object.freeze({
+  capsuleHalfHeightMeters: deterministicGroundedBodyConfig.capsuleHalfHeightMeters,
+  capsuleRadiusMeters: deterministicGroundedBodyConfig.capsuleRadiusMeters,
+  gravityUnitsPerSecond: deterministicGroundedBodyConfig.gravityUnitsPerSecond,
+  jumpImpulseUnitsPerSecond:
+    deterministicGroundedBodyConfig.jumpImpulseUnitsPerSecond,
+  oceanHeightMeters: 0,
+  stepHeightMeters: deterministicGroundedBodyConfig.stepHeightMeters
+});
 
 function assertApprox(actual, expected, tolerance = 0.000001) {
   assert.ok(
     Math.abs(actual - expected) <= tolerance,
     `expected ${actual} to be within ${tolerance} of ${expected}`
   );
+}
+
+function freezeVector3(x, y, z) {
+  return Object.freeze({ x, y, z });
+}
+
+function createSupportCollider(surfaceHeightMeters) {
+  return Object.freeze({
+    halfExtents: freezeVector3(8, 0.1, 8),
+    ownerEnvironmentAssetId: null,
+    rotation: Object.freeze({ x: 0, y: 0, z: 0, w: 1 }),
+    rotationYRadians: 0,
+    translation: freezeVector3(0, surfaceHeightMeters - 0.1, 0),
+    traversalAffordance: "support"
+  });
 }
 
 test("shared grounded traversal kernel keeps jump snap suppression active until touchdown", () => {
@@ -203,147 +239,67 @@ test("shared grounded traversal kernel syncs authoritative state without discard
   assertApprox(syncedState.position.z, -2.05);
 });
 
-test("shared grounded traversal kernel resolves controller results into the same grounded step state", () => {
-  const groundedStepState = createMetaverseGroundedBodyStepStateSnapshot({
-    grounded: false,
-    jumpGroundContactGraceSecondsRemaining: 0.12,
-    jumpReady: true,
-    position: {
-      x: 1.4,
-      y: 0.72,
-      z: -0.8
-    },
-    strafeSpeedUnitsPerSecond: 0.75,
-    verticalSpeedUnitsPerSecond: -1.4,
+test("shared grounded traversal kernel resolves deterministic support without controller movement", () => {
+  const currentSnapshot = createMetaverseGroundedBodyRuntimeSnapshot({
+    grounded: true,
+    linearVelocity: freezeVector3(0, 0, 0),
+    position: freezeVector3(1.4, 0.6, -0.8),
     yawRadians: Math.PI * 0.125
   });
-  const preparedStep = prepareMetaverseGroundedBodyStep(
-    groundedStepState,
-    {
+  const resolvedSnapshot = advanceMetaverseDeterministicUnmountedGroundedBodyStep({
+    autostepHeightMeters: null,
+    bodyIntent: Object.freeze({
       boost: true,
       jump: false,
       moveAxis: 0.85,
       strafeAxis: -0.15,
       turnAxis: 0.3
-    },
-    groundedBodyStepConfig,
-    0.033
-  );
-
-  assert.equal(preparedStep.driveTarget.boost, true);
-  assert.equal(preparedStep.driveTarget.moveAxis, 0.85);
-  assert.equal(preparedStep.driveTarget.strafeAxis, -0.15);
-  assert.ok(preparedStep.driveTarget.targetPlanarSpeedUnitsPerSecond > 0);
-  const directResolvedStep = resolveMetaverseGroundedBodyStep(
-    groundedStepState,
-    preparedStep,
-    {
-      x: 1.62,
-      y: 0.6,
-      z: -0.73
-    },
-    true,
-    groundedBodyStepConfig,
-    0.033
-  );
-  const controllerResolvedStep = resolveMetaverseGroundedBodyControllerStep(
-    groundedStepState,
-    preparedStep,
-    {
-      colliderCenterPosition: {
-        x: 1.55,
-        y: 1.41,
-        z: -0.78
-      },
-      computedGrounded: true,
-      computedMovementDelta: {
-        x: 0.07,
-        y: 0.01,
-        z: 0.05
-      },
-      standingOffsetMeters: 0.82
-    },
-    groundedBodyStepConfig,
-    0.033
-  );
-
-  assert.deepEqual(
-    {
-      ...controllerResolvedStep,
-      state: {
-        ...controllerResolvedStep.state,
-        contact: undefined
-      }
-    },
-    {
-      ...directResolvedStep,
-      state: {
-        ...directResolvedStep.state,
-        contact: undefined
-      }
-    }
-  );
-  assert.deepEqual(controllerResolvedStep.state.contact, {
-    appliedMovementDelta: {
-      x: 0.07,
-      y: 0.01,
-      z: 0.05
-    },
-    blockedPlanarMovement: true,
-    blockedVerticalMovement: false,
-    desiredMovementDelta: preparedStep.desiredMovementDelta,
-    supportingContactDetected: true
+    }),
+    currentGroundedBodySnapshot: currentSnapshot,
+    deltaSeconds: 0.033,
+    groundedBodyConfig: deterministicGroundedBodyConfig,
+    preferredLookYawRadians: null,
+    surfaceColliderSnapshots: Object.freeze([createSupportCollider(0.6)]),
+    surfacePolicyConfig
   });
-  assert.deepEqual(
-    controllerResolvedStep.state.driveTarget,
-    preparedStep.driveTarget
-  );
+
+  assert.equal(resolvedSnapshot.grounded, true);
+  assertApprox(resolvedSnapshot.position.y, 0.6);
+  assert.equal(resolvedSnapshot.driveTarget.boost, true);
+  assert.equal(resolvedSnapshot.driveTarget.moveAxis, 0.85);
+  assert.equal(resolvedSnapshot.driveTarget.strafeAxis, -0.15);
+  assert.ok(resolvedSnapshot.driveTarget.targetPlanarSpeedUnitsPerSecond > 0);
+  assert.equal(resolvedSnapshot.contact.supportingContactDetected, true);
+  assert.equal(resolvedSnapshot.contact.blockedPlanarMovement, false);
+  assert.equal(resolvedSnapshot.contact.blockedVerticalMovement, false);
 });
 
-test("shared grounded traversal kernel ignores sub-centimeter contact delta noise", () => {
-  const contactSnapshot = resolveMetaverseGroundedBodyControllerContactSnapshot(
-    {
-      desiredMovementDelta: {
-        x: 0.25,
-        y: 0.02,
-        z: -0.12
-      }
-    },
-    {
-      computedGrounded: true,
-      computedMovementDelta: {
-        x: 0.245,
-        y: 0.011,
-        z: -0.111
-      }
-    }
-  );
+test("shared grounded traversal kernel treats support lift as support, not blocked vertical movement", () => {
+  const currentSnapshot = createMetaverseGroundedBodyRuntimeSnapshot({
+    grounded: true,
+    linearVelocity: freezeVector3(0, 0, -0.5),
+    position: freezeVector3(0, 0.6, 0),
+    yawRadians: 0
+  });
+  const resolvedSnapshot = advanceMetaverseDeterministicUnmountedGroundedBodyStep({
+    autostepHeightMeters: null,
+    bodyIntent: Object.freeze({
+      boost: false,
+      jump: false,
+      moveAxis: 1,
+      strafeAxis: 0,
+      turnAxis: 0
+    }),
+    currentGroundedBodySnapshot: currentSnapshot,
+    deltaSeconds: 0.033,
+    groundedBodyConfig: deterministicGroundedBodyConfig,
+    preferredLookYawRadians: null,
+    surfaceColliderSnapshots: Object.freeze([createSupportCollider(0.6193)]),
+    surfacePolicyConfig
+  });
 
-  assert.equal(contactSnapshot.blockedPlanarMovement, false);
-  assert.equal(contactSnapshot.blockedVerticalMovement, false);
-  assert.equal(contactSnapshot.supportingContactDetected, true);
-});
-
-test("shared grounded traversal kernel does not treat grounded support lift as blocked vertical movement", () => {
-  const contactSnapshot = resolveMetaverseGroundedBodyControllerContactSnapshot(
-    {
-      desiredMovementDelta: {
-        x: 0,
-        y: -0.005,
-        z: -0.075
-      }
-    },
-    {
-      computedGrounded: true,
-      computedMovementDelta: {
-        x: 0,
-        y: 0.0193,
-        z: -0.075
-      }
-    }
-  );
-
-  assert.equal(contactSnapshot.blockedPlanarMovement, false);
-  assert.equal(contactSnapshot.blockedVerticalMovement, false);
-  assert.equal(contactSnapshot.supportingContactDetected, true);
+  assert.equal(resolvedSnapshot.grounded, true);
+  assert.equal(resolvedSnapshot.contact.supportingContactDetected, true);
+  assert.equal(resolvedSnapshot.contact.blockedVerticalMovement, false);
+  assertApprox(resolvedSnapshot.position.y, 0.6193);
 });

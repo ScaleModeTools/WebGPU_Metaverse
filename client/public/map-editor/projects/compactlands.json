@@ -1,0 +1,195 @@
+{
+  "compiledWorld": {
+    "chunkSizeMeters": 24,
+    "chunks": [
+      {
+        "bounds": {
+          "center": {
+            "x": 12,
+            "y": 0,
+            "z": 12
+          },
+          "size": {
+            "x": 24,
+            "y": 24,
+            "z": 24
+          }
+        },
+        "chunkId": "chunk:0:0",
+        "collision": {
+          "boxes": [],
+          "heightfields": [],
+          "triMeshes": []
+        },
+        "navigation": {
+          "connectorIds": [],
+          "gameplayVolumeIds": [
+            "blank-template:gameplay-volume:kill-floor"
+          ],
+          "regionIds": [],
+          "surfaceIds": []
+        },
+        "render": {
+          "edgeIds": [],
+          "instancedModuleAssetIds": [],
+          "lightIds": [],
+          "regionIds": [],
+          "structureIds": [],
+          "terrainPatchIds": [],
+          "transparentEntityIds": [
+            "blank-template:gameplay-volume:kill-floor"
+          ]
+        }
+      }
+    ],
+    "compatibilityEnvironmentAssets": []
+  },
+  "description": "Empty engine-tool seed bundle with no authored world content, scene objects, spawns, water, or launch variations.",
+  "environmentAssets": [],
+  "environmentPresentation": {
+    "environment": {
+      "cloudCoverage": 0.2,
+      "cloudDensity": 0.28,
+      "cloudElevation": 0.68,
+      "cloudScale": 0.00016,
+      "cloudSpeed": 0.00006,
+      "domeRadius": 360,
+      "fogColor": [
+        0.63,
+        0.76,
+        0.88
+      ],
+      "fogDensity": 0.0023,
+      "fogEnabled": false,
+      "groundColor": [
+        0.23,
+        0.28,
+        0.35
+      ],
+      "groundFalloff": 1.15,
+      "horizonColor": [
+        0.8,
+        0.85,
+        0.9
+      ],
+      "horizonSoftness": 0.24,
+      "mieCoefficient": 0.005,
+      "mieDirectionalG": 0.8,
+      "rayleigh": 2.1,
+      "skyExposure": 0.33,
+      "skyExposureCurve": 1,
+      "sunAzimuthDegrees": 132,
+      "sunColor": [
+        1,
+        0.91,
+        0.74
+      ],
+      "sunElevationDegrees": 28,
+      "toneMappingExposure": 0.88,
+      "turbidity": 9.5
+    },
+    "ocean": {
+      "emissiveColor": [
+        0.08,
+        0.28,
+        0.37
+      ],
+      "farColor": [
+        0.05,
+        0.22,
+        0.34
+      ],
+      "height": 0,
+      "nearColor": [
+        0.12,
+        0.45,
+        0.58
+      ],
+      "planeDepth": 72,
+      "planeWidth": 72,
+      "roughness": 0.16,
+      "segmentCount": 96,
+      "waveAmplitude": 0.32,
+      "waveFrequencies": {
+        "primary": 0.11,
+        "ripple": 0.38,
+        "secondary": 0.18
+      },
+      "waveSpeeds": {
+        "primary": 0.62,
+        "ripple": 1.28,
+        "secondary": 0.87
+      }
+    }
+  },
+  "gameplayProfileId": "shell-default-gameplay",
+  "label": "CompactLands",
+  "launchVariations": [
+    {
+      "description": "",
+      "experienceId": null,
+      "gameplayVariationId": null,
+      "label": "Scene Default",
+      "matchMode": "free-roam",
+      "variationId": "compactlands:scene-default",
+      "vehicleLayoutId": null,
+      "weaponLayoutId": null
+    }
+  ],
+  "mapId": "compactlands",
+  "playerSpawnNodes": [],
+  "playerSpawnSelection": {
+    "enemyAvoidanceRadiusMeters": 18,
+    "homeTeamBiasMeters": 12
+  },
+  "presentationProfileIds": {
+    "cameraProfileId": "shell-default-camera",
+    "characterPresentationProfileId": "shell-default-character-presentation",
+    "environmentPresentationProfileId": "shell-default-environment-presentation",
+    "hudProfileId": "shell-default-hud"
+  },
+  "resourceSpawns": [],
+  "sceneObjects": [],
+  "semanticWorld": {
+    "compatibilityAssetIds": {
+      "connectorAssetId": "metaverse-builder-step-tile-v1",
+      "floorAssetId": "metaverse-builder-floor-tile-v1",
+      "wallAssetId": "metaverse-builder-wall-tile-v1"
+    },
+    "connectors": [],
+    "edges": [],
+    "gameplayVolumes": [
+      {
+        "center": {
+          "x": 0,
+          "y": -5,
+          "z": 0
+        },
+        "label": "Kill Floor",
+        "priority": -1,
+        "rotationYRadians": 0,
+        "routePoints": [],
+        "size": {
+          "x": 240,
+          "y": 0.5,
+          "z": 240
+        },
+        "tags": [
+          "environment",
+          "kill-floor"
+        ],
+        "teamId": null,
+        "volumeId": "blank-template:gameplay-volume:kill-floor",
+        "volumeKind": "kill-floor"
+      }
+    ],
+    "lights": [],
+    "materialDefinitions": [],
+    "modules": [],
+    "regions": [],
+    "surfaces": [],
+    "structures": [],
+    "terrainPatches": []
+  },
+  "waterRegions": []
+}

@@ -5344,12 +5344,6 @@ export function applyMapEditorTerrainBrush(
   let terrainPatch = findTerrainPatchAtPosition(nextProject, snappedPosition);
 
   if (terrainPatch === null) {
-    nextProject = addMapEditorTerrainPatchDraft(nextProject, snappedPosition, materialId);
-    terrainPatch =
-      nextProject.terrainPatchDrafts[nextProject.terrainPatchDrafts.length - 1] ?? null;
-  }
-
-  if (terrainPatch === null) {
     return nextProject;
   }
 

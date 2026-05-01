@@ -497,7 +497,11 @@ export function resolveMetaverseWorldPlacedSurfaceColliders(
 export function resolveMetaverseWorldDynamicSurfaceCollidersForAsset(
   surfaceAsset: Pick<
     MetaverseWorldSurfaceAssetAuthoring,
-    "environmentAssetId" | "placement" | "placements" | "surfaceColliders"
+    | "collider"
+    | "environmentAssetId"
+    | "placement"
+    | "placements"
+    | "surfaceColliders"
   >,
   poseSnapshot: {
     readonly position: MetaverseWorldSurfaceVector3Snapshot;
@@ -522,15 +526,33 @@ export function resolveMetaverseWorldDynamicSurfaceCollidersForAsset(
     scale: authoredPlacement.scale
   } satisfies MetaverseWorldSurfacePlacementSnapshot);
 
-  return Object.freeze(
-    surfaceAsset.surfaceColliders.map((collider) =>
-      createPlacedSurfaceColliderSnapshot(
-        surfaceAsset.environmentAssetId,
-        collider,
-        placement
+  if (surfaceAsset.surfaceColliders.length > 0) {
+    return Object.freeze(
+      surfaceAsset.surfaceColliders.map((collider) =>
+        createPlacedSurfaceColliderSnapshot(
+          surfaceAsset.environmentAssetId,
+          collider,
+          placement
+        )
       )
+    );
+  }
+
+  if (surfaceAsset.collider === null) {
+    return Object.freeze([]);
+  }
+
+  return Object.freeze([
+    createPlacedSurfaceColliderSnapshot(
+      surfaceAsset.environmentAssetId,
+      Object.freeze({
+        center: surfaceAsset.collider.center,
+        size: surfaceAsset.collider.size,
+        traversalAffordance: "blocker"
+      }),
+      placement
     )
-  );
+  ]);
 }
 
 export function resolveMetaverseWorldPlacedWaterRegions(

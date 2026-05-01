@@ -4,9 +4,6 @@ import {
   type RapierColliderHandle,
   type RapierPhysicsRuntime
 } from "@/physics";
-import {
-  metaverseRealtimeWorldCadenceConfig
-} from "@webgpu-metaverse/shared/metaverse/realtime";
 
 import type { MetaverseLocomotionModeId } from "../../types/metaverse-locomotion-mode";
 import type { MetaverseCameraSnapshot } from "../../types/presentation";
@@ -34,24 +31,9 @@ import type {
 import type { MetaverseFlightInputSnapshot } from "../../types/metaverse-control-mode";
 import type { MetaverseUnmountedTraversalStateSnapshot } from "@webgpu-metaverse/shared";
 
-const authoritativeTraversalFixedStepSeconds =
-  Number(metaverseRealtimeWorldCadenceConfig.authoritativeTickIntervalMs) /
-  1_000;
-
-function createIdleGroundedBodyIntentSnapshot() {
-  return Object.freeze({
-    boost: false,
-    jump: false,
-    moveAxis: 0,
-    strafeAxis: 0,
-    turnAxis: 0
-  });
-}
-
 type SurfaceLocomotionDependencies = Pick<
   MetaverseTraversalRuntimeDependencies,
   | "readGroundedTraversalPlayerBlockers"
-  | "resolveGroundedTraversalFilterPredicate"
   | "resolveWaterborneTraversalFilterPredicate"
   | "surfaceColliderSnapshots"
 >;
@@ -155,7 +137,6 @@ export class MetaverseUnmountedSurfaceLocomotionState {
   readonly #dependencies: SurfaceLocomotionDependencies;
   readonly #fixedStepSimulation: MetaverseFixedStepTraversalSimulation;
   readonly #groundedBodyRuntime: MetaverseGroundedBodyRuntime;
-  readonly #physicsRuntime: RapierPhysicsRuntime;
   readonly #readMountedVehicleColliderHandle: () => RapierColliderHandle | null;
 
   #latestAutomaticSurfaceTelemetrySnapshot: AutomaticSurfaceTelemetrySnapshot;
@@ -170,7 +151,6 @@ export class MetaverseUnmountedSurfaceLocomotionState {
     this.#config = input.config;
     this.#dependencies = input.dependencies;
     this.#groundedBodyRuntime = input.groundedBodyRuntime;
-    this.#physicsRuntime = input.physicsRuntime;
     this.#readMountedVehicleColliderHandle =
       input.readMountedVehicleColliderHandle;
     this.#fixedStepSimulation = new MetaverseFixedStepTraversalSimulation(
@@ -179,8 +159,6 @@ export class MetaverseUnmountedSurfaceLocomotionState {
         physicsRuntime: input.physicsRuntime,
         readGroundedTraversalPlayerBlockers:
           input.dependencies.readGroundedTraversalPlayerBlockers,
-        resolveGroundedTraversalFilterPredicate:
-          input.dependencies.resolveGroundedTraversalFilterPredicate,
         resolveWaterborneTraversalFilterPredicate:
           input.dependencies.resolveWaterborneTraversalFilterPredicate,
         surfaceColliderSnapshots: input.dependencies.surfaceColliderSnapshots
@@ -348,8 +326,6 @@ export class MetaverseUnmountedSurfaceLocomotionState {
       groundedBodyRuntime: this.#groundedBodyRuntime,
       movementInput: input.movementInput,
       preferredLookYawRadians: input.preferredLookYawRadians,
-      readGroundedTraversalExcludedColliders: () =>
-        this.readGroundedTraversalExcludedColliders(),
       resolveGroundedPresentationPosition: (bodySnapshot) =>
         input.resolveGroundedPresentationPosition(bodySnapshot.position),
       traversalCameraPitchRadians: input.traversalCameraPitchRadians,
@@ -408,32 +384,20 @@ export class MetaverseUnmountedSurfaceLocomotionState {
       input.position.z
     );
 
-    this.#groundedBodyRuntime.setAutostepEnabled(false);
     this.#fixedStepSimulation.disposeSwimBodyRuntime();
-
-    if (input.linearVelocity === undefined || input.linearVelocity === null) {
-      this.#groundedBodyRuntime.teleport(groundedPosition, input.yawRadians);
-      this.#physicsRuntime.stepSimulation(authoritativeTraversalFixedStepSeconds);
-      this.#groundedBodyRuntime.advance(
-        createIdleGroundedBodyIntentSnapshot(),
-        authoritativeTraversalFixedStepSeconds,
-        this.#dependencies.resolveGroundedTraversalFilterPredicate(
-          this.readGroundedTraversalExcludedColliders()
-        ),
-        input.lookYawRadians
-      );
-    } else {
-      this.#groundedBodyRuntime.syncAuthoritativeState({
-        grounded: true,
-        linearVelocity: freezeVector3(
-          input.linearVelocity.x,
-          0,
-          input.linearVelocity.z
-        ),
-        position: groundedPosition,
-        yawRadians: input.yawRadians
-      });
-    }
+    this.#groundedBodyRuntime.syncAuthoritativeState({
+      grounded: true,
+      linearVelocity:
+        input.linearVelocity === undefined || input.linearVelocity === null
+          ? freezeVector3(0, 0, 0)
+          : freezeVector3(
+              input.linearVelocity.x,
+              0,
+              input.linearVelocity.z
+            ),
+      position: groundedPosition,
+      yawRadians: input.yawRadians
+    });
 
     return createTraversalGroundedCameraPresentationSnapshot(
       this.#groundedBodyRuntime.snapshot,
@@ -445,7 +409,6 @@ export class MetaverseUnmountedSurfaceLocomotionState {
   }
 
   enterSwimLocomotion(input: EnterSwimLocomotionInput): MetaverseCameraSnapshot {
-    this.#groundedBodyRuntime.setAutostepEnabled(false);
     const swimSnapshot = this.#fixedStepSimulation.teleportSwimBodyRuntime(
       input.position,
       input.yawRadians,
@@ -496,7 +459,6 @@ export class MetaverseUnmountedSurfaceLocomotionState {
           positionBlendAlpha
     );
 
-    this.#groundedBodyRuntime.setAutostepEnabled(false);
     this.#groundedBodyRuntime.syncAuthoritativeState({
       grounded: input.grounded,
       interaction: input.interaction ?? null,
@@ -517,7 +479,6 @@ export class MetaverseUnmountedSurfaceLocomotionState {
   syncAuthoritativeSwimLocomotion(
     input: SyncAuthoritativeSwimLocomotionInput
   ): MetaverseCameraSnapshot {
-    this.#groundedBodyRuntime.setAutostepEnabled(false);
     const swimSnapshot = this.#fixedStepSimulation.syncAuthoritativeSwimLocomotion({
       positionBlendAlpha: input.positionBlendAlpha ?? 1,
       readWaterSurfaceHeightMeters: (position, paddingMeters) =>

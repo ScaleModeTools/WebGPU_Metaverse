@@ -269,7 +269,6 @@ export class MetaverseMountedTraversalTransitionState {
       return;
     }
 
-    this.#dependencies.groundedBodyRuntime.setAutostepEnabled(false);
     this.#dependencies.setLocomotionMode("mounted");
     this.#dependencies.syncLocalTraversalAuthorityState(false);
     this.#dependencies.setTraversalCameraPitchRadians(

@@ -2,9 +2,25 @@ import type {
   MetaverseTraversalBodyControlSnapshot
 } from "./metaverse-traversal-contract.js";
 import {
+  createMetaverseGroundedBodyContactSnapshot,
+  createMetaverseGroundedBodyStepStateSnapshot,
+  prepareMetaverseGroundedBodyStep,
+  resolveMetaverseGroundedBodyStep,
+  type MetaverseGroundedBodyStepStateSnapshot,
   stepMetaverseGroundedTraversalAction,
   type MetaverseGroundedTraversalBodyIntentSnapshot
 } from "./metaverse-grounded-traversal-kernel.js";
+import {
+  createMetaverseGroundedJumpBodySnapshot
+} from "./metaverse-grounded-jump-physics.js";
+import {
+  createMetaverseGroundedBodyRuntimeSnapshot,
+  type MetaverseGroundedBodyConfigSnapshot,
+  type MetaverseGroundedBodyRuntimeSnapshot
+} from "./metaverse-grounded-body-contract.js";
+import {
+  resolveMetaverseGroundedTraversalDirectionalSpeeds
+} from "./metaverse-grounded-traversal-simulation.js";
 import type {
   MetaverseGroundedJumpBodySnapshot
 } from "./metaverse-grounded-jump-physics.js";
@@ -33,9 +49,18 @@ import type {
 } from "./metaverse-world-surface-policy.js";
 import {
   metaverseWorldAutomaticSurfaceWaterlineThresholdMeters,
+  metaverseWorldSurfaceStepHeightLeewayMeters,
+  constrainMetaverseWorldPlanarPositionAgainstBlockers,
   resolveMetaverseWorldGroundedAutostepHeightMeters,
   resolveMetaverseWorldSurfaceSupportSnapshot
 } from "./metaverse-world-surface-policy.js";
+import {
+  constrainMetaverseTraversalPlayerBodyBlockers,
+  type MetaverseTraversalPlayerBodyBlockerSnapshot
+} from "./metaverse-player-body-blocker-kernel.js";
+import {
+  resolveMetaverseTraversalLinearVelocitySnapshot
+} from "./metaverse-traversal-kinematics.js";
 import type {
   MetaverseTraversalCapabilityId,
   MetaverseTraversalStateDecision,
@@ -46,6 +71,7 @@ import {
 } from "./metaverse-traversal-state-resolver.js";
 import {
   clamp,
+  createMetaverseSurfaceTraversalVector3Snapshot,
   toFiniteNumber,
   wrapRadians
 } from "./metaverse-surface-traversal-simulation.js";
@@ -202,6 +228,20 @@ export interface AdvanceMetaverseUnmountedSwimBodyStepInput {
   readonly waterlineHeightMeters: number;
 }
 
+export interface AdvanceMetaverseDeterministicUnmountedGroundedBodyStepInput {
+  readonly autostepHeightMeters: number | null;
+  readonly bodyIntent: MetaverseGroundedTraversalBodyIntentSnapshot;
+  readonly currentGroundedBodySnapshot: MetaverseGroundedBodyRuntimeSnapshot;
+  readonly deltaSeconds: number;
+  readonly excludedOwnerEnvironmentAssetId?: string | null;
+  readonly groundedBodyConfig: MetaverseGroundedBodyConfigSnapshot;
+  readonly playerBlockers?: readonly MetaverseTraversalPlayerBodyBlockerSnapshot[];
+  readonly preferredLookYawRadians: number | null;
+  readonly preferredSupport?: MetaverseWorldSurfaceSupportSnapshot | null;
+  readonly surfaceColliderSnapshots: readonly MetaverseWorldPlacedSurfaceColliderSnapshot[];
+  readonly surfacePolicyConfig: MetaverseWorldSurfacePolicyConfig;
+}
+
 export interface SyncResolvedMetaverseUnmountedGroundedBodySnapshotInput<
   GroundedBodySnapshot extends MetaverseUnmountedGroundedBodySnapshot = MetaverseUnmountedGroundedBodySnapshot
 > {
@@ -313,6 +353,371 @@ function resolveAutomaticSurfaceSnapshot(
     currentLocomotionMode,
     excludedOwnerEnvironmentAssetId,
     preferredSupport
+  );
+}
+
+const deterministicGroundedBodyContactDeltaToleranceMeters = 0.01;
+const deterministicGroundedBodySupportToleranceMeters = 0.001;
+const emptyMetaverseTraversalPlayerBodyBlockers =
+  Object.freeze([]) as readonly MetaverseTraversalPlayerBodyBlockerSnapshot[];
+
+function createMetaverseGroundedBodyStepStateFromRuntimeSnapshot(
+  runtimeSnapshot: MetaverseGroundedBodyRuntimeSnapshot,
+  supportNormal: MetaverseWorldSurfaceVector3Snapshot | null
+): MetaverseGroundedBodyStepStateSnapshot {
+  const directionalSpeeds =
+    resolveMetaverseGroundedTraversalDirectionalSpeeds(
+      runtimeSnapshot.linearVelocity,
+      runtimeSnapshot.yawRadians,
+      runtimeSnapshot.grounded
+    );
+  const stepStateInput = {
+    contact: runtimeSnapshot.contact,
+    driveTarget: runtimeSnapshot.driveTarget,
+    forwardSpeedUnitsPerSecond:
+      directionalSpeeds.forwardSpeedUnitsPerSecond,
+    grounded: runtimeSnapshot.grounded,
+    interaction: runtimeSnapshot.interaction,
+    jumpGroundContactGraceSecondsRemaining:
+      runtimeSnapshot.jumpBody.jumpGroundContactGraceSecondsRemaining,
+    jumpReady: runtimeSnapshot.jumpBody.jumpReady,
+    jumpSnapSuppressionActive:
+      runtimeSnapshot.jumpBody.jumpSnapSuppressionActive,
+    position: runtimeSnapshot.position,
+    strafeSpeedUnitsPerSecond:
+      directionalSpeeds.strafeSpeedUnitsPerSecond,
+    verticalSpeedUnitsPerSecond:
+      runtimeSnapshot.jumpBody.verticalSpeedUnitsPerSecond,
+    yawRadians: runtimeSnapshot.yawRadians
+  };
+
+  return createMetaverseGroundedBodyStepStateSnapshot(
+    supportNormal === null
+      ? stepStateInput
+      : Object.freeze({
+          ...stepStateInput,
+          supportNormal
+        })
+  );
+}
+
+function createMetaverseGroundedBodyRuntimeSnapshotFromStepState(
+  stepState: MetaverseGroundedBodyStepStateSnapshot
+): MetaverseGroundedBodyRuntimeSnapshot {
+  const jumpBodySnapshot = createMetaverseGroundedJumpBodySnapshot({
+    grounded: stepState.grounded,
+    jumpGroundContactGraceSecondsRemaining:
+      stepState.jumpGroundContactGraceSecondsRemaining,
+    jumpReady: stepState.jumpReady,
+    jumpSnapSuppressionActive: stepState.jumpSnapSuppressionActive,
+    verticalSpeedUnitsPerSecond: stepState.verticalSpeedUnitsPerSecond
+  });
+
+  return createMetaverseGroundedBodyRuntimeSnapshot({
+    contact: stepState.contact,
+    driveTarget: stepState.driveTarget,
+    grounded: jumpBodySnapshot.grounded,
+    interaction: stepState.interaction,
+    jumpBody: jumpBodySnapshot,
+    linearVelocity: resolveMetaverseTraversalLinearVelocitySnapshot(
+      {
+        forwardSpeedUnitsPerSecond: stepState.forwardSpeedUnitsPerSecond,
+        strafeSpeedUnitsPerSecond: stepState.strafeSpeedUnitsPerSecond,
+        verticalSpeedUnitsPerSecond:
+          jumpBodySnapshot.verticalSpeedUnitsPerSecond
+      },
+      stepState.yawRadians
+    ),
+    position: stepState.position,
+    yawRadians: stepState.yawRadians
+  });
+}
+
+function resolveMetaverseDeterministicGroundedMaxStepRiseMeters(
+  input: Pick<
+    AdvanceMetaverseDeterministicUnmountedGroundedBodyStepInput,
+    "autostepHeightMeters" | "groundedBodyConfig" | "surfacePolicyConfig"
+  >
+): number {
+  return (
+    Math.max(
+      0,
+      toFiniteNumber(input.autostepHeightMeters ?? 0, 0),
+      toFiniteNumber(input.groundedBodyConfig.stepHeightMeters, 0),
+      toFiniteNumber(input.surfacePolicyConfig.stepHeightMeters, 0)
+    ) + metaverseWorldSurfaceStepHeightLeewayMeters
+  );
+}
+
+function resolveMetaverseDeterministicGroundedCapsuleHeightMeters(
+  input: Pick<
+    AdvanceMetaverseDeterministicUnmountedGroundedBodyStepInput,
+    "groundedBodyConfig" | "surfacePolicyConfig"
+  >
+): number {
+  return (
+    (Math.max(
+      0,
+      toFiniteNumber(
+        input.groundedBodyConfig.capsuleHalfHeightMeters,
+        input.surfacePolicyConfig.capsuleHalfHeightMeters
+      )
+    ) +
+      Math.max(
+        0,
+        toFiniteNumber(
+          input.groundedBodyConfig.capsuleRadiusMeters,
+          input.surfacePolicyConfig.capsuleRadiusMeters
+        )
+      )) *
+    2
+  );
+}
+
+function resolveMetaverseDeterministicGroundedPlanarPosition(input: {
+  readonly currentPosition: MetaverseWorldSurfaceVector3Snapshot;
+  readonly maxStepRiseMeters: number;
+  readonly nextPosition: MetaverseWorldSurfaceVector3Snapshot;
+  readonly stepInput: AdvanceMetaverseDeterministicUnmountedGroundedBodyStepInput;
+}): MetaverseWorldSurfaceVector3Snapshot {
+  const controllerOffsetMeters = Math.max(
+    0,
+    toFiniteNumber(input.stepInput.groundedBodyConfig.controllerOffsetMeters, 0)
+  );
+  const bodyRadiusMeters = Math.max(
+    0,
+    toFiniteNumber(
+      input.stepInput.groundedBodyConfig.capsuleRadiusMeters,
+      input.stepInput.surfacePolicyConfig.capsuleRadiusMeters
+    )
+  );
+  const capsuleHeightMeters =
+    resolveMetaverseDeterministicGroundedCapsuleHeightMeters(input.stepInput);
+  const minHeightMeters = Math.min(
+    input.currentPosition.y,
+    input.nextPosition.y
+  );
+  const maxHeightMeters =
+    Math.max(input.currentPosition.y, input.nextPosition.y) +
+    capsuleHeightMeters;
+  const worldBlockedPosition =
+    constrainMetaverseWorldPlanarPositionAgainstBlockers(
+      input.stepInput.surfaceColliderSnapshots,
+      input.currentPosition,
+      input.nextPosition,
+      bodyRadiusMeters + controllerOffsetMeters,
+      minHeightMeters,
+      maxHeightMeters,
+      input.stepInput.excludedOwnerEnvironmentAssetId ?? null,
+      Object.freeze({
+        currentRootHeightMeters: input.currentPosition.y,
+        maxStepRiseMeters: input.maxStepRiseMeters,
+        nextRootHeightMeters: input.nextPosition.y
+      })
+    );
+
+  return constrainMetaverseTraversalPlayerBodyBlockers({
+    blockers:
+      input.stepInput.playerBlockers ??
+      emptyMetaverseTraversalPlayerBodyBlockers,
+    capsuleHalfHeightMeters:
+      input.stepInput.groundedBodyConfig.capsuleHalfHeightMeters,
+    capsuleRadiusMeters:
+      input.stepInput.groundedBodyConfig.capsuleRadiusMeters,
+    controllerOffsetMeters,
+    currentPosition: input.currentPosition,
+    nextPosition: worldBlockedPosition
+  });
+}
+
+function hasDeterministicGroundedBodyMovementDeltaDivergence(
+  desiredDelta: number,
+  appliedDelta: number
+): boolean {
+  return (
+    Math.abs(toFiniteNumber(desiredDelta, 0) - toFiniteNumber(appliedDelta, 0)) >
+    deterministicGroundedBodyContactDeltaToleranceMeters
+  );
+}
+
+function hasDeterministicGroundedBodyVerticalMovementDivergence(
+  desiredDelta: number,
+  appliedDelta: number,
+  supportingContactDetected: boolean
+): boolean {
+  const sanitizedDesiredDelta = toFiniteNumber(desiredDelta, 0);
+  const sanitizedAppliedDelta = toFiniteNumber(appliedDelta, 0);
+
+  if (
+    supportingContactDetected &&
+    sanitizedDesiredDelta <= 0 &&
+    sanitizedAppliedDelta >= 0
+  ) {
+    return false;
+  }
+
+  return hasDeterministicGroundedBodyMovementDeltaDivergence(
+    sanitizedDesiredDelta,
+    sanitizedAppliedDelta
+  );
+}
+
+function shouldAcceptMetaverseDeterministicGroundedSupport(input: {
+  readonly currentPosition: MetaverseWorldSurfaceVector3Snapshot;
+  readonly maxStepRiseMeters: number;
+  readonly preparedStep: ReturnType<typeof prepareMetaverseGroundedBodyStep>;
+  readonly resolvedPlanarPosition: MetaverseWorldSurfaceVector3Snapshot;
+  readonly snapToGroundDistanceMeters: number;
+  readonly support: MetaverseWorldSurfaceSupportSnapshot | null;
+}): boolean {
+  if (input.support === null) {
+    return false;
+  }
+
+  const supportHeightMeters = input.support.supportHeightMeters;
+
+  if (
+    supportHeightMeters >
+    input.currentPosition.y + input.maxStepRiseMeters
+  ) {
+    return false;
+  }
+
+  if (
+    input.preparedStep.verticalSpeedUnitsPerSecond > 0 &&
+    input.resolvedPlanarPosition.y >
+      supportHeightMeters + deterministicGroundedBodySupportToleranceMeters
+  ) {
+    return false;
+  }
+
+  if (
+    input.resolvedPlanarPosition.y <=
+    supportHeightMeters + deterministicGroundedBodySupportToleranceMeters
+  ) {
+    return true;
+  }
+
+  return (
+    input.preparedStep.snapToGroundEnabled === true &&
+    input.resolvedPlanarPosition.y - supportHeightMeters <=
+      input.snapToGroundDistanceMeters + metaverseWorldSurfaceStepHeightLeewayMeters
+  );
+}
+
+export function advanceMetaverseDeterministicUnmountedGroundedBodyStep(
+  input: AdvanceMetaverseDeterministicUnmountedGroundedBodyStepInput
+): MetaverseGroundedBodyRuntimeSnapshot {
+  const deltaSeconds = Math.max(0, toFiniteNumber(input.deltaSeconds, 0));
+
+  if (deltaSeconds <= 0) {
+    return input.currentGroundedBodySnapshot;
+  }
+
+  const currentPosition = input.currentGroundedBodySnapshot.position;
+  const currentStepState =
+    createMetaverseGroundedBodyStepStateFromRuntimeSnapshot(
+      input.currentGroundedBodySnapshot,
+      input.preferredSupport?.supportNormal ?? null
+    );
+  const preparedStep = prepareMetaverseGroundedBodyStep(
+    currentStepState,
+    input.bodyIntent,
+    input.groundedBodyConfig,
+    deltaSeconds,
+    input.preferredLookYawRadians
+  );
+  const desiredRootPosition = createMetaverseSurfaceTraversalVector3Snapshot(
+    currentPosition.x + preparedStep.desiredMovementDelta.x,
+    currentPosition.y + preparedStep.desiredMovementDelta.y,
+    currentPosition.z + preparedStep.desiredMovementDelta.z
+  );
+  const maxStepRiseMeters =
+    resolveMetaverseDeterministicGroundedMaxStepRiseMeters(input);
+  const resolvedPlanarPosition =
+    resolveMetaverseDeterministicGroundedPlanarPosition({
+      currentPosition,
+      maxStepRiseMeters,
+      nextPosition: desiredRootPosition,
+      stepInput: input
+    });
+  const support = resolveMetaverseWorldSurfaceSupportSnapshot(
+    input.surfacePolicyConfig,
+    input.surfaceColliderSnapshots,
+    resolvedPlanarPosition.x,
+    resolvedPlanarPosition.z,
+    Math.max(
+      0,
+      toFiniteNumber(
+        input.groundedBodyConfig.capsuleRadiusMeters,
+        input.surfacePolicyConfig.capsuleRadiusMeters
+      ),
+      toFiniteNumber(input.surfacePolicyConfig.capsuleRadiusMeters, 0)
+    ) +
+      Math.max(
+        0,
+        toFiniteNumber(input.groundedBodyConfig.controllerOffsetMeters, 0)
+      ),
+    input.excludedOwnerEnvironmentAssetId ?? null,
+    Math.max(currentPosition.y, resolvedPlanarPosition.y) + maxStepRiseMeters,
+    input.preferredSupport ?? null
+  );
+  const grounded = shouldAcceptMetaverseDeterministicGroundedSupport({
+    currentPosition,
+    maxStepRiseMeters,
+    preparedStep,
+    resolvedPlanarPosition,
+    snapToGroundDistanceMeters: Math.max(
+      0,
+      toFiniteNumber(input.groundedBodyConfig.snapToGroundDistanceMeters, 0)
+    ),
+    support
+  });
+  const resolvedRootPosition = createMetaverseSurfaceTraversalVector3Snapshot(
+    resolvedPlanarPosition.x,
+    grounded && support !== null
+      ? support.supportHeightMeters
+      : resolvedPlanarPosition.y,
+    resolvedPlanarPosition.z
+  );
+  const appliedMovementDelta = createMetaverseSurfaceTraversalVector3Snapshot(
+    resolvedRootPosition.x - currentPosition.x,
+    resolvedRootPosition.y - currentPosition.y,
+    resolvedRootPosition.z - currentPosition.z
+  );
+  const contactSnapshot = createMetaverseGroundedBodyContactSnapshot({
+    appliedMovementDelta,
+    blockedPlanarMovement:
+      hasDeterministicGroundedBodyMovementDeltaDivergence(
+        preparedStep.desiredMovementDelta.x,
+        appliedMovementDelta.x
+      ) ||
+      hasDeterministicGroundedBodyMovementDeltaDivergence(
+        preparedStep.desiredMovementDelta.z,
+        appliedMovementDelta.z
+      ),
+    blockedVerticalMovement:
+      hasDeterministicGroundedBodyVerticalMovementDivergence(
+        preparedStep.desiredMovementDelta.y,
+        appliedMovementDelta.y,
+        grounded
+      ),
+    desiredMovementDelta: preparedStep.desiredMovementDelta,
+    supportingContactDetected: grounded
+  });
+  const resolvedStep = resolveMetaverseGroundedBodyStep(
+    currentStepState,
+    preparedStep,
+    resolvedRootPosition,
+    grounded,
+    input.groundedBodyConfig,
+    deltaSeconds,
+    contactSnapshot,
+    grounded ? support?.supportNormal ?? null : null
+  );
+
+  return createMetaverseGroundedBodyRuntimeSnapshotFromStepState(
+    resolvedStep.state
   );
 }
 

@@ -306,7 +306,6 @@ export class MetaverseTraversalRuntime {
   }
 
   reset(): void {
-    this.#groundedBodyRuntime.setAutostepEnabled(false);
     this.#cameraSnapshot = createMetaverseCameraSnapshot(this.#config.camera);
     this.#locomotionMode = defaultMetaverseLocomotionMode;
     this.#mountedVehicleState.clear();

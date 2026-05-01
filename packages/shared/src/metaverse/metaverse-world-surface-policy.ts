@@ -941,8 +941,12 @@ function resolveSurfaceSupportCandidate(
       continue;
     }
 
-    if (preferredSupport?.supportId === candidate.supportId) {
-      return candidate;
+    if (
+      preferredSupport?.supportId === candidate.supportId &&
+      selectedCandidate === null
+    ) {
+      selectedCandidate = candidate;
+      continue;
     }
 
     if (shouldPreferSupportCandidate(candidate, selectedCandidate)) {
@@ -984,10 +988,18 @@ function isPlanarPositionBlocked(
   paddingMeters: number,
   minHeightMeters: number,
   maxHeightMeters: number,
-  excludedOwnerEnvironmentAssetId: string | null = null
+  excludedOwnerEnvironmentAssetId: string | null = null,
+  groundedSupportObstacleConfig: {
+    readonly currentRootHeightMeters: number;
+    readonly maxStepRiseMeters: number;
+    readonly nextRootHeightMeters: number;
+  } | null = null
 ): boolean {
   for (const collider of surfaceColliderSnapshots) {
-    if (collider.traversalAffordance !== "blocker") {
+    if (
+      collider.traversalAffordance !== "blocker" &&
+      collider.traversalAffordance !== "support"
+    ) {
       continue;
     }
 
@@ -1002,6 +1014,45 @@ function isPlanarPositionBlocked(
       collider.translation.y - collider.halfExtents.y;
     const blockerMaxHeightMeters =
       collider.translation.y + collider.halfExtents.y;
+
+    if (collider.traversalAffordance === "support") {
+      if (
+        groundedSupportObstacleConfig === null ||
+        collider.shape === "heightfield" ||
+        collider.shape === "trimesh"
+      ) {
+        continue;
+      }
+
+      if (
+        blockerMaxHeightMeters <=
+        groundedSupportObstacleConfig.currentRootHeightMeters +
+          groundedSupportObstacleConfig.maxStepRiseMeters
+      ) {
+        continue;
+      }
+
+      const maxRootHeightMeters = Math.max(
+        groundedSupportObstacleConfig.currentRootHeightMeters,
+        groundedSupportObstacleConfig.nextRootHeightMeters
+      );
+      const risingTowardSupport =
+        groundedSupportObstacleConfig.nextRootHeightMeters >
+        groundedSupportObstacleConfig.currentRootHeightMeters +
+          automaticSurfaceBlockingHeightToleranceMeters;
+      const clearanceHeightMeters =
+        maxRootHeightMeters +
+        (risingTowardSupport
+          ? groundedSupportObstacleConfig.maxStepRiseMeters
+          : 0);
+
+      if (
+        clearanceHeightMeters >=
+        blockerMaxHeightMeters - automaticSurfaceBlockingHeightToleranceMeters
+      ) {
+        continue;
+      }
+    }
 
     if (
       blockerMaxHeightMeters < minHeightMeters ||
@@ -1345,7 +1396,12 @@ export function constrainMetaverseWorldPlanarPositionAgainstBlockers(
   paddingMeters: number,
   minHeightMeters: number,
   maxHeightMeters: number,
-  excludedOwnerEnvironmentAssetId: string | null = null
+  excludedOwnerEnvironmentAssetId: string | null = null,
+  groundedSupportObstacleConfig: {
+    readonly currentRootHeightMeters: number;
+    readonly maxStepRiseMeters: number;
+    readonly nextRootHeightMeters: number;
+  } | null = null
 ): MetaverseWorldSurfaceVector3Snapshot {
   if (
     !isPlanarPositionBlocked(
@@ -1355,7 +1411,8 @@ export function constrainMetaverseWorldPlanarPositionAgainstBlockers(
       paddingMeters,
       minHeightMeters,
       maxHeightMeters,
-      excludedOwnerEnvironmentAssetId
+      excludedOwnerEnvironmentAssetId,
+      groundedSupportObstacleConfig
     )
   ) {
     return freezeVector3(nextPosition.x, nextPosition.y, nextPosition.z);
@@ -1387,7 +1444,8 @@ export function constrainMetaverseWorldPlanarPositionAgainstBlockers(
         paddingMeters,
         minHeightMeters,
         maxHeightMeters,
-        excludedOwnerEnvironmentAssetId
+        excludedOwnerEnvironmentAssetId,
+        groundedSupportObstacleConfig
       )
     ) {
       continue;

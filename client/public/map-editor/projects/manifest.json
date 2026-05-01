@@ -1,6 +1,36 @@
 {
   "projects": [
     {
+      "bundleId": "compactlands",
+      "label": "CompactLands",
+      "mapEditorProjectSettings": {
+        "helperGridSizeMeters": 120
+      },
+      "path": "/map-editor/projects/compactlands.json",
+      "sourceBundleId": "blank-template",
+      "updatedAt": "2026-05-01T09:52:39.317Z"
+    },
+    {
+      "bundleId": "the-highlands",
+      "label": "Highlands",
+      "mapEditorProjectSettings": {
+        "helperGridSizeMeters": 240
+      },
+      "path": "/map-editor/projects/the-highlands.json",
+      "sourceBundleId": "blank-template",
+      "updatedAt": "2026-05-01T01:55:17.367Z"
+    },
+    {
+      "bundleId": "highlands-copy",
+      "label": "Highlands Copy",
+      "mapEditorProjectSettings": {
+        "helperGridSizeMeters": 240
+      },
+      "path": "/map-editor/projects/highlands-copy.json",
+      "sourceBundleId": "the-highlands",
+      "updatedAt": "2026-05-01T02:01:29.867Z"
+    },
+    {
       "bundleId": "private-build",
       "label": "Private",
       "mapEditorProjectSettings": null,

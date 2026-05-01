@@ -61,18 +61,6 @@ class FakeGroundedBodyRuntime {
     position: createVector3(0, 0.6, 0)
   });
 
-  setAutostepEnabled() {}
-
-  advance() {
-    this.snapshot = createGroundedSnapshot({
-      grounded: false,
-      linearVelocity: createVector3(0, -0.02, 0),
-      position: createVector3(0, 0.6, 0)
-    });
-
-    return this.snapshot;
-  }
-
   syncAuthoritativeState(snapshot) {
     this.snapshot = createGroundedSnapshot({
       grounded: snapshot.grounded,
@@ -98,7 +86,7 @@ class FakeSurfaceDriveBodyRuntime {
   }
 }
 
-test("MetaverseAuthoritativeUnmountedPlayerSimulation publishes grounded body truth after a supported controller blip", () => {
+test("MetaverseAuthoritativeUnmountedPlayerSimulation publishes deterministic grounded body truth from shared support", () => {
   const playerId = requireValue(
     createMetaversePlayerId("server-grounded-blip"),
     "playerId"
@@ -133,7 +121,6 @@ test("MetaverseAuthoritativeUnmountedPlayerSimulation publishes grounded body tr
     0
   );
   const simulation = new MetaverseAuthoritativeUnmountedPlayerSimulation({
-    createGroundedTraversalColliderPredicate: () => () => true,
     createWaterborneTraversalColliderPredicate: () => () => true,
     groundedBodyConfig: surfacePolicyConfig,
     groundedBodyRuntimeConfig: Object.freeze({

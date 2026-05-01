@@ -456,7 +456,9 @@ export function MapEditorViewportPane({
               ? `Click to place a ${builderToolState.lightIntensity.toFixed(1)} intensity ${builderToolState.lightKind} light.`
               : `Click to place a ${builderToolState.lightIntensity.toFixed(1)} intensity ${builderToolState.lightKind} light with ${builderToolState.lightRangeMeters.toFixed(1)}m range.`
           : viewportToolMode === "terrain"
-            ? `Drag empty ground to draw terrain, or click existing terrain to ${builderToolState.terrainBrushMode} with a ${builderToolState.terrainBrushSizeCells}x${builderToolState.terrainBrushSizeCells} brush.`
+            ? selectedEntityRef?.kind === "terrain-patch"
+              ? `Drag over selected terrain to ${builderToolState.terrainBrushMode} with a ${builderToolState.terrainBrushSizeCells}x${builderToolState.terrainBrushSizeCells} brush.`
+              : "Drag empty ground to draw a terrain patch. Click existing terrain to select it."
           : viewportToolMode === "vertex"
             ? "Click a terrain sample, then drag the vertical transform handle to reshape that vertex."
             : viewportToolMode === "resource-spawn"

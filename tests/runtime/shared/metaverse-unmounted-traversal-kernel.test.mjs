@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  advanceMetaverseDeterministicUnmountedGroundedBodyStep,
   advanceMetaverseUnmountedTraversalBodyStep,
   clearMetaverseUnmountedTraversalPendingActions,
   createMetaverseUnmountedTraversalStateSnapshot,
@@ -70,6 +71,29 @@ function createNarrowSupportCollider(surfaceHeightMeters, halfWidthMeters = 0.12
   });
 }
 
+function createBlockerCollider({
+  halfExtents = Object.freeze({
+    x: 0.12,
+    y: 1,
+    z: 0.06
+  }),
+  translation
+}) {
+  return Object.freeze({
+    halfExtents,
+    ownerEnvironmentAssetId: null,
+    rotation: Object.freeze({
+      x: 0,
+      y: 0,
+      z: 0,
+      w: 1
+    }),
+    rotationYRadians: 0,
+    translation,
+    traversalAffordance: "blocker"
+  });
+}
+
 const waterRegionSnapshots = Object.freeze([
   Object.freeze({
     halfExtents: Object.freeze({
@@ -130,10 +154,92 @@ function syncResolvedGroundedBodySnapshot({
   });
 }
 
+function createZeroVector3() {
+  return Object.freeze({
+    x: 0,
+    y: 0,
+    z: 0
+  });
+}
+
+function createGroundedBodyRuntimeSnapshot({
+  grounded,
+  jumpReady,
+  position,
+  verticalSpeedUnitsPerSecond,
+  yawRadians
+}) {
+  return Object.freeze({
+    contact: Object.freeze({
+      appliedMovementDelta: createZeroVector3(),
+      blockedPlanarMovement: false,
+      blockedVerticalMovement: false,
+      desiredMovementDelta: createZeroVector3(),
+      supportingContactDetected: grounded
+    }),
+    driveTarget: Object.freeze({
+      boost: false,
+      moveAxis: 0,
+      movementMagnitude: 0,
+      strafeAxis: 0,
+      targetForwardSpeedUnitsPerSecond: 0,
+      targetPlanarSpeedUnitsPerSecond: 0,
+      targetStrafeSpeedUnitsPerSecond: 0
+    }),
+    grounded,
+    interaction: Object.freeze({
+      applyImpulsesToDynamicBodies: false
+    }),
+    jumpBody: Object.freeze({
+      grounded,
+      jumpGroundContactGraceSecondsRemaining: grounded ? 0.2 : 0,
+      jumpReady,
+      jumpSnapSuppressionActive: false,
+      verticalSpeedUnitsPerSecond
+    }),
+    linearVelocity: Object.freeze({
+      x: 0,
+      y: verticalSpeedUnitsPerSecond,
+      z: 0
+    }),
+    position,
+    yawRadians
+  });
+}
+
 const groundedBodyConfig = Object.freeze({
   controllerOffsetMeters: 0.02,
   maxTurnSpeedRadiansPerSecond: 1.9,
   snapToGroundDistanceMeters: 0.22
+});
+
+const deterministicGroundedBodyConfig = Object.freeze({
+  accelerationCurveExponent: 1,
+  accelerationUnitsPerSecondSquared: 100,
+  airborneMovementDampingFactor: 0.42,
+  baseSpeedUnitsPerSecond: 4,
+  boostCurveExponent: 1,
+  boostMultiplier: 1.3,
+  capsuleHalfHeightMeters: surfacePolicyConfig.capsuleHalfHeightMeters,
+  capsuleRadiusMeters: surfacePolicyConfig.capsuleRadiusMeters,
+  controllerOffsetMeters: groundedBodyConfig.controllerOffsetMeters,
+  decelerationUnitsPerSecondSquared: 100,
+  dragCurveExponent: 1,
+  gravityUnitsPerSecond: surfacePolicyConfig.gravityUnitsPerSecond,
+  jumpGroundContactGraceSeconds: 0.2,
+  jumpImpulseUnitsPerSecond: surfacePolicyConfig.jumpImpulseUnitsPerSecond,
+  maxSlopeClimbAngleRadians: Math.PI * 0.26,
+  maxTurnSpeedRadiansPerSecond: groundedBodyConfig.maxTurnSpeedRadiansPerSecond,
+  minSlopeSlideAngleRadians: Math.PI * 0.34,
+  snapToGroundDistanceMeters: groundedBodyConfig.snapToGroundDistanceMeters,
+  spawnPosition: Object.freeze({
+    x: 0,
+    y: 0,
+    z: 0
+  }),
+  stepHeightMeters: surfacePolicyConfig.stepHeightMeters,
+  stepWidthMeters: 0.24,
+  worldRadius: 50
 });
 
 test("shared unmounted traversal state keeps locomotion ownership while queueing and clearing actions", () => {
@@ -956,4 +1062,52 @@ test("shared unmounted grounded traversal prep suppresses snap-to-ground while e
 
   assert.equal(step.locomotionMode, "grounded");
   assert.equal(step.bodyIntent.snapToGroundOverrideEnabled, false);
+});
+
+test("shared deterministic unmounted grounded body step resolves support and blockers without runtime physics", () => {
+  const result = advanceMetaverseDeterministicUnmountedGroundedBodyStep({
+    autostepHeightMeters: null,
+    bodyIntent: Object.freeze({
+      boost: false,
+      jump: false,
+      moveAxis: 1,
+      snapToGroundOverrideEnabled: true,
+      strafeAxis: 0,
+      turnAxis: 0
+    }),
+    currentGroundedBodySnapshot: createGroundedBodyRuntimeSnapshot({
+      grounded: true,
+      jumpReady: true,
+      position: Object.freeze({
+        x: 0,
+        y: 0,
+        z: 0
+      }),
+      verticalSpeedUnitsPerSecond: 0,
+      yawRadians: 0
+    }),
+    deltaSeconds: 0.1,
+    groundedBodyConfig: deterministicGroundedBodyConfig,
+    preferredLookYawRadians: null,
+    surfaceColliderSnapshots: Object.freeze([
+      createSupportCollider(0),
+      createBlockerCollider({
+        translation: Object.freeze({
+          x: 0,
+          y: 0.5,
+          z: -0.4
+        })
+      })
+    ]),
+    surfacePolicyConfig
+  });
+
+  assert.equal(result.grounded, true);
+  assert.equal(result.position.y, 0);
+  assert.equal(result.contact.supportingContactDetected, true);
+  assert.equal(result.contact.blockedPlanarMovement, true);
+  assert.ok(
+    result.position.z > -0.05,
+    `expected blocker to keep root near its starting z, got ${result.position.z}`
+  );
 });

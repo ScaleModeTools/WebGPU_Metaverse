@@ -19,6 +19,41 @@ after(async () => {
   await clientLoader?.close();
 });
 
+function assertTerrainHeightSamplesRespectMaxSlope(terrainPatch, maxSlopeDegrees) {
+  const maxAdjacentRiseMeters =
+    Math.tan(maxSlopeDegrees * (Math.PI / 180)) *
+    terrainPatch.sampleSpacingMeters;
+  const sampleToleranceMeters = 0.011;
+
+  for (let sampleZ = 0; sampleZ < terrainPatch.sampleCountZ; sampleZ += 1) {
+    for (let sampleX = 0; sampleX < terrainPatch.sampleCountX; sampleX += 1) {
+      const sampleIndex = sampleZ * terrainPatch.sampleCountX + sampleX;
+      const sampleHeight = terrainPatch.heightSamples[sampleIndex] ?? 0;
+
+      if (sampleX + 1 < terrainPatch.sampleCountX) {
+        const rightHeight = terrainPatch.heightSamples[sampleIndex + 1] ?? 0;
+
+        assert.equal(
+          Math.abs(sampleHeight - rightHeight) <=
+            maxAdjacentRiseMeters + sampleToleranceMeters,
+          true
+        );
+      }
+
+      if (sampleZ + 1 < terrainPatch.sampleCountZ) {
+        const bottomHeight =
+          terrainPatch.heightSamples[sampleIndex + terrainPatch.sampleCountX] ?? 0;
+
+        assert.equal(
+          Math.abs(sampleHeight - bottomHeight) <=
+            maxAdjacentRiseMeters + sampleToleranceMeters,
+          true
+        );
+      }
+    }
+  }
+}
+
 test("metaverse map bundle loader resolves the staging-ground authored slice and its client profiles", async () => {
   const { loadMetaverseMapBundle } = await clientLoader.load(
     "/src/metaverse/world/map-bundles/load-metaverse-map-bundle.ts"
@@ -1061,6 +1096,7 @@ test("map editor terrain generation bakes deterministic height and material samp
     frequency: 0.12,
     groundElevationMeters: 2,
     maxElevationMeters: 6,
+    maxSlopeDegrees: 32,
     minElevationMeters: -3,
     octaves: 4,
     seed: 4242,
@@ -1080,6 +1116,10 @@ test("map editor terrain generation bakes deterministic height and material samp
   assert.deepEqual(bakedTerrainA.materialLayers, bakedTerrainB.materialLayers);
   assert.equal(bakedTerrainA.origin.y, 2);
   assert.equal(bakedTerrainA.waterLevelMeters, null);
+  assertTerrainHeightSamplesRespectMaxSlope(
+    bakedTerrainA,
+    generationConfig.maxSlopeDegrees
+  );
   assert.equal(
     bakedTerrainA.heightSamples.every(
       (heightSample) => heightSample + bakedTerrainA.origin.y >= -3 &&
@@ -1094,6 +1134,15 @@ test("map editor terrain generation bakes deterministic height and material samp
     true
   );
   assert.equal(bakedTerrainA.materialLayers.length >= 3, true);
+  const cliffLayer = bakedTerrainA.materialLayers.find(
+    (materialLayer) => materialLayer.materialId === "terrain-cliff"
+  );
+
+  assert.notEqual(cliffLayer, undefined);
+  assert.equal(
+    cliffLayer.weightSamples.some((weightSample) => weightSample > 0),
+    true
+  );
 });
 
 test("map editor terrain naturalization conforms overlapping samples to authored support surfaces", async () => {

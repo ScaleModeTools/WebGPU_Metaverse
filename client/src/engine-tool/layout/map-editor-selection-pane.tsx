@@ -583,6 +583,49 @@ function createResizedTerrainPatchDraft(
   };
 }
 
+function createSmoothedTerrainHeightSamples(
+  draft: MapEditorTerrainPatchDraftSnapshot,
+  passes: number
+): readonly number[] {
+  let nextHeights = [...draft.heightSamples];
+  const passCount = Math.max(1, Math.round(passes));
+
+  for (let passIndex = 0; passIndex < passCount; passIndex += 1) {
+    const previousHeights = nextHeights;
+
+    nextHeights = previousHeights.map((currentHeight, sampleIndex) => {
+      const sampleX = sampleIndex % draft.sampleCountX;
+      const sampleZ = Math.floor(sampleIndex / draft.sampleCountX);
+      let totalHeight = 0;
+      let sampleCount = 0;
+
+      for (
+        let neighborZ = Math.max(0, sampleZ - 1);
+        neighborZ <= Math.min(draft.sampleCountZ - 1, sampleZ + 1);
+        neighborZ += 1
+      ) {
+        for (
+          let neighborX = Math.max(0, sampleX - 1);
+          neighborX <= Math.min(draft.sampleCountX - 1, sampleX + 1);
+          neighborX += 1
+        ) {
+          totalHeight +=
+            previousHeights[neighborZ * draft.sampleCountX + neighborX] ?? 0;
+          sampleCount += 1;
+        }
+      }
+
+      const averageHeight =
+        sampleCount > 0 ? totalHeight / sampleCount : currentHeight;
+      const nextHeight = currentHeight + (averageHeight - currentHeight) * 0.65;
+
+      return Math.round(nextHeight * 100) / 100;
+    });
+  }
+
+  return Object.freeze(nextHeights);
+}
+
 function createSingleTerrainMaterialLayer(
   draft: MapEditorTerrainPatchDraftSnapshot,
   materialId: MapEditorStructuralDraftSnapshot["materialId"]
@@ -1862,17 +1905,20 @@ function MapEditorBuildMaterialControlsPanel({
                   </Button>
                 ))}
               </ButtonGroup>
-              <MaterialPaletteTabs
-                activeCustomDefinition={null}
-                activeMaterialId={builderToolState.terrainMaterialId}
-                builderToolState={builderToolState}
-                libraryOptions={allTerrainMaterialOptions}
-                nextCustomMaterialId={null}
-                onBuilderToolStateChange={onBuilderToolStateChange}
-                onMaterialChange={setTerrainMaterial}
-                paletteOptions={terrainPaletteOptions}
-              />
             </>
+          ) : null}
+
+          {viewportToolMode === "terrain" ? (
+            <MaterialPaletteTabs
+              activeCustomDefinition={null}
+              activeMaterialId={builderToolState.terrainMaterialId}
+              builderToolState={builderToolState}
+              libraryOptions={allTerrainMaterialOptions}
+              nextCustomMaterialId={null}
+              onBuilderToolStateChange={onBuilderToolStateChange}
+              onMaterialChange={setTerrainMaterial}
+              paletteOptions={terrainPaletteOptions}
+            />
           ) : null}
 
           {viewportToolMode === "wall" ? (
@@ -2527,6 +2573,20 @@ export function MapEditorSelectionPane({
               <SelectionCard
                 title={formatToolSettingsTitle(viewportToolMode)}
               >
+                {viewportToolMode === "terrain" ? (
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="selection-tool-new-terrain-material">
+                      New Terrain Material
+                    </Label>
+                    <MaterialOptionSelect
+                      fieldId="selection-tool-new-terrain-material"
+                      onMaterialChange={updateBuilderTerrainMaterial}
+                      options={allTerrainMaterialOptions}
+                      value={builderToolState.terrainMaterialId}
+                    />
+                  </div>
+                ) : null}
+
                 {viewportToolMode === "terrain" ? (
                   <>
                     <div className="grid grid-cols-2 gap-3">
@@ -4533,6 +4593,27 @@ export function MapEditorSelectionPane({
                     />
                   </div>
                   <div className="flex flex-col gap-2">
+                    <Label htmlFor="selection-terrain-generate-max-slope">
+                      Max Slope
+                    </Label>
+                    <MapEditorEditableNumberInput
+                      decimals={1}
+                      id="selection-terrain-generate-max-slope"
+                      onValueChange={(nextValue) => {
+                        onBuilderToolStateChange((currentBuilderToolState) =>
+                          Object.freeze({
+                            ...currentBuilderToolState,
+                            terrainGenerationMaxSlopeDegrees: Math.max(
+                              1,
+                              Math.min(89, nextValue)
+                            )
+                          })
+                        );
+                      }}
+                      value={builderToolState.terrainGenerationMaxSlopeDegrees}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
                     <Label htmlFor="selection-terrain-generate-warp-frequency">Warp Freq</Label>
                     <MapEditorEditableNumberInput
                       decimals={3}
@@ -4583,6 +4664,8 @@ export function MapEditorSelectionPane({
                               groundElevationMeters: selectedTerrainPatch.origin.y,
                               maxElevationMeters:
                                 builderToolState.terrainGenerationMaxElevationMeters,
+                              maxSlopeDegrees:
+                                builderToolState.terrainGenerationMaxSlopeDegrees,
                               minElevationMeters:
                                 builderToolState.terrainGenerationMinElevationMeters,
                               octaves: builderToolState.terrainGenerationOctaves,
@@ -4631,6 +4714,33 @@ export function MapEditorSelectionPane({
                       variant="outline"
                     >
                       Naturalize
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        const smoothedTerrainPatch =
+                          conformMapEditorTerrainPatchDraftToSupportSurfaces(
+                            project,
+                            {
+                              ...selectedTerrainPatch,
+                              heightSamples: createSmoothedTerrainHeightSamples(
+                                selectedTerrainPatch,
+                                3
+                              )
+                            }
+                          );
+
+                        onUpdateTerrainPatch(
+                          selectedTerrainPatch.terrainPatchId,
+                          () => ({
+                            ...smoothedTerrainPatch,
+                            waterLevelMeters: null
+                          })
+                        );
+                      }}
+                      type="button"
+                      variant="outline"
+                    >
+                      Smooth
                     </Button>
                     <Button
                       onClick={() =>

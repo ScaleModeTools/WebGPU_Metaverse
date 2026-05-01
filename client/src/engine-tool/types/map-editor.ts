@@ -1,7 +1,8 @@
-import type {
-  MetaverseMapBundleSemanticLightKind,
-  MetaverseMapBundleSemanticMaterialId,
-  MetaverseWorldSurfaceVector3Snapshot
+import {
+  metaverseWorldSurfaceDefaultMaxWalkableSlopeAngleRadians,
+  type MetaverseMapBundleSemanticLightKind,
+  type MetaverseMapBundleSemanticMaterialId,
+  type MetaverseWorldSurfaceVector3Snapshot
 } from "@webgpu-metaverse/shared/metaverse/world";
 
 import { mapEditorBuildGridUnitMeters } from "@/engine-tool/build/map-editor-build-placement";
@@ -84,6 +85,13 @@ export const defaultMapEditorMaterialPaletteIds =
     "terrain-snow"
   ]);
 
+const defaultMapEditorTerrainGenerationMaxSlopeDegrees =
+  Math.round(
+    (metaverseWorldSurfaceDefaultMaxWalkableSlopeAngleRadians * 180) /
+      Math.PI *
+      10
+  ) / 10;
+
 export interface MapEditorProjectSettingsSnapshot {
   readonly helperGridSizeMeters: number;
 }
@@ -150,6 +158,7 @@ export interface MapEditorBuilderToolStateSnapshot {
   readonly terrainMaterialId: MetaverseMapBundleSemanticMaterialId;
   readonly terrainGenerationFrequency: number;
   readonly terrainGenerationMaxElevationMeters: number;
+  readonly terrainGenerationMaxSlopeDegrees: number;
   readonly terrainGenerationMinElevationMeters: number;
   readonly terrainGenerationOctaves: number;
   readonly terrainGenerationWarpFrequency: number;
@@ -198,6 +207,8 @@ export const defaultMapEditorBuilderToolState =
     terrainMaterialId: "terrain-grass",
     terrainGenerationFrequency: 0.08,
     terrainGenerationMaxElevationMeters: 8,
+    terrainGenerationMaxSlopeDegrees:
+      defaultMapEditorTerrainGenerationMaxSlopeDegrees,
     terrainGenerationMinElevationMeters: -8,
     terrainGenerationOctaves: 5,
     terrainGenerationWarpFrequency: 0.22,

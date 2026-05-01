@@ -6,8 +6,9 @@ import {
   type RapierColliderHandle
 } from "@/physics";
 import {
+  advanceMetaverseDeterministicUnmountedGroundedBodyStep,
   advanceMetaverseUnmountedTraversalBodyStep,
-  constrainMetaverseTraversalPlayerBodyBlockers,
+  type MetaverseGroundedBodyConfigSnapshot,
   type MetaverseUnmountedTraversalTransitionSnapshot,
   type MetaverseTraversalStateResolutionSnapshot,
   type MetaverseUnmountedTraversalStateSnapshot
@@ -55,7 +56,6 @@ interface MetaverseGroundedTraversalStepInput {
   readonly groundedBodyRuntime: MetaverseGroundedBodyRuntime;
   readonly movementInput: MetaverseFlightInputSnapshot;
   readonly preferredLookYawRadians: number;
-  readonly readGroundedTraversalExcludedColliders: () => readonly RapierColliderHandle[];
   readonly resolveGroundedPresentationPosition: (
     bodySnapshot: MetaverseGroundedBodySnapshot
   ) => PhysicsVector3Snapshot;
@@ -82,14 +82,16 @@ type FixedStepTraversalDependencies = Pick<
   MetaverseTraversalRuntimeDependencies,
   | "physicsRuntime"
   | "readGroundedTraversalPlayerBlockers"
-  | "resolveGroundedTraversalFilterPredicate"
   | "resolveWaterborneTraversalFilterPredicate"
   | "surfaceColliderSnapshots"
 >;
 
+const emptyGroundedTraversalPlayerBlockers = Object.freeze([]);
+
 export class MetaverseFixedStepTraversalSimulation {
   readonly #config: MetaverseRuntimeConfig;
   readonly #dependencies: FixedStepTraversalDependencies;
+  readonly #groundedBodyConfig: MetaverseGroundedBodyConfigSnapshot;
 
   #swimBodyRuntime: MetaverseSurfaceDriveBodyRuntime | null = null;
 
@@ -99,6 +101,10 @@ export class MetaverseFixedStepTraversalSimulation {
   ) {
     this.#config = config;
     this.#dependencies = dependencies;
+    this.#groundedBodyConfig = Object.freeze({
+      ...config.groundedBody,
+      worldRadius: config.movement.worldRadius
+    });
   }
 
   dispose(): void {
@@ -251,7 +257,6 @@ export class MetaverseFixedStepTraversalSimulation {
     groundedBodyRuntime,
     movementInput,
     preferredLookYawRadians,
-    readGroundedTraversalExcludedColliders,
     resolveGroundedPresentationPosition,
     traversalCameraPitchRadians,
     traversalState
@@ -264,33 +269,36 @@ export class MetaverseFixedStepTraversalSimulation {
         bodyIntent,
         preferredLookYawRadians: resolvedLookYawRadians
       }) => {
-        groundedBodyRuntime.setAutostepEnabled(
-          autostepHeightMeters !== null,
-          autostepHeightMeters ?? this.#config.groundedBody.stepHeightMeters
-        );
         this.#dependencies.physicsRuntime.stepSimulation(deltaSeconds);
+        const deterministicGroundedBodySnapshot =
+          advanceMetaverseDeterministicUnmountedGroundedBodyStep({
+            autostepHeightMeters,
+            bodyIntent,
+            currentGroundedBodySnapshot: currentBodySnapshot,
+            deltaSeconds,
+            groundedBodyConfig: this.#groundedBodyConfig,
+            playerBlockers:
+              this.#dependencies.readGroundedTraversalPlayerBlockers?.() ??
+              emptyGroundedTraversalPlayerBlockers,
+            preferredLookYawRadians: resolvedLookYawRadians,
+            preferredSupport: traversalState.groundedSupport,
+            surfaceColliderSnapshots:
+              this.#dependencies.surfaceColliderSnapshots,
+            surfacePolicyConfig
+          });
 
-        return groundedBodyRuntime.advance(
-          bodyIntent,
-          deltaSeconds,
-          this.#dependencies.resolveGroundedTraversalFilterPredicate(
-            readGroundedTraversalExcludedColliders()
-          ),
-          resolvedLookYawRadians,
-          (rootPosition) =>
-            constrainMetaverseTraversalPlayerBodyBlockers({
-              blockers:
-                this.#dependencies.readGroundedTraversalPlayerBlockers?.() ??
-                Object.freeze([]),
-              capsuleHalfHeightMeters:
-                this.#config.groundedBody.capsuleHalfHeightMeters,
-              capsuleRadiusMeters: this.#config.groundedBody.capsuleRadiusMeters,
-              controllerOffsetMeters:
-                this.#config.groundedBody.controllerOffsetMeters,
-              currentPosition: currentBodySnapshot.position,
-              nextPosition: rootPosition
-            })
-        );
+        groundedBodyRuntime.syncAuthoritativeState({
+          contact: deterministicGroundedBodySnapshot.contact,
+          driveTarget: deterministicGroundedBodySnapshot.driveTarget,
+          grounded: deterministicGroundedBodySnapshot.grounded,
+          interaction: deterministicGroundedBodySnapshot.interaction,
+          jumpBody: deterministicGroundedBodySnapshot.jumpBody,
+          linearVelocity: deterministicGroundedBodySnapshot.linearVelocity,
+          position: deterministicGroundedBodySnapshot.position,
+          yawRadians: deterministicGroundedBodySnapshot.yawRadians
+        });
+
+        return groundedBodyRuntime.snapshot;
       },
       advanceSwimBodySnapshot: () => {
         throw new Error(
@@ -464,9 +472,11 @@ export class MetaverseFixedStepTraversalSimulation {
     grounded: boolean
   ): MetaverseGroundedBodySnapshot {
     groundedBodyRuntime.syncAuthoritativeState({
+      contact: bodySnapshot.contact,
       driveTarget: bodySnapshot.driveTarget,
       grounded,
       interaction: bodySnapshot.interaction,
+      jumpBody: bodySnapshot.jumpBody,
       linearVelocity: bodySnapshot.linearVelocity,
       position: bodySnapshot.position,
       yawRadians: bodySnapshot.yawRadians

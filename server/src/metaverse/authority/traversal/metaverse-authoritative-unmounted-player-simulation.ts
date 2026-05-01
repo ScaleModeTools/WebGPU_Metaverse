@@ -1,11 +1,12 @@
 import {
+  advanceMetaverseDeterministicUnmountedGroundedBodyStep,
   advanceMetaverseUnmountedTraversalBodyStep,
   clamp,
-  constrainMetaverseTraversalPlayerBodyBlockers,
   createMetaverseSurfaceDriveBodyRuntimeSnapshot,
   createMetaverseUnmountedTraversalStateSnapshot,
   metaverseTraversalActionBufferSeconds,
   queueMetaverseUnmountedTraversalAction,
+  type MetaverseGroundedBodyConfigSnapshot,
   type MetaverseTraversalPlayerBodyBlockerSnapshot,
   type MetaverseSurfaceTraversalConfig
 } from "@webgpu-metaverse/shared/metaverse/traversal";
@@ -41,13 +42,6 @@ import {
   captureMetaverseAuthoritativeLastGroundedBodySnapshot
 } from "../players/metaverse-authoritative-last-grounded-body-snapshot.js";
 
-interface MetaverseAuthoritativeGroundedTraversalRuntimeConfig {
-  readonly controllerOffsetMeters: number;
-  readonly maxTurnSpeedRadiansPerSecond: number;
-  readonly snapToGroundDistanceMeters: number;
-  readonly stepHeightMeters: number;
-}
-
 interface MetaverseAuthoritativeUnmountedPlayerSimulationDependencies<
   PlayerRuntime extends MetaverseAuthoritativePlayerStateSyncRuntimeState<
     MetaverseAuthoritativeGroundedBodyRuntime,
@@ -57,17 +51,13 @@ interface MetaverseAuthoritativeUnmountedPlayerSimulationDependencies<
   MountedOccupancy extends MetaverseAuthoritativePlayerStateSyncMountedOccupancyRuntimeState,
   VehicleRuntime extends MetaverseAuthoritativePlayerStateSyncVehicleRuntimeState
 > {
-  readonly createGroundedTraversalColliderPredicate: (
-    playerRuntime: PlayerRuntime,
-    excludedColliders?: readonly RapierColliderHandle[]
-  ) => RapierQueryFilterPredicate;
   readonly createWaterborneTraversalColliderPredicate: (
     playerRuntime: PlayerRuntime,
     excludedOwnerEnvironmentAssetId?: string | null,
     excludedColliders?: readonly RapierColliderHandle[]
   ) => RapierQueryFilterPredicate;
   readonly groundedBodyConfig: MetaverseWorldSurfacePolicyConfig;
-  readonly groundedBodyRuntimeConfig: MetaverseAuthoritativeGroundedTraversalRuntimeConfig;
+  readonly groundedBodyRuntimeConfig: MetaverseGroundedBodyConfigSnapshot;
   readonly playerStateSync: MetaverseAuthoritativePlayerStateSync<
     PlayerRuntime,
     MetaverseAuthoritativeGroundedBodyRuntime,
@@ -230,36 +220,38 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
         bodyIntent,
         preferredLookYawRadians: resolvedLookYawRadians
       }) => {
-        playerRuntime.groundedBodyRuntime.setAutostepEnabled(
-          autostepHeightMeters !== null,
-          autostepHeightMeters ??
-            this.#dependencies.groundedBodyConfig.stepHeightMeters
-        );
+        const deterministicGroundedBodySnapshot =
+          advanceMetaverseDeterministicUnmountedGroundedBodyStep({
+            autostepHeightMeters,
+            bodyIntent,
+            currentGroundedBodySnapshot:
+              playerRuntime.groundedBodyRuntime.snapshot,
+            deltaSeconds,
+            groundedBodyConfig:
+              this.#dependencies.groundedBodyRuntimeConfig,
+            playerBlockers:
+              this.#dependencies.resolveGroundedTraversalPlayerBlockers(
+                playerRuntime
+              ),
+            preferredLookYawRadians: resolvedLookYawRadians,
+            preferredSupport:
+              playerRuntime.unmountedTraversalState.groundedSupport,
+            surfaceColliderSnapshots: authoritativeSurfaceColliders,
+            surfacePolicyConfig: this.#dependencies.groundedBodyConfig
+          });
 
-        return playerRuntime.groundedBodyRuntime.advance(
-          bodyIntent,
-          deltaSeconds,
-          resolvedLookYawRadians,
-          this.#dependencies.createGroundedTraversalColliderPredicate(
-            playerRuntime
-          ),
-          (rootPosition) =>
-            constrainMetaverseTraversalPlayerBodyBlockers({
-              blockers:
-                this.#dependencies.resolveGroundedTraversalPlayerBlockers(
-                  playerRuntime
-                ),
-              capsuleHalfHeightMeters:
-                this.#dependencies.groundedBodyConfig.capsuleHalfHeightMeters,
-              capsuleRadiusMeters:
-                this.#dependencies.groundedBodyConfig.capsuleRadiusMeters,
-              controllerOffsetMeters:
-                this.#dependencies.groundedBodyRuntimeConfig
-                  .controllerOffsetMeters,
-              currentPosition: playerRuntime.groundedBodyRuntime.snapshot.position,
-              nextPosition: rootPosition
-            })
-        );
+        playerRuntime.groundedBodyRuntime.syncAuthoritativeState({
+          contact: deterministicGroundedBodySnapshot.contact,
+          driveTarget: deterministicGroundedBodySnapshot.driveTarget,
+          grounded: deterministicGroundedBodySnapshot.grounded,
+          interaction: deterministicGroundedBodySnapshot.interaction,
+          jumpBody: deterministicGroundedBodySnapshot.jumpBody,
+          linearVelocity: deterministicGroundedBodySnapshot.linearVelocity,
+          position: deterministicGroundedBodySnapshot.position,
+          yawRadians: deterministicGroundedBodySnapshot.yawRadians
+        });
+
+        return playerRuntime.groundedBodyRuntime.snapshot;
       },
       advanceSwimBodySnapshot: ({
         bodyControl,
@@ -580,9 +572,11 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
     grounded: boolean
   ): MetaverseAuthoritativeGroundedBodyRuntime["snapshot"] {
     playerRuntime.groundedBodyRuntime.syncAuthoritativeState({
+      contact: groundedBodySnapshot.contact,
       driveTarget: groundedBodySnapshot.driveTarget,
       grounded,
       interaction: groundedBodySnapshot.interaction,
+      jumpBody: groundedBodySnapshot.jumpBody,
       linearVelocity: groundedBodySnapshot.linearVelocity,
       position: groundedBodySnapshot.position,
       yawRadians: groundedBodySnapshot.yawRadians
