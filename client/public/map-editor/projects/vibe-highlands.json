@@ -31454,8 +31454,8 @@
     {
       "label": "Player Spawn 6",
       "position": {
-        "x": 50,
-        "y": 1.25,
+        "x": 40,
+        "y": 1.1700000166893005,
         "z": -30
       },
       "spawnId": "vibe-highlands:spawn:6",
@@ -31476,9 +31476,9 @@
     {
       "label": "Player Spawn 8",
       "position": {
-        "x": 50,
-        "y": 1.1349999904632568,
-        "z": -42
+        "x": 38,
+        "y": 1.1050000190734863,
+        "z": -38
       },
       "spawnId": "vibe-highlands:spawn:8",
       "teamId": "blue",
@@ -31488,7 +31488,7 @@
       "label": "Player Spawn 9",
       "position": {
         "x": -46,
-        "y": 0.635000005364418,
+        "y": 2,
         "z": -46
       },
       "spawnId": "vibe-highlands:spawn:9",
