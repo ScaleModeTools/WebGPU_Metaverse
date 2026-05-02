@@ -54,9 +54,6 @@ export interface MetaverseAuthoritativeMountedPlayerRuntimeState<
   angularVelocityRadiansPerSecond: number;
   lastPoseAtMs: number | null;
   lastSeenAtMs: number;
-  linearVelocityX: number;
-  linearVelocityY: number;
-  linearVelocityZ: number;
   locomotionMode: MetaversePresencePoseSnapshot["locomotionMode"];
   mountedOccupancy: MountedOccupancy | null;
   readonly playerId: MetaversePlayerId;
@@ -100,6 +97,9 @@ interface MetaverseAuthoritativeMountedOccupancyAuthorityDependencies<
     nowMs: number
   ) => void;
   readonly syncPlayerTraversalAuthorityState: (
+    playerRuntime: PlayerRuntime
+  ) => void;
+  readonly stopPlayerTraversalBodyRuntimes: (
     playerRuntime: PlayerRuntime
   ) => void;
   readonly syncUnmountedPlayerToAuthoritativeSurface: (
@@ -242,11 +242,9 @@ export class MetaverseAuthoritativeMountedOccupancyAuthority<
       this.#dependencies.clearDriverVehicleControl(playerRuntime.playerId);
       this.#dependencies.clearPlayerTraversalIntent(playerRuntime.playerId);
       playerRuntime.angularVelocityRadiansPerSecond = 0;
-      playerRuntime.linearVelocityX = 0;
-      playerRuntime.linearVelocityY = 0;
-      playerRuntime.linearVelocityZ = 0;
       playerRuntime.mountedOccupancy = null;
       playerRuntime.lastPoseAtMs = nowMs;
+      this.#dependencies.stopPlayerTraversalBodyRuntimes(playerRuntime);
       this.#dependencies.syncUnmountedPlayerToAuthoritativeSurface(
         playerRuntime,
         authoritativeSurfaceColliders,
@@ -298,10 +296,8 @@ export class MetaverseAuthoritativeMountedOccupancyAuthority<
 
       this.#dependencies.clearDriverVehicleControl(playerRuntime.playerId);
       playerRuntime.angularVelocityRadiansPerSecond = 0;
-      playerRuntime.linearVelocityX = 0;
-      playerRuntime.linearVelocityY = 0;
-      playerRuntime.linearVelocityZ = 0;
       playerRuntime.lastPoseAtMs = nowMs;
+      this.#dependencies.stopPlayerTraversalBodyRuntimes(playerRuntime);
       this.#dependencies.syncUnmountedPlayerToAuthoritativeSurface(
         playerRuntime,
         authoritativeSurfaceColliders,

@@ -13,6 +13,66 @@ import {
 
 import { MetaverseAuthoritativeCombatAuthority } from "../../../server/dist/metaverse/authority/combat/metaverse-authoritative-combat-authority.js";
 
+function createBodySnapshot(
+  position,
+  yawRadians,
+  linearVelocity = Object.freeze({ x: 0, y: 0, z: 0 })
+) {
+  return Object.freeze({
+    linearVelocity,
+    position,
+    yawRadians
+  });
+}
+
+function syncPlayerRuntimeKinematicState(playerRuntime, kinematicStateSnapshot) {
+  const bodySnapshot = createBodySnapshot(
+    Object.freeze({
+      x: kinematicStateSnapshot.position.x,
+      y: kinematicStateSnapshot.position.y,
+      z: kinematicStateSnapshot.position.z
+    }),
+    kinematicStateSnapshot.yawRadians,
+    Object.freeze({
+      x: kinematicStateSnapshot.linearVelocity.x,
+      y: kinematicStateSnapshot.linearVelocity.y,
+      z: kinematicStateSnapshot.linearVelocity.z
+    })
+  );
+
+  playerRuntime.angularVelocityRadiansPerSecond =
+    kinematicStateSnapshot.angularVelocityRadiansPerSecond;
+  playerRuntime.groundedBodyRuntime.snapshot = bodySnapshot;
+  playerRuntime.swimBodyRuntime.snapshot = bodySnapshot;
+}
+
+function setPlayerBodyPose(
+  playerRuntime,
+  position,
+  yawRadians = playerRuntime.groundedBodyRuntime.snapshot.yawRadians,
+  linearVelocity = playerRuntime.groundedBodyRuntime.snapshot.linearVelocity
+) {
+  syncPlayerRuntimeKinematicState(playerRuntime, {
+    angularVelocityRadiansPerSecond: 0,
+    linearVelocity,
+    position,
+    yawRadians
+  });
+}
+
+function setPlayerBodyY(playerRuntime, positionY) {
+  const activeBodySnapshot = playerRuntime.groundedBodyRuntime.snapshot;
+
+  setPlayerBodyPose(
+    playerRuntime,
+    Object.freeze({
+      x: activeBodySnapshot.position.x,
+      y: positionY,
+      z: activeBodySnapshot.position.z
+    })
+  );
+}
+
 function createPlayerRuntimeState(
   playerId,
   teamId,
@@ -20,25 +80,27 @@ function createPlayerRuntimeState(
   yawRadians = 0,
   weaponState = createSingleWeaponState(playerId, "metaverse-service-pistol-v2")
 ) {
+  const bodySnapshot = createBodySnapshot(position, yawRadians);
+
   return {
-    linearVelocityX: 0,
-    linearVelocityY: 0,
-    linearVelocityZ: 0,
+    angularVelocityRadiansPerSecond: 0,
+    groundedBodyRuntime: {
+      snapshot: bodySnapshot
+    },
     locomotionMode: "grounded",
     lookPitchRadians: 0,
     lookYawRadians: yawRadians,
     mountedOccupancy: null,
     playerId,
-    positionX: position.x,
-    positionY: position.y,
-    positionZ: position.z,
     stateSequence: 0,
+    swimBodyRuntime: {
+      snapshot: bodySnapshot
+    },
     teamId,
     unmountedTraversalState: createMetaverseUnmountedTraversalStateSnapshot({
       locomotionMode: "grounded"
     }),
-    weaponState,
-    yawRadians
+    weaponState
   };
 }
 
@@ -367,7 +429,7 @@ function createCombatAuthorityForPlayers(playersById) {
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 }
 
@@ -500,7 +562,7 @@ test("MetaverseAuthoritativeCombatAuthority resolves floor-root body/head hits a
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -619,17 +681,23 @@ test("MetaverseAuthoritativeCombatAuthority resolves floor-root body/head hits a
   assert.equal(respawnedBlueCombatSnapshot?.activeWeapon?.ammoInMagazine, 12);
   assert.equal(respawnedBlueCombatSnapshot?.activeWeapon?.ammoInReserve, 48);
   assert.notEqual(bluePlayerRuntime, undefined);
-  assert.equal(bluePlayerRuntime?.linearVelocityX, 0);
-  assert.equal(bluePlayerRuntime?.linearVelocityY, 0);
-  assert.equal(bluePlayerRuntime?.linearVelocityZ, 0);
+  assert.deepEqual(bluePlayerRuntime?.groundedBodyRuntime.snapshot.linearVelocity, {
+    x: 0,
+    y: 0,
+    z: 0
+  });
   assert.equal(bluePlayerRuntime?.locomotionMode, "grounded");
   assert.equal(bluePlayerRuntime?.mountedOccupancy, null);
   assert.equal(bluePlayerRuntime?.lookPitchRadians, 0);
   assert.equal(bluePlayerRuntime?.lookYawRadians, blueRespawnYawRadians);
-  assert.equal(bluePlayerRuntime?.positionX, blueRespawnPosition.x);
-  assert.equal(bluePlayerRuntime?.positionY, blueRespawnPosition.y);
-  assert.equal(bluePlayerRuntime?.positionZ, blueRespawnPosition.z);
-  assert.equal(bluePlayerRuntime?.yawRadians, blueRespawnYawRadians);
+  assert.deepEqual(
+    bluePlayerRuntime?.groundedBodyRuntime.snapshot.position,
+    blueRespawnPosition
+  );
+  assert.equal(
+    bluePlayerRuntime?.groundedBodyRuntime.snapshot.yawRadians,
+    blueRespawnYawRadians
+  );
   assert.ok((bluePlayerRuntime?.stateSequence ?? 0) > 0);
 
   combatAuthority.acceptIssuePlayerActionCommand(
@@ -720,7 +788,7 @@ test("MetaverseAuthoritativeCombatAuthority uses validated reticle rays for clos
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -812,7 +880,7 @@ test("MetaverseAuthoritativeCombatAuthority registers upper-chest body hits belo
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -911,7 +979,7 @@ test("MetaverseAuthoritativeCombatAuthority registers humanoid lower-body hurt r
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -1008,7 +1076,7 @@ test("MetaverseAuthoritativeCombatAuthority rejects invalid reticle ray origin a
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -1189,7 +1257,7 @@ test("MetaverseAuthoritativeCombatAuthority validates camera-ray hits against au
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -1276,7 +1344,7 @@ test("MetaverseAuthoritativeCombatAuthority orders world blockers and player hit
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -1388,7 +1456,7 @@ test("MetaverseAuthoritativeCombatAuthority publishes exactly-once combat action
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -1579,7 +1647,7 @@ test("MetaverseAuthoritativeCombatAuthority rejects inactive pistol and accepts 
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -1687,7 +1755,7 @@ test("MetaverseAuthoritativeCombatAuthority applies sequenced weapon slot switch
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -1815,7 +1883,7 @@ test("MetaverseAuthoritativeCombatAuthority tracks fire cooldown per equipped we
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -1999,9 +2067,7 @@ test("MetaverseAuthoritativeCombatAuthority resolves shotgun pellets as one ammo
   );
 
   combatAuthority.syncCombatState(0);
-  bluePlayerRuntime.positionX = blueRootPosition.x;
-  bluePlayerRuntime.positionY = blueRootPosition.y;
-  bluePlayerRuntime.positionZ = blueRootPosition.z;
+  setPlayerBodyPose(bluePlayerRuntime, blueRootPosition);
   combatAuthority.advanceCombatRuntimes(1.1, 1_100);
   combatAuthority.acceptIssuePlayerActionCommand(
     createFireWeaponPlayerActionCommand({
@@ -2534,7 +2600,7 @@ test("MetaverseAuthoritativeCombatAuthority resolves rocket direct player impact
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -2671,7 +2737,7 @@ test("MetaverseAuthoritativeCombatAuthority launches no-hit rockets from weapon 
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -2786,7 +2852,7 @@ test("MetaverseAuthoritativeCombatAuthority resolves zero-distance rocket world 
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -2903,7 +2969,7 @@ test("MetaverseAuthoritativeCombatAuthority resolves short positive rocket world
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -3017,7 +3083,7 @@ test("MetaverseAuthoritativeCombatAuthority treats duplicate fire action sequenc
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -3130,7 +3196,7 @@ test("MetaverseAuthoritativeCombatAuthority emits one expired projectile resolut
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -3241,7 +3307,7 @@ test("MetaverseAuthoritativeCombatAuthority applies rocket splash around direct 
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -3388,7 +3454,7 @@ test("MetaverseAuthoritativeCombatAuthority applies rocket splash on world impac
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -3455,11 +3521,11 @@ test("MetaverseAuthoritativeCombatAuthority applies kill-floor suicides as death
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
-  playersById.get(bluePlayerId).positionY = -6;
+  setPlayerBodyY(playersById.get(bluePlayerId), -6);
   combatAuthority.advanceCombatRuntimes(1.1, 1_100);
 
   const blueCombatSnapshot = combatAuthority.readPlayerCombatSnapshot(bluePlayerId);
@@ -3538,7 +3604,7 @@ test("MetaverseAuthoritativeCombatAuthority credits prior attacker damage when a
     },
     syncAuthoritativePlayerLookToCurrentFacing() {},
     syncPlayerTraversalAuthorityState() {},
-    syncPlayerTraversalBodyRuntimes() {}
+    syncPlayerTraversalKinematicState: syncPlayerRuntimeKinematicState
   });
 
   combatAuthority.syncCombatState(0);
@@ -3554,7 +3620,7 @@ test("MetaverseAuthoritativeCombatAuthority credits prior attacker damage when a
     }),
     1_200
   );
-  playersById.get(bluePlayerId).positionY = -6;
+  setPlayerBodyY(playersById.get(bluePlayerId), -6);
   combatAuthority.advanceCombatRuntimes(0.1, 1_300);
 
   const redCombatSnapshot = combatAuthority.readPlayerCombatSnapshot(redPlayerId);

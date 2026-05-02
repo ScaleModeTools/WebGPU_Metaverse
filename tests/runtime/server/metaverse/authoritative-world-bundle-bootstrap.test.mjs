@@ -9,6 +9,7 @@ import {
   stagingGroundMapBundle
 } from "@webgpu-metaverse/shared/metaverse/world";
 import {
+  createMetaverseUnmountedTraversalStateSnapshot,
   metaverseGroundedSurfacePolicyConfig
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 
@@ -237,4 +238,62 @@ test("authoritative collision mesh assets expose mesh support without duplicate 
       true
     );
   }
+});
+
+test("authoritative surface sync reads active capsule pose", () => {
+  const bundleInputs =
+    createMetaverseAuthoritativeWorldBundleInputs("staging-ground");
+  const physicsRuntime = new MetaverseAuthoritativeRapierPhysicsRuntime();
+  let groundedSupportHeight = null;
+  let swimWaterlineHeight = null;
+  const surfaceState = new MetaverseAuthoritativeWorldSurfaceState({
+    dynamicCollisionMeshSeedSnapshots:
+      bundleInputs.dynamicCollisionMeshSeedSnapshots,
+    dynamicSurfaceSeedSnapshots: bundleInputs.dynamicSurfaceSeedSnapshots,
+    groundedBodyConfig: metaverseGroundedSurfacePolicyConfig,
+    physicsRuntime,
+    playerTraversalColliderHandles: new Set(),
+    resolveDynamicSurfaceColliders: bundleInputs.resolveDynamicSurfaceColliders,
+    staticCollisionMeshSeedSnapshots: bundleInputs.staticCollisionMeshSeedSnapshots,
+    staticSurfaceColliders: bundleInputs.staticSurfaceColliders,
+    syncUnmountedPlayerToGroundedSupport(_playerRuntime, supportHeightMeters) {
+      groundedSupportHeight = supportHeightMeters;
+    },
+    syncUnmountedPlayerToSwimWaterline(_playerRuntime, waterlineHeightMeters) {
+      swimWaterlineHeight = waterlineHeightMeters;
+    },
+    vehicleDriveColliderHandles: new Set(),
+    waterRegionSnapshots: bundleInputs.waterRegionSnapshots
+  });
+  const activeBodySnapshot = Object.freeze({
+    position: bundleInputs.defaultSpawn.position,
+    yawRadians: bundleInputs.defaultSpawn.yawRadians
+  });
+  const playerRuntime = {
+    groundedBodyRuntime: {
+      snapshot: activeBodySnapshot
+    },
+    lastGroundedBodySnapshot: {
+      positionYMeters: activeBodySnapshot.position.y
+    },
+    locomotionMode: "grounded",
+    swimBodyRuntime: {
+      snapshot: Object.freeze({
+        position: Object.freeze({
+          x: 999,
+          y: -999,
+          z: 999
+        }),
+        yawRadians: 0
+      })
+    },
+    unmountedTraversalState: createMetaverseUnmountedTraversalStateSnapshot({
+      locomotionMode: "grounded"
+    })
+  };
+
+  surfaceState.syncUnmountedPlayerToAuthoritativeSurface(playerRuntime);
+
+  assert.notEqual(groundedSupportHeight, null);
+  assert.equal(swimWaterlineHeight, null);
 });

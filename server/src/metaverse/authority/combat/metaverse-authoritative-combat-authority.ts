@@ -55,12 +55,22 @@ import type {
   MetaverseMapBundleResourceSpawnSnapshot,
   MetaverseMapBundleSemanticGameplayVolumeSnapshot
 } from "@webgpu-metaverse/shared/metaverse/world";
+import {
+  createMetaverseTraversalKinematicStateSnapshot,
+  type MetaverseTraversalKinematicStateSnapshot
+} from "@webgpu-metaverse/shared/metaverse/traversal";
 
 import type {
   PhysicsVector3Snapshot,
   RapierColliderHandle
 } from "../../types/metaverse-authoritative-rapier.js";
 import type { MetaverseAuthoritativeRapierPhysicsRuntime } from "../../classes/metaverse-authoritative-rapier-physics-runtime.js";
+import {
+  readMetaverseAuthoritativePlayerActiveBodyKinematicSnapshot,
+  readMetaverseAuthoritativePlayerActiveBodyPositionSnapshot,
+  readMetaverseAuthoritativePlayerActiveBodyYawRadians,
+  type MetaverseAuthoritativePlayerActiveBodyKinematicRuntimeState
+} from "../players/metaverse-authoritative-player-active-body.js";
 
 type MetaverseCombatShotResolutionRewindSourceId =
   | "current"
@@ -76,21 +86,14 @@ export interface MetaverseAuthoritativeCombatPlayerRuntimeState<
   MountedOccupancy extends
     | MetaverseCombatMountedOccupancyRuntimeState
     | null = MetaverseCombatMountedOccupancyRuntimeState | null
-> {
-  linearVelocityX: number;
-  linearVelocityY: number;
-  linearVelocityZ: number;
+> extends MetaverseAuthoritativePlayerActiveBodyKinematicRuntimeState {
   locomotionMode: string;
   mountedOccupancy: MountedOccupancy;
   readonly playerId: MetaversePlayerId;
   readonly teamId: MetaversePlayerTeamId;
-  positionX: number;
-  positionY: number;
-  positionZ: number;
   stateSequence: number;
   unmountedTraversalState: ReturnType<typeof createMetaverseUnmountedTraversalStateSnapshot>;
   weaponState: MetaverseRealtimePlayerWeaponStateSnapshot | null;
-  yawRadians: number;
   lookPitchRadians: number;
   lookYawRadians: number;
 }
@@ -219,8 +222,9 @@ interface MetaverseAuthoritativeCombatAuthorityDependencies<
   readonly syncPlayerTraversalAuthorityState: (
     playerRuntime: PlayerRuntime
   ) => void;
-  readonly syncPlayerTraversalBodyRuntimes: (
+  readonly syncPlayerTraversalKinematicState: (
     playerRuntime: PlayerRuntime,
+    kinematicStateSnapshot: MetaverseTraversalKinematicStateSnapshot,
     groundedOverride?: boolean
   ) => void;
 }
@@ -428,15 +432,10 @@ function createDistanceBetweenPoints(
 }
 
 function createPlayerBodyPositionSnapshot(
-  playerRuntime: Pick<
-    MetaverseAuthoritativeCombatPlayerRuntimeState,
-    "positionX" | "positionY" | "positionZ"
-  >
+  playerRuntime: MetaverseAuthoritativeCombatPlayerRuntimeState
 ): PhysicsVector3Snapshot {
-  return createPhysicsVector3Snapshot(
-    playerRuntime.positionX,
-    playerRuntime.positionY,
-    playerRuntime.positionZ
+  return readMetaverseAuthoritativePlayerActiveBodyPositionSnapshot(
+    playerRuntime
   );
 }
 
@@ -454,17 +453,16 @@ function createProjectilePositionSnapshot(
 }
 
 function isPlayerPositionInsideKillFloorVolume(
-  playerRuntime: Pick<
-    MetaverseAuthoritativeCombatPlayerRuntimeState,
-    "positionX" | "positionY" | "positionZ"
-  >,
+  playerRuntime: MetaverseAuthoritativeCombatPlayerRuntimeState,
   volume: Pick<
     MetaverseMapBundleSemanticGameplayVolumeSnapshot,
     "center" | "rotationYRadians" | "size"
   >
 ): boolean {
-  const planarDeltaX = playerRuntime.positionX - volume.center.x;
-  const planarDeltaZ = playerRuntime.positionZ - volume.center.z;
+  const playerPosition =
+    readMetaverseAuthoritativePlayerActiveBodyPositionSnapshot(playerRuntime);
+  const planarDeltaX = playerPosition.x - volume.center.x;
+  const planarDeltaZ = playerPosition.z - volume.center.z;
   const cosRotation = Math.cos(volume.rotationYRadians);
   const sinRotation = Math.sin(volume.rotationYRadians);
   const localX = planarDeltaX * cosRotation - planarDeltaZ * sinRotation;
@@ -473,7 +471,7 @@ function isPlayerPositionInsideKillFloorVolume(
   return (
     Math.abs(localX) <= Math.max(0.125, volume.size.x * 0.5) &&
     Math.abs(localZ) <= Math.max(0.125, volume.size.z * 0.5) &&
-    playerRuntime.positionY <= volume.center.y
+    playerPosition.y <= volume.center.y
   );
 }
 
@@ -1371,8 +1369,10 @@ export class MetaverseAuthoritativeCombatAuthority<
     playerRuntime: PlayerRuntime,
     weaponProfile: ReturnType<typeof readMetaverseCombatWeaponProfile>
   ): PhysicsVector3Snapshot {
-    const yawRadians = Number.isFinite(playerRuntime.yawRadians)
-      ? playerRuntime.yawRadians
+    const activeBodySnapshot =
+      readMetaverseAuthoritativePlayerActiveBodyKinematicSnapshot(playerRuntime);
+    const yawRadians = Number.isFinite(activeBodySnapshot.yawRadians)
+      ? activeBodySnapshot.yawRadians
       : 0;
     const forwardX = Math.sin(yawRadians);
     const forwardZ = -Math.cos(yawRadians);
@@ -1381,11 +1381,11 @@ export class MetaverseAuthoritativeCombatAuthority<
     const originOffset = weaponProfile.firingOriginOffset;
 
     return createPhysicsVector3Snapshot(
-      playerRuntime.positionX +
+      activeBodySnapshot.position.x +
         rightX * originOffset.rightMeters +
         forwardX * originOffset.forwardMeters,
-      playerRuntime.positionY + originOffset.upMeters,
-      playerRuntime.positionZ +
+      activeBodySnapshot.position.y + originOffset.upMeters,
+      activeBodySnapshot.position.z +
         rightZ * originOffset.rightMeters +
         forwardZ * originOffset.forwardMeters
     );
@@ -1396,13 +1396,13 @@ export class MetaverseAuthoritativeCombatAuthority<
     readonly semanticAimForward: PhysicsVector3Snapshot;
     readonly weaponProfile: ReturnType<typeof readMetaverseCombatWeaponProfile>;
   }): PhysicsVector3Snapshot {
+    const activeBodySnapshot =
+      readMetaverseAuthoritativePlayerActiveBodyKinematicSnapshot(
+        input.playerRuntime
+      );
     const frame = resolveMetaverseCombatSemanticWeaponTipFrame({
-      actorBodyPosition: createPhysicsVector3Snapshot(
-        input.playerRuntime.positionX,
-        input.playerRuntime.positionY,
-        input.playerRuntime.positionZ
-      ),
-      actorBodyYawRadians: input.playerRuntime.yawRadians,
+      actorBodyPosition: activeBodySnapshot.position,
+      actorBodyYawRadians: activeBodySnapshot.yawRadians,
       aimYawInfluence: 1,
       authoredMuzzleFromGrip:
         input.weaponProfile.projectilePresentation.authoredMuzzleFromGrip,
@@ -2330,7 +2330,8 @@ export class MetaverseAuthoritativeCombatAuthority<
 
       const hurtVolumes = createMetaversePlayerCombatHurtVolumes({
         activeBodyPosition: createPlayerBodyPositionSnapshot(targetRuntime),
-        activeBodyYawRadians: targetRuntime.yawRadians,
+        activeBodyYawRadians:
+          readMetaverseAuthoritativePlayerActiveBodyYawRadians(targetRuntime),
         ...(this.#dependencies.hurtVolumeConfig === undefined
           ? {}
           : {
@@ -2498,7 +2499,8 @@ export class MetaverseAuthoritativeCombatAuthority<
 
       const hurtVolumes = createMetaversePlayerCombatHurtVolumes({
         activeBodyPosition: createPlayerBodyPositionSnapshot(targetRuntime),
-        activeBodyYawRadians: targetRuntime.yawRadians,
+        activeBodyYawRadians:
+          readMetaverseAuthoritativePlayerActiveBodyYawRadians(targetRuntime),
         ...(this.#dependencies.hurtVolumeConfig === undefined
           ? {}
           : {
@@ -3200,21 +3202,14 @@ export class MetaverseAuthoritativeCombatAuthority<
     this.#dependencies.clearDriverVehicleControl(playerRuntime.playerId);
     this.#dependencies.clearPlayerTraversalIntent(playerRuntime.playerId);
     this.#dependencies.clearPlayerVehicleOccupancy(playerRuntime.playerId);
-    playerRuntime.linearVelocityX = 0;
-    playerRuntime.linearVelocityY = 0;
-    playerRuntime.linearVelocityZ = 0;
     playerRuntime.locomotionMode = "grounded";
     playerRuntime.mountedOccupancy = null;
-    playerRuntime.positionX = respawnPose.position.x;
-    playerRuntime.positionY = respawnPose.position.y;
-    playerRuntime.positionZ = respawnPose.position.z;
     playerRuntime.stateSequence += 1;
     playerRuntime.unmountedTraversalState = createMetaverseUnmountedTraversalStateSnapshot(
       {
         locomotionMode: "grounded"
       }
     );
-    playerRuntime.yawRadians = respawnPose.yawRadians;
     playerRuntime.lookPitchRadians = 0;
     playerRuntime.lookYawRadians = respawnPose.yawRadians;
     combatState.alive = true;
@@ -3232,7 +3227,16 @@ export class MetaverseAuthoritativeCombatAuthority<
       weaponState.reloadRemainingMs = 0;
     }
 
-    this.#dependencies.syncPlayerTraversalBodyRuntimes(playerRuntime, true);
+    this.#dependencies.syncPlayerTraversalKinematicState(
+      playerRuntime,
+      createMetaverseTraversalKinematicStateSnapshot({
+        angularVelocityRadiansPerSecond: 0,
+        linearVelocity: createPhysicsVector3Snapshot(0, 0, 0),
+        position: respawnPose.position,
+        yawRadians: respawnPose.yawRadians
+      }),
+      true
+    );
     this.#dependencies.syncPlayerTraversalAuthorityState(playerRuntime);
     this.#dependencies.syncAuthoritativePlayerLookToCurrentFacing(playerRuntime);
     this.#feedEvents.push({
@@ -3493,8 +3497,12 @@ export class MetaverseAuthoritativeCombatAuthority<
       readMetaverseCombatWeaponProfile(defaultCombatWeaponId);
     const weaponRuntime =
       combatState.weaponsById.get(weaponSlot.weaponId) ?? null;
-    const yawRadians = Number.isFinite(playerRuntime.yawRadians)
-      ? playerRuntime.yawRadians
+    const activeBodyPosition =
+      readMetaverseAuthoritativePlayerActiveBodyPositionSnapshot(playerRuntime);
+    const activeBodyYawRadians =
+      readMetaverseAuthoritativePlayerActiveBodyYawRadians(playerRuntime);
+    const yawRadians = Number.isFinite(activeBodyYawRadians)
+      ? activeBodyYawRadians
       : 0;
 
     return Object.freeze({
@@ -3512,9 +3520,9 @@ export class MetaverseAuthoritativeCombatAuthority<
       modeTags: Object.freeze([]),
       pickupRadiusMeters: combatDroppedWeaponPickupRadiusMeters,
       position: Object.freeze({
-        x: playerRuntime.positionX + Math.sin(yawRadians) * 0.9,
-        y: playerRuntime.positionY + 0.55,
-        z: playerRuntime.positionZ - Math.cos(yawRadians) * 0.9
+        x: activeBodyPosition.x + Math.sin(yawRadians) * 0.9,
+        y: activeBodyPosition.y + 0.55,
+        z: activeBodyPosition.z - Math.cos(yawRadians) * 0.9
       }),
       resourceKind: "weapon-pickup",
       respawnCooldownMs: 0,
@@ -3702,7 +3710,8 @@ export class MetaverseAuthoritativeCombatAuthority<
   ): MetaversePlayerCombatHurtVolumesSnapshot {
     return createMetaversePlayerCombatHurtVolumes({
       activeBodyPosition: createPlayerBodyPositionSnapshot(playerRuntime),
-      activeBodyYawRadians: playerRuntime.yawRadians,
+      activeBodyYawRadians:
+        readMetaverseAuthoritativePlayerActiveBodyYawRadians(playerRuntime),
       ...(this.#dependencies.hurtVolumeConfig === undefined
         ? {}
         : {

@@ -36,10 +36,6 @@ export interface MetaverseAuthoritativeVehicleRegistryMountedOccupancyRuntimeSta
 
 export interface MetaverseAuthoritativeVehicleRegistryPlayerRuntimeState {
   readonly playerId: MetaversePlayerId;
-  positionX: number;
-  positionY: number;
-  positionZ: number;
-  yawRadians: number;
 }
 
 export interface MetaverseAuthoritativeVehicleRuntimeRegistrySeatRuntimeState {

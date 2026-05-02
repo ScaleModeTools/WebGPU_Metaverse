@@ -27,17 +27,19 @@ import type {
   RapierColliderHandle,
   RapierQueryFilterPredicate
 } from "../../types/metaverse-authoritative-rapier.js";
+import {
+  readMetaverseAuthoritativePlayerActiveBodyPositionSnapshot,
+  readMetaverseAuthoritativePlayerActiveBodyYawRadians,
+  type MetaverseAuthoritativePlayerActiveBodyPoseRuntimeState
+} from "../players/metaverse-authoritative-player-active-body.js";
 
-interface MetaverseAuthoritativeSurfaceStatePlayerRuntime {
+interface MetaverseAuthoritativeSurfaceStatePlayerRuntime
+  extends MetaverseAuthoritativePlayerActiveBodyPoseRuntimeState {
   lastGroundedBodySnapshot: {
     readonly positionYMeters: number;
   };
   locomotionMode: MetaverseRealtimePlayerSnapshot["locomotionMode"];
-  positionX: number;
-  positionY: number;
-  positionZ: number;
   unmountedTraversalState: MetaverseUnmountedTraversalStateSnapshot;
-  yawRadians: number;
 }
 
 interface MetaverseAuthoritativeDynamicSurfaceRuntime {
@@ -436,6 +438,10 @@ export class MetaverseAuthoritativeWorldSurfaceState<
       this.resolveAuthoritativeSurfaceColliders(),
     excludedOwnerEnvironmentAssetId: string | null = null
   ): void {
+    const activeBodyPosition =
+      readMetaverseAuthoritativePlayerActiveBodyPositionSnapshot(playerRuntime);
+    const activeBodyYawRadians =
+      readMetaverseAuthoritativePlayerActiveBodyYawRadians(playerRuntime);
     const filteredSurfaceColliders =
       excludedOwnerEnvironmentAssetId === null
         ? surfaceColliders
@@ -446,11 +452,7 @@ export class MetaverseAuthoritativeWorldSurfaceState<
           );
     const waterlineHeightMeters = resolveMetaverseTraversalWaterlineHeightMeters(
       this.#dependencies.waterRegionSnapshots,
-      {
-        x: playerRuntime.positionX,
-        y: playerRuntime.positionY,
-        z: playerRuntime.positionZ
-      }
+      activeBodyPosition
     );
     const preferredSupport =
       playerRuntime.locomotionMode === "grounded"
@@ -460,12 +462,8 @@ export class MetaverseAuthoritativeWorldSurfaceState<
       this.#dependencies.groundedBodyConfig,
       filteredSurfaceColliders,
       this.#dependencies.waterRegionSnapshots,
-      {
-        x: playerRuntime.positionX,
-        y: playerRuntime.positionY,
-        z: playerRuntime.positionZ
-      },
-      playerRuntime.yawRadians,
+      activeBodyPosition,
+      activeBodyYawRadians,
       playerRuntime.locomotionMode === "swim" ? "swim" : "grounded",
       excludedOwnerEnvironmentAssetId,
       preferredSupport

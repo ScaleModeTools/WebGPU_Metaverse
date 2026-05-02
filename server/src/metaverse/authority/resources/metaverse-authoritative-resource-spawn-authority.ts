@@ -4,11 +4,14 @@ import type { MetaversePlayerId } from "@webgpu-metaverse/shared/metaverse/prese
 import type { MetaverseRealtimeResourceSpawnSnapshotInput } from "@webgpu-metaverse/shared/metaverse/realtime";
 import type { MetaverseMapBundleResourceSpawnSnapshot } from "@webgpu-metaverse/shared/metaverse/world";
 
-interface MetaverseAuthoritativeResourceSpawnPlayerRuntimeState {
+import {
+  readMetaverseAuthoritativePlayerActiveBodyPositionSnapshot,
+  type MetaverseAuthoritativePlayerActiveBodyPoseRuntimeState
+} from "../players/metaverse-authoritative-player-active-body.js";
+
+interface MetaverseAuthoritativeResourceSpawnPlayerRuntimeState
+  extends MetaverseAuthoritativePlayerActiveBodyPoseRuntimeState {
   readonly playerId: MetaversePlayerId;
-  positionX: number;
-  positionY: number;
-  positionZ: number;
 }
 
 interface MutableMetaverseResourceSpawnRuntimeState {
@@ -69,10 +72,13 @@ function createDistanceBetweenPlayerAndResource(
   playerRuntime: MetaverseAuthoritativeResourceSpawnPlayerRuntimeState,
   resourceSpawn: MetaverseMapBundleResourceSpawnSnapshot
 ): number {
+  const playerPosition =
+    readMetaverseAuthoritativePlayerActiveBodyPositionSnapshot(playerRuntime);
+
   return Math.hypot(
-    playerRuntime.positionX - resourceSpawn.position.x,
-    playerRuntime.positionY - resourceSpawn.position.y,
-    playerRuntime.positionZ - resourceSpawn.position.z
+    playerPosition.x - resourceSpawn.position.x,
+    playerPosition.y - resourceSpawn.position.y,
+    playerPosition.z - resourceSpawn.position.z
   );
 }
 

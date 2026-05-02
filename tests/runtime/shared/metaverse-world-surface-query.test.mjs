@@ -199,6 +199,84 @@ test("shared world surface blockers treat visible tri-mesh tops as solid only be
   );
 });
 
+test("shared world surface blockers do not stop downhill terrain support seams", () => {
+  const config = Object.freeze({
+    capsuleHalfHeightMeters: 0.48,
+    capsuleRadiusMeters: 0.34,
+    gravityUnitsPerSecond: 18,
+    jumpImpulseUnitsPerSecond: 6.8,
+    oceanHeightMeters: 0,
+    stepHeightMeters: 0.28
+  });
+  const heightfieldSupportSnapshot =
+    createMetaverseWorldPlacedSurfaceHeightfieldSupportSnapshot(
+      null,
+      {
+        heightSamples: Object.freeze([0.75, 0.75, 0.75, 0.75]),
+        sampleCountX: 2,
+        sampleCountZ: 2,
+        sampleSpacingMeters: 4
+      },
+      {
+        position: Object.freeze({ x: 0, y: 0, z: 0 }),
+        yawRadians: 0
+      }
+    );
+  const subsurfaceBlockerSnapshot =
+    createMetaverseWorldPlacedSurfaceTriMeshSnapshot(
+      null,
+      {
+        indices: Uint32Array.from([0, 1, 2, 1, 3, 2]),
+        vertices: Float32Array.from([
+          0, 0.965, -2,
+          0, -1, -2,
+          0, 0.965, 2,
+          0, -1, 2
+        ])
+      },
+      {
+        position: Object.freeze({ x: 0, y: 0, z: 0 }),
+        yawRadians: 0
+      },
+      "blocker"
+    );
+
+  assert.notEqual(heightfieldSupportSnapshot, null);
+  assert.notEqual(subsurfaceBlockerSnapshot, null);
+  assert.deepEqual(
+    constrainMetaverseWorldPlanarPositionAgainstBlockers(
+      Object.freeze([
+        Object.freeze({
+          ...heightfieldSupportSnapshot,
+          ownerKind: "terrain-patch"
+        }),
+        Object.freeze({
+          ...subsurfaceBlockerSnapshot,
+          ownerKind: "terrain-patch"
+        })
+      ]),
+      Object.freeze({ x: -2, y: 1, z: 0 }),
+      Object.freeze({ x: 0, y: 0.95, z: 0 }),
+      0,
+      0.95,
+      2,
+      null,
+      Object.freeze({
+        currentRootHeightMeters: 1,
+        maxStepRiseMeters: 0.32,
+        maxSupportRiseMeters: 0.36,
+        nextRootHeightMeters: 0.95,
+        surfacePolicyConfig: config
+      })
+    ),
+    {
+      x: 0,
+      y: 0.95,
+      z: 0
+    }
+  );
+});
+
 test("shared world surface query derives support height from authored heightfield collision and ignores out-of-bounds probes", () => {
   const heightfieldSupportSnapshot =
     createMetaverseWorldPlacedSurfaceHeightfieldSupportSnapshot(

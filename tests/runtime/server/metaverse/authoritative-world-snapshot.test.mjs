@@ -2,10 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  createMetaverseGroundedBodyRuntimeSnapshot,
   createMetaversePlayerId,
+  createMetaverseSurfaceDriveBodyRuntimeSnapshot,
+  createMetaverseTraversalAuthoritySnapshot,
+  createMetaverseUnmountedTraversalStateSnapshot,
   createUsername,
   metaverseHubPushableCrateEnvironmentAssetId
 } from "@webgpu-metaverse/shared";
+import {
+  createMetaverseAuthoritativeWorldSnapshot
+} from "../../../../server/dist/metaverse/authority/snapshots/metaverse-authoritative-world-snapshot-assembly.js";
 
 import {
   createAuthoritativeRuntime,
@@ -13,6 +20,10 @@ import {
   joinSurfacePlayer,
   requireValue
 } from "./authoritative-world-test-fixtures.mjs";
+
+function createVector3(x, y, z) {
+  return Object.freeze({ x, y, z });
+}
 
 test("MetaverseAuthoritativeWorldRuntime includes player turn rate in authoritative world snapshots", () => {
   const runtime = createAuthoritativeRuntime();
@@ -50,6 +61,77 @@ test("MetaverseAuthoritativeWorldRuntime includes player turn rate in authoritat
       (worldSnapshot.players[0]?.angularVelocityRadiansPerSecond ?? 0) - 3.6
     ) < 0.000001
   );
+});
+
+test("Metaverse authoritative world snapshots publish grounded body capsule pose", () => {
+  const playerId = requireValue(
+    createMetaversePlayerId("snapshot-capsule-authority-pilot"),
+    "playerId"
+  );
+  const username = requireValue(
+    createUsername("Snapshot Capsule Authority Pilot"),
+    "username"
+  );
+  const capsulePosition = createVector3(2.5, 1.2, -4);
+  const capsuleVelocity = createVector3(1, 0, -2);
+  const groundedBodySnapshot = createMetaverseGroundedBodyRuntimeSnapshot({
+    grounded: true,
+    linearVelocity: capsuleVelocity,
+    position: capsulePosition,
+    yawRadians: 0.75
+  });
+
+  const worldSnapshot = createMetaverseAuthoritativeWorldSnapshot({
+    combatEvents: [],
+    combatFeed: [],
+    combatMatch: null,
+    currentTick: 3,
+    environmentBodies: [],
+    lastAdvancedAtMs: 300,
+    nowMs: 300,
+    playerCombatActionObserverSnapshotsByPlayerId: new Map(),
+    playerCombatSnapshotsByPlayerId: new Map(),
+    players: [
+      {
+        angularVelocityRadiansPerSecond: 0,
+        characterId: "mesh2motion-humanoid-v1",
+        groundedBodyRuntime: {
+          snapshot: groundedBodySnapshot
+        },
+        lastProcessedLookSequence: 0,
+        lastProcessedTraversalSequence: 0,
+        lastProcessedWeaponSequence: 0,
+        lookPitchRadians: 0,
+        lookYawRadians: 0.75,
+        locomotionMode: "grounded",
+        mountedOccupancy: null,
+        playerId,
+        presenceAnimationVocabulary: "idle",
+        stateSequence: 4,
+        swimBodyRuntime: {
+          snapshot: createMetaverseSurfaceDriveBodyRuntimeSnapshot()
+        },
+        teamId: "neutral",
+        traversalAuthorityState: createMetaverseTraversalAuthoritySnapshot(),
+        unmountedTraversalState: createMetaverseUnmountedTraversalStateSnapshot({
+          locomotionMode: "grounded"
+        }),
+        username,
+        weaponState: null
+      }
+    ],
+    projectiles: [],
+    resourceSpawns: [],
+    snapshotSequence: 7,
+    tickIntervalMs: 100,
+    traversalIntentsByPlayerId: new Map(),
+    vehicles: []
+  });
+  const playerSnapshot = worldSnapshot.players[0];
+
+  assert.deepEqual(playerSnapshot?.groundedBody.position, capsulePosition);
+  assert.deepEqual(playerSnapshot?.groundedBody.linearVelocity, capsuleVelocity);
+  assert.equal(playerSnapshot?.groundedBody.yawRadians, 0.75);
 });
 
 test("MetaverseAuthoritativeWorldRuntime keeps simulation time stable between repeated reads inside one tick", () => {

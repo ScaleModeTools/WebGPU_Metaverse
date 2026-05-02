@@ -62,6 +62,9 @@ import {
 import { MetaverseAuthoritativeCombatAuthority } from "../authority/combat/metaverse-authoritative-combat-authority.js";
 import { MetaverseAuthoritativeResourceSpawnAuthority } from "../authority/resources/metaverse-authoritative-resource-spawn-authority.js";
 import { MetaverseAuthoritativeUnmountedPlayerSimulation } from "../authority/traversal/metaverse-authoritative-unmounted-player-simulation.js";
+import {
+  readMetaverseAuthoritativePlayerActiveBodyPositionSnapshot
+} from "../authority/players/metaverse-authoritative-player-active-body.js";
 import { MetaverseAuthoritativeWorldSurfaceState } from "../authority/traversal/metaverse-authoritative-world-surface-state.js";
 import { MetaverseAuthoritativeWorldTickState } from "../authority/world/metaverse-authoritative-world-tick-state.js";
 import { MetaverseAuthoritativeWorldReadState } from "../authority/world/metaverse-authoritative-world-read-state.js";
@@ -608,6 +611,8 @@ export class MetaverseAuthoritativeWorldRuntime
           ),
         syncPlayerTraversalAuthorityState: (playerRuntime) =>
           this.#playerStateSync.syncPlayerTraversalAuthorityState(playerRuntime),
+        stopPlayerTraversalBodyRuntimes: (playerRuntime) =>
+          this.#playerStateSync.stopPlayerTraversalBodyRuntimes(playerRuntime),
         syncUnmountedPlayerToAuthoritativeSurface: (
           playerRuntime,
           authoritativeSurfaceColliders,
@@ -692,8 +697,16 @@ export class MetaverseAuthoritativeWorldRuntime
         ),
       syncPlayerTraversalAuthorityState: (playerRuntime) =>
         this.#playerStateSync.syncPlayerTraversalAuthorityState(playerRuntime),
-      syncPlayerTraversalBodyRuntimes: (playerRuntime) =>
-        this.#playerStateSync.syncPlayerTraversalBodyRuntimes(playerRuntime),
+      syncPlayerTraversalKinematicState: (
+        playerRuntime,
+        kinematicStateSnapshot,
+        groundedOverride
+      ) =>
+        this.#playerStateSync.syncPlayerTraversalKinematicState(
+          playerRuntime,
+          kinematicStateSnapshot,
+          groundedOverride
+        ),
       syncUnmountedPlayerToAuthoritativeSurface: (
         playerRuntime,
         authoritativeSurfaceColliders,
@@ -824,9 +837,14 @@ export class MetaverseAuthoritativeWorldRuntime
         ),
       syncPlayerTraversalAuthorityState: (playerRuntime) =>
         this.#playerStateSync.syncPlayerTraversalAuthorityState(playerRuntime),
-      syncPlayerTraversalBodyRuntimes: (playerRuntime, groundedOverride) =>
-        this.#playerStateSync.syncPlayerTraversalBodyRuntimes(
+      syncPlayerTraversalKinematicState: (
+        playerRuntime,
+        kinematicStateSnapshot,
+        groundedOverride
+      ) =>
+        this.#playerStateSync.syncPlayerTraversalKinematicState(
           playerRuntime,
+          kinematicStateSnapshot,
           groundedOverride
         )
     });
@@ -1082,16 +1100,21 @@ export class MetaverseAuthoritativeWorldRuntime
     readonly teamId: MetaversePlayerTeamId;
   }[] {
     return Object.freeze(
-      [...this.#playersById.values()].map((playerRuntime) =>
-        Object.freeze({
+      [...this.#playersById.values()].map((playerRuntime) => {
+        const activeBodyPosition =
+          readMetaverseAuthoritativePlayerActiveBodyPositionSnapshot(
+            playerRuntime
+          );
+
+        return Object.freeze({
           position: Object.freeze({
-            x: playerRuntime.positionX,
-            y: playerRuntime.positionY,
-            z: playerRuntime.positionZ
+            x: activeBodyPosition.x,
+            y: activeBodyPosition.y,
+            z: activeBodyPosition.z
           }),
           teamId: playerRuntime.teamId
-        })
-      )
+        });
+      })
     );
   }
 

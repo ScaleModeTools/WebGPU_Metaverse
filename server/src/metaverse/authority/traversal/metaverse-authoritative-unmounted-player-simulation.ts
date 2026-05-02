@@ -41,6 +41,9 @@ import {
   createMetaverseAuthoritativeLastGroundedBodySnapshot,
   captureMetaverseAuthoritativeLastGroundedBodySnapshot
 } from "../players/metaverse-authoritative-last-grounded-body-snapshot.js";
+import {
+  readMetaverseAuthoritativePlayerActiveBodyYawRadians
+} from "../players/metaverse-authoritative-player-active-body.js";
 
 interface MetaverseAuthoritativeUnmountedPlayerSimulationDependencies<
   PlayerRuntime extends MetaverseAuthoritativePlayerStateSyncRuntimeState<
@@ -204,6 +207,8 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
     const moveAxis = clampAxis(traversalIntent?.bodyControl.moveAxis ?? 0);
     const strafeAxis = clampAxis(traversalIntent?.bodyControl.strafeAxis ?? 0);
     const preferredFacingYawRadians = traversalIntent?.facing.yawRadians ?? null;
+    const previousActiveBodyYawRadians =
+      readMetaverseAuthoritativePlayerActiveBodyYawRadians(playerRuntime);
     let lastGroundedBodySnapshot = playerRuntime.lastGroundedBodySnapshot;
     let grounded = false;
     let resolvedLocomotionMode: "grounded" | "swim" = locomotionMode;
@@ -339,13 +344,15 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
           ),
           yawRadians: swimSnapshot.yawRadians
         }),
-        deltaSeconds
+        deltaSeconds,
+        previousActiveBodyYawRadians
       );
 
       if (transitionSnapshot.enteredGrounded) {
         this.#dependencies.playerStateSync.syncUnmountedPlayerToGroundedSupport(
           playerRuntime,
-          swimTraversalOutcome.supportHeightMeters ?? playerRuntime.positionY,
+          swimTraversalOutcome.supportHeightMeters ??
+            playerRuntime.swimBodyRuntime.snapshot.position.y,
           deltaSeconds
         );
         lastGroundedBodySnapshot = playerRuntime.lastGroundedBodySnapshot;
@@ -365,7 +372,8 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
       this.#dependencies.playerStateSync.applyGroundedBodySnapshotToPlayerRuntime(
         playerRuntime,
         groundedBodySnapshot,
-        deltaSeconds
+        deltaSeconds,
+        previousActiveBodyYawRadians
       );
 
       if (transitionSnapshot.enteredSwim) {
@@ -409,7 +417,7 @@ export class MetaverseAuthoritativeUnmountedPlayerSimulation<
       playerRuntime.lastGroundedBodySnapshot =
         createMetaverseAuthoritativeLastGroundedBodySnapshot({
           ...playerRuntime.lastGroundedBodySnapshot,
-          positionYMeters: playerRuntime.positionY
+          positionYMeters: playerRuntime.groundedBodyRuntime.snapshot.position.y
         });
     }
 

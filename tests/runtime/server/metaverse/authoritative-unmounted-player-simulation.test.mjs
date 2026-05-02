@@ -151,8 +151,8 @@ test("MetaverseAuthoritativeUnmountedPlayerSimulation publishes deterministic gr
   simulation.advanceUnmountedPlayerRuntimes(1 / 30, 100);
 
   assert.equal(playerRuntime.locomotionMode, "grounded");
-  assert.equal(playerRuntime.positionY, 0.6);
-  assert.equal(playerRuntime.linearVelocityY, 0);
+  assert.equal(playerRuntime.groundedBodyRuntime.snapshot.position.y, 0.6);
+  assert.equal(playerRuntime.groundedBodyRuntime.snapshot.linearVelocity.y, 0);
   assert.equal(playerRuntime.groundedBodyRuntime.snapshot.grounded, true);
   assert.equal(playerRuntime.lastGroundedBodySnapshot.jumpBody.grounded, true);
   assert.equal(playerRuntime.lastGroundedBodySnapshot.jumpBody.jumpReady, true);

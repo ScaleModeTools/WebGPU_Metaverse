@@ -4,6 +4,9 @@ import test from "node:test";
 import {
   MetaverseAuthoritativePlayerStateSync
 } from "../../../../server/dist/metaverse/authority/players/metaverse-authoritative-player-state-sync.js";
+import {
+  createMetaverseTraversalKinematicStateSnapshot
+} from "@webgpu-metaverse/shared/metaverse/traversal";
 
 function createVector3(x, y, z) {
   return Object.freeze({ x, y, z });
@@ -127,22 +130,28 @@ test("Metaverse authoritative player state sync drives swim waterline snaps thro
     0
   );
 
-  playerRuntime.positionX = 3.25;
-  playerRuntime.positionY = 0.61;
-  playerRuntime.positionZ = -4.5;
-  playerRuntime.linearVelocityX = 2.1;
-  playerRuntime.linearVelocityY = -3.4;
-  playerRuntime.linearVelocityZ = 1.6;
-  playerRuntime.yawRadians = Math.PI * 0.4;
+  playerStateSync.syncPlayerTraversalKinematicState(
+    playerRuntime,
+    createMetaverseTraversalKinematicStateSnapshot({
+      angularVelocityRadiansPerSecond: 0,
+      linearVelocity: createVector3(2.1, -3.4, 1.6),
+      position: createVector3(3.25, 0.61, -4.5),
+      yawRadians: Math.PI * 0.4
+    })
+  );
 
   playerStateSync.syncUnmountedPlayerToSwimWaterline(playerRuntime, 0, 1 / 30);
 
-  assert.equal(playerRuntime.positionX, 3.25);
-  assert.equal(playerRuntime.positionY, 0);
-  assert.equal(playerRuntime.positionZ, -4.5);
-  assert.equal(playerRuntime.linearVelocityX, 2.1);
-  assert.equal(playerRuntime.linearVelocityY, 0);
-  assert.equal(playerRuntime.linearVelocityZ, 1.6);
+  assert.deepEqual(playerRuntime.swimBodyRuntime.snapshot.position, {
+    x: 3.25,
+    y: 0,
+    z: -4.5
+  });
+  assert.deepEqual(playerRuntime.swimBodyRuntime.snapshot.linearVelocity, {
+    x: 2.1,
+    y: 0,
+    z: 1.6
+  });
   assert.equal(playerRuntime.swimBodyRuntime.snapshot.position.y, 0);
   assert.equal(playerRuntime.swimBodyRuntime.snapshot.linearVelocity.y, 0);
 });
@@ -158,13 +167,15 @@ test("Metaverse authoritative player state sync drives grounded support snaps th
   );
 
   playerRuntime.locomotionMode = "swim";
-  playerRuntime.positionX = -6.75;
-  playerRuntime.positionY = 0;
-  playerRuntime.positionZ = 8.5;
-  playerRuntime.linearVelocityX = -1.8;
-  playerRuntime.linearVelocityY = 2.2;
-  playerRuntime.linearVelocityZ = 4.4;
-  playerRuntime.yawRadians = -Math.PI * 0.3;
+  playerStateSync.syncPlayerTraversalKinematicState(
+    playerRuntime,
+    createMetaverseTraversalKinematicStateSnapshot({
+      angularVelocityRadiansPerSecond: 0,
+      linearVelocity: createVector3(-1.8, 2.2, 4.4),
+      position: createVector3(-6.75, 0, 8.5),
+      yawRadians: -Math.PI * 0.3
+    })
+  );
 
   playerStateSync.syncUnmountedPlayerToGroundedSupport(
     playerRuntime,
@@ -172,12 +183,16 @@ test("Metaverse authoritative player state sync drives grounded support snaps th
     1 / 30
   );
 
-  assert.equal(playerRuntime.positionX, -6.75);
-  assert.equal(playerRuntime.positionY, 0.42);
-  assert.equal(playerRuntime.positionZ, 8.5);
-  assert.equal(playerRuntime.linearVelocityX, -1.8);
-  assert.equal(playerRuntime.linearVelocityY, 0);
-  assert.equal(playerRuntime.linearVelocityZ, 4.4);
+  assert.deepEqual(playerRuntime.groundedBodyRuntime.snapshot.position, {
+    x: -6.75,
+    y: 0.42,
+    z: 8.5
+  });
+  assert.deepEqual(playerRuntime.groundedBodyRuntime.snapshot.linearVelocity, {
+    x: -1.8,
+    y: 0,
+    z: 4.4
+  });
   assert.equal(playerRuntime.groundedBodyRuntime.snapshot.position.y, 0.42);
   assert.equal(playerRuntime.groundedBodyRuntime.snapshot.linearVelocity.y, 0);
   assert.equal(playerRuntime.lastGroundedBodySnapshot.positionYMeters, 0.42);

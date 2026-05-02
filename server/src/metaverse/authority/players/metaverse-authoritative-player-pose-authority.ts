@@ -9,10 +9,12 @@ import {
   type MetaverseSyncPresenceCommand
 } from "@webgpu-metaverse/shared/metaverse/presence";
 import {
+  createMetaverseTraversalKinematicStateSnapshot,
   createMetaverseTraversalAuthoritySnapshot,
   createMetaverseUnmountedTraversalStateSnapshot,
   resolveMetaverseTraversalPoseKinematics,
   type MetaverseTraversalAuthoritySnapshot,
+  type MetaverseTraversalKinematicStateSnapshot,
   type MetaverseUnmountedTraversalStateSnapshot
 } from "@webgpu-metaverse/shared/metaverse/traversal";
 
@@ -22,34 +24,32 @@ import {
   createMetaverseAuthoritativeLastGroundedBodySnapshot,
   type MetaverseAuthoritativeLastGroundedBodySnapshot
 } from "./metaverse-authoritative-last-grounded-body-snapshot.js";
+import {
+  readMetaverseAuthoritativePlayerActiveBodyPositionSnapshot,
+  readMetaverseAuthoritativePlayerActiveBodyYawRadians,
+  type MetaverseAuthoritativePlayerActiveBodyPoseRuntimeState
+} from "./metaverse-authoritative-player-active-body.js";
 
 export interface MetaverseAuthoritativePlayerPoseRuntimeState<
   MountedOccupancy extends MetaverseAuthoritativeMountedOccupancyRuntimeState = MetaverseAuthoritativeMountedOccupancyRuntimeState
-> {
+> extends MetaverseAuthoritativePlayerActiveBodyPoseRuntimeState {
   angularVelocityRadiansPerSecond: number;
   lastGroundedBodySnapshot: MetaverseAuthoritativeLastGroundedBodySnapshot;
   lastPoseAtMs: number | null;
   lastProcessedLookSequence: number;
   lastProcessedTraversalSequence: number;
   lastSeenAtMs: number;
-  linearVelocityX: number;
-  linearVelocityY: number;
-  linearVelocityZ: number;
   lookPitchRadians: number;
   lookYawRadians: number;
   locomotionMode: MetaversePresencePoseSnapshot["locomotionMode"];
   mountedOccupancy: MountedOccupancy | null;
   readonly playerId: MetaversePlayerId;
   readonly teamId: MetaversePlayerTeamId;
-  positionX: number;
-  positionY: number;
-  positionZ: number;
   presenceAnimationVocabulary: MetaversePresencePoseSnapshot["animationVocabulary"];
   realtimeWorldAuthorityActive: boolean;
   stateSequence: number;
   traversalAuthorityState: MetaverseTraversalAuthoritySnapshot;
   unmountedTraversalState: MetaverseUnmountedTraversalStateSnapshot;
-  yawRadians: number;
 }
 
 interface MetaverseAuthoritativeMountedOccupancyResolver<
@@ -115,8 +115,10 @@ interface MetaverseAuthoritativePlayerPoseAuthorityDependencies<
   readonly syncPlayerTraversalAuthorityState: (
     playerRuntime: PlayerRuntime
   ) => void;
-  readonly syncPlayerTraversalBodyRuntimes: (
-    playerRuntime: PlayerRuntime
+  readonly syncPlayerTraversalKinematicState: (
+    playerRuntime: PlayerRuntime,
+    kinematicStateSnapshot: MetaverseTraversalKinematicStateSnapshot,
+    groundedOverride?: boolean
   ) => void;
   readonly syncUnmountedPlayerToAuthoritativeSurface: (
     playerRuntime: PlayerRuntime,
@@ -397,12 +399,8 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
       this.#dependencies.clearDriverVehicleControl(playerRuntime.playerId);
     }
 
-    const previousMountedFacingYawRadians = playerRuntime.yawRadians;
-
-    playerRuntime.positionX = nextPose.position.x;
-    playerRuntime.positionY = nextPose.position.y;
-    playerRuntime.positionZ = nextPose.position.z;
-    playerRuntime.yawRadians = nextPose.yawRadians;
+    const previousMountedFacingYawRadians =
+      readMetaverseAuthoritativePlayerActiveBodyYawRadians(playerRuntime);
 
     const vehicleRuntime =
       this.#dependencies.syncVehicleOccupancyAndInitialPoseFromPlayer(
@@ -427,17 +425,13 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
     nowMs: number
   ): void {
     const deltaSeconds = computeSecondsBetween(playerRuntime.lastPoseAtMs, nowMs);
-    const previousPositionX = playerRuntime.positionX;
-    const previousPositionY = playerRuntime.positionY;
-    const previousPositionZ = playerRuntime.positionZ;
-    const previousYawRadians = playerRuntime.yawRadians;
+    const previousPosition =
+      readMetaverseAuthoritativePlayerActiveBodyPositionSnapshot(playerRuntime);
+    const previousYawRadians =
+      readMetaverseAuthoritativePlayerActiveBodyYawRadians(playerRuntime);
     const kinematicSnapshot = resolveMetaverseTraversalPoseKinematics(
       {
-        position: {
-          x: previousPositionX,
-          y: previousPositionY,
-          z: previousPositionZ
-        },
+        position: previousPosition,
         yawRadians: previousYawRadians
       },
       {
@@ -447,11 +441,6 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
       deltaSeconds
     );
 
-    playerRuntime.positionX = nextPose.position.x;
-    playerRuntime.positionY = nextPose.position.y;
-    playerRuntime.positionZ = nextPose.position.z;
-    playerRuntime.yawRadians = nextPose.yawRadians;
-
     if (playerRuntime.locomotionMode === "grounded") {
       playerRuntime.lastGroundedBodySnapshot =
         createMetaverseAuthoritativeLastGroundedBodySnapshot({
@@ -460,14 +449,18 @@ export class MetaverseAuthoritativePlayerPoseAuthority<
         });
     }
 
-    playerRuntime.angularVelocityRadiansPerSecond =
-      kinematicSnapshot.angularVelocityRadiansPerSecond;
-    playerRuntime.linearVelocityX = kinematicSnapshot.linearVelocity.x;
-    playerRuntime.linearVelocityY = kinematicSnapshot.linearVelocity.y;
-    playerRuntime.linearVelocityZ = kinematicSnapshot.linearVelocity.z;
-
     playerRuntime.lastPoseAtMs = nowMs;
-    this.#dependencies.syncPlayerTraversalBodyRuntimes(playerRuntime);
+    this.#dependencies.syncPlayerTraversalKinematicState(
+      playerRuntime,
+      createMetaverseTraversalKinematicStateSnapshot({
+        angularVelocityRadiansPerSecond:
+          kinematicSnapshot.angularVelocityRadiansPerSecond,
+        linearVelocity: kinematicSnapshot.linearVelocity,
+        position: nextPose.position,
+        yawRadians: nextPose.yawRadians
+      }),
+      playerRuntime.locomotionMode === "grounded"
+    );
   }
 
   #syncPlayerLookFromPresence(

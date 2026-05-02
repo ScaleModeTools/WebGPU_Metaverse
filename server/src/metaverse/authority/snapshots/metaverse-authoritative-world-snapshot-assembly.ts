@@ -14,6 +14,7 @@ import {
   type MetaversePresenceRosterSnapshot
 } from "@webgpu-metaverse/shared/metaverse/presence";
 import {
+  type MetaverseGroundedBodyRuntimeSnapshot,
   type MetaverseTraversalBodyControlSnapshot,
   type MetaverseSurfaceDriveBodyRuntimeSnapshot,
   type MetaverseTraversalAuthoritySnapshot,
@@ -39,9 +40,6 @@ import type {
   MetaversePlayerActionReceiptSnapshot,
   MetaversePlayerCombatSnapshot
 } from "@webgpu-metaverse/shared/metaverse";
-import type {
-  MetaverseAuthoritativeLastGroundedBodySnapshot
-} from "../players/metaverse-authoritative-last-grounded-body-snapshot.js";
 
 export interface MetaverseAuthoritativeSnapshotMountedOccupancyRuntimeState {
   readonly entryId: string | null;
@@ -55,22 +53,18 @@ export interface MetaverseAuthoritativeSnapshotMountedOccupancyRuntimeState {
 export interface MetaverseAuthoritativeSnapshotPlayerRuntimeState {
   angularVelocityRadiansPerSecond: number;
   readonly characterId: string;
-  lastGroundedBodySnapshot: MetaverseAuthoritativeLastGroundedBodySnapshot;
+  readonly groundedBodyRuntime: {
+    readonly snapshot: MetaverseGroundedBodyRuntimeSnapshot;
+  };
   lastProcessedLookSequence: number;
   lastProcessedTraversalSequence: number;
   lastProcessedWeaponSequence: number;
-  linearVelocityX: number;
-  linearVelocityY: number;
-  linearVelocityZ: number;
   lookPitchRadians: number;
   lookYawRadians: number;
   locomotionMode: MetaversePresencePoseSnapshot["locomotionMode"];
   mountedOccupancy: MetaverseAuthoritativeSnapshotMountedOccupancyRuntimeState | null;
   readonly playerId: MetaversePlayerId;
   readonly teamId: MetaversePlayerTeamId;
-  positionX: number;
-  positionY: number;
-  positionZ: number;
   presenceAnimationVocabulary: MetaversePresencePoseSnapshot["animationVocabulary"];
   stateSequence: number;
   readonly swimBodyRuntime: {
@@ -80,7 +74,6 @@ export interface MetaverseAuthoritativeSnapshotPlayerRuntimeState {
   unmountedTraversalState: MetaverseUnmountedTraversalStateSnapshot;
   readonly username: MetaversePresencePlayerSnapshot["username"];
   weaponState: MetaverseRealtimeWorldSnapshot["players"][number]["weaponState"];
-  yawRadians: number;
 }
 
 export interface MetaverseAuthoritativeSnapshotPlayerTraversalIntentRuntimeState {
@@ -240,6 +233,7 @@ export function createMetaverseAuthoritativeWorldSnapshot<
           : 0
   );
   const players = sortedPlayerRuntimes.map((playerRuntime) => {
+      const groundedBodySnapshot = playerRuntime.groundedBodyRuntime.snapshot;
       const traversalIntent =
         !shouldTreatMetaverseMountedOccupancyAsTraversalMounted(
           playerRuntime.mountedOccupancy
@@ -257,24 +251,7 @@ export function createMetaverseAuthoritativeWorldSnapshot<
         combat:
           config.playerCombatSnapshotsByPlayerId.get(playerRuntime.playerId) ??
           null,
-        groundedBody: Object.freeze({
-          contact: playerRuntime.lastGroundedBodySnapshot.contact,
-          driveTarget: playerRuntime.lastGroundedBodySnapshot.driveTarget,
-          grounded: playerRuntime.lastGroundedBodySnapshot.jumpBody.grounded,
-          interaction: playerRuntime.lastGroundedBodySnapshot.interaction,
-          jumpBody: playerRuntime.lastGroundedBodySnapshot.jumpBody,
-          linearVelocity: Object.freeze({
-            x: playerRuntime.linearVelocityX,
-            y: playerRuntime.linearVelocityY,
-            z: playerRuntime.linearVelocityZ
-          }),
-          position: Object.freeze({
-            x: playerRuntime.positionX,
-            y: playerRuntime.positionY,
-            z: playerRuntime.positionZ
-          }),
-          yawRadians: playerRuntime.yawRadians
-        }),
+        groundedBody: groundedBodySnapshot,
         groundedSupport:
           playerRuntime.locomotionMode === "grounded"
             ? playerRuntime.unmountedTraversalState.groundedSupport

@@ -6,11 +6,21 @@ import { createMetaversePlayerId } from "@webgpu-metaverse/shared";
 import { MetaverseAuthoritativeResourceSpawnAuthority } from "../../../../server/dist/metaverse/authority/resources/metaverse-authoritative-resource-spawn-authority.js";
 
 function createPlayerRuntime(playerId, position) {
+  const bodySnapshot = Object.freeze({
+    linearVelocity: Object.freeze({ x: 0, y: 0, z: 0 }),
+    position,
+    yawRadians: 0
+  });
+
   return {
+    groundedBodyRuntime: {
+      snapshot: bodySnapshot
+    },
+    locomotionMode: "grounded",
     playerId,
-    positionX: position.x,
-    positionY: position.y,
-    positionZ: position.z
+    swimBodyRuntime: {
+      snapshot: bodySnapshot
+    }
   };
 }
 

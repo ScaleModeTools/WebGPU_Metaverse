@@ -1137,9 +1137,6 @@ function shouldIgnoreGroundedTerrainPatchSubsurfaceBlocker(
   return (
     supportCandidate !== null &&
     supportCandidate.supportKind === "heightfield" &&
-    supportCandidate.supportHeightMeters >=
-      groundedSupportObstacleConfig.currentRootHeightMeters -
-        automaticSurfaceBlockingHeightToleranceMeters &&
     supportCandidate.supportHeightMeters <=
       groundedSupportObstacleConfig.currentRootHeightMeters +
         maxSupportRiseMeters +
